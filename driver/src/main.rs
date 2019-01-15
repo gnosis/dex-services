@@ -1,28 +1,8 @@
-extern crate serde_json;
-extern crate serde;
-
-
-const ACCOUNTS: i32 = 8;
-const TOKENS: i32 = 4;
-const SIZE_BALANCE: usize = (ACCOUNTS * TOKENS) as usize;
-
 #[macro_use]
 extern crate serde_derive;
 
-#[derive(Serialize, Deserialize)]
-struct State {
-  	curState: String,
-   	prevState: String,
-  	nextStates: String,
-   	slot: i32,
-   	balances: [i64; SIZE_BALANCE]
-}
-/*
-impl State {
-    fn getNextState(&self) -> std::string::String {
-        self.nextStates
-    }
-}*/
+extern crate serde_json;
+extern crate serde;
 extern crate mongodb;
 use mongodb::{Bson, bson, doc};
 use mongodb::{Client, ThreadedClient};
@@ -43,6 +23,7 @@ fn main() {
     let item = cursor.next();
 
     let cur_state; 
+
     // cursor.next() returns an Option<Result<Document>>
     match item {
         Some(Ok(doc)) => match doc.get("CurrentState") {
@@ -55,8 +36,8 @@ fn main() {
 
     let coll = client.db("dfusion").collection("State");
 
-
-    let cursor = match coll.find(Some(doc! { "curState"	: "0x0000000000000000000000000000000000000000", },) , None) {
+    // let cursor = match coll.find(Some(doc!(cur_state) ) , None) {
+    let cursor = match coll.find(Some(doc! { "curState": "0000000000000000000000000000000000000000", },) , None) {
 	    Ok(cursor) => cursor,
 	    Err(error) => panic!("The following error occured: {}", error)
 	};

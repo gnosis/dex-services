@@ -1,26 +1,16 @@
-const ACCOUNTS: i32 = 8;
-const TOKENS: i32 = 4;
-const SIZE_BALANCE: usize = (ACCOUNTS * TOKENS) as usize;
-
-extern crate serde_json;
-extern crate serde;
-
 #[macro_use]
 extern crate serde_derive;
 
-#[derive(Serialize, Deserialize)]
-struct State {
-  	curState: String,
-   	prevState: String,
-  	nextStates: String,
-   	slot: i32,
-   	balances: [i64; SIZE_BALANCE]
-}
+mod global_helpers;
 
+extern crate serde_json;
+extern crate serde;
 extern crate mongodb;
+
 use mongodb::{bson, doc};
 use mongodb::{Client, ThreadedClient};
 use mongodb::db::ThreadedDatabase;
+use pairing::{ PrimeField };
 
 
 fn main() {
@@ -41,12 +31,12 @@ fn main() {
     let coll = client.db("dfusion").collection("State");
 
 
-	let state = State {
+	let state = global_helpers::State {
 	    curState: "0000000000000000000000000000000000000000".to_owned(),
     	prevState: "0000000000000000000000000000000000000000".to_owned(),
-    	nextStates: "0000000000000000000000000000000000000000".to_owned(),
+    	nextState: "0000000000000000000000000000000000000000".to_owned(),
     	slot: 0,
-    	balances: [0; SIZE_BALANCE]
+    	balances: [0; global_helpers::SIZE_BALANCE]
 	};
 
     let document = serde_json::to_string(&state).ok().expect("Failed to convert first State");
@@ -67,8 +57,8 @@ fn main() {
         "depositHash": "0000000000000000000000000000000000000000",
         "depositIndex": "0000000000000000000000000000000000000000",
         "slot": 1,
-        "addressIndex": 0,
-        "tokenIndex": 1,
+        "addressId": 1,
+        "tokenId": 1,
         "amount": 55465465,
     };
 
