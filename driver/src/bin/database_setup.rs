@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate serde_derive;
 
-mod global_helpers;
+mod models;
 
 extern crate serde_json;
 extern crate serde;
@@ -31,22 +31,21 @@ fn main() {
     let coll = client.db("dfusion").collection("State");
 
 
-	let state = global_helpers::State {
+	let state = models::State {
 	    curState: "0000000000000000000000000000000000000000".to_owned(),
     	prevState: "0000000000000000000000000000000000000000".to_owned(),
     	nextState: "0000000000000000000000000000000000000000".to_owned(),
     	slot: 0,
-    	balances: [0; global_helpers::SIZE_BALANCE]
+    	balances: [0; models::SIZE_BALANCE]
 	};
 
     let document = serde_json::to_string(&state).ok().expect("Failed to convert first State");
     
 	println!("{}", document);
-
-    //    let document: String = String::from(r#"{"curState":"0000000000000000000000000000000000000000","prevState":"0000000000000000000000000000000000000000","nextStates":"0000000000000000000000000000000000000000","slot":0,"balances":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}"#);
-    //	let temp = doc!( r#document#);
-    let temp = doc! {"curState":"0000000000000000000000000000000000000000","prevState":"0000000000000000000000000000000000000000","nextStates":"0000000000000000000000000000000000000000","slot":0,"balances":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]};
-
+    let json: serde_json::Value = serde_json::to_value(&state).expect("Failed to parse json");
+    let bson = json.into();
+    let temp: bson::Document = mongodb::from_bson(bson).expect("Failed to convert bson to document");
+    
 	 // Insert document into 'dfusion.CurrentState' collection
     coll.insert_one(temp.clone(), None)
         .ok().expect("Failed to insert CurrentState.");
