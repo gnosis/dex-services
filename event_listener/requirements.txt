@@ -1,0 +1,7 @@
+Django==2.1.5
+django-environ==0.4.5
+django-eth-events==3.0.5
+django-model-utils==3.1.2
+ethereum==2.3.2
+pymongo==3.7.2
+web3==4.8.2
