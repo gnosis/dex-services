@@ -73,7 +73,7 @@ fn get_deposits_of_slot(slot: i32) -> Result<Vec< models::Deposits >, io::Error>
 
 fn apply_deposits(state: &mut models::State, deposits: &Vec<models::Deposits>) -> Result<models::State, io::Error> {
     for i in deposits {
-        state.balances[ (i.addressId * models::ACCOUNTS + i.tokenId) as usize] += i.amount;
+        state.balances[ (i.accountId * models::ACCOUNTS + i.tokenId) as usize] += i.amount;
     }
     Ok(state.clone())
 }
