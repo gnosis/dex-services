@@ -2,7 +2,7 @@ pub const ACCOUNTS: i32 = 2;
 pub const TOKENS: i32 = 2;
 pub const SIZE_BALANCE: usize = (ACCOUNTS * TOKENS) as usize;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct State {
   	pub curState: String,
    	pub prevState: String,
@@ -14,9 +14,9 @@ pub struct State {
 #[derive(Serialize, Deserialize)]
 pub struct Deposits {
   	pub depositHash: String,
-    depositIndex: String,
-    slot: i32,
-    addressId: i32,
-    tokenId: i32,
-    amount: i32,
+    pub depositIndex: String,
+    pub slot: i32,
+    pub addressId: i32,
+    pub tokenId: i32,
+    pub amount: i64,
 }

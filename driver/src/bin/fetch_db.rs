@@ -7,13 +7,11 @@ extern crate serde_json;
 extern crate serde;
 extern crate mongodb;
 use std::io;
-use mongodb::{Bson, bson, doc};
+use mongodb::bson;
 use mongodb::{Client, ThreadedClient};
 use mongodb::db::ThreadedDatabase;
-use pairing::{ PrimeField };
 
-
-fn getCurrentBalances() -> Result<models::State, io::Error>{
+fn get_current_balances() -> Result<models::State, io::Error>{
 
     let client = Client::connect("localhost", 27017)
         .expect("Failed to initialize standalone client.");
@@ -21,10 +19,10 @@ fn getCurrentBalances() -> Result<models::State, io::Error>{
     let coll = client.db("dfusion").collection("CurrentState");
 
     // Find the document and receive a cursor
-    let mut cursor = coll.find(None, None)
+    let cursor = coll.find(None, None)
         .ok().expect("Failed to execute find.");
     
-    let mut docs: Vec<_> = cursor.map(|doc| doc.unwrap()).collect();
+    let docs: Vec<_> = cursor.map(|doc| doc.unwrap()).collect();
 
     if docs.len() !=1 {
         println!("Error: There should be only one CurrentState");
@@ -41,7 +39,7 @@ fn getCurrentBalances() -> Result<models::State, io::Error>{
     
     let coll = client.db("dfusion").collection("State");
 
-    let mut cursor = coll.find(Some(_temp) , None)
+    let cursor = coll.find(Some(_temp) , None)
         .ok().expect("Failed to execute find.");
 
     let docs: Vec<_> = cursor.map(|doc| doc.unwrap()).collect();
@@ -53,7 +51,7 @@ fn getCurrentBalances() -> Result<models::State, io::Error>{
 }
 
 
-fn getDepositsOfSlot(slot: i32) -> Result<Vec< models::Deposits >, io::Error>{
+fn get_deposits_of_slot(slot: i32) -> Result<Vec< models::Deposits >, io::Error>{
 
     let client = Client::connect("localhost", 27017)
         .expect("Failed to initialize standalone client.");
@@ -68,7 +66,7 @@ fn getDepositsOfSlot(slot: i32) -> Result<Vec< models::Deposits >, io::Error>{
     
     let coll = client.db("dfusion").collection("Deposits");
 
-    let mut cursor = coll.find(Some(_temp) , None)
+    let cursor = coll.find(Some(_temp) , None)
         .ok().expect("Failed to execute find.");
 
     let docs: Vec<_> = cursor.map(|doc| doc.unwrap())
@@ -78,12 +76,21 @@ fn getDepositsOfSlot(slot: i32) -> Result<Vec< models::Deposits >, io::Error>{
     Ok(docs)
 }
 
+fn apply_deposits(state: &mut models::State, deposits: &Vec<models::Deposits>) -> Result<models::State, io::Error> {
+    for i in deposits {
+        state.balances[ (i.addressId * models::ACCOUNTS + i.tokenId) as usize] += i.amount;
+    }
+    Ok(state.clone())
+}
 
 fn main() {
     
-    let state = getCurrentBalances().expect("Could not get the current state of the chain");
+    let mut state = get_current_balances().expect("Could not get the current state of the chain");
     println!("Current balances are: {:?}", state.balances);
-    let deposits = getDepositsOfSlot(state.slot + 1);
-    println!("Current deposit hash: {:?}", deposits.unwrap()[0].depositHash);
+    let deposits = get_deposits_of_slot(state.slot + 1).unwrap();
+    println!("Current deposit hash: {:?}", deposits[0].depositHash);
+
+    state = apply_deposits(&mut state, &deposits).ok().expect("Deposits could not be applied");
+    println!("After the deposit the new balances are: {:?}", state.balances);
 
 }

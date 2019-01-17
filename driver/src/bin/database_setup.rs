@@ -62,4 +62,16 @@ fn main() {
     // Insert document into 'dfusion.CurrentState' collection
     coll.insert_one(doc2.clone(), None)
         .ok().expect("Failed to insert Deposit");    
+    let doc2 = doc! {
+        "depositHash": "0000000000000000000000000000000000000000",
+        "depositIndex": "0000000000000000000000000000000000000000",
+        "slot": 1,
+        "addressId": 1,
+        "tokenId": 0,
+        "amount": 65465,
+    };
+
+    // Insert document into 'dfusion.CurrentState' collection
+    coll.insert_one(doc2.clone(), None)
+        .ok().expect("Failed to insert Deposit");        
 }
