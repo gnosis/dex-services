@@ -33,7 +33,7 @@ cargo run --bin database_setup
 Running 
 
 ```sh
-cargo run --bin backend_services
+cargo run --bin driver
 
 ```
 

@@ -36,16 +36,14 @@ fn main() {
     	prevState: "0000000000000000000000000000000000000000".to_owned(),
     	nextState: "0000000000000000000000000000000000000000".to_owned(),
     	slot: 0,
-    	balances: [0; models::SIZE_BALANCE]
+    	balances: vec![0, 0, 0, 0]
 	};
 
-    let document = serde_json::to_string(&state).ok().expect("Failed to convert first State");
-    
-	println!("{}", document);
     let json: serde_json::Value = serde_json::to_value(&state).expect("Failed to parse json");
     let bson = json.into();
     let temp: bson::Document = mongodb::from_bson(bson).expect("Failed to convert bson to document");
     
+    println!("Data to be inserted{:?}", temp );
 	 // Insert document into 'dfusion.CurrentState' collection
     coll.insert_one(temp.clone(), None)
         .ok().expect("Failed to insert CurrentState.");
