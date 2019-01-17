@@ -71,6 +71,12 @@ fn get_deposits_of_slot(slot: i32) -> Result<Vec< models::Deposits >, io::Error>
     Ok(docs)
 }
 
+fn apply_deposits(state: &mut models::State, deposits: &Vec<models::Deposits>) -> Result<models::State, io::Error> {
+    for i in deposits {
+        state.balances[ (i.addressId * models::ACCOUNTS + i.tokenId) as usize] += i.amount;
+    }
+    Ok(state.clone())
+}
 
 fn main() {
     
@@ -78,5 +84,8 @@ fn main() {
     println!("Current balances are: {:?}", state.balances);
     let deposits = get_deposits_of_slot(state.slot + 1).unwrap();
     println!("Current deposit hash: {:?}", deposits[0].depositHash);
+
+    state = apply_deposits(&mut state, &deposits).ok().expect("Deposits could not be applied");
+    println!("After the deposit the new balances are: {:?}", state.balances);
 
 }
