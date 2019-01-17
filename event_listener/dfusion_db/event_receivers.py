@@ -1,53 +1,80 @@
+from abc import abstractmethod
+
 from django_eth_events.chainevents import AbstractEventReceiver
-from pymongo import MongoClient
+from .event_pusher import post_deposit, post_transition
 
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-def post_event(event_dict):
-    # client = MongoClient()
-    # client = MongoClient('localhost', 27017)
-    client = MongoClient('mongodb://localhost:27017/')
-    db = client.test_database
-    posts = db.posts
-    post_id = posts.insert_one(event_dict).inserted_id
-    return post_id
+class GenericEventReceiver(AbstractEventReceiver):
+    name = None
 
+    def ensure_name(self, _name):
+        return self.name == _name
 
-# def find_and_remove_event(event_dict):
-#     client = MongoClient('mongodb://localhost:27017/')
-#     db = client.test_database
-#     posts = db.posts
-#
-#     document = posts.find(filter=event_dict)
-#
-#     db.collections.remove(event_dict, True)
-#
-#     document = posts.find(filter=event_dict)
-
-
-class EventReceiver(AbstractEventReceiver):
+    def parse_event(self, decoded_event):
+        res = {param['name']: param['value'] for param in decoded_event['params']}
+        logging.info("{} received {}".format(self.name, res))
+        return res
 
     def save(self, decoded_event, block_info=None):
-        res = {param['name']: param['value'] for param in decoded_event['params']}
-        res.update({'type': decoded_event['name']})
+        if not self.ensure_name(decoded_event['name']):
+            return
 
-        # Convert byte strings to hex
-        for k, v in res.items():
-            if isinstance(v, bytes):
-                res[k] = v.hex()
+        parsed_event = self.parse_event(decoded_event)
 
-        post_event(res)
-        print("Event received {}".format(res))
-        logger.info("Event received {}".format(res))
-
-        # find_and_remove_event(event_dict=res)
+        self.real_save(parsed_event, block_info)
 
     def rollback(self, decoded_event, block_info=None):
-        pass
-        # res = {param['name']: param['value'] for param in decoded_event['params']}
-        # res.update({'type': decoded_event['name']})
+        if not self.ensure_name(decoded_event['name']):
+            return
 
-        # find_and_remove_event(res)
+        self.real_rollback(decoded_event, block_info)
+
+    @abstractmethod
+    def real_save(self, decoded_event, block_info=None):
+        pass
+
+    @abstractmethod
+    def real_rollback(self, decoded_event, block_info=None):
+        pass
+
+
+class DepositReceiver(GenericEventReceiver):
+    name = 'Deposit'
+
+    def real_save(self, parsed_event, block_info=None):
+        try:
+            post_deposit(parsed_event)
+        except AssertionError as exc:
+            logging.critical("Failed to record Deposit [{}] - {}".format(exc, parsed_event))
+
+    def real_rollback(self, decoded_event, block_info=None):
+        # TODO - remove event from db
+        pass
+
+
+class StateTransitionReceiver(GenericEventReceiver):
+    name = 'StateTransition'
+
+    def real_save(self, parsed_event, block_info=None):
+
+        # Convert byte strings to hex
+        for k, v in parsed_event.items():
+            if isinstance(v, bytes):
+                parsed_event[k] = v.hex()
+
+        try:
+            post_transition(parsed_event)
+        except AssertionError as exc:
+            logging.critical("Failed to record StateTransition [{}] - {}".format(exc, parsed_event))
+
+    def real_rollback(self, decoded_event, block_info=None):
+        # TODO - remove event from db
+        pass
+
+
+
+
