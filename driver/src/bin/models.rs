@@ -16,7 +16,7 @@ pub struct Deposits {
   	pub depositHash: String,
     pub depositIndex: String,
     pub slot: i32,
-    pub addressId: i32,
+    pub accountId: i32,
     pub tokenId: i32,
     pub amount: i64,
 }
