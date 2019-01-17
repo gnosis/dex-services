@@ -1,0 +1,6 @@
+mongo:
+  image: mongo:latest
+  environment:
+    - AUTH=no
+  ports:
+    - "27017:27017"
