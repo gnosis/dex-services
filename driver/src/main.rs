@@ -1,5 +1,4 @@
 extern crate models;
-
 extern crate mongodb;
 
 use std::io;

@@ -20,11 +20,11 @@ Install rust & cargo ("1.31") - older versions would not be compatible with newe
 
 ## Setup:
 
-In order to load the first data into the data base, run:
+In order to load the first data into the data base, we have a test prepared. Just run:
 
 
 ```sh
-cargo run --bin database_setup
+cargo test -- --nocapture
 
 ```
 
@@ -33,7 +33,7 @@ cargo run --bin database_setup
 Running 
 
 ```sh
-cargo run --bin driver
+cargo run 
 
 ```
 
