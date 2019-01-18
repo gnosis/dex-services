@@ -14,7 +14,7 @@ def post_deposit(event: dict):
     :return: bson.objectid.ObjectId
     """
     # Verify integrity of post data
-    assert event.keys() == {'accountId', 'tokenId', 'amount', 'slot'}, "Unexpected Event Keys"
+    assert event.keys() == {'accountId', 'tokenId', 'amount', 'slot', 'slotIndex'}, "Unexpected Event Keys"
     assert all(isinstance(val, int) for val in event.values()), "One or more of deposit values not integer type"
 
     deposits = db.deposits

@@ -238,6 +238,11 @@
           "indexed": false,
           "name": "slot",
           "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "name": "slotIndex",
+          "type": "uint16"
         }
       ],
       "name": "Deposit",
@@ -331,7 +336,7 @@
     {
       "constant": true,
       "inputs": [],
-      "name": "depositIndex",
+      "name": "depositSlot",
       "outputs": [
         {
           "name": "",
