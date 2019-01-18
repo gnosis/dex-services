@@ -1,6 +1,26 @@
-mongo:
-  image: mongo:latest
-  environment:
-    - AUTH=no
-  ports:
-    - "27017:27017"
+version: '3.6'
+services:
+  mongo:
+    image: mongo:latest
+    environment:
+      - AUTH=no
+    ports:
+      - "27017:27017"
+
+  ganache-cli:
+    ports:
+      - '8545:8545'
+    image: 'trufflesuite/ganache-cli:latest'
+    logging:
+      driver: "none"
+
+  listener:
+    command:  docker/event_listener/run.sh
+    build:
+      context: .
+      dockerfile: docker/event_listener/Dockerfile
+    depends_on:
+      - mongo
+      - ganache-cli
+    volumes:
+      - ./:/app/
