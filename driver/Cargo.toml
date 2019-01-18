@@ -4,6 +4,15 @@ version = "0.1.0"
 authors = ["josojo <alex@gnosis.pm>"]
 edition = "2018"
 
+[lib]
+name = "models"
+path = "src/models.rs"
+bench = true
+
+[[bin]]
+name = "driver"
+path = "src/main.rs"
+
 [dependencies]
 mongodb = "0.3.2"
 serde_json = "1.0"
