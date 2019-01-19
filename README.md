@@ -7,28 +7,14 @@ Installation
 OS requirements
 ---------------
 
-- `python3.6` (virtual environment recommended)
-- [MongoDB](https://docs.mongodb.com/manual/installation/)
-
-all other requirements are python libraries listed in `dex-services/event_listner`
+Clone the repository and run the container
 
 ```bash
 git clone git@github.com:gnosis/dex-services.git
-cd dex-services/event_listner
-pip install -r requirements.txt
+cd dex-services
+docker-compose up
 ```
 
-
-Testing
-=======
-
-
-Run ganache and mongo-db (default localhost and port settings are fine)
-
-```bash
-ganache-cli
-mongod
-```
 
 Deploy a [SnappBase Contract](https://github.com/gnosis/dex-contracts) and paste its address into the SNAPP_CONTRACT_ADDRESS in `dex-services/.env`
 
@@ -67,16 +53,13 @@ SNAPP_CONTRACT_ADDRESS=0x6A28a306bE4121529F80df1d406A8Cdc5076DBfd
 
 Execute the django-test as follows;
 
-```bash
-python manage.py test
-```
-**Note that** The test assumes that the contract events have already been emitted while, similarly, the indefinite event listener is run with
+Restart the event listener to reflect the change in environment variables.
 
 ```bash
-rm db.sqlite3
-python manage.py migrate
-python manage.py run_listener
+docker-compose restart listener
 ```
+
+
 
 Initiating Events from the Smart Contract
 -----------------------------------------
@@ -102,7 +85,6 @@ This should yield the following log from the listener service
 ```
 
 The database will also reflect this event!
-
 
 ```
 mongo
