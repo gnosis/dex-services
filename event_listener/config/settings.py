@@ -12,7 +12,6 @@ https://docs.djangoproject.com/en/2.1/ref/settings/
 import environ
 import os
 from .log_settings import *
-from .db_settings import *
 
 from event_listener.dfusion_db.abis import abi_file_path, load_json_file
 
@@ -20,6 +19,7 @@ env = environ.Env()
 
 ROOT_DIR = environ.Path(__file__) - 3  # (/dex-services/config/settings.py - 4 = /dex-services)
 env.read_env(str(ROOT_DIR.path('.env')))
+env.read_env(str(ROOT_DIR.path('.env_db')))
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -100,6 +100,10 @@ DATABASES = {
 }
 
 
+DB_HOST = os.environ['DB_HOST']
+DB_PORT = int(os.environ['DB_PORT'])
+DB_NAME = os.environ['DB_NAME']
+
 # Password validation
 # https://docs.djangoproject.com/en/2.1/ref/settings/#auth-password-validators
 
@@ -157,7 +161,7 @@ ETH_EVENTS = [
     # {
     #     'ADDRESSES': [os.environ['SNAPP_CONTRACT_ADDRESS']],
     #     'EVENT_ABI': load_json_file(abi_file_path('SnappBase.json')),
-    #     'EVENT_DATA_RECEIVER': 'event_listener.dfusion_db.event_receivers.EventReceiver',
+    #     'EVENT_DATA_RECEIVER': 'event_listener.dfusion_db.event_receivers.EventDispatcher',
     #     'NAME': 'snappBaseEvents',
     #     'PUBLISH': True,
     # },

@@ -2,8 +2,8 @@ from pymongo import MongoClient
 from django.conf import settings
 
 client = MongoClient(
-    host=settings.MONGO_HOST,
-    port=settings.MONGO_PORT
+    host=settings.DB_HOST,
+    port=settings.DB_PORT
 )
 db = client.get_database(settings.DB_NAME)
 
