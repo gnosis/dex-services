@@ -1,7 +1,8 @@
 from abc import abstractmethod
 
 from django_eth_events.chainevents import AbstractEventReceiver
-from .event_pusher import post_deposit, post_transition
+from .event_pusher import post_deposit, post_transition, update_accounts
+from typing import Dict, Any
 
 import logging
 
@@ -45,7 +46,11 @@ class GenericEventReceiver(AbstractEventReceiver):
 class DepositReceiver(GenericEventReceiver):
     name = 'Deposit'
 
-    def real_save(self, parsed_event, block_info=None):
+    def real_save(self, parsed_event: Dict[str, int], block_info=None):
+
+        # Verify integrity of post data
+        assert parsed_event.keys() == {'accountId', 'tokenId', 'amount', 'slot', 'slotIndex'}, "Unexpected Event Keys"
+
         try:
             post_deposit(parsed_event)
         except AssertionError as exc:
@@ -59,15 +64,28 @@ class DepositReceiver(GenericEventReceiver):
 class StateTransitionReceiver(GenericEventReceiver):
     name = 'StateTransition'
 
-    def real_save(self, parsed_event, block_info=None):
+    def real_save(self, parsed_event: Dict[str, Any], block_info=None):
 
         # Convert byte strings to hex
         for k, v in parsed_event.items():
             if isinstance(v, bytes):
                 parsed_event[k] = v.hex()
 
+        # Verify integrity of post data
+        assert parsed_event.keys() == {'transitionType', 'to', 'from', 'slot'}, "Unexpected Event Keys"
+        _to = parsed_event['to']
+        _from = parsed_event['from']
+        _type = parsed_event['transitionType']
+
+        assert isinstance(_to, str) and len(_to) == 64, "Transition to has unexpected values"
+        assert isinstance(_from, str) and len(_from) == 64, "Transition from has unexpected values"
+        assert isinstance(_type, int) and _type in {0, 1, 2}, "Transition type not recognized"
+        assert isinstance(parsed_event['slot'], int), "Transition slot not recognized"
+        # TODO - move the above assertions into a generic type for StateTransition
+
         try:
             post_transition(parsed_event)
+            update_accounts(parsed_event)
         except AssertionError as exc:
             logging.critical("Failed to record StateTransition [{}] - {}".format(exc, parsed_event))
 
