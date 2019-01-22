@@ -11,8 +11,9 @@ services:
     ports:
       - '8545:8545'
     image: 'trufflesuite/ganache-cli:latest'
-    logging:
-      driver: "none"
+    command: ["-d"]
+#    logging:
+#      driver: "none"
 
   listener:
     command:  docker/event_listener/run.sh
