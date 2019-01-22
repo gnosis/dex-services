@@ -44,9 +44,7 @@ def update_accounts(event: Dict[str, Union[int, str, str, int]]):
     prev_state = event['from']
     new_state = event['to']
 
-    balances = db.accounts.find({'stateHash': prev_state})['balances']
-
-    _log.info(balances)
+    balances = db.accounts.find_one({'currState': prev_state})['balances']
 
     num_tokens = db.constants.find_one()['num_tokens']
     num_accounts = db.constants.find_one()['num_accounts']

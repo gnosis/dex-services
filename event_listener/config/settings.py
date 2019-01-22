@@ -179,4 +179,11 @@ ETH_EVENTS = [
         'NAME': 'snappBaseTransitions',
         'PUBLISH': True,
     },
+    {
+        'ADDRESSES': [os.environ['SNAPP_CONTRACT_ADDRESS']],
+        'EVENT_ABI': load_json_file(abi_file_path('SnappBase.json')),
+        'EVENT_DATA_RECEIVER': 'event_listener.dfusion_db.event_receivers.SnappInitializationReceiver',
+        'NAME': 'snappBaseInit',
+        'PUBLISH': True,
+    },
 ]

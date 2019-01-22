@@ -1,7 +1,7 @@
 from abc import abstractmethod
 
 from django_eth_events.chainevents import AbstractEventReceiver
-from .event_pusher import post_deposit, post_transition, update_accounts
+from .event_pusher import post_deposit, post_transition, update_accounts, initialize_accounts
 from typing import Dict, Any
 
 import logging
@@ -17,6 +17,12 @@ class GenericEventReceiver(AbstractEventReceiver):
 
     def parse_event(self, decoded_event):
         res = {param['name']: param['value'] for param in decoded_event['params']}
+
+        # Convert byte strings to hex
+        for k, v in res.items():
+            if isinstance(v, bytes):
+                res[k] = v.hex()
+
         logging.info("{} received {}".format(self.name, res))
         return res
 
@@ -52,7 +58,8 @@ class DepositReceiver(GenericEventReceiver):
         assert parsed_event.keys() == {'accountId', 'tokenId', 'amount', 'slot', 'slotIndex'}, "Unexpected Event Keys"
 
         try:
-            post_deposit(parsed_event)
+            deposit_id = post_deposit(parsed_event)
+            logging.info("Successfully included Deposit - {}".format(deposit_id))
         except AssertionError as exc:
             logging.critical("Failed to record Deposit [{}] - {}".format(exc, parsed_event))
 
@@ -65,11 +72,6 @@ class StateTransitionReceiver(GenericEventReceiver):
     name = 'StateTransition'
 
     def real_save(self, parsed_event: Dict[str, Any], block_info=None):
-
-        # Convert byte strings to hex
-        for k, v in parsed_event.items():
-            if isinstance(v, bytes):
-                parsed_event[k] = v.hex()
 
         # Verify integrity of post data
         assert parsed_event.keys() == {'transitionType', 'to', 'from', 'slot'}, "Unexpected Event Keys"
@@ -85,7 +87,8 @@ class StateTransitionReceiver(GenericEventReceiver):
 
         try:
             post_transition(parsed_event)
-            update_accounts(parsed_event)
+            account_state = update_accounts(parsed_event)
+            logging.info("Successfully updated state and updated balances - {}".format(account_state))
         except AssertionError as exc:
             logging.critical("Failed to record StateTransition [{}] - {}".format(exc, parsed_event))
 
@@ -94,5 +97,24 @@ class StateTransitionReceiver(GenericEventReceiver):
         pass
 
 
+class SnappInitializationReceiver(GenericEventReceiver):
+    name = 'SnappInitialization'
 
+    def real_save(self, parsed_event: Dict[str, Any], block_info=None):
+
+        # Verify integrity of post data
+        assert parsed_event.keys() == {'stateHash', 'maxTokens', 'maxAccounts'}, "Unexpected Event Keys"
+        state_hash = parsed_event['stateHash']
+        assert isinstance(state_hash, str) and len(state_hash) == 64, "StateHash has unexpected values %s" % state_hash
+        assert isinstance(parsed_event['maxTokens'], int), "maxTokens has unexpected values"
+        assert isinstance(parsed_event['maxAccounts'], int), "maxAccounts has unexpected values"
+
+        try:
+            initialize_accounts(parsed_event)
+        except AssertionError as exc:
+            logging.critical("Failed to record SnappInitialization [{}] - {}".format(exc, parsed_event))
+
+    def real_rollback(self, decoded_event, block_info=None):
+        # TODO - remove event from db
+        pass
 
