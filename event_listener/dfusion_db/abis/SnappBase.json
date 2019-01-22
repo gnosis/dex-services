@@ -142,6 +142,20 @@
     },
     {
       "constant": true,
+      "inputs": [],
+      "name": "slotIndex",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "constant": true,
       "inputs": [
         {
           "name": "",
@@ -265,9 +279,58 @@
           "indexed": false,
           "name": "to",
           "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "name": "slot",
+          "type": "uint256"
         }
       ],
       "name": "StateTransition",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "name": "transitionType",
+          "type": "uint8"
+        },
+        {
+          "indexed": false,
+          "name": "from",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "name": "to",
+          "type": "bytes32"
+        }
+      ],
+      "name": "StateTransition",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "name": "stateHash",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "name": "maxTokens",
+          "type": "uint8"
+        },
+        {
+          "indexed": false,
+          "name": "maxAccounts",
+          "type": "uint16"
+        }
+      ],
+      "name": "SnappInitialization",
       "type": "event"
     },
     {
@@ -367,10 +430,6 @@
         {
           "name": "slot",
           "type": "uint256"
-        },
-        {
-          "name": "_currDepositHash",
-          "type": "bytes32"
         },
         {
           "name": "_currStateRoot",
