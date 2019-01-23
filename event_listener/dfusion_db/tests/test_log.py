@@ -5,6 +5,7 @@ from django_eth_events.event_listener import EventListener
 class TestLog(TestCase):
     def test_console_event(self):
         event_listener = EventListener()
-        event_listener.execute()
+        for _ in range(10):
+            event_listener.execute()
 
 

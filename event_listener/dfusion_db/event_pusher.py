@@ -41,31 +41,28 @@ def update_accounts(event: Dict[str, Union[int, str, str, int]]):
     :return: bson.objectid.ObjectId
     """
     transition_type = event['transitionType']
-    prev_state = event['from']
-    new_state = event['to']
+    state_index = event['stateIndex']
+    state_hash = event['stateHash']
 
-    balances = db.accounts.find_one({'currState': prev_state})['balances']
-
+    balances = db.accounts.find_one({'stateIndex': state_index - 1})['balances']
     num_tokens = db.constants.find_one()['num_tokens']
-    num_accounts = db.constants.find_one()['num_accounts']
 
     if transition_type == 0:  # Deposit
 
         applied_deposits = db.deposits.find({'slot': event['slot']})
 
         for deposit in applied_deposits:
-
             a_id = deposit['accountId']
             t_id = deposit['tokenId']
-            # Assuming index by accounts - tokens
-            balances[num_tokens*(a_id - 1) + (t_id - 1)] += deposit['amount']
+            amount = deposit['amount']
+            _log.info("Incrementing balance of account {} - token {} by {}".format(a_id, t_id, amount))
 
-            # # Assuming index by accounts - tokens
-            # balances[num_accounts * (t_id - 1) + (a_id - 1)] += deposit['amount']
+            # Balances are stored as [b(a1, t1), b(a1, t2), ... b(a1, T), b(a2, t1), ...]
+            balances[num_tokens * (a_id - 1) + (t_id - 1)] += amount
 
         new_account_record = {
-            'prevState': prev_state,
-            'currState': new_state,
+            'stateIndex': state_index,
+            'stateHash': state_hash,
             'balances': balances
         }
 
@@ -73,7 +70,7 @@ def update_accounts(event: Dict[str, Union[int, str, str, int]]):
 
     elif transition_type == 1:  # Withdraw
         pass
-    elif transition_type == 2:
+    elif transition_type == 2:  # Auction
         pass
     else:
         pass
@@ -82,20 +79,13 @@ def update_accounts(event: Dict[str, Union[int, str, str, int]]):
 def initialize_accounts(event: Dict[str, Union[str, int, int]]):
     # Will only ever be called once
 
-    # Verify integrity of post data
-    assert event.keys() == {'stateHash', 'maxTokens', 'maxAccounts'}, "Unexpected Event Keys"
-    state_hash = event['stateHash']
     num_tokens = event['maxTokens']
     num_accounts = event['maxAccounts']
 
-    assert isinstance(state_hash, str) and len(state_hash) == 64, "StateHash has unexpected values"
-    assert isinstance(num_tokens, int), "maxTokens has unexpected values"
-    assert isinstance(num_accounts, int), "maxAccounts has unexpected values"
-
     account_record: Dict[str, Union[str, str, List[int]]] = {
-        'prevState': "0"*64,
-        'currState': state_hash,
-        'balances': [0 for _ in range(num_tokens*num_accounts)]
+        'stateIndex': 0,
+        'stateHash': event['stateHash'],
+        'balances': [0 for _ in range(num_tokens * num_accounts)]
     }
 
     constants: Dict[str, int] = {
@@ -104,5 +94,4 @@ def initialize_accounts(event: Dict[str, Union[str, int, int]]):
     }
 
     db.constants.insert_one(constants)
-
     db.accounts.insert_one(account_record)

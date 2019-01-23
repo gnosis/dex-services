@@ -56,6 +56,7 @@ class DepositReceiver(GenericEventReceiver):
 
         # Verify integrity of post data
         assert parsed_event.keys() == {'accountId', 'tokenId', 'amount', 'slot', 'slotIndex'}, "Unexpected Event Keys"
+        assert all(isinstance(val, int) for val in parsed_event.values()), "One or more of event values not integer"
 
         try:
             deposit_id = post_deposit(parsed_event)
@@ -74,13 +75,13 @@ class StateTransitionReceiver(GenericEventReceiver):
     def real_save(self, parsed_event: Dict[str, Any], block_info=None):
 
         # Verify integrity of post data
-        assert parsed_event.keys() == {'transitionType', 'to', 'from', 'slot'}, "Unexpected Event Keys"
-        _to = parsed_event['to']
-        _from = parsed_event['from']
+        assert parsed_event.keys() == {'transitionType', 'stateIndex', 'stateHash', 'slot'}, \
+            "Unexpected Event Keys: got {}".format(parsed_event.keys())
+        _hash = parsed_event['stateHash']
         _type = parsed_event['transitionType']
 
-        assert isinstance(_to, str) and len(_to) == 64, "Transition to has unexpected values"
-        assert isinstance(_from, str) and len(_from) == 64, "Transition from has unexpected values"
+        assert isinstance(parsed_event['stateIndex'], int), "Transition to has unexpected values"
+        assert isinstance(_hash, str) and len(_hash) == 64, "Transition from has unexpected values"
         assert isinstance(_type, int) and _type in {0, 1, 2}, "Transition type not recognized"
         assert isinstance(parsed_event['slot'], int), "Transition slot not recognized"
         # TODO - move the above assertions into a generic type for StateTransition
@@ -117,4 +118,3 @@ class SnappInitializationReceiver(GenericEventReceiver):
     def real_rollback(self, decoded_event, block_info=None):
         # TODO - remove event from db
         pass
-

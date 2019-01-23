@@ -272,40 +272,18 @@
         },
         {
           "indexed": false,
-          "name": "from",
-          "type": "bytes32"
+          "name": "stateIndex",
+          "type": "uint256"
         },
         {
           "indexed": false,
-          "name": "to",
+          "name": "stateHash",
           "type": "bytes32"
         },
         {
           "indexed": false,
           "name": "slot",
           "type": "uint256"
-        }
-      ],
-      "name": "StateTransition",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": false,
-          "name": "transitionType",
-          "type": "uint8"
-        },
-        {
-          "indexed": false,
-          "name": "from",
-          "type": "bytes32"
-        },
-        {
-          "indexed": false,
-          "name": "to",
-          "type": "bytes32"
         }
       ],
       "name": "StateTransition",
