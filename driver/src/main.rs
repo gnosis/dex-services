@@ -18,10 +18,7 @@ use std::time::Duration;
 use std::thread;
 
 
-fn get_current_balances() -> Result<models::State, io::Error>{
-
-    let client = Client::connect("localhost", 27017)
-        .expect("Failed to initialize standalone client.");
+fn get_current_balances(client: Client) -> Result<models::State, io::Error>{
 
     let coll = client.db("dfusion").collection("CurrentState");
 
@@ -31,7 +28,11 @@ fn get_current_balances() -> Result<models::State, io::Error>{
     
     let docs: Vec<_> = cursor.map(|doc| doc.unwrap()).collect();
 
-    if docs.len() !=1 {
+    if docs.len() == 0 {
+        println!("Error: No CurrentState in the dfusion database");
+    }
+
+    if docs.len() != 1 {
         println!("Error: There should be only one CurrentState");
     }
 
@@ -58,10 +59,7 @@ fn get_current_balances() -> Result<models::State, io::Error>{
 }
 
 
-fn get_deposits_of_slot(slot: i32) -> Result<Vec< models::Deposits >, io::Error>{
-
-    let client = Client::connect("localhost", 27017)
-        .expect("Failed to initialize standalone client.");
+fn get_deposits_of_slot(slot: i32, client: Client) -> Result<Vec< models::Deposits >, io::Error>{
 
     let mut query=String::from(r#" { "slot": "#);
     let t=slot.to_string();
@@ -94,12 +92,28 @@ fn apply_deposits(state: &mut models::State, deposits: &Vec<models::Deposits>) -
 
 fn main() {
     
+    let client = Client::connect("localhost", 27017)
+        .expect("Failed to initialize standalone client.");
+
+	let (_eloop, transport) = web3::transports::Http::new("http://localhost:8545").unwrap();
+	let web3 = web3::Web3::new(transport);
+    
+
+	// Reading contract abi from json file.
+	let contents = fs::read_to_string("./build/contracts/SnappBase.json")
+	    .expect("Something went wrong reading the SnappBasejson");
+	let  snapp_base: serde_json::Value  = serde_json::from_str(&contents).expect("Json convertion was not correct");
+	let  snapp_base_abi: String =snapp_base.get("abi").unwrap().to_string(); 
+
+	let address: Address  = Address::from("0xC89Ce4735882C9F0f0FE26686c53074E09B0D550");//Todo: read address .env
+	let contract = Contract::from_json(web3.eth(), address ,snapp_base_abi.as_bytes()) 
+	    .unwrap();
+
     loop{
-	    let mut state = get_current_balances().expect("Could not get the current state of the chain");
+	    let mut state = get_current_balances(client.clone()).expect("Could not get the current state of the chain");
 	    println!("Current balances are: {:?}", state.balances);
 
-	   	let (_eloop, transport) = web3::transports::Http::new("http://localhost:8545").unwrap();
-	    let web3 = web3::Web3::new(transport);
+
 	    let accounts = web3.eth().accounts().wait().unwrap();
 	    //Get current balance
 	    let balance = web3.eth().balance(accounts[0], None).wait().unwrap();
@@ -107,15 +121,6 @@ fn main() {
 	    	panic!("Not sufficient balance for posting updates into the chain: {}", balance);
 	    }
 
-	    // Reading contract abi from json file.
-	    let contents = fs::read_to_string("./build/contracts/SnappBase.json")
-	        .expect("Something went wrong reading the SnappBasejson");
-	    let  snapp_base: serde_json::Value  = serde_json::from_str(&contents).expect("Json convertion was not correct");
-	    let  snapp_base_abi: String =snapp_base.get("abi").unwrap().to_string(); 
-
-	    let address: Address  = Address::from("0xC89Ce4735882C9F0f0FE26686c53074E09B0D550");//Todo: read address .env
-	    let contract = Contract::from_json(web3.eth(), address ,snapp_base_abi.as_bytes()) 
-	        .unwrap();
 
 		 //get depositSlot
 	   	let result = contract.query("depositSlot", (), None, Options::default(), None);
@@ -154,11 +159,8 @@ fn main() {
 	    }
 
 	    if deposit_ind < current_deposit_slot {
-			
 		    println!("Next deposit_slot to be processed is {}", deposit_ind);
-		  	
-
-		  	let deposits = get_deposits_of_slot(deposit_ind+1).unwrap();
+		  	let deposits = get_deposits_of_slot(deposit_ind+1, client.clone()).unwrap();
 		    
 		    //TODO rehash deposits
 		    //deposits[0].depositHash
