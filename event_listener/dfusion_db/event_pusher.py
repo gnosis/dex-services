@@ -41,8 +41,8 @@ def update_accounts(event: Dict[str, Union[int, str, str, int]]):
     :return: bson.objectid.ObjectId
     """
     transition_type = event['transitionType']
-    state_index = event['stateIndex']
-    state_hash = event['stateHash']
+    state_index = event['from']
+    state_hash = event['to']
 
     balances = db.accounts.find_one({'stateIndex': state_index - 1})['balances']
     num_tokens = db.constants.find_one()['num_tokens']

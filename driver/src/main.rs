@@ -19,9 +19,11 @@ use std::io::{Error, ErrorKind};
 use std::thread;
 use std::sync::mpsc;
 
+
+
 fn get_current_balances(client: Client) -> Result<models::State, io::Error>{
 
-    let coll = client.db("dfusion").collection("CurrentState");
+    let coll = client.db(models::DB_NAME).collection("transitions");
 
     // Find the document and receive a cursor
     let cursor = coll.find(None, None)
@@ -46,7 +48,7 @@ fn get_current_balances(client: Client) -> Result<models::State, io::Error>{
     let bson = v.into();
     let mut _temp: bson::ordered::OrderedDocument = mongodb::from_bson(bson).expect("Failed to convert bson to document");
     
-    let coll = client.db("dfusion").collection("State");
+    let coll = client.db(models::DB_NAME).collection("accounts");
 
     let cursor = coll.find(Some(_temp) , None)
         .ok().expect("Failed to execute find.");
@@ -70,10 +72,9 @@ fn get_deposits_of_slot(slot: i32, client: Client) -> Result<Vec< models::Deposi
     let bson = v.into();
     let mut _temp: bson::ordered::OrderedDocument = mongodb::from_bson(bson).expect("Failed to convert bson to document");
     
-    let coll = client.db("dfusion").collection("Deposits");
+    let coll = client.db(models::DB_NAME).collection("deposits");
 
-    let cursor = coll.find(Some(_temp) , None)
-        .ok().expect("Failed to execute find.");
+    let cursor = coll.find(Some(_temp) , None)?;
 
     let mut docs: Vec<models::Deposits> = cursor.map(|doc| doc.unwrap())
                                 .map(|doc| serde_json::to_string(&doc)
@@ -159,7 +160,7 @@ fn main() {
 		    	deposit_ind = deposit_ind + 1;
 		    }
 		    println!("Current depnding deposit_index is {:?}", deposit_ind);
-			/*
+			/* Probably no longer needed...
 		    // Now, we want to hop through all empty depositSlots
 		    let empty_deposit_slot = true;
 		    while empty_deposit_slot || current_deposit_slot == 0 {

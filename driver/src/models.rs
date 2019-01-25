@@ -15,6 +15,8 @@ pub const ACCOUNTS: i32 = 2;
 pub const TOKENS: i32 = 2;
 pub const SIZE_BALANCE: usize = (ACCOUNTS * TOKENS) as usize;
 
+pub const DB_NAME: &str = "db_test";
+
 #[allow(non_snake_case)]
 #[derive(Serialize, Deserialize, Clone)]
 pub struct State {
@@ -38,7 +40,7 @@ impl State {
             bs[i+32] = bs[i];
             bs[i] = hash[i];
           }  
-          println!("Intermediate Hash:{:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?}", bs[0],bs[1],bs[2],bs[3], bs[4],bs[5],bs[6],bs[7]);  
+          println!("Intermediate Hash:{:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?}", bs[0],bs[1],bs[2],bs[3],bs[4],bs[5],bs[6],bs[7]);  
           let mut h = Keccak::new_keccak256();
           h.update(&bs);
           let mut res: [u8; 32] = [0; 32];

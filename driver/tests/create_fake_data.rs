@@ -14,7 +14,7 @@ fn create_fake_data() {
     let client = Client::connect("localhost", 27017)
         .expect("Failed to initialize standalone client.");
 
-    let coll = client.db("dfusion").collection("CurrentState");
+    let coll = client.db(models::DB_NAME).collection("CurrentState");
 
     let doc = doc! {
         "CurrentState": "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -24,7 +24,7 @@ fn create_fake_data() {
     coll.insert_one(doc.clone(), None)
         .ok().expect("Failed to insert CurrentState.");
 
-    let coll = client.db("dfusion").collection("State");
+    let coll = client.db(models::DB_NAME).collection("State");
 
 
 	let state = models::State {
@@ -42,7 +42,7 @@ fn create_fake_data() {
     coll.insert_one(temp.clone(), None)
         .ok().expect("Failed to insert CurrentState.");
 
-    let coll = client.db("dfusion").collection("Deposits");
+    let coll = client.db(models::DB_NAME).collection("Deposits");
 
     let doc2 = doc! {
         "depositHash": "0x0000000000000000000000000000000000000000000000000000000000000010",
