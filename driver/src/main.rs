@@ -16,6 +16,8 @@ use mongodb::{Client, ThreadedClient};
 use mongodb::db::ThreadedDatabase;
 use std::time::Duration;
 use std::thread;
+use std::io::{Error, ErrorKind};
+
 
 
 fn get_current_balances(client: Client) -> Result<models::State, io::Error>{
@@ -29,11 +31,11 @@ fn get_current_balances(client: Client) -> Result<models::State, io::Error>{
     let docs: Vec<_> = cursor.map(|doc| doc.unwrap()).collect();
 
     if docs.len() == 0 {
-        println!("Error: No CurrentState in the dfusion database");
+        return Err(Error::new(ErrorKind::Other, "No CurrentState in the dfusion database"));
     }
 
-    if docs.len() != 1 {
-        println!("Error: There should be only one CurrentState");
+    if docs.len() > 1 {        
+        return Err(Error::new(ErrorKind::Other, "There should be only one CurrentState"));
     }
 
     let json: serde_json::Value = serde_json::to_value(&docs[0]).expect("Failed to parse json");;
@@ -106,13 +108,12 @@ fn main() {
 	let  snapp_base_abi: String =snapp_base.get("abi").unwrap().to_string(); 
 
 	let address: Address  = Address::from("0xC89Ce4735882C9F0f0FE26686c53074E09B0D550");//Todo: read address .env
-	let contract = Contract::from_json(web3.eth(), address ,snapp_base_abi.as_bytes()) 
+	let contract = Contract::from_json(web3.eth(), address, snapp_base_abi.as_bytes()) 
 	    .unwrap();
 
     loop{
 	    let mut state = get_current_balances(client.clone()).expect("Could not get the current state of the chain");
 	    println!("Current balances are: {:?}", state.balances);
-
 
 	    let accounts = web3.eth().accounts().wait().unwrap();
 	    //Get current balance
@@ -120,7 +121,6 @@ fn main() {
 	    if balance.is_zero() {
 	    	panic!("Not sufficient balance for posting updates into the chain: {}", balance);
 	    }
-
 
 		 //get depositSlot
 	   	let result = contract.query("depositSlot", (), None, Options::default(), None);
