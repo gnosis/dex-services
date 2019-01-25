@@ -1,6 +1,6 @@
 # our base image
-FROM rust:slim
+FROM rust:1.31
 
 WORKDIR /app
 
-COPY ../. /app
+COPY . .
