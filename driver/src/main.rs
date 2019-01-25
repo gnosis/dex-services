@@ -23,7 +23,7 @@ use std::sync::mpsc;
 
 fn get_current_balances(client: Client) -> Result<models::State, io::Error>{
 
-    let coll = client.db(models::DB_NAME).collection("transitions");
+    let coll = client.db(models::DB_NAME).collection("CurrentState");
 
     // Find the document and receive a cursor
     let cursor = coll.find(None, None)
@@ -48,7 +48,7 @@ fn get_current_balances(client: Client) -> Result<models::State, io::Error>{
     let bson = v.into();
     let mut _temp: bson::ordered::OrderedDocument = mongodb::from_bson(bson).expect("Failed to convert bson to document");
     
-    let coll = client.db(models::DB_NAME).collection("accounts");
+    let coll = client.db(models::DB_NAME).collection("State");
 
     let cursor = coll.find(Some(_temp) , None)
         .ok().expect("Failed to execute find.");
@@ -72,7 +72,7 @@ fn get_deposits_of_slot(slot: i32, client: Client) -> Result<Vec< models::Deposi
     let bson = v.into();
     let mut _temp: bson::ordered::OrderedDocument = mongodb::from_bson(bson).expect("Failed to convert bson to document");
     
-    let coll = client.db(models::DB_NAME).collection("deposits");
+    let coll = client.db(models::DB_NAME).collection("Deposits");
 
     let cursor = coll.find(Some(_temp) , None)?;
 

@@ -11,8 +11,8 @@ use rustc_hex::{ToHex};
 use byteorder::{LittleEndian, WriteBytesExt};
 use tiny_keccak::Keccak;
 
-pub const ACCOUNTS: i32 = 2;
-pub const TOKENS: i32 = 2;
+pub const ACCOUNTS: i32 = 100;
+pub const TOKENS: i32 = 30;
 pub const SIZE_BALANCE: usize = (ACCOUNTS * TOKENS) as usize;
 
 pub const DB_NAME: &str = "db_test";
