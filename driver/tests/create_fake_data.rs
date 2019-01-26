@@ -14,22 +14,17 @@ fn create_fake_data() {
     let client = Client::connect("localhost", 27017)
         .expect("Failed to initialize standalone client.");
 
-    let coll = client.db(models::DB_NAME).collection("CurrentState");
-
-    let doc = doc! {
-        "CurrentState": "0x0000000000000000000000000000000000000000000000000000000000000000",
-    };
 
     // Insert document into 'dfusion.CurrentState' collection
     coll.insert_one(doc.clone(), None)
         .ok().expect("Failed to insert CurrentState.");
 
-    let coll = client.db(models::DB_NAME).collection("State");
+    let coll = client.db(models::DB_NAME).collection("accounts");
 
 
 	let state = models::State {
-	    curState: "0x0000000000000000000000000000000000000000000000000000000000000000".to_owned(),
-    	slot: 0,
+	    stateHash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_owned(),
+    	stateIndex: 0,
     	balances: vec![0; models::SIZE_BALANCE],
 	};
 
@@ -42,10 +37,9 @@ fn create_fake_data() {
     coll.insert_one(temp.clone(), None)
         .ok().expect("Failed to insert CurrentState.");
 
-    let coll = client.db(models::DB_NAME).collection("Deposits");
+    let coll = client.db(models::DB_NAME).collection("deposits");
 
     let doc2 = doc! {
-        "depositHash": "0x0000000000000000000000000000000000000000000000000000000000000010",
         "slotIndex": 0,
         "slot": 1,
         "accountId": 1,
@@ -57,7 +51,6 @@ fn create_fake_data() {
     coll.insert_one(doc2.clone(), None)
         .ok().expect("Failed to insert Deposit");    
     let doc2 = doc! {
-        "depositHash": "0x0000000000000000000000000000000000000000000000000000000000000020",
         "slotIndex": 1,
         "slot": 1,
         "accountId": 1,

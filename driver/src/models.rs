@@ -10,18 +10,19 @@ extern crate byteorder;
 use rustc_hex::{ToHex};
 use byteorder::{LittleEndian, WriteBytesExt};
 use tiny_keccak::Keccak;
+use web3::types::{Address, H256, U256};
 
 pub const ACCOUNTS: i32 = 100;
 pub const TOKENS: i32 = 30;
 pub const SIZE_BALANCE: usize = (ACCOUNTS * TOKENS) as usize;
 
-pub const DB_NAME: &str = "test_db";
+pub const DB_NAME: &str = "dfusion2";
 
 #[allow(non_snake_case)]
 #[derive(Serialize, Deserialize, Clone)]
 pub struct State {
-  	pub curState: String,
-   	pub slot: i32,
+  	pub stateHash: String,
+   	pub stateIndex: i32,
    	pub balances: Vec<i64>,
 }
 
@@ -40,7 +41,7 @@ impl State {
             bs[i+32] = bs[i];
             bs[i] = hash[i];
           }  
-          println!("Intermediate Hash:{:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?}", bs[0],bs[1],bs[2],bs[3],bs[4],bs[5],bs[6],bs[7]);  
+          //println!("Intermediate Hash:{:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?}", bs[0],bs[1],bs[2],bs[3],bs[4],bs[5],bs[6],bs[7]);  
           let mut h = Keccak::new_keccak256();
           h.update(&bs);
           let mut res: [u8; 32] = [0; 32];
@@ -54,7 +55,6 @@ impl State {
 #[allow(non_snake_case)]
 #[derive(Serialize, Deserialize)]
 pub struct Deposits {
-  	pub depositHash: String,
     pub slotIndex: i32,
     pub slot: i32,
     pub accountId: i32,
@@ -64,10 +64,13 @@ pub struct Deposits {
 
 impl Deposits {
 
-  /*//All these hash functions still need to be coded
-  pub fn calc_hash(&self, prev_hash: [u8; 32]) -> [u8; 32]{
+  //All these hash functions still need to be coded
+  pub fn hash(&self, prev_hash: &H256
+    ) -> H256 {
 
-
+          let _current_deposithash: H256 = H256::zero();
+          _current_deposithash.clone()
+/*        
     // rust deposit hash calculation:
     //    '0x136dd1a7d0a62859f2077a62b7673c5c712fb750604a15f5f6140ab2c5112327'
     /// depositHashWithOnlyBytes32 0x66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925'
@@ -99,7 +102,6 @@ impl Deposits {
     hash = res.clone();
 
     println!("{:?}", hash[0]);    
-    hash.clone()   
+    hash.clone()   */
   }
-*/
 }

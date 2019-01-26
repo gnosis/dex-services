@@ -21,32 +21,15 @@ use std::sync::mpsc;
 
 
 
-fn get_current_balances<Transport>(client: Client, contract: Contract<Transport>) -> Result<models::State, Error>{
-	let t: String = get_current_state_root(contract.clone()).unwrap();
-    /*let coll = client.db(models::DB_NAME).collection("CurrentState");
+fn get_current_balances(client: Client, current_state_root: &H256) -> Result<models::State, Error>{
+	let t: String = current_state_root.hex();
+    let mut query=String::from(r#" { "stateHash": ""#);
+    query.push_str( &t[2..] );
+    query.push_str(r#"" }"#);
 
-    // Find the document and receive a cursor
-    let cursor = coll.find(None, None)
-        .ok().expect("Failed to execute find.");
-    
-    let docs: Vec<_> = cursor.map(|doc| doc.unwrap()).collect();
-
-    if docs.len() == 0 {
-        return Err(Error::new(ErrorKind::Other, "No CurrentState in the dfusion database"));
-    }
-
-    if docs.len() > 1 {        
-        return Err(Error::new(ErrorKind::Other, "There should be only one CurrentState"));
-    }
-
-    let json: serde_json::Value = serde_json::to_value(&docs[0]).expect("Failed to parse json");*/
-    let mut query=String::from(r#" { "curState": "#);
-    query.push_str( &t );
-    query.push_str(" }");
     let v: serde_json::Value = serde_json::from_str(&query).expect("Failed to parse query to serde_json::value");
     let bson = v.into();
     let mut _temp: bson::ordered::OrderedDocument = mongodb::from_bson(bson).expect("Failed to convert bson to document");
-    
     let coll = client.db(models::DB_NAME).collection("accounts");
 
     let cursor = coll.find(Some(_temp) , None)
@@ -91,13 +74,22 @@ fn apply_deposits(state: &mut models::State, deposits: &Vec<models::Deposits>) -
     Ok(state.clone())
 }
 
-fn get_current_state_root<Transport>(contract: Contract<Transport>) -> Result<String, io::Error>{
+fn get_current_state_root() -> Result<H256, io::Error> {
+
+	let (_eloop, transport) = web3::transports::Http::new("http://localhost:8545").unwrap();
+			let web3 = web3::Web3::new(transport);
+	// Reading contract abi from json file.
+	let contents = fs::read_to_string("./build/contracts/SnappBase.json")
+	    .expect("Something went wrong reading the SnappBasejson");
+	let  snapp_base: serde_json::Value  = serde_json::from_str(&contents).expect("Json convertion was not correct");
+	let  snapp_base_abi: String =snapp_base.get("abi").unwrap().to_string(); 
+
+	let address: Address  = Address::from("0xC89Ce4735882C9F0f0FE26686c53074E09B0D550");//Todo: read address .env
+	let contract = Contract::from_json(web3.eth(), address ,snapp_base_abi.as_bytes()) 
+ 	    .expect("Could not read the contract");
 	let result = contract.query("getCurrentStateRoot", (), None, Options::default(), None);
-	let _curr_state_root: H256 = result.wait()?;
-	let mut d=String::from(r#" "0x"#);
-   	d.push_str( &state.hash() );
-   	d.push_str(r#"""#);
-   	Ok(d.clone())
+	let _curr_state_root: H256 = result.wait().unwrap();
+   	Ok(_curr_state_root.clone())
 } 
 	
 fn main() {
@@ -133,20 +125,22 @@ fn main() {
 
 			let address: Address  = Address::from("0xC89Ce4735882C9F0f0FE26686c53074E09B0D550");//Todo: read address .env
 			let contract = Contract::from_json(web3.eth(), address ,snapp_base_abi.as_bytes()) 
-		 	    .expect("Could not read the contract");;
+		 	    .expect("Could not read the contract");
 
-	        
-		    let mut state = get_current_balances(client.clone(), contract.clone()).expect("Could not get the current state of the chain");
-		    println!("Current balances are: {:?}", state.balances);
-
+		 	// get current state
+	        let result = contract.query("getCurrentStateRoot", (), None, Options::default(), None);
+			let curr_state_root: H256 = result.wait().unwrap();
+		    let mut state = get_current_balances(client.clone(), &curr_state_root).expect("Could not get the current state of the chain");
 		    let accounts = web3.eth().accounts().wait().expect("Could not get the accounts");
-		    //Get current balance
+
+		    // check that operator has sufficient ether
 		    let balance = web3.eth().balance(accounts[0], None).wait().expect("Could not get the balances");
 		    if balance.is_zero() {
 		    	panic!("Not sufficient balance for posting updates into the chain: {}", balance);
 		    }
 
-			 //get depositSlot
+			//get depositSlot
+			//
 		   	let result = contract.query("depositIndex", (), None, Options::default(), None);
 		    let current_deposit_ind: U256 = result.wait().expect("Could not get deposit_slot");
 		    let current_deposit_slot: i32 = current_deposit_ind.low_u32() as i32; 
@@ -167,51 +161,59 @@ fn main() {
 		    if found {
 		    	deposit_ind = deposit_ind + 1;
 		    }
-		    println!("Current depnding deposit_index is {:?}", deposit_ind);
-			/* Probably no longer needed...
-		    // Now, we want to hop through all empty depositSlots
-		    let empty_deposit_slot = true;
-		    while empty_deposit_slot || current_deposit_slot == 0 {
-		    	let result = contract.query("isDepositSlotEmpty", U256::from(deposit_ind), None, Options::default(), None);
-		    	let empty_deposit_slot: bool = result.wait().expect("Could not get isDepositSlotEmpty");
-		    	if !empty_deposit_slot {
-		    		break;
-		    	}
-		    	deposit_ind = deposit_ind + 1;
-		    	if deposit_ind == current_deposit_slot {
-		    		break;
-		    	}
-		    }
-  		    println!("Current top deposit_slot2 is {:?}", deposit_ind);*/
+		    println!("Current depending deposit_index is {:?}", deposit_ind);
 
-		    if deposit_ind < current_deposit_slot {
+		   	let result = contract.query("getDepositCreationBlock", (U256::from(deposit_ind)), None, Options::default(), None);
+		    let current_deposit_ind_block: U256 = result.wait().expect("Could not get deposit_slot");
+
+			println!("Current depending deposit_ind_block is {:?}", current_deposit_ind_block);
+
+			let current_block = web3.eth().block_number().wait().expect("Could not get the block number");
+
+			let result = contract.query("isDepositSlotEmpty", (U256::from(deposit_ind)), None, Options::default(), None);
+		    let deposit_slot_empty: bool = result.wait().expect("Could not get deposit_slot");
+
+  			println!("Current block is {:?}", current_block);
+
+			if current_deposit_ind_block + 20 < current_block {
 			    println!("Next deposit_slot to be processed is {}", deposit_ind);
 			  	let deposits = get_deposits_of_slot(deposit_ind+1, client.clone()).unwrap();
 			    
 			    //TODO rehash deposits
-			    //deposits[0].depositHash
-			    println!("Current deposit hash: {:?}", &deposits[0].depositHash);
+			    let mut deposit_hash: H256 = H256::zero(); 
+				for pat in &deposits {
+					deposit_hash = pat.hash( &mut deposit_hash)
+				}			    	
+				println!("Current (calculated) deposit hash: {:?}", deposit_hash);
 
-			    // calculate new state by applying all deposits
-			    state = apply_deposits(&mut state, &deposits).ok().expect("Deposits could not be applied");
-			    println!("After the deposit the new balances are: {:?}", state.balances);
-			    println!("New StateHash is{:?}", state.hash());
+				// To be removed:
+				let result = contract.query("getDepositHash", (U256::from(deposit_ind)), None, Options::default(), None);
+		    	let deposit_hash: H256 = result.wait().expect("Could not get deposit_slot");
 
-			  	//send new state into blockchain
-			  	//applyDeposits signature is (slot, _currentDeposithash, _currStateRoot, _newStateRoot)
-			  	let slot = U256::from(deposit_ind);
-			    let mut d=String::from(r#" ""#);
-		    	d.push_str( &deposits[0].depositHash );
-		    	d.push_str(r#"""#);
-		   		let _current_deposithash: H256 = serde_json::from_str(&d).unwrap();
-		   		let result = contract.query("getCurrentStateRoot", (), None, Options::default(), None);
-		    	let _curr_state_root: H256 = result.wait().unwrap();
-				let mut d=String::from(r#" "0x"#);
-		    	d.push_str( &state.hash() );
-		    	d.push_str(r#"""#);
-				let _new_state_root: H256 = serde_json::from_str(&d).unwrap();
-				contract.call("applyDeposits", (slot, _current_deposithash, _curr_state_root, _new_state_root), accounts[0], Options::default());
-				println!("Send new state to the anchor contract!");
+		    	println!("Current (smart-contract) deposit hash: {:?}", deposit_hash);
+
+				if(deposit_slot_empty && deposit_ind != 0){
+					println!("All deposits are already processed");
+				} else {
+				    // calculate new state by applying all deposits
+				    state = apply_deposits(&mut state, &deposits).ok().expect("Deposits could not be applied");
+				    println!("New StateHash is{:?}", state.hash());
+
+				  	//send new state into blockchain
+				  	//applyDeposits signature is (slot, _currentDeposithash, _currStateRoot, _newStateRoot)
+				  	let slot = U256::from(deposit_ind);
+				    let mut d=String::from(r#" ""#);
+			    	d.push_str( &deposit_hash.hex() );
+			    	d.push_str(r#"""#);
+			   		let _current_deposithash: H256 = serde_json::from_str(&d).unwrap();
+			   		let _curr_state_root = curr_state_root;
+					let mut d=String::from(r#" "0x"#);
+			    	d.push_str( &state.hash() );
+			    	d.push_str(r#"""#);
+					let _new_state_root: H256 = serde_json::from_str(&d).unwrap();
+					contract.call("applyDeposits", (slot, _current_deposithash, _curr_state_root, _new_state_root), accounts[0], Options::default());
+					println!("New applyDeposit was send over to anchor contract with {:?} depositHash, {:?} _new_state_root", _current_deposithash, _new_state_root);
+				}
 			} else {
 				  	println!("All deposits are already processed");
 			}

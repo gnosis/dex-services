@@ -23,33 +23,27 @@ from the dex-contracts
 truffle migrate --network development
 ```
 
-As an example, this yields
+This should yield
 
 ```
 .
 .
 .
-3_batch_auction.js
-==================
-
-   Deploying 'SnappBase'
+Deploying 'SnappBase'
    ---------------------
-   > transaction hash:    0x7e968d2bf759c7a323173a94277e41d0fcf5ee6c563726cb85a684b947ecd41b
+   > transaction hash:    0xf95c4f1b080b65714095808269065e2a95557865502b85eba611f5fa54d001e3
    > Blocks: 0            Seconds: 0
-   > contract address:    0x6A28a306bE4121529F80df1d406A8Cdc5076DBfd
-   > account:             0x98cC12a6c7CBA60F984B297E8e482735c8ad75C5
-   > balance:             99.95211022
-   > gas used:            1971591
+   > contract address:    0xC89Ce4735882C9F0f0FE26686c53074E09B0D550
+   > account:             0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1
+   > balance:             99.94782536
+   > gas used:            2185834
    > gas price:           20 gwei
    > value sent:          0 ETH
-   > total cost:          0.03943182 ETH
-```
-
-So our `.env` will look like this
+   > total cost:          0.04371668 ETH
 
 ```
-SNAPP_CONTRACT_ADDRESS=0x6A28a306bE4121529F80df1d406A8Cdc5076DBfd
-```
+
+
 
 Execute the django-test as follows;
 
@@ -58,6 +52,15 @@ Restart the event listener to reflect the change in environment variables.
 ```bash
 docker-compose restart listener
 ```
+
+And then start the driver by:
+```bash
+cd driver
+cargo run
+```
+
+
+
 
 
 

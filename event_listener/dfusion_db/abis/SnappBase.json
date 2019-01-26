@@ -16,8 +16,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x497024c2"
+      "type": "function"
     },
     {
       "constant": false,
@@ -26,8 +25,7 @@
       "outputs": [],
       "payable": false,
       "stateMutability": "nonpayable",
-      "type": "function",
-      "signature": "0x715018a6"
+      "type": "function"
     },
     {
       "constant": true,
@@ -41,8 +39,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x7b48090e"
+      "type": "function"
     },
     {
       "constant": true,
@@ -56,8 +53,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x7b898939"
+      "type": "function"
     },
     {
       "constant": true,
@@ -71,8 +67,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x80d839b1"
+      "type": "function"
     },
     {
       "constant": true,
@@ -91,8 +86,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x89a72497"
+      "type": "function"
     },
     {
       "constant": true,
@@ -106,8 +100,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x8da5cb5b"
+      "type": "function"
     },
     {
       "constant": true,
@@ -121,8 +114,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x8e499bcf"
+      "type": "function"
     },
     {
       "constant": true,
@@ -136,8 +128,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x8f32d59b"
+      "type": "function"
     },
     {
       "constant": true,
@@ -156,8 +147,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x9067d7b4"
+      "type": "function"
     },
     {
       "constant": true,
@@ -176,8 +166,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x93066f93"
+      "type": "function"
     },
     {
       "constant": true,
@@ -208,8 +197,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0xb02c43d0"
+      "type": "function"
     },
     {
       "constant": false,
@@ -223,8 +211,7 @@
       "outputs": [],
       "payable": false,
       "stateMutability": "nonpayable",
-      "type": "function",
-      "signature": "0xf2fde38b"
+      "type": "function"
     },
     {
       "constant": true,
@@ -238,8 +225,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0xf47c84c5"
+      "type": "function"
     },
     {
       "constant": true,
@@ -258,15 +244,13 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0xf4cac30d"
+      "type": "function"
     },
     {
       "inputs": [],
       "payable": false,
       "stateMutability": "nonpayable",
-      "type": "constructor",
-      "signature": "constructor"
+      "type": "constructor"
     },
     {
       "anonymous": false,
@@ -298,8 +282,7 @@
         }
       ],
       "name": "Deposit",
-      "type": "event",
-      "signature": "0x11b6a98cbe45cc4a37168fc51fe422d2d03707513fa4b04b37d18c6896462dd2"
+      "type": "event"
     },
     {
       "anonymous": false,
@@ -311,12 +294,12 @@
         },
         {
           "indexed": false,
-          "name": "from",
+          "name": "stateIndex",
           "type": "uint256"
         },
         {
           "indexed": false,
-          "name": "to",
+          "name": "stateHash",
           "type": "bytes32"
         },
         {
@@ -326,8 +309,7 @@
         }
       ],
       "name": "StateTransition",
-      "type": "event",
-      "signature": "0x3226fdc3b71ca91a95959d6392681cb982b51fc63db71eafc2ad3753edff7f84"
+      "type": "event"
     },
     {
       "anonymous": false,
@@ -349,8 +331,7 @@
         }
       ],
       "name": "SnappInitialization",
-      "type": "event",
-      "signature": "0xe1da8c47dc4fbd0eefa87251c4c509097a6a709606f6e53831712771e174afdb"
+      "type": "event"
     },
     {
       "anonymous": false,
@@ -367,8 +348,7 @@
         }
       ],
       "name": "OwnershipTransferred",
-      "type": "event",
-      "signature": "0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0"
+      "type": "event"
     },
     {
       "constant": false,
@@ -382,8 +362,7 @@
       "outputs": [],
       "payable": false,
       "stateMutability": "nonpayable",
-      "type": "function",
-      "signature": "0xa67e02ee"
+      "type": "function"
     },
     {
       "constant": false,
@@ -397,8 +376,7 @@
       "outputs": [],
       "payable": false,
       "stateMutability": "nonpayable",
-      "type": "function",
-      "signature": "0xd48bfca7"
+      "type": "function"
     },
     {
       "constant": false,
@@ -416,8 +394,7 @@
       "outputs": [],
       "payable": false,
       "stateMutability": "nonpayable",
-      "type": "function",
-      "signature": "0xf4d4c9d7"
+      "type": "function"
     },
     {
       "constant": true,
@@ -431,8 +408,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x6a2e4b2e"
+      "type": "function"
     },
     {
       "constant": false,
@@ -454,8 +430,7 @@
       "outputs": [],
       "payable": false,
       "stateMutability": "nonpayable",
-      "type": "function",
-      "signature": "0xa28e1029"
+      "type": "function"
     },
     {
       "constant": true,
@@ -474,8 +449,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x8b8e3c8b"
+      "type": "function"
     },
     {
       "constant": true,
@@ -494,8 +468,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x4383af5b"
+      "type": "function"
     },
     {
       "constant": true,
@@ -509,7 +482,44 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x974af738"
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [
+        {
+          "name": "slot",
+          "type": "uint256"
+        }
+      ],
+      "name": "getDepositCreationBlock",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [
+        {
+          "name": "slot",
+          "type": "uint256"
+        }
+      ],
+      "name": "getDepositHash",
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
     }
   ]

@@ -1,5 +1,5 @@
 # our base image
-FROM rust:1.31
+FROM rust:1.32
 
 WORKDIR /app
 
