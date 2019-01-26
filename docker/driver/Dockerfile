@@ -1,5 +1,6 @@
-# our base image
-FROM rust:1.32
+FROM rust:1.31
+
+RUN rustup self update && rustup toolchain uninstall stable && rustup toolchain install stable
 
 WORKDIR /app
 

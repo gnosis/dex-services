@@ -177,7 +177,7 @@ fn main() {
 
 			if current_deposit_ind_block + 20 < current_block {
 			    println!("Next deposit_slot to be processed is {}", deposit_ind);
-			  	let deposits = get_deposits_of_slot(deposit_ind+1, client.clone()).unwrap();
+			  	let deposits = get_deposits_of_slot(deposit_ind, client.clone()).unwrap();
 			    
 			    //TODO rehash deposits
 			    let mut deposit_hash: H256 = H256::zero(); 
@@ -211,8 +211,7 @@ fn main() {
 			    	d.push_str( &state.hash() );
 			    	d.push_str(r#"""#);
 					let _new_state_root: H256 = serde_json::from_str(&d).unwrap();
-					contract.call("applyDeposits", (slot, _current_deposithash, _curr_state_root, _new_state_root), accounts[0], Options::default());
-					println!("New applyDeposit was send over to anchor contract with {:?} depositHash, {:?} _new_state_root", _current_deposithash, _new_state_root);
+					contract.call("applyDeposits", (slot, _curr_state_root, _new_state_root), accounts[0], Options::default());
 				}
 			} else {
 				  	println!("All deposits are already processed");
