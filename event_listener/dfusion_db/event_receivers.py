@@ -75,12 +75,12 @@ class StateTransitionReceiver(GenericEventReceiver):
     def real_save(self, parsed_event: Dict[str, Any], block_info=None):
 
         # Verify integrity of post data
-        assert parsed_event.keys() == {'transitionType', 'from', 'to', 'slot'}, \
+        assert parsed_event.keys() == {'transitionType', 'stateIndex', 'stateHash', 'slot'}, \
             "Unexpected Event Keys: got {}".format(parsed_event.keys())
-        _hash = parsed_event['to']
+        _hash = parsed_event['stateHash']
         _type = parsed_event['transitionType']
 
-        assert isinstance(parsed_event['from'], int), "Transition to has unexpected values"
+        assert isinstance(parsed_event['stateIndex'], int), "Transition to has unexpected values"
         assert isinstance(_hash, str) and len(_hash) == 64, "Transition from has unexpected values"
         assert isinstance(_type, int) and _type in {0, 1, 2}, "Transition type not recognized"
         assert isinstance(parsed_event['slot'], int), "Transition slot not recognized"

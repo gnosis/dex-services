@@ -7,13 +7,13 @@ services:
     ports:
       - "27017:27017"
 
-#   ganache-cli:
-#     ports:
-#       - '8545:8545'
-#     image: 'trufflesuite/ganache-cli:latest'
-#     command: ["-d "]
-# #    logging:
-# #      driver: "none"
+  ganache-cli:
+    ports:
+      - '8545:8545'
+    image: 'trufflesuite/ganache-cli:latest'
+    command: ["-d"]
+#    logging:
+#      driver: "none"
 
   listener:
     command:  docker/event_listener/run.sh
@@ -22,7 +22,7 @@ services:
       dockerfile: docker/event_listener/Dockerfile
     depends_on:
       - mongo
- #     - ganache-cli
+      - ganache-cli
     volumes:
       - ./:/app/
 

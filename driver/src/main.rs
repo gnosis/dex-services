@@ -21,9 +21,9 @@ use std::sync::mpsc;
 
 
 
-fn get_current_balances(client: Client) -> Result<models::State, io::Error>{
-
-    let coll = client.db(models::DB_NAME).collection("CurrentState");
+fn get_current_balances<Transport>(client: Client, contract: Contract<Transport>) -> Result<models::State, Error>{
+	let t: String = get_current_state_root(contract.clone()).unwrap();
+    /*let coll = client.db(models::DB_NAME).collection("CurrentState");
 
     // Find the document and receive a cursor
     let cursor = coll.find(None, None)
@@ -39,16 +39,15 @@ fn get_current_balances(client: Client) -> Result<models::State, io::Error>{
         return Err(Error::new(ErrorKind::Other, "There should be only one CurrentState"));
     }
 
-    let json: serde_json::Value = serde_json::to_value(&docs[0]).expect("Failed to parse json");;
+    let json: serde_json::Value = serde_json::to_value(&docs[0]).expect("Failed to parse json");*/
     let mut query=String::from(r#" { "curState": "#);
-    let t=json["CurrentState"].to_string();
     query.push_str( &t );
     query.push_str(" }");
     let v: serde_json::Value = serde_json::from_str(&query).expect("Failed to parse query to serde_json::value");
     let bson = v.into();
     let mut _temp: bson::ordered::OrderedDocument = mongodb::from_bson(bson).expect("Failed to convert bson to document");
     
-    let coll = client.db(models::DB_NAME).collection("State");
+    let coll = client.db(models::DB_NAME).collection("accounts");
 
     let cursor = coll.find(Some(_temp) , None)
         .ok().expect("Failed to execute find.");
@@ -57,7 +56,7 @@ fn get_current_balances(client: Client) -> Result<models::State, io::Error>{
 
     let json: String = serde_json::to_string(&docs[0]).expect("Failed to parse json");
 
-    let deserialized: models::State = serde_json::from_str(&json).unwrap();
+    let deserialized: models::State = serde_json::from_str(&json)?;
     Ok(deserialized)
 }
 
@@ -72,7 +71,7 @@ fn get_deposits_of_slot(slot: i32, client: Client) -> Result<Vec< models::Deposi
     let bson = v.into();
     let mut _temp: bson::ordered::OrderedDocument = mongodb::from_bson(bson).expect("Failed to convert bson to document");
     
-    let coll = client.db(models::DB_NAME).collection("Deposits");
+    let coll = client.db(models::DB_NAME).collection("deposits");
 
     let cursor = coll.find(Some(_temp) , None)?;
 
@@ -91,6 +90,15 @@ fn apply_deposits(state: &mut models::State, deposits: &Vec<models::Deposits>) -
     }
     Ok(state.clone())
 }
+
+fn get_current_state_root<Transport>(contract: Contract<Transport>) -> Result<String, io::Error>{
+	let result = contract.query("getCurrentStateRoot", (), None, Options::default(), None);
+	let _curr_state_root: H256 = result.wait()?;
+	let mut d=String::from(r#" "0x"#);
+   	d.push_str( &state.hash() );
+   	d.push_str(r#"""#);
+   	Ok(d.clone())
+} 
 	
 fn main() {
 
@@ -128,7 +136,7 @@ fn main() {
 		 	    .expect("Could not read the contract");;
 
 	        
-		    let mut state = get_current_balances(client.clone()).expect("Could not get the current state of the chain");
+		    let mut state = get_current_balances(client.clone(), contract.clone()).expect("Could not get the current state of the chain");
 		    println!("Current balances are: {:?}", state.balances);
 
 		    let accounts = web3.eth().accounts().wait().expect("Could not get the accounts");

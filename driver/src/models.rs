@@ -15,7 +15,7 @@ pub const ACCOUNTS: i32 = 100;
 pub const TOKENS: i32 = 30;
 pub const SIZE_BALANCE: usize = (ACCOUNTS * TOKENS) as usize;
 
-pub const DB_NAME: &str = "db_test";
+pub const DB_NAME: &str = "test_db";
 
 #[allow(non_snake_case)]
 #[derive(Serialize, Deserialize, Clone)]
