@@ -1,6 +1,4 @@
-FROM rust:1.31
-
-RUN rustup self update && rustup toolchain uninstall stable && rustup toolchain install stable
+FROM rust:1.31.0
 
 WORKDIR /app
 
