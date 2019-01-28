@@ -108,7 +108,6 @@ fn main() {
 		let address: Address  = Address::from("0xC89Ce4735882C9F0f0FE26686c53074E09B0D550");//Todo: read address .env
 		let contract = Contract::from_json(web3.eth(), address ,snapp_base_abi.as_bytes()) 
 		 	    .expect("Could not read the contract");
-		println!("At least the start is correct");
 
 	    thread::spawn(move || {
 		 	// get current state
