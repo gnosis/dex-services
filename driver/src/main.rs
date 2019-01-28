@@ -129,7 +129,7 @@ fn main() {
 
 		    // get latest non-applied deposit_index 
 		    let mut deposit_ind: i32 = current_deposit_ind.low_u32() as i32 + 1;
-		    println!("Current top deposit_index is {:?}", deposit_ind);
+		    println!("Current top deposit_slot is {:?}", deposit_ind);
 		    let mut found: bool = false;
 
 		    // Starting from the last depositSlot, we search backwards to the first non-applied deposit
@@ -144,7 +144,7 @@ fn main() {
 		    if found {
 		    	deposit_ind = deposit_ind + 1;
 		    }
-		    println!("Current pending deposit_index is {:?}", deposit_ind);
+		    println!("Current pending deposit_slot is {:?}", deposit_ind);
 
 		   	let result = contract.query("getDepositCreationBlock", U256::from(deposit_ind), None, Options::default(), None);
 		    let current_deposit_ind_block: U256 = result.wait().expect("Could not get deposit_slot");
@@ -182,14 +182,19 @@ fn main() {
 				    println!("New StateHash is{:?}", state.hash());
 
 				  	//send new state into blockchain
-				  	//applyDeposits signature is (slot, _currStateRoot, _newStateRoot)
+				  	//applyDeposits signature is (slot, _currStateRoot, _newStateRoot, deposit_slotHash)
 				  	let slot = U256::from(deposit_ind);
 			   		let _curr_state_root = curr_state_root;
 					let mut d=String::from(r#" "0x"#);
 			    	d.push_str( &state.hash() );
 			    	d.push_str(r#"""#);
+			    	// To be removed:
 					let _new_state_root: H256 = serde_json::from_str(&d).expect("Could not get new state root");
-					contract.call("applyDeposits", (slot, _curr_state_root, _new_state_root), accounts[0], Options::default());
+					
+					let result = contract.query("getDepositHash", U256::from(deposit_ind), None, Options::default(), None);
+		    		let deposit_hash: H256 = result.wait().expect("Could not get deposit_slot");
+					
+					contract.call("applyDeposits", (slot, _curr_state_root, _new_state_root, deposit_hash), accounts[0], Options::default());
 				}
 			} else {
 				  	println!("All deposits are already processed");

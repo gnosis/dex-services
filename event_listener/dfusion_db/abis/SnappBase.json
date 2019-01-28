@@ -424,6 +424,10 @@
         {
           "name": "_newStateRoot",
           "type": "bytes32"
+        },
+        {
+          "name": "_depositHash",
+          "type": "bytes32"
         }
       ],
       "name": "applyDeposits",
