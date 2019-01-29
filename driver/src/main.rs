@@ -1,6 +1,5 @@
 extern crate models;
 extern crate mongodb;
-extern crate tiny_keccak;
 extern crate byteorder;
 extern crate rustc_hex;
 extern crate web3;
