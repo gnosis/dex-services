@@ -1,5 +1,6 @@
 # Running pepper with snarks from this repo
 
+## Will be updated soon, currently only docker config is supported
 
 ## Prerequisits:
 
@@ -15,7 +16,6 @@ sudo systemctl start mongodb
 
 
 Install rust & cargo ("1.31") - older versions would not be compatible with newest mongodb drivers.
-
 
 
 ## Setup:

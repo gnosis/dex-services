@@ -164,7 +164,7 @@ fn main() {
 			    //TODO rehash deposits
 			    let mut deposit_hash: H256 = H256::zero(); 
 				for pat in &deposits {
-					deposit_hash = pat.hash( &mut deposit_hash)
+					deposit_hash = pat.iter_hash( &mut deposit_hash)
 				}			    	
 				println!("Current (calculated) deposit hash: {:?}", deposit_hash);
 

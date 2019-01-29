@@ -7,10 +7,11 @@ extern crate rustc_hex;
 extern crate tiny_keccak;
 extern crate byteorder;
 
-use rustc_hex::{ToHex};
 use byteorder::{LittleEndian, WriteBytesExt};
 use tiny_keccak::Keccak;
-use web3::types::{Address, H256, U256};
+use web3::types:: H256;
+use rustc_hex::{FromHex, ToHex};
+
 
 pub const ACCOUNTS: i32 = 100;
 pub const TOKENS: i32 = 30;
@@ -65,11 +66,27 @@ pub struct Deposits {
 impl Deposits {
 
   //All these hash functions still need to be coded
-  pub fn hash(&self, prev_hash: &H256
+  pub fn hash_zero(&self, prev_hash: &H256
     ) -> H256 {
-
+         
           let _current_deposithash: H256 = H256::zero();
-          _current_deposithash.clone()
+          let s = _current_deposithash.hex();
+          let bytes: Vec< u8> = s[2..].from_hex().unwrap();
+          println!("{:?}", bytes);
+          let mut h = Keccak::new_keccak256();
+          h.update(&bytes);
+          let mut res: [u8; 32] = [0; 32];
+          h.finalize(&mut res);
+          println!("res to hex{:?}", res.to_hex());
+          let hash: H256 = H256::from_slice(&res);
+          let target: H256 = serde_json::from_str(r#""0x2b32db6c2c0a6235fb1397e8225ea85e0f0e6e8c7b126d0016ccbde0e667151e""#).unwrap();
+          hash
+  }
+  
+  pub fn iter_hash(&self, prev_hash: &H256
+    ) -> H256 {    
+        let _current_deposithash: H256 = H256::zero();
+        _current_deposithash          
 /*        
     // rust deposit hash calculation:
     //    '0x136dd1a7d0a62859f2077a62b7673c5c712fb750604a15f5f6140ab2c5112327'
@@ -104,4 +121,27 @@ impl Deposits {
     println!("{:?}", hash[0]);    
     hash.clone()   */
   }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_hash() {
+        //check transformations
+        let deposits = Deposits { slotIndex: 0, slot: 0, accountId: 0, tokenId: 0, amount: 0 };
+        let current_deposithash: H256 = H256::zero();
+
+        let s = current_deposithash.hex();
+        let bytes: Vec< u8> = s[2..].from_hex().unwrap();
+        println!("{:?}", bytes);
+        let hash: H256 = H256::from_slice(&bytes);
+
+         assert_eq!(current_deposithash, hash);
+
+        //Check actual hashing 
+        let target: H256 = serde_json::from_str(r#""0x2b32db6c2c0a6235fb1397e8225ea85e0f0e6e8c7b126d0016ccbde0e667151e""#).unwrap();
+        assert_eq!(deposits.hash_zero(&current_deposithash), target);
+    }
 }

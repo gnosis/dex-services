@@ -53,46 +53,19 @@ Restart the event listener to reflect the change in environment variables.
 docker-compose restart listener
 ```
 
-And then start the driver by:
-```bash
-cd driver
-cargo run
-```
-
-
-
-
-
 
 Initiating Events from the Smart Contract
 -----------------------------------------
 
 From within the [dex-contracts](https://github.com/gnosis/dex-contracts) repository, with the truffle console
+run the following command to give the smart contract a basic setup( registing accounts and tokens)
 
 ```
-truffle console --network development
-> const me = (await web3.eth.getAccounts())[0]
-> const instance = await SnappBase.deployed()
-> await instance.openAccount(1)
-> const token = await ERC20Mintable.new()
-> await instance.addToken(token.address)
-> await token.mint(me, 10)
-> await token.approve(instance.address, 10)
-> await instance.deposit(1, 1)
+truffle exec scripts/setup_environment.js 
 ```
 
-This should yield the following log from the listener service
-
+Then you can use the account 1 to deposit 1 amount of token 1
 ```
-2019-01-18 13:12:15,008 [INFO] [MainProcess] Deposit received {'accountId': 1, 'tokenId': 1, 'amount': 1, 'slot': 0}
-```
-
-The database will also reflect this event!
-
-```
-mongo
-> use test_db
-> db.deposits.find()
-{ "_id" : ObjectId("5c41d0afbda1c1620c75b1fa"), "accountId" : 1, "tokenId" : 1, "amount" : 1, "slot" : 0 }
+truffle exec scripts/deposit.js 1 1 1
 
 ```

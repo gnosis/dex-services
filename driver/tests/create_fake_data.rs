@@ -1,4 +1,4 @@
-
+/*
 extern crate models;
 extern crate serde_json;
 extern crate serde;
@@ -62,3 +62,4 @@ fn create_fake_data() {
     coll.insert_one(doc2.clone(), None)
         .ok().expect("Failed to insert Deposit");        
 }
+*/
