@@ -9,7 +9,7 @@ extern crate hex;
 
 
 use byteorder::{LittleEndian, WriteBytesExt};
-use web3::types:: {H256};
+use web3::types::{H256};
 use rustc_hex::{FromHex, ToHex};
 use sha2::{Sha256, Digest};
 use std::num::ParseIntError;

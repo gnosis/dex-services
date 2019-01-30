@@ -85,9 +85,8 @@ fn main() {
 	    thread::spawn(move || {
 	        let val = String::from("Previous state is valid confirmed by thread");
 	        tx.send(val).unwrap();
-
 	    });
-
+	    // receive validtor input
 	    let received = rx.recv().unwrap();
 	    println!(": {}", received);
 
@@ -163,7 +162,7 @@ fn main() {
 			    //rehash deposits
 			    let mut deposit_hash: H256 = H256::zero(); 
 				for pat in &deposits {
-					deposit_hash = pat.iter_hash( &mut deposit_hash)
+					deposit_hash = pat.iter_hash(&mut deposit_hash)
 				}			    	
 
 				let result = contract.query("getDepositHash", U256::from(deposit_ind), None, Options::default(), None);
@@ -189,13 +188,12 @@ fn main() {
 					let mut d=String::from(r#" "0x"#);
 			    	d.push_str( &state.hash() );
 			    	d.push_str(r#"""#);
-			    	// To be removed:
 					let _new_state_root: H256 = serde_json::from_str(&d).expect("Could not get new state root");
 						
-					contract.call("applyDeposits", (slot, _curr_state_root, _new_state_root, deposit_hash), accounts[0], Options::default());
+					contract.call("applyDeposits", (slot, _curr_state_root, _new_state_root, deposit_hash_pulled), accounts[0], Options::default());
 				}
 			} else {
-				  	println!("All deposits are already processed");
+				println!("All deposits are already processed");
 			}
 		});
 

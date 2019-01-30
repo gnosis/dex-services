@@ -39,3 +39,8 @@ services:
     restart: always  
     volumes:
       - ./:/app/
+    environment:
+      - SNAPP_CONTRACT_ADDRESS=0xC89Ce4735882C9F0f0FE26686c53074E09B0D550
+      - DB_HOST=mongo
+      - DB_PORT=27017
+      - DB_NAME=dfusion2  
