@@ -186,4 +186,11 @@ ETH_EVENTS = [
         'NAME': 'snappBaseInit',
         'PUBLISH': True,
     },
+    {
+        'ADDRESSES': [os.environ['SNAPP_CONTRACT_ADDRESS']],
+        'EVENT_ABI': load_json_file(abi_file_path('SnappBase.json')),
+        'EVENT_DATA_RECEIVER': 'event_listener.dfusion_db.event_receivers.WithdrawRequestReceiver',
+        'NAME': 'snappBaseWithdraw',
+        'PUBLISH': True,
+    },
 ]

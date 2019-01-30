@@ -1,7 +1,7 @@
 from abc import abstractmethod
 
 from django_eth_events.chainevents import AbstractEventReceiver
-from .event_pusher import post_deposit, post_transition, update_accounts, initialize_accounts
+from .event_pusher import post_deposit, post_transition, update_accounts, initialize_accounts, post_withdraw
 from typing import Dict, Any
 
 import logging
@@ -118,3 +118,24 @@ class SnappInitializationReceiver(GenericEventReceiver):
     def real_rollback(self, decoded_event, block_info=None):
         # TODO - remove event from db
         pass
+
+
+class WithdrawRequestReceiver(GenericEventReceiver):
+    name = 'WithdrawRequest'
+
+    def real_save(self, parsed_event: Dict[str, Any], block_info=None):
+
+        # Verify integrity of post data
+        assert parsed_event.keys() == {'accountId', 'tokenId', 'amount', 'slot', 'slotIndex'}, "Unexpected Event Keys"
+        assert all(isinstance(val, int) for val in parsed_event.values()), "One or more of event values not integer"
+
+        try:
+            withdraw_id = post_withdraw(parsed_event)
+            logging.info("Successfully included Deposit - {}".format(withdraw_id))
+        except AssertionError as exc:
+            logging.critical("Failed to record Deposit [{}] - {}".format(exc, parsed_event))
+
+    def real_rollback(self, decoded_event, block_info=None):
+        # TODO - remove event from db
+        pass
+
