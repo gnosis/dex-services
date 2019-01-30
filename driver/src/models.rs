@@ -5,11 +5,14 @@ extern crate serde_json;
 extern crate serde;
 extern crate rustc_hex;
 extern crate byteorder;
+extern crate hex;
+
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use web3::types:: {H256};
 use rustc_hex::{FromHex, ToHex};
-use sha2::{Sha256, Sha512, Digest};
+use sha2::{Sha256, Digest};
+use std::num::ParseIntError;
 
 pub const ACCOUNTS: i32 = 100;
 pub const BITS_PER_ACCOUNT: i32 = 4;
@@ -20,29 +23,46 @@ pub const BITS_PER_BALANCE: i32 = 30;
 
 pub const DB_NAME: &str = "dfusion2";
 
-pub fn from_slice2(bytes: &[u8]) -> [u8; 32] {
-      let mut array = [0; 32];
-      let bytes = &bytes[..array.len()]; // panics if not enough data
-      array.copy_from_slice(bytes); 
-      array
-    }  
-
-fn parse_hex(hex_asm: &str) -> Vec<u8> {
-    let mut hex_bytes = hex_asm.as_bytes().iter().filter_map(|b| {
-        match b {
-            b'0'...b'9' => Some(b - b'0'),
-            b'a'...b'f' => Some(b - b'a' + 10),
-            b'A'...b'F' => Some(b - b'A' + 10),
-            _ => None,
-        }
-    }).fuse();
-
-    let mut bytes = Vec::new();
-    while let (Some(h), Some(l)) = (hex_bytes.next(), hex_bytes.next()) {
-        bytes.push(h << 4 | l)
+pub fn decode_hex_uint8(s: &mut str, size: i32) -> Result<Vec<u8>, ParseIntError> {
+    // add prefix 0, in case s has not even length
+    let mut pretail: &str = "";
+    if s.len() % 2 == 1{
+       pretail = "0";
     }
-    bytes
-}    
+    let mut p: &'static str = pretail.into();
+    let s = format!("{}{}",p, s);
+
+    let mut v: Result<Vec<u8>, ParseIntError> = (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16))
+        .collect();
+
+    let mut v= v.unwrap();
+    let mut vv = Vec::with_capacity(size as usize);
+    for _i in 0..size {
+        vv.push(0);
+    }
+    for i in 1..v.len()+1 {
+      vv[size as usize - i] = v.pop().unwrap();
+    }
+    println!("{:?}", vv.clone());
+    Ok(vv.clone())
+}
+
+pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16))
+        .collect()
+}
+
+pub fn from_slice2(bytes: &[u8]) -> [u8; 32] {
+    let mut array = [0; 32];
+    let bytes = &bytes[..array.len()]; // panics if not enough data
+    array.copy_from_slice(bytes); 
+    array
+}  
+
 
 #[allow(non_snake_case)]
 #[derive(Serialize, Deserialize, Clone)]
@@ -75,9 +95,7 @@ impl State {
           hash = from_slice2(&b); 
         }
       hash.to_hex()
-    } 
-    
-    
+    }     
 }
 
 #[allow(non_snake_case)]
@@ -91,90 +109,63 @@ pub struct Deposits {
 }
 
 impl Deposits {
-
-  //All these hash functions still need to be coded
-  pub fn hash_zero(&self, prev_hash: &H256
-    ) -> H256 {
-         
-          let _current_deposithash: H256 = H256::zero();
-          let s = _current_deposithash.hex();
-          let bytes: Vec< u8> = s[2..].from_hex().unwrap();
-          let mut hasher = Sha256::new();
-          hasher.input(&bytes);
-          let result = hasher.result();
-          let b: Vec<u8>  = result.to_vec();
-          let hash: H256 = H256::from_slice(&b);
-          hash
-  }
-
-  //All these hash functions still need to be coded
-  pub fn hash_zero_512(&self, prev_hash: &H256
-    ) -> H256 {
-         
-          let _current_deposithash: H256 = H256::zero();
-          let s = _current_deposithash.hex();
-          let mut bytes: Vec< u8> = s[2..].from_hex().unwrap();
-          let mut bytes2: Vec< u8> = s[2..].from_hex().unwrap();
-
-          bytes.append(&mut bytes2);
-          println!("{:?}", bytes);
-          let mut hasher = Sha256::new();
-          hasher.input(&bytes);
-          let result = hasher.result();
-          let b: Vec<u8>  = result.to_vec();
-          let hash: H256 = H256::from_slice(&b);
-          hash
-  }
-
+  //calcalutes the iterative hash of deposits
   pub fn iter_hash(&self, prev_hash: &H256) -> H256 {    
-        let _current_deposithash: H256 = H256::zero();
-        let s = prev_hash.hex();
-        let mut bytes: Vec< u8> = s[2..].from_hex().unwrap();
+      let _current_deposithash: H256 = H256::zero();
+      let s = prev_hash.hex();
+      let mut bytes: Vec< u8> = s[2..].from_hex().unwrap();
 
-        // add two byte for uint16 accountID
-        let s = format!("{:X}", self.accountId);
-        let mut temp:Vec<u8> = parse_hex(&s);
-        bytes.append(&mut temp);
-        // add one byte for uint8 tokenIndex,
-        let s = format!("{:X}", self.tokenId);
-        let mut temp:Vec<u8> = parse_hex(&s);
-        bytes.append(&mut temp);
-        // add 32 byte for amount u256
-        let s = format!("{:X}", self.amount);
-        let mut temp:Vec<u8> = parse_hex(&s);
-        bytes.append(&mut temp);
+      // add two byte for uint16 accountID
+      let mut s = format!("{:X}", self.accountId);
+      let decoded = decode_hex_uint8(&mut s, 2).expect("Decoding failed");
+      let mut temp:Vec<u8> = decoded;
+      bytes.append(&mut temp);
 
-        println!("{:?}", bytes);
-        let mut hasher = Sha256::new();
-        hasher.input(&bytes);
-        let result = hasher.result();
-        let b: Vec<u8>  = result.to_vec();
-        let hash: H256 = H256::from_slice(&b);
-        hash
+      // add one byte for uint8 tokenIndex,
+      let mut s = format!("{:x}", self.tokenId);
+      let decoded = decode_hex_uint8(&mut s, 1).expect("Decoding failed");
+      let mut temp:Vec<u8> = decoded;
+      bytes.append(&mut temp);
+
+      // add 32 byte for amount u256
+      let mut s = format!("{:X}", self.amount);
+      let decoded = decode_hex_uint8(&mut s, 32).expect("Decoding failed");
+      let mut temp:Vec<u8> =  decoded;
+      bytes.append(&mut temp);
+
+      println!("{:?}", bytes);
+      println!("Length of bytes is{:?}", bytes.len());
+
+      let mut hasher = Sha256::new();
+      hasher.input(&bytes);
+      let result = hasher.result();
+      let b: Vec<u8>  = result.to_vec();
+      let hash: H256 = H256::from_slice(&b);
+      hash
     }
+
+  //Just a function for a test case
+  pub fn hash_zero_512(&self) -> H256 {
+     
+      let _current_deposithash: H256 = H256::zero();
+      let s = _current_deposithash.hex();
+      let mut bytes: Vec< u8> = s[2..].from_hex().unwrap();
+      let mut bytes2: Vec< u8> = s[2..].from_hex().unwrap();
+
+      bytes.append(&mut bytes2);
+      println!("{:?}", bytes);
+      let mut hasher = Sha256::new();
+      hasher.input(&bytes);
+      let result = hasher.result();
+      let b: Vec<u8>  = result.to_vec();
+      let hash: H256 = H256::from_slice(&b);
+      hash
+  }   
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn check_hash_zero() {
-        //check transformations
-        let deposits = Deposits { slotIndex: 0, slot: 0, accountId: 0, tokenId: 0, amount: 0 };
-        let current_deposithash: H256 = H256::zero();
-
-        let s = current_deposithash.hex();
-        let bytes: Vec< u8> = s[2..].from_hex().unwrap();
-        println!("{:?}", bytes);
-        let hash: H256 = H256::from_slice(&bytes);
-
-         assert_eq!(current_deposithash, hash);
-
-        //Check actual hashing 
-        let target: H256 = serde_json::from_str(r#""0x66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925""#).unwrap();
-        assert_eq!(deposits.hash_zero(&current_deposithash), target);
-    }
 
     #[test]
     fn check_hash_zero_512bits() {
@@ -187,11 +178,11 @@ mod tests {
         println!("{:?}", bytes);
         let hash: H256 = H256::from_slice(&bytes);
 
-         assert_eq!(current_deposithash, hash);
+        assert_eq!(current_deposithash, hash);
 
         //Check actual hashing 
         let target: H256 = serde_json::from_str(r#""0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b""#).unwrap();
-        assert_eq!(deposits.hash_zero_512(&current_deposithash), target);
+        assert_eq!(deposits.hash_zero_512(), target);
     }
 
     #[test]
@@ -205,10 +196,10 @@ mod tests {
         println!("{:?}", bytes);
         let hash: H256 = H256::from_slice(&bytes);
 
-         assert_eq!(current_deposithash, hash);
+        assert_eq!(current_deposithash, hash);
 
         //Check actual hashing 
         let target: H256 = serde_json::from_str(r#""0x1be2b3990b410ca4fb38d1f79019c4018cd8820b69618646c81d22dfcbddc802""#).unwrap();
-        assert_eq!(deposits.hash_zero_512(&current_deposithash), target);
+        assert_eq!(deposits.iter_hash(&current_deposithash), target);
     }
 }

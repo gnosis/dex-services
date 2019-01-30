@@ -160,18 +160,20 @@ fn main() {
 			    println!("Next deposit_slot to be processed is {}", deposit_ind);
 			  	let deposits = get_deposits_of_slot(deposit_ind, client.clone()).expect("Could not get deposit slot");
 			    
-			    //TODO rehash deposits
+			    //rehash deposits
 			    let mut deposit_hash: H256 = H256::zero(); 
 				for pat in &deposits {
 					deposit_hash = pat.iter_hash( &mut deposit_hash)
 				}			    	
-				println!("Current (calculated) deposit hash: {:?}", deposit_hash);
 
-				// To be removed:
 				let result = contract.query("getDepositHash", U256::from(deposit_ind), None, Options::default(), None);
-		    	let deposit_hash: H256 = result.wait().expect("Could not get deposit_slot");
+		    	let deposit_hash_pulled: H256 = result.wait().expect("Could not get deposit_slot");
 
-		    	println!("Current (smart-contract) deposit hash: {:?}", deposit_hash);
+		    	if deposit_hash != deposit_hash_pulled {
+		    		println!("There is some error with the data, calculated deposit_hash: {:?} does not match with deposit_hash from smart-contract {:?}", deposit_hash, deposit_hash_pulled);
+		    		// currently the hashes are not always correct due to old data in database
+		    		//panic!("There is some error with the data, calculated deposit_hash: {:?} does not match with deposit_hash from smart-contract {:?}", deposit_hash, deposit_hash_pulled);
+		      	}
 
 				if deposit_slot_empty && deposit_ind != 0 {
 					println!("All deposits are already processed");
@@ -189,10 +191,7 @@ fn main() {
 			    	d.push_str(r#"""#);
 			    	// To be removed:
 					let _new_state_root: H256 = serde_json::from_str(&d).expect("Could not get new state root");
-					
-					let result = contract.query("getDepositHash", U256::from(deposit_ind), None, Options::default(), None);
-		    		let deposit_hash: H256 = result.wait().expect("Could not get deposit_slot");
-					
+						
 					contract.call("applyDeposits", (slot, _curr_state_root, _new_state_root, deposit_hash), accounts[0], Options::default());
 				}
 			} else {
@@ -200,7 +199,7 @@ fn main() {
 			}
 		});
 
-	thread::sleep(Duration::from_secs(3));
+	thread::sleep(Duration::from_secs(5));
 	
 	}
 }
