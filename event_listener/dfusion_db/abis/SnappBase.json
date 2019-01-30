@@ -1,6 +1,20 @@
 [
     {
       "constant": true,
+      "inputs": [],
+      "name": "withdrawIndex",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "constant": true,
       "inputs": [
         {
           "name": "",
@@ -19,12 +33,71 @@
       "type": "function"
     },
     {
+      "constant": true,
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "pendingWithdraws",
+      "outputs": [
+        {
+          "name": "size",
+          "type": "uint16"
+        },
+        {
+          "name": "shaHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "creationBlock",
+          "type": "uint256"
+        },
+        {
+          "name": "appliedAccountStateIndex",
+          "type": "uint256"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
       "constant": false,
       "inputs": [],
       "name": "renounceOwnership",
       "outputs": [],
       "payable": false,
       "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [],
+      "name": "MAX_DEPOSIT_BATCH",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [],
+      "name": "depositIndex",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
       "type": "function"
     },
     {
@@ -143,7 +216,7 @@
     {
       "constant": true,
       "inputs": [],
-      "name": "slotIndex",
+      "name": "MAX_WITHDRAW_BATCH",
       "outputs": [
         {
           "name": "",
@@ -162,15 +235,46 @@
           "type": "uint256"
         }
       ],
-      "name": "depositHashes",
+      "name": "deposits",
       "outputs": [
+        {
+          "name": "size",
+          "type": "uint16"
+        },
         {
           "name": "shaHash",
           "type": "bytes32"
         },
         {
-          "name": "applied",
-          "type": "bool"
+          "name": "creationBlock",
+          "type": "uint256"
+        },
+        {
+          "name": "appliedAccountStateIndex",
+          "type": "uint256"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "claimableWithdraws",
+      "outputs": [
+        {
+          "name": "merkleRoot",
+          "type": "bytes32"
+        },
+        {
+          "name": "appliedAccountStateIndex",
+          "type": "uint256"
         }
       ],
       "payable": false,
@@ -246,7 +350,39 @@
         {
           "indexed": false,
           "name": "amount",
+          "type": "uint128"
+        },
+        {
+          "indexed": false,
+          "name": "slot",
           "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "name": "slotIndex",
+          "type": "uint16"
+        }
+      ],
+      "name": "WithdrawRequest",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "name": "accountId",
+          "type": "uint16"
+        },
+        {
+          "indexed": false,
+          "name": "tokenId",
+          "type": "uint8"
+        },
+        {
+          "indexed": false,
+          "name": "amount",
+          "type": "uint128"
         },
         {
           "indexed": false,
@@ -329,6 +465,72 @@
       "type": "event"
     },
     {
+      "constant": true,
+      "inputs": [],
+      "name": "stateIndex",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint256"
+        }
+      ],
+      "name": "hasDepositBeenApplied",
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint256"
+        }
+      ],
+      "name": "isDepositSlotEmpty",
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [],
+      "name": "getCurrentStateRoot",
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
       "constant": false,
       "inputs": [
         {
@@ -360,46 +562,18 @@
       "constant": false,
       "inputs": [
         {
-          "name": "tokenIndex",
+          "name": "tokenId",
           "type": "uint8"
         },
         {
           "name": "amount",
-          "type": "uint256"
+          "type": "uint128"
         }
       ],
       "name": "deposit",
       "outputs": [],
       "payable": false,
       "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "constant": true,
-      "inputs": [],
-      "name": "depositSlot",
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "payable": false,
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "constant": true,
-      "inputs": [],
-      "name": "stateIndex",
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "payable": false,
-      "stateMutability": "view",
       "type": "function"
     },
     {
@@ -416,12 +590,140 @@
         {
           "name": "_newStateRoot",
           "type": "bytes32"
+        },
+        {
+          "name": "_depositHash",
+          "type": "bytes32"
         }
       ],
       "name": "applyDeposits",
       "outputs": [],
       "payable": false,
       "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "constant": false,
+      "inputs": [
+        {
+          "name": "tokenId",
+          "type": "uint8"
+        },
+        {
+          "name": "amount",
+          "type": "uint128"
+        }
+      ],
+      "name": "requestWithdrawal",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "constant": false,
+      "inputs": [
+        {
+          "name": "slot",
+          "type": "uint256"
+        },
+        {
+          "name": "includedBitMap",
+          "type": "bool[100]"
+        },
+        {
+          "name": "_merkleRoot",
+          "type": "bytes32"
+        },
+        {
+          "name": "_currStateRoot",
+          "type": "bytes32"
+        },
+        {
+          "name": "_newStateRoot",
+          "type": "bytes32"
+        },
+        {
+          "name": "_withdrawHash",
+          "type": "bytes32"
+        }
+      ],
+      "name": "applyWithdrawals",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "constant": false,
+      "inputs": [
+        {
+          "name": "withdrawSlot",
+          "type": "uint256"
+        },
+        {
+          "name": "inclusionIndex",
+          "type": "uint16"
+        },
+        {
+          "name": "accountId",
+          "type": "uint16"
+        },
+        {
+          "name": "tokenId",
+          "type": "uint8"
+        },
+        {
+          "name": "amount",
+          "type": "uint128"
+        },
+        {
+          "name": "proof",
+          "type": "bytes"
+        }
+      ],
+      "name": "claimWithdrawal",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [
+        {
+          "name": "slot",
+          "type": "uint256"
+        }
+      ],
+      "name": "getDepositCreationBlock",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [
+        {
+          "name": "slot",
+          "type": "uint256"
+        }
+      ],
+      "name": "getDepositHash",
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
       "type": "function"
     }
   ]
