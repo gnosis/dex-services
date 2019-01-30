@@ -129,7 +129,7 @@ impl Deposits {
 
       // add 32 byte for amount u256
       let mut s = format!("{:X}", self.amount);
-      let decoded = decode_hex_uint8(&mut s, 32).expect("Decoding failed");
+      let decoded = decode_hex_uint8(&mut s, 16).expect("Decoding failed");
       let mut temp:Vec<u8> =  decoded;
       bytes.append(&mut temp);
 

@@ -1,6 +1,20 @@
 [
     {
       "constant": true,
+      "inputs": [],
+      "name": "withdrawIndex",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "constant": true,
       "inputs": [
         {
           "name": "",
@@ -16,23 +30,38 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x497024c2"
+      "type": "function"
     },
     {
       "constant": true,
-      "inputs": [],
-      "name": "b",
-      "outputs": [
+      "inputs": [
         {
           "name": "",
-          "type": "bytes"
+          "type": "uint256"
+        }
+      ],
+      "name": "pendingWithdraws",
+      "outputs": [
+        {
+          "name": "size",
+          "type": "uint16"
+        },
+        {
+          "name": "shaHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "creationBlock",
+          "type": "uint256"
+        },
+        {
+          "name": "appliedAccountStateIndex",
+          "type": "uint256"
         }
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x4df7e3d0"
+      "type": "function"
     },
     {
       "constant": false,
@@ -41,8 +70,7 @@
       "outputs": [],
       "payable": false,
       "stateMutability": "nonpayable",
-      "type": "function",
-      "signature": "0x715018a6"
+      "type": "function"
     },
     {
       "constant": true,
@@ -56,8 +84,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x7b48090e"
+      "type": "function"
     },
     {
       "constant": true,
@@ -71,8 +98,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x7b898939"
+      "type": "function"
     },
     {
       "constant": true,
@@ -86,8 +112,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x80d839b1"
+      "type": "function"
     },
     {
       "constant": true,
@@ -106,8 +131,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x89a72497"
+      "type": "function"
     },
     {
       "constant": true,
@@ -121,8 +145,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x8da5cb5b"
+      "type": "function"
     },
     {
       "constant": true,
@@ -136,8 +159,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x8e499bcf"
+      "type": "function"
     },
     {
       "constant": true,
@@ -151,8 +173,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x8f32d59b"
+      "type": "function"
     },
     {
       "constant": true,
@@ -171,8 +192,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x9067d7b4"
+      "type": "function"
     },
     {
       "constant": true,
@@ -191,8 +211,21 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x93066f93"
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [],
+      "name": "MAX_WITHDRAW_BATCH",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "constant": true,
@@ -223,8 +256,30 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0xb02c43d0"
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "claimableWithdraws",
+      "outputs": [
+        {
+          "name": "merkleRoot",
+          "type": "bytes32"
+        },
+        {
+          "name": "appliedAccountStateIndex",
+          "type": "uint256"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "constant": false,
@@ -238,8 +293,7 @@
       "outputs": [],
       "payable": false,
       "stateMutability": "nonpayable",
-      "type": "function",
-      "signature": "0xf2fde38b"
+      "type": "function"
     },
     {
       "constant": true,
@@ -253,8 +307,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0xf47c84c5"
+      "type": "function"
     },
     {
       "constant": true,
@@ -273,15 +326,13 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0xf4cac30d"
+      "type": "function"
     },
     {
       "inputs": [],
       "payable": false,
       "stateMutability": "nonpayable",
-      "type": "constructor",
-      "signature": "constructor"
+      "type": "constructor"
     },
     {
       "anonymous": false,
@@ -299,7 +350,39 @@
         {
           "indexed": false,
           "name": "amount",
+          "type": "uint128"
+        },
+        {
+          "indexed": false,
+          "name": "slot",
           "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "name": "slotIndex",
+          "type": "uint16"
+        }
+      ],
+      "name": "WithdrawRequest",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "name": "accountId",
+          "type": "uint16"
+        },
+        {
+          "indexed": false,
+          "name": "tokenId",
+          "type": "uint8"
+        },
+        {
+          "indexed": false,
+          "name": "amount",
+          "type": "uint128"
         },
         {
           "indexed": false,
@@ -313,8 +396,7 @@
         }
       ],
       "name": "Deposit",
-      "type": "event",
-      "signature": "0x11b6a98cbe45cc4a37168fc51fe422d2d03707513fa4b04b37d18c6896462dd2"
+      "type": "event"
     },
     {
       "anonymous": false,
@@ -341,8 +423,7 @@
         }
       ],
       "name": "StateTransition",
-      "type": "event",
-      "signature": "0x3226fdc3b71ca91a95959d6392681cb982b51fc63db71eafc2ad3753edff7f84"
+      "type": "event"
     },
     {
       "anonymous": false,
@@ -364,8 +445,7 @@
         }
       ],
       "name": "SnappInitialization",
-      "type": "event",
-      "signature": "0xe1da8c47dc4fbd0eefa87251c4c509097a6a709606f6e53831712771e174afdb"
+      "type": "event"
     },
     {
       "anonymous": false,
@@ -382,57 +462,7 @@
         }
       ],
       "name": "OwnershipTransferred",
-      "type": "event",
-      "signature": "0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0"
-    },
-    {
-      "constant": false,
-      "inputs": [
-        {
-          "name": "accountId",
-          "type": "uint16"
-        }
-      ],
-      "name": "openAccount",
-      "outputs": [],
-      "payable": false,
-      "stateMutability": "nonpayable",
-      "type": "function",
-      "signature": "0xa67e02ee"
-    },
-    {
-      "constant": false,
-      "inputs": [
-        {
-          "name": "_tokenAddress",
-          "type": "address"
-        }
-      ],
-      "name": "addToken",
-      "outputs": [],
-      "payable": false,
-      "stateMutability": "nonpayable",
-      "type": "function",
-      "signature": "0xd48bfca7"
-    },
-    {
-      "constant": false,
-      "inputs": [
-        {
-          "name": "tokenIndex",
-          "type": "uint8"
-        },
-        {
-          "name": "amount",
-          "type": "uint256"
-        }
-      ],
-      "name": "deposit",
-      "outputs": [],
-      "payable": false,
-      "stateMutability": "nonpayable",
-      "type": "function",
-      "signature": "0xf4d4c9d7"
+      "type": "event"
     },
     {
       "constant": true,
@@ -446,8 +476,105 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x6a2e4b2e"
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint256"
+        }
+      ],
+      "name": "hasDepositBeenApplied",
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint256"
+        }
+      ],
+      "name": "isDepositSlotEmpty",
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [],
+      "name": "getCurrentStateRoot",
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "constant": false,
+      "inputs": [
+        {
+          "name": "accountId",
+          "type": "uint16"
+        }
+      ],
+      "name": "openAccount",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "constant": false,
+      "inputs": [
+        {
+          "name": "_tokenAddress",
+          "type": "address"
+        }
+      ],
+      "name": "addToken",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "constant": false,
+      "inputs": [
+        {
+          "name": "tokenId",
+          "type": "uint8"
+        },
+        {
+          "name": "amount",
+          "type": "uint128"
+        }
+      ],
+      "name": "deposit",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
     },
     {
       "constant": false,
@@ -473,63 +600,93 @@
       "outputs": [],
       "payable": false,
       "stateMutability": "nonpayable",
-      "type": "function",
-      "signature": "0x8a9ffe22"
+      "type": "function"
     },
     {
-      "constant": true,
+      "constant": false,
       "inputs": [
         {
-          "name": "index",
-          "type": "uint256"
-        }
-      ],
-      "name": "hasDepositBeenApplied",
-      "outputs": [
+          "name": "tokenId",
+          "type": "uint8"
+        },
         {
-          "name": "",
-          "type": "bool"
+          "name": "amount",
+          "type": "uint128"
         }
       ],
+      "name": "requestWithdrawal",
+      "outputs": [],
       "payable": false,
-      "stateMutability": "view",
-      "type": "function",
-      "signature": "0x8b8e3c8b"
+      "stateMutability": "nonpayable",
+      "type": "function"
     },
     {
-      "constant": true,
+      "constant": false,
       "inputs": [
         {
-          "name": "index",
+          "name": "slot",
           "type": "uint256"
-        }
-      ],
-      "name": "isDepositSlotEmpty",
-      "outputs": [
+        },
         {
-          "name": "",
-          "type": "bool"
-        }
-      ],
-      "payable": false,
-      "stateMutability": "view",
-      "type": "function",
-      "signature": "0x4383af5b"
-    },
-    {
-      "constant": true,
-      "inputs": [],
-      "name": "getCurrentStateRoot",
-      "outputs": [
+          "name": "includedBitMap",
+          "type": "bool[100]"
+        },
         {
-          "name": "",
+          "name": "_merkleRoot",
+          "type": "bytes32"
+        },
+        {
+          "name": "_currStateRoot",
+          "type": "bytes32"
+        },
+        {
+          "name": "_newStateRoot",
+          "type": "bytes32"
+        },
+        {
+          "name": "_withdrawHash",
           "type": "bytes32"
         }
       ],
+      "name": "applyWithdrawals",
+      "outputs": [],
       "payable": false,
-      "stateMutability": "view",
-      "type": "function",
-      "signature": "0x974af738"
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "constant": false,
+      "inputs": [
+        {
+          "name": "withdrawSlot",
+          "type": "uint256"
+        },
+        {
+          "name": "inclusionIndex",
+          "type": "uint16"
+        },
+        {
+          "name": "accountId",
+          "type": "uint16"
+        },
+        {
+          "name": "tokenId",
+          "type": "uint8"
+        },
+        {
+          "name": "amount",
+          "type": "uint128"
+        },
+        {
+          "name": "proof",
+          "type": "bytes"
+        }
+      ],
+      "name": "claimWithdrawal",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
     },
     {
       "constant": true,
@@ -548,8 +705,7 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0x6c8629c0"
+      "type": "function"
     },
     {
       "constant": true,
@@ -568,7 +724,6 @@
       ],
       "payable": false,
       "stateMutability": "view",
-      "type": "function",
-      "signature": "0xe880696a"
+      "type": "function"
     }
   ]

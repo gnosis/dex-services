@@ -8,16 +8,17 @@ use web3::futures::Future;
 use web3::contract::{Contract, Options};
 use web3::types::{Address, H256, U256};
 
+use std::env;
 use std::fs;
 use std::io;
-use mongodb::bson;
-use mongodb::{Client, ThreadedClient};
-use mongodb::db::ThreadedDatabase;
 use std::time::Duration;
 use std::io::{Error};
 use std::thread;
 use std::sync::mpsc;
 
+use mongodb::bson;
+use mongodb::{Client, ThreadedClient};
+use mongodb::db::ThreadedDatabase;
 
 
 fn get_current_balances(client: Client, current_state_root: H256) -> Result<models::State, Error>{
@@ -90,9 +91,11 @@ fn main() {
 	    let received = rx.recv().unwrap();
 	    println!(": {}", received);
 
-		// initializing all needed web3 variables 
-		 let client = Client::connect("mongo", 27017)
-	    .expect("Failed to initialize standalone client");
+		// initializing all needed web3 variables
+		let db_host = env::var("DB_HOST").unwrap();
+		let db_port = env::var("DB_PORT").unwrap();
+		let client = Client::connect(&db_host, db_port.parse::<u16>().unwrap())
+	    	.expect("Failed to initialize standalone client");
 
 		let (_eloop, transport) = web3::transports::Http::new("http://ganache-cli:8545")
 			.expect("Transport was not established correctly");
@@ -103,7 +106,9 @@ fn main() {
 		let  snapp_base: serde_json::Value  = serde_json::from_str(&contents).expect("Json convertion was not correct");
 		let  snapp_base_abi: String =snapp_base.get("abi").unwrap().to_string(); 
 
-		let address: Address  = Address::from("0xC89Ce4735882C9F0f0FE26686c53074E09B0D550");//Todo: read address .env
+		let snapp_address: String = env::var("SNAPP_CONTRACT_ADDRESS").unwrap();
+		// TO do: use snapp_address in next line
+		let address: Address  = Address::from("0xC89Ce4735882C9F0f0FE26686c53074E09B0D550");
 		let contract = Contract::from_json(web3.eth(), address ,snapp_base_abi.as_bytes()) 
 		 	    .expect("Could not read the contract");
 
@@ -158,7 +163,7 @@ fn main() {
 			if current_deposit_ind_block + 20 < current_block && deposit_ind != current_deposit_ind.low_u32() as i32 + 1 {
 			    println!("Next deposit_slot to be processed is {}", deposit_ind);
 			  	let deposits = get_deposits_of_slot(deposit_ind, client.clone()).expect("Could not get deposit slot");
-			    
+			    println!("Amount of deposits to be processed{:?}", deposits.len());
 			    //rehash deposits
 			    let mut deposit_hash: H256 = H256::zero(); 
 				for pat in &deposits {
