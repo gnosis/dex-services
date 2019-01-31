@@ -16,6 +16,17 @@ services:
 #    logging:
 #      driver: "none"
 
+  truffle:
+    command: docker/truffle/run.sh
+    build:
+      context: .
+      dockerfile: ./docker/truffle/Dockerfile
+    depends_on:
+      - ganache-cli
+    volumes:
+      - ./:/app/
+    tty: true    
+
   listener:
     command:  docker/event_listener/run.sh
     build:
