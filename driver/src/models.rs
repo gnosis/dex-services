@@ -29,10 +29,10 @@ pub fn decode_hex_uint8(s: &mut str, size: i32) -> Result<Vec<u8>, ParseIntError
     if s.len() % 2 == 1{
        pretail = "0";
     }
-    let mut p: &'static str = pretail.into();
+    let p: &'static str = pretail.into();
     let s = format!("{}{}",p, s);
 
-    let mut v: Result<Vec<u8>, ParseIntError> = (0..s.len())
+    let v: Result<Vec<u8>, ParseIntError> = (0..s.len())
         .step_by(2)
         .map(|i| u8::from_str_radix(&s[i..i + 2], 16))
         .collect();
