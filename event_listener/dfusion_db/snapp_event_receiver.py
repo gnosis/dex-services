@@ -25,7 +25,7 @@ class DepositReceiver(SnappEventListener):
 
 
 class StateTransitionReceiver(SnappEventListener):
-    def save(self, parsed_event: Dict[str, Any], block_info=None):
+    def save(self, parsed_event: Dict[str, Any], block_info):
 
         # Verify integrity of post data
         assert parsed_event.keys() == {'transitionType', 'stateIndex', 'stateHash', 'slot'}, \
@@ -47,7 +47,7 @@ class StateTransitionReceiver(SnappEventListener):
             logging.critical("Failed to record StateTransition [{}] - {}".format(exc, parsed_event))
 
 class SnappInitializationReceiver(SnappEventListener):
-    def save(self, parsed_event: Dict[str, Any], block_info=None):
+    def save(self, parsed_event: Dict[str, Any], block_info):
 
         # Verify integrity of post data
         assert parsed_event.keys() == {'stateHash', 'maxTokens', 'maxAccounts'}, "Unexpected Event Keys"
