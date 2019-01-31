@@ -1,14 +1,13 @@
-This can be tested as a standalone service as follows;
+Intro
+============
+This repository contains the backend logic for the dfusion exchange based on the specification, see [here](github.com/gnosis/dex-research)
 
 
-Installation
+Instructinos
 ============
 
-OS requirements
----------------
 
 Clone the repository, its submodule, and run the container
-
 ```bash
 git clone git@github.com:gnosis/dex-services.git
 cd dex-services
@@ -17,57 +16,26 @@ git submodule update
 docker-compose up
 ```
 
-
-Deploy a [SnappBase Contract](https://github.com/gnosis/dex-contracts) and paste its address into the SNAPP_CONTRACT_ADDRESS in `dex-services/.env`
-
-from the dex-contracts
-```bash
-truffle migrate --network development
-```
-
-This should yield
-
-```
-.
-.
-.
-Deploying 'SnappBase'
-   ---------------------
-   > transaction hash:    0xf95c4f1b080b65714095808269065e2a95557865502b85eba611f5fa54d001e3
-   > Blocks: 0            Seconds: 0
-   > contract address:    0xC89Ce4735882C9F0f0FE26686c53074E09B0D550
-   > account:             0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1
-   > balance:             99.94782536
-   > gas used:            2185834
-   > gas price:           20 gwei
-   > value sent:          0 ETH
-   > total cost:          0.04371668 ETH
-
-```
+This will start:
+ganche-cli, the local ethereum chain
+mongodb, the data base storing the data of the snapp
+listener, a listner pulling data from the ganache-cli and inserting it into mongodb
+driver, a service calculating the new states and push these into the smart contract
 
 
-
-Execute the django-test as follows;
-
-Restart the event listener to reflect the change in environment variables.
+After the docker is up an running, we have to migrate the smart contracts into ganache-cli
 
 ```bash
-docker-compose restart listener
+git clone git@github.com:gnosis/dex-contracts.git
+cd dex-contracts
+truffle migrate --reset
 ```
 
+In order to setup some testing accounts and make the first deposits (from account 3, of the thrid registered token with an amount of 18), run in the same repo the following scripts:
 
-Initiating Events from the Smart Contract
------------------------------------------
 
-From within the [dex-contracts](https://github.com/gnosis/dex-contracts) repository, with the truffle console
-run the following command to give the smart contract a basic setup( registing accounts and tokens)
-
-```
-truffle exec scripts/setup_environment.js 
-```
-
-Then you can use the account 1 to deposit 1 amount of token 1
-```
-truffle exec scripts/deposit.js 1 1 1
-
+```bash
+truffle exec scripts/setup_environment.js
+truffle exec scripts/deposit.js 3 3 18
+truffle exec scripts/mineBlocks.js 21
 ```
