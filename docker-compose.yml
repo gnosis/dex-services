@@ -16,6 +16,17 @@ services:
 #    logging:
 #      driver: "none"
 
+  truffle:
+    command:  docker/truffle/run.sh
+    build:
+      context: .
+      dockerfile: ./docker/truffle/Dockerfile
+    depends_on:
+      - ganache-cli
+    volumes:
+      - ./:/app/
+    tty: true    
+
   listener:
     command:  docker/event_listener/run.sh
     build:
@@ -43,4 +54,6 @@ services:
       - SNAPP_CONTRACT_ADDRESS=0xC89Ce4735882C9F0f0FE26686c53074E09B0D550
       - DB_HOST=mongo
       - DB_PORT=27017
-      - DB_NAME=dfusion2  
+      - DB_NAME=dfusion2
+
+       
