@@ -12,6 +12,12 @@ client = MongoClient(
 )
 db = client.get_database(settings.DB_NAME)
 
+TRANSITION_TYPES = {
+    'Deposit': 0,
+    'Withdraw': 1,
+    'Auction': 2
+}
+
 
 def post_deposit(event: dict[str, int]):
     """
@@ -56,7 +62,7 @@ def update_accounts(event: Dict[str, Union[int, str, str, int]]):
     balances = db.accounts.find_one({'stateIndex': state_index - 1})['balances']
     num_tokens = db.constants.find_one()['num_tokens']
 
-    if transition_type == 0:  # Deposit
+    if transition_type == TRANSITION_TYPES['Deposit']:
 
         applied_deposits = db.deposits.find({'slot': event['slot']})
 
@@ -77,14 +83,14 @@ def update_accounts(event: Dict[str, Union[int, str, str, int]]):
 
         db.accounts.insert_one(new_account_record)
 
-    elif transition_type == 1:  # Withdraw
+    elif transition_type == TRANSITION_TYPES['Withdraw']:
 
         requested_withdraws = db.withdraws.find({'slot': event['slot']})
 
-        for deposit in requested_withdraws:
-            a_id = deposit['accountId']
-            t_id = deposit['tokenId']
-            amount = deposit['amount']
+        for withdraw in requested_withdraws:
+            a_id = withdraw['accountId']
+            t_id = withdraw['tokenId']
+            amount = withdraw['amount']
 
             index = num_tokens * (a_id - 1) + (t_id - 1)
             # Balances are stored as [b(a1, t1), b(a1, t2), ... b(a1, T), b(a2, t1), ...]
@@ -101,7 +107,7 @@ def update_accounts(event: Dict[str, Union[int, str, str, int]]):
         }
 
         db.accounts.insert_one(new_account_record)
-    elif transition_type == 2:  # Auction
+    elif transition_type == TRANSITION_TYPES['Auction']:
         pass
     else:
         # This can not happen
