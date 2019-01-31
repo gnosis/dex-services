@@ -6,11 +6,13 @@ This repository contains the backend logic for the dfusion exchange based on the
 Instructinos
 ============
 
-Run the docker compose with
 
+Clone the repository, its submodule, and run the container
 ```bash
 git clone git@github.com:gnosis/dex-services.git
 cd dex-services
+git submodule init
+git submodule update
 docker-compose up
 ```
 
