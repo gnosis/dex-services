@@ -7,11 +7,13 @@ Installation
 OS requirements
 ---------------
 
-Clone the repository and run the container
+Clone the repository, its submodule, and run the container
 
 ```bash
 git clone git@github.com:gnosis/dex-services.git
 cd dex-services
+git submodule init
+git submodule update
 docker-compose up
 ```
 
