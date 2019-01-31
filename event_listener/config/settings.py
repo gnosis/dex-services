@@ -158,32 +158,11 @@ ETHEREUM_MAX_BATCH_REQUESTS = env.int('ETHEREUM_MAX_BATCH_REQUESTS', default=500
 # GNOSIS ETHEREUM CONTRACTS
 # -------------------------
 ETH_EVENTS = [
-    # {
-    #     'ADDRESSES': [os.environ['SNAPP_CONTRACT_ADDRESS']],
-    #     'EVENT_ABI': load_json_file(abi_file_path('SnappBase.json')),
-    #     'EVENT_DATA_RECEIVER': 'event_listener.dfusion_db.event_receivers.EventDispatcher',
-    #     'NAME': 'snappBaseEvents',
-    #     'PUBLISH': True,
-    # },
     {
         'ADDRESSES': [os.environ['SNAPP_CONTRACT_ADDRESS']],
         'EVENT_ABI': load_json_file(abi_file_path('SnappBase.json')),
-        'EVENT_DATA_RECEIVER': 'event_listener.dfusion_db.event_receivers.DepositReceiver',
-        'NAME': 'snappBaseDeposits',
-        'PUBLISH': True,
-    },
-    {
-        'ADDRESSES': [os.environ['SNAPP_CONTRACT_ADDRESS']],
-        'EVENT_ABI': load_json_file(abi_file_path('SnappBase.json')),
-        'EVENT_DATA_RECEIVER': 'event_listener.dfusion_db.event_receivers.StateTransitionReceiver',
-        'NAME': 'snappBaseTransitions',
-        'PUBLISH': True,
-    },
-    {
-        'ADDRESSES': [os.environ['SNAPP_CONTRACT_ADDRESS']],
-        'EVENT_ABI': load_json_file(abi_file_path('SnappBase.json')),
-        'EVENT_DATA_RECEIVER': 'event_listener.dfusion_db.event_receivers.SnappInitializationReceiver',
-        'NAME': 'snappBaseInit',
+        'EVENT_DATA_RECEIVER': 'event_listener.dfusion_db.generic_event_receiver.EventDispatcher',
+        'NAME': 'SnappEventReceiver',
         'PUBLISH': True,
     },
 ]
