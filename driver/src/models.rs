@@ -199,7 +199,7 @@ mod tests {
         assert_eq!(current_deposithash, hash);
 
         //Check actual hashing 
-        let target: H256 = serde_json::from_str(r#""0x1be2b3990b410ca4fb38d1f79019c4018cd8820b69618646c81d22dfcbddc802""#).unwrap();
+        let target: H256 = serde_json::from_str(r#""0x8e8fe47e4a33b178bf0433d8050cb0ad7ec323fbdeeab3ecfd857b4ce1805b7a""#).unwrap();
         assert_eq!(deposits.iter_hash(&current_deposithash), target);
     }
 }
