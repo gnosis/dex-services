@@ -101,7 +101,7 @@ fn main() {
 			.expect("Transport was not established correctly");
 		let web3 = web3::Web3::new(transport);
 
-		let contents = fs::read_to_string("./build/contracts/SnappBase.json")
+		let contents = fs::read_to_string("../dex-contracts/build/contracts/SnappBase.json")
 		    .expect("Something went wrong reading the SnappBasejson");
 		let  snapp_base: serde_json::Value  = serde_json::from_str(&contents).expect("Json convertion was not correct");
 		let  snapp_base_abi: String =snapp_base.get("abi").unwrap().to_string(); 
