@@ -166,4 +166,5 @@ ETH_EVENTS = [
         'NAME': 'SnappEventReceiver',
         'PUBLISH': True,
     },
+
 ]

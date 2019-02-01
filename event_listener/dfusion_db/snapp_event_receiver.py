@@ -1,14 +1,16 @@
-from .event_pusher import post_deposit, post_transition, update_accounts, initialize_accounts
+from .event_pusher import post_deposit, post_transition, update_accounts, initialize_accounts, post_withdraw
 from abc import ABC, abstractmethod
 from typing import Dict, Any
 
 import logging
 logger = logging.getLogger(__name__)
 
+
 class SnappEventListener(ABC):
     """Abstract SnappEventReceiver class."""
     @abstractmethod
     def save(self, event:Dict[str, Any], block_info): pass
+
 
 class DepositReceiver(SnappEventListener):
     def save(self, parsed_event: Dict[str, Any], block_info):
@@ -46,6 +48,7 @@ class StateTransitionReceiver(SnappEventListener):
         except AssertionError as exc:
             logging.critical("Failed to record StateTransition [{}] - {}".format(exc, parsed_event))
 
+
 class SnappInitializationReceiver(SnappEventListener):
     def save(self, parsed_event: Dict[str, Any], block_info):
 
@@ -60,3 +63,19 @@ class SnappInitializationReceiver(SnappEventListener):
             initialize_accounts(parsed_event)
         except AssertionError as exc:
             logging.critical("Failed to record SnappInitialization [{}] - {}".format(exc, parsed_event))
+
+
+class WithdrawRequestReceiver(SnappEventListener):
+    name = 'WithdrawRequest'
+
+    def save(self, parsed_event: Dict[str, Any], block_info):
+
+        # Verify integrity of post data
+        assert parsed_event.keys() == {'accountId', 'tokenId', 'amount', 'slot', 'slotIndex'}, "Unexpected Event Keys"
+        assert all(isinstance(val, int) for val in parsed_event.values()), "One or more of event values not integer"
+
+        try:
+            withdraw_id = post_withdraw(parsed_event)
+            logging.info("Successfully included Deposit - {}".format(withdraw_id))
+        except AssertionError as exc:
+            logging.critical("Failed to record Deposit [{}] - {}".format(exc, parsed_event))
