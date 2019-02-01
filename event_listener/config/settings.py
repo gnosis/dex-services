@@ -13,11 +13,11 @@ import environ
 import os
 from .log_settings import *
 
-from event_listener.dfusion_db.abis import abi_file_path, load_json_file
+from .contract_fetcher import abi_file_path, load_contract_abi
 
 env = environ.Env()
 
-ROOT_DIR = environ.Path(__file__) - 3  # (/dex-services/config/settings.py - 4 = /dex-services)
+ROOT_DIR = environ.Path(__file__) - 3  # (/dex-services/config/settings.py - 3 = /dex-services)
 env.read_env(str(ROOT_DIR.path('.env')))
 env.read_env(str(ROOT_DIR.path('.env_db')))
 
@@ -157,40 +157,14 @@ ETHEREUM_MAX_BATCH_REQUESTS = env.int('ETHEREUM_MAX_BATCH_REQUESTS', default=500
 # -------------------------
 # GNOSIS ETHEREUM CONTRACTS
 # -------------------------
+
 ETH_EVENTS = [
-    # {
-    #     'ADDRESSES': [os.environ['SNAPP_CONTRACT_ADDRESS']],
-    #     'EVENT_ABI': load_json_file(abi_file_path('SnappBase.json')),
-    #     'EVENT_DATA_RECEIVER': 'event_listener.dfusion_db.event_receivers.EventDispatcher',
-    #     'NAME': 'snappBaseEvents',
-    #     'PUBLISH': True,
-    # },
     {
         'ADDRESSES': [os.environ['SNAPP_CONTRACT_ADDRESS']],
-        'EVENT_ABI': load_json_file(abi_file_path('SnappBase.json')),
-        'EVENT_DATA_RECEIVER': 'event_listener.dfusion_db.event_receivers.DepositReceiver',
-        'NAME': 'snappBaseDeposits',
+        'EVENT_ABI': load_contract_abi(abi_file_path('SnappBase.json')),
+        'EVENT_DATA_RECEIVER': 'event_listener.dfusion_db.generic_event_receiver.EventDispatcher',
+        'NAME': 'SnappEventReceiver',
         'PUBLISH': True,
     },
-    {
-        'ADDRESSES': [os.environ['SNAPP_CONTRACT_ADDRESS']],
-        'EVENT_ABI': load_json_file(abi_file_path('SnappBase.json')),
-        'EVENT_DATA_RECEIVER': 'event_listener.dfusion_db.event_receivers.StateTransitionReceiver',
-        'NAME': 'snappBaseTransitions',
-        'PUBLISH': True,
-    },
-    {
-        'ADDRESSES': [os.environ['SNAPP_CONTRACT_ADDRESS']],
-        'EVENT_ABI': load_json_file(abi_file_path('SnappBase.json')),
-        'EVENT_DATA_RECEIVER': 'event_listener.dfusion_db.event_receivers.SnappInitializationReceiver',
-        'NAME': 'snappBaseInit',
-        'PUBLISH': True,
-    },
-    {
-        'ADDRESSES': [os.environ['SNAPP_CONTRACT_ADDRESS']],
-        'EVENT_ABI': load_json_file(abi_file_path('SnappBase.json')),
-        'EVENT_DATA_RECEIVER': 'event_listener.dfusion_db.event_receivers.WithdrawRequestReceiver',
-        'NAME': 'snappBaseWithdraw',
-        'PUBLISH': True,
-    },
+
 ]

@@ -1,58 +1,19 @@
-from abc import abstractmethod
-
-from django_eth_events.chainevents import AbstractEventReceiver
 from .event_pusher import post_deposit, post_transition, update_accounts, initialize_accounts, post_withdraw
+from abc import ABC, abstractmethod
 from typing import Dict, Any
 
 import logging
-
 logger = logging.getLogger(__name__)
 
 
-class GenericEventReceiver(AbstractEventReceiver):
-    name = None
-
-    def ensure_name(self, _name):
-        return self.name == _name
-
-    def parse_event(self, decoded_event):
-        res = {param['name']: param['value'] for param in decoded_event['params']}
-
-        # Convert byte strings to hex
-        for k, v in res.items():
-            if isinstance(v, bytes):
-                res[k] = v.hex()
-
-        logging.info("{} received {}".format(self.name, res))
-        return res
-
-    def save(self, decoded_event, block_info=None):
-        if not self.ensure_name(decoded_event['name']):
-            return
-
-        parsed_event = self.parse_event(decoded_event)
-
-        self.real_save(parsed_event, block_info)
-
-    def rollback(self, decoded_event, block_info=None):
-        if not self.ensure_name(decoded_event['name']):
-            return
-
-        self.real_rollback(decoded_event, block_info)
-
+class SnappEventListener(ABC):
+    """Abstract SnappEventReceiver class."""
     @abstractmethod
-    def real_save(self, decoded_event, block_info=None):
-        pass
-
-    @abstractmethod
-    def real_rollback(self, decoded_event, block_info=None):
-        pass
+    def save(self, event:Dict[str, Any], block_info): pass
 
 
-class DepositReceiver(GenericEventReceiver):
-    name = 'Deposit'
-
-    def real_save(self, parsed_event: Dict[str, int], block_info=None):
+class DepositReceiver(SnappEventListener):
+    def save(self, parsed_event: Dict[str, Any], block_info):
 
         # Verify integrity of post data
         assert parsed_event.keys() == {'accountId', 'tokenId', 'amount', 'slot', 'slotIndex'}, "Unexpected Event Keys"
@@ -64,15 +25,9 @@ class DepositReceiver(GenericEventReceiver):
         except AssertionError as exc:
             logging.critical("Failed to record Deposit [{}] - {}".format(exc, parsed_event))
 
-    def real_rollback(self, decoded_event, block_info=None):
-        # TODO - remove event from db
-        pass
 
-
-class StateTransitionReceiver(GenericEventReceiver):
-    name = 'StateTransition'
-
-    def real_save(self, parsed_event: Dict[str, Any], block_info=None):
+class StateTransitionReceiver(SnappEventListener):
+    def save(self, parsed_event: Dict[str, Any], block_info):
 
         # Verify integrity of post data
         assert parsed_event.keys() == {'transitionType', 'stateIndex', 'stateHash', 'slot'}, \
@@ -93,15 +48,9 @@ class StateTransitionReceiver(GenericEventReceiver):
         except AssertionError as exc:
             logging.critical("Failed to record StateTransition [{}] - {}".format(exc, parsed_event))
 
-    def real_rollback(self, decoded_event, block_info=None):
-        # TODO - remove event from db
-        pass
 
-
-class SnappInitializationReceiver(GenericEventReceiver):
-    name = 'SnappInitialization'
-
-    def real_save(self, parsed_event: Dict[str, Any], block_info=None):
+class SnappInitializationReceiver(SnappEventListener):
+    def save(self, parsed_event: Dict[str, Any], block_info):
 
         # Verify integrity of post data
         assert parsed_event.keys() == {'stateHash', 'maxTokens', 'maxAccounts'}, "Unexpected Event Keys"
@@ -115,15 +64,11 @@ class SnappInitializationReceiver(GenericEventReceiver):
         except AssertionError as exc:
             logging.critical("Failed to record SnappInitialization [{}] - {}".format(exc, parsed_event))
 
-    def real_rollback(self, decoded_event, block_info=None):
-        # TODO - remove event from db
-        pass
 
-
-class WithdrawRequestReceiver(GenericEventReceiver):
+class WithdrawRequestReceiver(SnappEventListener):
     name = 'WithdrawRequest'
 
-    def real_save(self, parsed_event: Dict[str, Any], block_info=None):
+    def save(self, parsed_event: Dict[str, Any], block_info):
 
         # Verify integrity of post data
         assert parsed_event.keys() == {'accountId', 'tokenId', 'amount', 'slot', 'slotIndex'}, "Unexpected Event Keys"
@@ -134,8 +79,3 @@ class WithdrawRequestReceiver(GenericEventReceiver):
             logging.info("Successfully included Deposit - {}".format(withdraw_id))
         except AssertionError as exc:
             logging.critical("Failed to record Deposit [{}] - {}".format(exc, parsed_event))
-
-    def real_rollback(self, decoded_event, block_info=None):
-        # TODO - remove event from db
-        pass
-
