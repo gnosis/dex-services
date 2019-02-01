@@ -191,14 +191,15 @@ fn main() {
 				.expect("Could not get the block number");
 
 			let result = contract.query(
-				"isDepositSlotEmpty",
+				"getDepositHash",
 				U256::from(deposit_ind),
 				None,
 				Options::default(),
 				None,
 			);
-			let deposit_slot_empty: bool = result.wait().expect("Could not get deposit_slot");
-
+			let deposit_slot_empty_hash: H256 = result.wait().expect("Could not get deposit_slot");
+			let deposit_slot_empty = deposit_slot_empty_hash == H256::zero();
+			
 			println!(
 				"Current block is {:?} and the last deposit_ind_creationBlock is {:?}",
 				current_block, current_deposit_ind_block
