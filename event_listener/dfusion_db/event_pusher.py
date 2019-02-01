@@ -18,6 +18,11 @@ TRANSITION_TYPES = {
     'Auction': 2
 }
 
+COLLECTION_MAP = {
+    0: 'deposits',
+    1: 'withdraws',
+}
+
 
 def post_deposit(event: dict[str, int]):
     """
@@ -62,56 +67,43 @@ def update_accounts(event: Dict[str, Union[int, str, str, int]]):
     balances = db.accounts.find_one({'stateIndex': state_index - 1})['balances']
     num_tokens = db.constants.find_one()['num_tokens']
 
-    if transition_type == TRANSITION_TYPES['Deposit']:
+    applied_data = db.get_collection(COLLECTION_MAP[transition_type]).find({'slot': event['slot']})
 
-        applied_deposits = db.deposits.find({'slot': event['slot']})
+    for datum in applied_data:
+        a_id = datum['accountId']
+        t_id = datum['tokenId']
+        amount = datum['amount']
 
-        for deposit in applied_deposits:
-            a_id = deposit['accountId']
-            t_id = deposit['tokenId']
-            amount = deposit['amount']
+        # Balances are stored as [b(a1, t1), b(a1, t2), ... b(a1, T), b(a2, t1), ...]
+        index = num_tokens * (a_id - 1) + (t_id - 1)
+
+        if transition_type == TRANSITION_TYPES['Deposit']:
+
             _log.info("Incrementing balance of account {} - token {} by {}".format(a_id, t_id, amount))
-
-            # Balances are stored as [b(a1, t1), b(a1, t2), ... b(a1, T), b(a2, t1), ...]
             balances[num_tokens * (a_id - 1) + (t_id - 1)] += amount
 
-        new_account_record = {
-            'stateIndex': state_index,
-            'stateHash': state_hash,
-            'balances': balances
-        }
+        elif transition_type == TRANSITION_TYPES['Withdraw']:
 
-        db.accounts.insert_one(new_account_record)
-
-    elif transition_type == TRANSITION_TYPES['Withdraw']:
-
-        requested_withdraws = db.withdraws.find({'slot': event['slot']})
-
-        for withdraw in requested_withdraws:
-            a_id = withdraw['accountId']
-            t_id = withdraw['tokenId']
-            amount = withdraw['amount']
-
-            index = num_tokens * (a_id - 1) + (t_id - 1)
-            # Balances are stored as [b(a1, t1), b(a1, t2), ... b(a1, T), b(a2, t1), ...]
             if balances[index] - amount >= 0:
                 _log.info("Decreasing balance of account {} - token {} by {}".format(a_id, t_id, amount))
                 balances[index] -= amount
             else:
                 _log.info("Insufficient balance: account {} - token {} for amount {}".format(a_id, t_id, amount))
 
-        new_account_record = {
-            'stateIndex': state_index,
-            'stateHash': state_hash,
-            'balances': balances
-        }
+        elif transition_type == TRANSITION_TYPES['Auction']:
+            pass
 
-        db.accounts.insert_one(new_account_record)
-    elif transition_type == TRANSITION_TYPES['Auction']:
-        pass
-    else:
-        # This can not happen
-        _log.error("Unrecognized transition type - this should never happen")
+        else:
+            # This can not happen
+            _log.error("Unrecognized transition type - this should never happen")
+
+    new_account_record = {
+        'stateIndex': state_index,
+        'stateHash': state_hash,
+        'balances': balances
+    }
+
+    db.accounts.insert_one(new_account_record)
 
 
 def initialize_accounts(event: Dict[str, Union[str, int, int]]):
