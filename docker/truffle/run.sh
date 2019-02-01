@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#cd dex-contracts
+cd dex-contracts
 
-# rm -fr .git || :
+rm -fr .git || :
 # # Compile necesary contracts for app and cleanup unnecesary files
-# npm install
+npm install
 
 # # Compile necesary contracts for app and cleanup unnecesary files
 # truffle compile
