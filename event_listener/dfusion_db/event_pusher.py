@@ -24,7 +24,7 @@ COLLECTION_MAP = {
 }
 
 
-def post_deposit(event: dict[str, int]):
+def post_deposit(event: Dict[str, int]):
     """
     :param event: dict
     :return: bson.objectid.ObjectId
@@ -34,7 +34,7 @@ def post_deposit(event: dict[str, int]):
     return deposit_id
 
 
-def post_withdraw(event: dict[str, int]):
+def post_withdraw(event: Dict[str, int]):
     """
     :param event: dict
     :return: bson.objectid.ObjectId
@@ -44,7 +44,7 @@ def post_withdraw(event: dict[str, int]):
     return withdraw_id
 
 
-def post_transition(event: dict):
+def post_transition(event: Dict):
     """
     :param event: dict
     :return: bson.objectid.ObjectId
