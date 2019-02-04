@@ -102,13 +102,13 @@ class StateTransitionReceiver(SnappEventListener):
         }
         self.db.write_account_state(new_account_record)
 
-    def get_data_to_appy(self, transition_type, slot):
+    def get_data_to_apply(self, transition_type, slot):
         if transition_type == 0:
             return self.db.get_deposits(slot)
         elif transition_type == 1:
             return self.db.get_withdraws(slot)
         else:
-            throw RuntimeError("Invalid transition type: " + transition_type)
+            raise Exception("Invalid transition type: " + transition_type)
 
 
 class SnappInitializationReceiver(SnappEventListener):
