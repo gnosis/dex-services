@@ -7,19 +7,19 @@ import logging
 
 class DatabaseInterface(ABC):
     @abstractmethod
-    def write_deposit(self, deposit: dict) -> None: pass
+    def write_deposit(self, deposit: Dict) -> None: pass
     
     @abstractmethod
-    def write_account_state(self, account_record: dict) -> None: pass
+    def write_account_state(self, account_record: Dict) -> None: pass
 
     @abstractmethod
     def write_constants(self, num_tokens: int, num_accounts: int) -> None: pass
 
     @abstractmethod
-    def get_account_state(self, index: int) -> dict: pass
+    def get_account_state(self, index: int) -> Dict: pass
 
     @abstractmethod
-    def get_deposits(self, slot: int) -> dict: pass
+    def get_deposits(self, slot: int) -> Dict: pass
 
     @abstractmethod
     def get_num_tokens(self) -> int: pass
@@ -33,11 +33,16 @@ class MongoDbInterface(DatabaseInterface):
         self.db = client.get_database(settings.DB_NAME)
         self.logger = logging.getLogger(__name__)
 
-    def write_deposit(self, event: dict) -> None:
+    def write_deposit(self, event: Dict) -> None:
         deposit_id = self.db.deposits.insert_one(event).inserted_id
         self.logger.info("Successfully included Deposit - {}".format(deposit_id))
+
+    def write_withdraw(self, event: Dict):
+        withdraws = self.db.withdraws
+        withdraw_id = withdraws.insert_one(event).inserted_id
+        self.logger.info("Successfully included Withdraw - {}".format(withdraw_id))
     
-    def write_account_state(self, account_record: dict) -> None:
+    def write_account_state(self, account_record: Dict) -> None:
         self.db.accounts.insert_one(account_record)
     
     def write_constants(self, num_tokens: int, num_accounts: int) -> None:
@@ -46,11 +51,14 @@ class MongoDbInterface(DatabaseInterface):
             'num_accounts': num_accounts
         })
 
-    def get_account_state(self, index: int) -> dict:
+    def get_account_state(self, index: int) -> Dict:
         return self.db.accounts.find_one({'stateIndex': index})
 
-    def get_deposits(self, slot: int) -> dict:
+    def get_deposits(self, slot: int) -> Dict:
         return self.db.deposits.find({'slot': slot})
+    
+    def get_withdraws(self, slot: int) -> Dict:
+        return self.db.withdraws.find({'slot': slot})
 
     def get_num_tokens(self) -> int:
         return self.db.constants.find_one()['num_tokens']

@@ -1,4 +1,4 @@
-from .database_writer import MongoDbInterface
+from .database_interface import MongoDbInterface
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Union, List
 
@@ -13,6 +13,7 @@ class SnappEventListener(ABC):
     @abstractmethod
     def save(self, event:Dict[str, Any], block_info): pass
 
+
 class DepositReceiver(SnappEventListener):
     def save(self, parsed_event: Dict[str, Any], block_info):
 
@@ -21,12 +22,17 @@ class DepositReceiver(SnappEventListener):
         assert all(isinstance(val, int) for val in parsed_event.values()), "One or more of event values not integer"
 
         try:
-            deposit_id = self.db.write_deposit(parsed_event)
+            self.db.write_deposit(parsed_event)
         except AssertionError as exc:
             logging.critical("Failed to record Deposit [{}] - {}".format(exc, parsed_event))
 
-
 class StateTransitionReceiver(SnappEventListener):
+    TRANSITION_TYPES = {
+        'Deposit': 0,
+        'Withdraw': 1,
+        'Auction': 2
+    }
+
     def save(self, parsed_event: Dict[str, Any], block_info):
 
         # Verify integrity of post data
@@ -59,29 +65,51 @@ class StateTransitionReceiver(SnappEventListener):
         balances = self.db.get_account_state(state_index - 1)['balances']
         num_tokens = self.db.get_num_tokens()
 
-        if transition_type == 0:  # Deposit
-            applied_deposits = self.db.get_deposits(event['slot'])
-            for deposit in applied_deposits:
-                a_id = deposit['accountId']
-                t_id = deposit['tokenId']
-                amount = deposit['amount']
-                self.logger.info("Incrementing balance of account {} - token {} by {}".format(a_id, t_id, amount))
+        applied_data = self.get_data_to_apply(transition_type, event['slot'])
 
-                # Balances are stored as [b(a1, t1), b(a1, t2), ... b(a1, T), b(a2, t1), ...]
+        for datum in applied_data:
+            a_id = datum['accountId']
+            t_id = datum['tokenId']
+            amount = datum['amount']
+
+            # Balances are stored as [b(a1, t1), b(a1, t2), ... b(a1, T), b(a2, t1), ...]
+            index = num_tokens * (a_id - 1) + (t_id - 1)
+
+            if transition_type == self.TRANSITION_TYPES['Deposit']:
+
+                self.logger.info("Incrementing balance of account {} - token {} by {}".format(a_id, t_id, amount))
                 balances[num_tokens * (a_id - 1) + (t_id - 1)] += amount
 
-            new_account_record = {
-                'stateIndex': state_index,
-                'stateHash': state_hash,
-                'balances': balances
-            }
-            self.db.write_account_state(new_account_record)
-        elif transition_type == 1:  # Withdraw
-            pass
-        elif transition_type == 2:  # Auction
-            pass
+            elif transition_type == self.TRANSITION_TYPES['Withdraw']:
+
+                if balances[index] - amount >= 0:
+                    self.logger.info("Decreasing balance of account {} - token {} by {}".format(a_id, t_id, amount))
+                    balances[index] -= amount
+                else:
+                    self.logger.info("Insufficient balance: account {} - token {} for amount {}".format(a_id, t_id, amount))
+
+            elif transition_type == self.TRANSITION_TYPES['Auction']:
+                pass
+
+            else:
+                # This can not happen
+                self.logger.error("Unrecognized transition type - this should never happen")
+
+        new_account_record = {
+            'stateIndex': state_index,
+            'stateHash': state_hash,
+            'balances': balances
+        }
+        self.db.write_account_state(new_account_record)
+
+    def get_data_to_appy(self, transition_type, slot):
+        if transition_type == 0:
+            return self.db.get_deposits(slot)
+        elif transition_type == 1:
+            return self.db.get_withdraws(slot)
         else:
-            pass
+            throw RuntimeError("Invalid transition type: " + transition_type)
+
 
 class SnappInitializationReceiver(SnappEventListener):
     def save(self, parsed_event: Dict[str, Any], block_info):
@@ -110,3 +138,16 @@ class SnappInitializationReceiver(SnappEventListener):
 
         self.db.write_constants(num_tokens, num_accounts)
         self.db.write_account_state(account_record)
+
+
+class WithdrawRequestReceiver(SnappEventListener):
+    def save(self, parsed_event: Dict[str, Any], block_info):
+
+        # Verify integrity of post data
+        assert parsed_event.keys() == {'accountId', 'tokenId', 'amount', 'slot', 'slotIndex'}, "Unexpected Event Keys"
+        assert all(isinstance(val, int) for val in parsed_event.values()), "One or more of event values not integer"
+
+        try:
+            self.db.write_withdraw(parsed_event)
+        except AssertionError as exc:
+            logging.critical("Failed to record Deposit [{}] - {}".format(exc, parsed_event))
