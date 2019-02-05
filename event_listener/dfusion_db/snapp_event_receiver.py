@@ -78,7 +78,7 @@ class StateTransitionReceiver(SnappEventListener):
             if transition_type == self.TRANSITION_TYPES['Deposit']:
 
                 self.logger.info("Incrementing balance of account {} - token {} by {}".format(a_id, t_id, amount))
-                balances[num_tokens * (a_id - 1) + (t_id - 1)] += amount
+                balances[index] += amount
 
             elif transition_type == self.TRANSITION_TYPES['Withdraw']:
 
