@@ -1,15 +1,14 @@
 matrix:
   include:
     - language: rust
-      rust:
-        - 1.31.0
+      rust: 1.31.0
       cache: cargo 
       script:
         - cd driver/
         - cargo build --verbose --all
         - cargo test --verbose --all
     - language: python
-      python: "3.7-dev"
+      python: 3.6
       install:
         - pip install -r event_listener/requirements.txt
       script:
