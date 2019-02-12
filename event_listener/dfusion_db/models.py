@@ -1,5 +1,5 @@
-from typing import NamedTuple, Dict, Any, List
 from enum import Enum
+from typing import NamedTuple, Dict, Any, List
 
 
 class TransitionType(Enum):

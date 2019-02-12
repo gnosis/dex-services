@@ -1,7 +1,7 @@
 import logging
-
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Union, List
+
 from .database_interface import DatabaseInterface, MongoDbInterface
 from .models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord
 

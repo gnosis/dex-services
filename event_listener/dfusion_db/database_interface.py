@@ -1,10 +1,11 @@
-from abc import ABC, abstractmethod
-from pymongo import MongoClient
-from django.conf import settings
-from typing import Dict, List
-from .models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord
-
 import logging
+from abc import ABC, abstractmethod
+from typing import List
+
+from django.conf import settings
+from pymongo import MongoClient
+
+from .models import Deposit, Withdraw, AccountRecord
 
 
 class DatabaseInterface(ABC):

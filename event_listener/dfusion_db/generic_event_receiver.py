@@ -1,8 +1,10 @@
-from django_eth_events.chainevents import AbstractEventReceiver
-from .snapp_event_receiver import DepositReceiver, StateTransitionReceiver, SnappInitializationReceiver
+import logging
 from typing import Any, Dict
 
-import logging
+from django_eth_events.chainevents import AbstractEventReceiver
+
+from .snapp_event_receiver import DepositReceiver, StateTransitionReceiver, SnappInitializationReceiver
+
 logger = logging.getLogger(__name__)
 
 RECEIVER_MAPPING = {
