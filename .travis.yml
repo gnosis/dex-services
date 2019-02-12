@@ -12,4 +12,5 @@ matrix:
       install:
         - pip install -r event_listener/requirements.txt
       script:
+        - pytest --cov=event_listener/dfusion_db/ --cov-report term-missing
         - mypy event_listener/dfusion_db/ --ignore-missing-imports --strict
