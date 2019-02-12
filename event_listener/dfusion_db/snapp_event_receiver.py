@@ -60,10 +60,13 @@ class StateTransitionReceiver(SnappEventListener):
                         datum.account_id, datum.token_id, datum.amount))
                     balances[index] -= datum.amount
                 else:
-                    self.logger.info("Insufficient balance: account {} - token {} for amount {}".format(
-                        datum.account_id,
-                        datum.token_id,
-                        datum.amount))
+                    self.logger.info(
+                        "Insufficient balance: account {} - token {} for amount {}".format(
+                            datum.account_id,
+                            datum.token_id,
+                            datum.amount
+                        )
+                    )
             else:
                 # This can not happen
                 self.logger.error(
