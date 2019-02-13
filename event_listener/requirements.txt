@@ -5,3 +5,5 @@ django-model-utils==3.1.2
 ethereum==2.3.2
 pymongo==3.7.2
 web3==4.8.2
+flake8==3.7.5
+flake8-mypy==17.8.0
