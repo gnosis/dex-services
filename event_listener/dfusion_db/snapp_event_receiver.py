@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Union, List
+from typing import Dict, Any, Union, List, Optional
 
 from .database_interface import DatabaseInterface, MongoDbInterface
 from .models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord
@@ -9,8 +9,8 @@ from .models import Deposit, StateTransition, TransitionType, Withdraw, AccountR
 class SnappEventListener(ABC):
     """Abstract SnappEventReceiver class."""
 
-    def __init__(self, database_interface: DatabaseInterface = MongoDbInterface()):
-        self.database = database_interface
+    def __init__(self, database_interface: Optional[DatabaseInterface] = None):
+        self.database = database_interface if database_interface else MongoDbInterface()
         self.logger = logging.getLogger(__name__)
 
     @abstractmethod
@@ -44,12 +44,9 @@ class StateTransitionReceiver(SnappEventListener):
 
     def __update_accounts(self, transition: StateTransition) -> None:
         balances = self.database.get_account_state(
-            transition.state_index - 1).balances
+            transition.state_index - 1).balances.copy()
         num_tokens = self.database.get_num_tokens()
-
-        applied_data = self.__get_data_to_apply(transition)
-
-        for datum in applied_data:
+        for datum in self.__get_data_to_apply(transition):
             # Balances are stored as [b(a1, t1), b(a1, t2), ... b(a1, T), b(a2, t1), ...]
             index = num_tokens * (datum.account_id - 1) + (datum.token_id - 1)
 
@@ -63,10 +60,13 @@ class StateTransitionReceiver(SnappEventListener):
                         datum.account_id, datum.token_id, datum.amount))
                     balances[index] -= datum.amount
                 else:
-                    self.logger.info("Insufficient balance: account {} - token {} for amount {}".format(
-                        datum.account_id, datum.token_id, datum.amount))
-            elif transition.transition_type == TransitionType.Auction:
-                pass
+                    self.logger.info(
+                        "Insufficient balance: account {} - token {} for amount {}".format(
+                            datum.account_id,
+                            datum.token_id,
+                            datum.amount
+                        )
+                    )
             else:
                 # This can not happen
                 self.logger.error(
