@@ -3,17 +3,11 @@ FROM node:8.11-alpine
 # Create app directory
 WORKDIR /app
 
-# Dependencies will 	Install app dependencies
+#TO be modified, need to copy only some files.
 COPY . .
 
-RUN  apk add --update --no-cache --virtual build-dependencies git python
+# Dependencies will 	Install app dependencies
+RUN apk add --update --no-cache --virtual build-dependencies git python make g++ ca-certificates
 
-RUN cd dex-contracts
-
-RUN rm -fr .git || :
-# # Compile necesary contracts for app and cleanup unnecesary files
-RUN npm install
-
-# # Compile necesary contracts for app and cleanup unnecesary files
-# truffle compile
-RUN npx truffle migrate --reset --network developmentdocker
+# Expose container port
+EXPOSE 8080
