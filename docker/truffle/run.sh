@@ -2,11 +2,14 @@
 
 cd dex-contracts
 
+# Trick to run npm install in a git submodule
 rm -fr .git || :
-# # Compile necesary contracts for app and cleanup unnecesary files
+
+# Compile necesary contracts for app and cleanup unnecesary files
 npm install
 
 # # Compile necesary contracts for app and cleanup unnecesary files
+
 # truffle compile
 npx truffle migrate --reset --network developmentdocker
 
