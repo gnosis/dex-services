@@ -14,29 +14,7 @@ services:
     image: 'trufflesuite/ganache-cli:latest'
     command: ["-d"]
 #    logging:
-#      driver: "none"
-
-  truffle-tester:
-    command: tail -f /dev/null
-    build:
-      context: .
-      dockerfile: docker/truffle/Dockerfile
-    depends_on:
-      - ganache-cli
-    volumes:
-      - ./:/app/
-    tty: true  
-
-  truffle:
-    command: sh docker/truffle/run.sh
-    build:
-      context: .
-      dockerfile: docker/truffle/Dockerfile
-    depends_on:
-      - ganache-cli
-    volumes:
-      - ./:/app/
-    tty: true    
+#      driver: "none"  
 
   listener:
     command:  docker/event_listener/run.sh
