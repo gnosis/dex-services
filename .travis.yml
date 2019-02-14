@@ -15,6 +15,8 @@ matrix:
     #     - pytest --cov=event_listener/dfusion_db/ --cov-report term-missing
     #     - mypy event_listener/dfusion_db/ --ignore-missing-imports --strict
     - language: node_js
+      sudo: required
+      node_js: 10.13.0
       env:
         - DOCKER_COMPOSE_VERSION=1.22.0
       before_install:
@@ -22,10 +24,11 @@ matrix:
         - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
         - chmod +x docker-compose
         - sudo mv docker-compose /usr/local/bin
-        - npm install -g truffle
+        #- npm install -g truffle
       install:
         - git submodule update --init
         - docker-compose up -d
+        - npm install dex-contracts
       script:
         - sh ./test/e2e-tests-deposit.sh
       after_script:
