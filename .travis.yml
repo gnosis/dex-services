@@ -17,22 +17,22 @@ matrix:
     - language: minimal
       sudo: required
       dist: trusty
+      env:
+        global:
+          - DOCKER_COMPOSE_VERSION=1.22.0
+        matrix:
+          - PYTHON_VERSION=3.6 TEST_SUITE=pylint
+          - PYTHON_VERSION=2.7 TEST_SUITE=pylint
+          - PYTHON_VERSION=3.6 TEST_SUITE=python-tests
+          - PYTHON_VERSION=2.7 TEST_SUITE=python-tests
+          - PYTHON_VERSION=3.6 TEST_SUITE=scala-tests
       install:
       # Update docker-engine using Ubuntu 'trusty' apt repo
-      - >
-        curl -sSL "https://get.docker.com/gpg" |
-        sudo -E apt-key add -
-      - >
-        echo "deb https://apt.dockerproject.org/repo ubuntu-trusty main" |
-        sudo tee -a /etc/apt/sources.list
-      - sudo apt-get update
-      - >
-        sudo apt-get -o Dpkg::Options::="--force-confdef" \
-        -o Dpkg::Options::="--force-confold" --assume-yes install docker-engine
-      - docker version
-      # Update docker-compose via pip
-      - sudo pip install docker-compose
-      - docker-compose version
+      # update docker compose to the specified version, https://docs.travis-ci.com/user/docker/#using-docker-compose
+      - sudo rm /usr/local/bin/docker-compose
+      - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
+      - chmod +x docker-compose
+      - sudo mv docker-compose /usr/local/bin
       before_script:
         - git submodule init
         - git submodule update
