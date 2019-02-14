@@ -15,8 +15,6 @@ matrix:
         - pytest --cov=event_listener/dfusion_db/ --cov-report term-missing
         - mypy event_listener/dfusion_db/ --ignore-missing-imports --strict
     - language: minimal
-      sudo: required
-      dist: trusty
       env:
         - DOCKER_COMPOSE_VERSION=1.22.0
       before_install:
@@ -28,8 +26,6 @@ matrix:
         - git submodule update --init
         - docker-compose up -d
       script:
-        - cd dex-contracts 
-        # running the e2e tests - deposits
         - sh ./../test/e2e-tests-deposit.sh
       after_script:
         - docker-compose down
