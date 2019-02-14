@@ -13,5 +13,3 @@ npm install
 # truffle compile
 npx truffle migrate --reset --network developmentdocker
 
-# running the actual tests
-sh ./../test/e2e-tests.sh
