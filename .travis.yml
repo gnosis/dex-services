@@ -19,6 +19,14 @@ matrix:
       node_js: 10.13.0
       env:
         - DOCKER_COMPOSE_VERSION=1.22.0
+          - CXX=g++-4.8
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - build-essential
+            - g++-4.8
       before_install:
         - sudo rm /usr/local/bin/docker-compose
         - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
@@ -28,6 +36,7 @@ matrix:
       install:
         - git submodule update --init
         - docker-compose up -d
+        - npm install -C dex-contracts
       script:
         - sh ./test/e2e-tests-deposit.sh
       after_script:

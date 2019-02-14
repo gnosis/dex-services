@@ -1,6 +1,5 @@
 #!/usr/bin/env bats
 cd dex-contracts/
-npm install
 
 # checks state after first new deposit round with a deposit of 18 from account 3 and token 3
 truffle exec scripts/setup_environment.js
