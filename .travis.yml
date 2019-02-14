@@ -24,11 +24,11 @@ matrix:
         - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
         - chmod +x docker-compose
         - sudo mv docker-compose /usr/local/bin
-        #- npm install -g truffle
+        - npm install -g truffle
       install:
         - git submodule update --init
         - docker-compose up -d
-        - npm install dex-contracts
+        #- npm install dex-contracts
       script:
         - sh ./test/e2e-tests-deposit.sh
       after_script:
