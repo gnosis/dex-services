@@ -28,7 +28,7 @@ matrix:
       install:
         - git submodule update --init
         - docker-compose up -d
-        - npm install -C dex-contracts
+        - sudo npm install -C dex-contracts
       script:
         - sh ./test/e2e-tests-deposit.sh
       after_script:
