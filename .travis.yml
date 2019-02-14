@@ -18,27 +18,15 @@ matrix:
       sudo: required
       dist: trusty
       env:
-        global:
-          - DOCKER_COMPOSE_VERSION=1.22.0
-        matrix:
-          - PYTHON_VERSION=3.6 TEST_SUITE=pylint
-          - PYTHON_VERSION=2.7 TEST_SUITE=pylint
-          - PYTHON_VERSION=3.6 TEST_SUITE=python-tests
-          - PYTHON_VERSION=2.7 TEST_SUITE=python-tests
-          - PYTHON_VERSION=3.6 TEST_SUITE=scala-tests
+        - DOCKER_COMPOSE_VERSION=1.22.0
       before_install:
-      # Update docker-engine using Ubuntu 'trusty' apt repo
-      # update docker compose to the specified version, https://docs.travis-ci.com/user/docker/#using-docker-compose
-      - sudo rm /usr/local/bin/docker-compose
-      - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
-      - chmod +x docker-compose
-      - sudo mv docker-compose /usr/local/bin
-      - apt-get install -y git
+        - sudo rm /usr/local/bin/docker-compose
+        - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
+        - chmod +x docker-compose
+        - sudo mv docker-compose /usr/local/bin
       install:
-        - git submodule init
-        - git submodule update
-        - docker-compose build --build-arg PYTHON_VERSION=$PYTHON_VERSION
-        - docker-compose up -d --scale worker=2
+        - git submodule update --init
+        - docker-compose up -d
       script:
         - cd dex-contracts 
         # running the e2e tests - deposits
