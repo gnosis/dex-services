@@ -37,7 +37,6 @@ services:
       - ganache-cli
     volumes:
       - ./:/app/
-    tty: true 
 
   driver:
     command:  docker/driver/run.sh
