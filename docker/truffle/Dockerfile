@@ -1,7 +1,7 @@
 FROM node:8.11-alpine
 
 # Create app directory
-WORKDIR /app/dex-contacts
+WORKDIR /app/dex-contracts
 
 #TO be modified, need to copy only some files.
 COPY . .
