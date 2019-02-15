@@ -1,4 +1,4 @@
-FROM node:8.11-alpine
+FROM node:10.15.1-alpine
 
 # Create app directory
 WORKDIR /app/dex-contracts
