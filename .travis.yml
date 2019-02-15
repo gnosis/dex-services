@@ -35,8 +35,8 @@ matrix:
         - git submodule update --init
         - npm install -C dex-contracts
         - cd dex-contracts && truffle compile && cd -
-        - docker-compose build
         - docker-compose up -d
+        - while ! nc -z localhost 8545; do sleep .1; done # wait for ganache to start up
         - cd dex-contracts && truffle migrate --reset && cd -
       script:
         - sh ./test/e2e-tests-deposit.sh
