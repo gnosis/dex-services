@@ -1,4 +1,5 @@
 import logging
+import traceback
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Union, List, Optional
 
@@ -39,6 +40,7 @@ class StateTransitionReceiver(SnappEventListener):
             self.__update_accounts(transition)
             logging.info("Successfully updated state and balances")
         except AssertionError as exc:
+            traceback.print_stack()
             logging.critical(
                 "Failed to record StateTransition [{}] - {}".format(exc, transition))
 
