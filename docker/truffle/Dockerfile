@@ -8,4 +8,4 @@ COPY dex-contracts .
 
 # Dependencies will 	Install app dependencies
 RUN apk add --update --no-cache --virtual build-dependencies git python make g++ ca-certificates
-RUN npm install
+RUN npm install --only=prod
