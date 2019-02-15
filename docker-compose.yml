@@ -36,9 +36,7 @@ services:
       - mongo
       - listener
       - ganache-cli
-    restart: always  
-    volumes:
-      - ./:/app/
+    restart: always
     environment:
       - SNAPP_CONTRACT_ADDRESS=0xC89Ce4735882C9F0f0FE26686c53074E09B0D550
       - DB_HOST=mongo
