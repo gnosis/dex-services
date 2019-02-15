@@ -4,9 +4,8 @@ FROM node:8.11-alpine
 WORKDIR /app/dex-contracts
 
 #TO be modified, need to copy only some files.
-COPY . .
+COPY dex-contracts .
 
 # Dependencies will 	Install app dependencies
 RUN apk add --update --no-cache --virtual build-dependencies git python make g++ ca-certificates
 RUN npm install
-RUN truffle migrate --reset

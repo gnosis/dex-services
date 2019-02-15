@@ -17,7 +17,7 @@ services:
 #      driver: "none"  
 
   listener:
-    command:  docker/event_listener/run.sh
+    command: docker/event_listener/run.sh
     build:
       context: .
       dockerfile: docker/event_listener/Dockerfile
@@ -29,7 +29,7 @@ services:
       - ./:/app/
 
   truffle:
-    command: sh docker/truffle/run.sh
+    command: node_modules/.bin/truffle migrate --reset --network truffle_container
     build:
       context: .
       dockerfile: docker/truffle/Dockerfile
