@@ -29,7 +29,7 @@ services:
       - ./:/app/
 
   truffle:
-    command: node_modules/.bin/truffle migrate --reset --network truffle_container
+    command: node_modules/.bin/truffle migrate --reset --network developmentdocker
     build:
       context: .
       dockerfile: docker/truffle/Dockerfile
