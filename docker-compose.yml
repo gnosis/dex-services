@@ -39,7 +39,7 @@ services:
       - ./:/app/
 
   driver:
-    command:  docker/driver/run.sh
+    command:  cargo run
     build:
       context: .
       dockerfile: docker/driver/Dockerfile
