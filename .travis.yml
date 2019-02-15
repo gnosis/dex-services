@@ -39,4 +39,5 @@ matrix:
       script:
         - sh ./test/e2e-tests-deposit.sh
       after_script:
+        - docker-compose logs
         - docker-compose down
