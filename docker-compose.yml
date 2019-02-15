@@ -24,8 +24,20 @@ services:
     depends_on:
       - mongo
       - ganache-cli
+      - truffle
     volumes:
       - ./:/app/
+
+  truffle:
+    command: sh docker/truffle/run.sh
+    build:
+      context: .
+      dockerfile: docker/truffle/Dockerfile
+    depends_on:
+      - ganache-cli
+    volumes:
+      - ./:/app/
+    tty: true 
 
   driver:
     command:  docker/driver/run.sh
@@ -36,6 +48,7 @@ services:
       - mongo
       - listener
       - ganache-cli
+      - truffle
     restart: always  
     volumes:
       - ./:/app/
