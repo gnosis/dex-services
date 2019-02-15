@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 cd dex-contracts/
-truffle migrate --compile-all --verbose-rpc
+truffle migrate --compile-all
 
 # checks state after first new deposit round with a deposit of 18 from account 3 and token 3
 truffle exec scripts/setup_environment.js
