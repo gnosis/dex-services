@@ -34,7 +34,7 @@ matrix:
       install:
         - git submodule update --init
         - npm install -C dex-contracts
-        - cd dex-contracts && truffle compile && cd -
+        - cd dex-contracts && truffle compile && cd - # driver/listener require compiled contracts
         - docker-compose up -d
         - cd dex-contracts && truffle migrate --compile-all && cd -
       script:
