@@ -34,6 +34,7 @@ matrix:
       install:
         - git submodule update --init
         - npm install -C dex-contracts
+        - cd dex-contracts && truffle migrate && cd -
         - docker-compose up -d
       script:
         - sh ./test/e2e-tests-deposit.sh
