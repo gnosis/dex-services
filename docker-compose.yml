@@ -13,8 +13,18 @@ services:
       - '8545:8545'
     image: 'trufflesuite/ganache-cli:latest'
     command: ["-d"]
-#    logging:
-#      driver: "none"  
+
+  truffle:
+    command: node_modules/.bin/truffle migrate --reset --network developmentdocker
+    ports:
+      - '8546:8546' # opens after migration complete
+    build:
+      context: .
+      dockerfile: docker/truffle/Dockerfile
+    depends_on:
+      - ganache-cli
+    volumes:
+      - ./dex-contracts/build:/app/dex-contracts/build
 
   listener:
     command: docker/event_listener/run.sh
