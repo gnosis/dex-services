@@ -51,7 +51,9 @@ services:
       - ganache-cli
     restart: always
     volumes:
-      - ./:/app/
+      # Don't sync target, otherwise we rebuild on every deploy
+      - ./driver/src:/app/driver/src
+      - ./driver/tests:/app/driver/tests
     environment:
       - SNAPP_CONTRACT_ADDRESS=0xC89Ce4735882C9F0f0FE26686c53074E09B0D550
       - DB_HOST=mongo
