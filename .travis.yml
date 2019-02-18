@@ -37,6 +37,7 @@ matrix:
         - cd dex-contracts && truffle compile && cd - # driver/listener require compiled contracts
         - docker-compose up -d
       script:
+        - cd dex-contracts && truffle exec scripts/wait_for_deployment.js && cd -
         - sh ./test/e2e-tests-deposit.sh
       after_script:
         - docker-compose logs
