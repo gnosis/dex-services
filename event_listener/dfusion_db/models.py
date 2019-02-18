@@ -37,16 +37,15 @@ class Deposit(NamedTuple):
 
     @classmethod
     def from_dictionary(cls, data: Dict[str, Any]) -> "Deposit":
-        assert data.keys() == {'accountId', 'tokenId', 'amount',
-                               'slot', 'slotIndex'}, "Unexpected Event Keys"
-        assert all(isinstance(val, int) for val in data.values()
-                   ), "One or more of event values not integer"
+        assert all(k in data for k in(
+            'accountId', 'tokenId', 'amount', 'slot', 'slotIndex')), \
+            "Unexpected Event Keys"
         return Deposit(
-            data['accountId'],
-            data['tokenId'],
-            data['amount'],
-            data['slot'],
-            data['slotIndex']
+            int(data['accountId']),
+            int(data['tokenId']),
+            int(data['amount']),
+            int(data['slot']),
+            int(data['slotIndex'])
         )
 
 
@@ -59,16 +58,15 @@ class Withdraw(NamedTuple):
 
     @classmethod
     def from_dictionary(cls, data: Dict[str, Any]) -> "Withdraw":
-        assert data.keys() == {'accountId', 'tokenId', 'amount',
-                               'slot', 'slotIndex'}, "Unexpected Event Keys"
-        assert all(isinstance(val, int) for val in data.values()
-                   ), "One or more of event values not integer"
+        assert all(k in data for k in(
+            'accountId', 'tokenId', 'amount', 'slot', 'slotIndex')), \
+            "Unexpected Event Keys"
         return Withdraw(
-            data['accountId'],
-            data['tokenId'],
-            data['amount'],
-            data['slot'],
-            data['slotIndex']
+            int(data['accountId']),
+            int(data['tokenId']),
+            int(data['amount']),
+            int(data['slot']),
+            int(data['slotIndex'])
         )
 
 
