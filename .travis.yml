@@ -37,7 +37,7 @@ matrix:
         - cd dex-contracts && truffle compile && cd - # driver/listener require compiled contracts
         - docker-compose up -d
       script:
-        - sleep 20 # wait for docker to finish start up
+        - timeout 60 bash -c -- 'while [ ! -f dex-contracts/build/migration.flag ] ; do sleep .1; done' # wait for migrations to complete (max 60s)
         - sh ./test/e2e-tests-deposit.sh
       after_script:
         - docker-compose logs

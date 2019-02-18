@@ -15,7 +15,7 @@ services:
     command: ["-d"]
 
   truffle:
-    command: node_modules/.bin/truffle migrate --reset --network developmentdocker
+    command: /app/docker/truffle/run.sh
     ports:
       - '8546:8546' # opens after migration complete
     build:
