@@ -37,9 +37,9 @@ matrix:
         - cd dex-contracts && truffle compile && cd - # driver/listener require compiled contracts
         - docker-compose up -d
       script:
-        - while ! nc -z localhost 8545; do sleep .1; done # wait for ganache to start
-        - cd dex-contracts && truffle exec scripts/wait_for_deployment.js && cd - # wait for migrations
-        - sh ./test/e2e-tests-deposit.sh
+        - cd dex-contracts
+        - timeout 30 bash -c -- 'while ! truffle exec scripts/wait_for_deployment.js; do sleep .1; done' # wait for migrations
+        - sh ../test/e2e-tests-deposit.sh
       after_script:
         - docker-compose logs
         - docker-compose down
