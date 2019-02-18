@@ -102,7 +102,7 @@ class SnappInitializationReceiver(SnappEventListener):
 
         try:
             self.initialize_accounts(
-                event['maxTokens'], event['numAccounts'], state_hash)
+                event['maxTokens'], event['maxAccounts'], state_hash)
         except AssertionError as exc:
             logging.critical(
                 "Failed to record SnappInitialization [{}] - {}".format(exc, event))
