@@ -13,16 +13,10 @@ use web3::types::{Address, H256, U256};
 use std::env;
 use std::fs;
 use std::io;
-use std::io::Error;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 use std::process;
-
-
-use mongodb::bson;
-use mongodb::db::ThreadedDatabase;
-use mongodb::{Client, ThreadedClient};
 
 
 fn apply_deposits(
@@ -48,7 +42,6 @@ fn main() {
 		let received = rx.recv().unwrap();
 		println!(": {}", received);
 
-		let args: Vec<String> = env::args().collect();
 		let db_host = env::var("DB_HOST").unwrap();
         let db_port = env::var("DB_PORT").unwrap();
 		let db_instance = db_interface::db_interface::DbInterface::new(db_host, db_port).unwrap_or_else(|err| {

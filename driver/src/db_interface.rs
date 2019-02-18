@@ -3,22 +3,14 @@ pub mod db_interface{
     use mongodb::db::ThreadedDatabase;
     use mongodb::{Client, ThreadedClient};
 
-    use std::env;
-
-    
     extern crate models;
     extern crate rustc_hex;
     extern crate web3;
 
-    use web3::types::{Address, H256, U256};
+    use web3::types::H256;
 
-    use std::fs;
     use std::io;
     use std::io::{Error, ErrorKind};
-    use std::sync::mpsc;
-    use std::thread;
-    use std::time::Duration;
-    use std::process;
     
     #[derive(Clone)]
     pub struct DbInterface{
