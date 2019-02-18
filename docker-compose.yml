@@ -36,6 +36,9 @@ services:
       - ganache-cli
     volumes:
       - ./:/app/
+    environment:
+      - SNAPP_CONTRACT_ADDRESS=0xC89Ce4735882C9F0f0FE26686c53074E09B0D550
+      - ETHEREUM_NODE_URL=http://ganache-cli:8545
 
   driver:
     command: cargo run

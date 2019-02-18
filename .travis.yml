@@ -1,19 +1,19 @@
 matrix:
   include:
-    # - language: rust
-    #   rust: 1.31.0
-    #   cache: cargo 
-    #   script:
-    #     - cd driver/
-    #     - cargo build --verbose --all
-    #     - cargo test --verbose --all
-    # - language: python
-    #   python: 3.6
-    #   install:
-    #     - pip install -U -r event_listener/requirements.txt
-    #   script:
-    #     - pytest --cov=event_listener/dfusion_db/ --cov-report term-missing
-    #     - mypy event_listener/dfusion_db/ --ignore-missing-imports --strict
+    - language: rust
+      rust: 1.31.0
+      cache: cargo 
+      script:
+        - cd driver/
+        - cargo build --verbose --all
+        - cargo test --verbose --all
+    - language: python
+      python: 3.6
+      install:
+        - pip install -U -r event_listener/requirements.txt
+      script:
+        - pytest --cov=event_listener/dfusion_db/ --cov-report term-missing
+        - mypy event_listener/dfusion_db/ --ignore-missing-imports --strict
     - language: node_js
       sudo: required
       node_js: 10.13.0
