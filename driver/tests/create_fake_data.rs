@@ -24,7 +24,6 @@ fn create_fake_data() {
 
     let coll = client.db(models::DB_NAME).collection("accounts");
 
-
 	let state = models::State {
 	    stateHash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_owned(),
     	stateIndex: 0,

@@ -63,7 +63,7 @@ pub fn from_slice2(bytes: &[u8]) -> [u8; 32] {
 }
 
 #[allow(non_snake_case)]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct State {
   pub stateHash: String,
   pub stateIndex: i32,
