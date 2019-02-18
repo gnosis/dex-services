@@ -6,4 +6,4 @@ truffle exec scripts/setup_environment.js
 truffle exec scripts/deposit.js 3 3 18 
 truffle exec scripts/mine_blocks.js 21 
 sleep 1s
-truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep 0xf1940d119100aae087a3a8f202a23a8b81486908576cb63eb6261fdc72e23b67
+truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep 0x7b01abfbad57cb7a1344b12709603ea3b9ad803ef5ea09814ca212748f54733
