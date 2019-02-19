@@ -5,6 +5,7 @@ use sha2::{Digest, Sha256};
 use std::num::ParseIntError;
 use web3::types::H256;
 
+
 pub const ACCOUNTS: i32 = 100;
 pub const TOKENS: i32 = 30;
 pub const SIZE_BALANCE: usize = (ACCOUNTS * TOKENS) as usize;
@@ -132,22 +133,6 @@ impl Deposits {
     hash
   }
 
-  //Just a function for a test case
-  pub fn hash_zero_512(&self) -> H256 {
-    let _current_deposithash: H256 = H256::zero();
-    let s = _current_deposithash.hex();
-    let mut bytes: Vec<u8> = s[2..].from_hex().unwrap();
-    let mut bytes2: Vec<u8> = s[2..].from_hex().unwrap();
-
-    bytes.append(&mut bytes2);
-    println!("{:?}", bytes);
-    let mut hasher = Sha256::new();
-    hasher.input(&bytes);
-    let result = hasher.result();
-    let b: Vec<u8> = result.to_vec();
-    let hash: H256 = H256::from_slice(&b);
-    hash
-  }
 }
 
 impl From<mongodb::ordered::OrderedDocument> for Deposits {
@@ -161,32 +146,6 @@ impl From<mongodb::ordered::OrderedDocument> for Deposits {
 mod tests {
   use super::*;
   use web3::types::H256;
-  #[test]
-  fn check_hash_zero_512bits() {
-    //check transformations
-    let deposits = Deposits {
-      slotIndex: 0,
-      slot: 0,
-      accountId: 0,
-      tokenId: 0,
-      amount: 0,
-    };
-    let current_deposithash: H256 = H256::zero();
-
-    let s = current_deposithash.hex();
-    let bytes: Vec<u8> = s[2..].from_hex().unwrap();
-    println!("{:?}", bytes);
-    let hash: H256 = H256::from_slice(&bytes);
-
-    assert_eq!(current_deposithash, hash);
-
-    //Check actual hashing
-    let target: H256 = serde_json::from_str(
-      r#""0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b""#,
-    )
-    .unwrap();
-    assert_eq!(deposits.hash_zero_512(), target);
-  }
 
   #[test]
   fn check_iter_hash() {
