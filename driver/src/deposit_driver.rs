@@ -23,7 +23,7 @@ pub fn apply_deposits(
 pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 	let db_host = env::var("DB_HOST")?;
 	let db_port = env::var("DB_PORT")?;
-	let db_instance = db_interface::DbInterface::new(db_host, db_port)?;
+	let db_instance = db_interface::db_instance::new(db_host, db_port)?;
 
 	let (_eloop, transport) = web3::transports::Http::new("http://ganache-cli:8545")?;
 	let web3 = web3::Web3::new(transport);
@@ -39,7 +39,7 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 	// get current state
 	let result = contract.query("getCurrentStateRoot", (), None, Options::default(), None);
 	let curr_state_root: H256 = result.wait()?;
-	let mut state = db_instance.get_current_balances(curr_state_root.clone())?;
+	let mut state = db_interface::get_current_balances(db_instance, curr_state_root.clone())?;
 	let accounts = web3.eth().accounts().wait()?;
 
 	// check that operator has sufficient ether
@@ -109,7 +109,7 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 		&& deposit_ind != current_deposit_ind.low_u32() as i32 + 1
 	{
 		println!("Next deposit_slot to be processed is {}", deposit_ind);
-		let deposits = db_instance.get_deposits_of_slot(deposit_ind)?;
+		let deposits = db_interface::get_deposits_of_slot(db_instance, deposit_ind)?;
 		println!("Amount of deposits to be processed{:?}", deposits.len());
 		//rehash deposits
 		let mut deposit_hash: H256 = H256::zero();

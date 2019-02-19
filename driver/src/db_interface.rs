@@ -55,9 +55,30 @@ impl DbInterface for MongoDB {
 
         let json: String = serde_json::to_string(&docs[0])?;
 
-        let deserialized: models::State = serde_json::from_str(&json)?;
-        Ok(deserialized)
-    }
+pub fn get_deposits_of_slot<T: DbInterface>(
+    db: T,
+    slot: i32,
+) -> Result<Vec<models::Deposits>, io::Error> {
+    let mut query = String::from(r#" { "slot": "#);
+    let t = slot.to_string();
+    query.push_str(&t);
+    query.push_str(" }");
+    let v: serde_json::Value =
+        serde_json::from_str(&query).expect("Failed to parse query to serde_json::value");
+    let bson = v.into();
+    let mut _temp: bson::ordered::OrderedDocument =
+        mongodb::from_bson(bson).expect("Failed to convert bson to document");
+
+    let cursor = db.read_data_from(models::DB_NAME, "deposits", _temp);
+
+    let mut docs: Vec<models::Deposits> = cursor
+        .map(|doc| doc.unwrap())
+        .map(|doc| {
+            serde_json::to_string(&doc)
+                .map(|json| serde_json::from_str(&json).unwrap())
+                .expect("Failed to parse json")
+        })
+        .collect();
 
     fn get_deposits_of_slot(
         &self,
