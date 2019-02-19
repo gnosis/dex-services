@@ -1,24 +1,16 @@
-#[macro_use]
-extern crate serde_derive;
-extern crate byteorder;
-extern crate hex;
-extern crate rustc_hex;
-extern crate serde;
-extern crate serde_json;
-extern crate sha2;
-
 use byteorder::{LittleEndian, WriteBytesExt};
 use rustc_hex::{FromHex, ToHex};
+use serde_derive::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::num::ParseIntError;
 use web3::types::H256;
 
 pub const ACCOUNTS: i32 = 100;
-pub const BITS_PER_ACCOUNT: i32 = 4;
 pub const TOKENS: i32 = 30;
-pub const BITS_PER_TOKENS: i32 = 3;
 pub const SIZE_BALANCE: usize = (ACCOUNTS * TOKENS) as usize;
-pub const BITS_PER_BALANCE: i32 = 30;
+// pub const BITS_PER_BALANCE: i32 = 30;
+// pub const BITS_PER_ACCOUNT: i32 = 4;
+// pub const BITS_PER_TOKENS: i32 = 3;
 
 pub const DB_NAME: &str = "dfusion2";
 
@@ -167,41 +159,59 @@ impl From<mongodb::ordered::OrderedDocument> for Deposits {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+  use super::*;
+  use web3::types::H256;
+  #[test]
+  fn check_hash_zero_512bits() {
+    //check transformations
+    let deposits = Deposits {
+      slotIndex: 0,
+      slot: 0,
+      accountId: 0,
+      tokenId: 0,
+      amount: 0,
+    };
+    let current_deposithash: H256 = H256::zero();
 
-    #[test]
-    fn check_hash_zero_512bits() {
-        //check transformations
-        let deposits = Deposits { slotIndex: 0, slot: 0, accountId: 0, tokenId: 0, amount: 0 };
-        let current_deposithash: H256 = H256::zero();
+    let s = current_deposithash.hex();
+    let bytes: Vec<u8> = s[2..].from_hex().unwrap();
+    println!("{:?}", bytes);
+    let hash: H256 = H256::from_slice(&bytes);
 
-        let s = current_deposithash.hex();
-        let bytes: Vec< u8> = s[2..].from_hex().unwrap();
-        println!("{:?}", bytes);
-        let hash: H256 = H256::from_slice(&bytes);
+    assert_eq!(current_deposithash, hash);
 
-        assert_eq!(current_deposithash, hash);
+    //Check actual hashing
+    let target: H256 = serde_json::from_str(
+      r#""0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b""#,
+    )
+    .unwrap();
+    assert_eq!(deposits.hash_zero_512(), target);
+  }
 
-        //Check actual hashing 
-        let target: H256 = serde_json::from_str(r#""0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b""#).unwrap();
-        assert_eq!(deposits.hash_zero_512(), target);
-    }
+  #[test]
+  fn check_iter_hash() {
+    //check transformations
+    let deposits = Deposits {
+      slotIndex: 0,
+      slot: 0,
+      accountId: 0,
+      tokenId: 0,
+      amount: 0,
+    };
+    let current_deposithash: H256 = H256::zero();
 
-    #[test]
-    fn check_iter_hash() {
-        //check transformations
-        let deposits = Deposits { slotIndex: 0, slot: 0, accountId: 0, tokenId: 0, amount: 0 };
-        let current_deposithash: H256 = H256::zero();
+    let s = current_deposithash.hex();
+    let bytes: Vec<u8> = s[2..].from_hex().unwrap();
+    println!("{:?}", bytes);
+    let hash: H256 = H256::from_slice(&bytes);
 
-        let s = current_deposithash.hex();
-        let bytes: Vec< u8> = s[2..].from_hex().unwrap();
-        println!("{:?}", bytes);
-        let hash: H256 = H256::from_slice(&bytes);
+    assert_eq!(current_deposithash, hash);
 
-        assert_eq!(current_deposithash, hash);
-
-        //Check actual hashing 
-        let target: H256 = serde_json::from_str(r#""0x8e8fe47e4a33b178bf0433d8050cb0ad7ec323fbdeeab3ecfd857b4ce1805b7a""#).unwrap();
-        assert_eq!(deposits.iter_hash(&current_deposithash), target);
-    }
+    //Check actual hashing
+    let target: H256 = serde_json::from_str(
+      r#""0x8e8fe47e4a33b178bf0433d8050cb0ad7ec323fbdeeab3ecfd857b4ce1805b7a""#,
+    )
+    .unwrap();
+    assert_eq!(deposits.iter_hash(&current_deposithash), target);
+  }
 }
