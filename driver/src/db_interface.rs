@@ -69,7 +69,7 @@ pub fn get_deposits_of_slot<T: DbInterface>(
     let mut _temp: bson::ordered::OrderedDocument =
         mongodb::from_bson(bson).expect("Failed to convert bson to document");
 
-    let cursor = db.read_data_from(models::DB_NAME, "deposits", _temp);
+    let cursor = db.read_data_from(models::DB_NAME, String::from("deposits"), _temp)?;
 
     let mut docs: Vec<models::Deposits> = cursor
         .map(|doc| doc.unwrap())

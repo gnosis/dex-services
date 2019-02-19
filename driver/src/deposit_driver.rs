@@ -39,7 +39,7 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 	// get current state
 	let result = contract.query("getCurrentStateRoot", (), None, Options::default(), None);
 	let curr_state_root: H256 = result.wait()?;
-	let mut state = db_interface::get_current_balances(db_instance, curr_state_root.clone())?;
+	let mut state = db_interface::get_current_balances(db_instance.clone(), curr_state_root.clone())?;
 	let accounts = web3.eth().accounts().wait()?;
 
 	// check that operator has sufficient ether
@@ -109,7 +109,7 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 		&& deposit_ind != current_deposit_ind.low_u32() as i32 + 1
 	{
 		println!("Next deposit_slot to be processed is {}", deposit_ind);
-		let deposits = db_interface::get_deposits_of_slot(db_instance, deposit_ind)?;
+		let deposits = db_interface::get_deposits_of_slot(db_instance.clone(), deposit_ind)?;
 		println!("Amount of deposits to be processed{:?}", deposits.len());
 		//rehash deposits
 		let mut deposit_hash: H256 = H256::zero();
