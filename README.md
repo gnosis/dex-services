@@ -1,9 +1,9 @@
 Intro
-============
+=====
 This repository contains the backend logic for the dfusion exchange based on the specification, see [here](github.com/gnosis/dex-research)
 
 
-Instructinos
+Instructions
 ============
 
 
@@ -17,9 +17,9 @@ docker-compose up
 ```
 
 This will start:
-ganche-cli, the local ethereum chain
+ganache-cli, the local ethereum chain
 mongodb, the data base storing the data of the snapp
-listener, a listner pulling data from the ganache-cli and inserting it into mongodb
+listener, a listener pulling data from the ganache-cli and inserting it into mongodb
 driver, a service calculating the new states and push these into the smart contract
 
 
@@ -31,7 +31,7 @@ cd dex-contracts
 truffle migrate --reset
 ```
 
-In order to setup some testing accounts and make the first deposits (from account 3, of the thrid registered token with an amount of 18), run in the same repo the following scripts:
+In order to setup some testing accounts and make the first deposits (from account 3, of the third registered token with an amount of 18), run in the same repo the following scripts:
 
 
 ```bash
