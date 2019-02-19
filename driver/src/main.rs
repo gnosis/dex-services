@@ -16,6 +16,8 @@ use std::io;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
+use std::error::Error;
+
 
 fn apply_deposits(
 	state: &mut models::State,
@@ -210,7 +212,5 @@ fn main() {
 				println!("All deposits are already processed");
 			}
 		});
-
-		thread::sleep(Duration::from_secs(5));
-	}
+	Ok(())
 }
