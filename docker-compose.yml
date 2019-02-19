@@ -13,11 +13,21 @@ services:
       - '8545:8545'
     image: 'trufflesuite/ganache-cli:latest'
     command: ["-d"]
-#    logging:
-#      driver: "none"
+
+  truffle:
+    command: /app/docker/truffle/run.sh
+    ports:
+      - '8546:8546' # opens after migration complete
+    build:
+      context: .
+      dockerfile: docker/truffle/Dockerfile
+    depends_on:
+      - ganache-cli
+    volumes:
+      - ./dex-contracts/build:/app/dex-contracts/build
 
   listener:
-    command:  docker/event_listener/run.sh
+    command: docker/event_listener/run.sh
     build:
       context: .
       dockerfile: docker/event_listener/Dockerfile
@@ -26,9 +36,12 @@ services:
       - ganache-cli
     volumes:
       - ./:/app/
+    environment:
+      - SNAPP_CONTRACT_ADDRESS=0xC89Ce4735882C9F0f0FE26686c53074E09B0D550
+      - ETHEREUM_NODE_URL=http://ganache-cli:8545
 
   driver:
-    command:  docker/driver/run.sh
+    command: cargo run
     build:
       context: .
       dockerfile: docker/driver/Dockerfile
@@ -36,9 +49,11 @@ services:
       - mongo
       - listener
       - ganache-cli
-    restart: always  
+    restart: always
     volumes:
-      - ./:/app/
+      # Don't sync target, otherwise we rebuild on every deploy
+      - ./driver/src:/app/driver/src
+      - ./driver/tests:/app/driver/tests
     environment:
       - SNAPP_CONTRACT_ADDRESS=0xC89Ce4735882C9F0f0FE26686c53074E09B0D550
       - DB_HOST=mongo

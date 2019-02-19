@@ -14,3 +14,31 @@ matrix:
       script:
         - pytest --cov=event_listener/dfusion_db/ --cov-report term-missing
         - mypy event_listener/dfusion_db/ --ignore-missing-imports --strict
+    - language: node_js
+      sudo: required
+      node_js: 10.13.0
+      env:
+        - DOCKER_COMPOSE_VERSION=1.22.0
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - build-essential
+      before_install:
+        - sudo rm /usr/local/bin/docker-compose
+        - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
+        - chmod +x docker-compose
+        - sudo mv docker-compose /usr/local/bin
+        - npm install -g truffle
+      install:
+        - git submodule update --init
+        - npm install -C dex-contracts
+        - cd dex-contracts && truffle compile && cd - # driver/listener require compiled contracts
+        - docker-compose up -d
+      script:
+        - timeout 60 bash -c -- 'while [ ! -f dex-contracts/build/migration.flag ] ; do sleep .1; done' # wait for migrations to complete (max 60s)
+        - sh ./test/e2e-tests-deposit.sh
+      after_script:
+        - docker-compose logs
+        - docker-compose down
