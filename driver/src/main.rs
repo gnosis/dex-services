@@ -3,8 +3,8 @@ extern crate models;
 extern crate mongodb;
 extern crate rustc_hex;
 extern crate web3;
-
 mod db_interface;
+use crate::db_interface::DbInterface;
 
 use web3::contract::{Contract, Options};
 use web3::futures::Future;
@@ -17,6 +17,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 use std::process;
+
 
 
 fn apply_deposits(
@@ -44,7 +45,7 @@ fn main() {
 
 		let db_host = env::var("DB_HOST").unwrap();
         let db_port = env::var("DB_PORT").unwrap();
-		let db_instance = db_interface::db_interface::DbInterface::new(db_host, db_port).unwrap_or_else(|err| {
+		let db_instance = db_interface::DbInstance::new(db_host, db_port).unwrap_or_else(|err| {
       		println!("Problem creating DbInterface: {}", err);
 			process::exit(1);
     	});
