@@ -9,22 +9,21 @@ use crate::db_interface::DbInterface;
 use std::env;
 use std::error::Error;
 use std::fs;
-use std::io;
 
 pub fn apply_deposits(
 	state: &mut models::State,
 	deposits: &Vec<models::Deposits>,
-) -> Result<models::State, io::Error> {
+) -> models::State {
 	for i in deposits {
 		state.balances[(i.accountId * models::TOKENS + i.tokenId) as usize] += i.amount;
 	}
-	Ok(state.clone())
+	state.clone()
 }
 
 pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 	let db_host = env::var("DB_HOST")?;
 	let db_port = env::var("DB_PORT")?;
-	let db_instance = db_interface::DbMongoInstance::new(db_host, db_port)?;
+	let db_instance = db_interface::MongoDB::new(db_host, db_port)?;
 
 	let (_eloop, transport) = web3::transports::Http::new("http://ganache-cli:8545")?;
 	let web3 = web3::Web3::new(transport);
@@ -50,9 +49,8 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 	}
 
 	//get depositSlot
-	//
 	let result = contract.query("depositIndex", (), None, Options::default(), None);
-	let current_deposit_ind: U256 = result.wait().expect("Could not get deposit_slot");
+	let current_deposit_ind: U256 = result.wait()?;
 
 	// get latest non-applied deposit_index
 	let mut deposit_ind: i32 = current_deposit_ind.low_u32() as i32 + 1;
@@ -135,7 +133,7 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 			println!("All deposits are already processed");
 		} else {
 			// calculate new state by applying all deposits
-			state = apply_deposits(&mut state, &deposits)?;
+			state = apply_deposits(&mut state, &deposits);
 			println!("New StateHash is{:?}", state.hash());
 
 			//send new state into blockchain

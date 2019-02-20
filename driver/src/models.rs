@@ -4,6 +4,7 @@ use serde_derive::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::num::ParseIntError;
 use web3::types::H256;
+use std::error::Error;
 
 
 pub const ACCOUNTS: i32 = 100;
@@ -15,7 +16,7 @@ pub const SIZE_BALANCE: usize = (ACCOUNTS * TOKENS) as usize;
 
 pub const DB_NAME: &str = "dfusion2";
 
-pub fn decode_hex_uint8(s: &mut str, size: i32) -> Result<Vec<u8>, ParseIntError> {
+pub fn decode_hex_uint8(s: &mut str, size: i32) -> Result<Vec<u8>, Box<dyn Error>> {
   // add prefix 0, in case s has not even length
   let mut pretail: &str = "";
   if s.len() % 2 == 1 {
@@ -29,7 +30,7 @@ pub fn decode_hex_uint8(s: &mut str, size: i32) -> Result<Vec<u8>, ParseIntError
     .map(|i| u8::from_str_radix(&s[i..i + 2], 16))
     .collect();
 
-  let mut v = v.unwrap();
+  let mut v = v?;
   let mut vv = Vec::with_capacity(size as usize);
   for _i in 0..size {
     vv.push(0);
@@ -37,15 +38,7 @@ pub fn decode_hex_uint8(s: &mut str, size: i32) -> Result<Vec<u8>, ParseIntError
   for i in 1..v.len() + 1 {
     vv[size as usize - i] = v.pop().unwrap();
   }
-  println!("{:?}", vv.clone());
   Ok(vv.clone())
-}
-
-pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
-  (0..s.len())
-    .step_by(2)
-    .map(|i| u8::from_str_radix(&s[i..i + 2], 16))
-    .collect()
 }
 
 pub fn from_slice2(bytes: &[u8]) -> [u8; 32] {
@@ -65,13 +58,12 @@ pub struct State {
 
 impl State {
   //Todo: Exchange sha with pederson hash
-  pub fn hash(&self) -> String {
+  pub fn hash(&self) -> Result<String, Box<dyn Error>> {
     let mut hash: [u8; 32] = [0; 32];
     for i in &self.balances {
       let mut bs = [0u8; 64];
       bs.as_mut()
-        .write_i64::<LittleEndian>(*i)
-        .expect("Unable to write");
+        .write_i64::<LittleEndian>(*i)?;
       for i in 0..32 {
         bs[i + 32] = bs[i];
         bs[i] = hash[i];
@@ -83,7 +75,7 @@ impl State {
       let b: Vec<u8> = result.to_vec();
       hash = from_slice2(&b);
     }
-    hash.to_hex()
+    Ok(hash.to_hex())
   }
 }
 
@@ -101,8 +93,8 @@ impl Deposits {
   //calcalutes the iterative hash of deposits
   pub fn iter_hash(&self, prev_hash: &H256) -> H256 {
     let _current_deposithash: H256 = H256::zero();
-    let s = prev_hash.hex();
-    let mut bytes: Vec<u8> = s[2..].from_hex().unwrap();
+    let s = format!(" {:x} ", prev_hash);
+    let mut bytes: Vec<u8> = s.from_hex().unwrap();
 
     // add two byte for uint16 accountID
     let mut s = format!("{:X}", self.accountId);
@@ -159,8 +151,9 @@ mod tests {
     };
     let current_deposithash: H256 = H256::zero();
 
-    let s = current_deposithash.hex();
-    let bytes: Vec<u8> = s[2..].from_hex().unwrap();
+    let s = format!(" {:x} ", current_deposithash);
+    //let s = current_deposithash.hex();
+    let bytes: Vec<u8> = s.from_hex().unwrap();
     println!("{:?}", bytes);
     let hash: H256 = H256::from_slice(&bytes);
 
