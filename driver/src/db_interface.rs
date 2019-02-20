@@ -24,17 +24,17 @@ pub trait DbInterface {
 }
 
 #[derive(Clone)]
-pub struct DbInstance {
+pub struct DbMongoInstance {
     pub client: Client,
 }
-impl DbInstance {
-    pub fn new(db_host: String, db_port: String) -> Result<DbInstance, &'static str> {
+impl DbMongoInstance {
+    pub fn new(db_host: String, db_port: String) -> Result<DbMongoInstance, &'static str> {
         let client = Client::connect(&db_host, db_port.parse::<u16>().unwrap()).expect("wrong");
 
-        Ok(DbInstance { client })
+        Ok(DbMongoInstance { client })
     }
 }
-impl DbInterface for DbInstance {
+impl DbInterface for DbMongoInstance {
     fn get_current_balances(
         &self,
         current_state_root: H256,
@@ -49,7 +49,7 @@ impl DbInterface for DbInstance {
             serde_json::from_str(&query)?;
         let bson = v.into();
         let mut _temp: bson::ordered::OrderedDocument =
-            mongodb::from_bson(bson)?;
+            mongodb::from_bson(bson).expect("Failed to convert bson to document");
 
         let coll = self.client.db(models::DB_NAME).collection("accounts");
 

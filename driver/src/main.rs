@@ -45,7 +45,7 @@ fn main() {
 
 		let db_host = env::var("DB_HOST").unwrap();
         let db_port = env::var("DB_PORT").unwrap();
-		let db_instance = db_interface::DbInstance::new(db_host, db_port).unwrap_or_else(|err| {
+		let db_instance = db_interface::DbMongoInstance::new(db_host, db_port).unwrap_or_else(|err| {
       		println!("Problem creating DbInterface: {}", err);
 			process::exit(1);
     	});
