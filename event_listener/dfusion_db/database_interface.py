@@ -16,6 +16,9 @@ class DatabaseInterface(ABC):
     def write_withdraw(self, withdraw: Withdraw) -> None: pass
 
     @abstractmethod
+    def update_withdraw(self, old: Withdraw, new: Withdraw) -> None: pass
+
+    @abstractmethod
     def write_account_state(self, account_record: AccountRecord) -> None: pass
 
     @abstractmethod
@@ -56,17 +59,14 @@ class MongoDbInterface(DatabaseInterface):
             "Successfully included Deposit - {}".format(deposit_id))
 
     def write_withdraw(self, withdraw: Withdraw) -> None:
-        withdraws = self.db.withdraws
-        event = {
-            "accountId": withdraw.account_id,
-            "tokenId": withdraw.token_id,
-            "amount": withdraw.amount,
-            "slot": withdraw.slot,
-            "slotIndex": withdraw.slot_index
-        }
-        withdraw_id = withdraws.insert_one(event).inserted_id
+        withdraw_id = self.db.withdraws.insert_one(withdraw.to_dictionary()).inserted_id
         self.logger.info(
             "Successfully included Withdraw - {}".format(withdraw_id))
+
+    def update_withdraw(self, old: Withdraw, new: Withdraw) -> None:
+        self.db.withdraws.replace_one({'_id': old.id}, new.to_dictionary())
+        self.logger.info(
+            "Successfully included Withdraw - {}".format(old.id))
 
     def write_account_state(self, account_record: AccountRecord) -> None:
         record = {

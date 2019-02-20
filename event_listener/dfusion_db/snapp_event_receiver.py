@@ -55,10 +55,12 @@ class StateTransitionReceiver(SnappEventListener):
                     datum.account_id, datum.token_id, datum.amount))
                 balances[index] += datum.amount
             elif transition.transition_type == TransitionType.Withdraw:
+                assert isinstance(datum, Withdraw)
                 if balances[index] - datum.amount >= 0:
                     self.logger.info("Decreasing balance of account {} - token {} by {}".format(
                         datum.account_id, datum.token_id, datum.amount))
                     balances[index] -= datum.amount
+                    self.database.update_withdraw(datum, datum._replace(valid=True))
                 else:
                     self.logger.info(
                         "Insufficient balance: account {} - token {} for amount {}".format(
