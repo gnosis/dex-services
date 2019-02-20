@@ -7,6 +7,15 @@ services:
     restart: always  
     ports:
       - "27017:27017"
+  
+  mongoclient:
+    image: mongoclient/mongoclient:2.2.0
+    environment:
+      - MONGOCLIENT_DEFAULT_CONNECTION_URL=mongodb://mongo/dfusion2
+    ports:
+      - '3000:3000'
+    depends_on:
+      - mongo
 
   ganache-cli:
     ports:
@@ -16,8 +25,6 @@ services:
 
   truffle:
     command: /app/docker/truffle/run.sh
-    ports:
-      - '8546:8546' # opens after migration complete
     build:
       context: .
       dockerfile: docker/truffle/Dockerfile
