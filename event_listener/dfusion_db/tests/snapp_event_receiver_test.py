@@ -73,6 +73,28 @@ class StateTransitionReceiverTest(unittest.TestCase):
         new_balances[62] = 37
         new_state = AccountRecord(new_state_index, "new state", new_balances)
         database.write_account_state.assert_called_with(new_state)
+    
+    def test_marks_valid_withdraws_as_valid(self) -> None:
+        database = Mock()
+        receiver = StateTransitionReceiver(database)
+        new_state_index = 2
+        slot_index = 3
+        num_tokens = 10
+
+        database.get_num_tokens.return_value = num_tokens
+        old_state = AccountRecord(1, "old state", [42] * 10 * num_tokens)
+        database.get_account_state.return_value = old_state
+
+        withdraw1 = Withdraw(1, 2, 10, slot_index, 0)
+        withdraw2 = Withdraw(7, 3, 100, slot_index, 1)
+        database.get_withdraws.return_value = [withdraw1, withdraw2]
+
+        transition = StateTransition(
+            TransitionType.Withdraw, new_state_index, "new state", slot_index)
+        receiver.save_parsed(transition)
+
+        updated_withdraw1 = withdraw1._replace(valid=True)
+        database.update_withdraw.assert_called_once_with(withdraw1, updated_withdraw1)
 
     def test_skips_deduction_if_not_enough_balance(self) -> None:
         database = Mock()

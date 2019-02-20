@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import NamedTuple, Dict, Any, List
+from typing import NamedTuple, Dict, Any, List, Optional
 
 
 class TransitionType(Enum):
@@ -55,6 +55,8 @@ class Withdraw(NamedTuple):
     amount: int
     slot: int
     slot_index: int
+    valid: bool = False
+    id: Optional[str] = None
 
     @classmethod
     def from_dictionary(cls, data: Dict[str, Any]) -> "Withdraw":
@@ -66,8 +68,20 @@ class Withdraw(NamedTuple):
             int(data['tokenId']),
             int(data['amount']),
             int(data['slot']),
-            int(data['slotIndex'])
+            int(data['slotIndex']),
+            bool(data.get('valid', False)),
+            data.get('_id', None)
         )
+
+    def to_dictionary(self) -> Dict[str, Any]:
+        return {
+            "accountId": self.account_id,
+            "tokenId": self.token_id,
+            "amount": self.amount,
+            "slot": self.slot,
+            "slotIndex": self.slot_index,
+            "valid": self.valid
+        }
 
 
 class AccountRecord(NamedTuple):
