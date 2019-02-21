@@ -3,7 +3,7 @@ use crate::error::DriverError;
 
 use web3::contract::{Contract, Options};
 use web3::futures::Future;
-use web3::types::{Address, H256, U256};
+use web3::types::{Address, H256, H160, U256};
 
 use crate::db_interface;
 use crate::db_interface::DbInterface;
@@ -35,7 +35,10 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 
 	let snapp_address = env::var("SNAPP_CONTRACT_ADDRESS")?;
 	println!("{:}",snapp_address);
-	let address: Address = Address::from("0xC89Ce4735882C9F0f0FE26686c53074E09B0D550");
+	let a = H160::from_slice(&snapp_address[4..].as_bytes());
+	println!("{:}", a);
+	let address: Address = Address::from(snapp_address[4..].as_bytes());
+	println!("{:}", address);
 	let contract = Contract::from_json(web3.eth(), address, snapp_base_abi.as_bytes())?;
 	// get current state
 	let result = contract.query("getCurrentStateRoot", (), None, Options::default(), None);
