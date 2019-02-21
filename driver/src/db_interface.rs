@@ -52,6 +52,9 @@ impl DbInterface for MongoDB {
                 ErrorKind::Other, format!("Expeceted to find a single unique state, found {}", docs.len()))
             ));
         }
+        if docs.len() > 1 {
+            return Err(Box::new(Error::new(ErrorKind::Other, "Error, state not unique")));
+        }
 
         let json: String = serde_json::to_string(&docs[0])?;
 
