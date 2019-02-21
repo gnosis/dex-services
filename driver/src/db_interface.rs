@@ -50,14 +50,14 @@ impl DbInterface for MongoDB {
             if let Ok(item) = result {
                 docs.push(item);
             } else{
-                return Err(Box::new(Error::new(ErrorKind::Other, "Error, doc of state was not okay")));
+                return Err(Box::new(Error::new(ErrorKind::Other, "doc of state was not okay")));
             }
         }
         if docs.len() == 0 {
-            return Err(Box::new(Error::new(ErrorKind::Other, "Error, state was not found")));
+            return Err(Box::new(Error::new(ErrorKind::Other, "state was not found")));
         }
         if docs.len() > 1 {
-            return Err(Box::new(Error::new(ErrorKind::Other, "Error, state not unique")));
+            return Err(Box::new(Error::new(ErrorKind::Other, "state not unique")));
         }
 
         let json: String = serde_json::to_string(&docs[0])?;
@@ -96,7 +96,7 @@ impl DbInterface for MongoDB {
                     println!("One deposit from slot {:} could not be unwraped", slot);
                 }
             } else{
-                return Err(Box::new(Error::new(ErrorKind::Other, "Error, doc of deposit was not okay")));
+                return Err(Box::new(Error::new(ErrorKind::Other, "doc of deposit was not okay")));
             }
         } 
         docs.sort_by(|a, b| b.slot.cmp(&a.slot));
