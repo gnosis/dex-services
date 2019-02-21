@@ -6,10 +6,7 @@ use std::num::ParseIntError;
 use web3::types::H256;
 use std::error::Error;
 
-
-pub const ACCOUNTS: i32 = 100;
 pub const TOKENS: i32 = 30;
-pub const SIZE_BALANCE: usize = (ACCOUNTS * TOKENS) as usize;
 
 pub const DB_NAME: &str = "dfusion2";
 
@@ -118,8 +115,7 @@ impl Deposits {
     hasher.input(&bytes);
     let result = hasher.result();
     let b: Vec<u8> = result.to_vec();
-    let hash: H256 = H256::from_slice(&b);
-    hash
+    H256::from(b.as_slice())
   }
 
 }

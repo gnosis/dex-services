@@ -1,4 +1,5 @@
 use crate::models;
+use crate::error::DriverError;
 
 use web3::contract::{Contract, Options};
 use web3::futures::Future;
@@ -9,7 +10,6 @@ use crate::db_interface::DbInterface;
 use std::env;
 use std::error::Error;
 use std::fs;
-use crate::error::DriverError;
 
 pub fn apply_deposits(
 	state: &mut models::State,
@@ -31,11 +31,10 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 
 	let contents = fs::read_to_string("../dex-contracts/build/contracts/SnappBase.json")?;
 	let snapp_base: serde_json::Value = serde_json::from_str(&contents)?;
-	let snapp_base_abi: String = snapp_base.get("abi").unwrap().to_string();
+	let snapp_base_abi: String = snapp_base.get("abi").ok_or("No ABI for contract")?.to_string();
 
-	// let snapp_address: String = env::var("SNAPP_CONTRACT_ADDRESS")?;
-	// TO do: use snapp_address in next line
-	let address: Address = Address::from("0xC89Ce4735882C9F0f0FE26686c53074E09B0D550");
+	let snapp_address = env::var("SNAPP_CONTRACT_ADDRESS")?;
+	let address: Address = Address::from(snapp_address.as_bytes());
 	let contract = Contract::from_json(web3.eth(), address, snapp_base_abi.as_bytes())?;
 	// get current state
 	let result = contract.query("getCurrentStateRoot", (), None, Options::default(), None);
@@ -131,7 +130,7 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 		}
 
 		if deposit_slot_empty && deposit_ind != 0 {
-			println!("All deposits are already processed");
+			println!("deposit_slot {} already processed", deposit_ind);
 		} else {
 			// calculate new state by applying all deposits
 			state = apply_deposits(&mut state, &deposits);

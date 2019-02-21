@@ -13,18 +13,14 @@ mod deposit_driver;
 mod models;
 mod error;
 
-use std::error::Error;
-
 use crate::deposit_driver::run_deposit_listener;
 
-pub fn run_driver_components() -> Result<(), Box<dyn Error>> {
+pub fn run_driver_components() -> () {
     //start deposit_driver
     if let Err(e) = run_deposit_listener() {
         println!("Deposit_driver error: {}", e);
-        ()
     }
     //start withdraw_driver
     //...
-    Ok(())
 }
 
