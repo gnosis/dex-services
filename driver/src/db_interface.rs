@@ -8,6 +8,7 @@ use web3::types::H256;
 
 use std::io::{Error, ErrorKind};
 
+
 pub trait DbInterface {
     fn get_current_balances(
         &self,
@@ -35,7 +36,7 @@ impl DbInterface for MongoDB {
         current_state_root: H256,
     ) -> Result<models::State, Box<dyn std::error::Error>> {
         let query: String = format!("{{ \"stateHash\": \"{:x}\" }}", current_state_root);
-
+        println!("{}",query);
         let v: serde_json::Value = serde_json::from_str(&query)?;
         let bson = v.into();
         let mut _temp: bson::ordered::OrderedDocument =
@@ -44,11 +45,19 @@ impl DbInterface for MongoDB {
         let coll = self.client.db(models::DB_NAME).collection("accounts");
 
         let cursor = coll.find(Some(_temp), None)?;
-
-        let docs: Vec<bson::ordered::OrderedDocument> = cursor.map(|doc| doc.unwrap()).collect();
-
+        let mut docs: Vec<bson::ordered::OrderedDocument>=vec!();
+        for result in cursor {
+            if let Ok(item) = result {
+                docs.push(item);
+            } else{
+                return Err(Box::new(Error::new(ErrorKind::Other, "Error, doc of state was not okay")));
+            }
+        }
         if docs.len() == 0 {
-            Error::new(ErrorKind::Other, "Error, state was not found");
+            return Err(Box::new(Error::new(ErrorKind::Other, "Error, state was not found")));
+        }
+        if docs.len() > 1 {
+            return Err(Box::new(Error::new(ErrorKind::Other, "Error, state not unique")));
         }
 
         let json: String = serde_json::to_string(&docs[0])?;
@@ -62,7 +71,8 @@ impl DbInterface for MongoDB {
         slot: i32,
     ) -> Result<Vec<models::Deposits>, Box<dyn std::error::Error>> {
         let query = format!("{{ \"slot\": {:} }}", slot);
-        
+        println!("{}",query);
+
         let v: serde_json::Value =
             serde_json::from_str(&query)?;
         let bson = v.into();
@@ -73,14 +83,22 @@ impl DbInterface for MongoDB {
 
         let cursor = coll.find(Some(_temp), None)?;
 
-        let mut docs: Vec<models::Deposits> = cursor
-            .map(|doc| doc.unwrap())
-            .map(|doc| {
-                serde_json::to_string(&doc)
-                    .map(|json| serde_json::from_str(&json).unwrap()).expect("needed here")
-            })
-            .collect();
-
+        let mut docs: Vec<models::Deposits> =vec!();
+        for result in cursor {
+            if let Ok(item) = result {
+                if let Ok(deposit_str) = serde_json::to_string(&item){
+                    if let Ok(deposit) = serde_json::from_str(&deposit_str){
+                        docs.push(deposit);
+                    } else {
+                        println!("One deposit from slot {:} could not be unwraped", slot);
+                    }
+                } else {
+                    println!("One deposit from slot {:} could not be unwraped", slot);
+                }
+            } else{
+                return Err(Box::new(Error::new(ErrorKind::Other, "Error, doc of deposit was not okay")));
+            }
+        } 
         docs.sort_by(|a, b| b.slot.cmp(&a.slot));
         Ok(docs)
     }
