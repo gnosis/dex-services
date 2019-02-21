@@ -36,28 +36,21 @@ impl DbInterface for MongoDB {
         current_state_root: H256,
     ) -> Result<models::State, Box<dyn std::error::Error>> {
         let query: String = format!("{{ \"stateHash\": \"{:x}\" }}", current_state_root);
-        println!("{}",query);
-        let v: serde_json::Value = serde_json::from_str(&query)?;
-        let bson = v.into();
-        let mut _temp: bson::ordered::OrderedDocument =
-            mongodb::from_bson(bson).expect("Failed to convert bson to document");
+        println!("Querying stateHash: {}", query);
+
+        let bson =  serde_json::from_str::<serde_json::Value>(&query)?.into();
+        let query = mongodb::from_bson(bson)?;
 
         let coll = self.client.db(models::DB_NAME).collection("accounts");
-
-        let cursor = coll.find(Some(_temp), None)?;
-        let mut docs: Vec<bson::ordered::OrderedDocument>=vec!();
+        let cursor = coll.find(Some(query), None)?;
+        let mut docs: Vec<bson::ordered::OrderedDocument> = vec!();
         for result in cursor {
-            if let Ok(item) = result {
-                docs.push(item);
-            } else{
-                return Err(Box::new(Error::new(ErrorKind::Other, "doc of state was not okay")));
-            }
+            docs.push(result?);
         }
-        if docs.len() == 0 {
-            return Err(Box::new(Error::new(ErrorKind::Other, "state was not found")));
-        }
-        if docs.len() > 1 {
-            return Err(Box::new(Error::new(ErrorKind::Other, "state not unique")));
+        if docs.len() != 0 {
+            return Err(Box::new(Error::new(
+                ErrorKind::Other, format!("Expeceted to find a single unique state, found {}", docs.len()))
+            ));
         }
 
         let json: String = serde_json::to_string(&docs[0])?;
@@ -71,33 +64,16 @@ impl DbInterface for MongoDB {
         slot: i32,
     ) -> Result<Vec<models::Deposits>, Box<dyn std::error::Error>> {
         let query = format!("{{ \"slot\": {:} }}", slot);
-        println!("{}",query);
+        println!("Querying deposits: {}", query);
 
-        let v: serde_json::Value =
-            serde_json::from_str(&query)?;
-        let bson = v.into();
-        let mut _temp: bson::ordered::OrderedDocument =
-            mongodb::from_bson(bson)?;
+        let bson = serde_json::from_str::<serde_json::Value>(&query)?.into();
+        let query = mongodb::from_bson(bson)?;
 
         let coll = self.client.db(models::DB_NAME).collection("deposits");
-
-        let cursor = coll.find(Some(_temp), None)?;
-
+        let cursor = coll.find(Some(query), None)?;
         let mut docs: Vec<models::Deposits> =vec!();
         for result in cursor {
-            if let Ok(item) = result {
-                if let Ok(deposit_str) = serde_json::to_string(&item){
-                    if let Ok(deposit) = serde_json::from_str(&deposit_str){
-                        docs.push(deposit);
-                    } else {
-                        println!("One deposit from slot {:} could not be unwraped", slot);
-                    }
-                } else {
-                    println!("One deposit from slot {:} could not be unwraped", slot);
-                }
-            } else{
-                return Err(Box::new(Error::new(ErrorKind::Other, "doc of deposit was not okay")));
-            }
+            docs.push(models::Deposits::from(result?));
         } 
         docs.sort_by(|a, b| b.slot.cmp(&a.slot));
         Ok(docs)

@@ -13,7 +13,6 @@ use web3::types::{Address, H256, U256};
 use std::env;
 use std::fs;
 use std::io;
-use std::process;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -45,8 +44,7 @@ fn main() {
 		let db_port = env::var("DB_PORT").unwrap();
 		let db_instance =
 			db_interface::MongoDB::new(db_host, db_port).unwrap_or_else(|err| {
-				println!("Problem creating DbInterface: {}", err);
-				process::exit(1);
+				panic!(format!("Problem creating DbInterface: {}", err));
 			});
 
 		let (_eloop, transport) = web3::transports::Http::new("http://ganache-cli:8545")
