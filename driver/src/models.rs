@@ -63,7 +63,7 @@ pub fn from_slice2(bytes: &[u8]) -> [u8; 32] {
 }
 
 #[allow(non_snake_case)]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct State {
   pub stateHash: String,
   pub stateIndex: i32,
@@ -156,6 +156,13 @@ impl Deposits {
     let hash: H256 = H256::from_slice(&b);
     hash
   }
+}
+
+impl From<mongodb::ordered::OrderedDocument> for Deposits {
+    fn from(document: mongodb::ordered::OrderedDocument) -> Self {
+        let json = serde_json::to_string(&document).unwrap();
+        serde_json::from_str(&json).unwrap()
+    }
 }
 
 #[cfg(test)]

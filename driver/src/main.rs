@@ -3,6 +3,8 @@ extern crate models;
 extern crate mongodb;
 extern crate rustc_hex;
 extern crate web3;
+mod db_interface;
+use crate::db_interface::DbInterface;
 
 use web3::contract::{Contract, Options};
 use web3::futures::Future;
@@ -11,68 +13,9 @@ use web3::types::{Address, H256, U256};
 use std::env;
 use std::fs;
 use std::io;
-use std::io::Error;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
-
-use mongodb::bson;
-use mongodb::db::ThreadedDatabase;
-use mongodb::{Client, ThreadedClient};
-
-fn get_current_balances(client: Client, current_state_root: H256) -> Result<models::State, Error> {
-	let t: String = format!("{:#x}", current_state_root);
-	let mut query = String::from(r#" { "stateHash": ""#);
-	query.push_str(&t[2..]);
-	query.push_str(r#"" }"#);
-
-	let v: serde_json::Value =
-		serde_json::from_str(&query).expect("Failed to parse query to serde_json::value");
-	let bson = v.into();
-	let mut _temp: bson::ordered::OrderedDocument =
-		mongodb::from_bson(bson).expect("Failed to convert bson to document");
-	let coll = client.db(models::DB_NAME).collection("accounts");
-
-	let cursor = coll
-		.find(Some(_temp), None)
-		.ok()
-		.expect("Failed to execute find.");
-
-	let docs: Vec<_> = cursor.map(|doc| doc.unwrap()).collect();
-
-	let json: String = serde_json::to_string(&docs[0]).expect("Failed to parse json");
-
-	let deserialized: models::State = serde_json::from_str(&json)?;
-	Ok(deserialized)
-}
-
-fn get_deposits_of_slot(slot: i32, client: Client) -> Result<Vec<models::Deposits>, io::Error> {
-	let mut query = String::from(r#" { "slot": "#);
-	let t = slot.to_string();
-	query.push_str(&t);
-	query.push_str(" }");
-	let v: serde_json::Value =
-		serde_json::from_str(&query).expect("Failed to parse query to serde_json::value");
-	let bson = v.into();
-	let mut _temp: bson::ordered::OrderedDocument =
-		mongodb::from_bson(bson).expect("Failed to convert bson to document");
-
-	let coll = client.db(models::DB_NAME).collection("deposits");
-
-	let cursor = coll.find(Some(_temp), None)?;
-
-	let mut docs: Vec<models::Deposits> = cursor
-		.map(|doc| doc.unwrap())
-		.map(|doc| {
-			serde_json::to_string(&doc)
-				.map(|json| serde_json::from_str(&json).unwrap())
-				.expect("Failed to parse json")
-		})
-		.collect();
-
-	docs.sort_by(|a, b| b.slot.cmp(&a.slot));
-	Ok(docs)
-}
 
 fn apply_deposits(
 	state: &mut models::State,
@@ -97,11 +40,12 @@ fn main() {
 		let received = rx.recv().unwrap();
 		println!(": {}", received);
 
-		// initializing all needed web3 variables
 		let db_host = env::var("DB_HOST").unwrap();
 		let db_port = env::var("DB_PORT").unwrap();
-		let client = Client::connect(&db_host, db_port.parse::<u16>().unwrap())
-			.expect("Failed to initialize standalone client");
+		let db_instance =
+			db_interface::MongoDB::new(db_host, db_port).unwrap_or_else(|err| {
+				panic!(format!("Problem creating DbInterface: {}", err));
+			});
 
 		let (_eloop, transport) = web3::transports::Http::new("http://ganache-cli:8545")
 			.expect("Transport was not established correctly");
@@ -123,7 +67,8 @@ fn main() {
 			// get current state
 			let result = contract.query("getCurrentStateRoot", (), None, Options::default(), None);
 			let curr_state_root: H256 = result.wait().expect("Unable to get current stateroot");
-			let mut state = get_current_balances(client.clone(), curr_state_root.clone())
+			let mut state = db_instance
+				.get_current_balances(curr_state_root.clone())
 				.expect("Could not get the current state of the chain");
 			let accounts = web3
 				.eth()
@@ -199,7 +144,7 @@ fn main() {
 			);
 			let deposit_slot_empty_hash: H256 = result.wait().expect("Could not get deposit_slot");
 			let deposit_slot_empty = deposit_slot_empty_hash == H256::zero();
-			
+
 			println!(
 				"Current block is {:?} and the last deposit_ind_creationBlock is {:?}",
 				current_block, current_deposit_ind_block
@@ -210,7 +155,8 @@ fn main() {
 				&& deposit_ind != current_deposit_ind.low_u32() as i32 + 1
 			{
 				println!("Next deposit_slot to be processed is {}", deposit_ind);
-				let deposits = get_deposits_of_slot(deposit_ind, client.clone())
+				let deposits = db_instance
+					.get_deposits_of_slot(deposit_ind)
 					.expect("Could not get deposit slot");
 				println!("Amount of deposits to be processed{:?}", deposits.len());
 				//rehash deposits
