@@ -53,7 +53,7 @@ impl DbInterface for MongoDB {
             ));
         }
         if docs.len() > 1 {
-            return Err(Box::new(Error::new(ErrorKind::Other, "Error, state not unique")));
+            return Err(Box::new(Error::new(ErrorKind::Other, "state not unique")));
         }
 
         let json: String = serde_json::to_string(&docs[0])?;
