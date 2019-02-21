@@ -47,7 +47,7 @@ impl DbInterface for MongoDB {
         for result in cursor {
             docs.push(result?);
         }
-        if docs.len() != 0 {
+        if docs.len() != 1 {
             return Err(Box::new(Error::new(
                 ErrorKind::Other, format!("Expeceted to find a single unique state, found {}", docs.len()))
             ));
