@@ -9,6 +9,7 @@ use crate::db_interface::DbInterface;
 use std::env;
 use std::error::Error;
 use std::fs;
+use crate::error::DriverError;
 
 pub fn apply_deposits(
 	state: &mut models::State,
@@ -45,7 +46,7 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 	// check that operator has sufficient ether
 	let balance = web3.eth().balance(accounts[0], None).wait()?;
 	if balance.is_zero() {
-		panic!("Not sufficient balance for posting updates into the chain");
+		return Err(Box::new(DriverError::new("Not sufficient balance for posting updates into the chain")));
 	}
 
 	//get depositSlot
@@ -134,14 +135,14 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 		} else {
 			// calculate new state by applying all deposits
 			state = apply_deposits(&mut state, &deposits);
-			println!("New StateHash is{:?}", state.hash());
+			println!("New StateHash is{:?}", state.hash()?);
 
 			//send new state into blockchain
 			//applyDeposits signature is (slot, _currStateRoot, _newStateRoot, deposit_slotHash)
 			let slot = U256::from(deposit_ind);
 			let _curr_state_root = curr_state_root;
 			let mut d = String::from(r#" "0x"#);
-			d.push_str(&state.hash());
+			d.push_str(&state.hash()?);
 			d.push_str(r#"""#);
 			let _new_state_root: H256 = serde_json::from_str(&d)?;
 

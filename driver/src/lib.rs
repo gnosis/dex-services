@@ -11,6 +11,7 @@ extern crate sha2;
 mod db_interface;
 mod deposit_driver;
 mod models;
+mod error;
 
 use std::error::Error;
 
@@ -26,3 +27,4 @@ pub fn run_driver_components() -> Result<(), Box<dyn Error>> {
     //...
     Ok(())
 }
+

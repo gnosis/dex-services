@@ -10,9 +10,6 @@ use std::error::Error;
 pub const ACCOUNTS: i32 = 100;
 pub const TOKENS: i32 = 30;
 pub const SIZE_BALANCE: usize = (ACCOUNTS * TOKENS) as usize;
-// pub const BITS_PER_BALANCE: i32 = 30;
-// pub const BITS_PER_ACCOUNT: i32 = 4;
-// pub const BITS_PER_TOKENS: i32 = 3;
 
 pub const DB_NAME: &str = "dfusion2";
 

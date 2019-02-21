@@ -7,7 +7,6 @@ fn main() {
         //start driver_componets
         if let Err(e) = run_driver_components() {
             println!("Deposit_driver error: {}", e);
-            ()
         }
         thread::sleep(Duration::from_secs(5));
     }
