@@ -9,19 +9,19 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub trait SnappContract {
     // General Blockchain interface
-    fn get_current_block_number(self) -> Result<U256>;
+    fn get_current_block_number(&self) -> Result<U256>;
 
     // Top level smart contract methods
-    fn get_current_state_root(self) -> Result<H256>;
-    fn get_current_deposit_slot(self) -> Result<U256>;
+    fn get_current_state_root(&self) -> Result<H256>;
+    fn get_current_deposit_slot(&self) -> Result<U256>;
 
     // Deposit Slots
-    fn creation_block_for_slot(self, slot: U256) -> Result<U256>;
-    fn deposit_hash_for_slot(self, slot: U256) -> Result<H256>;
-    fn has_deposit_slot_been_applied(self, slot: U256) -> Result<bool>;
+    fn creation_block_for_slot(&self, slot: U256) -> Result<U256>;
+    fn deposit_hash_for_slot(&self, slot: U256) -> Result<H256>;
+    fn has_deposit_slot_been_applied(&self, slot: U256) -> Result<bool>;
 
     // Write methods
-    fn apply_deposits(self, slot: U256, prev_state: H256, new_state: H256, deposit_hash: H256) -> Result<()>;
+    fn apply_deposits(&self, slot: U256, prev_state: H256, new_state: H256, deposit_hash: H256) -> Result<()>;
 }
 
 pub struct SnappContractImpl {
@@ -44,63 +44,57 @@ impl SnappContractImpl {
         Ok(SnappContractImpl { contract, web3 })
     }
 
-    fn account_with_sufficient_balance(self) -> Option<Address> {
-        let accounts = self.web3.eth().accounts().wait()?;
-        if self.web3.eth().balance(accounts[0], None).wait()?.is_zero() {
-            None
-        } else {
-            Some(accounts[0])
-        }
+    fn account_with_sufficient_balance(&self) -> Option<Address> {
+        let accounts: Vec<Address> = self.web3.eth().accounts().wait().ok()?;
+        accounts.into_iter().find(|&acc| {
+            match self.web3.eth().balance(acc, None).wait() {
+                Ok(balance) => !balance.is_zero(),
+                Err(_) => false,
+            }
+        })
     }
 }
 
 impl SnappContract for SnappContractImpl {
-    fn get_current_state_root(self) -> Result<H256> {
+    fn get_current_state_root(&self) -> Result<H256> {
         self.contract.query(
-            "getCurrentStateRoot", (), None, Options::default(), None).wait()?
+            "getCurrentStateRoot", (), None, Options::default(), None
+        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
     }
 
-    fn get_current_deposit_slot(self) -> Result<U256> {
+    fn get_current_deposit_slot(&self) -> Result<U256> {
         self.contract.query(
-            "depositIndex", (), None, Options::default(), None).wait()?
+            "depositIndex", (), None, Options::default(), None
+        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
     }
 
-    fn has_deposit_slot_been_applied(self, slot: U256) -> Result<bool> {
+    fn has_deposit_slot_been_applied(&self, slot: U256) -> Result<bool> {
         self.contract.query(
-            "getDepositCreationBlock",
-            slot,
-            None,
-            Options::default(),
-            None,
-        ).wait()
+            "getDepositCreationBlock", slot, None, Options::default(), None,
+        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
     }
 
-    fn deposit_hash_for_slot(self, slot: U256) -> Result<H256> {
+    fn deposit_hash_for_slot(&self, slot: U256) -> Result<H256> {
         self.contract.query(
-            "getDepositHash",
-            U256::from(slot),
-            None,
-            Options::default(),
-            None,
-        ).wait()
+            "getDepositHash", slot, None, Options::default(), None,
+        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
     }
 
-    fn creation_block_for_slot(self, slot: U256) -> Result<U256> {
+    fn creation_block_for_slot(&self, slot: U256) -> Result<U256> {
         self.contract.query(
-            "getDepositCreationBlock",
-            slot,
-            None,
-            Options::default(),
-            None,
-        ).wait()
+            "getDepositCreationBlock", slot, None, Options::default(), None,
+        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
     }
 
-    fn get_current_block_number(self) -> Result<U256> {
-        self.web3.eth().block_number().wait()
+    fn get_current_block_number(&self) -> Result<U256> {
+        self.web3.eth()
+            .block_number()
+            .wait()
+            .map_err(|e| Box::new(e) as Box<std::error::Error>)
     }
     
     fn apply_deposits(
-        self, 
+        &self, 
         slot: U256,
         prev_state: H256,
         new_state: H256,
@@ -112,5 +106,7 @@ impl SnappContract for SnappContractImpl {
                 account,
                 Options::default(),
             ).wait()
+            .map_err(|e| Box::new(e) as Box<std::error::Error>)
+            .map(|_|())
     }
 }

@@ -12,7 +12,6 @@ mod contract;
 mod db_interface;
 mod deposit_driver;
 mod models;
-mod error;
 
 use crate::deposit_driver::run_deposit_listener;
 

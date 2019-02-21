@@ -16,7 +16,7 @@ pub trait DbInterface {
     ) -> Result<models::State, Box<dyn std::error::Error>>;
     fn get_deposits_of_slot(
         &self,
-        slot: i32,
+        slot: u32,
     ) -> Result<Vec<models::Deposits>, Box<dyn std::error::Error>>;
 }
 
@@ -61,7 +61,7 @@ impl DbInterface for MongoDB {
 
     fn get_deposits_of_slot(
         &self,
-        slot: i32,
+        slot: u32,
     ) -> Result<Vec<models::Deposits>, Box<dyn std::error::Error>> {
         let query = format!("{{ \"slot\": {:} }}", slot);
         println!("Querying deposits: {}", query);
