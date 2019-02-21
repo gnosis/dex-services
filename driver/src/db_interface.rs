@@ -61,7 +61,7 @@ impl DbInterface for MongoDB {
         &self,
         slot: i32,
     ) -> Result<Vec<models::Deposits>, Box<dyn std::error::Error>> {
-        let query = format!("{{ \"slot\": \"{:}\" }}", slot);
+        let query = format!("{{ \"slot\": {:} }}", slot);
         
         let v: serde_json::Value =
             serde_json::from_str(&query)?;
