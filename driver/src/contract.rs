@@ -14,14 +14,21 @@ pub trait SnappContract {
     // Top level smart contract methods
     fn get_current_state_root(&self) -> Result<H256>;
     fn get_current_deposit_slot(&self) -> Result<U256>;
+    fn get_current_withdraw_slot(&self) -> Result<U256>;
 
     // Deposit Slots
-    fn creation_block_for_slot(&self, slot: U256) -> Result<U256>;
+    fn creation_block_for_deposit_slot(&self, slot: U256) -> Result<U256>;
     fn deposit_hash_for_slot(&self, slot: U256) -> Result<H256>;
     fn has_deposit_slot_been_applied(&self, slot: U256) -> Result<bool>;
 
+    // Withdraw Slots
+    fn creation_block_for_withdraw_slot(&self, slot: U256) -> Result<U256>;
+    fn withdraw_hash_for_slot(&self, slot: U256) -> Result<H256>;
+    fn has_withdraw_slot_been_applied(&self, slot: U256) -> Result<bool>;
+
     // Write methods
     fn apply_deposits(&self, slot: U256, prev_state: H256, new_state: H256, deposit_hash: H256) -> Result<()>;
+    fn apply_withdraws(&self, slot: U256, prev_state: H256, new_state: H256, deposit_hash: H256) -> Result<()>;
 }
 
 pub struct SnappContractImpl {
@@ -81,9 +88,33 @@ impl SnappContract for SnappContractImpl {
         ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
     }
 
-    fn creation_block_for_slot(&self, slot: U256) -> Result<U256> {
+    fn creation_block_for_deposit_slot(&self, slot: U256) -> Result<U256> {
         self.contract.query(
             "getDepositCreationBlock", slot, None, Options::default(), None,
+        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
+    }
+
+    fn get_current_withdraw_slot(&self) -> Result<U256> {
+        self.contract.query(
+            "withdrawIndex", (), None, Options::default(), None
+        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
+    }
+
+    fn has_withdraw_slot_been_applied(&self, slot: U256) -> Result<bool> {
+        self.contract.query(
+            "hasWithdrawBeenApplied", slot, None, Options::default(), None,
+        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
+    }
+
+    fn withdraw_hash_for_slot(&self, slot: U256) -> Result<H256> {
+        self.contract.query(
+            "getWithdrawHash", slot, None, Options::default(), None,
+        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
+    }
+
+    fn creation_block_for_withdraw_slot(&self, slot: U256) -> Result<U256> {
+        self.contract.query(
+            "getWithdrawCreationBlock", slot, None, Options::default(), None,
         ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
     }
 
@@ -103,6 +134,23 @@ impl SnappContract for SnappContractImpl {
             let account = self.account_with_sufficient_balance().ok_or("Not enough balance to send Txs")?;
             self.contract.call(
                 "applyDeposits",
+                (slot, prev_state, new_state, deposit_hash),
+                account,
+                Options::default(),
+            ).wait()
+            .map_err(|e| Box::new(e) as Box<std::error::Error>)
+            .map(|_|())
+    }
+
+    fn apply_withdraws(
+        &self, 
+        slot: U256,
+        prev_state: H256,
+        new_state: H256,
+        deposit_hash: H256) -> Result<()> {
+            let account = self.account_with_sufficient_balance().ok_or("Not enough balance to send Txs")?;
+            self.contract.call(
+                "applyWithdraws",
                 (slot, prev_state, new_state, deposit_hash),
                 account,
                 Options::default(),

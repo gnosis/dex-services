@@ -8,19 +8,25 @@ extern crate serde;
 extern crate serde_json;
 extern crate sha2;
 
-mod contract;
-mod db_interface;
+pub mod contract;
+pub mod db_interface;
+
 mod deposit_driver;
 mod models;
+mod withdraw_driver;
 
 use crate::deposit_driver::run_deposit_listener;
+use crate::withdraw_driver::run_withdraw_listener;
+use crate::db_interface::MongoDB;
+use crate::contract::SnappContractImpl;
 
-pub fn run_driver_components() -> () {
-    //start deposit_driver
+pub fn run_driver_components(db: &MongoDB, contract: &SnappContractImpl) -> () {
     if let Err(e) = run_deposit_listener() {
         println!("Deposit_driver error: {}", e);
     }
-    //start withdraw_driver
+    if let Err(e) = run_withdraw_listener(db, contract) {
+        println!("Withdraw_driver error: {}", e);
+    }
     //...
 }
 

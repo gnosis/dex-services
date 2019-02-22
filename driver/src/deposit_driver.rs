@@ -11,7 +11,7 @@ use std::error::Error;
 
 pub fn apply_deposits(
 	state: &mut models::State,
-	deposits: &Vec<models::Deposits>,
+	deposits: &Vec<models::Deposit>,
 ) -> models::State {
 	for i in deposits {
 		state.balances[(i.accountId * models::TOKENS + i.tokenId) as usize] += i.amount;
@@ -26,7 +26,7 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
     let contract = contract::SnappContractImpl::new()?;
 
 	let curr_state_root: H256 = contract.get_current_state_root()?;
-	let mut state = db_instance.get_current_balances(curr_state_root.clone())?;
+	let mut state = db_instance.get_current_balances(&curr_state_root)?;
 
 	let current_deposit_ind: U256 = contract.get_current_deposit_slot()?;
 
@@ -45,7 +45,7 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 	}
 	println!("Current pending deposit_slot is {:?}", deposit_ind);
 
-	let current_deposit_ind_block = contract.creation_block_for_slot(deposit_ind)?;
+	let current_deposit_ind_block = contract.creation_block_for_deposit_slot(deposit_ind)?;
 	let current_block = contract.get_current_block_number()?;
 
 	let deposit_hash_pulled: H256 = contract.deposit_hash_for_slot(deposit_ind)?;
