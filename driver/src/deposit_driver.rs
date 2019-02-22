@@ -36,7 +36,7 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 	let mut found: bool = false;
 
 	// Starting from the last depositSlot, we search backwards to the first non-applied deposit
-	while !found {
+	while !found && deposit_ind != U256::zero() {
 		deposit_ind = deposit_ind - 1;
 		found = contract.has_deposit_slot_been_applied(deposit_ind)?;
 	}

@@ -27,11 +27,12 @@ pub trait SnappContract {
 pub struct SnappContractImpl {
     contract: Contract<web3::transports::Http>,
     web3: web3::Web3<web3::transports::Http>,
+    event_loop: web3::transports::EventLoopHandle,
 }
 
 impl SnappContractImpl {
     pub fn new() -> Result<Self> {
-        let (_, transport) = web3::transports::Http::new("http://ganache-cli:8545")?;
+        let (event_loop, transport) = web3::transports::Http::new("http://ganache-cli:8545")?;
         let web3 = web3::Web3::new(transport);
 
         let contents = fs::read_to_string("../dex-contracts/build/contracts/SnappBase.json")?;
@@ -41,7 +42,7 @@ impl SnappContractImpl {
         let snapp_address = hex::decode(env::var("SNAPP_CONTRACT_ADDRESS")?)?;
         let address: Address = Address::from(&snapp_address[..]);
         let contract = Contract::from_json(web3.eth(), address, snapp_base_abi.as_bytes())?;
-        Ok(SnappContractImpl { contract, web3 })
+        Ok(SnappContractImpl { contract, web3, event_loop })
     }
 
     fn account_with_sufficient_balance(&self) -> Option<Address> {
@@ -70,7 +71,7 @@ impl SnappContract for SnappContractImpl {
 
     fn has_deposit_slot_been_applied(&self, slot: U256) -> Result<bool> {
         self.contract.query(
-            "getDepositCreationBlock", slot, None, Options::default(), None,
+            "hasDepositBeenApplied", slot, None, Options::default(), None,
         ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
     }
 
