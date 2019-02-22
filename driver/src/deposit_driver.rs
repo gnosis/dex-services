@@ -33,8 +33,8 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 	let snapp_base: serde_json::Value = serde_json::from_str(&contents)?;
 	let snapp_base_abi: String = snapp_base.get("abi").ok_or("No ABI for contract")?.to_string();
 
-	let snapp_address = env::var("SNAPP_CONTRACT_ADDRESS")?;
-	let address: Address = Address::from("0xC89Ce4735882C9F0f0FE26686c53074E09B0D550");
+	let snapp_address = hex::decode(env::var("SNAPP_CONTRACT_ADDRESS")?)?;
+	let address: Address = Address::from(&snapp_address[..]);
 	let contract = Contract::from_json(web3.eth(), address, snapp_base_abi.as_bytes())?;
 	// get current state
 	let result = contract.query("getCurrentStateRoot", (), None, Options::default(), None);
