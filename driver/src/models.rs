@@ -127,13 +127,6 @@ impl From<mongodb::ordered::OrderedDocument> for Deposits {
     }
 }
 
-impl From<mongodb::ordered::OrderedDocument> for Deposits {
-    fn from(document: mongodb::ordered::OrderedDocument) -> Self {
-        let json = serde_json::to_string(&document).unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
-}
-
 #[cfg(test)]
 mod tests {
   use super::*;
