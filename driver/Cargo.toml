@@ -5,13 +5,8 @@ authors = ["josojo <alex@gnosis.pm>"]
 edition = "2018"
 
 [lib]
-name = "models"
-path = "src/models.rs"
-bench = true
-
-[[bin]]
 name = "driver"
-path = "src/main.rs"
+path = "src/lib.rs"
 
 [dependencies]
 mongodb = "0.3.2"
