@@ -12,7 +12,7 @@ fn apply_withdraws(
 	withdraws: &Vec<models::PendingFlux>,
 ) -> models::State {
 	for i in withdraws {
-        if( state.balances[(i.accountId * models::TOKENS + i.tokenId) as usize] > i.amount){
+        if state.balances[(i.accountId * models::TOKENS + i.tokenId) as usize] > i.amount {
             state.balances[(i.accountId * models::TOKENS + i.tokenId) as usize] -= i.amount;
  	    }
     }
@@ -47,7 +47,7 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(), Box<dyn E
     let withdraw_slot = contract.get_current_withdraw_slot()?;
 
     println!("Current top withdraw_slot is {:?}", withdraw_slot);
-    slot = find_first_unapplied_slot(withdraw_slot, contract)?;
+    let slot = find_first_unapplied_slot(withdraw_slot, contract)?;
     println!("Highest unprocessed withdraw_slot is {:?}", slot);
     if can_process(slot, contract)? {
         println!("Processing withdraw_slot is {:?}", slot);
