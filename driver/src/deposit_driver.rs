@@ -27,7 +27,8 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 
 	let curr_state_root: H256 = contract.get_current_state_root()?;
 	let mut state = db_instance.get_current_balances(&curr_state_root)?;
-
+	// check that operator has sufficient ether
+	
 	let current_deposit_ind: U256 = contract.get_current_deposit_slot()?;
 
 	// get latest non-applied deposit_index
