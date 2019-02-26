@@ -1,9 +1,23 @@
+use crate::models;
+
 use crate::db_interface::DbInterface;
 use crate::contract::SnappContract;
 
 use web3::types::{H256, U256};
 
 use std::error::Error;
+
+fn apply_withdraws(
+	state: &mut models::State,
+	withdraws: &Vec<models::PendingFlux>,
+) -> models::State {
+	for i in withdraws {
+        if( state.balances[(i.accountId * models::TOKENS + i.tokenId) as usize] > i.amount){
+            state.balances[(i.accountId * models::TOKENS + i.tokenId) as usize] -= i.amount;
+ 	    }
+    }
+    state.clone()
+}
 
 fn find_first_unapplied_slot<C>(upper_bound: U256, contract: &C) -> Result<Option<U256>, Box<dyn Error>>
     where C: SnappContract
@@ -43,7 +57,21 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(), Box<dyn E
 
             let withdraws = db.get_withdraws_of_slot(slot.low_u32())?;
             // Hash withdraws and compare with contract
-            // adjust balances
+            let mut withdraw_hash: H256 = H256::zero();
+            for pat in &withdraws {
+                withdraw_hash = pat.iter_hash(&mut withdraw_hash)
+            }
+
+            if withdraw_hash != contract_withdraw_hash {
+                panic!("There is some error with the data, calculated withdraw_hash: {:?} does not match with withdraw_hash from smart-contract {:?}", withdraw_hash, contract_withdraw_hash);
+            }
+            // adjust balances and rehash
+           	balances = apply_withdraws(&mut balances, &withdraws);
+            let mut d = String::from(r#" "0x"#);
+			d.push_str(&balances.hash()?);
+			d.push_str(r#"""#);
+			let _new_state_root: H256 = serde_json::from_str(&d)?;
+
             // has balances
             contract.apply_withdraws(slot, state_root, _new_state_root, contract_withdraw_hash)?;
         } else {

@@ -11,7 +11,7 @@ use std::error::Error;
 
 pub fn apply_deposits(
 	state: &mut models::State,
-	deposits: &Vec<models::Deposit>,
+	deposits: &Vec<models::PendingFlux>,
 ) -> models::State {
 	for i in deposits {
 		state.balances[(i.accountId * models::TOKENS + i.tokenId) as usize] += i.amount;

@@ -75,7 +75,7 @@ impl State {
 
 #[allow(non_snake_case)]
 #[derive(Serialize, Deserialize)]
-pub struct Deposit {
+pub struct PendingFlux {
   pub slotIndex: i32,
   pub slot: i32,
   pub accountId: i32,
@@ -83,7 +83,7 @@ pub struct Deposit {
   pub amount: i64,
 }
 
-impl Deposit {
+impl PendingFlux {
   //calcalutes the iterative hash of deposits
   pub fn iter_hash(&self, prev_hash: &H256) -> H256 {
     let _current_deposithash: H256 = H256::zero();
@@ -117,17 +117,16 @@ impl Deposit {
     let b: Vec<u8> = result.to_vec();
     H256::from(b.as_slice())
   }
-
 }
 
-impl From<mongodb::ordered::OrderedDocument> for Deposit {
+
+impl From<mongodb::ordered::OrderedDocument> for PendingFlux {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
         let json = serde_json::to_string(&document).unwrap();
         serde_json::from_str(&json).unwrap()
     }
 }
 
-pub type Withdraw = Deposit;
 
 #[cfg(test)]
 mod tests {
@@ -137,7 +136,7 @@ mod tests {
   #[test]
   fn check_iter_hash() {
     //check transformations
-    let deposits = Deposit {
+    let deposits = PendingFlux {
       slotIndex: 0,
       slot: 0,
       accountId: 0,

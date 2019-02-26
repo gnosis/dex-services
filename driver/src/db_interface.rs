@@ -17,11 +17,11 @@ pub trait DbInterface {
     fn get_deposits_of_slot(
         &self,
         slot: u32,
-    ) -> Result<Vec<models::Deposit>, Box<dyn std::error::Error>>;
+    ) -> Result<Vec<models::PendingFlux>, Box<dyn std::error::Error>>;
     fn get_withdraws_of_slot(
         &self,
         slot: u32,
-    ) -> Result<Vec<models::Withdraw>, Box<dyn std::error::Error>>;
+    ) -> Result<Vec<models::PendingFlux>, Box<dyn std::error::Error>>;
 }
 
 #[derive(Clone)]
@@ -38,7 +38,7 @@ impl MongoDB {
         &self,
         slot: u32,
         collection: &str,
-    ) -> Result<Vec<models::Deposit>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<models::PendingFlux>, Box<dyn std::error::Error>> {
         let query = format!("{{ \"slot\": {:} }}", slot);
         println!("Querying {}: {}", collection, query);
 
@@ -47,9 +47,9 @@ impl MongoDB {
 
         let coll = self.client.db(models::DB_NAME).collection(collection);
         let cursor = coll.find(Some(query), None)?;
-        let mut docs: Vec<models::Deposit> =vec!();
+        let mut docs: Vec<models::PendingFlux> =vec!();
         for result in cursor {
-            docs.push(models::Deposit::from(result?));
+            docs.push(models::PendingFlux::from(result?));
         } 
         docs.sort_by(|a, b| b.slot.cmp(&a.slot));
         Ok(docs)
@@ -88,14 +88,14 @@ impl DbInterface for MongoDB {
     fn get_deposits_of_slot(
         &self,
         slot: u32,
-    ) -> Result<Vec<models::Deposit>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<models::PendingFlux>, Box<dyn std::error::Error>> {
         self.get_items_for_slot(slot, "deposits")
     }
 
     fn get_withdraws_of_slot(
         &self,
         slot: u32,
-    ) -> Result<Vec<models::Withdraw>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<models::PendingFlux>, Box<dyn std::error::Error>> {
         self.get_items_for_slot(slot, "withdraws")
     }
 }
