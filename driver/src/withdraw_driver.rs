@@ -19,26 +19,26 @@ fn apply_withdraws(
     state.clone()
 }
 
-fn find_first_unapplied_slot<C>(upper_bound: U256, contract: &C) -> Result<Option<U256>, Box<dyn Error>>
+fn find_first_unapplied_slot<C>(upper_bound: U256, contract: &C) -> Result<U256, Box<dyn Error>>
     where C: SnappContract
 {
     let mut slot = upper_bound;
     while slot != U256::zero() {
-        if contract.has_deposit_slot_been_applied(slot)? {
-            return Ok(Some(slot))
+        if contract.has_withdraw_slot_been_applied(slot - 1)? {
+            return Ok(slot)
         }
         slot = slot - 1;
     }
-    if contract.has_deposit_slot_been_applied(U256::zero())? {
-            return Ok(Some(U256::zero()))
-        }
-    Ok(None)
+    Ok(U256::zero())
 }
 
 fn can_process<C>(slot: U256, contract: &C) -> Result<bool, Box<dyn Error>> 
     where C: SnappContract
 {
     let slot_creation_block = contract.creation_block_for_withdraw_slot(slot)?;
+    if slot_creation_block == U256::zero() {
+        return Ok( false );
+    }
 	let current_block = contract.get_current_block_number()?;
     Ok(slot_creation_block + 20 < current_block)
 }
@@ -50,7 +50,7 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(), Box<dyn E
     let withdraw_slot = contract.get_current_withdraw_slot()?;
 
     println!("Current top withdraw_slot is {:?}", withdraw_slot);
-    if let Some(slot) = find_first_unapplied_slot(withdraw_slot, contract)? {
+    let slot = find_first_unapplied_slot(withdraw_slot + 1, contract)?;
         println!("Highest unprocessed withdraw_slot is {:?}", slot);
         if can_process(slot, contract)? {
             println!("Processing withdraw_slot is {:?}", slot);
@@ -82,6 +82,6 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(), Box<dyn E
         } else {
             println!("Need to wait before withdraw_slot is {:?}", slot);
         }
-    }
+    
     Ok(())
 }
