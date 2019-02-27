@@ -28,7 +28,7 @@ pub trait SnappContract {
 
     // Write methods
     fn apply_deposits(&self, slot: U256, prev_state: H256, new_state: H256, deposit_hash: H256) -> Result<()>;
-    fn apply_withdraws(&self, slot: U256, prev_state: H256, new_state: H256, deposit_hash: H256) -> Result<()>;
+    fn apply_withdraws(&self, slot: U256, merkle_root: H256, prev_state: H256, new_state: H256, withdraw_hash: H256) -> Result<()>;
 }
 
 pub struct SnappContractImpl {
@@ -54,12 +54,14 @@ impl SnappContractImpl {
 
     fn account_with_sufficient_balance(&self) -> Option<Address> {
         let accounts: Vec<Address> = self.web3.eth().accounts().wait().ok()?;
-        accounts.into_iter().find(|&acc| {
-            match self.web3.eth().balance(acc, None).wait() {
-                Ok(balance) => !balance.is_zero(),
-                Err(_) => false,
-            }
-        })
+        println!("{:?}", accounts[0]);
+        Some(accounts[0])
+        // accounts.into_iter().find(|&acc| {
+        //     match self.web3.eth().balance(acc, None).wait() {
+        //         Ok(balance) => !balance.is_zero(),
+        //         Err(_) => false,
+        //     }
+        // })
     }
 }
 
@@ -150,10 +152,14 @@ impl SnappContract for SnappContractImpl {
         new_state: H256,
         withdraw_hash: H256) -> Result<()> {
             let account = self.account_with_sufficient_balance().ok_or("Not enough balance to send Txs")?;
+            let mut o = Options::default();
+            let s = String::from("6000000");
+            o.gas = Some(U256::from_dec_str(&s).unwrap());
+            println!("{:?}",o.gas);
             self.contract.call(
                 "applyWithdrawals",
                 (slot, merkle_root, prev_state, new_state, withdraw_hash),
-                account,
+                account,    
                 Options::default(),
             ).wait()
             .map_err(|e| Box::new(e) as Box<std::error::Error>)
