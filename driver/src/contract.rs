@@ -145,13 +145,14 @@ impl SnappContract for SnappContractImpl {
     fn apply_withdraws(
         &self, 
         slot: U256,
+        merkle_root: H256,
         prev_state: H256,
         new_state: H256,
-        deposit_hash: H256) -> Result<()> {
+        withdraw_hash: H256) -> Result<()> {
             let account = self.account_with_sufficient_balance().ok_or("Not enough balance to send Txs")?;
             self.contract.call(
-                "applyWithdraws",
-                (slot, prev_state, new_state, deposit_hash),
+                "applyWithdrawals",
+                (slot, merkle_root, prev_state, new_state, withdraw_hash),
                 account,
                 Options::default(),
             ).wait()

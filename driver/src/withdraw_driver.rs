@@ -65,6 +65,8 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(), Box<dyn E
         if withdraw_hash != contract_withdraw_hash {
             panic!("There is some error with the data, calculated withdraw_hash: {:?} does not match with withdraw_hash from smart-contract {:?}", withdraw_hash, contract_withdraw_hash);
         }
+        //calculate merkleRoot of withdrawalHash
+        let withdrawal_merkle_root: H256 = H256::zero();
         // adjust balances and rehash
         balances = apply_withdraws(&mut balances, &withdraws);
         let mut d = String::from(r#" "0x"#);
@@ -73,7 +75,7 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(), Box<dyn E
         let _new_state_root: H256 = serde_json::from_str(&d)?;
 
         // has balances
-        contract.apply_withdraws(slot, state_root, _new_state_root, contract_withdraw_hash)?;
+        contract.apply_withdraws(slot, withdrawal_merkle_root, state_root, _new_state_root, contract_withdraw_hash)?;
     } else {
         println!("Need to wait before withdraw_slot is {:?}", slot);
     }
