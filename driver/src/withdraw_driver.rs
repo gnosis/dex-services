@@ -12,8 +12,10 @@ fn apply_withdraws(
 	withdraws: &Vec<models::PendingFlux>,
 ) -> models::State {
 	for i in withdraws {
-        if state.balances[(i.accountId * models::TOKENS + i.tokenId) as usize] > i.amount {
-            state.balances[(i.accountId * models::TOKENS + i.tokenId) as usize] -= i.amount;
+        println!("amount to be withdrawn! {:?}", i.amount);
+        if state.balances[((i.accountId - 1) * models::TOKENS + (i.tokenId - 1)) as usize] >= i.amount {
+            state.balances[((i.accountId - 1) * models::TOKENS + (i.tokenId - 1)) as usize] -= i.amount;
+            println!("amount which is withdrawn {:?}", i.amount);
  	    }
     }
     state.clone()
