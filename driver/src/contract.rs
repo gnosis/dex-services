@@ -153,14 +153,19 @@ impl SnappContract for SnappContractImpl {
         withdraw_hash: H256) -> Result<()> {
             let account = self.account_with_sufficient_balance().ok_or("Not enough balance to send Txs")?;
             let mut o = Options::default();
-            let s = String::from("6000000");
+            println!("The gas default value is: {:?}",o.gas);
+
+            let s = String::from("1000000");
             o.gas = Some(U256::from_dec_str(&s).unwrap());
             println!("{:?}",o.gas);
             self.contract.call(
                 "applyWithdrawals",
                 (slot, merkle_root, prev_state, new_state, withdraw_hash),
                 account,    
-                Options::default(),
+                Options::with(|opt| {
+            opt.gas_price = Some(25.into());
+            opt.gas = Some(1_000_000.into());
+        }),
             ).wait()
             .map_err(|e| Box::new(e) as Box<std::error::Error>)
             .map(|_|())
