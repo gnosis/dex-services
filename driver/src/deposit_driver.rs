@@ -14,7 +14,7 @@ pub fn apply_deposits(
 	deposits: &Vec<models::Deposits>,
 ) -> models::State {
 	for i in deposits {
-		state.balances[(i.accountId * models::TOKENS + i.tokenId) as usize] += i.amount;
+		state.balances[((i.accountId - 1) * models::TOKENS + (i.tokenId - 1)) as usize] += i.amount;
 	}
 	state.clone()
 }
