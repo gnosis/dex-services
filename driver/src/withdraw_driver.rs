@@ -12,10 +12,8 @@ fn apply_withdraws(
 	withdraws: &Vec<models::PendingFlux>,
 ) -> models::State {
 	for i in withdraws {
-        println!("amount to be withdrawn! {:?}", i.amount);
         if state.balances[((i.accountId - 1) * models::TOKENS + (i.tokenId - 1)) as usize] >= i.amount {
             state.balances[((i.accountId - 1) * models::TOKENS + (i.tokenId - 1)) as usize] -= i.amount;
-            println!("amount which is withdrawn {:?}", i.amount);
  	    }
     }
     state.clone()
@@ -78,8 +76,6 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(), Box<dyn E
             d.push_str(&balances.hash()?);
             d.push_str(r#"""#);
             let _new_state_root: H256 = serde_json::from_str(&d)?;
-
-            // has balances
             contract.apply_withdraws(slot, withdrawal_merkle_root, state_root, _new_state_root, contract_withdraw_hash)?;
         } else {
             println!("Need to wait before withdraw_slot is {:?}", slot);

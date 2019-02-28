@@ -54,14 +54,12 @@ impl SnappContractImpl {
 
     fn account_with_sufficient_balance(&self) -> Option<Address> {
         let accounts: Vec<Address> = self.web3.eth().accounts().wait().ok()?;
-        println!("{:?}", accounts[0]);
-        Some(accounts[0])
-        // accounts.into_iter().find(|&acc| {
-        //     match self.web3.eth().balance(acc, None).wait() {
-        //         Ok(balance) => !balance.is_zero(),
-        //         Err(_) => false,
-        //     }
-        // })
+        accounts.into_iter().find(|&acc| {
+            match self.web3.eth().balance(acc, None).wait() {
+                Ok(balance) => !balance.is_zero(),
+                Err(_) => false,
+            }
+        })
     }
 }
 
@@ -151,18 +149,13 @@ impl SnappContract for SnappContractImpl {
         prev_state: H256,
         new_state: H256,
         withdraw_hash: H256) -> Result<()> {
+            // HERE WE NEED TO BE SURE THAT THE SENDING ACCOUNT IS THE OWNER
             let account = self.account_with_sufficient_balance().ok_or("Not enough balance to send Txs")?;
-            let mut o = Options::default();
-            println!("The gas default value is: {:?}",o.gas);
-
-            let s = String::from("1000000");
-            o.gas = Some(U256::from_dec_str(&s).unwrap());
-            println!("{:?}",o.gas);
             self.contract.call(
                 "applyWithdrawals",
                 (slot, merkle_root, prev_state, new_state, withdraw_hash),
                 account,    
-                Options::with(|opt| {
+                Options::with(|opt| { // usual gas estimate is not working
             opt.gas_price = Some(25.into());
             opt.gas = Some(1_000_000.into());
         }),
