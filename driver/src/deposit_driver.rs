@@ -14,7 +14,7 @@ pub fn apply_deposits(
 	deposits: &Vec<models::PendingFlux>,
 ) -> models::State {
 	for i in deposits {
-		state.balances[((i.accountId - 1) * models::TOKENS + (i.tokenId - 1)) as usize] += i.amount;
+		state.balances[((i.accountId - 1) * models::TOKENS + (i.tokenId as u16 - 1)) as usize] += i.amount;
 	}
 	state.clone()
 }
@@ -86,10 +86,7 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 			//applyDeposits signature is (slot, _currStateRoot, _newStateRoot, deposit_slotHash)
 			let slot = U256::from(deposit_ind);
 			let _curr_state_root = curr_state_root;
-			let mut d = String::from(r#" "0x"#);
-			d.push_str(&state.hash()?);
-			d.push_str(r#"""#);
-			let _new_state_root: H256 = serde_json::from_str(&d)?;
+			let _new_state_root = H256::from(state.hash()?);
 
 			contract.apply_deposits(slot, _curr_state_root, _new_state_root, deposit_hash_pulled)?;
 		}

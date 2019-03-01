@@ -10,6 +10,7 @@ extern crate sha2;
 
 pub mod contract;
 pub mod db_interface;
+pub mod error;
 
 mod deposit_driver;
 mod models;
