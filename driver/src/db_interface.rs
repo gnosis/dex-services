@@ -12,12 +12,16 @@ use std::io::{Error, ErrorKind};
 pub trait DbInterface {
     fn get_current_balances(
         &self,
-        current_state_root: H256,
+        current_state_root: &H256,
     ) -> Result<models::State, Box<dyn std::error::Error>>;
     fn get_deposits_of_slot(
         &self,
         slot: u32,
-    ) -> Result<Vec<models::Deposits>, Box<dyn std::error::Error>>;
+    ) -> Result<Vec<models::PendingFlux>, Box<dyn std::error::Error>>;
+    fn get_withdraws_of_slot(
+        &self,
+        slot: u32,
+    ) -> Result<Vec<models::PendingFlux>, Box<dyn std::error::Error>>;
 }
 
 #[derive(Clone)]
@@ -29,11 +33,33 @@ impl MongoDB {
         let client = Client::connect(&db_host, db_port.parse::<u16>()?)?;
         Ok(MongoDB { client })
     }
+
+    fn get_items_for_slot(
+        &self,
+        slot: u32,
+        collection: &str,
+    ) -> Result<Vec<models::PendingFlux>, Box<dyn std::error::Error>> {
+        let query = format!("{{ \"slot\": {:} }}", slot);
+        println!("Querying {}: {}", collection, query);
+
+        let bson = serde_json::from_str::<serde_json::Value>(&query)?.into();
+        let query = mongodb::from_bson(bson)?;
+
+        let coll = self.client.db(models::DB_NAME).collection(collection);
+        let cursor = coll.find(Some(query), None)?;
+        let mut docs: Vec<models::PendingFlux> =vec!();
+        for result in cursor {
+            docs.push(models::PendingFlux::from(result?));
+        } 
+        docs.sort_by(|a, b| b.slot.cmp(&a.slot));
+        Ok(docs)
+    }
 }
+
 impl DbInterface for MongoDB {
     fn get_current_balances(
         &self,
-        current_state_root: H256,
+        current_state_root: &H256,
     ) -> Result<models::State, Box<dyn std::error::Error>> {
         let query: String = format!("{{ \"stateHash\": \"{:x}\" }}", current_state_root);
         println!("Querying stateHash: {}", query);
@@ -47,7 +73,7 @@ impl DbInterface for MongoDB {
         for result in cursor {
             docs.push(result?);
         }
-        if docs.len() != 1 {
+        if docs.len() == 0 {
             return Err(Box::new(Error::new(
                 ErrorKind::Other, format!("Expected to find a single unique state, found {}", docs.len()))
             ));
@@ -62,20 +88,14 @@ impl DbInterface for MongoDB {
     fn get_deposits_of_slot(
         &self,
         slot: u32,
-    ) -> Result<Vec<models::Deposits>, Box<dyn std::error::Error>> {
-        let query = format!("{{ \"slot\": {:} }}", slot);
-        println!("Querying deposits: {}", query);
+    ) -> Result<Vec<models::PendingFlux>, Box<dyn std::error::Error>> {
+        self.get_items_for_slot(slot, "deposits")
+    }
 
-        let bson = serde_json::from_str::<serde_json::Value>(&query)?.into();
-        let query = mongodb::from_bson(bson)?;
-
-        let coll = self.client.db(models::DB_NAME).collection("deposits");
-        let cursor = coll.find(Some(query), None)?;
-        let mut docs: Vec<models::Deposits> =vec!();
-        for result in cursor {
-            docs.push(models::Deposits::from(result?));
-        } 
-        docs.sort_by(|a, b| b.slot.cmp(&a.slot));
-        Ok(docs)
+    fn get_withdraws_of_slot(
+        &self,
+        slot: u32,
+    ) -> Result<Vec<models::PendingFlux>, Box<dyn std::error::Error>> {
+        self.get_items_for_slot(slot, "withdraws")
     }
 }

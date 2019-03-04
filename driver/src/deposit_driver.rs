@@ -11,10 +11,10 @@ use std::error::Error;
 
 pub fn apply_deposits(
 	state: &mut models::State,
-	deposits: &Vec<models::Deposits>,
+	deposits: &Vec<models::PendingFlux>,
 ) -> models::State {
 	for i in deposits {
-		state.balances[((i.accountId - 1) * models::TOKENS + (i.tokenId - 1)) as usize] += i.amount;
+		state.balances[((i.accountId - 1) * models::TOKENS + (i.tokenId as u16 - 1)) as usize] += i.amount;
 	}
 	state.clone()
 }
@@ -26,8 +26,10 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
     let contract = contract::SnappContractImpl::new()?;
 
 	let curr_state_root: H256 = contract.get_current_state_root()?;
-	let mut state = db_instance.get_current_balances(curr_state_root.clone())?;
+	let mut state = db_instance.get_current_balances(&curr_state_root)?;
 
+	// check that operator has sufficient ether
+	
 	let current_deposit_ind: U256 = contract.get_current_deposit_slot()?;
 
 	// get latest non-applied deposit_index
@@ -45,7 +47,7 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 	}
 	println!("Current pending deposit_slot is {:?}", deposit_ind);
 
-	let current_deposit_ind_block = contract.creation_block_for_slot(deposit_ind)?;
+	let current_deposit_ind_block = contract.creation_block_for_deposit_slot(deposit_ind)?;
 	let current_block = contract.get_current_block_number()?;
 
 	let deposit_hash_pulled: H256 = contract.deposit_hash_for_slot(deposit_ind)?;
@@ -84,10 +86,7 @@ pub fn run_deposit_listener() -> Result<(), Box<dyn Error>> {
 			//applyDeposits signature is (slot, _currStateRoot, _newStateRoot, deposit_slotHash)
 			let slot = U256::from(deposit_ind);
 			let _curr_state_root = curr_state_root;
-			let mut d = String::from(r#" "0x"#);
-			d.push_str(&state.hash()?);
-			d.push_str(r#"""#);
-			let _new_state_root: H256 = serde_json::from_str(&d)?;
+			let _new_state_root = H256::from(state.hash()?);
 
 			contract.apply_deposits(slot, _curr_state_root, _new_state_root, deposit_hash_pulled)?;
 		}

@@ -1,12 +1,12 @@
-use byteorder::{LittleEndian, WriteBytesExt};
-use rustc_hex::{FromHex, ToHex};
+use byteorder::{BigEndian, LittleEndian, WriteBytesExt};
+use rustc_hex::{FromHex};
 use serde_derive::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::num::ParseIntError;
 use web3::types::H256;
 use std::error::Error;
 
-pub const TOKENS: i32 = 30;
+pub const TOKENS: u16 = 30;
 
 pub const DB_NAME: &str = "dfusion2";
 
@@ -47,17 +47,17 @@ pub fn from_slice2(bytes: &[u8]) -> [u8; 32] {
 pub struct State {
   pub stateHash: String,
   pub stateIndex: i32,
-  pub balances: Vec<i64>,
+  pub balances: Vec<u128>,
 }
 
 impl State {
   //Todo: Exchange sha with pederson hash
-  pub fn hash(&self) -> Result<String, Box<dyn Error>> {
+  pub fn hash(&self) -> Result<[u8; 32], Box<dyn Error>> {
     let mut hash: [u8; 32] = [0; 32];
     for i in &self.balances {
       let mut bs = [0u8; 64];
       bs.as_mut()
-        .write_i64::<LittleEndian>(*i)?;
+        .write_u128::<LittleEndian>(*i)?;
       for i in 0..32 {
         bs[i + 32] = bs[i];
         bs[i] = hash[i];
@@ -69,21 +69,21 @@ impl State {
       let b: Vec<u8> = result.to_vec();
       hash = from_slice2(&b);
     }
-    Ok(hash.to_hex())
+    Ok(hash)
   }
 }
 
 #[allow(non_snake_case)]
 #[derive(Serialize, Deserialize)]
-pub struct Deposits {
+pub struct PendingFlux {
   pub slotIndex: i32,
   pub slot: i32,
-  pub accountId: i32,
-  pub tokenId: i32,
-  pub amount: i64,
+  pub accountId: u16,
+  pub tokenId: u8,
+  pub amount: u128,
 }
 
-impl Deposits {
+impl PendingFlux {
   //calcalutes the iterative hash of deposits
   pub fn iter_hash(&self, prev_hash: &H256) -> H256 {
     let _current_deposithash: H256 = H256::zero();
@@ -118,14 +118,23 @@ impl Deposits {
     H256::from(b.as_slice())
   }
 
+  pub fn bytes(&self) -> Vec<u8> {
+    let mut wtr = vec![0; 13];
+    wtr.write_u16::<BigEndian>(self.accountId).unwrap();
+    wtr.write_u8(self.tokenId).unwrap();
+    wtr.write_u128::<BigEndian>(self.amount).unwrap();
+    wtr
+  }
 }
 
-impl From<mongodb::ordered::OrderedDocument> for Deposits {
+
+impl From<mongodb::ordered::OrderedDocument> for PendingFlux {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
         let json = serde_json::to_string(&document).unwrap();
         serde_json::from_str(&json).unwrap()
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -135,7 +144,7 @@ mod tests {
   #[test]
   fn check_iter_hash() {
     //check transformations
-    let deposits = Deposits {
+    let deposits = PendingFlux {
       slotIndex: 0,
       slot: 0,
       accountId: 0,
