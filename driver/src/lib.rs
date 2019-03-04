@@ -22,7 +22,7 @@ use crate::db_interface::MongoDB;
 use crate::contract::SnappContractImpl;
 
 pub fn run_driver_components(db: &MongoDB, contract: &SnappContractImpl) -> () {
-    if let Err(e) = run_deposit_listener() {
+    if let Err(e) = run_deposit_listener(db, contract) {
         println!("Deposit_driver error: {}", e);
     }
     if let Err(e) = run_withdraw_listener(db, contract) {
