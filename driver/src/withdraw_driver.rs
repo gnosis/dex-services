@@ -2,11 +2,10 @@ use crate::models;
 
 use crate::db_interface::DbInterface;
 use crate::contract::SnappContract;
-use crate::error::DriverError;
+use crate::error::{DriverError, ErrorKind};
 
 use web3::types::{H256, U256};
 use sha2::{Digest, Sha256};
-use std::error::Error;
 
 fn apply_withdraws(
     state: &models::State,
@@ -25,7 +24,7 @@ fn apply_withdraws(
     (state, valid_withdraws)
 }
 
-fn find_first_unapplied_slot<C>(upper_bound: U256, contract: &C) -> Result<U256, Box<dyn Error>>
+fn find_first_unapplied_slot<C>(upper_bound: U256, contract: &C) -> Result<U256, DriverError>
     where C: SnappContract
 {
     let mut slot = upper_bound;
@@ -38,7 +37,7 @@ fn find_first_unapplied_slot<C>(upper_bound: U256, contract: &C) -> Result<U256,
     Ok(U256::zero())
 }
 
-fn can_process<C>(slot: U256, contract: &C) -> Result<bool, Box<dyn Error>> 
+fn can_process<C>(slot: U256, contract: &C) -> Result<bool, DriverError> 
     where C: SnappContract
 {
     let slot_creation_block = contract.creation_block_for_withdraw_slot(slot)?;
@@ -63,7 +62,7 @@ fn merkleize(withdraws: Vec<Vec<u8>>) -> H256 {
     merkleize(next_layer)
 }
 
-pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(), Box<dyn Error>> 
+pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(), DriverError> 
     where   D: DbInterface,
             C: SnappContract
 {
@@ -81,10 +80,10 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(), Box<dyn E
             let withdraws = db.get_withdraws_of_slot(slot.low_u32())?;
             let withdraw_hash = withdraws.iter().fold(H256::zero(), |acc, w| w.iter_hash(&acc));
             if withdraw_hash != contract_withdraw_hash {
-                return Err(Box::new(DriverError::new(
+                return Err(DriverError::new(
                     &format!("Pending withdraw hash from contract ({}), didn't match the one found in db ({})", 
-                    withdraw_hash, contract_withdraw_hash)
-                )));
+                    withdraw_hash, contract_withdraw_hash), ErrorKind::StateError
+                ));
             }
 
             let (updated_balances, valid_withdraws) = apply_withdraws(&balances, &withdraws);

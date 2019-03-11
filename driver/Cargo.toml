@@ -9,6 +9,7 @@ name = "driver"
 path = "src/lib.rs"
 
 [dependencies]
+ethabi = "6.1.0"
 mongodb = "0.3.2"
 serde_json = "1.0"
 serde_derive = "1.0"
@@ -20,7 +21,6 @@ sha2 = "*"
 byteorder = "*"
 hex = "*"
 web3 = { git = "https://github.com/tomusdrw/rust-web3" }
-
 
 
 

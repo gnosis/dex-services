@@ -1,11 +1,9 @@
 use crate::models;
 use crate::db_interface::DbInterface;
+use crate::error::{DriverError, ErrorKind};
 use crate::contract::SnappContract;
-use crate::error::DriverError;
 
 use web3::types::{H256, U256};
-
-use std::error::Error;
 
 pub fn apply_deposits(
     state: &mut models::State,
@@ -17,7 +15,7 @@ pub fn apply_deposits(
     state.clone()
 }
 
-pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(), Box<dyn Error>> 
+pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(), DriverError> 
     where   D: DbInterface,
             C: SnappContract
 {
@@ -68,10 +66,10 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(), Box<dyn Er
         }
 
         if deposit_hash != deposit_hash_pulled {
-            return Err(Box::new(DriverError::new(
+            return Err(DriverError::new(
                 &format!("Pending deposit hash from contract ({}), didn't match the one found in db ({})", 
-                deposit_hash, deposit_hash_pulled)
-            )));
+                deposit_hash, deposit_hash_pulled), ErrorKind::StateError
+            ));
         }
 
         if deposit_slot_empty && deposit_ind != U256::zero() {

@@ -2,10 +2,12 @@ use web3::contract::{Contract, Options};
 use web3::futures::Future;
 use web3::types::{Address, H256, U256};
 
+use crate::error::DriverError;
+
 use std::env;
 use std::fs;
 
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+type Result<T> = std::result::Result<T, DriverError>;
 
 pub trait SnappContract {
     // General Blockchain interface
@@ -68,62 +70,62 @@ impl SnappContract for SnappContractImpl {
     fn get_current_state_root(&self) -> Result<H256> {
         self.contract.query(
             "getCurrentStateRoot", (), None, Options::default(), None
-        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
+        ).wait().map_err(|e| DriverError::from(e))
     }
 
     fn get_current_deposit_slot(&self) -> Result<U256> {
         self.contract.query(
             "depositIndex", (), None, Options::default(), None
-        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
+        ).wait().map_err(|e| DriverError::from(e))
     }
 
     fn has_deposit_slot_been_applied(&self, slot: U256) -> Result<bool> {
         self.contract.query(
             "hasDepositBeenApplied", slot, None, Options::default(), None,
-        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
+        ).wait().map_err(|e| DriverError::from(e))
     }
 
     fn deposit_hash_for_slot(&self, slot: U256) -> Result<H256> {
         self.contract.query(
             "getDepositHash", slot, None, Options::default(), None,
-        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
+        ).wait().map_err(|e| DriverError::from(e))
     }
 
     fn creation_block_for_deposit_slot(&self, slot: U256) -> Result<U256> {
         self.contract.query(
             "getDepositCreationBlock", slot, None, Options::default(), None,
-        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
+        ).wait().map_err(|e| DriverError::from(e))
     }
 
     fn get_current_withdraw_slot(&self) -> Result<U256> {
         self.contract.query(
             "withdrawIndex", (), None, Options::default(), None
-        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
+        ).wait().map_err(|e| DriverError::from(e))
     }
 
     fn has_withdraw_slot_been_applied(&self, slot: U256) -> Result<bool> {
         self.contract.query(
             "hasWithdrawBeenApplied", slot, None, Options::default(), None,
-        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
+        ).wait().map_err(|e| DriverError::from(e))
     }
 
     fn withdraw_hash_for_slot(&self, slot: U256) -> Result<H256> {
         self.contract.query(
             "getWithdrawHash", slot, None, Options::default(), None,
-        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
+        ).wait().map_err(|e| DriverError::from(e))
     }
 
     fn creation_block_for_withdraw_slot(&self, slot: U256) -> Result<U256> {
         self.contract.query(
             "getWithdrawCreationBlock", slot, None, Options::default(), None,
-        ).wait().map_err(|e| Box::new(e) as Box<std::error::Error>)
+        ).wait().map_err(|e| DriverError::from(e))
     }
 
     fn get_current_block_number(&self) -> Result<U256> {
         self.web3.eth()
             .block_number()
             .wait()
-            .map_err(|e| Box::new(e) as Box<std::error::Error>)
+            .map_err(|e| DriverError::from(e))
     }
     
     fn apply_deposits(
@@ -139,7 +141,7 @@ impl SnappContract for SnappContractImpl {
                 account,
                 Options::default(),
             ).wait()
-            .map_err(|e| Box::new(e) as Box<std::error::Error>)
+            .map_err(|e| DriverError::from(e))
             .map(|_|())
     }
 
@@ -161,7 +163,7 @@ impl SnappContract for SnappContractImpl {
             opt.gas = Some(1_000_000.into());
         }),
             ).wait()
-            .map_err(|e| Box::new(e) as Box<std::error::Error>)
+            .map_err(|e| DriverError::from(e))
             .map(|_|())
     }
 }

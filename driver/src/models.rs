@@ -5,6 +5,7 @@ use sha2::{Digest, Sha256};
 use std::num::ParseIntError;
 use web3::types::H256;
 use std::error::Error;
+use crate::error;
 
 pub const TOKENS: u16 = 30;
 
@@ -52,7 +53,7 @@ pub struct State {
 
 impl State {
   //Todo: Exchange sha with pederson hash
-  pub fn hash(&self) -> Result<[u8; 32], Box<dyn Error>> {
+  pub fn hash(&self) -> Result<[u8; 32], error::DriverError> {
     let mut hash: [u8; 32] = [0; 32];
     for i in &self.balances {
       let mut bs = [0u8; 64];
@@ -74,7 +75,7 @@ impl State {
 }
 
 #[allow(non_snake_case)]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct PendingFlux {
   pub slotIndex: i32,
   pub slot: i32,
