@@ -31,6 +31,7 @@ pub trait SnappContract {
     fn apply_withdraws(&self, slot: U256, merkle_root: H256, prev_state: H256, new_state: H256, withdraw_hash: H256) -> Result<()>;
 }
 
+#[allow(dead_code)] // event_loop needs to be retained to keep web3 connection open
 pub struct SnappContractImpl {
     contract: Contract<web3::transports::Http>,
     web3: web3::Web3<web3::transports::Http>,

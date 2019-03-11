@@ -153,19 +153,10 @@ mod tests {
     };
     let current_deposithash: H256 = H256::zero();
 
-    let s = format!(" {:x} ", current_deposithash);
-    //let s = current_deposithash.hex();
-    let bytes: Vec<u8> = s.from_hex().unwrap();
-    println!("{:?}", bytes);
-    let hash: H256 = H256::from_slice(&bytes);
-
-    assert_eq!(current_deposithash, hash);
-
     //Check actual hashing
     let target: H256 = serde_json::from_str(
       r#""0x8e8fe47e4a33b178bf0433d8050cb0ad7ec323fbdeeab3ecfd857b4ce1805b7a""#,
-    )
-    .unwrap();
+    ).unwrap();
     assert_eq!(deposits.iter_hash(&current_deposithash), target);
   }
 }
