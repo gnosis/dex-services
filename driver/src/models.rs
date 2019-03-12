@@ -11,6 +11,10 @@ pub const TOKENS: u16 = 30;
 
 pub const DB_NAME: &str = "dfusion2";
 
+pub trait Hashable {
+    fn hash(&self) -> H256;
+}
+
 pub fn decode_hex_uint8(s: &mut str, size: i32) -> Result<Vec<u8>, Box<dyn Error>> {
   // add prefix 0, in case s has not even length
   let mut pretail: &str = "";
@@ -77,8 +81,8 @@ impl State {
 #[allow(non_snake_case)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct PendingFlux {
-  pub slotIndex: i32,
-  pub slot: i32,
+  pub slotIndex: u32,
+  pub slot: u32,
   pub accountId: u16,
   pub tokenId: u8,
   pub amount: u128,
@@ -136,9 +140,14 @@ impl From<mongodb::ordered::OrderedDocument> for PendingFlux {
     }
 }
 
+impl Hashable for Vec<PendingFlux> {
+    fn hash(&self) -> H256 {
+        self.iter().fold(H256::zero(), |acc, w| w.iter_hash(&acc))
+    }
+}
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
   use super::*;
   use web3::types::H256;
 
@@ -159,5 +168,15 @@ mod tests {
       r#""0x8e8fe47e4a33b178bf0433d8050cb0ad7ec323fbdeeab3ecfd857b4ce1805b7a""#,
     ).unwrap();
     assert_eq!(deposits.iter_hash(&current_deposithash), target);
+  }
+
+  pub fn test_flux(slot: u32, slot_index: u32) -> PendingFlux {
+      PendingFlux {
+          slotIndex: slot_index,
+          slot,
+          accountId: 1,
+          tokenId: 1,
+          amount: 10,
+      }
   }
 }

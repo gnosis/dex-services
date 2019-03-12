@@ -4,6 +4,7 @@ use ethabi;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ErrorKind {
+    Unknown,
     MiscError,
     IoError,
     ContractError,
@@ -19,7 +20,7 @@ pub enum ErrorKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DriverError {
     details: String,
-    kind: ErrorKind,
+    pub kind: ErrorKind,
 }
 
 impl From<std::io::Error> for DriverError {

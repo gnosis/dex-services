@@ -1,4 +1,5 @@
 use crate::models;
+use crate::models::Hashable;
 
 use crate::db_interface::DbInterface;
 use crate::contract::SnappContract;
@@ -48,6 +49,15 @@ fn can_process<C>(slot: U256, contract: &C) -> Result<bool, DriverError>
     Ok(slot_creation_block + 20 < current_block)
 }
 
+fn merkleize_valid_withdraws(withdraws: &Vec<models::PendingFlux>, valid: &Vec<bool>) -> H256 {
+    assert!(withdraws.len() == valid.len());
+    let mut withdraw_bytes = vec![vec![0; 32]; 128];
+    for (index, _) in valid.iter().enumerate().filter(|(_, valid)| **valid) {
+        withdraw_bytes[index] = withdraws[index].bytes();
+    }
+    merkleize(withdraw_bytes)
+}
+
 fn merkleize(withdraws: Vec<Vec<u8>>) -> H256 {
     if withdraws.len() == 1 {
         return H256::from(withdraws[0].as_slice());
@@ -58,11 +68,10 @@ fn merkleize(withdraws: Vec<Vec<u8>>) -> H256 {
         hasher.input(&pair[1]);
         hasher.result().to_vec()
     }).collect();
-    println!("Next layer: {:?}", next_layer);
     merkleize(next_layer)
 }
 
-pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(), DriverError> 
+pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), DriverError> 
     where   D: DbInterface,
             C: SnappContract
 {
@@ -70,6 +79,7 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(), DriverErr
 
     println!("Current top withdraw_slot is {:?}", withdraw_slot);
     let slot = find_first_unapplied_slot(withdraw_slot + 1, contract)?;
+    if slot <= withdraw_slot {
         println!("Highest unprocessed withdraw_slot is {:?}", slot);
         if can_process(slot, contract)? {
             println!("Processing withdraw_slot {:?}", slot);
@@ -78,7 +88,7 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(), DriverErr
             let balances = db.get_current_balances(&state_root)?;
 
             let withdraws = db.get_withdraws_of_slot(slot.low_u32())?;
-            let withdraw_hash = withdraws.iter().fold(H256::zero(), |acc, w| w.iter_hash(&acc));
+            let withdraw_hash = withdraws.hash();
             if withdraw_hash != contract_withdraw_hash {
                 return Err(DriverError::new(
                     &format!("Pending withdraw hash from contract ({}), didn't match the one found in db ({})", 
@@ -87,20 +97,183 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(), DriverErr
             }
 
             let (updated_balances, valid_withdraws) = apply_withdraws(&balances, &withdraws);
-            
-            let mut withdraw_bytes = vec![vec![0; 32]; 128];
-            for (index, _) in valid_withdraws.iter().enumerate().filter(|(_, valid)| **valid) {
-                withdraw_bytes[index] = withdraws[index].bytes();
-            }
-            println!("Withdraw Bytes: {:?}", withdraw_bytes);
-            let withdrawal_merkle_root = merkleize(withdraw_bytes);
+            let withdrawal_merkle_root = merkleize_valid_withdraws(&withdraws, &valid_withdraws);
             let new_state_root = H256::from(updated_balances.hash()?);
             
             println!("New StateHash is {}, Valid Withdraw Merkle Root is {}", new_state_root, withdrawal_merkle_root);
             contract.apply_withdraws(slot, withdrawal_merkle_root, state_root, new_state_root, contract_withdraw_hash)?;
+            return Ok(true);
         } else {
             println!("Need to wait before processing withdraw_slot {:?}", slot);
         }
-    
-    Ok(())
+    }
+    Ok(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::contract::tests::SnappContractMock;
+    use crate::models::tests::test_flux;
+    use crate::db_interface::tests::DbInterfaceMock;
+    use mock_it::Matcher::*;
+
+    #[test]
+    fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
+        let slot = U256::from(1);
+        let state_hash = H256::zero();
+        let withdraws = vec![test_flux(1,1), test_flux(1,2)];
+        let state = models::State {
+            stateHash: format!("{:x}", state_hash),
+            stateIndex: 1,
+            balances: vec![100; (models::TOKENS * 2) as usize],
+        };
+
+        let contract = SnappContractMock::new();
+        contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
+        contract.has_withdraw_slot_been_applied.given(slot).will_return(Ok(false));
+        contract.has_withdraw_slot_been_applied.given(slot - 1).will_return(Ok(true));
+        contract.creation_block_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
+        contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
+        contract.withdraw_hash_for_slot.given(slot).will_return(Ok(withdraws.hash()));
+        contract.get_current_state_root.given(()).will_return(Ok(state_hash));
+        contract.apply_withdraws.given((slot, Any, Any, Any, Any)).will_return(Ok(()));
+
+        let db = DbInterfaceMock::new();
+        db.get_withdraws_of_slot.given(1).will_return(Ok(withdraws));
+        db.get_current_balances.given(state_hash).will_return(Ok(state));
+
+        assert_eq!(run_withdraw_listener(&db, &contract), Ok(true));
+    }
+
+    #[test]
+    fn does_not_apply_if_highest_slot_already_applied() {
+        let slot = U256::from(1);
+        let contract = SnappContractMock::new();
+        contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
+        contract.has_withdraw_slot_been_applied.given(slot).will_return(Ok(true));
+
+        let db = DbInterfaceMock::new();
+        assert_eq!(run_withdraw_listener(&db, &contract), Ok(false));
+    }
+
+    #[test]
+    fn does_not_apply_if_highest_slot_too_close_to_current_block() {
+        let slot = U256::from(1);
+        let contract = SnappContractMock::new();
+        contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
+        contract.has_withdraw_slot_been_applied.given(slot).will_return(Ok(false));
+        contract.has_withdraw_slot_been_applied.given(slot-1).will_return(Ok(true));
+
+        contract.creation_block_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
+        contract.get_current_block_number.given(()).will_return(Ok(U256::from(11)));
+
+        let db = DbInterfaceMock::new();
+        assert_eq!(run_withdraw_listener(&db, &contract), Ok(false));
+    }
+
+    #[test]
+    fn applies_all_unapplied_states_before_current() {
+        let slot = U256::from(1);
+        let state_hash = H256::zero();
+        let first_withdraws = vec![test_flux(0,1), test_flux(0,2)];
+        let second_withdraws = vec![test_flux(1,1), test_flux(1,2)];
+
+        let contract = SnappContractMock::new();
+        contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
+
+        contract.has_withdraw_slot_been_applied.given(slot).will_return(Ok(false));
+        contract.has_withdraw_slot_been_applied.given(slot - 1).will_return(Ok(false));
+
+        contract.creation_block_for_withdraw_slot.given(slot-1).will_return(Ok(U256::from(10)));
+
+        contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
+        contract.withdraw_hash_for_slot.given(slot-1).will_return(Ok(second_withdraws.hash()));
+
+        contract.get_current_state_root.given(()).will_return(Ok(state_hash));
+        contract.apply_withdraws.given((slot - 1, Any, Any, Any, Any)).will_return(Ok(()));
+
+        let state = models::State {
+            stateHash: format!("{:x}", state_hash),
+            stateIndex: 1,
+            balances: vec![100; (models::TOKENS * 2) as usize],
+        };
+
+        let db = DbInterfaceMock::new();
+        db.get_withdraws_of_slot.given(0).will_return(Ok(first_withdraws));
+        db.get_current_balances.given(state_hash).will_return(Ok(state));
+        
+        assert_eq!(run_withdraw_listener(&db, &contract), Ok(true));
+        assert_eq!(run_withdraw_listener(&db, &contract), Ok(true));
+    }
+
+    #[test]
+    fn returns_error_if_db_withdraw_hash_doesnt_match_cotract() {
+        let slot = U256::from(1);
+        let state_hash = H256::zero();
+
+        let withdraws = vec![test_flux(1,1), test_flux(1,2)];
+
+        let state = models::State {
+            stateHash: format!("{:x}", state_hash),
+            stateIndex: 1,
+            balances: vec![100; (models::TOKENS * 2) as usize],
+        };
+
+        let contract = SnappContractMock::new();
+        contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
+        contract.has_withdraw_slot_been_applied.given(slot).will_return(Ok(false));
+        contract.has_withdraw_slot_been_applied.given(slot - 1).will_return(Ok(true));
+
+        contract.creation_block_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
+        contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
+        
+        contract.withdraw_hash_for_slot.given(slot).will_return(Ok(H256::zero()));
+        contract.get_current_state_root.given(()).will_return(Ok(state_hash));
+
+        let db = DbInterfaceMock::new();
+        db.get_withdraws_of_slot.given(1).will_return(Ok(withdraws));
+        db.get_current_balances.given(state_hash).will_return(Ok(state));
+
+        let error = run_withdraw_listener(&db, &contract).expect_err("Expected Error");
+        assert_eq!(error.kind, ErrorKind::StateError);
+    }
+
+    #[test]
+    fn skips_invalid_balances_in_applied_merkle_tree() {
+        let slot = U256::from(1);
+        let state_hash = H256::zero();
+        let withdraws = vec![test_flux(1,1), models::PendingFlux {
+            slotIndex: 2,
+            slot: 1,
+            accountId: 1,
+            tokenId: 2,
+            amount: 10,
+        }];
+        let mut state = models::State {
+            stateHash: format!("{:x}", state_hash),
+            stateIndex: 1,
+            balances: vec![100; (models::TOKENS * 2) as usize],
+        };
+
+        state.balances[1] = 0;
+
+        let merkle_root = merkleize_valid_withdraws(&withdraws, &vec![true, false]);
+
+        let contract = SnappContractMock::new();
+        contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
+        contract.has_withdraw_slot_been_applied.given(slot).will_return(Ok(false));
+        contract.has_withdraw_slot_been_applied.given(slot - 1).will_return(Ok(true));
+        contract.creation_block_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
+        contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
+        contract.withdraw_hash_for_slot.given(slot).will_return(Ok(withdraws.hash()));
+        contract.get_current_state_root.given(()).will_return(Ok(state_hash));
+        contract.apply_withdraws.given((slot, Val(merkle_root), Any, Any, Any)).will_return(Ok(()));
+
+        let db = DbInterfaceMock::new();
+        db.get_withdraws_of_slot.given(1).will_return(Ok(withdraws));
+        db.get_current_balances.given(state_hash).will_return(Ok(state));
+
+        assert_eq!(run_withdraw_listener(&db, &contract), Ok(true));
+    }
 }
