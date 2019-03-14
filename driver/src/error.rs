@@ -1,14 +1,85 @@
 use std::error::Error;
 use std::fmt;
+use ethabi;
 
-#[derive(Debug)]
-pub struct DriverError {
-    details: String
+#[derive(Debug, Clone, PartialEq)]
+pub enum ErrorKind {
+    MiscError,
+    IoError,
+    ContractError,
+    JsonError,
+    HexError,
+    AbiError,
+    EnvError,
+    DbError,
+    ParseIntError,
+    StateError,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct DriverError {
+    details: String,
+    kind: ErrorKind,
+}
+
+impl From<std::io::Error> for DriverError {
+    fn from(error: std::io::Error) -> Self {
+        DriverError::new(error.description(), ErrorKind::IoError)
+    }
+}
+impl From<web3::contract::Error> for DriverError {
+    fn from(error: web3::contract::Error) -> Self {
+        DriverError::new(error.description(), ErrorKind::ContractError)
+    }
+}
+impl From<web3::Error> for DriverError {
+    fn from(error: web3::Error) -> Self {
+        DriverError::new(error.description(), ErrorKind::ContractError)
+    }
+}
+impl From<serde_json::Error> for DriverError {
+    fn from(error: serde_json::Error) -> Self {
+        DriverError::new(error.description(), ErrorKind::JsonError)
+    }
+}
+impl From<hex::FromHexError> for DriverError {
+    fn from(error: hex::FromHexError) -> Self {
+        DriverError::new(error.description(), ErrorKind::HexError)
+    }
+}
+impl From<ethabi::Error> for DriverError {
+    fn from(error: ethabi::Error) -> Self {
+        DriverError::new(error.description(), ErrorKind::AbiError)
+    }
+}
+impl From<std::env::VarError> for DriverError {
+    fn from(error: std::env::VarError) -> Self {
+        DriverError::new(error.description(), ErrorKind::EnvError)
+    }
+}
+impl From<mongodb::Error> for DriverError {
+    fn from(error: mongodb::Error) -> Self {
+        DriverError::new(error.description(), ErrorKind::DbError)
+    }
+}
+impl From<std::num::ParseIntError> for DriverError {
+    fn from(error: std::num::ParseIntError) -> Self {
+        DriverError::new(error.description(), ErrorKind::ParseIntError)
+    }
+}
+impl From<mongodb::DecoderError> for DriverError {
+    fn from(error: mongodb::DecoderError) -> Self {
+        DriverError::new(error.description(), ErrorKind::DbError)
+    }
+}
+impl From<&str> for DriverError {
+    fn from(error: &str) -> Self {
+        DriverError::new(error, ErrorKind::MiscError)
+    }
+}
 impl DriverError {
-    pub fn new(msg: &str) -> DriverError {
-        DriverError{details: msg.to_string()}
+    pub fn new(msg: &str, kind: ErrorKind) -> DriverError {
+        DriverError{details: msg.to_string(), kind}
     }
 }
 impl fmt::Display for DriverError {
