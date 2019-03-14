@@ -114,7 +114,7 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
 mod tests {
     use super::*;
     use crate::contract::tests::SnappContractMock;
-    use crate::models::tests::test_flux;
+    use crate::models::tests::create_flux_for_test;
     use crate::db_interface::tests::DbInterfaceMock;
     use mock_it::Matcher::*;
 
@@ -122,7 +122,7 @@ mod tests {
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
         let slot = U256::from(1);
         let state_hash = H256::zero();
-        let withdraws = vec![test_flux(1,1), test_flux(1,2)];
+        let withdraws = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
         let state = models::State {
             stateHash: format!("{:x}", state_hash),
             stateIndex: 1,
@@ -176,8 +176,8 @@ mod tests {
     fn applies_all_unapplied_states_before_current() {
         let slot = U256::from(1);
         let state_hash = H256::zero();
-        let first_withdraws = vec![test_flux(0,1), test_flux(0,2)];
-        let second_withdraws = vec![test_flux(1,1), test_flux(1,2)];
+        let first_withdraws = vec![create_flux_for_test(0,1), create_flux_for_test(0,2)];
+        let second_withdraws = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
         let contract = SnappContractMock::new();
         contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
@@ -212,7 +212,7 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
 
-        let withdraws = vec![test_flux(1,1), test_flux(1,2)];
+        let withdraws = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
         let state = models::State {
             stateHash: format!("{:x}", state_hash),
@@ -243,7 +243,7 @@ mod tests {
     fn skips_invalid_balances_in_applied_merkle_tree() {
         let slot = U256::from(1);
         let state_hash = H256::zero();
-        let withdraws = vec![test_flux(1,1), models::PendingFlux {
+        let withdraws = vec![create_flux_for_test(1,1), models::PendingFlux {
             slotIndex: 2,
             slot: 1,
             accountId: 1,

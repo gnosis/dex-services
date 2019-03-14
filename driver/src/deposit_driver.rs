@@ -100,7 +100,7 @@ mod tests {
     use super::*;
     use crate::models::Hashable;
     use crate::contract::tests::SnappContractMock;
-    use crate::models::tests::test_flux;
+    use crate::models::tests::create_flux_for_test;
     use crate::db_interface::tests::DbInterfaceMock;
     use mock_it::Matcher::*;
 
@@ -108,7 +108,7 @@ mod tests {
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
         let slot = U256::from(1);
         let state_hash = H256::zero();
-        let deposits = vec![test_flux(1,1), test_flux(1,2)];
+        let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
         let state = models::State {
             stateHash: format!("{:x}", state_hash),
             stateIndex: 1,
@@ -162,7 +162,7 @@ mod tests {
     fn does_not_apply_if_highest_slot_too_close_to_current_block() {
         let slot = U256::from(1);
         let state_hash = H256::zero();
-        let deposits = vec![test_flux(1,1), test_flux(1,2)];
+        let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
         let state = models::State {
             stateHash: format!("{:x}", state_hash),
@@ -190,8 +190,8 @@ mod tests {
     fn applies_all_unapplied_states_before_current() {
         let slot = U256::from(1);
         let state_hash = H256::zero();
-        let first_deposits = vec![test_flux(0,1), test_flux(0,2)];
-        let second_deposits = vec![test_flux(1,1), test_flux(1,2)];
+        let first_deposits = vec![create_flux_for_test(0,1), create_flux_for_test(0,2)];
+        let second_deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
         let contract = SnappContractMock::new();
         contract.get_current_deposit_slot.given(()).will_return(Ok(slot));
@@ -224,7 +224,7 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
 
-        let deposits = vec![test_flux(1,1), test_flux(1,2)];
+        let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
         let state = models::State {
             stateHash: format!("{:x}", state_hash),

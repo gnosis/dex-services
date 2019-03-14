@@ -170,7 +170,7 @@ pub mod tests {
     assert_eq!(deposits.iter_hash(&current_deposithash), target);
   }
 
-  pub fn test_flux(slot: u32, slot_index: u32) -> PendingFlux {
+  pub fn create_flux_for_test(slot: u32, slot_index: u32) -> PendingFlux {
       PendingFlux {
           slotIndex: slot_index,
           slot,
