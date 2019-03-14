@@ -12,7 +12,7 @@ pub fn apply_deposits(
     deposits: &Vec<models::PendingFlux>,
 ) -> models::State {
     for i in deposits {
-        state.balances[((i.accountId - 1) * models::TOKENS + (i.tokenId as u16 - 1)) as usize] += i.amount;
+        state.balances[((i.account_id - 1) * models::TOKENS + (i.token_id as u16 - 1)) as usize] += i.amount;
     }
     state.clone()
 }
@@ -79,7 +79,7 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
         } else {
             // calculate new state by applying all deposits
             state = apply_deposits(&mut state, &deposits);
-            println!("New StateHash is{:?}", state.rolling_hash());
+            println!("New State_hash is{:?}", state.rolling_hash());
 
             //send new state into blockchain
             //applyDeposits signature is (slot, _currStateRoot, _newStateRoot, deposit_slotHash)
@@ -111,8 +111,8 @@ mod tests {
         let state_hash = H256::zero();
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
         let state = models::State {
-            stateHash: format!("{:x}", state_hash),
-            stateIndex: 1,
+            state_hash: format!("{:x}", state_hash),
+            state_index: 1,
             balances: vec![100; (models::TOKENS * 2) as usize],
         };
 
@@ -139,8 +139,8 @@ mod tests {
         let state_hash = H256::zero();
 
         let state = models::State {
-            stateHash: format!("{:x}", state_hash),
-            stateIndex: 1,
+            state_hash: format!("{:x}", state_hash),
+            state_index: 1,
             balances: vec![100; (models::TOKENS * 2) as usize],
         };
 
@@ -166,8 +166,8 @@ mod tests {
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
         let state = models::State {
-            stateHash: format!("{:x}", state_hash),
-            stateIndex: 1,
+            state_hash: format!("{:x}", state_hash),
+            state_index: 1,
             balances: vec![100; (models::TOKENS * 2) as usize],
         };
 
@@ -208,8 +208,8 @@ mod tests {
         contract.apply_deposits.given((slot - 1, Any, Any, Any)).will_return(Ok(()));
 
         let state = models::State {
-            stateHash: format!("{:x}", state_hash),
-            stateIndex: 1,
+            state_hash: format!("{:x}", state_hash),
+            state_index: 1,
             balances: vec![100; (models::TOKENS * 2) as usize],
         };
 
@@ -228,8 +228,8 @@ mod tests {
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
         let state = models::State {
-            stateHash: format!("{:x}", state_hash),
-            stateIndex: 1,
+            state_hash: format!("{:x}", state_hash),
+            state_index: 1,
             balances: vec![100; (models::TOKENS * 2) as usize],
         };
 
