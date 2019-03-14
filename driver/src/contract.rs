@@ -5,7 +5,7 @@ use web3::contract::{Contract, Options};
 use web3::futures::Future;
 use web3::types::{Address, H256, U256};
 
-use crate::error::{DriverError};
+use crate::error::DriverError;
 
 use std::env;
 use std::fs;
