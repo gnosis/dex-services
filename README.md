@@ -9,7 +9,7 @@ Architecture
  </p>
 
 The *Event Listener* registers for certain EVM events via the [Gnosis Trading DB](https://github.com/gnosis/pm-trading-db).
-The dex smart contract emits these events on user interaction (deposit, withdraw, order) as well as when the saved state root hash is updated (state transitions).
+The [dex smart contract](https://github.com/gnosis/dex-contracts) emits these events on user interaction (deposit, withdraw, order) as well as when the saved state root hash is updated (state transitions).
 
 Upon receiving a relevant event from the contract, the event listener computes the implied changes to the underlying state. 
 E.g. if a *deposit* event is received, the list of pending deposits is updated.
