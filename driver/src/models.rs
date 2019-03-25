@@ -197,4 +197,14 @@ pub mod tests {
           amount: 10,
       }
   }
+
+  pub fn create_flux_for_test(slot: u32, slot_index: u32) -> PendingFlux {
+      PendingFlux {
+          slotIndex: slot_index,
+          slot,
+          accountId: 1,
+          tokenId: 1,
+          amount: 10,
+      }
+  }
 }
