@@ -1,3 +1,6 @@
+#[cfg(test)]
+extern crate mock_it;
+
 use crate::models;
 use crate::error::{DriverError, ErrorKind};
 
@@ -96,5 +99,49 @@ impl DbInterface for MongoDB {
         slot: u32,
     ) -> Result<Vec<models::PendingFlux>, DriverError> {
         self.get_items_for_slot(slot, "withdraws")
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use mock_it::Mock;
+
+    #[derive(Clone)]
+    pub struct DbInterfaceMock {
+        pub get_current_balances: Mock<H256, Result<models::State, DriverError>>,
+        pub get_deposits_of_slot: Mock<u32, Result<Vec<models::PendingFlux>, DriverError>>,
+        pub get_withdraws_of_slot: Mock<u32, Result<Vec<models::PendingFlux>, DriverError>>,
+    }
+
+    impl DbInterfaceMock {
+        pub fn new() -> DbInterfaceMock {
+            DbInterfaceMock {
+                get_current_balances: Mock::new(Err(DriverError::new("Unexpected call to get_current_balances", ErrorKind::Unknown))),
+                get_deposits_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_deposits_of_slot", ErrorKind::Unknown))),
+                get_withdraws_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_withdraws_of_slot", ErrorKind::Unknown))),
+            }
+        }
+    }
+
+    impl DbInterface for DbInterfaceMock {
+        fn get_current_balances(
+            &self,
+            current_state_root: &H256,
+        ) -> Result<models::State, DriverError> {
+            self.get_current_balances.called(*current_state_root)
+        }
+        fn get_deposits_of_slot(
+            &self,
+            slot: u32,
+        ) -> Result<Vec<models::PendingFlux>, DriverError> {
+            self.get_deposits_of_slot.called(slot)
+        }
+        fn get_withdraws_of_slot(
+            &self,
+            slot: u32,
+        ) -> Result<Vec<models::PendingFlux>, DriverError> {
+            self.get_withdraws_of_slot.called(slot)
+        }
     }
 }

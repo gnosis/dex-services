@@ -22,6 +22,7 @@ byteorder = "*"
 hex = "*"
 web3 = { git = "https://github.com/tomusdrw/rust-web3" }
 
-
+[dev-dependencies]
+mock-it = "0.2.0"
 
 
