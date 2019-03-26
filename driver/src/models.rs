@@ -14,11 +14,11 @@ pub trait RootHashable {
     fn root_hash(&self, valid_items: &Vec<bool>) -> H256;
 }
 
-#[allow(non_snake_case)]
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct State {
-  pub stateHash: String,
-  pub stateIndex: i32,
+  pub state_hash: String,
+  pub state_index: i32,
   pub balances: Vec<u128>,
 }
 
@@ -40,13 +40,13 @@ impl RollingHashable for State {
   }
 }
 
-#[allow(non_snake_case)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct PendingFlux {
-  pub slotIndex: u32,
+  pub slot_index: u32,
   pub slot: u32,
-  pub accountId: u16,
-  pub tokenId: u8,
+  pub account_id: u16,
+  pub token_id: u8,
   pub amount: u128,
 }
 
@@ -63,8 +63,8 @@ impl PendingFlux {
 
   pub fn bytes(&self) -> Vec<u8> {
     let mut wtr = vec![0; 13];
-    wtr.write_u16::<BigEndian>(self.accountId).unwrap();
-    wtr.write_u8(self.tokenId).unwrap();
+    wtr.write_u16::<BigEndian>(self.account_id).unwrap();
+    wtr.write_u8(self.token_id).unwrap();
     wtr.write_u128::<BigEndian>(self.amount).unwrap();
     wtr
   }
@@ -116,10 +116,10 @@ pub mod tests {
   #[test]
   fn test_pending_flux_rolling_hash() {
     let deposit = PendingFlux {
-      slotIndex: 0,
+      slot_index: 0,
       slot: 0,
-      accountId: 0,
-      tokenId: 0,
+      account_id: 0,
+      token_id: 0,
       amount: 0,
     };
     assert_eq!(
@@ -139,10 +139,10 @@ pub mod tests {
   #[test]
   fn test_pending_flux_root_hash() {
     let deposit = PendingFlux {
-      slotIndex: 0,
+      slot_index: 0,
       slot: 0,
-      accountId: 3,
-      tokenId: 3,
+      account_id: 3,
+      token_id: 3,
       amount: 18,
     };
     // one valid withdraw
@@ -166,34 +166,34 @@ pub mod tests {
     // Empty state
     let mut balances = vec![0; 3000];
     let state = State {
-        stateHash: "77b01abfbad57cb7a1344b12709603ea3b9ad803ef5ea09814ca212748f54733".to_string(),
-        stateIndex:  1,
+        state_hash: "77b01abfbad57cb7a1344b12709603ea3b9ad803ef5ea09814ca212748f54733".to_string(),
+        state_index:  1,
         balances: balances.clone(),
     };
     assert_eq!(
       state.rolling_hash(),
-      H256::from_str(&state.stateHash).unwrap()
+      H256::from_str(&state.state_hash).unwrap()
     );
 
     // State with single deposit
     balances[62] = 18;
     let state = State {
-        stateHash: "73899d50b4ec5e351b4967e4c4e4a725e0fa3e8ab82d1bb6d3197f22e65f0c97".to_string(),
-        stateIndex:  1,
+        state_hash: "73899d50b4ec5e351b4967e4c4e4a725e0fa3e8ab82d1bb6d3197f22e65f0c97".to_string(),
+        state_index:  1,
         balances: balances,
     };
     assert_eq!(
       state.rolling_hash(),
-      H256::from_str(&state.stateHash).unwrap()
+      H256::from_str(&state.state_hash).unwrap()
     );
   }
 
   pub fn create_flux_for_test(slot: u32, slot_index: u32) -> PendingFlux {
       PendingFlux {
-          slotIndex: slot_index,
+          slot_index: slot_index,
           slot,
-          accountId: 1,
-          tokenId: 1,
+          account_id: 1,
+          token_id: 1,
           amount: 10,
       }
   }

@@ -14,8 +14,8 @@ fn apply_withdraws(
     let mut state = state.clone();
     let mut valid_withdraws = vec![];
     for i in withdraws {
-        if state.balances[((i.accountId - 1) * models::TOKENS + (i.tokenId as u16 - 1)) as usize] >= i.amount {
-            state.balances[((i.accountId - 1) * models::TOKENS + (i.tokenId as u16 - 1)) as usize] -= i.amount;
+        if state.balances[((i.account_id - 1) * models::TOKENS + (i.token_id as u16 - 1)) as usize] >= i.amount {
+            state.balances[((i.account_id - 1) * models::TOKENS + (i.token_id as u16 - 1)) as usize] -= i.amount;
             valid_withdraws.push(true);
         } else {
             valid_withdraws.push(false);
@@ -77,7 +77,7 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
             let withdrawal_merkle_root = withdraws.root_hash(&valid_withdraws);
             let new_state_root = H256::from(updated_balances.rolling_hash());
             
-            println!("New StateHash is {}, Valid Withdraw Merkle Root is {}", new_state_root, withdrawal_merkle_root);
+            println!("New State_hash is {}, Valid Withdraw Merkle Root is {}", new_state_root, withdrawal_merkle_root);
             contract.apply_withdraws(slot, withdrawal_merkle_root, state_root, new_state_root, contract_withdraw_hash)?;
             return Ok(true);
         } else {
@@ -101,8 +101,8 @@ mod tests {
         let state_hash = H256::zero();
         let withdraws = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
         let state = models::State {
-            stateHash: format!("{:x}", state_hash),
-            stateIndex: 1,
+            state_hash: format!("{:x}", state_hash),
+            state_index: 1,
             balances: vec![100; (models::TOKENS * 2) as usize],
         };
 
@@ -171,8 +171,8 @@ mod tests {
         contract.apply_withdraws.given((slot - 1, Any, Any, Any, Any)).will_return(Ok(()));
 
         let state = models::State {
-            stateHash: format!("{:x}", state_hash),
-            stateIndex: 1,
+            state_hash: format!("{:x}", state_hash),
+            state_index: 1,
             balances: vec![100; (models::TOKENS * 2) as usize],
         };
 
@@ -192,8 +192,8 @@ mod tests {
         let withdraws = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
         let state = models::State {
-            stateHash: format!("{:x}", state_hash),
-            stateIndex: 1,
+            state_hash: format!("{:x}", state_hash),
+            state_index: 1,
             balances: vec![100; (models::TOKENS * 2) as usize],
         };
 
@@ -221,15 +221,15 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let withdraws = vec![create_flux_for_test(1,1), models::PendingFlux {
-            slotIndex: 2,
+            slot_index: 2,
             slot: 1,
-            accountId: 1,
-            tokenId: 2,
+            account_id: 1,
+            token_id: 2,
             amount: 10,
         }];
         let mut state = models::State {
-            stateHash: format!("{:x}", state_hash),
-            stateIndex: 1,
+            state_hash: format!("{:x}", state_hash),
+            state_index: 1,
             balances: vec![100; (models::TOKENS * 2) as usize],
         };
 
