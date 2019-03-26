@@ -1,12 +1,11 @@
 use crate::models;
-use crate::models::Hashable;
+use crate::models::{RollingHashable, RootHashable};
 
 use crate::db_interface::DbInterface;
 use crate::contract::SnappContract;
 use crate::error::{DriverError, ErrorKind};
 
 use web3::types::{H256, U256};
-use sha2::{Digest, Sha256};
 
 fn apply_withdraws(
     state: &models::State,
@@ -49,28 +48,6 @@ fn can_process<C>(slot: U256, contract: &C) -> Result<bool, DriverError>
     Ok(slot_creation_block + 20 < current_block)
 }
 
-fn merkleize_valid_withdraws(withdraws: &Vec<models::PendingFlux>, valid: &Vec<bool>) -> H256 {
-    assert!(withdraws.len() == valid.len());
-    let mut withdraw_bytes = vec![vec![0; 32]; 128];
-    for (index, _) in valid.iter().enumerate().filter(|(_, valid)| **valid) {
-        withdraw_bytes[index] = withdraws[index].bytes();
-    }
-    merkleize(withdraw_bytes)
-}
-
-fn merkleize(withdraws: Vec<Vec<u8>>) -> H256 {
-    if withdraws.len() == 1 {
-        return H256::from(withdraws[0].as_slice());
-    }
-    let next_layer = withdraws.chunks(2).map(|pair| {
-        let mut hasher = Sha256::new();
-        hasher.input(&pair[0]);
-        hasher.input(&pair[1]);
-        hasher.result().to_vec()
-    }).collect();
-    merkleize(next_layer)
-}
-
 pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), DriverError> 
     where   D: DbInterface,
             C: SnappContract
@@ -88,7 +65,7 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
             let balances = db.get_current_balances(&state_root)?;
 
             let withdraws = db.get_withdraws_of_slot(slot.low_u32())?;
-            let withdraw_hash = withdraws.hash();
+            let withdraw_hash = withdraws.rolling_hash();
             if withdraw_hash != contract_withdraw_hash {
                 return Err(DriverError::new(
                     &format!("Pending withdraw hash from contract ({}), didn't match the one found in db ({})", 
@@ -97,8 +74,8 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
             }
 
             let (updated_balances, valid_withdraws) = apply_withdraws(&balances, &withdraws);
-            let withdrawal_merkle_root = merkleize_valid_withdraws(&withdraws, &valid_withdraws);
-            let new_state_root = H256::from(updated_balances.hash()?);
+            let withdrawal_merkle_root = withdraws.root_hash(&valid_withdraws);
+            let new_state_root = H256::from(updated_balances.rolling_hash());
             
             println!("New StateHash is {}, Valid Withdraw Merkle Root is {}", new_state_root, withdrawal_merkle_root);
             contract.apply_withdraws(slot, withdrawal_merkle_root, state_root, new_state_root, contract_withdraw_hash)?;
@@ -135,7 +112,7 @@ mod tests {
         contract.has_withdraw_slot_been_applied.given(slot - 1).will_return(Ok(true));
         contract.creation_block_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
         contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
-        contract.withdraw_hash_for_slot.given(slot).will_return(Ok(withdraws.hash()));
+        contract.withdraw_hash_for_slot.given(slot).will_return(Ok(withdraws.rolling_hash()));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_withdraws.given((slot, Any, Any, Any, Any)).will_return(Ok(()));
 
@@ -188,7 +165,7 @@ mod tests {
         contract.creation_block_for_withdraw_slot.given(slot-1).will_return(Ok(U256::from(10)));
 
         contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
-        contract.withdraw_hash_for_slot.given(slot-1).will_return(Ok(second_withdraws.hash()));
+        contract.withdraw_hash_for_slot.given(slot-1).will_return(Ok(second_withdraws.rolling_hash()));
 
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_withdraws.given((slot - 1, Any, Any, Any, Any)).will_return(Ok(()));
@@ -258,7 +235,7 @@ mod tests {
 
         state.balances[1] = 0;
 
-        let merkle_root = merkleize_valid_withdraws(&withdraws, &vec![true, false]);
+        let merkle_root = withdraws.root_hash(&vec![true, false]);
 
         let contract = SnappContractMock::new();
         contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
@@ -266,7 +243,7 @@ mod tests {
         contract.has_withdraw_slot_been_applied.given(slot - 1).will_return(Ok(true));
         contract.creation_block_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
         contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
-        contract.withdraw_hash_for_slot.given(slot).will_return(Ok(withdraws.hash()));
+        contract.withdraw_hash_for_slot.given(slot).will_return(Ok(withdraws.rolling_hash()));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_withdraws.given((slot, Val(merkle_root), Any, Any, Any)).will_return(Ok(()));
 

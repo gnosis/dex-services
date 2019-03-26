@@ -1,50 +1,17 @@
 use byteorder::{BigEndian, LittleEndian, WriteBytesExt};
-use rustc_hex::{FromHex};
 use serde_derive::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::num::ParseIntError;
 use web3::types::H256;
-use std::error::Error;
-use crate::error;
 
 pub const TOKENS: u16 = 30;
-
 pub const DB_NAME: &str = "dfusion2";
 
-pub trait Hashable {
-    fn hash(&self) -> H256;
+pub trait RollingHashable {
+    fn rolling_hash(&self) -> H256;
 }
 
-pub fn decode_hex_uint8(s: &mut str, size: i32) -> Result<Vec<u8>, Box<dyn Error>> {
-  // add prefix 0, in case s has not even length
-  let mut pretail: &str = "";
-  if s.len() % 2 == 1 {
-    pretail = "0";
-  }
-  let p: &'static str = pretail.into();
-  let s = format!("{}{}", p, s);
-
-  let v: Result<Vec<u8>, ParseIntError> = (0..s.len())
-    .step_by(2)
-    .map(|i| u8::from_str_radix(&s[i..i + 2], 16))
-    .collect();
-
-  let mut v = v?;
-  let mut vv = Vec::with_capacity(size as usize);
-  for _i in 0..size {
-    vv.push(0);
-  }
-  for i in 1..v.len() + 1 {
-    vv[size as usize - i] = v.pop().unwrap();
-  }
-  Ok(vv.clone())
-}
-
-pub fn from_slice2(bytes: &[u8]) -> [u8; 32] {
-  let mut array = [0; 32];
-  let bytes = &bytes[..array.len()]; // panics if not enough data
-  array.copy_from_slice(bytes);
-  array
+pub trait RootHashable {
+    fn root_hash(&self, valid_items: &Vec<bool>) -> H256;
 }
 
 #[allow(non_snake_case)]
@@ -55,26 +22,21 @@ pub struct State {
   pub balances: Vec<u128>,
 }
 
-impl State {
+impl RollingHashable for State {
   //Todo: Exchange sha with pederson hash
-  pub fn hash(&self) -> Result<[u8; 32], error::DriverError> {
-    let mut hash: [u8; 32] = [0; 32];
+  fn rolling_hash(&self) -> H256 {
+    let mut hash = vec![0u8; 32];
     for i in &self.balances {
-      let mut bs = [0u8; 64];
-      bs.as_mut()
-        .write_u128::<LittleEndian>(*i)?;
-      for i in 0..32 {
-        bs[i + 32] = bs[i];
-        bs[i] = hash[i];
-      }
-      let bytes: Vec<u8> = bs.to_vec();
+      let mut bs = [0u8; 32];
+      bs.as_mut().write_u128::<LittleEndian>(*i).unwrap();
+
       let mut hasher = Sha256::new();
-      hasher.input(&bytes);
+      hasher.input(hash);
+      hasher.input(bs);
       let result = hasher.result();
-      let b: Vec<u8> = result.to_vec();
-      hash = from_slice2(&b);
+      hash = result.to_vec();
     }
-    Ok(hash)
+    H256::from(hash.as_slice())
   }
 }
 
@@ -91,33 +53,9 @@ pub struct PendingFlux {
 impl PendingFlux {
   //calcalutes the iterative hash of deposits
   pub fn iter_hash(&self, prev_hash: &H256) -> H256 {
-    let _current_deposithash: H256 = H256::zero();
-    let s = format!(" {:x} ", prev_hash);
-    let mut bytes: Vec<u8> = s.from_hex().unwrap();
-
-    // add two byte for uint16 accountID
-    let mut s = format!("{:X}", self.accountId);
-    let decoded = decode_hex_uint8(&mut s, 2).expect("Decoding failed");
-    let mut temp: Vec<u8> = decoded;
-    bytes.append(&mut temp);
-
-    // add one byte for uint8 tokenIndex,
-    let mut s = format!("{:x}", self.tokenId);
-    let decoded = decode_hex_uint8(&mut s, 1).expect("Decoding failed");
-    let mut temp: Vec<u8> = decoded;
-    bytes.append(&mut temp);
-
-    // add 32 byte for amount u256
-    let mut s = format!("{:X}", self.amount);
-    let decoded = decode_hex_uint8(&mut s, 16).expect("Decoding failed");
-    let mut temp: Vec<u8> = decoded;
-    bytes.append(&mut temp);
-
-    println!("{:?}", bytes);
-    println!("Length of bytes is{:?}", bytes.len());
-
     let mut hasher = Sha256::new();
-    hasher.input(&bytes);
+    hasher.input(prev_hash);
+    hasher.input(self.bytes());
     let result = hasher.result();
     let b: Vec<u8> = result.to_vec();
     H256::from(b.as_slice())
@@ -132,7 +70,6 @@ impl PendingFlux {
   }
 }
 
-
 impl From<mongodb::ordered::OrderedDocument> for PendingFlux {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
         let json = serde_json::to_string(&document).unwrap();
@@ -140,34 +77,115 @@ impl From<mongodb::ordered::OrderedDocument> for PendingFlux {
     }
 }
 
-impl Hashable for Vec<PendingFlux> {
-    fn hash(&self) -> H256 {
+impl RollingHashable for Vec<PendingFlux> {
+    fn rolling_hash(&self) -> H256 {
         self.iter().fold(H256::zero(), |acc, w| w.iter_hash(&acc))
     }
+}
+
+impl RootHashable for Vec<PendingFlux> {
+    fn root_hash(&self, valid_items: &Vec<bool>) -> H256 {
+        assert!(self.len() == valid_items.len());
+        let mut withdraw_bytes = vec![vec![0; 32]; 128];
+        for (index, _) in valid_items.iter().enumerate().filter(|(_, valid)| **valid) {
+            withdraw_bytes[index] = self[index].bytes();
+        }
+        merkleize(withdraw_bytes)
+    }
+}
+
+fn merkleize(leafs: Vec<Vec<u8>>) -> H256 {
+    if leafs.len() == 1 {
+        return H256::from(leafs[0].as_slice());
+    }
+    let next_layer = leafs.chunks(2).map(|pair| {
+        let mut hasher = Sha256::new();
+        hasher.input(&pair[0]);
+        hasher.input(&pair[1]);
+        hasher.result().to_vec()
+    }).collect();
+    merkleize(next_layer)
 }
 
 #[cfg(test)]
 pub mod tests {
   use super::*;
   use web3::types::H256;
+  use std::str::FromStr;
 
   #[test]
-  fn check_iter_hash() {
-    //check transformations
-    let deposits = PendingFlux {
+  fn test_pending_flux_rolling_hash() {
+    let deposit = PendingFlux {
       slotIndex: 0,
       slot: 0,
       accountId: 0,
       tokenId: 0,
       amount: 0,
     };
-    let current_deposithash: H256 = H256::zero();
+    assert_eq!(
+        vec![deposit].rolling_hash(),
+        H256::from_str(
+            "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+        ).unwrap()
+    );
+    assert_eq!(
+        vec![create_flux_for_test(0,0)].rolling_hash(), 
+        H256::from_str(
+            "dc8a5e14d3989bc687a8334e9096c515752e9726367ebab13b6f399865f71d3e"
+        ).unwrap()
+    );
+  }
 
-    //Check actual hashing
-    let target: H256 = serde_json::from_str(
-      r#""0x8e8fe47e4a33b178bf0433d8050cb0ad7ec323fbdeeab3ecfd857b4ce1805b7a""#,
-    ).unwrap();
-    assert_eq!(deposits.iter_hash(&current_deposithash), target);
+  #[test]
+  fn test_pending_flux_root_hash() {
+    let deposit = PendingFlux {
+      slotIndex: 0,
+      slot: 0,
+      accountId: 3,
+      tokenId: 3,
+      amount: 18,
+    };
+    // one valid withdraw
+    assert_eq!(
+        vec![deposit.clone()].root_hash(&vec![true]),
+        H256::from_str(
+            "4a77ba0bc619056248f2f2793075eb6f49cf35dacb5cccfe1e71392046a06b79"
+        ).unwrap()
+    );
+    // no valid withdraws
+    assert_eq!(
+        vec![deposit].root_hash(&vec![false]),
+        H256::from_str(
+            "87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c"
+        ).unwrap()
+    );
+  }
+
+  #[test]
+  fn test_state_rolling_hash() {
+    // Empty state
+    let mut balances = vec![0; 3000];
+    let state = State {
+        stateHash: "77b01abfbad57cb7a1344b12709603ea3b9ad803ef5ea09814ca212748f54733".to_string(),
+        stateIndex:  1,
+        balances: balances.clone(),
+    };
+    assert_eq!(
+      state.rolling_hash(),
+      H256::from_str(&state.stateHash).unwrap()
+    );
+
+    // State with single deposit
+    balances[62] = 18;
+    let state = State {
+        stateHash: "73899d50b4ec5e351b4967e4c4e4a725e0fa3e8ab82d1bb6d3197f22e65f0c97".to_string(),
+        stateIndex:  1,
+        balances: balances,
+    };
+    assert_eq!(
+      state.rolling_hash(),
+      H256::from_str(&state.stateHash).unwrap()
+    );
   }
 
   pub fn create_flux_for_test(slot: u32, slot_index: u32) -> PendingFlux {

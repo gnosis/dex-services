@@ -1,4 +1,5 @@
 use crate::models;
+use crate::models::RollingHashable;
 
 use crate::db_interface::DbInterface;
 use crate::error::{DriverError, ErrorKind};
@@ -78,13 +79,13 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
         } else {
             // calculate new state by applying all deposits
             state = apply_deposits(&mut state, &deposits);
-            println!("New StateHash is{:?}", state.hash()?);
+            println!("New StateHash is{:?}", state.rolling_hash());
 
             //send new state into blockchain
             //applyDeposits signature is (slot, _currStateRoot, _newStateRoot, deposit_slotHash)
             let slot = U256::from(deposit_ind);
             let _curr_state_root = curr_state_root;
-            let _new_state_root = H256::from(state.hash()?);
+            let _new_state_root = H256::from(state.rolling_hash());
 
             contract.apply_deposits(slot, _curr_state_root, _new_state_root, deposit_hash_pulled)?;
             return Ok(true);
@@ -98,7 +99,7 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::Hashable;
+    use crate::models::RollingHashable;
     use crate::contract::tests::SnappContractMock;
     use crate::models::tests::create_flux_for_test;
     use crate::db_interface::tests::DbInterfaceMock;
@@ -121,7 +122,7 @@ mod tests {
         contract.has_deposit_slot_been_applied.given(slot - 1).will_return(Ok(true));
         contract.creation_block_for_deposit_slot.given(slot).will_return(Ok(U256::from(10)));
         contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
-        contract.deposit_hash_for_slot.given(slot).will_return(Ok(deposits.hash()));
+        contract.deposit_hash_for_slot.given(slot).will_return(Ok(deposits.rolling_hash()));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_deposits.given((slot, Any, Any, Any)).will_return(Ok(()));
 
@@ -178,7 +179,7 @@ mod tests {
 
         contract.creation_block_for_deposit_slot.given(slot).will_return(Ok(U256::from(10)));
         contract.get_current_block_number.given(()).will_return(Ok(U256::from(11)));
-        contract.deposit_hash_for_slot.given(slot).will_return(Ok(deposits.hash()));
+        contract.deposit_hash_for_slot.given(slot).will_return(Ok(deposits.rolling_hash()));
 
         let db = DbInterfaceMock::new();
         db.get_current_balances.given(state_hash).will_return(Ok(state));
@@ -201,7 +202,7 @@ mod tests {
 
         contract.creation_block_for_deposit_slot.given(slot-1).will_return(Ok(U256::from(10)));
         contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
-        contract.deposit_hash_for_slot.given(slot-1).will_return(Ok(second_deposits.hash()));
+        contract.deposit_hash_for_slot.given(slot-1).will_return(Ok(second_deposits.rolling_hash()));
 
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_deposits.given((slot - 1, Any, Any, Any)).will_return(Ok(()));
