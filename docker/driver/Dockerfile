@@ -16,11 +16,12 @@ WORKDIR /app
 COPY docker/driver/clone_solver.sh docker/driver/clone_solver.sh
 COPY .ssh/ .ssh/
 RUN if [ "$use_solver" = 1 ]; then docker/driver/clone_solver.sh; else echo "Not installing solver"; fi
+ENV PYTHONPATH ${PYTHONPATH}:/app/batchauctions/
 
 # Copy smart contract build artefacts
 COPY dex-contracts/build dex-contracts/build
 
 # Copy source code
 WORKDIR /app/driver
-COPY driver/src driver/tests ./
+COPY driver/src ./
 RUN cargo build
