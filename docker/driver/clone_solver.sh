@@ -1,4 +1,5 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
+set -e
 
 # Authorize SSH Host
 mkdir -p /root/.ssh
