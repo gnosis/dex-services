@@ -23,5 +23,5 @@ COPY dex-contracts/build dex-contracts/build
 
 # Copy source code
 WORKDIR /app/driver
-COPY driver/src ./
-RUN cargo build
+COPY driver/src ./src
+RUN cargo clean -p driver && cargo build

@@ -20,7 +20,7 @@ rustc-hex = "*"
 sha2 = "*"
 byteorder = "*"
 hex = "*"
-web3 = { git = "https://github.com/tomusdrw/rust-web3" }
+web3 = { git = "https://github.com/tomusdrw/rust-web3", rev = "56ad08e" }
 
 [dev-dependencies]
 mock-it = "0.2.0"
