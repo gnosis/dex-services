@@ -8,7 +8,6 @@ pub struct Solution {
     pub surplus: U256,
     pub prices: Vec<u128>,
     pub executed_sell_amounts: Vec<u128>,
-    pub executed_buy_amounts: Vec<u128>,
 }
 
 pub trait PriceFinding {
