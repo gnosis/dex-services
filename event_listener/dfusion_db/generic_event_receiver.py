@@ -4,13 +4,14 @@ from typing import Any, Dict
 from django_eth_events.chainevents import AbstractEventReceiver
 
 from .snapp_event_receiver import DepositReceiver, StateTransitionReceiver, \
-    SnappInitializationReceiver, WithdrawRequestReceiver
+    SnappInitializationReceiver, WithdrawRequestReceiver, OrderReceiver
 
 RECEIVER_MAPPING = {
     'Deposit': DepositReceiver(),
     'WithdrawRequest': WithdrawRequestReceiver(),
     'StateTransition': StateTransitionReceiver(),
     'SnappInitialization': SnappInitializationReceiver(),
+    'SellOrder': OrderReceiver(),
 }
 
 
