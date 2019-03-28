@@ -161,7 +161,7 @@ ETHEREUM_MAX_BATCH_REQUESTS = env.int('ETHEREUM_MAX_BATCH_REQUESTS', default=500
 ETH_EVENTS = [
     {
         'ADDRESSES': [os.environ['SNAPP_CONTRACT_ADDRESS']],
-        'EVENT_ABI': load_contract_abi(abi_file_path('SnappBase.json')),
+        'EVENT_ABI': load_contract_abi(abi_file_path('SnappAuction.json')),
         'EVENT_DATA_RECEIVER': 'event_listener.dfusion_db.generic_event_receiver.EventDispatcher',
         'NAME': 'SnappEventReceiver',
         'PUBLISH': True,
