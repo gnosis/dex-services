@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import Mock
 from ..snapp_event_receiver import WithdrawRequestReceiver, DepositReceiver, StateTransitionReceiver, \
-    SnappInitializationReceiver
-from ..models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord
+    SnappInitializationReceiver, OrderReceiver
+from ..models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord, Order
 
 
 class DepositReceiverTest(unittest.TestCase):
@@ -21,6 +21,15 @@ class WithdrawRequestReceiverTest(unittest.TestCase):
         withdraw = Withdraw(1, 2, 10, 42, 51)
         receiver.save_parsed(withdraw)
         database.write_withdraw.assert_called_with(withdraw)
+
+
+class OrderReceiverTest(unittest.TestCase):
+    def test_writes_order(self) -> None:
+        database = Mock()
+        receiver = OrderReceiver(database)
+        order = Order(1, 1, 2, 1, 1, 1, 1)
+        receiver.save_parsed(order)
+        database.write_order.assert_called_with(order)
 
 
 class StateTransitionReceiverTest(unittest.TestCase):
