@@ -5,7 +5,7 @@ from typing import List
 from django.conf import settings
 from pymongo import MongoClient
 
-from .models import Deposit, Withdraw, AccountRecord
+from .models import Deposit, Withdraw, AccountRecord, Order
 
 
 class DatabaseInterface(ABC):
@@ -35,6 +35,12 @@ class DatabaseInterface(ABC):
 
     @abstractmethod
     def get_num_tokens(self) -> int: pass
+
+    @abstractmethod
+    def write_order(self, order: Order) -> None: pass
+
+    @abstractmethod
+    def get_orders(self, slot: int) -> List[Order]: pass
 
 
 class MongoDbInterface(DatabaseInterface):
@@ -94,3 +100,11 @@ class MongoDbInterface(DatabaseInterface):
 
     def get_num_tokens(self) -> int:
         return int(self.db.constants.find_one()['num_tokens'])
+
+    def write_order(self, order: Order):
+        order_id = self.db.orders.insert_one(order.to_dictionary()).inserted_id
+        self.logger.info(
+            "Successfully included Order - {}".format(order_id))
+
+    def get_orders(self, slot: int):
+        return list(map(lambda d: Order.from_dictionary(d), self.db.orders.find({'slot': slot})))
