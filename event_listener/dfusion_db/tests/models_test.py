@@ -94,7 +94,7 @@ class OrderTest(unittest.TestCase):
 
     def test_throws_with_missing_key(self) -> None:
         with self.assertRaises(AssertionError):
-            Withdraw.from_dictionary({
+            Order.from_dictionary({
                 "auctionId": 1,
                 "slotIndex": 2,
                 "accountId": 3,
@@ -105,7 +105,7 @@ class OrderTest(unittest.TestCase):
 
     def test_throws_with_non_integer_value(self) -> None:
         with self.assertRaises(ValueError):
-            Withdraw.from_dictionary({
+            Order.from_dictionary({
                 "auctionId": "Bad Text!",
                 "slotIndex": 2,
                 "accountId": 3,
