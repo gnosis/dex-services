@@ -101,10 +101,10 @@ class MongoDbInterface(DatabaseInterface):
     def get_num_tokens(self) -> int:
         return int(self.db.constants.find_one()['num_tokens'])
 
-    def write_order(self, order: Order):
+    def write_order(self, order: Order) -> None:
         order_id = self.db.orders.insert_one(order.to_dictionary()).inserted_id
         self.logger.info(
             "Successfully included Order - {}".format(order_id))
 
-    def get_orders(self, slot: int):
+    def get_orders(self, slot: int) -> List[Order]:
         return list(map(lambda d: Order.from_dictionary(d), self.db.orders.find({'slot': slot})))
