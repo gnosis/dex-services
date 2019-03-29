@@ -44,7 +44,6 @@ matrix:
       install:
         - git submodule update --init
         - npm install -C dex-contracts
-        - ganache-cli -p 8545 > /dev/null &
         - cd dex-contracts && truffle compile && cd - # driver/listener require compiled contracts
         - docker-compose up -d driver listener truffle | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
       script:
