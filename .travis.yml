@@ -13,6 +13,7 @@ matrix:
         - cargo test --verbose --all
     - language: python
       python: 3.6
+      cache: pip
       install:
         - pip install -U -r event_listener/requirements.txt
       script:
