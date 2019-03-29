@@ -108,3 +108,4 @@ class MongoDbInterface(DatabaseInterface):
 
     def get_orders(self, slot: int) -> List[Order]:
         return list(map(lambda d: Order.from_dictionary(d), self.db.orders.find({'slot': slot})))
+
