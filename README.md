@@ -112,6 +112,7 @@ Troubleshooting
 If you have built the docker landscape before, and there are updates to the smart contracts submodule (*dex-contracts/*), you have to rebuild your docker environment, for them to be picked up:
 
 ```bash
+cd dex-contracts && rm -rf build && truffle compile && cd ..
 docker-compose build truffle
 ```
 
