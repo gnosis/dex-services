@@ -8,6 +8,7 @@ pub struct Solution {
     pub surplus: U256,
     pub prices: Vec<u128>,
     pub executed_sell_amounts: Vec<u128>,
+    pub executed_buy_amounts: Vec<u128>,
 }
 
 pub trait PriceFinding {
@@ -40,11 +41,11 @@ pub mod tests {
 
     impl PriceFinding for PriceFindingMock {
         fn find_prices(
-        &self, 
-        orders: Vec<models::Order>, 
-        state: models::State
-    ) -> Result<Solution, DriverError> {
-        self.find_prices.called((orders, state))
-    }
+            &self, 
+            orders: Vec<models::Order>, 
+            state: models::State
+        ) -> Result<Solution, DriverError> {
+            self.find_prices.called((orders, state))
+        }
     }
 }
