@@ -3,7 +3,10 @@ matrix:
   include:
     - language: rust
       rust: 1.31.0
-      cache: cargo 
+      cache: 
+        cargo: true
+        directories:
+          - driver/target
       script:
         - cd driver/
         - cargo build --verbose --all
