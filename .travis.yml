@@ -31,8 +31,6 @@ matrix:
             - ubuntu-toolchain-r-test
           packages:
             - build-essential
-        hosts:
-        - ganache-cli
       before_install:
         - sudo rm /usr/local/bin/docker-compose
         - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
@@ -44,7 +42,7 @@ matrix:
         - cd dex-contracts && truffle compile && cd - # driver/listener require compiled contracts
         - docker-compose up -d driver listener | while read line ; do echo "$(date)| $line"; done;
         - docker-compose port ganache-cli 8545
-        - cd dex-contracts && truffle migrate --network developmentdocker && cd -
+        - cd dex-contracts && truffle migrate && cd -
       script:
         - sh ./test/e2e-tests-deposit.sh
         - sh ./test/e2e-tests-withdraw.sh
