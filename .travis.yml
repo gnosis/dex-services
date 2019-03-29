@@ -20,6 +20,10 @@ matrix:
         - pytest --cov=event_listener/dfusion_db/ --cov-report term-missing
         - mypy event_listener/dfusion_db/ --ignore-missing-imports --strict
     - language: node_js
+      cache:
+        npm: true
+        directories:
+          - $HOME/docker
       sudo: required
       node_js: 10.13.0
       env:
@@ -35,6 +39,8 @@ matrix:
         - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
         - chmod +x docker-compose
         - sudo mv docker-compose /usr/local/bin
+        # Load cached docker images
+        - if [[ -d $HOME/docker ]]; then ls $HOME/docker/*.tar.gz | xargs -I {file} sh -c "zcat {file} | docker load"; fi
         - npm install -g truffle
       install:
         - git submodule update --init
@@ -48,3 +54,8 @@ matrix:
       after_script:
         - docker-compose logs
         - docker-compose down
+      before_cache:
+      # Save tagged docker images
+      - >
+        mkdir -p $HOME/docker && docker images -a --filter='reference=*dex-services*' --filter='dangling=false' --format '{{.Repository}}:{{.Tag}} {{.ID}}'
+        | xargs -n 2 -t sh -c 'test -e $HOME/docker/$1.tar.gz || docker save $0 | gzip -2 > $HOME/docker/$1.tar.gz'
