@@ -42,6 +42,7 @@ matrix:
         - cd dex-contracts && truffle compile && cd - # driver/listener require compiled contracts
         - docker-compose up -d driver listener | while read line ; do echo "$(date)| $line"; done;
         - docker-compose port ganache-cli 8545
+        - sudo netstat -tulpn
         - cd dex-contracts && truffle migrate && cd -
       script:
         - sh ./test/e2e-tests-deposit.sh
