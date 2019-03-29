@@ -40,7 +40,8 @@ matrix:
         - git submodule update --init
         - npm install -C dex-contracts
         - cd dex-contracts && truffle compile && cd - # driver/listener require compiled contracts
-        - docker-compose up -d driver listener
+        - docker-compose up -d driver listener | while read line ; do echo "$(date)| $line"; done;
+        - docker-compose port ganache-cli 8545
         - cd dex-contracts && truffle migrate && cd -
       script:
         - sh ./test/e2e-tests-deposit.sh
