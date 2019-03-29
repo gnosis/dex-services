@@ -14,7 +14,7 @@ pub trait RootHashable {
     fn root_hash(&self, valid_items: &Vec<bool>) -> H256;
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct State {
   pub state_hash: String,
@@ -105,6 +105,15 @@ fn merkleize(leafs: Vec<Vec<u8>>) -> H256 {
         hasher.result().to_vec()
     }).collect();
     merkleize(next_layer)
+}
+
+#[derive(PartialEq)]
+pub struct Order {
+    pub account_id: u16,
+    pub sell_token: u8,
+    pub buy_token: u8,
+    pub sell_amount: u128,
+    pub buy_amount: u128,
 }
 
 #[cfg(test)]
