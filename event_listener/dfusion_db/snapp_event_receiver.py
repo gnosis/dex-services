@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Union, List, Optional
 
 from .database_interface import DatabaseInterface, MongoDbInterface
-from .models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord
+from .models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord, Order
 
 
 class SnappEventListener(ABC):
@@ -126,3 +126,15 @@ class WithdrawRequestReceiver(SnappEventListener):
         except AssertionError as exc:
             logging.critical(
                 "Failed to record Deposit [{}] - {}".format(exc, withdraw))
+
+
+class OrderReceiver(SnappEventListener):
+    def save(self, event: Dict[str, Any], block_info: Dict[str, Any]) -> None:
+        self.save_parsed(Order.from_dictionary(event))
+
+    def save_parsed(self, order: Order) -> None:
+        try:
+            self.database.write_order(order)
+        except AssertionError as exc:
+            logging.critical(
+                "Failed to record Deposit [{}] - {}".format(exc, order))
