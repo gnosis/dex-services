@@ -10,7 +10,7 @@ RUN ln -s $HOME/.cargo/bin/* /usr/bin/
 
 # Copy requirements and install
 WORKDIR /app/driver
-COPY driver/Cargo.toml .
+ADD driver/Cargo.toml ~/.cache/target_cache.tar.gz* ./
 RUN mkdir src && touch src/lib.rs && cargo build
 
 # Install solver if specified

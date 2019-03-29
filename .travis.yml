@@ -20,7 +20,10 @@ matrix:
         - pytest --cov=event_listener/dfusion_db/ --cov-report term-missing
         - mypy event_listener/dfusion_db/ --ignore-missing-imports --strict
     - language: node_js
-      cache: npm
+      cache: 
+        npm: true
+        directories:
+          - ~/.cache
       sudo: required
       node_js: 10.13.0
       env:
@@ -50,3 +53,6 @@ matrix:
         - sh ./test/e2e-tests-withdraw.sh
       after_script:
         - docker-compose logs
+      before_cache:
+        # Save tagged docker images
+        - docker cp $(docker ps -lqf "name=dex-services_driver"):/app/driver/target/ . && tar -zcvf  ~/.cache/target_cache.tar.gz target/
