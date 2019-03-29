@@ -39,23 +39,14 @@ matrix:
         - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
         - chmod +x docker-compose
         - sudo mv docker-compose /usr/local/bin
-        # Load cached docker images
-        - if [[ -d $HOME/docker ]]; then ls $HOME/docker/*.tar.gz | xargs -I {file} sh -c "zcat {file} | docker load"; fi
-        - npm install -g truffle
       install:
         - git submodule update --init
         - npm install -C dex-contracts
         - cd dex-contracts && truffle compile && cd - # driver/listener require compiled contracts
-        - docker-compose up -d driver listener truffle
+        - docker-compose up -d driver listener
+        - cd dex-contracts && truffle migrate && cd -
       script:
-        - timeout 120 bash -c -- 'while [ ! -f dex-contracts/build/migration.flag ] ; do sleep .1; done' # wait for migrations to complete (max 60s)
         - sh ./test/e2e-tests-deposit.sh
         - sh ./test/e2e-tests-withdraw.sh
       after_script:
         - docker-compose logs
-        - docker-compose down
-      before_cache:
-      # Save tagged docker images
-      - >
-        mkdir -p $HOME/docker && docker images -a --filter='reference=*dex-services*' --filter='dangling=false' --format '{{.Repository}}:{{.Tag}} {{.ID}}'
-        | xargs -n 2 -t sh -c 'test -e $HOME/docker/$1.tar.gz || docker save $0 | gzip -2 > $HOME/docker/$1.tar.gz'
