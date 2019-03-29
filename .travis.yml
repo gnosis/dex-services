@@ -20,10 +20,7 @@ matrix:
         - pytest --cov=event_listener/dfusion_db/ --cov-report term-missing
         - mypy event_listener/dfusion_db/ --ignore-missing-imports --strict
     - language: node_js
-      cache:
-        npm: true
-        directories:
-          - $HOME/docker
+      cache: npm
       sudo: required
       node_js: 10.13.0
       env:
