@@ -19,7 +19,8 @@ matrix:
       script:
         - pytest --cov=event_listener/dfusion_db/ --cov-report term-missing
         - mypy event_listener/dfusion_db/ --ignore-missing-imports --strict
-    - dist: xenial
+    - language: generic
+      dist: xenial
       cache: 
         npm: true
         directories:
