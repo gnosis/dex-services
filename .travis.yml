@@ -23,9 +23,9 @@ matrix:
       dist: xenial
       sudo: required
       cache: 
-        npm: true
         directories:
           - .cache
+          - $HOME/.nvm/versions/node/v8.12.0/lib/node_modules
           - dex-contracts/node_modules/
       before_install:
         - npm install -g truffle
@@ -43,5 +43,5 @@ matrix:
         - docker-compose logs
       before_cache:
         # Save caches from docker images
-        - docker cp $(docker ps -lqf "name=dex-services_driver"):/app/driver/target/ . && tar -zcvf .cache/target_cache.tar.gz target/
-        - docker cp $(docker ps -lqf "name=dex-services_listener"):/root/.cache/pip . && tar -zcvf .cache/pip_cache.tar.gz pip/
+        - docker cp $(docker ps -lqf "name=dex-services_driver"):/app/driver/target/ . && tar -zcf .cache/target_cache.tar.gz target/
+        - docker cp $(docker ps -lqf "name=dex-services_listener"):/usr/local/lib/python3.6/site-packages/ . && tar -zcf .cache/pip_cache.tar.gz site-packages/

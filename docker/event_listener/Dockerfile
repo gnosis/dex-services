@@ -4,7 +4,7 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Restore cache if available (at least one sourcefile is needed, therefore use README in case cache doesn't exist)
-ADD README.md .cache/pip_cache.tar.gz* /root/.cache/
+ADD README.md .cache/pip_cache.tar.gz* /usr/local/lib/python3.6/
 
 COPY event_listener/requirements.txt event_listener/
 RUN apt-get update \
