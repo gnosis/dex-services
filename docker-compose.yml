@@ -24,7 +24,7 @@ services:
     command: ["-d"]
 
   truffle:
-    command: /app/run.sh
+    command: ./run.sh
     build:
       context: .
       dockerfile: docker/truffle/Dockerfile
