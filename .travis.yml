@@ -21,6 +21,7 @@ matrix:
         - mypy event_listener/dfusion_db/ --ignore-missing-imports --strict
     - language: generic
       dist: xenial
+      sudo: required
       cache: 
         npm: true
         directories:
