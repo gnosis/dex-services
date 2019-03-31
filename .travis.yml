@@ -28,7 +28,6 @@ matrix:
       sudo: required
       install:
         - git submodule update --init
-        - docker-compose --version
         # driver/listener require compiled contracts
         - docker-compose build truffle
         - docker cp $(docker ps -lqf "name=dex-services_truffle"):/app/dex-contracts/build ./dex-contracts/

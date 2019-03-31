@@ -8,4 +8,4 @@ WORKDIR /app/dex-contracts
 
 # Dependencies will Install app dependencies
 RUN apk add --update --no-cache --virtual build-dependencies git python make g++ ca-certificates
-RUN npm install --production && truffle compile
+RUN npm install --production && node_modules/.bin/truffle compile
