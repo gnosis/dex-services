@@ -19,7 +19,7 @@ matrix:
       script:
         - pytest --cov=event_listener/dfusion_db/ --cov-report term-missing
         - mypy event_listener/dfusion_db/ --ignore-missing-imports --strict
-    - language: node_js
+    - language: generic
       cache: 
         npm: true
         directories:
@@ -27,19 +27,7 @@ matrix:
           - dex-contracts/node_modules/
       sudo: required
       node_js: 10.13.0
-      env:
-        - DOCKER_COMPOSE_VERSION=1.22.0
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - build-essential
       before_install:
-        - sudo rm /usr/local/bin/docker-compose
-        - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
-        - chmod +x docker-compose
-        - sudo mv docker-compose /usr/local/bin
         - npm install -g truffle
       install:
         - git submodule update --init
