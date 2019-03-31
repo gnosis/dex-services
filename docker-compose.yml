@@ -34,7 +34,7 @@ services:
       - ./dex-contracts/build:/app/dex-contracts/build
 
   listener:
-    command: ./run.sh
+    command: docker/event_listener/run.sh
     build:
       context: .
       dockerfile: docker/event_listener/Dockerfile
@@ -42,7 +42,7 @@ services:
       - mongo
       - ganache-cli
     volumes:
-      - ./event_listener:/app/event_listener
+      - ./:/app/
     environment:
       - SNAPP_CONTRACT_ADDRESS=0xC89Ce4735882C9F0f0FE26686c53074E09B0D550
       - ETHEREUM_NODE_URL=http://ganache-cli:8545

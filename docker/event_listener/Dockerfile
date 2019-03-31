@@ -13,5 +13,3 @@ RUN apt-get update \
     && pip install --no-cache-dir -r event_listener/requirements.txt 
 
 ENV PYTHONPATH=/app/
-
-COPY event_listener dex-contracts docker/event_listener/run.sh ./
