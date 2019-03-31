@@ -54,7 +54,6 @@ services:
       dockerfile: docker/driver/Dockerfile
     depends_on:
       - mongo
-      - listener
       - ganache-cli
     restart: always
     volumes:

@@ -34,9 +34,8 @@ matrix:
         - npm install -C dex-contracts
         # driver/listener require compiled contracts
         - cd dex-contracts && truffle compile && cd -
-        - docker-compose up -d driver listener truffle | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
+        - docker-compose up -d driver listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
       script:
-        - timeout 120 bash -c -- 'while [ ! -f dex-contracts/build/migration.flag ] ; do sleep .1; done' # wait for migrations to complete (max 120s)
         - cd dex-contracts && truffle migrate && cd -
         - sh ./test/e2e-tests-deposit.sh
         - sh ./test/e2e-tests-withdraw.sh
