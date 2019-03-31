@@ -27,11 +27,13 @@ matrix:
         directories:
           - .cache
           - dex-contracts/node_modules/
+      before_install:
+        - npm install -g truffle
       install:
         - git submodule update --init
+        - npm install -C dex-contracts
         # driver/listener require compiled contracts
-        - docker-compose up --no-start truffle
-        - sudo docker cp $(docker ps -lqf "name=dex-services_truffle"):/app/dex-contracts/build ./dex-contracts/
+        - cd dex-contracts && truffle compile && cd -
         - docker-compose up -d driver listener truffle | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
       script:
         - timeout 120 bash -c -- 'while [ ! -f dex-contracts/build/migration.flag ] ; do sleep .1; done' # wait for migrations to complete (max 120s)
