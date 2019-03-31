@@ -23,7 +23,7 @@ matrix:
       cache: 
         npm: true
         directories:
-          - ~/.cache
+          - .cache
           - dex-contracts/node_modules/
       sudo: required
       node_js: 10.13.0
@@ -54,4 +54,4 @@ matrix:
         - docker-compose logs
       before_cache:
         # Save tagged docker images
-        - docker cp $(docker ps -lqf "name=dex-services_driver"):/app/driver/target/ . && tar -zcvf  ~/.cache/target_cache.tar.gz target/
+        - docker cp $(docker ps -lqf "name=dex-services_driver"):/app/driver/target/ . && tar -zcvf .cache/target_cache.tar.gz target/
