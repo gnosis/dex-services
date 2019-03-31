@@ -42,5 +42,6 @@ matrix:
       after_script:
         - docker-compose logs
       before_cache:
-        # Save tagged docker images
+        # Save caches from docker images
         - docker cp $(docker ps -lqf "name=dex-services_driver"):/app/driver/target/ . && tar -zcvf .cache/target_cache.tar.gz target/
+        - docker cp $(docker ps -lqf "name=dex-services_listener"):/root/.cache/pip . && tar -zcvf .cache/pip_cache.tar.gz pip/
