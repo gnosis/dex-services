@@ -24,7 +24,7 @@ services:
     command: ["-d"]
 
   truffle:
-    command: /app/docker/truffle/run.sh
+    command: ./run.sh
     build:
       context: .
       dockerfile: docker/truffle/Dockerfile
@@ -54,7 +54,6 @@ services:
       dockerfile: docker/driver/Dockerfile
     depends_on:
       - mongo
-      - listener
       - ganache-cli
     restart: always
     volumes:

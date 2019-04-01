@@ -3,44 +3,45 @@ matrix:
   include:
     - language: rust
       rust: 1.31.0
-      cache: cargo 
+      cache: 
+        cargo: true
+        directories:
+          - driver/target
       script:
         - cd driver/
         - cargo build --verbose --all
         - cargo test --verbose --all
     - language: python
       python: 3.6
+      cache: pip
       install:
         - pip install -U -r event_listener/requirements.txt
       script:
         - pytest --cov=event_listener/dfusion_db/ --cov-report term-missing
         - mypy event_listener/dfusion_db/ --ignore-missing-imports --strict
-    - language: node_js
+    - language: generic
+      dist: xenial
       sudo: required
-      node_js: 10.13.0
-      env:
-        - DOCKER_COMPOSE_VERSION=1.22.0
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - build-essential
+      cache: 
+        directories:
+          - .cache
+          - $HOME/.nvm/versions/node/v8.12.0/lib/node_modules
+          - dex-contracts/node_modules/
       before_install:
-        - sudo rm /usr/local/bin/docker-compose
-        - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
-        - chmod +x docker-compose
-        - sudo mv docker-compose /usr/local/bin
         - npm install -g truffle
       install:
         - git submodule update --init
         - npm install -C dex-contracts
-        - cd dex-contracts && truffle compile && cd - # driver/listener require compiled contracts
-        - docker-compose up -d driver listener truffle
+        # driver/listener require compiled contracts
+        - cd dex-contracts && truffle compile && cd -
+        - docker-compose up -d driver listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
       script:
-        - timeout 120 bash -c -- 'while [ ! -f dex-contracts/build/migration.flag ] ; do sleep .1; done' # wait for migrations to complete (max 60s)
+        - cd dex-contracts && truffle migrate && cd -
         - sh ./test/e2e-tests-deposit.sh
         - sh ./test/e2e-tests-withdraw.sh
       after_script:
         - docker-compose logs
-        - docker-compose down
+      before_cache:
+        # Save caches from docker images
+        - docker cp $(docker ps -lqf "name=dex-services_driver"):/app/driver/target/ . && tar -zcf .cache/target_cache.tar.gz target/
+        - docker cp $(docker ps -lqf "name=dex-services_listener"):/usr/local/lib/python3.6/site-packages/ . && tar -zcf .cache/pip_cache.tar.gz site-packages/
