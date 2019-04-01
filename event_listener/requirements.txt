@@ -9,4 +9,4 @@ flake8==3.7.5
 flake8-mypy==17.8.0
 pytest==4.2.0
 pytest-cov==2.6.1
-kombu==4.3.0
+kombu==4.4.0
