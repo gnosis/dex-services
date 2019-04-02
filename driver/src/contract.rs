@@ -70,6 +70,13 @@ impl SnappContractImpl {
 }
 
 impl SnappContract for SnappContractImpl {
+    fn get_current_block_number(&self) -> Result<U256> {
+        self.web3.eth()
+            .block_number()
+            .wait()
+            .map_err(|e| DriverError::from(e))
+    }
+
     fn get_current_state_root(&self) -> Result<H256> {
         self.contract.query(
             "getCurrentStateRoot", (), None, Options::default(), None
@@ -82,15 +89,9 @@ impl SnappContract for SnappContractImpl {
         ).wait().map_err(|e| DriverError::from(e))
     }
 
-    fn has_deposit_slot_been_applied(&self, slot: U256) -> Result<bool> {
+    fn get_current_withdraw_slot(&self) -> Result<U256> {
         self.contract.query(
-            "hasDepositBeenApplied", slot, None, Options::default(), None,
-        ).wait().map_err(|e| DriverError::from(e))
-    }
-
-    fn deposit_hash_for_slot(&self, slot: U256) -> Result<H256> {
-        self.contract.query(
-            "getDepositHash", slot, None, Options::default(), None,
+            "withdrawIndex", (), None, Options::default(), None
         ).wait().map_err(|e| DriverError::from(e))
     }
 
@@ -100,21 +101,15 @@ impl SnappContract for SnappContractImpl {
         ).wait().map_err(|e| DriverError::from(e))
     }
 
-    fn get_current_withdraw_slot(&self) -> Result<U256> {
+    fn deposit_hash_for_slot(&self, slot: U256) -> Result<H256> {
         self.contract.query(
-            "withdrawIndex", (), None, Options::default(), None
+            "getDepositHash", slot, None, Options::default(), None,
         ).wait().map_err(|e| DriverError::from(e))
     }
 
-    fn has_withdraw_slot_been_applied(&self, slot: U256) -> Result<bool> {
+    fn has_deposit_slot_been_applied(&self, slot: U256) -> Result<bool> {
         self.contract.query(
-            "hasWithdrawBeenApplied", slot, None, Options::default(), None,
-        ).wait().map_err(|e| DriverError::from(e))
-    }
-
-    fn withdraw_hash_for_slot(&self, slot: U256) -> Result<H256> {
-        self.contract.query(
-            "getWithdrawHash", slot, None, Options::default(), None,
+            "hasDepositBeenApplied", slot, None, Options::default(), None,
         ).wait().map_err(|e| DriverError::from(e))
     }
 
@@ -124,11 +119,16 @@ impl SnappContract for SnappContractImpl {
         ).wait().map_err(|e| DriverError::from(e))
     }
 
-    fn get_current_block_number(&self) -> Result<U256> {
-        self.web3.eth()
-            .block_number()
-            .wait()
-            .map_err(|e| DriverError::from(e))
+    fn withdraw_hash_for_slot(&self, slot: U256) -> Result<H256> {
+        self.contract.query(
+            "getWithdrawHash", slot, None, Options::default(), None,
+        ).wait().map_err(|e| DriverError::from(e))
+    }
+
+    fn has_withdraw_slot_been_applied(&self, slot: U256) -> Result<bool> {
+        self.contract.query(
+            "hasWithdrawBeenApplied", slot, None, Options::default(), None,
+        ).wait().map_err(|e| DriverError::from(e))
     }
     
     fn apply_deposits(
@@ -161,10 +161,10 @@ impl SnappContract for SnappContractImpl {
                 "applyWithdrawals",
                 (slot, merkle_root, prev_state, new_state, withdraw_hash),
                 account,    
-                Options::with(|opt| { // usual gas estimate is not working
-            opt.gas_price = Some(25.into());
-            opt.gas = Some(1_000_000.into());
-        }),
+                Options::with(|mut opt| { // usual gas estimate is not working
+                    opt.gas_price = Some(25.into());
+                    opt.gas = Some(1_000_000.into());
+                }),
             ).wait()
             .map_err(|e| DriverError::from(e))
             .map(|_|())

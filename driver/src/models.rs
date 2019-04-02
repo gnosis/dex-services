@@ -51,7 +51,7 @@ pub struct PendingFlux {
 }
 
 impl PendingFlux {
-  //calcalutes the iterative hash of deposits
+  // calculates iterative hash of deposits
   pub fn iter_hash(&self, prev_hash: &H256) -> H256 {
     let mut hasher = Sha256::new();
     hasher.input(prev_hash);
@@ -189,7 +189,7 @@ pub mod tests {
     let state = State {
         state_hash: "73899d50b4ec5e351b4967e4c4e4a725e0fa3e8ab82d1bb6d3197f22e65f0c97".to_string(),
         state_index:  1,
-        balances: balances,
+        balances,
     };
     assert_eq!(
       state.rolling_hash(),
@@ -199,7 +199,7 @@ pub mod tests {
 
   pub fn create_flux_for_test(slot: u32, slot_index: u32) -> PendingFlux {
       PendingFlux {
-          slot_index: slot_index,
+          slot_index,
           slot,
           account_id: 1,
           token_id: 1,

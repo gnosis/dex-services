@@ -13,7 +13,7 @@ fn main() {
     let db_instance = MongoDB::new(db_host, db_port).unwrap();
     let contract = SnappContractImpl::new().unwrap();
     loop {
-        //start driver_componets
+        // Start driver_components
         run_driver_components(&db_instance, &contract);
         thread::sleep(Duration::from_secs(5));
     }
