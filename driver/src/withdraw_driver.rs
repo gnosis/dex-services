@@ -14,8 +14,8 @@ fn apply_withdraws(
     let mut state = state.clone();
     let mut valid_withdraws = vec![];
     for i in withdraws {
-        if state.balances[((i.account_id - 1) * models::TOKENS + (i.token_id as u16 - 1)) as usize] >= i.amount {
-            state.balances[((i.account_id - 1) * models::TOKENS + (i.token_id as u16 - 1)) as usize] -= i.amount;
+        if state.balances[((i.account_id - 1) * (models::TOKENS as u16) + (i.token_id as u16 - 1)) as usize] >= i.amount {
+            state.balances[((i.account_id - 1) * (models::TOKENS as u16) + (i.token_id as u16 - 1)) as usize] -= i.amount;
             valid_withdraws.push(true);
         } else {
             valid_withdraws.push(false);
@@ -103,7 +103,7 @@ mod tests {
         let state = models::State {
             state_hash: format!("{:x}", state_hash),
             state_index: 1,
-            balances: vec![100; (models::TOKENS * 2) as usize],
+            balances: vec![100; ((models::TOKENS as u16) * 2) as usize],
         };
 
         let contract = SnappContractMock::new();
@@ -173,7 +173,7 @@ mod tests {
         let state = models::State {
             state_hash: format!("{:x}", state_hash),
             state_index: 1,
-            balances: vec![100; (models::TOKENS * 2) as usize],
+            balances: vec![100; ((models::TOKENS as u16) * 2) as usize],
         };
 
         let db = DbInterfaceMock::new();
@@ -194,7 +194,7 @@ mod tests {
         let state = models::State {
             state_hash: format!("{:x}", state_hash),
             state_index: 1,
-            balances: vec![100; (models::TOKENS * 2) as usize],
+            balances: vec![100; ((models::TOKENS as u16) * 2) as usize],
         };
 
         let contract = SnappContractMock::new();
@@ -230,7 +230,7 @@ mod tests {
         let mut state = models::State {
             state_hash: format!("{:x}", state_hash),
             state_index: 1,
-            balances: vec![100; (models::TOKENS * 2) as usize],
+            balances: vec![100; ((models::TOKENS as u16) * 2) as usize],
         };
 
         state.balances[1] = 0;
