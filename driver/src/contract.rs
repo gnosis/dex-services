@@ -161,7 +161,7 @@ impl SnappContract for SnappContractImpl {
                 "applyWithdrawals",
                 (slot, merkle_root, prev_state, new_state, withdraw_hash),
                 account,    
-                Options::with(|opt| { // usual gas estimate is not working
+                Options::with(|mut opt| { // usual gas estimate is not working
                     opt.gas_price = Some(25.into());
                     opt.gas = Some(1_000_000.into());
                 }),
