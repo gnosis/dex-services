@@ -13,7 +13,7 @@ pub struct Solution {
 
 pub trait PriceFinding {
     fn find_prices(
-        self, 
+        &mut self, 
         orders: &Vec<models::Order>, 
         state: &models::State
     ) -> Result<Solution, PriceFindingError>;
@@ -41,7 +41,7 @@ pub mod tests {
 
     impl PriceFinding for PriceFindingMock {
         fn find_prices(
-            self, 
+            &mut self, 
             orders: &Vec<models::Order>, 
             state: &models::State
         ) -> Result<Solution, PriceFindingError> {

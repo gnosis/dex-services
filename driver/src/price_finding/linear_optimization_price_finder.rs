@@ -17,7 +17,7 @@ pub struct LinearOptimisationPriceFinder {
     previous_prices: Prices
 }
 
-impl<'a> LinearOptimisationPriceFinder {
+impl LinearOptimisationPriceFinder {
     pub fn new() -> Self {
         // All prices are 1 (10**18)
         return LinearOptimisationPriceFinder {
@@ -110,9 +110,9 @@ fn deserialize_result(json: &serde_json::Value) -> Result<(Prices, Solution), Pr
     }))
 }
 
-impl<'a> PriceFinding for LinearOptimisationPriceFinder {
+impl PriceFinding for LinearOptimisationPriceFinder {
     fn find_prices(
-        mut self, 
+        &mut self, 
         orders: &Vec<models::Order>, 
         state: &models::State
     ) -> Result<Solution, PriceFindingError> {
