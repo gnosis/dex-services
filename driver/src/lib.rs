@@ -16,6 +16,7 @@ pub mod price_finding;
 mod deposit_driver;
 pub mod models;
 mod withdraw_driver;
+mod util;
 
 use crate::deposit_driver::run_deposit_listener;
 use crate::withdraw_driver::run_withdraw_listener;

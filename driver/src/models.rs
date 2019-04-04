@@ -123,19 +123,19 @@ pub struct Order {
 
 impl Serializable for Order {
     fn bytes(&self) -> Vec<u8> {
-        let mut wtr = vec![0; 13];
-        wtr.write_u16::<BigEndian>(self.account_id).unwrap();
-        wtr.write_u8(self.buy_token).unwrap();
-        wtr.write_u8(self.sell_token).unwrap();
+        let mut wtr = vec![0; 4];
         wtr.extend(self.sell_amount.bytes());
         wtr.extend(self.buy_amount.bytes());
+        wtr.write_u8(self.buy_token).unwrap();
+        wtr.write_u8(self.sell_token).unwrap();
+        wtr.write_u16::<BigEndian>(self.account_id).unwrap();
         wtr
     }
 }
 
 impl Serializable for u128 {
     fn bytes(&self) -> Vec<u8> {
-        self.to_be_bytes()[..12].to_vec()
+        self.to_be_bytes()[4..].to_vec()
     }
 }
 
@@ -224,6 +224,25 @@ pub mod tests {
     assert_eq!(
       state.rolling_hash(),
       H256::from_str(&state.state_hash).unwrap()
+    );
+  }
+
+  #[test]
+  fn test_order_rolling_hash() {
+    let order = Order {
+      slot_index: 0,
+      account_id: 1,
+      sell_token: 2,
+      buy_token: 3,
+      sell_amount: 4,
+      buy_amount: 5,
+    };
+
+    assert_eq!(
+    vec![order].rolling_hash(),
+    H256::from_str(
+      "e1be57cc443a06d5b4e8c860eed65583e915cce10762f6f04a370326c187879b"
+      ).unwrap()
     );
   }
 
