@@ -12,7 +12,7 @@ pub fn apply_deposits(
     deposits: &Vec<models::PendingFlux>,
 ) -> models::State {
     for i in deposits {
-        state.balances[((i.account_id - 1) * models::TOKENS + (i.token_id as u16 - 1)) as usize] += i.amount;
+        state.balances[((i.account_id - 1) * (models::TOKENS as u16) + (i.token_id as u16 - 1)) as usize] += i.amount;
     }
     state.clone()
 }

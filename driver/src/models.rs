@@ -3,7 +3,7 @@ use serde_derive::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use web3::types::H256;
 
-pub const TOKENS: u16 = 30;
+pub const TOKENS: u8 = 30;
 pub const DB_NAME: &str = "dfusion2";
 
 pub trait RollingHashable {
@@ -107,7 +107,7 @@ fn merkleize(leafs: Vec<Vec<u8>>) -> H256 {
     merkleize(next_layer)
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub struct Order {
     pub account_id: u16,
     pub sell_token: u8,
