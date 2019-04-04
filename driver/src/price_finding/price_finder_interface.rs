@@ -11,6 +11,20 @@ pub struct Solution {
     pub executed_buy_amounts: Vec<u128>,
 }
 
+impl models::Serializable for Solution {
+    fn bytes(&self) -> Vec<u8> {
+        [
+            &self.prices, 
+            &self.executed_sell_amounts,
+            &self.executed_buy_amounts,
+        ]
+            .iter()
+            .flat_map(|list| list.iter())
+            .flat_map(|element| element.bytes())
+            .collect()
+    }
+}
+
 pub trait PriceFinding {
     fn find_prices(
         &mut self, 
