@@ -40,7 +40,7 @@ impl RollingHashable for State {
   }
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Ord, PartialOrd, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PendingFlux {
   pub slot_index: u32,
@@ -107,13 +107,22 @@ fn merkleize(leafs: Vec<Vec<u8>>) -> H256 {
     merkleize(next_layer)
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
+#[serde(rename_all = "camelCase")]
 pub struct Order {
+    pub slot_index: u32,
     pub account_id: u16,
     pub sell_token: u8,
     pub buy_token: u8,
     pub sell_amount: u128,
     pub buy_amount: u128,
+}
+
+impl From<mongodb::ordered::OrderedDocument> for Order {
+    fn from(document: mongodb::ordered::OrderedDocument) -> Self {
+        let json = serde_json::to_string(&document).unwrap();
+        serde_json::from_str(&json).unwrap()
+    }
 }
 
 #[cfg(test)]

@@ -24,6 +24,10 @@ pub trait DbInterface {
         &self,
         slot: u32,
     ) -> Result<Vec<models::PendingFlux>, DriverError>;
+    fn get_orders_of_slot(
+        &self,
+        slot: u32,
+    ) -> Result<Vec<models::Order>, DriverError>;
 }
 
 #[derive(Clone)]
@@ -36,11 +40,11 @@ impl MongoDB {
         Ok(MongoDB { client })
     }
 
-    fn get_items_for_slot(
+    fn get_items_for_slot<I: From<mongodb::ordered::OrderedDocument> + std::cmp::Ord>(
         &self,
         slot: u32,
         collection: &str,
-    ) -> Result<Vec<models::PendingFlux>, DriverError> {
+    ) -> Result<Vec<I>, DriverError> {
         let query = format!("{{ \"slot\": {:} }}", slot);
         println!("Querying {}: {}", collection, query);
 
@@ -49,11 +53,11 @@ impl MongoDB {
 
         let coll = self.client.db(models::DB_NAME).collection(collection);
         let cursor = coll.find(Some(query), None)?;
-        let mut docs: Vec<models::PendingFlux> =vec!();
+        let mut docs = vec!();
         for result in cursor {
-            docs.push(models::PendingFlux::from(result?));
+            docs.push(I::from(result?));
         } 
-        docs.sort_by(|a, b| b.slot.cmp(&a.slot));
+        docs.sort();
         Ok(docs)
     }
 }
@@ -100,6 +104,13 @@ impl DbInterface for MongoDB {
     ) -> Result<Vec<models::PendingFlux>, DriverError> {
         self.get_items_for_slot(slot, "withdraws")
     }
+
+    fn get_orders_of_slot(
+        &self,
+        slot: u32,
+    ) -> Result<Vec<models::Order>, DriverError> {
+        self.get_items_for_slot(slot, "orders")
+    }
 }
 
 #[cfg(test)]
@@ -112,6 +123,7 @@ pub mod tests {
         pub get_current_balances: Mock<H256, Result<models::State, DriverError>>,
         pub get_deposits_of_slot: Mock<u32, Result<Vec<models::PendingFlux>, DriverError>>,
         pub get_withdraws_of_slot: Mock<u32, Result<Vec<models::PendingFlux>, DriverError>>,
+        pub get_orders_of_slot: Mock<u32, Result<Vec<models::Order>, DriverError>>,
     }
 
     impl DbInterfaceMock {
@@ -120,6 +132,7 @@ pub mod tests {
                 get_current_balances: Mock::new(Err(DriverError::new("Unexpected call to get_current_balances", ErrorKind::Unknown))),
                 get_deposits_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_deposits_of_slot", ErrorKind::Unknown))),
                 get_withdraws_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_withdraws_of_slot", ErrorKind::Unknown))),
+                get_orders_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_withdraws_of_slot", ErrorKind::Unknown))),
             }
         }
     }
@@ -142,6 +155,12 @@ pub mod tests {
             slot: u32,
         ) -> Result<Vec<models::PendingFlux>, DriverError> {
             self.get_withdraws_of_slot.called(slot)
+        }
+        fn get_orders_of_slot(
+            &self,
+            slot: u32,
+        ) -> Result<Vec<models::Order>, DriverError> {
+            self.get_orders_of_slot.called(slot)
         }
     }
 }

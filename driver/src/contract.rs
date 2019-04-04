@@ -20,6 +20,7 @@ pub trait SnappContract {
     fn get_current_state_root(&self) -> Result<H256>;
     fn get_current_deposit_slot(&self) -> Result<U256>;
     fn get_current_withdraw_slot(&self) -> Result<U256>;
+    fn get_current_auction_slot(&self) -> Result<U256>;
 
     // Deposit Slots
     fn creation_block_for_deposit_slot(&self, slot: U256) -> Result<U256>;
@@ -31,9 +32,15 @@ pub trait SnappContract {
     fn withdraw_hash_for_slot(&self, slot: U256) -> Result<H256>;
     fn has_withdraw_slot_been_applied(&self, slot: U256) -> Result<bool>;
 
+    // Auction Slots
+    fn creation_block_for_auction_slot(&self, slot: U256) -> Result<U256>;
+    fn order_hash_for_slot(&self, slot: U256) -> Result<H256>;
+    fn has_auction_slot_been_applied(&self, slot: U256) -> Result<bool>;
+
     // Write methods
     fn apply_deposits(&self, slot: U256, prev_state: H256, new_state: H256, deposit_hash: H256) -> Result<()>;
     fn apply_withdraws(&self, slot: U256, merkle_root: H256, prev_state: H256, new_state: H256, withdraw_hash: H256) -> Result<()>;
+    fn apply_auction(&self, slot: U256, prev_state: H256, new_state: H256, order_hash: H256, prices: Vec<u8>, volumes: Vec<u8>) -> Result<()>;
 }
 
 #[allow(dead_code)] // event_loop needs to be retained to keep web3 connection open
@@ -95,6 +102,12 @@ impl SnappContract for SnappContractImpl {
         ).wait().map_err(|e| DriverError::from(e))
     }
 
+    fn get_current_auction_slot(&self) -> Result<U256> {
+        self.contract.query(
+            "auctionIndex", (), None, Options::default(), None
+        ).wait().map_err(|e| DriverError::from(e))
+    }
+
     fn creation_block_for_deposit_slot(&self, slot: U256) -> Result<U256> {
         self.contract.query(
             "getDepositCreationBlock", slot, None, Options::default(), None,
@@ -128,6 +141,24 @@ impl SnappContract for SnappContractImpl {
     fn has_withdraw_slot_been_applied(&self, slot: U256) -> Result<bool> {
         self.contract.query(
             "hasWithdrawBeenApplied", slot, None, Options::default(), None,
+        ).wait().map_err(|e| DriverError::from(e))
+    }
+
+    fn creation_block_for_auction_slot(&self, slot: U256) -> Result<U256> {
+        self.contract.query(
+            "getAuctionCreationBlock", slot, None, Options::default(), None,
+        ).wait().map_err(|e| DriverError::from(e))
+    }
+
+    fn order_hash_for_slot(&self, slot: U256) -> Result<H256> {
+        self.contract.query(
+            "getOrderHash", slot, None, Options::default(), None,
+        ).wait().map_err(|e| DriverError::from(e))
+    }
+
+    fn has_auction_slot_been_applied(&self, slot: U256) -> Result<bool> {
+        self.contract.query(
+            "hasAuctionBeenApplied", slot, None, Options::default(), None,
         ).wait().map_err(|e| DriverError::from(e))
     }
     
@@ -169,6 +200,25 @@ impl SnappContract for SnappContractImpl {
             .map_err(|e| DriverError::from(e))
             .map(|_|())
     }
+
+    fn apply_auction(
+        &self, 
+        slot: U256,
+        prev_state: H256,
+        new_state: H256,
+        order_hash: H256,
+        prices: Vec<u8>, 
+        volumes: Vec<u8>) -> Result<()> {
+            let account = self.account_with_sufficient_balance().ok_or("Not enough balance to send Txs")?;
+            self.contract.call(
+                "applyAuction",
+                (slot, prev_state, new_state, order_hash, prices, volumes),
+                account,
+                Options::default(),
+            ).wait()
+            .map_err(|e| DriverError::from(e))
+            .map(|_|())
+    }
 }
 
 #[cfg(test)]
@@ -185,14 +235,19 @@ pub mod tests {
         pub get_current_state_root: Mock<(), Result<H256>>,
         pub get_current_deposit_slot: Mock<(), Result<U256>>,
         pub get_current_withdraw_slot: Mock<(), Result<U256>>,
+        pub get_current_auction_slot: Mock<(), Result<U256>>,
         pub creation_block_for_deposit_slot: Mock<(U256), Result<U256>>,
         pub deposit_hash_for_slot: Mock<U256, Result<H256>>,
         pub has_deposit_slot_been_applied: Mock<U256, Result<bool>>,
         pub creation_block_for_withdraw_slot: Mock<U256, Result<U256>>,
         pub withdraw_hash_for_slot: Mock<U256, Result<H256>>,
         pub has_withdraw_slot_been_applied: Mock<U256, Result<bool>>,
+        pub creation_block_for_auction_slot: Mock<U256, Result<U256>>,
+        pub order_hash_for_slot: Mock<U256, Result<H256>>,
+        pub has_auction_slot_been_applied: Mock<U256, Result<bool>>,
         pub apply_deposits: Mock<(U256, Matcher<H256>, Matcher<H256>, Matcher<H256>), Result<()>>,
         pub apply_withdraws: Mock<(U256, Matcher<H256>, Matcher<H256>, Matcher<H256>, Matcher<H256>), Result<()>>,
+        pub apply_auction: Mock<(U256, Matcher<H256>, Matcher<H256>, Matcher<H256>, Matcher<Vec<u8>>, Matcher<Vec<u8>>), Result<()>>,
     }
 
     impl SnappContractMock {
@@ -202,14 +257,19 @@ pub mod tests {
                 get_current_state_root: Mock::new(Err(DriverError::new("Unexpected call to get_current_state_root", ErrorKind::Unknown))),
                 get_current_deposit_slot: Mock::new(Err(DriverError::new("Unexpected call to get_current_deposit_slot", ErrorKind::Unknown))),
                 get_current_withdraw_slot: Mock::new(Err(DriverError::new("Unexpected call to get_current_withdraw_slot", ErrorKind::Unknown))),
+                get_current_auction_slot: Mock::new(Err(DriverError::new("Unexpected call to get_current_auction_slot", ErrorKind::Unknown))),
                 creation_block_for_deposit_slot: Mock::new(Err(DriverError::new("Unexpected call to creation_block_for_deposit_slot", ErrorKind::Unknown))),
                 deposit_hash_for_slot: Mock::new(Err(DriverError::new("Unexpected call to deposit_hash_for_slot", ErrorKind::Unknown))),
                 has_deposit_slot_been_applied: Mock::new(Err(DriverError::new("Unexpected call to has_deposit_slot_been_applied", ErrorKind::Unknown))),
                 creation_block_for_withdraw_slot: Mock::new(Err(DriverError::new("Unexpected call to creation_block_for_withdraw_slot", ErrorKind::Unknown))),
                 withdraw_hash_for_slot: Mock::new(Err(DriverError::new("Unexpected call to withdraw_hash_for_slot", ErrorKind::Unknown))),
                 has_withdraw_slot_been_applied: Mock::new(Err(DriverError::new("Unexpected call to has_withdraw_slot_been_applied", ErrorKind::Unknown))),
+                creation_block_for_auction_slot: Mock::new(Err(DriverError::new("Unexpected call to creation_block_for_auction_slot", ErrorKind::Unknown))),
+                order_hash_for_slot: Mock::new(Err(DriverError::new("Unexpected call to order_hash_for_slot", ErrorKind::Unknown))),
+                has_auction_slot_been_applied: Mock::new(Err(DriverError::new("Unexpected call to has_auction_slot_been_applied", ErrorKind::Unknown))),
                 apply_deposits: Mock::new(Err(DriverError::new("Unexpected call to apply_deposits", ErrorKind::Unknown))),
                 apply_withdraws: Mock::new(Err(DriverError::new("Unexpected call to apply_withdraws", ErrorKind::Unknown))),
+                apply_auction: Mock::new(Err(DriverError::new("Unexpected call to apply_auctions", ErrorKind::Unknown))),
             }
         }
     }
@@ -226,6 +286,9 @@ pub mod tests {
         }
         fn get_current_withdraw_slot(&self) -> Result<U256> {
             self.get_current_withdraw_slot.called(())
+        }
+        fn get_current_auction_slot(&self) -> Result<U256> {
+            self.get_current_auction_slot.called(())
         }
         fn creation_block_for_deposit_slot(&self, slot: U256) -> Result<U256>{
             self.creation_block_for_deposit_slot.called(slot)
@@ -245,11 +308,23 @@ pub mod tests {
         fn has_withdraw_slot_been_applied(&self, slot: U256) -> Result<bool> {
             self.has_withdraw_slot_been_applied.called(slot)
         }
+        fn creation_block_for_auction_slot(&self, slot: U256) -> Result<U256> {
+            self.creation_block_for_auction_slot.called(slot)
+        }
+        fn order_hash_for_slot(&self, slot: U256) -> Result<H256> {
+            self.order_hash_for_slot.called(slot)
+        }
+        fn has_auction_slot_been_applied(&self, slot: U256) -> Result<bool> {
+            self.has_auction_slot_been_applied.called(slot)
+        }
         fn apply_deposits(&self, slot: U256, prev_state: H256, new_state: H256, deposit_hash: H256) -> Result<()> {
             self.apply_deposits.called((slot, Val(prev_state), Val(new_state), Val(deposit_hash)))
         }
         fn apply_withdraws(&self, slot: U256, merkle_root: H256, prev_state: H256, new_state: H256, withdraw_hash: H256) -> Result<()> {
             self.apply_withdraws.called((slot, Val(merkle_root), Val(prev_state), Val(new_state), Val(withdraw_hash)))
+        }
+        fn apply_auction(&self, slot: U256, prev_state: H256, new_state: H256, order_hash: H256, prices: Vec<u8>, volumes: Vec<u8>) -> Result<()> {
+            self.apply_auction.called((slot, Val(prev_state), Val(new_state), Val(order_hash), Val(prices), Val(volumes)))
         }
     }
 }
