@@ -36,8 +36,8 @@ pub struct MongoDB {
 }
 impl MongoDB {
     pub fn new(db_host: String, db_port: String) -> Result<MongoDB, DriverError> {
-        // connect is being picked up from a trait which isn't in scope (NetworkConnector)
-        // All three!
+        // Connect is being picked up from a trait which isn't in scope (NetworkConnector)
+        // https://github.com/intellij-rust/intellij-rust/issues/3654
         let client = Client::connect(&db_host, db_port.parse::<u16>()?)?;
         Ok(MongoDB { client })
     }
