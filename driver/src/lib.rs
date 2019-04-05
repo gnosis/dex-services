@@ -14,7 +14,7 @@ pub mod error;
 pub mod price_finding;
 
 mod deposit_driver;
-mod models;
+pub mod models;
 mod withdraw_driver;
 
 use crate::deposit_driver::run_deposit_listener;
