@@ -210,6 +210,8 @@ impl SnappContract for SnappContractImpl {
         prices: Vec<u8>, 
         volumes: Vec<u8>) -> Result<()> {
             let account = self.account_with_sufficient_balance().ok_or("Not enough balance to send Txs")?;
+            let mut options = Options::default();
+            options.gas = Some(U256::from(5000000))
             self.contract.call(
                 "applyAuction",
                 (slot, prev_state, new_state, order_hash, prices, volumes),

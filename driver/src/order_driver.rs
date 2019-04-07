@@ -43,15 +43,25 @@ pub fn run_order_listener<D, C, PF>(
                 ));
             }
 
-            let solution = price_finder.find_prices(&orders, &state).unwrap_or_else(|e| {
-                println!("Error computing result: {}\n Falling back to trivial solution", e);
+            let solution = if orders.len() > 0 {
+                price_finder.find_prices(&orders, &state).unwrap_or_else(|e| {
+                    println!("Error computing result: {}\n Falling back to trivial solution", e);
+                    Solution {
+                        surplus: U256::zero(),
+                        prices: vec![0; models::TOKENS as usize],
+                        executed_sell_amounts: vec![0; orders.len()],
+                        executed_buy_amounts: vec![0; orders.len()],
+                    }
+                })
+            } else {
+                println!("No orders in batch. Falling back to trivial solution");
                 Solution {
                     surplus: U256::zero(),
                     prices: vec![0; models::TOKENS as usize],
                     executed_sell_amounts: vec![0; orders.len()],
                     executed_buy_amounts: vec![0; orders.len()],
                 }
-            });
+            };
             state.balances = compute_updated_balances(&state.balances, &orders, &solution);
             let new_state_root = H256::from(state.rolling_hash());
             
@@ -71,8 +81,14 @@ fn compute_updated_balances(
     solution: &Solution
 ) -> Vec<u128> {
     let mut result = balances.clone();
-    for o in orders.iter() {
-        //TODO update balances
+    for (index, order) in orders.iter().enumerate() {
+        let buy_volume = solution.executed_buy_amounts[index];
+        let buy_index = (order.account_id as usize * models::TOKENS as usize) + order.buy_token as usize;
+        result[buy_index] += buy_volume;
+
+        let sell_volume = solution.executed_sell_amounts[index];
+        let sell_index = (order.account_id as usize * models::TOKENS as usize) + order.buy_token as usize;
+        result[sell_index] -= sell_volume;
     }
     result
 }

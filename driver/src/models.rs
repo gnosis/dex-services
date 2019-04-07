@@ -44,6 +44,20 @@ impl RollingHashable for State {
   }
 }
 
+impl From<mongodb::ordered::OrderedDocument> for State {
+    fn from(document: mongodb::ordered::OrderedDocument) -> Self {
+        State {
+            state_hash: document.get_str("stateHash").unwrap().to_owned(),
+            state_index: document.get_i32("stateIndex").unwrap(),
+            balances: document.get_array("balances")
+                .unwrap()
+                .iter()
+                .map(|e| e.as_str().unwrap().parse().unwrap())
+                .collect(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Ord, PartialOrd, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PendingFlux {
@@ -66,8 +80,13 @@ impl Serializable for PendingFlux {
 
 impl From<mongodb::ordered::OrderedDocument> for PendingFlux {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
-        let json = serde_json::to_string(&document).unwrap();
-        serde_json::from_str(&json).unwrap()
+        PendingFlux {
+            slot_index: document.get_i32("slotIndex").unwrap() as u32,
+            slot: document.get_i32("slot").unwrap() as u32,
+            account_id: document.get_i32("accountId").unwrap() as u16,
+            token_id: document.get_i32("tokenId").unwrap() as u8,
+            amount: document.get_str("amount").unwrap().parse().unwrap(),
+        }
     }
 }
 
@@ -124,10 +143,10 @@ pub struct Order {
 impl Serializable for Order {
     fn bytes(&self) -> Vec<u8> {
         let mut wtr = vec![0; 4];
-        wtr.extend(self.sell_amount.bytes());
         wtr.extend(self.buy_amount.bytes());
-        wtr.write_u8(self.buy_token).unwrap();
+        wtr.extend(self.sell_amount.bytes());
         wtr.write_u8(self.sell_token).unwrap();
+        wtr.write_u8(self.buy_token).unwrap();
         wtr.write_u16::<BigEndian>(self.account_id).unwrap();
         wtr
     }
@@ -141,8 +160,14 @@ impl Serializable for u128 {
 
 impl From<mongodb::ordered::OrderedDocument> for Order {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
-        let json = serde_json::to_string(&document).unwrap();
-        serde_json::from_str(&json).unwrap()
+        Order {
+            slot_index: document.get_i32("slotIndex").unwrap() as u32,
+            account_id: document.get_i32("accountId").unwrap() as u16,
+            sell_token: document.get_i32("sellToken").unwrap() as u8,
+            buy_token: document.get_i32("buyToken").unwrap() as u8,
+            sell_amount: document.get_str("sellAmount").unwrap().parse().unwrap(),
+            buy_amount: document.get_str("buyAmount").unwrap().parse().unwrap(),
+        }
     }
 }
 
