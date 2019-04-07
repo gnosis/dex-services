@@ -107,7 +107,7 @@ fn merkleize(leafs: Vec<Vec<u8>>) -> H256 {
     merkleize(next_layer)
 }
 
-#[derive(Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Order {
     pub slot_index: u32,
