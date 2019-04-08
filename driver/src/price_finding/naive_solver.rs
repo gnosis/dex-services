@@ -60,7 +60,13 @@ pub fn solve(orders: &Vec<models::Order>, num_tokens: u8) -> Result<Solution, Pr
                     buy_amount[i] = y.sell_amount;
                     buy_amount[j] = x.sell_amount;
                 }
-                break;
+
+                Ok(Solution {
+                    surplus: U256([0, 0, 0, 0]),
+                    prices,
+                    executed_sell_amounts: sell_amount,
+                    executed_buy_amounts: buy_amount,
+                })
             }
         }
     }
