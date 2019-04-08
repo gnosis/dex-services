@@ -4,7 +4,7 @@ extern crate mock_it;
 use crate::models;
 use crate::error::{DriverError, ErrorKind};
 
-use mongodb::bson;
+use mongodb::ordered::OrderedDocument;
 use mongodb::db::ThreadedDatabase;
 use mongodb::{Client, ThreadedClient};
 
@@ -36,6 +36,8 @@ pub struct MongoDB {
 }
 impl MongoDB {
     pub fn new(db_host: String, db_port: String) -> Result<MongoDB, DriverError> {
+        // Connect is being picked up from a trait which isn't in scope (NetworkConnector)
+        // https://github.com/intellij-rust/intellij-rust/issues/3654
         let client = Client::connect(&db_host, db_port.parse::<u16>()?)?;
         Ok(MongoDB { client })
     }
@@ -75,7 +77,7 @@ impl DbInterface for MongoDB {
 
         let coll = self.client.db(models::DB_NAME).collection("accounts");
         let cursor = coll.find(Some(query), None)?;
-        let mut docs: Vec<bson::ordered::OrderedDocument> = vec!();
+        let mut docs: Vec<OrderedDocument> = vec!();
         for result in cursor {
             docs.push(result?);
         }
@@ -142,7 +144,7 @@ pub mod tests {
             &self,
             current_state_root: &H256,
         ) -> Result<models::State, DriverError> {
-            self.get_current_balances.called(*current_state_root)
+            self.get_current_balances.called(*current_state_root)  // https://github.com/intellij-rust/intellij-rust/issues/3164
         }
         fn get_deposits_of_slot(
             &self,
