@@ -29,7 +29,7 @@ class StateTransition(NamedTuple):
 class Deposit(NamedTuple):
     account_id: int
     token_id: int
-    amount: str
+    amount: int
     slot: int
     slot_index: int
 
@@ -40,16 +40,25 @@ class Deposit(NamedTuple):
         return Deposit(
             int(data['accountId']),
             int(data['tokenId']),
-            data['amount'],
+            int(data['amount']),
             int(data['slot']),
             int(data['slotIndex'])
         )
+
+    def to_dictionary(self):
+        return {
+            "accountId": self.account_id,
+            "tokenId": self.token_id,
+            "amount": str(self.amount),
+            "slot": self.slot,
+            "slotIndex": self.slot_index
+        }
 
 
 class Withdraw(NamedTuple):
     account_id: int
     token_id: int
-    amount: str
+    amount: int
     slot: int
     slot_index: int
     valid: bool = False
@@ -62,7 +71,7 @@ class Withdraw(NamedTuple):
         return Withdraw(
             int(data['accountId']),
             int(data['tokenId']),
-            data['amount'],
+            int(data['amount']),
             int(data['slot']),
             int(data['slotIndex']),
             bool(data.get('valid', False)),
@@ -73,7 +82,7 @@ class Withdraw(NamedTuple):
         return {
             "accountId": self.account_id,
             "tokenId": self.token_id,
-            "amount": self.amount,
+            "amount": str(self.amount),
             "slot": self.slot,
             "slotIndex": self.slot_index,
             "valid": self.valid
@@ -83,7 +92,14 @@ class Withdraw(NamedTuple):
 class AccountRecord(NamedTuple):
     state_index: int
     state_hash: str
-    balances: List[str]
+    balances: List[int]
+
+    def to_dictionary(self):
+        return {
+            "stateIndex": self.state_index,
+            "stateHash": self.state_hash,
+            "balances": list(map(str, self.balances))
+        }
 
 
 class Order(NamedTuple):
@@ -92,8 +108,8 @@ class Order(NamedTuple):
     account_id: int
     buy_token: int
     sell_token: int
-    buy_amount: str
-    sell_amount: str
+    buy_amount: int
+    sell_amount: int
 
     @classmethod
     def from_dictionary(cls, data: Dict[str, Any]) -> "Order":
@@ -105,8 +121,8 @@ class Order(NamedTuple):
             int(data['accountId']),
             int(data['buyToken']),
             int(data['sellToken']),
-            data['buyAmount'],
-            data['sellAmount'],
+            int(data['buyAmount']),
+            int(data['sellAmount']),
         )
 
     def to_dictionary(self) -> Dict[str, Any]:
@@ -116,6 +132,6 @@ class Order(NamedTuple):
             "accountId": self.account_id,
             "buyToken": self.buy_token,
             "sellToken": self.sell_token,
-            "buyAmount": self.buy_amount,
-            "sellAmount": self.sell_amount
+            "buyAmount": str(self.buy_amount),
+            "sellAmount": str(self.sell_amount)
         }
