@@ -57,8 +57,13 @@ class StateTransitionReceiver(SnappEventListener):
             elif transition.transition_type == TransitionType.Withdraw:
                 assert isinstance(datum, Withdraw)
                 if balances[index] - datum.amount >= 0:
-                    self.logger.info("Decreasing balance of account {} - token {} by {}".format(
-                        datum.account_id, datum.token_id, datum.amount))
+                    self.logger.info(
+                        "Decreasing balance of account {} - token {} by {}".format(
+                            datum.account_id,
+                            datum.token_id,
+                            datum.amount
+                        )
+                    )
                     balances[index] -= datum.amount
                     self.database.update_withdraw(datum, datum._replace(valid=True))
                 else:
@@ -71,11 +76,9 @@ class StateTransitionReceiver(SnappEventListener):
                     )
             else:
                 # This can not happen
-                self.logger.error(
-                    "Unrecognized transition type - this should never happen")
+                self.logger.error("Unrecognized transition type - this should never happen")
 
-        new_account_record = AccountRecord(
-            transition.state_index, transition.state_hash, balances)
+        new_account_record = AccountRecord(transition.state_index, transition.state_hash, balances)
         self.database.write_account_state(new_account_record)
 
     def __get_data_to_apply(self, transition: StateTransition) -> Union[List[Withdraw], List[Deposit]]:
@@ -84,34 +87,27 @@ class StateTransitionReceiver(SnappEventListener):
         elif transition.transition_type == TransitionType.Withdraw:
             return self.database.get_withdraws(transition.slot)
         else:
-            raise Exception("Invalid transition type: {} ".format(
-                transition.transition_type))
+            raise Exception("Invalid transition type: {} ".format(transition.transition_type))
 
 
 class SnappInitializationReceiver(SnappEventListener):
     def save(self, event: Dict[str, Any], block_info: Dict[str, Any]) -> None:
 
         # Verify integrity of post data
-        assert event.keys() == {
-            'stateHash', 'maxTokens', 'maxAccounts'}, "Unexpected Event Keys"
+        assert event.keys() == {'stateHash', 'maxTokens', 'maxAccounts'}, "Unexpected Event Keys"
         state_hash = event['stateHash']
-        assert isinstance(state_hash, str) and len(
-            state_hash) == 64, "StateHash has unexpected values %s" % state_hash
-        assert isinstance(event['maxTokens'],
-                          int), "maxTokens has unexpected values"
-        assert isinstance(
-            event['maxAccounts'], int), "maxAccounts has unexpected values"
+        assert isinstance(state_hash, str) and len(state_hash) == 64, "StateHash has unexpected values %s" % state_hash
+        assert isinstance(event['maxTokens'], int), "maxTokens has unexpected values"
+        assert isinstance(event['maxAccounts'], int), "maxAccounts has unexpected values"
 
         try:
-            self.initialize_accounts(
-                event['maxTokens'], event['maxAccounts'], state_hash)
+            self.initialize_accounts(event['maxTokens'], event['maxAccounts'], state_hash)
         except AssertionError as exc:
             logging.critical(
                 "Failed to record SnappInitialization [{}] - {}".format(exc, event))
 
     def initialize_accounts(self, num_tokens: int, num_accounts: int, state_hash: str) -> None:
-        account_record = AccountRecord(
-            0, state_hash, [0 for _ in range(num_tokens * num_accounts)])
+        account_record = AccountRecord(0, state_hash, [0 for _ in range(num_tokens * num_accounts)])
         self.database.write_constants(num_tokens, num_accounts)
         self.database.write_account_state(account_record)
 
