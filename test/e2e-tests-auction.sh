@@ -18,9 +18,9 @@ truffle exec scripts/sell_order.js 6 3 1 20 280
 
 sleep 5
 
-# Test Listener: There are now 6 orders in auction slot 1 and sellAmount for accountId = 6 is 280
+# Test Listener: There are now 6 orders in auction slot 1 and sellAmount for accountId = 6 is 280000000000000000000
 mongo dfusion2 --eval "db.orders.find({'auctionId': ${EXPECTED_AUCTION}}).size()" | grep 6
-mongo dfusion2 --eval "db.orders.findOne({'auctionId': ${EXPECTED_AUCTION}, 'accountId': 6}).sellAmount" | grep 280
+mongo dfusion2 --eval "db.orders.findOne({'auctionId': ${EXPECTED_AUCTION}, 'accountId': 6}).sellAmount" | grep 280000000000000000000
 
 truffle exec scripts/mine_blocks.js 21
 
