@@ -40,6 +40,20 @@ impl RollingHashable for State {
   }
 }
 
+impl From<mongodb::ordered::OrderedDocument> for State {
+    fn from(document: mongodb::ordered::OrderedDocument) -> Self {
+        State {
+            state_hash: document.get_str("stateHash").unwrap().to_owned(),
+            state_index: document.get_i32("stateIndex").unwrap(),
+            balances: document.get_array("balances")
+                .unwrap()
+                .iter()
+                .map(|e| e.as_str().unwrap().parse().unwrap())
+                .collect(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Ord, PartialOrd, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PendingFlux {
@@ -72,8 +86,13 @@ impl PendingFlux {
 
 impl From<mongodb::ordered::OrderedDocument> for PendingFlux {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
-        let json = serde_json::to_string(&document).unwrap();
-        serde_json::from_str(&json).unwrap()
+        PendingFlux {
+            slot_index: document.get_i32("slotIndex").unwrap() as u32,
+            slot: document.get_i32("slot").unwrap() as u32,
+            account_id: document.get_i32("accountId").unwrap() as u16,
+            token_id: document.get_i32("tokenId").unwrap() as u8,
+            amount: document.get_str("amount").unwrap().parse().unwrap(),
+        }
     }
 }
 
@@ -85,7 +104,7 @@ impl RollingHashable for Vec<PendingFlux> {
 
 impl RootHashable for Vec<PendingFlux> {
     fn root_hash(&self, valid_items: &Vec<bool>) -> H256 {
-        assert!(self.len() == valid_items.len());
+        assert_eq!(self.len(), valid_items.len());
         let mut withdraw_bytes = vec![vec![0; 32]; 128];
         for (index, _) in valid_items.iter().enumerate().filter(|(_, valid)| **valid) {
             withdraw_bytes[index] = self[index].bytes();
@@ -120,8 +139,14 @@ pub struct Order {
 
 impl From<mongodb::ordered::OrderedDocument> for Order {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
-        let json = serde_json::to_string(&document).unwrap();
-        serde_json::from_str(&json).unwrap()
+        Order {
+            slot_index: document.get_i32("slotIndex").unwrap() as u32,
+            account_id: document.get_i32("accountId").unwrap() as u16,
+            buy_token: document.get_i32("buyToken").unwrap() as u8,
+            sell_token: document.get_i32("sellToken").unwrap() as u8,
+            buy_amount: document.get_str("buyAmount").unwrap().parse().unwrap(),
+            sell_amount: document.get_str("sellAmount").unwrap().parse().unwrap(),
+        }
     }
 }
 
