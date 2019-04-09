@@ -57,28 +57,28 @@ SAMPLE_ORDERS = [
     }
 ]
 
-TYPE_I_A = [
+TYPE_I_B = [
     {
         "auctionId": 1,
         "slotIndex": 3,
         "accountId": 1,
-        "sellAmount": 15,
-        "sellToken": 2,
         "buyToken": 1,
+        "sellToken": 2,
         "buyAmount": 180,
+        "sellAmount": 15,
     },
     {
         "auctionId": 1,
         "slotIndex": 4,
         "accountId": 1,
-        "sellAmount": 52,
-        "sellToken": 1,
         "buyToken": 2,
+        "sellToken": 1,
         "buyAmount": 4,
+        "sellAmount": 52,
     }
 ]
 
-TYPE_I_B = [
+TYPE_I_A = [
     {
         "auctionId": 1,
         "slotIndex": 4,
