@@ -43,8 +43,7 @@ class StateTransitionReceiver(SnappEventListener):
                 "Failed to record StateTransition [{}] - {}".format(exc, transition))
 
     def __update_accounts(self, transition: StateTransition) -> None:
-        balances = self.database.get_account_state(
-            transition.state_index - 1).balances.copy()
+        balances = self.database.get_account_state(transition.state_index - 1).balances.copy()
         num_tokens = self.database.get_num_tokens()
         for datum in self.__get_data_to_apply(transition):
             # Balances are stored as [b(a1, t1), b(a1, t2), ... b(a1, T), b(a2, t1), ...]

@@ -78,7 +78,7 @@ class MongoDbInterface(DatabaseInterface):
 
     def get_account_state(self, index: int) -> AccountRecord:
         record = self.db.accounts.find_one({'stateIndex': index})
-        return AccountRecord(record["stateIndex"], record["stateHash"], record["balances"])
+        return AccountRecord(record["stateIndex"], record["stateHash"], list(map(int, record["balances"])))
 
     def get_deposits(self, slot: int) -> List[Deposit]:
         return list(map(lambda d: Deposit.from_dictionary(d), self.db.deposits.find({'slot': slot})))
