@@ -5,18 +5,18 @@ use web3::types::U256;
 use crate::models::Order;
 use itertools::Itertools;
 use std::error::Error;
+use math::round::ceil;
 
 enum OrderPairType {
     TypeIa,
     TypeIb,
-    TypeII
+    TypeII,
 }
 
 impl Order {
     fn matches(&self, other: &Order) -> bool {
         self.opposite_tokens(other) && self.have_price_overlap(other)
     }
-
     fn match_compare(&self, other: &Order) -> Option<OrderPairType> {
         if self.matches(other) {
             if self.buy_amount <= other.sell_amount && self.sell_amount <= other.buy_amount {
@@ -29,18 +29,27 @@ impl Order {
         }
         None()
     }
-
     fn opposite_tokens(&self, other: &Order) -> bool {
         self.buy_token == other.sell_token && self.sell_token == other.buy_token
     }
-
     fn have_price_overlap(&self, other: &Order) -> bool {
         self.buy_amount * other.buy_amount <= other.sell_amount * self.sell_amount
     }
+    fn surplus(
+        &self,
+        prices: &Vec<u128>,
+        exec_buy_amount: u128,
+        exec_sell_amount: u128,
+    ) -> U256 {
+        let price = prices[self.buy_token];
+        let to_round = self.buy_amount * (exec_sell_amount / self.sell_amount);
+        U256::from((exec_buy_amount - ceil(to_round, 0) as u128) * price)
+    }
 }
 
+impl Solution {}
+
 pub fn solve(orders: &Vec<models::Order>, num_tokens: u8) -> Result<Solution, Error> {
-    // TODO - use mapping here
     let mut prices: Vec<u128> = vec![0; num_tokens as usize];
     let mut sell_amount: Vec<u128> = vec![0; orders.len()];
     let mut buy_amount: Vec<u128> = vec![0; orders.len()];
@@ -59,7 +68,7 @@ pub fn solve(orders: &Vec<models::Order>, num_tokens: u8) -> Result<Solution, Er
 
                     buy_amount[i] = x.buy_amount;
                     buy_amount[j] = x.sell_amount;
-                },
+                }
                 Some(OrderPairType::TypeIb) => {
                     prices[x.sell_token - 1] = y.sell_amount;
                     prices[y.sell_token - 1] = y.buy_amount;
@@ -69,7 +78,7 @@ pub fn solve(orders: &Vec<models::Order>, num_tokens: u8) -> Result<Solution, Er
 
                     buy_amount[i] = y.sell_amount;
                     buy_amount[j] = y.buy_amount;
-                },
+                }
                 Some(OrderPairType::TypeII) => {
                     prices[x.buy_token - 1] = y.sell_amount;
                     prices[y.buy_token - 1] = x.sell_amount;
@@ -79,18 +88,18 @@ pub fn solve(orders: &Vec<models::Order>, num_tokens: u8) -> Result<Solution, Er
 
                     buy_amount[i] = y.sell_amount;
                     buy_amount[j] = x.sell_amount;
-                },
+                }
                 None => None
             }
+
             Ok(Solution {
-                surplus: U256([0, 0, 0, 0]),
+                surplus: x.surplus(&prices, sell_amount[i], buy_amount[i]) + y.surplus(&prices, sell_amount[j], buy_amount[j]),
                 prices,
                 executed_sell_amounts: sell_amount,
                 executed_buy_amounts: buy_amount,
             })
         }
     }
-
     Ok(Solution {
         surplus: U256([0, 0, 0, 0]),
         prices,

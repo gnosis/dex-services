@@ -18,6 +18,8 @@ class Solution:
     def __init__(self, prices: Dict[int, int] = dict, amounts: Dict[Order, TradeExecution] = dict):
         self.prices: Dict[int, int] = prices
         self.amounts: Dict[Order, TradeExecution] = amounts
+
+        # computed
         self.orders: List[Order] = list(amounts.keys())
         self.surplus: Dict[Order, int] = {order: self._order_surplus(order) for order in self.orders}
         self.total_surplus: int = sum(self.surplus.values())
