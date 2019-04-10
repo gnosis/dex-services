@@ -1,33 +1,30 @@
-use crate::models;
+use web3::types::U256;
+
+use crate::models::{Order, TOKENS};
 
 use super::price_finder_interface::Solution;
-use web3::types::U256;
-use crate::models::Order;
-use itertools::Itertools;
-use std::error::Error;
-use math::round::ceil;
 
-enum OrderPairType {
+pub enum OrderPairType {
     TypeIa,
     TypeIb,
     TypeII,
 }
 
 impl Order {
-    fn matches(&self, other: &Order) -> bool {
+    fn attracts(&self, other: &Order) -> bool {
         self.opposite_tokens(other) && self.have_price_overlap(other)
     }
     fn match_compare(&self, other: &Order) -> Option<OrderPairType> {
-        if self.matches(other) {
+        if self.attracts(other) {
             if self.buy_amount <= other.sell_amount && self.sell_amount <= other.buy_amount {
-                Some(OrderPairType::TypeIa)
+                Some(OrderPairType::TypeIa);
             } else if self.buy_amount >= other.sell_amount && self.sell_amount >= other.buy_amount {
-                Some(OrderPairType::TypeIb)
+                Some(OrderPairType::TypeIb);
             } else {
-                Some(OrderPairType::TypeII)
+                Some(OrderPairType::TypeII);
             }
         }
-        None()
+        None
     }
     fn opposite_tokens(&self, other: &Order) -> bool {
         self.buy_token == other.sell_token && self.sell_token == other.buy_token
@@ -37,22 +34,24 @@ impl Order {
     }
     fn surplus(
         &self,
-        prices: &Vec<u128>,
+        price: u128,
         exec_buy_amount: u128,
         exec_sell_amount: u128,
     ) -> U256 {
-        let price = prices[self.buy_token];
-        let to_round = self.buy_amount * (exec_sell_amount / self.sell_amount);
-        U256::from((exec_buy_amount - ceil(to_round, 0) as u128) * price)
+        // TODO - Refer to Alex's Lemma
+        let res = (exec_buy_amount - (self.buy_amount * exec_sell_amount + self.sell_amount - 1) / self.sell_amount) * price;
+        U256::from_big_endian(&res.to_be_bytes())
     }
 }
 
-impl Solution {}
+pub fn solve(orders: &Vec<Order>) -> Solution {
+//    TODO - include account balances and make sure they agree.
+    let mut prices: Vec<u128> = vec![0; TOKENS as usize];
+    let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
+    let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
+    let mut total_surplus = U256::zero();
 
-pub fn solve(orders: &Vec<models::Order>, num_tokens: u8) -> Result<Solution, Error> {
-    let mut prices: Vec<u128> = vec![0; num_tokens as usize];
-    let mut sell_amount: Vec<u128> = vec![0; orders.len()];
-    let mut buy_amount: Vec<u128> = vec![0; orders.len()];
+    let mut found_flag = false;
 
     for (i, x) in orders.iter().enumerate() {
         for j in i + 1..orders.len() {
@@ -60,50 +59,51 @@ pub fn solve(orders: &Vec<models::Order>, num_tokens: u8) -> Result<Solution, Er
 
             match x.match_compare(y) {
                 Some(OrderPairType::TypeIa) => {
-                    prices[x.buy_token - 1] = x.sell_amount;
-                    prices[y.buy_token - 1] = x.buy_amount;
+                    prices[(x.buy_token - 1) as usize] = x.sell_amount;
+                    prices[(y.buy_token - 1) as usize] = x.buy_amount;
 
-                    sell_amount[i] = x.sell_amount;
-                    sell_amount[j] = x.buy_amount;
+                    exec_sell_amount[i] = x.sell_amount;
+                    exec_sell_amount[j] = x.buy_amount;
 
-                    buy_amount[i] = x.buy_amount;
-                    buy_amount[j] = x.sell_amount;
+                    exec_buy_amount[i] = x.buy_amount;
+                    exec_buy_amount[j] = x.sell_amount;
                 }
                 Some(OrderPairType::TypeIb) => {
-                    prices[x.sell_token - 1] = y.sell_amount;
-                    prices[y.sell_token - 1] = y.buy_amount;
+                    prices[(x.sell_token - 1) as usize] = y.sell_amount;
+                    prices[(y.sell_token - 1) as usize] = y.buy_amount;
 
-                    sell_amount[i] = y.buy_amount;
-                    sell_amount[j] = y.sell_amount;
+                    exec_sell_amount[i] = y.buy_amount;
+                    exec_sell_amount[j] = y.sell_amount;
 
-                    buy_amount[i] = y.sell_amount;
-                    buy_amount[j] = y.buy_amount;
+                    exec_buy_amount[i] = y.sell_amount;
+                    exec_buy_amount[j] = y.buy_amount;
                 }
                 Some(OrderPairType::TypeII) => {
-                    prices[x.buy_token - 1] = y.sell_amount;
-                    prices[y.buy_token - 1] = x.sell_amount;
+                    prices[(x.buy_token - 1) as usize] = y.sell_amount;
+                    prices[(y.buy_token - 1) as usize] = x.sell_amount;
 
-                    sell_amount[i] = x.sell_amount;
-                    sell_amount[j] = y.sell_amount;
+                    exec_sell_amount[i] = x.sell_amount;
+                    exec_sell_amount[j] = y.sell_amount;
 
-                    buy_amount[i] = y.sell_amount;
-                    buy_amount[j] = x.sell_amount;
+                    exec_buy_amount[i] = y.sell_amount;
+                    exec_buy_amount[j] = x.sell_amount;
                 }
-                None => None
+                None => continue
             }
-
-            Ok(Solution {
-                surplus: x.surplus(&prices, sell_amount[i], buy_amount[i]) + y.surplus(&prices, sell_amount[j], buy_amount[j]),
-                prices,
-                executed_sell_amounts: sell_amount,
-                executed_buy_amounts: buy_amount,
-            })
+            found_flag = true;
+            let x_surplus = x.surplus(prices[x.buy_token as usize], exec_buy_amount[i], exec_sell_amount[i]);
+            let y_surplus = y.surplus(prices[y.buy_token as usize], exec_buy_amount[j], exec_sell_amount[j]);
+            total_surplus = x_surplus.checked_add(y_surplus).unwrap();
+            break;
+        }
+        if found_flag == true {
+            break;
         }
     }
-    Ok(Solution {
-        surplus: U256([0, 0, 0, 0]),
+    Solution {
+        surplus: total_surplus,
         prices,
-        executed_sell_amounts: sell_amount,
-        executed_buy_amounts: buy_amount,
-    })
+        executed_sell_amounts: exec_sell_amount,
+        executed_buy_amounts: exec_buy_amount,
+    }
 }
