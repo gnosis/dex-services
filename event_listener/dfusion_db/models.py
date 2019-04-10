@@ -45,7 +45,7 @@ class Deposit(NamedTuple):
             int(data['slotIndex'])
         )
 
-    def to_dictionary(self):
+    def to_dictionary(self) -> Dict[str, Any]:
         return {
             "accountId": self.account_id,
             "tokenId": self.token_id,
@@ -94,7 +94,7 @@ class AccountRecord(NamedTuple):
     state_hash: str
     balances: List[int]
 
-    def to_dictionary(self):
+    def to_dictionary(self) -> Dict[str, Any]:
         return {
             "stateIndex": self.state_index,
             "stateHash": self.state_hash,
