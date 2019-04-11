@@ -4,11 +4,11 @@
 
 This is the software for the driver of a snapp. The driver is responsible for pushing new states into the snapp base. For this it gets all necessary information from the mongodb and the smart-contract and then starts to calculate new states and pushes them into the snapp. New states are calculated based on deposit, withdrawal and order inputs. 
 
-## Prerequisits:
+## Prerequisites:
 
 ## Setup:
 
-The driver interacts with ganache-cli (ethereum blockchain) and a Mongodb database. It is the easiest to simply use the docker compose of the parentfile to get everything running up and communicating. 
+The driver interacts with ganache-cli (ethereum blockchain) and a Mongodb database. It is the easiest to simply use the docker compose of the parent file to get everything running up and communicating. 
 
 In case, you want to do it manually, do the following steps:
 
@@ -18,7 +18,7 @@ Install mongodb("0.3.2") and run it using:
 sudo systemctl start mongodb
 
 ``` 
-- do not use any authentification for the database.
+- do not use any authentication for the database.
 
 
 Install rust & cargo ("1.31") - older versions would not be compatible with newest mongodb drivers.
