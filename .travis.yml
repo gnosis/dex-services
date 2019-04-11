@@ -1,4 +1,4 @@
-if: (branch = master) OR (branch = fixNoGanacheIssue) OR (type = pull_request) OR (tag IS present)
+if: (branch = master) OR (type = pull_request) OR (tag IS present)
 matrix:
   include:
     - language: rust
@@ -35,6 +35,7 @@ matrix:
         # driver/listener require compiled contracts
         - cd dex-contracts && truffle compile && cd -
         - docker-compose up -d ganache-cli driver listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
+        - sleep 2s
       script:
         - cd dex-contracts && truffle migrate && cd -
         - sh ./test/e2e-tests-deposit.sh
