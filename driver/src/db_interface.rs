@@ -86,11 +86,7 @@ impl DbInterface for MongoDB {
                 &format!("Expected to find a single unique state, found {}", docs.len()), ErrorKind::StateError)
             );
         }
-
-        let json: String = serde_json::to_string(&docs[0])?;
-
-        let deserialized: models::State = serde_json::from_str(&json)?;
-        Ok(deserialized)
+        Ok(models::State::from(docs.pop().unwrap()))
     }
 
     fn get_deposits_of_slot(

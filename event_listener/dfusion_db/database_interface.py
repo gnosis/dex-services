@@ -53,14 +53,7 @@ class MongoDbInterface(DatabaseInterface):
         self.logger = logging.getLogger(__name__)
 
     def write_deposit(self, deposit: Deposit) -> None:
-        event = {
-            "accountId": deposit.account_id,
-            "tokenId": deposit.token_id,
-            "amount": deposit.amount,
-            "slot": deposit.slot,
-            "slotIndex": deposit.slot_index
-        }
-        deposit_id = self.db.deposits.insert_one(event).inserted_id
+        deposit_id = self.db.deposits.insert_one(deposit.to_dictionary()).inserted_id
         self.logger.info(
             "Successfully included Deposit - {}".format(deposit_id))
 
@@ -72,15 +65,10 @@ class MongoDbInterface(DatabaseInterface):
     def update_withdraw(self, old: Withdraw, new: Withdraw) -> None:
         self.db.withdraws.replace_one({'_id': old.id}, new.to_dictionary())
         self.logger.info(
-            "Successfully included Withdraw - {}".format(old.id))
+            "Successfully updated Withdraw - {}".format(old.id))
 
     def write_account_state(self, account_record: AccountRecord) -> None:
-        record = {
-            "stateIndex": account_record.state_index,
-            "stateHash": account_record.state_hash,
-            "balances": account_record.balances
-        }
-        self.db.accounts.insert_one(record)
+        self.db.accounts.insert_one(account_record.to_dictionary())
 
     def write_constants(self, num_tokens: int, num_accounts: int) -> None:
         self.db.constants.insert_one({
@@ -90,7 +78,7 @@ class MongoDbInterface(DatabaseInterface):
 
     def get_account_state(self, index: int) -> AccountRecord:
         record = self.db.accounts.find_one({'stateIndex': index})
-        return AccountRecord(record["stateIndex"], record["stateHash"], record["balances"])
+        return AccountRecord(record["stateIndex"], record["stateHash"], list(map(int, record["balances"])))
 
     def get_deposits(self, slot: int) -> List[Deposit]:
         return list(map(lambda d: Deposit.from_dictionary(d), self.db.deposits.find({'slot': slot})))
