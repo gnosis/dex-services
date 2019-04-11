@@ -38,8 +38,8 @@ matrix:
       script:
         - cd dex-contracts && truffle migrate && cd -
         - sh ./test/e2e-tests-deposit.sh
-        - sh ./test/e2e-tests-auction.sh
         - sh ./test/e2e-tests-withdraw.sh
+        - sh ./test/e2e-tests-auction.sh
       after_script:
         - docker-compose logs
       before_cache:
