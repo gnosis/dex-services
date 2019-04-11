@@ -17,11 +17,11 @@ impl Order {
     fn match_compare(&self, other: &Order) -> Option<OrderPairType> {
         if self.attracts(other) {
             if self.buy_amount <= other.sell_amount && self.sell_amount <= other.buy_amount {
-                Some(OrderPairType::TypeIa);
+                return Some(OrderPairType::TypeIa);
             } else if self.buy_amount >= other.sell_amount && self.sell_amount >= other.buy_amount {
-                Some(OrderPairType::TypeIb);
+                return Some(OrderPairType::TypeIb);
             } else {
-                Some(OrderPairType::TypeII);
+                return Some(OrderPairType::TypeII);
             }
         }
         None
@@ -34,12 +34,12 @@ impl Order {
     }
     fn surplus(
         &self,
-        price: u128,
+        buy_price: u128,
         exec_buy_amount: u128,
         exec_sell_amount: u128,
     ) -> U256 {
-        // TODO - Refer to Alex's Lemma
-        let res = (exec_buy_amount - (self.buy_amount * exec_sell_amount + self.sell_amount - 1) / self.sell_amount) * price;
+        // TODO - Refer to Alex's Lemma [ceil(p/float(q)) == (p + q - 1) // q]
+        let res = (exec_buy_amount - (self.buy_amount * exec_sell_amount + self.sell_amount - 1) / self.sell_amount) * buy_price;
         U256::from_big_endian(&res.to_be_bytes())
     }
 }
