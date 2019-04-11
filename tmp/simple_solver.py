@@ -16,21 +16,30 @@ class TradeExecution(NamedTuple):
 class Solution:
 
     def __init__(self, prices: Dict[int, int] = dict, amounts: Dict[Order, TradeExecution] = dict):
-        self.prices: Dict[int, int] = prices
-        self.amounts: Dict[Order, TradeExecution] = amounts
+        self.prices: List[int] = [prices[i] for i in sorted(prices.keys())]
+        self.orders: List[Order] = list(amounts.keys())
+        self.buy_amounts: List[int] = [amounts[o].buy_amount for o in self.orders]
+        self.sell_amounts: List[int] = [amounts[o].sell_amount for o in self.orders]
 
         # computed
-        self.orders: List[Order] = list(amounts.keys())
-        self.surplus: Dict[Order, int] = {order: self._order_surplus(order) for order in self.orders}
-        self.total_surplus: int = sum(self.surplus.values())
+        self.surplus: List[int] = [self._order_surplus(order) for order in self.orders]
+        self.total_surplus: int = sum(self.surplus)
 
     def _order_surplus(self, order: Order):
-        price = self.prices[order.buy_token]
-        ex = self.amounts[order]
-        return (ex.buy_amount - ceil(order.buy_amount * (ex.sell_amount / order.sell_amount))) * price
+        price = self.prices[order.buy_token-1]
+        buy_amt = self.buy_amounts[self.orders.index(order)]
+        sell_amt = self.sell_amounts[self.orders.index(order)]
+        print(buy_amt, sell_amt)
+        return (buy_amt - ceil(order.buy_amount * (sell_amt / order.sell_amount))) * price
 
     def __str__(self):
-        return "Prices: {prices}\nAmounts: {amounts}\nTotal Surplus: {total_surplus}".format(**self.__dict__)
+        return "\n" \
+               "Orders:      {orders}\n" \
+               "Prices:      {prices}\n" \
+               "BuyAmounts:  {buy_amounts}\n" \
+               "SellAmounts: {sell_amounts}\n" \
+               "Surplus:     {surplus}\n" \
+               "TotalSurplus:{total_surplus}\n".format(**self.__dict__)
 
 
 def simple_solve(orders: List[Order], tokens: Set[int]) -> Solution:

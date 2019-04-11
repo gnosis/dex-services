@@ -46,7 +46,7 @@ impl Order {
 
 pub fn solve(orders: &Vec<Order>) -> Solution {
 //    TODO - include account balances and make sure they agree.
-    let mut prices: Vec<u128> = vec![0; TOKENS as usize];
+    let mut prices: Vec<u128> = vec![1; TOKENS as usize];
     let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
     let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
     let mut total_surplus = U256::zero();
@@ -106,4 +106,35 @@ pub fn solve(orders: &Vec<Order>) -> Solution {
         executed_sell_amounts: exec_sell_amount,
         executed_buy_amounts: exec_buy_amount,
     }
+}
+
+#[cfg(test)]
+pub mod tests {
+  use super::*;
+
+  #[test]
+  fn test_type_ia() {
+
+      let orders = vec![
+          Order {
+              slot_index: 0,
+              account_id: 1,
+              sell_token: 2,
+              buy_token: 1,
+              sell_amount: 180,
+              buy_amount: 15
+          },
+          Order {
+              slot_index: 0,
+              account_id: 2,
+              sell_token: 1,
+              buy_token: 2,
+              sell_amount: 52,
+              buy_amount: 4
+          }
+      ];
+      let res = solve(&orders);
+      println!("{:?}", res);
+      assert_eq!(U256::from(208), res.surplus);
+  }
 }
