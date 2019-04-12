@@ -37,7 +37,7 @@ pub fn run_driver_components(
     if let Err(e) = run_withdraw_listener(db, contract) {
         println!("Withdraw_driver error: {}", e);
     }
-    // TO BE ACTIVED, ONCE LISTNER CAN PROCESS APPLIED ORDERS
+    // TO BE ACTIVED, ONCE LISTNER CAN PROCESSES APPLIED ORDERS
     // if let Err(e) = run_order_listener(db, contract, price_finder) {
     //     println!("Order_driver error: {}", e);
     // }

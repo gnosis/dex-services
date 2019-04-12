@@ -110,13 +110,6 @@ impl DbInterface for MongoDB {
     ) -> Result<Vec<models::Order>, DriverError> {
         self.get_items_for_slot("auctionId", slot, "orders")
     }
-
-    // fn get_orders_of_slot(
-    //     &self,
-    //     slot: u32,
-    // ) -> Result<Vec<models::Order>, DriverError> {
-    //     self.get_items_for_slot(slot, "orders")
-    // }
 }
 
 #[cfg(test)]

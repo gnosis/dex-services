@@ -280,4 +280,14 @@ pub mod tests {
           amount: 10,
       }
   }
+  pub fn create_order_for_test(slot_index: u32) -> Order {
+      Order {
+          slot_index,
+          account_id: 1,
+          sell_token: 2,
+          buy_token: 3,
+          sell_amount: 4,
+          buy_amount: 5,
+      }
+  }
 }
