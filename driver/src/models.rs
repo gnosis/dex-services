@@ -143,17 +143,10 @@ pub struct Order {
 impl Serializable for Order {
     fn bytes(&self) -> Vec<u8> {
         let mut wtr = vec![0; 4];
-<<<<<<< HEAD
-        wtr.extend(self.buy_amount.bytes());
-        wtr.extend(self.sell_amount.bytes());
-        wtr.write_u8(self.sell_token).unwrap();
-        wtr.write_u8(self.buy_token).unwrap();
-=======
         wtr.extend(self.sell_amount.bytes());
         wtr.extend(self.buy_amount.bytes());
         wtr.write_u8(self.buy_token).unwrap();
         wtr.write_u8(self.sell_token).unwrap();
->>>>>>> master
         wtr.write_u16::<BigEndian>(self.account_id).unwrap();
         wtr
     }

@@ -42,7 +42,7 @@ fn token_id(token: u8) -> String {
 }
 
 fn account_id(account: u16) -> String {
-    format!("account{}", account)
+    format!("{}", account)
 }
 
 fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
