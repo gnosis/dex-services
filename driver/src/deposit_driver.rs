@@ -70,6 +70,7 @@ mod tests {
     use crate::models::tests::create_flux_for_test;
     use crate::db_interface::tests::DbInterfaceMock;
     use mock_it::Matcher::*;
+    use web3::types::U256;
 
     #[test]
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
