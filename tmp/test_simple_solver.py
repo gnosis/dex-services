@@ -8,19 +8,19 @@ class TestSimpleSolve(unittest.TestCase):
     def test_retreat_example(self):
         order_list = list(map(lambda t: Order.from_dictionary(t), SAMPLE_ORDERS))
         soln = simple_solve(order_list, TOKENS)
-        print(soln)
-
-    def test_type_II(self):
-        order_list = list(map(lambda t: Order.from_dictionary(t), TYPE_II_ORDERS))
-        soln = simple_solve(order_list, TOKENS)
-        print(soln)
+        self.assertEqual(soln.total_surplus, 16)
 
     def test_type_I_A(self):
         order_list = list(map(lambda t: Order.from_dictionary(t), TYPE_I_A))
         soln = simple_solve(order_list, TOKENS)
-        print(soln)
+        self.assertEqual(soln.total_surplus, 16)
 
     def test_type_I_B(self):
         order_list = list(map(lambda t: Order.from_dictionary(t), TYPE_I_B))
         soln = simple_solve(order_list, TOKENS)
-        print(soln)
+        self.assertEqual(soln.total_surplus, 16)
+
+    def test_type_II(self):
+        order_list = list(map(lambda t: Order.from_dictionary(t), TYPE_II_ORDERS))
+        soln = simple_solve(order_list, TOKENS)
+        self.assertEqual(soln.total_surplus, 116)

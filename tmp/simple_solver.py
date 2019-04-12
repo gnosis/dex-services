@@ -16,7 +16,7 @@ class TradeExecution(NamedTuple):
 class Solution:
 
     def __init__(self, prices: Dict[int, int] = dict, amounts: Dict[Order, TradeExecution] = dict):
-        self.prices: List[int] = [prices[i] for i in sorted(prices.keys())]
+        self.prices: Dict[int, int] = prices
         self.orders: List[Order] = list(amounts.keys())
         self.buy_amounts: List[int] = [amounts[o].buy_amount for o in self.orders]
         self.sell_amounts: List[int] = [amounts[o].sell_amount for o in self.orders]
@@ -26,11 +26,11 @@ class Solution:
         self.total_surplus: int = sum(self.surplus)
 
     def _order_surplus(self, order: Order):
-        price = self.prices[order.buy_token-1]
-        buy_amt = self.buy_amounts[self.orders.index(order)]
-        sell_amt = self.sell_amounts[self.orders.index(order)]
-        print(buy_amt, sell_amt)
-        return (buy_amt - ceil(order.buy_amount * (sell_amt / order.sell_amount))) * price
+
+        price = self.prices[order.buy_token]
+        exec_buy_amt = self.buy_amounts[self.orders.index(order)]
+        exec_sell_amt = self.sell_amounts[self.orders.index(order)]
+        return (exec_buy_amt - ceil(order.buy_amount * (exec_sell_amt / order.sell_amount))) * price
 
     def __str__(self):
         return "\n" \
@@ -57,18 +57,21 @@ def simple_solve(orders: List[Order], tokens: Set[int]) -> Solution:
         if all(match_conditions):
 
             if x.buy_amount <= y.sell_amount and x.sell_amount <= y.buy_amount:  # Type I-A (x <= y)
+                print("Type I-A")
                 res_price[x.buy_token] = x.sell_amount
                 res_price[y.buy_token] = x.buy_amount
                 res_vol[x] = TradeExecution(sell_amount=x.sell_amount, buy_amount=x.buy_amount)
                 res_vol[y] = TradeExecution(sell_amount=x.buy_amount, buy_amount=x.sell_amount)
 
             elif x.buy_amount >= y.sell_amount and x.sell_amount >= y.buy_amount:  # Type I-B (x >= y)
+                print("Type I-B")
                 res_price[x.sell_token] = y.sell_amount
                 res_price[y.sell_token] = y.buy_amount
                 res_vol[x] = TradeExecution(sell_amount=y.buy_amount, buy_amount=y.sell_amount)
                 res_vol[y] = TradeExecution(sell_amount=y.sell_amount, buy_amount=y.buy_amount)
 
             else:  # Type II
+                print("Type II")
                 res_price[x.buy_token] = y.sell_amount
                 res_price[y.buy_token] = x.sell_amount
                 res_vol[x] = TradeExecution(sell_amount=x.sell_amount, buy_amount=y.sell_amount)
