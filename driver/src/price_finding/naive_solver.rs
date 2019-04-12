@@ -39,13 +39,16 @@ impl Order {
         exec_sell_amount: u128,
     ) -> U256 {
         // TODO - Refer to Alex's Lemma [ceil(p/float(q)) == (p + q - 1) // q]
-        let res = (exec_buy_amount - (self.buy_amount * exec_sell_amount + self.sell_amount - 1) / self.sell_amount) * buy_price;
+        let relative_buy = (self.buy_amount * exec_sell_amount + self.sell_amount - 1) / self.sell_amount;
+        let res = (exec_buy_amount - relative_buy) * buy_price;
         U256::from_big_endian(&res.to_be_bytes())
     }
 }
 
 pub fn solve(orders: &Vec<Order>) -> Solution {
-//    TODO - include account balances and make sure they agree.
+    // TODO - include account balances and make sure they agree.
+
+    // Initialize trivial solution
     let mut prices: Vec<u128> = vec![1; 1 + TOKENS as usize];
     let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
     let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
@@ -92,8 +95,16 @@ pub fn solve(orders: &Vec<Order>) -> Solution {
                 None => continue
             }
             found_flag = true;
-            let x_surplus = x.surplus(prices[x.buy_token as usize], exec_buy_amount[i], exec_sell_amount[i]);
-            let y_surplus = y.surplus(prices[y.buy_token as usize], exec_buy_amount[j], exec_sell_amount[j]);
+            let x_surplus = x.surplus(
+                prices[x.buy_token as usize],
+                exec_buy_amount[i],
+                exec_sell_amount[i],
+            );
+            let y_surplus = y.surplus(
+                prices[y.buy_token as usize],
+                exec_buy_amount[j],
+                exec_sell_amount[j],
+            );
             total_surplus = x_surplus.checked_add(y_surplus).unwrap();
             break;
         }
