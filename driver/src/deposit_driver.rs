@@ -62,10 +62,7 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
         let deposits = db.get_deposits_of_slot(deposit_ind.low_u32())?;
         println!("Amount of deposits to be processed{:?}", deposits.len());
         //rehash deposits
-        let mut deposit_hash: H256 = H256::zero();
-        for pat in &deposits {
-            deposit_hash = pat.iter_hash(&mut deposit_hash)
-        }
+        let deposit_hash: H256 = deposits.rolling_hash();
 
         if deposit_hash != deposit_hash_pulled {
             return Err(DriverError::new(
