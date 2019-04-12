@@ -11,6 +11,6 @@ truffle exec scripts/mine_blocks.js 21
 
 sleep 5
 
-EXPECTED_HASH="73899d50b4ec5e351b4967e4c4e4a725e0fa3e8ab82d1bb6d3197f22e65f0c97"
-truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep $EXPECTED_HASH
-mongo dfusion2 --eval "db.accounts.findOne({'stateHash': '$EXPECTED_HASH'}).balances[62]" | grep 18
+EXPECTED_HASH="a5b2329a51ada3ce2114e2724264cbfd11f5cd63e41c3700c3f88358995b6153"
+truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep ${EXPECTED_HASH}
+mongo dfusion2 --eval "db.accounts.findOne({'stateHash': '${EXPECTED_HASH}'}).balances[62]" | grep 18000000000000000000

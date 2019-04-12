@@ -98,7 +98,7 @@ impl<T: Serializable> RollingHashable for Vec<T> {
 
 impl RootHashable for Vec<PendingFlux> {
     fn root_hash(&self, valid_items: &Vec<bool>) -> H256 {
-        assert!(self.len() == valid_items.len());
+        assert_eq!(self.len(), valid_items.len());
         let mut withdraw_bytes = vec![vec![0; 32]; 128];
         for (index, _) in valid_items.iter().enumerate().filter(|(_, valid)| **valid) {
             withdraw_bytes[index] = self[index].bytes();
@@ -163,10 +163,10 @@ impl From<mongodb::ordered::OrderedDocument> for Order {
         Order {
             slot_index: document.get_i32("slotIndex").unwrap() as u32,
             account_id: document.get_i32("accountId").unwrap() as u16,
-            sell_token: document.get_i32("sellToken").unwrap() as u8,
             buy_token: document.get_i32("buyToken").unwrap() as u8,
-            sell_amount: document.get_str("sellAmount").unwrap().parse().unwrap(),
+            sell_token: document.get_i32("sellToken").unwrap() as u8,
             buy_amount: document.get_str("buyAmount").unwrap().parse().unwrap(),
+            sell_amount: document.get_str("sellAmount").unwrap().parse().unwrap(),
         }
     }
 }

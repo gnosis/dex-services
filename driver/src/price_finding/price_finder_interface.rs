@@ -3,7 +3,7 @@ use crate::models;
 use super::error::PriceFindingError;
 use web3::types::U256;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Solution {
     pub surplus: U256,
     pub prices: Vec<u128>,

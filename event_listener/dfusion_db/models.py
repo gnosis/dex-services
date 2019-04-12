@@ -45,6 +45,15 @@ class Deposit(NamedTuple):
             int(data['slotIndex'])
         )
 
+    def to_dictionary(self) -> Dict[str, Any]:
+        return {
+            "accountId": self.account_id,
+            "tokenId": self.token_id,
+            "amount": str(self.amount),
+            "slot": self.slot,
+            "slotIndex": self.slot_index
+        }
+
 
 class Withdraw(NamedTuple):
     account_id: int
@@ -73,7 +82,7 @@ class Withdraw(NamedTuple):
         return {
             "accountId": self.account_id,
             "tokenId": self.token_id,
-            "amount": self.amount,
+            "amount": str(self.amount),
             "slot": self.slot,
             "slotIndex": self.slot_index,
             "valid": self.valid
@@ -84,6 +93,13 @@ class AccountRecord(NamedTuple):
     state_index: int
     state_hash: str
     balances: List[int]
+
+    def to_dictionary(self) -> Dict[str, Any]:
+        return {
+            "stateIndex": self.state_index,
+            "stateHash": self.state_hash,
+            "balances": list(map(str, self.balances))
+        }
 
 
 class Order(NamedTuple):
@@ -116,6 +132,6 @@ class Order(NamedTuple):
             "accountId": self.account_id,
             "buyToken": self.buy_token,
             "sellToken": self.sell_token,
-            "buyAmount": self.buy_amount,
-            "sellAmount": self.sell_amount
+            "buyAmount": str(self.buy_amount),
+            "sellAmount": str(self.sell_amount)
         }
