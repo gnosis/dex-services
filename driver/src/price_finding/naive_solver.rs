@@ -46,7 +46,7 @@ impl Order {
 
 pub fn solve(orders: &Vec<Order>) -> Solution {
 //    TODO - include account balances and make sure they agree.
-    let mut prices: Vec<u128> = vec![1; TOKENS as usize];
+    let mut prices: Vec<u128> = vec![1; 1 + TOKENS as usize];
     let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
     let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
     let mut total_surplus = U256::zero();
@@ -56,12 +56,11 @@ pub fn solve(orders: &Vec<Order>) -> Solution {
     for (i, x) in orders.iter().enumerate() {
         for j in i + 1..orders.len() {
             let y = &orders[j];
-
             match x.match_compare(y) {
                 Some(OrderPairType::TypeIa) => {
-                    prices[(x.buy_token - 1) as usize] = x.sell_amount;
-                    prices[(y.buy_token - 1) as usize] = x.buy_amount;
-
+                    prices[x.buy_token as usize] = x.sell_amount;
+                    prices[y.buy_token as usize] = x.buy_amount;
+                    println!("Type I-A;{:?}, {:?}", x, y);
                     exec_sell_amount[i] = x.sell_amount;
                     exec_sell_amount[j] = x.buy_amount;
 
@@ -69,8 +68,9 @@ pub fn solve(orders: &Vec<Order>) -> Solution {
                     exec_buy_amount[j] = x.sell_amount;
                 }
                 Some(OrderPairType::TypeIb) => {
-                    prices[(x.sell_token - 1) as usize] = y.sell_amount;
-                    prices[(y.sell_token - 1) as usize] = y.buy_amount;
+                    println!("Type I-B; {:?}, {:?}", x, y);
+                    prices[x.sell_token as usize] = y.sell_amount;
+                    prices[y.sell_token as usize] = y.buy_amount;
 
                     exec_sell_amount[i] = y.buy_amount;
                     exec_sell_amount[j] = y.sell_amount;
@@ -79,8 +79,9 @@ pub fn solve(orders: &Vec<Order>) -> Solution {
                     exec_buy_amount[j] = y.buy_amount;
                 }
                 Some(OrderPairType::TypeII) => {
-                    prices[(x.buy_token - 1) as usize] = y.sell_amount;
-                    prices[(y.buy_token - 1) as usize] = x.sell_amount;
+                    println!("Type II; {:?}, {:?}", x, y);
+                    prices[x.buy_token as usize] = y.sell_amount;
+                    prices[y.buy_token as usize] = x.sell_amount;
 
                     exec_sell_amount[i] = x.sell_amount;
                     exec_sell_amount[j] = y.sell_amount;
@@ -110,31 +111,137 @@ pub fn solve(orders: &Vec<Order>) -> Solution {
 
 #[cfg(test)]
 pub mod tests {
-  use super::*;
+    use super::*;
 
-  #[test]
-  fn test_type_ia() {
+    #[test]
+    fn test_type_ia() {
+        let orders = vec![
+            Order {
+                slot_index: 0,
+                account_id: 2,
+                sell_token: 1,
+                buy_token: 2,
+                sell_amount: 52,
+                buy_amount: 4,
+            },
+            Order {
+                slot_index: 0,
+                account_id: 1,
+                sell_token: 2,
+                buy_token: 1,
+                sell_amount: 15,
+                buy_amount: 180,
+            },
+        ];
+        let res = solve(&orders);
+        println!("{:?}", res);
+        assert_eq!(U256::from(16), res.surplus);
+    }
 
-      let orders = vec![
-          Order {
-              slot_index: 0,
-              account_id: 1,
-              sell_token: 2,
-              buy_token: 1,
-              sell_amount: 180,
-              buy_amount: 15
-          },
-          Order {
-              slot_index: 0,
-              account_id: 2,
-              sell_token: 1,
-              buy_token: 2,
-              sell_amount: 52,
-              buy_amount: 4
-          }
-      ];
-      let res = solve(&orders);
-      println!("{:?}", res);
-      assert_eq!(U256::from(208), res.surplus);
-  }
+    #[test]
+    fn test_type_ib() {
+        let orders = vec![
+            Order {
+                slot_index: 0,
+                account_id: 1,
+                sell_token: 2,
+                buy_token: 1,
+                sell_amount: 15,
+                buy_amount: 180,
+            },
+            Order {
+                slot_index: 0,
+                account_id: 2,
+                sell_token: 1,
+                buy_token: 2,
+                sell_amount: 52,
+                buy_amount: 4,
+            }
+        ];
+        let res = solve(&orders);
+        println!("{:?}", res);
+        assert_eq!(U256::from(16), res.surplus);
+    }
+
+    #[test]
+    fn test_type_ii() {
+        let orders = vec![
+            Order {
+                slot_index: 0,
+                account_id: 1,
+                sell_token: 2,
+                buy_token: 1,
+                sell_amount: 10,
+                buy_amount: 10,
+            },
+            Order {
+                slot_index: 0,
+                account_id: 2,
+                sell_token: 1,
+                buy_token: 2,
+                sell_amount: 16,
+                buy_amount: 8,
+            }
+        ];
+        let res = solve(&orders);
+        println!("{:?}", res);
+        assert_eq!(U256::from(116), res.surplus);
+    }
+
+    #[test]
+    fn test_retreth_example() {
+        let orders = vec![
+            Order {
+                slot_index: 0,
+                account_id: 1,
+                sell_token: 3,
+                buy_token: 2,
+                sell_amount: 12,
+                buy_amount: 12,
+            },
+            Order {
+                slot_index: 0,
+                account_id: 2,
+                sell_token: 2,
+                buy_token: 3,
+                sell_amount: 20,
+                buy_amount: 22,
+            },
+            Order {
+                slot_index: 0,
+                account_id: 3,
+                sell_token: 3,
+                buy_token: 1,
+                sell_amount: 10,
+                buy_amount: 150,
+            },
+            Order {
+                slot_index: 0,
+                account_id: 4,
+                sell_token: 2,
+                buy_token: 1,
+                sell_amount: 15,
+                buy_amount: 180,
+            },
+            Order {
+                slot_index: 0,
+                account_id: 5,
+                sell_token: 1,
+                buy_token: 2,
+                sell_amount: 52,
+                buy_amount: 4,
+            },
+            Order {
+                slot_index: 0,
+                account_id: 6,
+                sell_token: 1,
+                buy_token: 3,
+                sell_amount: 280,
+                buy_amount: 20,
+            }
+        ];
+        let res = solve(&orders);
+        println!("{:?}", res);
+        assert_eq!(U256::from(16), res.surplus);
+    }
 }

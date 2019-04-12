@@ -83,10 +83,10 @@ TYPE_I_A = [
         "auctionId": 1,
         "slotIndex": 4,
         "accountId": 1,
-        "sellAmount": 52,
-        "sellToken": 1,
         "buyToken": 2,
+        "sellToken": 1,
         "buyAmount": 4,
+        "sellAmount": 52,
     },
     {
         "auctionId": 1,
