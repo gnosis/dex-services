@@ -142,7 +142,7 @@ class AuctionSettlement(NamedTuple):
     auction_id: int
     state_index: int
     state_hash: str
-    prices_and_volumes: bytes
+    prices_and_volumes: str  # Stored as Hex String
 
     @classmethod
     def from_dictionary(cls, data: Dict[str, Any]) -> "AuctionSettlement":
@@ -152,7 +152,7 @@ class AuctionSettlement(NamedTuple):
             int(data['auctionId']),
             int(data['slotIndex']),
             str(data['stateHash']),
-            bytes(data['pricesAndVolumes']),
+            str(data['pricesAndVolumes']),
         )
 
     def to_dictionary(self) -> Dict[str, Any]:
@@ -166,10 +166,16 @@ class AuctionSettlement(NamedTuple):
     def serialize_solution(self) -> Dict[str, List[int]]:
         """Transform Byte Code for prices_and_volumes into Prices & TradeExecution objects"""
         logging.info("Serializing Auction Results (from bytecode)")
+        tmp = self.prices_and_volumes[2:]
+        hex_str_array = [tmp[i] + tmp[i+1] for i in range(0,len(tmp), 2)]
+        byte_array = list(map(lambda t: int(t, 16), hex_str_array))
 
-        logging.warning("serialize_solution not yet implemented, returning empty results")
+        prices, volumes = byte_array[:30], byte_array[30:]
+        buy_amounts = volumes[0::2]   # Even elements
+        sell_amounts = volumes[1::2]  # Odd elements
+
         return {
-            "prices": [],
-            "exec_buy_amounts": [],
-            "exec_sell_amounts": [],
+            "prices": prices,
+            "exec_buy_amounts": buy_amounts,
+            "exec_sell_amounts": sell_amounts,
         }
