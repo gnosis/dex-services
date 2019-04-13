@@ -4,8 +4,9 @@ use crate::models::{RollingHashable, RootHashable};
 use crate::db_interface::DbInterface;
 use crate::contract::SnappContract;
 use crate::error::{DriverError, ErrorKind};
+use crate::util;
 
-use web3::types::{H256, U256};
+use web3::types::H256;
 
 fn apply_withdraws(
     state: &models::State,
@@ -24,30 +25,6 @@ fn apply_withdraws(
     (state, valid_withdraws)
 }
 
-fn find_first_unapplied_slot<C>(upper_bound: U256, contract: &C) -> Result<U256, DriverError>
-    where C: SnappContract
-{
-    let mut slot = upper_bound;
-    while slot != U256::zero() {
-        if contract.has_withdraw_slot_been_applied(slot - 1)? {
-            return Ok(slot)
-        }
-        slot = slot - 1;
-    }
-    Ok(U256::zero())
-}
-
-fn can_process<C>(slot: U256, contract: &C) -> Result<bool, DriverError> 
-    where C: SnappContract
-{
-    let slot_creation_block = contract.creation_block_for_withdraw_slot(slot)?;
-    if slot_creation_block == U256::zero() {
-        return Ok( false );
-    }
-    let current_block = contract.get_current_block_number()?;
-    Ok(slot_creation_block + 20 < current_block)
-}
-
 pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), DriverError> 
     where   D: DbInterface,
             C: SnappContract
@@ -55,10 +32,15 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
     let withdraw_slot = contract.get_current_withdraw_slot()?;
 
     println!("Current top withdraw_slot is {:?}", withdraw_slot);
-    let slot = find_first_unapplied_slot(withdraw_slot + 1, contract)?;
+    let slot = util::find_first_unapplied_slot(
+        withdraw_slot + 1, 
+        Box::new(&|i| contract.has_withdraw_slot_been_applied(i))
+    )?;
     if slot <= withdraw_slot {
         println!("Highest unprocessed withdraw_slot is {:?}", slot);
-        if can_process(slot, contract)? {
+        if util::can_process(slot, contract,
+            Box::new(&|i| contract.creation_block_for_withdraw_slot(i))
+        )? {
             println!("Processing withdraw_slot {:?}", slot);
             let state_root = contract.get_current_state_root()?;
             let contract_withdraw_hash = contract.withdraw_hash_for_slot(slot)?;
@@ -94,6 +76,7 @@ mod tests {
     use crate::models::tests::create_flux_for_test;
     use crate::db_interface::tests::DbInterfaceMock;
     use mock_it::Matcher::*;
+    use web3::types::U256;
 
     #[test]
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {

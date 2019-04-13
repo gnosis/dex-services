@@ -14,6 +14,10 @@ pub trait RootHashable {
     fn root_hash(&self, valid_items: &Vec<bool>) -> H256;
 }
 
+pub trait Serializable {
+    fn bytes(&self) -> Vec<u8>;
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct State {
@@ -64,18 +68,8 @@ pub struct PendingFlux {
   pub amount: u128,
 }
 
-impl PendingFlux {
-  // calculates iterative hash of deposits
-  pub fn iter_hash(&self, prev_hash: &H256) -> H256 {
-    let mut hasher = Sha256::new();
-    hasher.input(prev_hash);
-    hasher.input(self.bytes());
-    let result = hasher.result();
-    let b: Vec<u8> = result.to_vec();
-    H256::from(b.as_slice())
-  }
-
-  pub fn bytes(&self) -> Vec<u8> {
+impl Serializable for PendingFlux {
+  fn bytes(&self) -> Vec<u8> {
     let mut wtr = vec![0; 13];
     wtr.write_u16::<BigEndian>(self.account_id).unwrap();
     wtr.write_u8(self.token_id).unwrap();
@@ -96,9 +90,9 @@ impl From<mongodb::ordered::OrderedDocument> for PendingFlux {
     }
 }
 
-impl RollingHashable for Vec<PendingFlux> {
+impl<T: Serializable> RollingHashable for Vec<T> {
     fn rolling_hash(&self) -> H256 {
-        self.iter().fold(H256::zero(), |acc, w| w.iter_hash(&acc))
+        self.iter().fold(H256::zero(), |acc, w| iter_hash(w, &acc))
     }
 }
 
@@ -126,7 +120,16 @@ fn merkleize(leafs: Vec<Vec<u8>>) -> H256 {
     merkleize(next_layer)
 }
 
-#[derive(Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd, Debug)]
+fn iter_hash<T: Serializable>(item: &T, prev_hash: &H256) -> H256 {
+    let mut hasher = Sha256::new();
+    hasher.input(prev_hash);
+    hasher.input(item.bytes());
+    let result = hasher.result();
+    let b: Vec<u8> = result.to_vec();
+    H256::from(b.as_slice())
+  }
+
+#[derive(Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct Order {
     pub slot_index: u32,
@@ -135,6 +138,24 @@ pub struct Order {
     pub buy_token: u8,
     pub sell_amount: u128,
     pub buy_amount: u128,
+}
+
+impl Serializable for Order {
+    fn bytes(&self) -> Vec<u8> {
+        let mut wtr = vec![0; 4];
+        wtr.extend(self.sell_amount.bytes());
+        wtr.extend(self.buy_amount.bytes());
+        wtr.write_u8(self.buy_token).unwrap();
+        wtr.write_u8(self.sell_token).unwrap();
+        wtr.write_u16::<BigEndian>(self.account_id).unwrap();
+        wtr
+    }
+}
+
+impl Serializable for u128 {
+    fn bytes(&self) -> Vec<u8> {
+        self.to_be_bytes()[4..].to_vec()
+    }
 }
 
 impl From<mongodb::ordered::OrderedDocument> for Order {
@@ -228,6 +249,25 @@ pub mod tests {
     assert_eq!(
       state.rolling_hash(),
       H256::from_str(&state.state_hash).unwrap()
+    );
+  }
+
+  #[test]
+  fn test_order_rolling_hash() {
+    let order = Order {
+      slot_index: 0,
+      account_id: 1,
+      sell_token: 2,
+      buy_token: 3,
+      sell_amount: 4,
+      buy_amount: 5,
+    };
+
+    assert_eq!(
+    vec![order].rolling_hash(),
+    H256::from_str(
+      "e1be57cc443a06d5b4e8c860eed65583e915cce10762f6f04a370326c187879b"
+      ).unwrap()
     );
   }
 

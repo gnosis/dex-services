@@ -227,14 +227,14 @@ pub mod tests {
             sell_amount: 100,
             buy_amount: 200,
         };
-        let result = serialize_order(&order, "some id");
+        let result = serialize_order(&order, "1");
         let expected = json!({
             "sellToken": "token2",
             "buyToken": "token3",
             "sellAmount": "100",
             "buyAmount": "200",
             "accountID": "1",
-            "ID": "some id"
+            "ID": "1"
         });
         assert_eq!(result, expected);
     }

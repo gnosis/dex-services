@@ -21,6 +21,7 @@ pub mod price_finding;
 mod deposit_driver;
 pub mod models;
 mod withdraw_driver;
+mod util;
 
 pub fn run_driver_components(db: &MongoDB, contract: &SnappContractImpl) -> () {
     if let Err(e) = run_deposit_listener(db, contract) {
