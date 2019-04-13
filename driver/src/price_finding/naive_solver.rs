@@ -63,7 +63,6 @@ pub fn solve(orders: &Vec<Order>) -> Solution {
                 Some(OrderPairType::TypeIa) => {
                     prices[x.buy_token as usize] = x.sell_amount;
                     prices[y.buy_token as usize] = x.buy_amount;
-                    println!("Type I-A;{:?}, {:?}", x, y);
                     exec_sell_amount[i] = x.sell_amount;
                     exec_sell_amount[j] = x.buy_amount;
 
@@ -71,7 +70,6 @@ pub fn solve(orders: &Vec<Order>) -> Solution {
                     exec_buy_amount[j] = x.sell_amount;
                 }
                 Some(OrderPairType::TypeIb) => {
-                    println!("Type I-B; {:?}, {:?}", x, y);
                     prices[x.sell_token as usize] = y.sell_amount;
                     prices[y.sell_token as usize] = y.buy_amount;
 
@@ -82,7 +80,6 @@ pub fn solve(orders: &Vec<Order>) -> Solution {
                     exec_buy_amount[j] = y.buy_amount;
                 }
                 Some(OrderPairType::TypeII) => {
-                    println!("Type II; {:?}, {:?}", x, y);
                     prices[x.buy_token as usize] = y.sell_amount;
                     prices[y.buy_token as usize] = x.sell_amount;
 
@@ -145,7 +142,6 @@ pub mod tests {
             },
         ];
         let res = solve(&orders);
-        println!("{:?}", res);
         assert_eq!(U256::from(16), res.surplus);
     }
 
@@ -170,7 +166,6 @@ pub mod tests {
             }
         ];
         let res = solve(&orders);
-        println!("{:?}", res);
         assert_eq!(U256::from(16), res.surplus);
     }
 
@@ -195,7 +190,6 @@ pub mod tests {
             }
         ];
         let res = solve(&orders);
-        println!("{:?}", res);
         assert_eq!(U256::from(116), res.surplus);
     }
 
@@ -252,7 +246,6 @@ pub mod tests {
             }
         ];
         let res = solve(&orders);
-        println!("{:?}", res);
         assert_eq!(U256::from(16), res.surplus);
     }
 }
