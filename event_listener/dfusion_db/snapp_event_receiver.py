@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Union, List, Optional
 
 from .database_interface import DatabaseInterface, MongoDbInterface
-from .models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord, Order
+from .models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord, Order, AuctionSettlement
 
 
 class SnappEventListener(ABC):
@@ -132,4 +132,36 @@ class OrderReceiver(SnappEventListener):
             self.database.write_order(order)
         except AssertionError as exc:
             logging.critical(
-                "Failed to record Deposit [{}] - {}".format(exc, order))
+                "Failed to record Order [{}] - {}".format(exc, order))
+
+
+class AuctionSettlementReceiver(SnappEventListener):
+    def save(self, event: Dict[str, Any], block_info: Dict[str, Any]) -> None:
+        self.save_parsed(AuctionSettlement.from_dictionary(event))
+
+    def save_parsed(self, settlement: AuctionSettlement) -> None:
+        try:
+            self.__update_accounts(settlement)
+        except AssertionError as exc:
+            logging.critical(
+                "Failed to record Settlement [{}] - {}".format(exc, settlement))
+
+    def __update_accounts(self, settlement: AuctionSettlement) -> None:
+        balances = self.database.get_account_state(settlement.state_index - 1).balances.copy()
+        num_tokens = self.database.get_num_tokens()
+
+        # Apply the balance updates according to settlement.prices_and_volumes
+        # Should we bother to fetch the corresponding orders?
+        # We can assume the solution took balances into account?
+
+        logging.error()
+
+        # for datum in self.__get_data_to_apply(settlement):
+        #     # Balances are stored as [b(a1, t1), b(a1, t2), ... b(a1, T), b(a2, t1), ...]
+        #     index = num_tokens * (datum.account_id - 1) + (datum.token_id - 1)
+
+    def __get_data_to_apply(self, settlement: AuctionSettlement) -> Union[List[Withdraw], List[Deposit]]:
+        orders = self.database.get_orders(settlement.auction_id)
+        solution = settlement.extract_solution()
+        logging.info()
+

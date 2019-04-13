@@ -1,3 +1,4 @@
+import logging
 from enum import Enum
 from typing import NamedTuple, Dict, Any, List, Optional
 
@@ -36,7 +37,7 @@ class Deposit(NamedTuple):
     @classmethod
     def from_dictionary(cls, data: Dict[str, Any]) -> "Deposit":
         event_fields = ('accountId', 'tokenId', 'amount', 'slot', 'slotIndex')
-        assert all(k in data for k in event_fields), "Unexpected Event Keys"
+        assert all(k in data for k in event_fields), "Unexpected Event Keys: got {}".format(data.keys())
         return Deposit(
             int(data['accountId']),
             int(data['tokenId']),
@@ -67,7 +68,7 @@ class Withdraw(NamedTuple):
     @classmethod
     def from_dictionary(cls, data: Dict[str, Any]) -> "Withdraw":
         event_fields = ('accountId', 'tokenId', 'amount', 'slot', 'slotIndex')
-        assert all(k in data for k in event_fields), "Unexpected Event Keys"
+        assert all(k in data for k in event_fields), "Unexpected Event Keys: got {}".format(data.keys())
         return Withdraw(
             int(data['accountId']),
             int(data['tokenId']),
@@ -114,7 +115,7 @@ class Order(NamedTuple):
     @classmethod
     def from_dictionary(cls, data: Dict[str, Any]) -> "Order":
         event_fields = ('auctionId', 'slotIndex', 'accountId', 'buyToken', 'sellToken', 'buyAmount', 'sellAmount')
-        assert all(k in data for k in event_fields), "Unexpected Event Keys"
+        assert all(k in data for k in event_fields), "Unexpected Event Keys: got {}".format(data.keys())
         return Order(
             int(data['auctionId']),
             int(data['slotIndex']),
@@ -134,4 +135,41 @@ class Order(NamedTuple):
             "sellToken": self.sell_token,
             "buyAmount": str(self.buy_amount),
             "sellAmount": str(self.sell_amount)
+        }
+
+
+class AuctionSettlement(NamedTuple):
+    auction_id: int
+    state_index: int
+    state_hash: str
+    prices_and_volumes: bytes
+
+    @classmethod
+    def from_dictionary(cls, data: Dict[str, Any]) -> "AuctionSettlement":
+        event_fields = ('auctionId', 'stateIndex', 'stateHash', 'pricesAndVolumes')
+        assert all(k in data for k in event_fields), "Unexpected Event Keys: got {}".format(data.keys())
+        return AuctionSettlement(
+            int(data['auctionId']),
+            int(data['slotIndex']),
+            str(data['stateHash']),
+            bytes(data['pricesAndVolumes']),
+        )
+
+    def to_dictionary(self) -> Dict[str, Any]:
+        return {
+            "auctionId": self.auction_id,
+            "slotIndex": self.state_index,
+            "stateHash": self.state_hash,
+            "pricesAndVolumes": self.prices_and_volumes,
+        }
+
+    def serialize_solution(self) -> Dict[str, List[int]]:
+        """Transform Byte Code for prices_and_volumes into Prices & TradeExecution objects"""
+        logging.info("Serializing Auction Results (from bytecode)")
+
+        logging.warning("serialize_solution not yet implemented, returning empty results")
+        return {
+            "prices": [],
+            "exec_buy_amounts": [],
+            "exec_sell_amounts": [],
         }
