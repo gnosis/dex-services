@@ -1,4 +1,4 @@
-FROM python:3.6-slim-stretch
+FROM gnosispm/dfusion-event-listener-base
 
 ENV PYTHONUNBUFFERED 1
 WORKDIR /app
@@ -7,9 +7,6 @@ WORKDIR /app
 ADD README.md .cache/pip_cache.tar.gz* /usr/local/lib/python3.6/
 
 COPY event_listener/requirements.txt event_listener/
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential libssl-dev \
-    && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir -r event_listener/requirements.txt 
+RUN pip install --no-cache-dir -r event_listener/requirements.txt 
 
 ENV PYTHONPATH=/app/
