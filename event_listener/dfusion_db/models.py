@@ -163,7 +163,7 @@ class AuctionSettlement(NamedTuple):
             "pricesAndVolumes": self.prices_and_volumes,
         }
 
-    def serialize_solution(self) -> Dict[str, List[int]]:
+    def serialize_solution(self) -> "AuctionResults":
         """Transform Byte Code for prices_and_volumes into Prices & TradeExecution objects"""
         logging.info("Serializing Auction Results (from bytecode)")
         tmp = self.prices_and_volumes[2:]
@@ -174,8 +174,24 @@ class AuctionSettlement(NamedTuple):
         buy_amounts = volumes[0::2]  # Even elements
         sell_amounts = volumes[1::2]  # Odd elements
 
-        return {
+        return AuctionResults.from_dictionary({
             "prices": prices,
-            "exec_buy_amounts": buy_amounts,
-            "exec_sell_amounts": sell_amounts,
-        }
+            "buy_amounts": buy_amounts,
+            "sell_amounts": sell_amounts,
+        })
+
+
+class AuctionResults(NamedTuple):
+    prices: List[int]
+    buy_amounts: List[int]
+    sell_amounts: List[int]
+
+    @classmethod
+    def from_dictionary(cls, data: Dict[str, List[int]]) -> "AuctionResults":
+        event_fields = ('prices', 'buy_amounts', 'sell_amounts')
+        assert all(k in data for k in event_fields), "Unexpected keys. Got {}".format(data.keys())
+        return AuctionResults(
+            data["prices"],
+            data["exec_buy_amounts"],
+            data["exec_sell_amounts"]
+        )
