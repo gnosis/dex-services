@@ -1,5 +1,5 @@
 import unittest
-from ..models import Deposit, Withdraw, Order
+from ..models import Deposit, Withdraw, Order, AuctionResults, AccountRecord, AuctionSettlement, StateTransition
 
 
 class DepositTest(unittest.TestCase):
@@ -11,11 +11,11 @@ class DepositTest(unittest.TestCase):
             "slot": 4,
             "slotIndex": 5
         })
-        assert deposit.account_id == 1
-        assert deposit.token_id == 2
-        assert deposit.amount == 3
-        assert deposit.slot == 4
-        assert deposit.slot_index == 5
+        self.assertEqual(1, deposit.account_id)
+        self.assertEqual(2, deposit.token_id)
+        self.assertEqual(3, deposit.amount)
+        self.assertEqual(4, deposit.slot)
+        self.assertEqual(5, deposit.slot_index)
 
     def test_throws_with_missing_key(self) -> None:
         with self.assertRaises(AssertionError):
@@ -46,11 +46,11 @@ class WithdrawTest(unittest.TestCase):
             "slot": 4,
             "slotIndex": 5
         })
-        assert withdraw.account_id == 1
-        assert withdraw.token_id == 2
-        assert withdraw.amount == 3
-        assert withdraw.slot == 4
-        assert withdraw.slot_index == 5
+        self.assertEqual(1, withdraw.account_id)
+        self.assertEqual(2, withdraw.token_id)
+        self.assertEqual(3, withdraw.amount)
+        self.assertEqual(4, withdraw.slot)
+        self.assertEqual(5, withdraw.slot_index)
 
     def test_throws_with_missing_key(self) -> None:
         with self.assertRaises(AssertionError):
@@ -114,3 +114,4 @@ class OrderTest(unittest.TestCase):
                 "buyAmount": 6,
                 "sellAmount": 7
             })
+
