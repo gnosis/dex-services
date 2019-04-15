@@ -30,7 +30,7 @@ services:
       driver: "none"
 
   truffle:
-    command: ./run.sh
+    command: /app/run.sh
     build:
       context: .
       dockerfile: docker/truffle/Dockerfile
