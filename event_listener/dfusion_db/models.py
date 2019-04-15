@@ -6,7 +6,6 @@ from typing import NamedTuple, Dict, Any, List, Optional
 class TransitionType(Enum):
     Deposit = 0
     Withdraw = 1
-    Auction = 2
 
 
 class StateTransition(NamedTuple):
