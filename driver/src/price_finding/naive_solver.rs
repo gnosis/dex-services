@@ -17,7 +17,7 @@ impl Order {
     }
 
     fn sufficient_seller_funds(&self, state: &State) -> bool {
-        let balance_index = self.sell_token as usize + (self.account_id - 1) as usize * TOKENS as usize;
+        let balance_index = (self.sell_token - 1) as usize + (self.account_id - 1) as usize * TOKENS as usize;
         state.balances[balance_index] >= self.sell_amount
     }
 
