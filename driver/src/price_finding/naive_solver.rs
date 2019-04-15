@@ -6,9 +6,9 @@ use super::price_finder_interface::{PriceFinding, Solution};
 use crate::price_finding::error::PriceFindingError;
 
 pub enum OrderPairType {
-    TypeIa,
-    TypeIb,
-    TypeII,
+    LhsCompletelyFulfilled,
+    RhsCompletelyFulfilled,
+    BothPartiallyFulfilled,
 }
 
 impl Order {
@@ -24,11 +24,11 @@ impl Order {
     fn match_compare(&self, other: &Order, state: &State) -> Option<OrderPairType> {
         if self.sufficient_seller_funds(&state) && other.sufficient_seller_funds(&state) && self.attracts(other) {
             if self.buy_amount <= other.sell_amount && self.sell_amount <= other.buy_amount {
-                return Some(OrderPairType::TypeIa);
+                return Some(OrderPairType::LhsCompletelyFulfilled);
             } else if self.buy_amount >= other.sell_amount && self.sell_amount >= other.buy_amount {
-                return Some(OrderPairType::TypeIb);
+                return Some(OrderPairType::RhsCompletelyFulfilled);
             } else {
-                return Some(OrderPairType::TypeII);
+                return Some(OrderPairType::BothPartiallyFulfilled);
             }
         }
         None
@@ -72,7 +72,7 @@ impl PriceFinding for NaiveSolver {
             for j in i + 1..orders.len() {
                 let y = &orders[j];
                 match x.match_compare(y, &state) {
-                    Some(OrderPairType::TypeIa) => {
+                    Some(OrderPairType::LhsCompletelyFulfilled) => {
                         prices[x.buy_token as usize] = x.sell_amount;
                         prices[y.buy_token as usize] = x.buy_amount;
                         exec_sell_amount[i] = x.sell_amount;
@@ -81,7 +81,7 @@ impl PriceFinding for NaiveSolver {
                         exec_buy_amount[i] = x.buy_amount;
                         exec_buy_amount[j] = x.sell_amount;
                     }
-                    Some(OrderPairType::TypeIb) => {
+                    Some(OrderPairType::RhsCompletelyFulfilled) => {
                         prices[x.sell_token as usize] = y.sell_amount;
                         prices[y.sell_token as usize] = y.buy_amount;
 
@@ -91,7 +91,7 @@ impl PriceFinding for NaiveSolver {
                         exec_buy_amount[i] = y.sell_amount;
                         exec_buy_amount[j] = y.buy_amount;
                     }
-                    Some(OrderPairType::TypeII) => {
+                    Some(OrderPairType::BothPartiallyFulfilled) => {
                         prices[x.buy_token as usize] = y.sell_amount;
                         prices[y.buy_token as usize] = x.sell_amount;
 
@@ -309,6 +309,36 @@ pub mod tests {
                 sell_token: 2,
                 buy_token: 1,
                 sell_amount: 15,
+                buy_amount: 180,
+            },
+        ];
+        let mut solver = NaiveSolver{};
+        let res = solver.find_prices(&orders, &state);
+        assert_eq!(U256::from(0), res.unwrap().surplus);
+    }
+
+    #[test]
+    fn test_no_matches() {
+        let state = State {
+            state_hash: "test".to_string(),
+            state_index: 0,
+            balances: vec![200; (TOKENS * 2) as usize]
+        };
+        let orders = vec![
+            Order {
+                slot_index: 0,
+                account_id: 2,
+                sell_token: 1,
+                buy_token: 2,
+                sell_amount: 52,
+                buy_amount: 4,
+            },
+            Order {
+                slot_index: 1,
+                account_id: 1,
+                sell_token: 2,
+                buy_token: 1,
+                sell_amount: 10,
                 buy_amount: 180,
             },
         ];
