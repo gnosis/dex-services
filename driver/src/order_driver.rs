@@ -66,7 +66,7 @@ pub fn run_order_listener<D, C, PF>(
             let new_state_root = H256::from(state.rolling_hash());
             
             println!("New State_hash is {}, Solution: {:?}", new_state_root, solution);
-            contract.apply_auction(slot, state_root, new_state_root, order_hash, solution.bytes(), solution.bytes())?;
+            contract.apply_auction(slot, state_root, new_state_root, order_hash, solution.bytes())?;
             return Ok(true);
         } else {
             println!("Need to wait before processing auction slot {:?}", slot);
@@ -151,7 +151,7 @@ mod tests {
         contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
         contract.order_hash_for_slot.given(slot).will_return(Ok(orders.rolling_hash()));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
-        contract.apply_auction.given((slot, Any, Any, Any, Any, Any)).will_return(Ok(()));
+        contract.apply_auction.given((slot, Any, Any, Any, Any)).will_return(Ok(()));
 
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(1).will_return(Ok(orders.clone()));
@@ -216,7 +216,7 @@ mod tests {
         contract.order_hash_for_slot.given(slot-1).will_return(Ok(second_orders.rolling_hash()));
 
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
-        contract.apply_auction.given((slot - 1, Any, Any, Any, Any, Any)).will_return(Ok(()));
+        contract.apply_auction.given((slot - 1, Any, Any, Any, Any)).will_return(Ok(()));
 
         let state = models::State {
             state_hash: format!("{:x}", state_hash),
