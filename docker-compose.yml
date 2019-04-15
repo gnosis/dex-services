@@ -7,6 +7,8 @@ services:
     restart: always  
     ports:
       - "27017:27017"
+    logging:
+      driver: "none"
   
   mongoclient:
     image: mongoclient/mongoclient:2.2.0
@@ -16,12 +18,16 @@ services:
       - '3000:3000'
     depends_on:
       - mongo
+    logging:
+      driver: "none"
 
   ganache-cli:
     ports:
       - '8545:8545'
     image: 'trufflesuite/ganache-cli:latest'
     command: ["-d"]
+    logging:
+      driver: "none"
 
   truffle:
     command: ./run.sh
@@ -31,7 +37,7 @@ services:
     depends_on:
       - ganache-cli
     volumes:
-      - ./dex-contracts/build:/app/dex-contracts/build
+      - ./dex-contracts:/app/dex-contracts
 
   listener:
     command: docker/event_listener/run.sh
@@ -59,6 +65,7 @@ services:
     volumes:
       # Don't sync target, otherwise we rebuild on every deploy
       - ./driver/src:/app/driver/src
+      - ./dex-contracts:/app/dex-contracts
     environment:
       - SNAPP_CONTRACT_ADDRESS=C89Ce4735882C9F0f0FE26686c53074E09B0D550
       - DB_HOST=mongo
