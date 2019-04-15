@@ -150,7 +150,7 @@ class AuctionSettlement(NamedTuple):
         assert all(k in data for k in event_fields), "Unexpected Event Keys: got {}".format(data.keys())
         return AuctionSettlement(
             int(data['auctionId']),
-            int(data['slotIndex']),
+            int(data['stateIndex']),
             str(data['stateHash']),
             str(data['pricesAndVolumes']),
         )
@@ -158,7 +158,7 @@ class AuctionSettlement(NamedTuple):
     def to_dictionary(self) -> Dict[str, Any]:
         return {
             "auctionId": self.auction_id,
-            "slotIndex": self.state_index,
+            "stateIndex": self.state_index,
             "stateHash": self.state_hash,
             "pricesAndVolumes": self.prices_and_volumes,
         }

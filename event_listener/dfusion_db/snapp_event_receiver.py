@@ -147,14 +147,13 @@ class AuctionSettlementReceiver(SnappEventListener):
                 "Failed to record Settlement [{}] - {}".format(exc, settlement))
 
     def __update_accounts(self, settlement: AuctionSettlement) -> None:
-        balances = self.database.get_account_state(settlement.state_index - 1).balances.copy()
-        num_tokens = self.database.get_num_tokens()
+        state = self.database.get_account_state(settlement.state_index - 1)
+        new_account_record = AccountRecord(settlement.state_index, settlement.state_hash, state.balances.copy())
+        self.database.write_account_state(new_account_record)
 
         # Apply the balance updates according to settlement.prices_and_volumes
         # Should we bother to fetch the corresponding orders?
         # We can assume the solution took balances into account?
-
-        logging.error()
 
         # for datum in self.__get_data_to_apply(settlement):
         #     # Balances are stored as [b(a1, t1), b(a1, t2), ... b(a1, T), b(a2, t1), ...]
