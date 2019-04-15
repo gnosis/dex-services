@@ -28,7 +28,7 @@ impl Order {
             } else if self.buy_amount >= other.sell_amount && self.sell_amount >= other.buy_amount {
                 return Some(OrderPairType::RhsCompletelyFulfilled);
             } else {
-                return Some(OrderPairType::BothPartiallyFulfilled);
+                return Some(OrderPairType::BothFullyFilled);
             }
         }
         None
