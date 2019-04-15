@@ -189,8 +189,9 @@ class AuctionResults(NamedTuple):
     def from_dictionary(cls, data: Dict[str, List[int]]) -> "AuctionResults":
         event_fields = ('prices', 'buy_amounts', 'sell_amounts')
         assert all(k in data for k in event_fields), "Unexpected keys. Got {}".format(data.keys())
+
         return AuctionResults(
             data["prices"],
-            data["exec_buy_amounts"],
-            data["exec_sell_amounts"]
+            data["buy_amounts"],
+            data["sell_amounts"]
         )
