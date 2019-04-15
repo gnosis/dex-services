@@ -6,8 +6,8 @@ use super::price_finder_interface::{PriceFinding, Solution};
 use crate::price_finding::error::PriceFindingError;
 
 pub enum OrderPairType {
-    LhsCompletelyFulfilled,
-    RhsCompletelyFulfilled,
+    LhsFullyFilled,
+    RhsFullyFilled,
     BothFullyFilled,
 }
 
@@ -24,9 +24,9 @@ impl Order {
     fn match_compare(&self, other: &Order, state: &State) -> Option<OrderPairType> {
         if self.sufficient_seller_funds(&state) && other.sufficient_seller_funds(&state) && self.attracts(other) {
             if self.buy_amount <= other.sell_amount && self.sell_amount <= other.buy_amount {
-                return Some(OrderPairType::LhsCompletelyFulfilled);
+                return Some(OrderPairType::LhsFullyFilled);
             } else if self.buy_amount >= other.sell_amount && self.sell_amount >= other.buy_amount {
-                return Some(OrderPairType::RhsCompletelyFulfilled);
+                return Some(OrderPairType::RhsFullyFilled);
             } else {
                 return Some(OrderPairType::BothFullyFilled);
             }
@@ -72,7 +72,7 @@ impl PriceFinding for NaiveSolver {
             for j in i + 1..orders.len() {
                 let y = &orders[j];
                 match x.match_compare(y, &state) {
-                    Some(OrderPairType::LhsCompletelyFulfilled) => {
+                    Some(OrderPairType::LhsFullyFilled) => {
                         prices[x.buy_token as usize] = x.sell_amount;
                         prices[y.buy_token as usize] = x.buy_amount;
                         exec_sell_amount[i] = x.sell_amount;
@@ -81,7 +81,7 @@ impl PriceFinding for NaiveSolver {
                         exec_buy_amount[i] = x.buy_amount;
                         exec_buy_amount[j] = x.sell_amount;
                     }
-                    Some(OrderPairType::RhsCompletelyFulfilled) => {
+                    Some(OrderPairType::RhsFullyFilled) => {
                         prices[x.sell_token as usize] = y.sell_amount;
                         prices[y.sell_token as usize] = y.buy_amount;
 
