@@ -4,7 +4,7 @@ use crate::models::RollingHashable;
 use crate::db_interface::DbInterface;
 use crate::error::{DriverError, ErrorKind};
 use crate::contract::SnappContract;
-use crate::util;
+use crate::util::{balance_index, find_first_unapplied_slot, can_process};
 
 use web3::types::H256;
 
@@ -15,7 +15,7 @@ pub fn apply_deposits(
 ) -> models::State {
     let mut updated_state = state.clone();
     for i in deposits {
-        updated_state.balances[((i.account_id - 1) * (models::TOKENS as u16) + (i.token_id as u16 - 1)) as usize] += i.amount;
+        updated_state.balances[balance_index(i.token_id, i.account_id)] += i.amount;
     }
     updated_state
 }
@@ -27,13 +27,13 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
     let deposit_slot = contract.get_current_deposit_slot()?;
 
     println!("Current top deposit_slot is {:?}", deposit_slot);
-    let slot = util::find_first_unapplied_slot(
+    let slot = find_first_unapplied_slot(
         deposit_slot + 1, 
         Box::new(&|i| contract.has_deposit_slot_been_applied(i))
     )?;
     if slot <= deposit_slot {
         println!("Highest unprocessed deposit_slot is {:?}", slot);
-        if util::can_process(slot, contract,
+        if can_process(slot, contract,
             Box::new(&|i| contract.creation_block_for_deposit_slot(i))
         )? {
             println!("Processing deposit_slot {:?}", slot);
@@ -191,7 +191,7 @@ mod tests {
     }
 
     #[test]
-    fn returns_error_if_db_deposit_hash_doesnt_match_cotract() {
+    fn returns_error_if_db_deposit_hash_doesnt_match_contract() {
         let slot = U256::from(1);
         let state_hash = H256::zero();
 
