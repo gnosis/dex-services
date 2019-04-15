@@ -141,7 +141,7 @@ class AuctionSettlement(NamedTuple):
     auction_id: int
     state_index: int
     state_hash: str
-    prices_and_volumes: str  # Stored as Hex String
+    prices_and_volumes: str  # Emitted as Hex String
 
     @classmethod
     def from_dictionary(cls, data: Dict[str, Any]) -> "AuctionSettlement":
@@ -162,14 +162,14 @@ class AuctionSettlement(NamedTuple):
             "pricesAndVolumes": self.prices_and_volumes,
         }
 
-    def serialize_solution(self) -> "AuctionResults":
+    def serialize_solution(self, num_tokens: int) -> "AuctionResults":
         """Transform Byte Code for prices_and_volumes into Prices & TradeExecution objects"""
         logging.info("Serializing Auction Results (from bytecode)")
         tmp = self.prices_and_volumes[2:]
         hex_str_array = [tmp[i] + tmp[i + 1] for i in range(0, len(tmp), 2)]
         byte_array = list(map(lambda t: int(t, 16), hex_str_array))
 
-        prices, volumes = byte_array[:30], byte_array[30:]
+        prices, volumes = byte_array[:num_tokens], byte_array[num_tokens:]
         buy_amounts = volumes[0::2]  # Even elements
         sell_amounts = volumes[1::2]  # Odd elements
 
