@@ -172,13 +172,3 @@ class AuctionSettlementReceiver(SnappEventListener):
 
         new_account_record = AccountRecord(settlement.state_index, settlement.state_hash, balances)
         self.database.write_account_state(new_account_record)
-
-        # Apply the balance updates according to settlement.prices_and_volumes
-        # Should we bother to fetch the corresponding orders?
-        # We can assume the solution took balances into account?
-
-        # for datum in self.__get_data_to_apply(settlement):
-        #     # Balances are stored as [b(a1, t1), b(a1, t2), ... b(a1, T), b(a2, t1), ...]
-        #     index = num_tokens * (datum.account_id - 1) + (datum.token_id - 1)
-
-
