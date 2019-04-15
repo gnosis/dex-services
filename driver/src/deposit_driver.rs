@@ -10,13 +10,14 @@ use web3::types::H256;
 
 
 pub fn apply_deposits(
-    state: &mut models::State,
+    state: &models::State,
     deposits: &Vec<models::PendingFlux>,
 ) -> models::State {
+    let mut updated_state = state.clone();
     for i in deposits {
-        state.balances[((i.account_id - 1) * (models::TOKENS as u16) + (i.token_id as u16 - 1)) as usize] += i.amount;
+        updated_state.balances[((i.account_id - 1) * (models::TOKENS as u16) + (i.token_id as u16 - 1)) as usize] += i.amount;
     }
-    state.clone()
+    updated_state
 }
 
 pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), DriverError> 
@@ -38,18 +39,18 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
             println!("Processing deposit_slot {:?}", slot);
             let state_root = contract.get_current_state_root()?;
             let contract_deposit_hash = contract.deposit_hash_for_slot(slot)?;
-            let mut balances = db.get_current_balances(&state_root)?;
+            let balances = db.get_current_balances(&state_root)?;
 
             let deposits = db.get_deposits_of_slot(slot.low_u32())?;
             let deposit_hash = deposits.rolling_hash();
             if deposit_hash != contract_deposit_hash {
                 return Err(DriverError::new(
                     &format!("Pending deposit hash from contract ({}), didn't match the one found in db ({})", 
-                    deposit_hash, contract_deposit_hash), ErrorKind::StateError
+                    contract_deposit_hash, deposit_hash), ErrorKind::StateError
                 ));
             }
 
-            let updated_balances = apply_deposits(&mut balances, &deposits);
+            let updated_balances = apply_deposits(&balances, &deposits);
             let new_state_root = H256::from(updated_balances.rolling_hash());
             
             println!("New State_hash is {}", new_state_root);
@@ -58,6 +59,8 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
         } else {
             println!("Need to wait before processing deposit_slot {:?}", slot);
         }
+    } else {
+        println!("All deposits are already processed");
     }
     Ok(false)
 }
