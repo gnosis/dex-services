@@ -8,7 +8,7 @@ use crate::price_finding::error::PriceFindingError;
 pub enum OrderPairType {
     LhsCompletelyFulfilled,
     RhsCompletelyFulfilled,
-    BothPartiallyFulfilled,
+    BothFullyFilled,
 }
 
 impl Order {
@@ -91,7 +91,7 @@ impl PriceFinding for NaiveSolver {
                         exec_buy_amount[i] = y.sell_amount;
                         exec_buy_amount[j] = y.buy_amount;
                     }
-                    Some(OrderPairType::BothPartiallyFulfilled) => {
+                    Some(OrderPairType::BothFullyFilled) => {
                         prices[x.buy_token as usize] = y.sell_amount;
                         prices[y.buy_token as usize] = x.sell_amount;
 
