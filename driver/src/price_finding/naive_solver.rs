@@ -1,8 +1,9 @@
 use web3::types::U256;
 
-use crate::models::{Order, TOKENS};
+use crate::models::{Order, State, TOKENS};
 
-use super::price_finder_interface::Solution;
+use super::price_finder_interface::{PriceFinding, Solution};
+use crate::price_finding::error::PriceFindingError;
 
 pub enum OrderPairType {
     TypeIa,
@@ -14,8 +15,14 @@ impl Order {
     fn attracts(&self, other: &Order) -> bool {
         self.opposite_tokens(other) && self.have_price_overlap(other)
     }
-    fn match_compare(&self, other: &Order) -> Option<OrderPairType> {
-        if self.attracts(other) {
+
+    fn sufficient_seller_funds(&self, state: &State) -> bool {
+        let balance_index = self.sell_token as usize + (self.account_id - 1) as usize * TOKENS as usize;
+        state.balances[balance_index] >= self.sell_amount
+    }
+
+    fn match_compare(&self, other: &Order, state: &State) -> Option<OrderPairType> {
+        if self.sufficient_seller_funds(&state) && other.sufficient_seller_funds(&state) && self.attracts(other) {
             if self.buy_amount <= other.sell_amount && self.sell_amount <= other.buy_amount {
                 return Some(OrderPairType::TypeIa);
             } else if self.buy_amount >= other.sell_amount && self.sell_amount >= other.buy_amount {
@@ -45,77 +52,84 @@ impl Order {
     }
 }
 
-pub fn solve(orders: &Vec<Order>) -> Solution {
-    // TODO - include account balances and make sure they agree.
+struct NaiveSolver {}
 
-    // Initialize trivial solution
-    let mut prices: Vec<u128> = vec![1; 1 + TOKENS as usize];
-    let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
-    let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
-    let mut total_surplus = U256::zero();
+impl PriceFinding for NaiveSolver {
+    fn find_prices(
+        &mut self, 
+        orders: &Vec<Order>, 
+        state: &State
+    ) -> Result<Solution, PriceFindingError> {
+        // Initialize trivial solution
+        let mut prices: Vec<u128> = vec![1; 1 + TOKENS as usize];
+        let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
+        let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
+        let mut total_surplus = U256::zero();
 
-    let mut found_flag = false;
+        let mut found_flag = false;
 
-    for (i, x) in orders.iter().enumerate() {
-        for j in i + 1..orders.len() {
-            let y = &orders[j];
-            match x.match_compare(y) {
-                Some(OrderPairType::TypeIa) => {
-                    prices[x.buy_token as usize] = x.sell_amount;
-                    prices[y.buy_token as usize] = x.buy_amount;
-                    exec_sell_amount[i] = x.sell_amount;
-                    exec_sell_amount[j] = x.buy_amount;
+        for (i, x) in orders.iter().enumerate() {
+            for j in i + 1..orders.len() {
+                let y = &orders[j];
+                match x.match_compare(y, &state) {
+                    Some(OrderPairType::TypeIa) => {
+                        prices[x.buy_token as usize] = x.sell_amount;
+                        prices[y.buy_token as usize] = x.buy_amount;
+                        exec_sell_amount[i] = x.sell_amount;
+                        exec_sell_amount[j] = x.buy_amount;
 
-                    exec_buy_amount[i] = x.buy_amount;
-                    exec_buy_amount[j] = x.sell_amount;
+                        exec_buy_amount[i] = x.buy_amount;
+                        exec_buy_amount[j] = x.sell_amount;
+                    }
+                    Some(OrderPairType::TypeIb) => {
+                        prices[x.sell_token as usize] = y.sell_amount;
+                        prices[y.sell_token as usize] = y.buy_amount;
+
+                        exec_sell_amount[i] = y.buy_amount;
+                        exec_sell_amount[j] = y.sell_amount;
+
+                        exec_buy_amount[i] = y.sell_amount;
+                        exec_buy_amount[j] = y.buy_amount;
+                    }
+                    Some(OrderPairType::TypeII) => {
+                        prices[x.buy_token as usize] = y.sell_amount;
+                        prices[y.buy_token as usize] = x.sell_amount;
+
+                        exec_sell_amount[i] = x.sell_amount;
+                        exec_sell_amount[j] = y.sell_amount;
+
+                        exec_buy_amount[i] = y.sell_amount;
+                        exec_buy_amount[j] = x.sell_amount;
+                    }
+                    None => continue
                 }
-                Some(OrderPairType::TypeIb) => {
-                    prices[x.sell_token as usize] = y.sell_amount;
-                    prices[y.sell_token as usize] = y.buy_amount;
-
-                    exec_sell_amount[i] = y.buy_amount;
-                    exec_sell_amount[j] = y.sell_amount;
-
-                    exec_buy_amount[i] = y.sell_amount;
-                    exec_buy_amount[j] = y.buy_amount;
-                }
-                Some(OrderPairType::TypeII) => {
-                    prices[x.buy_token as usize] = y.sell_amount;
-                    prices[y.buy_token as usize] = x.sell_amount;
-
-                    exec_sell_amount[i] = x.sell_amount;
-                    exec_sell_amount[j] = y.sell_amount;
-
-                    exec_buy_amount[i] = y.sell_amount;
-                    exec_buy_amount[j] = x.sell_amount;
-                }
-                None => continue
+                found_flag = true;
+                let x_surplus = x.surplus(
+                    prices[x.buy_token as usize],
+                    exec_buy_amount[i],
+                    exec_sell_amount[i],
+                );
+                let y_surplus = y.surplus(
+                    prices[y.buy_token as usize],
+                    exec_buy_amount[j],
+                    exec_sell_amount[j],
+                );
+                total_surplus = x_surplus.checked_add(y_surplus).unwrap();
+                break;
             }
-            found_flag = true;
-            let x_surplus = x.surplus(
-                prices[x.buy_token as usize],
-                exec_buy_amount[i],
-                exec_sell_amount[i],
-            );
-            let y_surplus = y.surplus(
-                prices[y.buy_token as usize],
-                exec_buy_amount[j],
-                exec_sell_amount[j],
-            );
-            total_surplus = x_surplus.checked_add(y_surplus).unwrap();
-            break;
+            if found_flag == true {
+                break;
+            }
         }
-        if found_flag == true {
-            break;
-        }
-    }
-    Solution {
-        surplus: total_surplus,
-        prices,
-        executed_sell_amounts: exec_sell_amount,
-        executed_buy_amounts: exec_buy_amount,
+        Ok(Solution {
+            surplus: total_surplus,
+            prices,
+            executed_sell_amounts: exec_sell_amount,
+            executed_buy_amounts: exec_buy_amount,
+        })
     }
 }
+
 
 #[cfg(test)]
 pub mod tests {
@@ -123,6 +137,11 @@ pub mod tests {
 
     #[test]
     fn test_type_ia() {
+        let state = State {
+            state_hash: "test".to_string(),
+            state_index: 0,
+            balances: vec![200; (TOKENS * 2) as usize]
+        };
         let orders = vec![
             Order {
                 slot_index: 0,
@@ -141,12 +160,18 @@ pub mod tests {
                 buy_amount: 180,
             },
         ];
-        let res = solve(&orders);
-        assert_eq!(U256::from(16), res.surplus);
+        let mut solver = NaiveSolver{};
+        let res = solver.find_prices(&orders, &state);
+        assert_eq!(U256::from(16), res.unwrap().surplus);
     }
 
     #[test]
     fn test_type_ib() {
+        let state = State {
+            state_hash: "test".to_string(),
+            state_index: 0,
+            balances: vec![200; (TOKENS * 2) as usize]
+        };
         let orders = vec![
             Order {
                 slot_index: 0,
@@ -165,12 +190,18 @@ pub mod tests {
                 buy_amount: 4,
             }
         ];
-        let res = solve(&orders);
-        assert_eq!(U256::from(16), res.surplus);
+        let mut solver = NaiveSolver{};
+        let res = solver.find_prices(&orders, &state);
+        assert_eq!(U256::from(16), res.unwrap().surplus);
     }
 
     #[test]
     fn test_type_ii() {
+        let state = State {
+            state_hash: "test".to_string(),
+            state_index: 0,
+            balances: vec![200; (TOKENS * 2) as usize]
+        };
         let orders = vec![
             Order {
                 slot_index: 0,
@@ -189,12 +220,18 @@ pub mod tests {
                 buy_amount: 8,
             }
         ];
-        let res = solve(&orders);
-        assert_eq!(U256::from(116), res.surplus);
+        let mut solver = NaiveSolver{};
+        let res = solver.find_prices(&orders, &state);
+        assert_eq!(U256::from(116), res.unwrap().surplus);
     }
 
     #[test]
     fn test_retreth_example() {
+        let state = State {
+            state_hash: "test".to_string(),
+            state_index: 0,
+            balances: vec![200; (TOKENS * 6) as usize]
+        };
         let orders = vec![
             Order {
                 slot_index: 0,
@@ -245,7 +282,38 @@ pub mod tests {
                 buy_amount: 20,
             }
         ];
-        let res = solve(&orders);
-        assert_eq!(U256::from(16), res.surplus);
+        let mut solver = NaiveSolver{};
+        let res = solver.find_prices(&orders, &state);
+        assert_eq!(U256::from(16), res.unwrap().surplus);
+    }
+
+    #[test]
+    fn test_insufficient_balance() {
+        let state = State {
+            state_hash: "test".to_string(),
+            state_index: 0,
+            balances: vec![0; (TOKENS * 2) as usize]
+        };
+        let orders = vec![
+            Order {
+                slot_index: 0,
+                account_id: 2,
+                sell_token: 1,
+                buy_token: 2,
+                sell_amount: 52,
+                buy_amount: 4,
+            },
+            Order {
+                slot_index: 1,
+                account_id: 1,
+                sell_token: 2,
+                buy_token: 1,
+                sell_amount: 15,
+                buy_amount: 180,
+            },
+        ];
+        let mut solver = NaiveSolver{};
+        let res = solver.find_prices(&orders, &state);
+        assert_eq!(U256::from(0), res.unwrap().surplus);
     }
 }
