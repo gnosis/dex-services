@@ -156,12 +156,11 @@ class AuctionSettlementReceiver(SnappEventListener):
         balances = state.balances.copy()
 
         orders = self.database.get_orders(settlement.auction_id)
-        solution = settlement.serialize_solution()
+        num_tokens = self.database.get_num_tokens()
+        solution = settlement.serialize_solution(num_tokens)
 
         buy_amounts = solution.buy_amounts
         sell_amounts = solution.sell_amounts
-
-        num_tokens = self.database.get_num_tokens()
 
         for i, order in enumerate(orders):
             buy_index = num_tokens * (order.account_id - 1) + (order.buy_token - 1)
