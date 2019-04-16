@@ -15,8 +15,9 @@ fn apply_withdraws(
     let mut state = state.clone();
     let mut valid_withdraws = vec![];
     for i in withdraws {
-        if state.balances[((i.account_id - 1) * (models::TOKENS as u16) + (i.token_id as u16 - 1)) as usize] >= i.amount {
-            state.balances[((i.account_id - 1) * (models::TOKENS as u16) + (i.token_id as u16 - 1)) as usize] -= i.amount;
+        let index = util::balance_index(i.token_id, i.account_id);
+        if state.balances[index] >= i.amount {
+            state.balances[index] -= i.amount;
             valid_withdraws.push(true);
         } else {
             valid_withdraws.push(false);

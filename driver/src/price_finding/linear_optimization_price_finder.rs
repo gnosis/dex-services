@@ -225,7 +225,7 @@ pub mod tests {
     #[test]
     fn test_serialize_order() {
         let order = models::Order {
-            slot_index: 1,
+            slot_index: 0,
             account_id: 1,
             sell_token: 2,
             buy_token: 3,
