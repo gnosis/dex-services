@@ -217,21 +217,22 @@ class AuctionSettlementTest(unittest.TestCase):
 
     def test_serialize_solution(self) -> None:
         num_tokens = 3
-        settlement = AuctionSettlement(1, 2, "hash", "0x010203010203040506")
+
+        settlement = AuctionSettlement(1, 2, "hash", "0x" + "0" * 24 * num_tokens + "0" * 24 * 2)
 
         serialized_solution = settlement.serialize_solution(num_tokens)
-        self.assertEqual([1, 2, 3], serialized_solution.prices)
-        self.assertEqual([1, 3, 5], serialized_solution.buy_amounts)
-        self.assertEqual([2, 4, 6], serialized_solution.sell_amounts)
+        self.assertEqual([0, 0, 0], serialized_solution.prices)
+        self.assertEqual([0], serialized_solution.buy_amounts)
+        self.assertEqual([0], serialized_solution.sell_amounts)
 
     def test_serialize_solution_warning(self) -> None:
         num_tokens = 3
-        settlement = AuctionSettlement(1, 2, "hash", "0x01020301020304050607")
+        settlement = AuctionSettlement(1, 2, "hash", "0x" + "0" * 24 * num_tokens + "0" * 24 * 3)
 
         serialized_solution = settlement.serialize_solution(num_tokens)
-        self.assertEqual([1, 2, 3], serialized_solution.prices)
-        self.assertEqual([1, 3, 5, 7], serialized_solution.buy_amounts)
-        self.assertEqual([2, 4, 6], serialized_solution.sell_amounts)
+        self.assertEqual([0, 0, 0], serialized_solution.prices)
+        self.assertEqual([0, 0], serialized_solution.buy_amounts)
+        self.assertEqual([0], serialized_solution.sell_amounts)
 
 
 class StateTransitionTest(unittest.TestCase):
