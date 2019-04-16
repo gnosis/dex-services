@@ -183,7 +183,7 @@ class AuctionSettlement(NamedTuple):
         """Transform Byte Code for prices_and_volumes into Prices & TradeExecution objects"""
         logging.info("Serializing Auction Results (from bytecode)")
         tmp = self.prices_and_volumes[2:]
-        hex_str_array = [tmp[i] + tmp[i + 1] for i in range(0, len(tmp), 2)]
+        hex_str_array = [tmp[i: i+24] for i in range(0, len(tmp), 24)]
         byte_array = list(map(lambda t: int(t, 16), hex_str_array))
 
         prices, volumes = byte_array[:num_tokens], byte_array[num_tokens:]
