@@ -136,6 +136,7 @@ class Order(NamedTuple):
             "sellAmount": str(self.sell_amount)
         }
 
+
 class AuctionResults(NamedTuple):
     prices: List[int]
     buy_amounts: List[int]
