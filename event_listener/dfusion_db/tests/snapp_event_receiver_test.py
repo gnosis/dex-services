@@ -7,12 +7,26 @@ from ..models import Deposit, StateTransition, TransitionType, Withdraw, Account
 
 class DepositReceiverTest(unittest.TestCase):
     @staticmethod
-    def test_writes_deposit() -> None:
+    def test_save_parsed() -> None:
         database = Mock()
         receiver = DepositReceiver(database)
         deposit = Deposit(1, 2, 10, 42, 51)
         receiver.save_parsed(deposit)
         database.write_deposit.assert_called_with(deposit)
+
+    @staticmethod
+    def test_save() -> None:
+        database = Mock()
+        receiver = DepositReceiver(database)
+        event = {
+            "accountId": 1,
+            "tokenId": 2,
+            "amount": 3,
+            "slot": 4,
+            "slotIndex": 5
+        }
+        receiver.save(event, block_info={})
+        database.write_deposit.assert_called_with(Deposit.from_dictionary(event))
 
 
 class WithdrawRequestReceiverTest(unittest.TestCase):
@@ -36,6 +50,36 @@ class OrderReceiverTest(unittest.TestCase):
 
 
 class StateTransitionReceiverTest(unittest.TestCase):
+    @staticmethod
+    def test_save() -> None:
+        database = Mock()
+        receiver = StateTransitionReceiver(database)
+        new_state_index = 2
+        slot_index = 3
+        num_tokens = 10
+
+        database.get_num_tokens.return_value = num_tokens
+        old_state = AccountRecord(1, "old state", [42] * 10 * num_tokens)
+        database.get_account_state.return_value = old_state
+
+        deposit1 = Deposit(1, 2, 10, slot_index, 0)
+        deposit2 = Deposit(7, 3, 5, slot_index, 1)
+        database.get_deposits.return_value = [deposit1, deposit2]
+
+        transition_event = {
+            "transitionType": TransitionType.Deposit,
+            "stateIndex": new_state_index,
+            "stateHash": "0x00000000000000000000000000000000000000000000000000000000000000",
+            "slot": slot_index,
+        }
+        receiver.save(event=transition_event, block_info={})
+
+        new_balances = old_state.balances
+        new_balances[1] = 52
+        new_balances[62] = 47
+        new_state = AccountRecord(new_state_index, "0x00000000000000000000000000000000000000000000000000000000000000", new_balances)
+        database.write_account_state.assert_called_with(new_state)
+
     @staticmethod
     def test_adds_pending_deposits_to_previous_balances() -> None:
         database = Mock()
@@ -135,6 +179,18 @@ class StateTransitionReceiverTest(unittest.TestCase):
         new_balances[1] = 32
         new_state = AccountRecord(new_state_index, "new state", new_balances)
         database.write_account_state.assert_called_with(new_state)
+
+    def test_raises_on_bad_transition_type(self) -> None:
+        database = Mock()
+        receiver = StateTransitionReceiver(database)
+        transition_event = {
+            "transitionType": -1,
+            "stateIndex": 2,
+            "stateHash": "new state",
+            "slot": 3,
+        }
+        with self.assertRaises(Exception):
+            receiver.save(event=transition_event, block_info={})
 
 
 class SnappInitializationReceiverTest(unittest.TestCase):

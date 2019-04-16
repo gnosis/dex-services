@@ -15,7 +15,7 @@ class SnappEventListener(ABC):
 
     @abstractmethod
     def save(self, event: Dict[str, Any], block_info: Dict[str, Any]) -> None:
-        return
+        return  # pragma: no cover
 
 
 class DepositReceiver(SnappEventListener):
@@ -25,9 +25,8 @@ class DepositReceiver(SnappEventListener):
     def save_parsed(self, deposit: Deposit) -> None:
         try:
             self.database.write_deposit(deposit)
-        except AssertionError as exc:
-            logging.critical(
-                "Failed to record Deposit [{}] - {}".format(exc, deposit))
+        except Exception as exc:  # pragma: no cover
+            logging.critical("Failed to record Deposit [{}] - {}".format(exc, deposit))
 
 
 class StateTransitionReceiver(SnappEventListener):
@@ -38,9 +37,8 @@ class StateTransitionReceiver(SnappEventListener):
         try:
             self.__update_accounts(transition)
             logging.info("Successfully updated state and balances")
-        except AssertionError as exc:
-            logging.critical(
-                "Failed to record StateTransition [{}] - {}".format(exc, transition))
+        except Exception as exc:  # pragma: no cover
+            logging.critical("Failed to record StateTransition [{}] - {}".format(exc, transition))
 
     def __update_accounts(self, transition: StateTransition) -> None:
         balances = self.database.get_account_state(transition.state_index - 1).balances.copy()
@@ -79,8 +77,7 @@ class StateTransitionReceiver(SnappEventListener):
                         )
                     )
             else:
-                # This can not happen
-                self.logger.error("Unrecognized transition type - this should never happen")
+                self.logger.error("Unrecognized transition type: should never happen!")  # pragma: no cover
 
         new_account_record = AccountRecord(transition.state_index, transition.state_hash, balances)
         self.database.write_account_state(new_account_record)
@@ -90,7 +87,7 @@ class StateTransitionReceiver(SnappEventListener):
             return self.database.get_deposits(transition.slot)
         elif transition.transition_type == TransitionType.Withdraw:
             return self.database.get_withdraws(transition.slot)
-        else:
+        else:  # pragma: no cover
             raise Exception("Invalid transition type: {} ".format(transition.transition_type))
 
 
