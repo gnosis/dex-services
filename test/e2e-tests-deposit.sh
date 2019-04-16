@@ -9,7 +9,7 @@ truffle exec scripts/setup_environment.js
 truffle exec scripts/deposit.js 3 3 18 
 truffle exec scripts/mine_blocks.js 21
 
-sleep 5
+sleep 10
 
 EXPECTED_HASH="a5b2329a51ada3ce2114e2724264cbfd11f5cd63e41c3700c3f88358995b6153"
 truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep ${EXPECTED_HASH}
