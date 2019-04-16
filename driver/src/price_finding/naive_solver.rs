@@ -1,9 +1,11 @@
 use web3::types::U256;
 
+use crate::util::balance_index;
+
 use crate::models::{Order, State, TOKENS};
+use crate::price_finding::error::PriceFindingError;
 
 use super::price_finder_interface::{PriceFinding, Solution};
-use crate::price_finding::error::PriceFindingError;
 
 pub enum OrderPairType {
     LhsFullyFilled,
@@ -17,8 +19,7 @@ impl Order {
     }
 
     fn sufficient_seller_funds(&self, state: &State) -> bool {
-        let balance_index = (self.sell_token - 1) as usize + (self.account_id - 1) as usize * TOKENS as usize;
-        state.balances[balance_index] >= self.sell_amount
+        state.balances[balance_index(self.sell_token, self.account_id)] >= self.sell_amount
     }
 
     fn match_compare(&self, other: &Order, state: &State) -> Option<OrderPairType> {

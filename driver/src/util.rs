@@ -1,5 +1,6 @@
 use crate::contract::SnappContract;
 use crate::error::DriverError;
+use crate::models::TOKENS;
 
 use web3::types::U256;
 
@@ -31,4 +32,8 @@ pub fn can_process<C>(
     }
     let current_block = contract.get_current_block_number()?;
     Ok(slot_creation_block + 20 < current_block)
+}
+
+pub fn balance_index(token_id: u8, account_id: u16) -> usize {
+    TOKENS as usize * (account_id - 1) as usize  + (token_id - 1) as usize
 }
