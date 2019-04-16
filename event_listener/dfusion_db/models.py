@@ -136,6 +136,22 @@ class Order(NamedTuple):
             "sellAmount": str(self.sell_amount)
         }
 
+class AuctionResults(NamedTuple):
+    prices: List[int]
+    buy_amounts: List[int]
+    sell_amounts: List[int]
+
+    @classmethod
+    def from_dictionary(cls, data: Dict[str, List[int]]) -> "AuctionResults":
+        event_fields = ('prices', 'buy_amounts', 'sell_amounts')
+        assert all(k in data for k in event_fields), "Unexpected keys. Got {}".format(data.keys())
+
+        return AuctionResults(
+            data["prices"],
+            data["buy_amounts"],
+            data["sell_amounts"]
+        )
+
 
 class AuctionSettlement(NamedTuple):
     auction_id: int
@@ -162,7 +178,7 @@ class AuctionSettlement(NamedTuple):
             "pricesAndVolumes": self.prices_and_volumes,
         }
 
-    def serialize_solution(self, num_tokens: int) -> "AuctionResults":
+    def serialize_solution(self, num_tokens: int) -> AuctionResults:
         """Transform Byte Code for prices_and_volumes into Prices & TradeExecution objects"""
         logging.info("Serializing Auction Results (from bytecode)")
         tmp = self.prices_and_volumes[2:]
@@ -173,6 +189,9 @@ class AuctionSettlement(NamedTuple):
         buy_amounts = volumes[0::2]  # Even elements
         sell_amounts = volumes[1::2]  # Odd elements
 
+        if len(buy_amounts) != len(sell_amounts):
+            logging.warning("Solution data is not correct!")
+
         return AuctionResults.from_dictionary({
             "prices": prices,
             "buy_amounts": buy_amounts,
@@ -180,18 +199,4 @@ class AuctionSettlement(NamedTuple):
         })
 
 
-class AuctionResults(NamedTuple):
-    prices: List[int]
-    buy_amounts: List[int]
-    sell_amounts: List[int]
 
-    @classmethod
-    def from_dictionary(cls, data: Dict[str, List[int]]) -> "AuctionResults":
-        event_fields = ('prices', 'buy_amounts', 'sell_amounts')
-        assert all(k in data for k in event_fields), "Unexpected keys. Got {}".format(data.keys())
-
-        return AuctionResults(
-            data["prices"],
-            data["buy_amounts"],
-            data["sell_amounts"]
-        )

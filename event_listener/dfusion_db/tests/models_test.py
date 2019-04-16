@@ -1,5 +1,6 @@
 import unittest
-from ..models import Deposit, Withdraw, Order, AuctionResults, AccountRecord, AuctionSettlement, StateTransition
+from ..models import AccountRecord, AuctionResults, AuctionSettlement
+from ..models import Deposit, Order, StateTransition, TransitionType, Withdraw
 
 
 class DepositTest(unittest.TestCase):
@@ -118,10 +119,10 @@ class OrderTest(unittest.TestCase):
 
 class AccountRecordTest(unittest.TestCase):
     def test_to_dictionary(self) -> None:
-        rec = AccountRecord(1, 2, [1, 2, 3])
+        rec = AccountRecord(1, "Hash", [1, 2, 3])
         expected_dict = {
             "stateIndex": 1,
-            "stateHash": 2,
+            "stateHash": "Hash",
             "balances": ["1", "2", "3"]
         }
 
@@ -186,3 +187,25 @@ class AuctionSettlementTest(unittest.TestCase):
         self.assertEqual([1, 2, 3], serialized_solution.prices)
         self.assertEqual([1, 3, 5], serialized_solution.buy_amounts)
         self.assertEqual([2, 4, 6], serialized_solution.sell_amounts)
+
+
+class StateTransitionTest(unittest.TestCase):
+    def test_from_dict(self) -> None:
+        transition_dict = {
+            "transitionType": TransitionType.Deposit,
+            "stateIndex": 2,
+            "stateHash": "hash",
+            "slot": 1,
+        }
+        expected = StateTransition(TransitionType.Deposit, 2, "hash", 1)
+        self.assertEqual(expected, StateTransition.from_dictionary(transition_dict))
+
+    def test_from_dict_failure(self) -> None:
+        with self.assertRaises(AssertionError):
+            bad_transition_dict = {
+                "BAD_KEY": TransitionType.Deposit,
+                "stateIndex": 2,
+                "stateHash": "hash",
+                "slot": 1,
+            }
+            StateTransition.from_dictionary(bad_transition_dict)
