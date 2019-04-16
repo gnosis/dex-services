@@ -103,7 +103,7 @@ class SnappInitializationReceiver(SnappEventListener):
 
         try:
             self.initialize_accounts(event['maxTokens'], event['maxAccounts'], state_hash)
-        except AssertionError as exc:
+        except Exception as exc:  # pragma: no cover
             logging.critical(
                 "Failed to record SnappInitialization [{}] - {}".format(exc, event))
 
@@ -120,7 +120,7 @@ class WithdrawRequestReceiver(SnappEventListener):
     def save_parsed(self, withdraw: Withdraw) -> None:
         try:
             self.database.write_withdraw(withdraw)
-        except AssertionError as exc:
+        except Exception as exc:  # pragma: no cover
             logging.critical(
                 "Failed to record Deposit [{}] - {}".format(exc, withdraw))
 
@@ -132,7 +132,7 @@ class OrderReceiver(SnappEventListener):
     def save_parsed(self, order: Order) -> None:
         try:
             self.database.write_order(order)
-        except AssertionError as exc:
+        except Exception as exc:  # pragma: no cover
             logging.critical(
                 "Failed to record Order [{}] - {}".format(exc, order))
 
@@ -144,7 +144,7 @@ class AuctionSettlementReceiver(SnappEventListener):
     def save_parsed(self, settlement: AuctionSettlement) -> None:
         try:
             self.__update_accounts(settlement)
-        except AssertionError as exc:
+        except Exception as exc:  # pragma: no cover
             logging.critical(
                 "Failed to record Settlement [{}] - {}".format(exc, settlement))
 

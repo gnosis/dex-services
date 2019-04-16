@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock
 from ..snapp_event_receiver import DepositReceiver, OrderReceiver, SnappInitializationReceiver
-from ..snapp_event_receiver import WithdrawRequestReceiver, StateTransitionReceiver
+from ..snapp_event_receiver import WithdrawRequestReceiver, StateTransitionReceiver, AuctionSettlementReceiver
 from ..models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord, Order
 
 
@@ -31,6 +31,20 @@ class DepositReceiverTest(unittest.TestCase):
 
 class WithdrawRequestReceiverTest(unittest.TestCase):
     @staticmethod
+    def test_save() -> None:
+        database = Mock()
+        receiver = WithdrawRequestReceiver(database)
+        event = {
+            "accountId": 1,
+            "tokenId": 2,
+            "amount": "3",
+            "slot": 4,
+            "slotIndex": 5,
+        }
+        receiver.save(event, block_info={})
+        database.write_withdraw.assert_called_with(Withdraw.from_dictionary(event))
+
+    @staticmethod
     def test_writes_withdraw() -> None:
         database = Mock()
         receiver = WithdrawRequestReceiver(database)
@@ -40,6 +54,22 @@ class WithdrawRequestReceiverTest(unittest.TestCase):
 
 
 class OrderReceiverTest(unittest.TestCase):
+    @staticmethod
+    def test_save() -> None:
+        database = Mock()
+        receiver = OrderReceiver(database)
+        event = {
+            "auctionId": 1,
+            "slotIndex": 2,
+            "accountId": 3,
+            "buyToken": 4,
+            "sellToken": 5,
+            "buyAmount": "67",
+            "sellAmount": "89",
+        }
+        receiver.save(event, block_info={})
+        database.write_order.assert_called_with(Order.from_dictionary(event))
+
     @staticmethod
     def test_writes_order() -> None:
         database = Mock()
@@ -77,7 +107,8 @@ class StateTransitionReceiverTest(unittest.TestCase):
         new_balances = old_state.balances
         new_balances[1] = 52
         new_balances[62] = 47
-        new_state = AccountRecord(new_state_index, "0x00000000000000000000000000000000000000000000000000000000000000", new_balances)
+        new_state = AccountRecord(new_state_index, "0x00000000000000000000000000000000000000000000000000000000000000",
+                                  new_balances)
         database.write_account_state.assert_called_with(new_state)
 
     @staticmethod
@@ -195,6 +226,22 @@ class StateTransitionReceiverTest(unittest.TestCase):
 
 class SnappInitializationReceiverTest(unittest.TestCase):
 
+    def setUp(self) -> None:
+        self.dummy_state = "0x00000000000000000000000000000000000000000000000000000000000000"
+
+    def test_generic_save(self) -> None:
+        database = Mock()
+        receiver = SnappInitializationReceiver(database)
+
+        event = {
+            "stateHash": self.dummy_state,
+            "maxTokens": 2,
+            "maxAccounts": 3
+        }
+        receiver.save(event, block_info={})
+        database.write_constants.assert_called_with(2, 3)
+        database.write_account_state(AccountRecord(0, self.dummy_state, [0 for _ in range(2 * 3)]))
+
     @staticmethod
     def test_create_empty_balances() -> None:
         database = Mock()
@@ -205,3 +252,31 @@ class SnappInitializationReceiverTest(unittest.TestCase):
         state = AccountRecord(0, "initial hash", [0] * 30 * 100)
         database.write_account_state.assert_called_with(state)
         database.write_constants.assert_called_with(30, 100)
+
+
+class AuctionSettlementReceiverTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.num_tokens = 3
+        self.dummy_state_hash = "0x00000000000000000000000000000000000000000000000000000000000000"
+        self.old_balances = [42] * 10 * self.num_tokens
+        self.dummy_account_record = AccountRecord(1, self.dummy_state_hash, self.old_balances)
+
+    def test_save(self) -> None:
+        database = Mock()
+        receiver = AuctionSettlementReceiver(database)
+        num_tokens = 3
+
+        event = {
+            "auctionId": 1,
+            "stateIndex": 2,
+            "stateHash": self.dummy_state_hash,
+            "pricesAndVolumes": "0x" + ("0" * 23 + "1") * self.num_tokens + ""
+        }
+
+        database.get_account_state.return_value = self.dummy_account_record
+
+        database.get_orders.return_value = []
+        database.get_num_tokens.return_value = num_tokens
+        receiver.save(event, block_info={})
+
+        database.write_account_state(AccountRecord(0, self.dummy_state_hash, self.old_balances))
