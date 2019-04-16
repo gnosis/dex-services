@@ -1,12 +1,13 @@
 import unittest
 from unittest.mock import Mock
-from ..snapp_event_receiver import WithdrawRequestReceiver, DepositReceiver, StateTransitionReceiver, \
-    SnappInitializationReceiver, OrderReceiver
+from ..snapp_event_receiver import DepositReceiver, OrderReceiver, SnappInitializationReceiver
+from ..snapp_event_receiver import WithdrawRequestReceiver, StateTransitionReceiver
 from ..models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord, Order
 
 
 class DepositReceiverTest(unittest.TestCase):
-    def test_writes_deposit(self) -> None:
+    @staticmethod
+    def test_writes_deposit() -> None:
         database = Mock()
         receiver = DepositReceiver(database)
         deposit = Deposit(1, 2, 10, 42, 51)
@@ -15,7 +16,8 @@ class DepositReceiverTest(unittest.TestCase):
 
 
 class WithdrawRequestReceiverTest(unittest.TestCase):
-    def test_writes_withdraw(self) -> None:
+    @staticmethod
+    def test_writes_withdraw() -> None:
         database = Mock()
         receiver = WithdrawRequestReceiver(database)
         withdraw = Withdraw(1, 2, 10, 42, 51)
@@ -24,7 +26,8 @@ class WithdrawRequestReceiverTest(unittest.TestCase):
 
 
 class OrderReceiverTest(unittest.TestCase):
-    def test_writes_order(self) -> None:
+    @staticmethod
+    def test_writes_order() -> None:
         database = Mock()
         receiver = OrderReceiver(database)
         order = Order(1, 1, 2, 1, 1, 1, 1)
@@ -33,7 +36,8 @@ class OrderReceiverTest(unittest.TestCase):
 
 
 class StateTransitionReceiverTest(unittest.TestCase):
-    def test_adds_pending_deposits_to_previous_balances(self) -> None:
+    @staticmethod
+    def test_adds_pending_deposits_to_previous_balances() -> None:
         database = Mock()
         receiver = StateTransitionReceiver(database)
         new_state_index = 2
@@ -58,7 +62,8 @@ class StateTransitionReceiverTest(unittest.TestCase):
         new_state = AccountRecord(new_state_index, "new state", new_balances)
         database.write_account_state.assert_called_with(new_state)
 
-    def test_subtracts_pending_withdraws_to_previous_balances(self) -> None:
+    @staticmethod
+    def test_subtracts_pending_withdraws_to_previous_balances() -> None:
         database = Mock()
         receiver = StateTransitionReceiver(database)
         new_state_index = 2
@@ -82,8 +87,9 @@ class StateTransitionReceiverTest(unittest.TestCase):
         new_balances[62] = 37
         new_state = AccountRecord(new_state_index, "new state", new_balances)
         database.write_account_state.assert_called_with(new_state)
-    
-    def test_marks_valid_withdraws_as_valid(self) -> None:
+
+    @staticmethod
+    def test_marks_valid_withdraws_as_valid() -> None:
         database = Mock()
         receiver = StateTransitionReceiver(database)
         new_state_index = 2
@@ -105,7 +111,8 @@ class StateTransitionReceiverTest(unittest.TestCase):
         updated_withdraw1 = withdraw1._replace(valid=True)
         database.update_withdraw.assert_called_once_with(withdraw1, updated_withdraw1)
 
-    def test_skips_deduction_if_not_enough_balance(self) -> None:
+    @staticmethod
+    def test_skips_deduction_if_not_enough_balance() -> None:
         database = Mock()
         receiver = StateTransitionReceiver(database)
         new_state_index = 2
@@ -131,7 +138,9 @@ class StateTransitionReceiverTest(unittest.TestCase):
 
 
 class SnappInitializationReceiverTest(unittest.TestCase):
-    def test_create_empty_balances(self) -> None:
+
+    @staticmethod
+    def test_create_empty_balances() -> None:
         database = Mock()
         receiver = SnappInitializationReceiver(database)
 

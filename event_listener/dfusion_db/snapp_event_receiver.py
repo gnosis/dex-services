@@ -15,7 +15,7 @@ class SnappEventListener(ABC):
 
     @abstractmethod
     def save(self, event: Dict[str, Any], block_info: Dict[str, Any]) -> None:
-        pass
+        return
 
 
 class DepositReceiver(SnappEventListener):
