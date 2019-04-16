@@ -3,8 +3,8 @@ from typing import Any, Dict
 
 from django_eth_events.chainevents import AbstractEventReceiver
 
-from .snapp_event_receiver import DepositReceiver, StateTransitionReceiver, \
-    SnappInitializationReceiver, WithdrawRequestReceiver, OrderReceiver
+from .snapp_event_receiver import DepositReceiver, StateTransitionReceiver, SnappInitializationReceiver
+from .snapp_event_receiver import WithdrawRequestReceiver, OrderReceiver, AuctionSettlementReceiver
 
 RECEIVER_MAPPING = {
     'Deposit': DepositReceiver(),
@@ -12,6 +12,7 @@ RECEIVER_MAPPING = {
     'StateTransition': StateTransitionReceiver(),
     'SnappInitialization': SnappInitializationReceiver(),
     'SellOrder': OrderReceiver(),
+    'AuctionSettlement': AuctionSettlementReceiver(),
 }
 
 

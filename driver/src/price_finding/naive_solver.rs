@@ -53,7 +53,7 @@ impl Order {
     }
 }
 
-struct NaiveSolver {}
+pub struct NaiveSolver {}
 
 impl PriceFinding for NaiveSolver {
     fn find_prices(

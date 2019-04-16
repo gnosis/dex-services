@@ -12,7 +12,8 @@ use crate::contract::SnappContractImpl;
 use crate::db_interface::MongoDB;
 use crate::deposit_driver::run_deposit_listener;
 use crate::order_driver::run_order_listener;
-use crate::price_finding::linear_optimization_price_finder::LinearOptimisationPriceFinder;
+
+use crate::price_finding::price_finder_interface::PriceFinding;
 use crate::withdraw_driver::run_withdraw_listener;
 
 pub mod contract;
@@ -26,11 +27,14 @@ pub mod models;
 mod withdraw_driver;
 mod util;
 
-pub fn run_driver_components(
+pub fn run_driver_components<PF>(
     db: &MongoDB,
     contract: &SnappContractImpl, 
-    price_finder: &mut LinearOptimisationPriceFinder,
-) -> () {
+    price_finder: &mut PF,
+) -> ()
+ where   
+        PF: PriceFinding 
+{
     if let Err(e) = run_deposit_listener(db, contract) {
         println!("Deposit_driver error: {}", e);
     }

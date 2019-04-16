@@ -4,6 +4,7 @@ use crate::error::{DriverError, ErrorKind};
 use crate::models::{Order, RollingHashable, Serializable};
 use crate::models;
 use crate::price_finding::{PriceFinding, Solution};
+use crate::util::balance_index;
 use crate::util;
 
 use web3::types::{H256, U256};
@@ -83,12 +84,13 @@ fn compute_updated_balances(
     let mut result = balances.clone();
     for (index, order) in orders.iter().enumerate() {
         let buy_volume = solution.executed_buy_amounts[index];
-        let buy_index = (order.account_id as usize * models::TOKENS as usize) + order.buy_token as usize;
+        let buy_index = balance_index(order.buy_token, order.account_id);
         result[buy_index] += buy_volume;
 
         let sell_volume = solution.executed_sell_amounts[index];
-        let sell_index = (order.account_id as usize * models::TOKENS as usize) + order.buy_token as usize;
+        let sell_index = balance_index(order.sell_token, order.account_id);
         result[sell_index] -= sell_volume;
+        println!("{:},{:},{:}",index, sell_index,sell_volume);
     }
     result
 }
@@ -105,32 +107,36 @@ mod tests {
 
     #[test]
     fn computes_updated_balance_on_example_with_equal_buy_and_sell(){
-        let balances = vec![100; 70];
+        let balances = vec![100; 60];
         let solution = Solution {
             surplus: U256::from_dec_str("0").unwrap(),
-            prices: vec![1, 2],
+            prices: vec![1, 1],
             executed_sell_amounts: vec![1, 1],
             executed_buy_amounts: vec![1, 1],
         };
         let order_1 = Order{
           slot_index: 1,
           account_id: 1,
-          sell_token: 0,
-          buy_token: 1,
+          sell_token: 1,
+          buy_token: 2,
           sell_amount: 4,
-          buy_amount: 5,
+          buy_amount: 4,
         };
         let order_2 = Order{
           slot_index: 1,
-          account_id: 0,
-          sell_token: 1,
-          buy_token: 0,
-          sell_amount: 5,
+          account_id: 2,
+          sell_token: 2,
+          buy_token: 1,
+          sell_amount: 4,
           buy_amount: 4,
         };
         let orders = vec![order_1, order_2];
-
-        assert_eq!(compute_updated_balances(&balances, &orders, &solution), balances);
+        let mut balances_target = vec![100; 60];
+        balances_target[0] = 99;
+        balances_target[1] = 101;
+        balances_target[31] = 99;
+        balances_target[30] = 101;
+        assert_eq!(compute_updated_balances(&balances, &orders, &solution), balances_target);
     }
     #[test]
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
