@@ -18,6 +18,17 @@ class DepositTest(unittest.TestCase):
         self.assertEqual(4, deposit.slot)
         self.assertEqual(5, deposit.slot_index)
 
+    def test_to_dictionary(self) -> None:
+        deposit = Deposit(1, 2, 3, 4, 5)
+        expected = {
+            "accountId": 1,
+            "tokenId": 2,
+            "amount": "3",
+            "slot": 4,
+            "slotIndex": 5
+        }
+        self.assertEqual(deposit.to_dictionary(), expected)
+
     def test_throws_with_missing_key(self) -> None:
         with self.assertRaises(AssertionError):
             Deposit.from_dictionary({
@@ -52,6 +63,18 @@ class WithdrawTest(unittest.TestCase):
         self.assertEqual(3, withdraw.amount)
         self.assertEqual(4, withdraw.slot)
         self.assertEqual(5, withdraw.slot_index)
+
+    def test_to_dictionary(self) -> None:
+        withdraw = Withdraw(1, 2, 3, 4, 5)
+        expected = {
+            "accountId": 1,
+            "tokenId": 2,
+            "amount": "3",
+            "slot": 4,
+            "slotIndex": 5,
+            "valid": False
+        }
+        self.assertEqual(withdraw.to_dictionary(), expected)
 
     def test_throws_with_missing_key(self) -> None:
         with self.assertRaises(AssertionError):
@@ -93,6 +116,19 @@ class OrderTest(unittest.TestCase):
         self.assertEqual(6, order.buy_amount)
         self.assertEqual(7, order.sell_amount)
 
+    def test_to_dictionary(self) -> None:
+        order = Order(1, 2, 3, 4, 5, 6, 7)
+        expected = {
+            "auctionId": 1,
+            "slotIndex": 2,
+            "accountId": 3,
+            "buyToken": 4,
+            "sellToken": 5,
+            "buyAmount": "6",
+            "sellAmount": "7",
+        }
+        self.assertEqual(order.to_dictionary(), expected)
+
     def test_throws_with_missing_key(self) -> None:
         with self.assertRaises(AssertionError):
             Order.from_dictionary({
@@ -100,8 +136,8 @@ class OrderTest(unittest.TestCase):
                 "slotIndex": 2,
                 "accountId": 3,
                 "buyToken": 4,
-                "buyAmount": 6,
-                "sellAmount": 7
+                "buyAmount": "6",
+                "sellAmount": "7"
             })
 
     def test_throws_with_non_integer_value(self) -> None:
@@ -112,8 +148,8 @@ class OrderTest(unittest.TestCase):
                 "accountId": 3,
                 "buyToken": 4,
                 "sellToken": 5,
-                "buyAmount": 6,
-                "sellAmount": 7
+                "buyAmount": "6",
+                "sellAmount": "7"
             })
 
 
@@ -188,16 +224,30 @@ class AuctionSettlementTest(unittest.TestCase):
         self.assertEqual([1, 3, 5], serialized_solution.buy_amounts)
         self.assertEqual([2, 4, 6], serialized_solution.sell_amounts)
 
+    def test_serialize_solution_warning(self) -> None:
+        num_tokens = 3
+        settlement = AuctionSettlement(1, 2, "hash", "0x01020301020304050607")
+
+        serialized_solution = settlement.serialize_solution(num_tokens)
+        self.assertEqual([1, 2, 3], serialized_solution.prices)
+        self.assertEqual([1, 3, 5, 7], serialized_solution.buy_amounts)
+        self.assertEqual([2, 4, 6], serialized_solution.sell_amounts)
+
 
 class StateTransitionTest(unittest.TestCase):
     def test_from_dict(self) -> None:
         transition_dict = {
             "transitionType": TransitionType.Deposit,
             "stateIndex": 2,
-            "stateHash": "hash",
+            "stateHash": "0xbdbf90e53369e96fd67d57999d2b33e28a877216d962dfac023b1234567890",
             "slot": 1,
         }
-        expected = StateTransition(TransitionType.Deposit, 2, "hash", 1)
+        expected = StateTransition(
+            TransitionType.Deposit,
+            2,
+            "0xbdbf90e53369e96fd67d57999d2b33e28a877216d962dfac023b1234567890",
+            1
+        )
         self.assertEqual(expected, StateTransition.from_dictionary(transition_dict))
 
     def test_from_dict_failure(self) -> None:
@@ -205,7 +255,27 @@ class StateTransitionTest(unittest.TestCase):
             bad_transition_dict = {
                 "BAD_KEY": TransitionType.Deposit,
                 "stateIndex": 2,
-                "stateHash": "hash",
+                "stateHash": "0x6e5066077cdaf2f0b697e15a49f624e429adeb62",
                 "slot": 1,
+            }
+            StateTransition.from_dictionary(bad_transition_dict)
+
+    def test_bad_hash(self) -> None:
+        with self.assertRaises(AssertionError):
+            bad_transition_dict = {
+                "transitionType": TransitionType.Deposit,
+                "stateIndex": 2,
+                "stateHash": "Not A Hash",
+                "slot": 1,
+            }
+            StateTransition.from_dictionary(bad_transition_dict)
+
+    def test_bad_slot(self) -> None:
+        with self.assertRaises(AssertionError):
+            bad_transition_dict = {
+                "transitionType": TransitionType.Deposit,
+                "stateIndex": 2,
+                "stateHash": "0x6e5066077cdaf2f0b697e15a49f624e429adeb62",
+                "slot": "fart",
             }
             StateTransition.from_dictionary(bad_transition_dict)
