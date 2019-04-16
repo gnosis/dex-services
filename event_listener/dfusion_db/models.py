@@ -182,6 +182,8 @@ class AuctionSettlement(NamedTuple):
     def serialize_solution(self, num_tokens: int) -> AuctionResults:
         """Transform Byte Code for prices_and_volumes into Prices & TradeExecution objects"""
         logging.info("Serializing Auction Results (from bytecode)")
+
+        # TODO - pass num_orders (as read from DB for solution verification)
         tmp = self.prices_and_volumes[2:]
         hex_str_array = [tmp[i: i+24] for i in range(0, len(tmp), 24)]
         byte_array = list(map(lambda t: int(t, 16), hex_str_array))
@@ -191,6 +193,7 @@ class AuctionSettlement(NamedTuple):
         sell_amounts = volumes[1::2]  # Odd elements
 
         if len(buy_amounts) != len(sell_amounts):
+            # TODO - assert that buy and sell amounts have same length and are less than num_orders
             logging.warning("Solution data is not correct!")
 
         return AuctionResults.from_dictionary({
