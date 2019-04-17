@@ -202,6 +202,3 @@ class AuctionSettlement(NamedTuple):
             "buy_amounts": buy_amounts,
             "sell_amounts": sell_amounts,
         })
-
-
-
