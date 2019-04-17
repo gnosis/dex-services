@@ -10,7 +10,7 @@ mongo dfusion2 --eval "db.orders.find({'auctionId': ${EXPECTED_AUCTION}}).size()
 
 # Place 6 orders in current Auction (accountId, buyToken, sellToken, minBuy, maxSell)
 truffle exec scripts/sell_order.js 1 2 3 12 12
-truffle exec scripts/sell_order.js 2 3 2 22 20
+truffle exec scripts/sell_order.js 2 3 2 2.2 2
 truffle exec scripts/sell_order.js 3 1 3 150 10
 truffle exec scripts/sell_order.js 4 1 2 180 15
 truffle exec scripts/sell_order.js 5 2 1 4 52

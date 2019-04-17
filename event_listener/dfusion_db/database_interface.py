@@ -40,7 +40,7 @@ class DatabaseInterface(ABC):
     def write_order(self, order: Order) -> None: pass
 
     @abstractmethod
-    def get_orders(self, slot: int) -> List[Order]: pass
+    def get_orders(self, auctionId: int) -> List[Order]: pass
 
 
 class MongoDbInterface(DatabaseInterface):
@@ -94,6 +94,6 @@ class MongoDbInterface(DatabaseInterface):
         self.logger.info(
             "Successfully included Order - {}".format(order_id))
 
-    def get_orders(self, slot: int) -> List[Order]:
-        return list(map(lambda d: Order.from_dictionary(d), self.db.orders.find({'slot': slot})))
+    def get_orders(self, auctionId: int) -> List[Order]:
+        return list(map(lambda d: Order.from_dictionary(d), self.db.orders.find({'auctionId': auctionId})))
 

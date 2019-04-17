@@ -42,14 +42,14 @@ fn token_id(token: u8) -> String {
 }
 
 fn account_id(account: u16) -> String {
-    format!("{}", account)
+    format!("account{}", account)
 }
 
 fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
     json!({
-        "accountID": account_id(order.account_id),
-        "sellToken": token_id(order.sell_token),
-        "buyToken": token_id(order.buy_token), 
+        "accountID": account_id(order.account_id - 1),
+        "sellToken": token_id(order.sell_token - 1),
+        "buyToken": token_id(order.buy_token - 1), 
         "sellAmount": order.sell_amount.to_string(),
         "buyAmount": order.buy_amount.to_string(),
         "ID": id //TODO this should not be needed
@@ -61,8 +61,7 @@ fn serialize_balances(balances: &Vec<u128>, num_tokens: u8) -> serde_json::Value
     let mut accounts: HashMap<String, HashMap<String, String>> = HashMap::new();
     let mut current_account = 0;
     for balances_for_current_account in balances.chunks(num_tokens as usize) {
-        accounts.insert(current_account.to_string(), (0..num_tokens)
-
+        accounts.insert(account_id(current_account), (0..num_tokens)
             .map(|t| token_id(t))
             .zip(balances_for_current_account.iter().map(|b| b.to_string()))
             .collect());

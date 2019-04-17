@@ -166,8 +166,9 @@ class AuctionSettlement(NamedTuple):
     def serialize_solution(self) -> Dict[str, List[int]]:
         """Transform Byte Code for prices_and_volumes into Prices & TradeExecution objects"""
         logging.info("Serializing Auction Results (from bytecode)")
-        tmp = self.prices_and_volumes[2:]
-        hex_str_array = [tmp[i] + tmp[i + 1] for i in range(0, len(tmp), 2)]
+
+        # TODO - pass num_orders (as read from DB for solution verification)
+        hex_str_array = [self.prices_and_volumes[i: i + 24] for i in range(0, len(self.prices_and_volumes), 24)]
         byte_array = list(map(lambda t: int(t, 16), hex_str_array))
 
         prices, volumes = byte_array[:30], byte_array[30:]
