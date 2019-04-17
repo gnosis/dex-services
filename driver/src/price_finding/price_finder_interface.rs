@@ -2,6 +2,8 @@ use crate::models;
 
 use super::error::PriceFindingError;
 use web3::types::U256;
+use std::iter::once;
+
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Solution {
@@ -14,12 +16,12 @@ pub struct Solution {
 impl models::Serializable for Solution {
     fn bytes(&self) -> Vec<u8> {
         // TODO: need to find better zipping formulation
-        let c = self.executed_sell_amounts.iter().zip(self.executed_buy_amounts.iter());
-        let mut altering_sell_buy_amounts = vec![];
-        for (i, ( x, y)) in c.enumerate() {
-            altering_sell_buy_amounts.append(&mut vec![x.clone()]);
-            altering_sell_buy_amounts.append(&mut vec![y.clone()]);
-        }
+        let altering_sell_buy_amounts: Vec<u128> = self.executed_sell_amounts
+        .iter()
+        .zip(self.executed_buy_amounts.iter())
+        .flat_map(|tup| once(tup.0).chain(once(tup.1)))
+        .map(|x| x.clone())
+        .collect();
         [&self.prices, &altering_sell_buy_amounts]
             .iter()
             .flat_map(|list| list.iter())
