@@ -229,6 +229,8 @@ class SnappInitializationReceiverTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.dummy_state = "0x00000000000000000000000000000000000000000000000000000000000000"
+        self.num_tokens = 2
+        self.num_accounts = 3
 
     def test_generic_save(self) -> None:
         database = Mock()
@@ -236,12 +238,13 @@ class SnappInitializationReceiverTest(unittest.TestCase):
 
         event = {
             "stateHash": self.dummy_state,
-            "maxTokens": 2,
-            "maxAccounts": 3
+            "maxTokens": self.num_tokens,
+            "maxAccounts": self.num_accounts
         }
         receiver.save(event, block_info={})
         database.write_constants.assert_called_with(2, 3)
-        database.write_account_state(AccountRecord(0, self.dummy_state, [0 for _ in range(2 * 3)]))
+        database.write_account_state(
+            AccountRecord(0, self.dummy_state, [0 for _ in range(self.num_tokens * self.num_accounts)]))
 
     @staticmethod
     def test_create_empty_balances() -> None:
