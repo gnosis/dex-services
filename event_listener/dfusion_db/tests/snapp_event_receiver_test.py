@@ -3,6 +3,7 @@ from unittest.mock import Mock
 from ..snapp_event_receiver import DepositReceiver, OrderReceiver, SnappInitializationReceiver
 from ..snapp_event_receiver import WithdrawRequestReceiver, StateTransitionReceiver, AuctionSettlementReceiver
 from ..models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord, Order
+from typing import List
 
 
 class DepositReceiverTest(unittest.TestCase):
@@ -256,27 +257,60 @@ class SnappInitializationReceiverTest(unittest.TestCase):
 
 class AuctionSettlementReceiverTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.num_tokens = 3
+        self.num_tokens = 2
+        self.num_accounts = 2
         self.dummy_state_hash = "0x00000000000000000000000000000000000000000000000000000000000000"
-        self.old_balances = [42] * 10 * self.num_tokens
+        self.old_balances = [42] * self.num_accounts * self.num_tokens
         self.dummy_account_record = AccountRecord(1, self.dummy_state_hash, self.old_balances)
 
     def test_save(self) -> None:
+
+        def int_list_to_hex_bytes(arr: List[int], num_bits: int) -> str:
+            assert (num_bits % 4 == 0)
+            hex_length = num_bits // 4
+            return "".join(map(lambda t: str(hex(t))[2:].rjust(hex_length, "0"), arr))
+
         database = Mock()
         receiver = AuctionSettlementReceiver(database)
-        num_tokens = 3
+
+        orders = [
+            Order.from_dictionary({
+                "auctionId": 1,
+                "slotIndex": 4,
+                "accountId": 1,
+                "buyToken": 2,
+                "sellToken": 1,
+                "buyAmount": 10,
+                "sellAmount": 10,
+            }),
+            Order.from_dictionary({
+                "auctionId": 1,
+                "slotIndex": 4,
+                "accountId": 2,
+                "buyToken": 1,
+                "sellToken": 2,
+                "buyAmount": 8,
+                "sellAmount": 16,
+            }),
+        ]
+
+        prices = [16, 10]
+        executed_amounts = [16, 10, 10, 16]
+        encoded_solution = "0x" + int_list_to_hex_bytes(prices, 96) + int_list_to_hex_bytes(executed_amounts, 96)
 
         event = {
             "auctionId": 1,
             "stateIndex": 2,
             "stateHash": self.dummy_state_hash,
-            "pricesAndVolumes": "0x" + ("0" * 23 + "1") * self.num_tokens + ""
+            "pricesAndVolumes": encoded_solution
         }
 
         database.get_account_state.return_value = self.dummy_account_record
-
-        database.get_orders.return_value = []
-        database.get_num_tokens.return_value = num_tokens
+        database.get_orders.return_value = orders
+        database.get_num_tokens.return_value = self.num_tokens
         receiver.save(event, block_info={})
 
-        database.write_account_state(AccountRecord(0, self.dummy_state_hash, self.old_balances))
+        new_balances = [42 - 10, 42 + 16, 42 + 10, 42 - 16]
+
+        new_account_record = AccountRecord(2, self.dummy_state_hash, new_balances)
+        database.write_account_state.assert_called_with(new_account_record)
