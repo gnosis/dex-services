@@ -1,0 +1,7 @@
+[run]
+omit =
+    event_listener/**/__init__.py
+    event_listener/dfusion_db/tests/*
+    event_listener/dfusion_db/management/commands/run_listener.py
+    event_listener/dfusion_db/generic_event_receiver.py
+    event_listener/dfusion_db/database_interface.py
