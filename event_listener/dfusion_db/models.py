@@ -143,7 +143,7 @@ class AuctionResults(NamedTuple):
     sell_amounts: List[int]
 
     @classmethod
-    def from_bytes(cls, byte_str: str, num_tokens) -> "AuctionResults":
+    def from_bytes(cls, byte_str: str, num_tokens: int) -> "AuctionResults":
         # TODO - pass num_orders (as read from DB for solution verification)
         hex_str_array = [byte_str[i: i+24] for i in range(0, len(byte_str), 24)]
         byte_array = list(map(lambda t: int(t, 16), hex_str_array))

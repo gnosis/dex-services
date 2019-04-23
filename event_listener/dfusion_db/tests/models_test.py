@@ -168,31 +168,40 @@ class AccountRecordTest(unittest.TestCase):
 class AuctionResultsTest(unittest.TestCase):
 
     def test_from_bytes(self) -> None:
-        price_strings = list(map(lambda x: str(x).rjust(24, "0"), [1, 2, 3]))
-        amount_strings = list(map(lambda x: str(x).rjust(24, "0"), [1, 2, 3, 4]))
+        price_strings = list(map(lambda x: str(hex(x))[2:].rjust(24, "0"), [1, 2, 3]))
+        amount_strings = list(map(lambda x: str(hex(x))[2:].rjust(24, "0"), [1, 2, 3, 4]))
         solution_bytes = "".join(price_strings) + "".join(amount_strings)
         solution = AuctionResults.from_bytes(solution_bytes, 3)
         self.assertEqual(solution.prices, [1, 2, 3], "Solution's prices unexpected")
         self.assertEqual(solution.buy_amounts, [1, 3], "Solution's buy amounts unexpected")
         self.assertEqual(solution.sell_amounts, [2, 4], "Solution's sell amounts unexpected")
 
+    def test_bad_bytes(self) -> None:
+        price_strings = list(map(lambda x: str(hex(x))[2:].rjust(24, "0"), [1, 2, 3]))
+        # Amount list should have even length (i.e. sell amount for every buy amount)!
+        bad_amount_strings = list(map(lambda x: str(hex(x))[2:].rjust(24, "0"), [1, 2, 3]))
+        bad_bytes = "".join(price_strings) + "".join(bad_amount_strings)
+
+        with self.assertLogs():
+            AuctionResults.from_bytes(bad_bytes, 3)
+
 
 class AuctionSettlementTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self.num_tokens = 3
-        self.solution_bytes = "0" * 24 * self.num_tokens + "0" * 24 * 2
-        self.results = AuctionResults.from_bytes(self.solution_bytes, self.num_tokens)
+
+    NUM_TOKENS = 3
+    EMPTY_SOLUTION_BYTES = "0" * 24 * NUM_TOKENS + "0" * 24 * 2
+    AUCTION_RESULTS = AuctionResults.from_bytes(EMPTY_SOLUTION_BYTES, NUM_TOKENS)
 
     def test_from_dict(self) -> None:
         settlement_dict = {
             "auctionId": 1,
             "stateIndex": 2,
             "stateHash": "hash",
-            "pricesAndVolumes": self.solution_bytes,
+            "pricesAndVolumes": self.EMPTY_SOLUTION_BYTES,
         }
 
-        expected = AuctionSettlement(1, 2, "hash", self.results)
-        self.assertEqual(expected, AuctionSettlement.from_dictionary(settlement_dict, self.num_tokens))
+        expected = AuctionSettlement(1, 2, "hash", self.AUCTION_RESULTS)
+        self.assertEqual(expected, AuctionSettlement.from_dictionary(settlement_dict, self.NUM_TOKENS))
 
     def test_from_dict_failure(self) -> None:
         with self.assertRaises(AssertionError):
@@ -201,7 +210,7 @@ class AuctionSettlementTest(unittest.TestCase):
                 "stateIndex": 2,
                 "stateHash": "hash",
                 "pricesAndVolumes": "hashed_bytes",
-            }, self.num_tokens)
+            }, self.NUM_TOKENS)
 
 
 class StateTransitionTest(unittest.TestCase):
