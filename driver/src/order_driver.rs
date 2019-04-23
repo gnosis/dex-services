@@ -83,11 +83,11 @@ fn compute_updated_balances(
     let mut result = balances.clone();
     for (index, order) in orders.iter().enumerate() {
         let buy_volume = solution.executed_buy_amounts[index];
-        let buy_index = (order.account_id as usize * models::TOKENS as usize) + order.buy_token as usize;
+        let buy_index = util::balance_index(order.buy_token, order.account_id);
         result[buy_index] += buy_volume;
 
         let sell_volume = solution.executed_sell_amounts[index];
-        let sell_index = (order.account_id as usize * models::TOKENS as usize) + order.buy_token as usize;
+        let sell_index = util::balance_index(order.sell_token, order.account_id);
         result[sell_index] -= sell_volume;
     }
     result

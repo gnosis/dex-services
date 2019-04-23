@@ -19,6 +19,6 @@ truffle exec scripts/mine_blocks.js 21
 
 sleep 10
 
-EXPECTED_HASH="a5b2329a51ada3ce2114e2724264cbfd11f5cd63e41c3700c3f88358995b6153"
+EXPECTED_HASH="6af094aed402d5fd6427d28989b7621e4a2558c88a00d8a21c5d741b79da874e"
 truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep ${EXPECTED_HASH}
 mongo dfusion2 --eval "db.accounts.findOne({'stateHash': '${EXPECTED_HASH}'}).balances[62]" | grep 18000000000000000000
