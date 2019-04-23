@@ -158,7 +158,7 @@ class AuctionSettlement(NamedTuple):
     auction_id: int
     state_index: int
     state_hash: str
-    prices_and_volumes: str  # Emitted as Hex String
+    prices_and_volumes: str  # TODO - Emitted as Hex String  # Should be a Prices & Buy Amounts, Sell Amounts
 
     @classmethod
     def from_dictionary(cls, data: Dict[str, Any]) -> "AuctionSettlement":
@@ -168,7 +168,7 @@ class AuctionSettlement(NamedTuple):
             int(data['auctionId']),
             int(data['stateIndex']),
             str(data['stateHash']),
-            str(data['pricesAndVolumes']),
+            str(data['pricesAndVolumes']),  # TODO - Call serialize solution
         )
 
     def to_dictionary(self) -> Dict[str, Any]:
@@ -200,6 +200,3 @@ class AuctionSettlement(NamedTuple):
             "buy_amounts": buy_amounts,
             "sell_amounts": sell_amounts,
         })
-
-
-
