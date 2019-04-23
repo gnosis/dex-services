@@ -15,7 +15,7 @@ class SnappEventListener(ABC):
 
     @abstractmethod
     def save(self, event: Dict[str, Any], block_info: Dict[str, Any]) -> None:
-        pass
+        return
 
 
 class DepositReceiver(SnappEventListener):
@@ -50,8 +50,13 @@ class StateTransitionReceiver(SnappEventListener):
             index = num_tokens * (datum.account_id - 1) + (datum.token_id - 1)
 
             if transition.transition_type == TransitionType.Deposit:
-                self.logger.info("Incrementing balance of account {} - token {} by {}".format(
-                    datum.account_id, datum.token_id, datum.amount))
+                self.logger.info(
+                    "Incrementing balance of account {} - token {} by {}".format(
+                        datum.account_id,
+                        datum.token_id,
+                        datum.amount
+                    )
+                )
                 balances[index] += datum.amount
             elif transition.transition_type == TransitionType.Withdraw:
                 assert isinstance(datum, Withdraw)
@@ -148,19 +153,21 @@ class AuctionSettlementReceiver(SnappEventListener):
 
     def __update_accounts(self, settlement: AuctionSettlement) -> None:
         state = self.database.get_account_state(settlement.state_index - 1)
-        new_account_record = AccountRecord(settlement.state_index, settlement.state_hash, state.balances.copy())
-        self.database.write_account_state(new_account_record)
+        balances = state.balances.copy()
 
-        # Apply the balance updates according to settlement.prices_and_volumes
-        # Should we bother to fetch the corresponding orders?
-        # We can assume the solution took balances into account?
-
-        # for datum in self.__get_data_to_apply(settlement):
-        #     # Balances are stored as [b(a1, t1), b(a1, t2), ... b(a1, T), b(a2, t1), ...]
-        #     index = num_tokens * (datum.account_id - 1) + (datum.token_id - 1)
-
-    def __get_data_to_apply(self, settlement: AuctionSettlement) -> Union[List[Withdraw], List[Deposit]]:
         orders = self.database.get_orders(settlement.auction_id)
-        solution = settlement.extract_solution()
-        logging.info()
+        num_tokens = self.database.get_num_tokens()
+        solution = settlement.serialize_solution(num_tokens)
 
+        buy_amounts = solution.buy_amounts
+        sell_amounts = solution.sell_amounts
+
+        for i, order in enumerate(orders):
+            buy_index = num_tokens * (order.account_id - 1) + (order.buy_token - 1)
+            balances[buy_index] += buy_amounts[i]
+
+            sell_index = num_tokens * (order.account_id - 1) + (order.sell_token - 1)
+            balances[sell_index] -= sell_amounts[i]
+
+        new_account_record = AccountRecord(settlement.state_index, settlement.state_hash, balances)
+        self.database.write_account_state(new_account_record)

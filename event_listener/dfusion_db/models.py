@@ -6,7 +6,6 @@ from typing import NamedTuple, Dict, Any, List, Optional
 class TransitionType(Enum):
     Deposit = 0
     Withdraw = 1
-    Auction = 2
 
 
 class StateTransition(NamedTuple):
@@ -138,11 +137,35 @@ class Order(NamedTuple):
         }
 
 
+<<<<<<< HEAD
+=======
+class AuctionResults(NamedTuple):
+    prices: List[int]
+    buy_amounts: List[int]
+    sell_amounts: List[int]
+
+    @classmethod
+    def from_dictionary(cls, data: Dict[str, List[int]]) -> "AuctionResults":
+        event_fields = ('prices', 'buy_amounts', 'sell_amounts')
+        assert all(k in data for k in event_fields), "Unexpected keys. Got {}".format(data.keys())
+
+        return AuctionResults(
+            data["prices"],
+            data["buy_amounts"],
+            data["sell_amounts"]
+        )
+
+
+>>>>>>> origin/master
 class AuctionSettlement(NamedTuple):
     auction_id: int
     state_index: int
     state_hash: str
+<<<<<<< HEAD
     prices_and_volumes: str  # Stored as Hex String
+=======
+    prices_and_volumes: str  # Emitted as Hex String
+>>>>>>> origin/master
 
     @classmethod
     def from_dictionary(cls, data: Dict[str, Any]) -> "AuctionSettlement":
@@ -163,20 +186,28 @@ class AuctionSettlement(NamedTuple):
             "pricesAndVolumes": self.prices_and_volumes,
         }
 
-    def serialize_solution(self) -> Dict[str, List[int]]:
+    def serialize_solution(self, num_tokens: int) -> AuctionResults:
         """Transform Byte Code for prices_and_volumes into Prices & TradeExecution objects"""
         logging.info("Serializing Auction Results (from bytecode)")
 
         # TODO - pass num_orders (as read from DB for solution verification)
+        tmp = self.prices_and_volumes[2:]
         hex_str_array = [self.prices_and_volumes[i: i + 24] for i in range(0, len(self.prices_and_volumes), 24)]
         byte_array = list(map(lambda t: int(t, 16), hex_str_array))
 
-        prices, volumes = byte_array[:30], byte_array[30:]
+        prices, volumes = byte_array[:num_tokens], byte_array[num_tokens:]
         buy_amounts = volumes[0::2]  # Even elements
         sell_amounts = volumes[1::2]  # Odd elements
 
-        return {
+        if len(buy_amounts) != len(sell_amounts):
+            # TODO - assert that buy and sell amounts have same length and are less than num_orders
+            logging.warning("Solution data is not correct!")
+
+        return AuctionResults.from_dictionary({
             "prices": prices,
-            "exec_buy_amounts": buy_amounts,
-            "exec_sell_amounts": sell_amounts,
-        }
+            "buy_amounts": buy_amounts,
+            "sell_amounts": sell_amounts,
+        })
+
+
+
