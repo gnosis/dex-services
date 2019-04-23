@@ -32,6 +32,9 @@ mongo dfusion2 --eval "db.orders.findOne({'auctionId': ${EXPECTED_AUCTION}, 'acc
 
 truffle exec scripts/mine_blocks.js 21
 
-# TODO - Test Driver: Wait for state update because of closed auction
+sleep 10
 
-# TODO - Test Solver: Ensure that balances are differ after state transition (i.e. found non-trivial solution)
+# Test balances have been updated
+EXPECTED_HASH="c4c44a0c0c17022dc987ba8abbc89d0c77d20865d0d61c07f76c889badd708a2"
+truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep ${EXPECTED_HASH}
+mongo dfusion2 --eval "db.accounts.findOne({'stateHash': '$EXPECTED_HASH'}).balances[60]" | grep 4000000000000000000
