@@ -8,6 +8,14 @@ EXPECTED_AUCTION=1
 # Ensure no orders yet in auction slot 1
 mongo dfusion2 --eval "db.orders.find({'auctionId': ${EXPECTED_AUCTION}}).size()" | grep 0
 
+# Make sure we have enough balances for the trades
+truffle exec scripts/deposit.js 1 3 300
+truffle exec scripts/deposit.js 2 2 300
+truffle exec scripts/deposit.js 3 3 200
+truffle exec scripts/deposit.js 4 2 300
+truffle exec scripts/deposit.js 5 1 300
+truffle exec scripts/deposit.js 6 1 300
+
 # Place 6 orders in current Auction (accountId, buyToken, sellToken, minBuy, maxSell)
 truffle exec scripts/sell_order.js 1 2 3 12 12
 truffle exec scripts/sell_order.js 2 3 2 2.2 2

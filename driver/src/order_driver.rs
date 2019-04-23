@@ -114,23 +114,28 @@ mod tests {
         };
         let order_1 = Order{
           slot_index: 1,
-          account_id: 1,
-          sell_token: 0,
-          buy_token: 1,
+          account_id: 2,
+          sell_token: 1,
+          buy_token: 2,
           sell_amount: 4,
           buy_amount: 5,
         };
         let order_2 = Order{
           slot_index: 1,
-          account_id: 0,
-          sell_token: 1,
-          buy_token: 0,
+          account_id: 1,
+          sell_token: 2,
+          buy_token: 1,
           sell_amount: 5,
           buy_amount: 4,
         };
         let orders = vec![order_1, order_2];
 
-        assert_eq!(compute_updated_balances(&balances, &orders, &solution), balances);
+        let mut updated_balances = balances.clone();
+        updated_balances[0] = 101;
+        updated_balances[1] = 99;
+        updated_balances[30] = 99;
+        updated_balances[31] = 101;
+        assert_eq!(compute_updated_balances(&balances, &orders, &solution), updated_balances);
     }
     #[test]
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
