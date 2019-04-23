@@ -222,7 +222,7 @@ class AuctionSettlementTest(unittest.TestCase):
 
         serialized_solution = settlement.serialize_solution(num_tokens)
         self.assertEqual([0, 0, 0], serialized_solution.prices)
-        self.assertEqual([0], serialized_solution.buy_amounts)
+        self.assertEqual([0, 0], serialized_solution.buy_amounts)
         self.assertEqual([0], serialized_solution.sell_amounts)
 
     def test_serialize_solution_warning(self) -> None:
@@ -232,7 +232,7 @@ class AuctionSettlementTest(unittest.TestCase):
         serialized_solution = settlement.serialize_solution(num_tokens)
         self.assertEqual([0, 0, 0], serialized_solution.prices)
         self.assertEqual([0, 0], serialized_solution.buy_amounts)
-        self.assertEqual([0], serialized_solution.sell_amounts)
+        self.assertEqual([0, 0], serialized_solution.sell_amounts)
 
 
 class StateTransitionTest(unittest.TestCase):
