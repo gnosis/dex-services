@@ -233,11 +233,11 @@ pub mod tests {
         };
         let result = serialize_order(&order, "1");
         let expected = json!({
-            "sellToken": "token2",
-            "buyToken": "token3",
+            "sellToken": "token1",
+            "buyToken": "token2",
             "sellAmount": "100",
             "buyAmount": "200",
-            "accountID": "1",
+            "accountID": "account0",
             "ID": "1"
         });
         assert_eq!(result, expected);
@@ -248,12 +248,12 @@ pub mod tests {
         let balances = vec![100, 200, 300, 400, 500, 600];
         let result = serialize_balances(&balances, 3);
         let expected = json!({
-            "0": {
+            "account0": {
                 "token0": "100",
                 "token1": "200",
                 "token2": "300",
             }, 
-            "1": {
+            "account1": {
                 "token0": "400",
                 "token1": "500",
                 "token2": "600",

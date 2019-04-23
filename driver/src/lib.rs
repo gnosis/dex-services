@@ -12,7 +12,7 @@ use crate::contract::SnappContractImpl;
 use crate::db_interface::MongoDB;
 use crate::deposit_driver::run_deposit_listener;
 use crate::order_driver::run_order_listener;
-use crate::price_finding::linear_optimization_price_finder::LinearOptimisationPriceFinder;
+use crate::price_finding::naive_solver::NaiveSolver;
 use crate::withdraw_driver::run_withdraw_listener;
 
 pub mod contract;
@@ -29,7 +29,7 @@ mod util;
 pub fn run_driver_components(
     db: &MongoDB,
     contract: &SnappContractImpl, 
-    price_finder: &mut LinearOptimisationPriceFinder,
+    price_finder: &mut NaiveSolver,
 ) -> () {
     if let Err(e) = run_deposit_listener(db, contract) {
         println!("Deposit_driver error: {}", e);

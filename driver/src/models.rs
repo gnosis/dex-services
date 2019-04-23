@@ -266,7 +266,7 @@ pub mod tests {
     assert_eq!(
     vec![order].rolling_hash(),
     H256::from_str(
-      "e1be57cc443a06d5b4e8c860eed65583e915cce10762f6f04a370326c187879b"
+      "8c253b4588a6d87b02b5f7d1424020b7b5f8c0397e464e087d2830a126d3b699"
       ).unwrap()
     );
   }
