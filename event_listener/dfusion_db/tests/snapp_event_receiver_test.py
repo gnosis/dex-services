@@ -5,6 +5,8 @@ from ..snapp_event_receiver import WithdrawRequestReceiver, StateTransitionRecei
 from ..models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord, Order
 from typing import List
 
+EMPTY_STATE_HASH = "0x00000000000000000000000000000000000000000000000000000000000000"
+
 
 class DepositReceiverTest(unittest.TestCase):
     @staticmethod
@@ -227,24 +229,24 @@ class StateTransitionReceiverTest(unittest.TestCase):
 
 class SnappInitializationReceiverTest(unittest.TestCase):
 
-    def setUp(self) -> None:
-        self.dummy_state = "0x00000000000000000000000000000000000000000000000000000000000000"
-        self.num_tokens = 2
-        self.num_accounts = 3
-
-    def test_generic_save(self) -> None:
+    @staticmethod
+    def test_generic_save() -> None:
         database = Mock()
         receiver = SnappInitializationReceiver(database)
 
+        num_tokens = 2
+        num_accounts = 3
+
         event = {
-            "stateHash": self.dummy_state,
-            "maxTokens": self.num_tokens,
-            "maxAccounts": self.num_accounts
+            "stateHash": EMPTY_STATE_HASH,
+            "maxTokens": num_tokens,
+            "maxAccounts": num_accounts
         }
         receiver.save(event, block_info={})
+
         database.write_constants.assert_called_with(2, 3)
-        database.write_account_state(
-            AccountRecord(0, self.dummy_state, [0 for _ in range(self.num_tokens * self.num_accounts)]))
+        database.write_account_state.assert_called_with(
+            AccountRecord(0, EMPTY_STATE_HASH, [0 for _ in range(num_tokens * num_accounts)]))
 
     @staticmethod
     def test_create_empty_balances() -> None:
@@ -259,14 +261,13 @@ class SnappInitializationReceiverTest(unittest.TestCase):
 
 
 class AuctionSettlementReceiverTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self.num_tokens = 2
-        self.num_accounts = 2
-        self.dummy_state_hash = "0x00000000000000000000000000000000000000000000000000000000000000"
-        self.old_balances = [42] * self.num_accounts * self.num_tokens
-        self.dummy_account_record = AccountRecord(1, self.dummy_state_hash, self.old_balances)
 
-    def test_save(self) -> None:
+    @staticmethod
+    def test_save() -> None:
+        num_tokens = 2
+        num_accounts = 2
+        old_balances = [42] * num_accounts * num_tokens
+        dummy_account_record = AccountRecord(1, EMPTY_STATE_HASH, old_balances)
 
         def int_list_to_hex_bytes(arr: List[int], num_bits: int) -> str:
             assert (num_bits % 4 == 0)
@@ -304,16 +305,16 @@ class AuctionSettlementReceiverTest(unittest.TestCase):
         event = {
             "auctionId": 1,
             "stateIndex": 2,
-            "stateHash": self.dummy_state_hash,
+            "stateHash": EMPTY_STATE_HASH,
             "pricesAndVolumes": encoded_solution
         }
 
-        database.get_account_state.return_value = self.dummy_account_record
+        database.get_account_state.return_value = dummy_account_record
         database.get_orders.return_value = orders
-        database.get_num_tokens.return_value = self.num_tokens
+        database.get_num_tokens.return_value = num_tokens
         receiver.save(event, block_info={})
 
         new_balances = [42 - 10, 42 + 16, 42 + 10, 42 - 16]
 
-        new_account_record = AccountRecord(2, self.dummy_state_hash, new_balances)
+        new_account_record = AccountRecord(2, EMPTY_STATE_HASH, new_balances)
         database.write_account_state.assert_called_with(new_account_record)

@@ -166,35 +166,42 @@ class AccountRecordTest(unittest.TestCase):
 
 
 class AuctionResultsTest(unittest.TestCase):
-    def test_from_dictionary(self) -> None:
-        auction_result_dict = {
-            "prices": [1, 2, 3],
-            "buy_amounts": [1, 3, 5],
-            "sell_amounts": [0, 2, 4]
-        }
-        expected_res = AuctionResults([1, 2, 3], [1, 3, 5], [0, 2, 4])
 
-        self.assertEqual(expected_res, AuctionResults.from_dictionary(auction_result_dict))
+    def test_from_bytes(self) -> None:
+        price_strings = list(map(lambda x: str(hex(x))[2:].rjust(24, "0"), [1, 2, 3]))
+        amount_strings = list(map(lambda x: str(hex(x))[2:].rjust(24, "0"), [1, 2, 3, 4]))
+        solution_bytes = "".join(price_strings) + "".join(amount_strings)
+        solution = AuctionResults.from_bytes(solution_bytes, 3)
+        self.assertEqual(solution.prices, [1, 2, 3], "Solution's prices unexpected")
+        self.assertEqual(solution.buy_amounts, [1, 3], "Solution's buy amounts unexpected")
+        self.assertEqual(solution.sell_amounts, [2, 4], "Solution's sell amounts unexpected")
 
-    def test_from_dict_fail_insufficient_keys(self) -> None:
-        with self.assertRaises(AssertionError):
-            AuctionResults.from_dictionary({
-                "prices": [1, 2, 3],
-                "BAD_KEY": [1, 3, 5],
-                "sell_amounts": [0, 2, 4],
-            })
+    def test_bad_bytes(self) -> None:
+        price_strings = list(map(lambda x: str(hex(x))[2:].rjust(24, "0"), [1, 2, 3]))
+        # Amount list should have even length (i.e. sell amount for every buy amount)!
+        bad_amount_strings = list(map(lambda x: str(hex(x))[2:].rjust(24, "0"), [1, 2, 3]))
+        bad_bytes = "".join(price_strings) + "".join(bad_amount_strings)
+
+        with self.assertLogs():
+            AuctionResults.from_bytes(bad_bytes, 3)
 
 
 class AuctionSettlementTest(unittest.TestCase):
+
+    NUM_TOKENS = 3
+    EMPTY_SOLUTION_BYTES = "0" * 24 * NUM_TOKENS + "0" * 24 * 2
+    AUCTION_RESULTS = AuctionResults.from_bytes(EMPTY_SOLUTION_BYTES, NUM_TOKENS)
+
     def test_from_dict(self) -> None:
         settlement_dict = {
             "auctionId": 1,
             "stateIndex": 2,
             "stateHash": "hash",
-            "pricesAndVolumes": "hashed_bytes",
+            "pricesAndVolumes": self.EMPTY_SOLUTION_BYTES,
         }
-        expected = AuctionSettlement(1, 2, "hash", "hashed_bytes")
-        self.assertEqual(expected, AuctionSettlement.from_dictionary(settlement_dict))
+
+        expected = AuctionSettlement(1, 2, "hash", self.AUCTION_RESULTS)
+        self.assertEqual(expected, AuctionSettlement.from_dictionary(settlement_dict, self.NUM_TOKENS))
 
     def test_from_dict_failure(self) -> None:
         with self.assertRaises(AssertionError):
@@ -203,36 +210,7 @@ class AuctionSettlementTest(unittest.TestCase):
                 "stateIndex": 2,
                 "stateHash": "hash",
                 "pricesAndVolumes": "hashed_bytes",
-            })
-
-    def test_to_dict(self) -> None:
-        rec = AuctionSettlement(1, 2, "hash", "hashed_bytes")
-        expected = {
-            "auctionId": 1,
-            "stateIndex": 2,
-            "stateHash": "hash",
-            "pricesAndVolumes": "hashed_bytes",
-        }
-        self.assertEqual(expected, AuctionSettlement.to_dictionary(rec))
-
-    def test_serialize_solution(self) -> None:
-        num_tokens = 3
-
-        settlement = AuctionSettlement(1, 2, "hash", "0x" + "0" * 24 * num_tokens + "0" * 24 * 2)
-
-        serialized_solution = settlement.serialize_solution(num_tokens)
-        self.assertEqual([0, 0, 0], serialized_solution.prices)
-        self.assertEqual([0, 0], serialized_solution.buy_amounts)
-        self.assertEqual([0], serialized_solution.sell_amounts)
-
-    def test_serialize_solution_warning(self) -> None:
-        num_tokens = 3
-        settlement = AuctionSettlement(1, 2, "hash", "0x" + "0" * 24 * num_tokens + "0" * 24 * 3)
-
-        serialized_solution = settlement.serialize_solution(num_tokens)
-        self.assertEqual([0, 0, 0], serialized_solution.prices)
-        self.assertEqual([0, 0], serialized_solution.buy_amounts)
-        self.assertEqual([0, 0], serialized_solution.sell_amounts)
+            }, self.NUM_TOKENS)
 
 
 class StateTransitionTest(unittest.TestCase):
