@@ -3,7 +3,7 @@ set -e
 
 cd dex-contracts/
 
-EXPECTED_AUCTION=1
+EXPECTED_AUCTION=0
 
 # Ensure no orders yet in auction slot 1
 mongo dfusion2 --eval "db.orders.find({'auctionId': ${EXPECTED_AUCTION}}).size()" | grep 0

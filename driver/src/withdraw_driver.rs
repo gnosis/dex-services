@@ -34,7 +34,7 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
 
     println!("Current top withdraw_slot is {:?}", withdraw_slot);
     let slot = util::find_first_unapplied_slot(
-        withdraw_slot + 1, 
+        withdraw_slot, 
         Box::new(&|i| contract.has_withdraw_slot_been_applied(i))
     )?;
     if slot <= withdraw_slot {
