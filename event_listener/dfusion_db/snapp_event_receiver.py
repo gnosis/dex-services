@@ -25,7 +25,7 @@ class DepositReceiver(SnappEventListener):
     def save_parsed(self, deposit: Deposit) -> None:
         try:
             self.database.write_deposit(deposit)
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:
             logging.critical("Failed to record Deposit [{}] - {}".format(exc, deposit))
 
 
@@ -37,7 +37,7 @@ class StateTransitionReceiver(SnappEventListener):
         try:
             self.__update_accounts(transition)
             logging.info("Successfully updated state and balances")
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:
             logging.critical("Failed to record StateTransition [{}] - {}".format(exc, transition))
 
     def __update_accounts(self, transition: StateTransition) -> None:
@@ -77,7 +77,7 @@ class StateTransitionReceiver(SnappEventListener):
                         )
                     )
             else:
-                self.logger.error("Unrecognized transition type: should never happen!")  # pragma: no cover
+                self.logger.error("Unrecognized transition type: should never happen!")
 
         new_account_record = AccountRecord(transition.state_index, transition.state_hash, balances)
         self.database.write_account_state(new_account_record)
@@ -87,7 +87,7 @@ class StateTransitionReceiver(SnappEventListener):
             return self.database.get_deposits(transition.slot)
         elif transition.transition_type == TransitionType.Withdraw:
             return self.database.get_withdraws(transition.slot)
-        else:  # pragma: no cover
+        else:
             raise Exception("Invalid transition type: {} ".format(transition.transition_type))
 
 
@@ -103,7 +103,7 @@ class SnappInitializationReceiver(SnappEventListener):
 
         try:
             self.initialize_accounts(event['maxTokens'], event['maxAccounts'], state_hash)
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:
             logging.critical(
                 "Failed to record SnappInitialization [{}] - {}".format(exc, event))
 
@@ -120,7 +120,7 @@ class WithdrawRequestReceiver(SnappEventListener):
     def save_parsed(self, withdraw: Withdraw) -> None:
         try:
             self.database.write_withdraw(withdraw)
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:
             logging.critical(
                 "Failed to record Deposit [{}] - {}".format(exc, withdraw))
 
@@ -132,7 +132,7 @@ class OrderReceiver(SnappEventListener):
     def save_parsed(self, order: Order) -> None:
         try:
             self.database.write_order(order)
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:
             logging.critical(
                 "Failed to record Order [{}] - {}".format(exc, order))
 
@@ -144,7 +144,7 @@ class AuctionSettlementReceiver(SnappEventListener):
     def save_parsed(self, settlement: AuctionSettlement) -> None:
         try:
             self.__update_accounts(settlement)
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:
             logging.critical(
                 "Failed to record Settlement [{}] - {}".format(exc, settlement))
 
