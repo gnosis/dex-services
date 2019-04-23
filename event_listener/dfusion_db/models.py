@@ -143,64 +143,34 @@ class AuctionResults(NamedTuple):
     sell_amounts: List[int]
 
     @classmethod
-    def from_dictionary(cls, data: Dict[str, List[int]]) -> "AuctionResults":
-        event_fields = ('prices', 'buy_amounts', 'sell_amounts')
-        assert all(k in data for k in event_fields), "Unexpected keys. Got {}".format(data.keys())
+    def from_bytes(cls, byte_str: str, num_tokens) -> "AuctionResults":
+        # TODO - pass num_orders (as read from DB for solution verification)
+        hex_str_array = [byte_str[i: i+24] for i in range(0, len(byte_str), 24)]
+        byte_array = list(map(lambda t: int(t, 16), hex_str_array))
+        prices, volumes = byte_array[:num_tokens], byte_array[num_tokens:]
+        buy_amounts = volumes[0::2]  # Even elements
+        sell_amounts = volumes[1::2]  # Odd elements
 
-        return AuctionResults(
-            data["prices"],
-            data["buy_amounts"],
-            data["sell_amounts"]
-        )
+        if len(buy_amounts) != len(sell_amounts):
+            # TODO - ensure buy and sell amounts have same length (and < num_orders)
+            logging.warning("Solution data is not correct!")
+
+        return AuctionResults(prices, buy_amounts, sell_amounts)
 
 
 class AuctionSettlement(NamedTuple):
     auction_id: int
     state_index: int
     state_hash: str
-    prices_and_volumes: str  # Emitted as Hex String
+    prices_and_volumes: AuctionResults  # Emitted as Hex String
 
     @classmethod
-    def from_dictionary(cls, data: Dict[str, Any]) -> "AuctionSettlement":
+    def from_dictionary(cls, data: Dict[str, Any], num_tokens: int) -> "AuctionSettlement":
         event_fields = ('auctionId', 'stateIndex', 'stateHash', 'pricesAndVolumes')
         assert all(k in data for k in event_fields), "Unexpected Event Keys: got {}".format(data.keys())
         return AuctionSettlement(
             int(data['auctionId']),
             int(data['stateIndex']),
             str(data['stateHash']),
-            str(data['pricesAndVolumes']),
+            AuctionResults.from_bytes(data['pricesAndVolumes'], num_tokens),
         )
-
-    def to_dictionary(self) -> Dict[str, Any]:
-        return {
-            "auctionId": self.auction_id,
-            "stateIndex": self.state_index,
-            "stateHash": self.state_hash,
-            "pricesAndVolumes": self.prices_and_volumes,
-        }
-
-    def serialize_solution(self, num_tokens: int) -> AuctionResults:
-        """Transform Byte Code for prices_and_volumes into Prices & TradeExecution objects"""
-        logging.info("Serializing Auction Results (from bytecode)")
-
-        # TODO - pass num_orders (as read from DB for solution verification)
-        tmp = self.prices_and_volumes[2:]
-        hex_str_array = [tmp[i: i+24] for i in range(0, len(tmp), 24)]
-        byte_array = list(map(lambda t: int(t, 16), hex_str_array))
-
-        prices, volumes = byte_array[:num_tokens], byte_array[num_tokens:]
-        buy_amounts = volumes[0::2]  # Even elements
-        sell_amounts = volumes[1::2]  # Odd elements
-
-        if len(buy_amounts) != len(sell_amounts):
-            # TODO - assert that buy and sell amounts have same length and are less than num_orders
-            logging.warning("Solution data is not correct!")
-
-        return AuctionResults.from_dictionary({
-            "prices": prices,
-            "buy_amounts": buy_amounts,
-            "sell_amounts": sell_amounts,
-        })
-
-
-

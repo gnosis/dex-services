@@ -142,7 +142,9 @@ class OrderReceiver(SnappEventListener):
 
 class AuctionSettlementReceiver(SnappEventListener):
     def save(self, event: Dict[str, Any], block_info: Dict[str, Any]) -> None:
-        self.save_parsed(AuctionSettlement.from_dictionary(event))
+        self.save_parsed(
+            AuctionSettlement.from_dictionary(event, self.database.get_num_tokens())
+        )
 
     def save_parsed(self, settlement: AuctionSettlement) -> None:
         try:
@@ -157,7 +159,7 @@ class AuctionSettlementReceiver(SnappEventListener):
 
         orders = self.database.get_orders(settlement.auction_id)
         num_tokens = self.database.get_num_tokens()
-        solution = settlement.serialize_solution(num_tokens)
+        solution = settlement.prices_and_volumes
 
         buy_amounts = solution.buy_amounts
         sell_amounts = solution.sell_amounts
