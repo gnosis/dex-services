@@ -299,7 +299,7 @@ class AuctionSettlementReceiverTest(unittest.TestCase):
 
         prices = [16, 10]
         executed_amounts = [16, 10, 10, 16]
-        encoded_solution = "0x" + int_list_to_hex_bytes(prices, 96) + int_list_to_hex_bytes(executed_amounts, 96)
+        encoded_solution = int_list_to_hex_bytes(prices, 96) + int_list_to_hex_bytes(executed_amounts, 96)
 
         event = {
             "auctionId": 1,

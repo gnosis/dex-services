@@ -73,7 +73,6 @@ class WithdrawTest(unittest.TestCase):
             "slot": 4,
             "slotIndex": 5,
             "valid": False,
-            "id": None
         }
         self.assertEqual(withdraw.to_dictionary(), expected)
 

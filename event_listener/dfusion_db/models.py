@@ -85,8 +85,7 @@ class Withdraw(NamedTuple):
             "amount": str(self.amount),
             "slot": self.slot,
             "slotIndex": self.slot_index,
-            "valid": self.valid,
-            "id": self.id
+            "valid": self.valid
         }
 
 
