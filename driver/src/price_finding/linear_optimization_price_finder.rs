@@ -41,11 +41,15 @@ fn token_id(token: u8) -> String {
     format!("token{}", token)
 }
 
+fn account_id(account: u16) -> String {
+    format!("account{}", account)
+}
+
 fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
     json!({
-        "accountID": order.account_id.to_string(),
-        "sellToken": token_id(order.sell_token),
-        "buyToken": token_id(order.buy_token), 
+        "accountID": account_id(order.account_id - 1),
+        "sellToken": token_id(order.sell_token - 1),
+        "buyToken": token_id(order.buy_token - 1), 
         "sellAmount": order.sell_amount.to_string(),
         "buyAmount": order.buy_amount.to_string(),
         "ID": id //TODO this should not be needed
@@ -57,7 +61,7 @@ fn serialize_balances(balances: &Vec<u128>, num_tokens: u8) -> serde_json::Value
     let mut accounts: HashMap<String, HashMap<String, String>> = HashMap::new();
     let mut current_account = 0;
     for balances_for_current_account in balances.chunks(num_tokens as usize) {
-        accounts.insert(current_account.to_string(), (0..num_tokens)
+        accounts.insert(account_id(current_account), (0..num_tokens)
             .map(|t| token_id(t))
             .zip(balances_for_current_account.iter().map(|b| b.to_string()))
             .collect());
@@ -229,11 +233,11 @@ pub mod tests {
         };
         let result = serialize_order(&order, "1");
         let expected = json!({
-            "sellToken": "token2",
-            "buyToken": "token3",
+            "sellToken": "token1",
+            "buyToken": "token2",
             "sellAmount": "100",
             "buyAmount": "200",
-            "accountID": "1",
+            "accountID": "account0",
             "ID": "1"
         });
         assert_eq!(result, expected);
@@ -244,12 +248,12 @@ pub mod tests {
         let balances = vec![100, 200, 300, 400, 500, 600];
         let result = serialize_balances(&balances, 3);
         let expected = json!({
-            "0": {
+            "account0": {
                 "token0": "100",
                 "token1": "200",
                 "token2": "300",
             }, 
-            "1": {
+            "account1": {
                 "token0": "400",
                 "token1": "500",
                 "token2": "600",

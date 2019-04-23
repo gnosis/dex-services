@@ -143,10 +143,10 @@ pub struct Order {
 impl Serializable for Order {
     fn bytes(&self) -> Vec<u8> {
         let mut wtr = vec![0; 4];
-        wtr.extend(self.sell_amount.bytes());
         wtr.extend(self.buy_amount.bytes());
-        wtr.write_u8(self.buy_token).unwrap();
+        wtr.extend(self.sell_amount.bytes());
         wtr.write_u8(self.sell_token).unwrap();
+        wtr.write_u8(self.buy_token).unwrap();
         wtr.write_u16::<BigEndian>(self.account_id).unwrap();
         wtr
     }
@@ -266,7 +266,7 @@ pub mod tests {
     assert_eq!(
     vec![order].rolling_hash(),
     H256::from_str(
-      "e1be57cc443a06d5b4e8c860eed65583e915cce10762f6f04a370326c187879b"
+      "8c253b4588a6d87b02b5f7d1424020b7b5f8c0397e464e087d2830a126d3b699"
       ).unwrap()
     );
   }
@@ -278,6 +278,16 @@ pub mod tests {
           account_id: 1,
           token_id: 1,
           amount: 10,
+      }
+  }
+  pub fn create_order_for_test(slot_index: u32) -> Order {
+      Order {
+          slot_index,
+          account_id: 1,
+          sell_token: 2,
+          buy_token: 3,
+          sell_amount: 4,
+          buy_amount: 5,
       }
   }
 }

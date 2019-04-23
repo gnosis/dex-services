@@ -8,7 +8,7 @@ import logging
 _log = logging.getLogger(__name__)
 
 
-class Command(BaseCommand): #type: ignore
+class Command(BaseCommand):  # type: ignore
     def handle(self, *args: Any, **options: Any) -> None:
         _log.info("Event Listener now active")
         event_listener = EventListener()

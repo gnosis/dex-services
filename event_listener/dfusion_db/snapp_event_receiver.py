@@ -15,7 +15,7 @@ class SnappEventListener(ABC):
 
     @abstractmethod
     def save(self, event: Dict[str, Any], block_info: Dict[str, Any]) -> None:
-        return
+        return  # pragma: no cover
 
 
 class DepositReceiver(SnappEventListener):
@@ -25,9 +25,8 @@ class DepositReceiver(SnappEventListener):
     def save_parsed(self, deposit: Deposit) -> None:
         try:
             self.database.write_deposit(deposit)
-        except AssertionError as exc:
-            logging.critical(
-                "Failed to record Deposit [{}] - {}".format(exc, deposit))
+        except Exception as exc:
+            logging.critical("Failed to record Deposit [{}] - {}".format(exc, deposit))
 
 
 class StateTransitionReceiver(SnappEventListener):
@@ -38,9 +37,8 @@ class StateTransitionReceiver(SnappEventListener):
         try:
             self.__update_accounts(transition)
             logging.info("Successfully updated state and balances")
-        except AssertionError as exc:
-            logging.critical(
-                "Failed to record StateTransition [{}] - {}".format(exc, transition))
+        except Exception as exc:
+            logging.critical("Failed to record StateTransition [{}] - {}".format(exc, transition))
 
     def __update_accounts(self, transition: StateTransition) -> None:
         balances = self.database.get_account_state(transition.state_index - 1).balances.copy()
@@ -79,8 +77,7 @@ class StateTransitionReceiver(SnappEventListener):
                         )
                     )
             else:
-                # This can not happen
-                self.logger.error("Unrecognized transition type - this should never happen")
+                self.logger.error("Unrecognized transition type: should never happen!")
 
         new_account_record = AccountRecord(transition.state_index, transition.state_hash, balances)
         self.database.write_account_state(new_account_record)
@@ -106,7 +103,7 @@ class SnappInitializationReceiver(SnappEventListener):
 
         try:
             self.initialize_accounts(event['maxTokens'], event['maxAccounts'], state_hash)
-        except AssertionError as exc:
+        except Exception as exc:
             logging.critical(
                 "Failed to record SnappInitialization [{}] - {}".format(exc, event))
 
@@ -123,7 +120,7 @@ class WithdrawRequestReceiver(SnappEventListener):
     def save_parsed(self, withdraw: Withdraw) -> None:
         try:
             self.database.write_withdraw(withdraw)
-        except AssertionError as exc:
+        except Exception as exc:
             logging.critical(
                 "Failed to record Deposit [{}] - {}".format(exc, withdraw))
 
@@ -135,7 +132,7 @@ class OrderReceiver(SnappEventListener):
     def save_parsed(self, order: Order) -> None:
         try:
             self.database.write_order(order)
-        except AssertionError as exc:
+        except Exception as exc:
             logging.critical(
                 "Failed to record Order [{}] - {}".format(exc, order))
 
@@ -149,7 +146,7 @@ class AuctionSettlementReceiver(SnappEventListener):
     def save_parsed(self, settlement: AuctionSettlement) -> None:
         try:
             self.__update_accounts(settlement)
-        except AssertionError as exc:
+        except Exception as exc:
             logging.critical(
                 "Failed to record Settlement [{}] - {}".format(exc, settlement))
 

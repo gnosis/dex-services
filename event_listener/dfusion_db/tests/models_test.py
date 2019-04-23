@@ -72,7 +72,7 @@ class WithdrawTest(unittest.TestCase):
             "amount": "3",
             "slot": 4,
             "slotIndex": 5,
-            "valid": False
+            "valid": False,
         }
         self.assertEqual(withdraw.to_dictionary(), expected)
 

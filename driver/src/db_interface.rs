@@ -44,10 +44,11 @@ impl MongoDB {
 
     fn get_items_for_slot<I: From<mongodb::ordered::OrderedDocument> + std::cmp::Ord>(
         &self,
+        slot_key: &str,
         slot: u32,
         collection: &str,
     ) -> Result<Vec<I>, DriverError> {
-        let query = format!("{{ \"slot\": {:} }}", slot);
+        let query = format!("{{ \"{}\": {:} }}", slot_key, slot);
         println!("Querying {}: {}", collection, query);
 
         let bson = serde_json::from_str::<serde_json::Value>(&query)?.into();
@@ -93,21 +94,21 @@ impl DbInterface for MongoDB {
         &self,
         slot: u32,
     ) -> Result<Vec<models::PendingFlux>, DriverError> {
-        self.get_items_for_slot(slot, "deposits")
+        self.get_items_for_slot("slot", slot, "deposits")
     }
 
     fn get_withdraws_of_slot(
         &self,
         slot: u32,
     ) -> Result<Vec<models::PendingFlux>, DriverError> {
-        self.get_items_for_slot(slot, "withdraws")
+        self.get_items_for_slot("slot", slot, "withdraws")
     }
 
     fn get_orders_of_slot(
         &self,
         slot: u32,
     ) -> Result<Vec<models::Order>, DriverError> {
-        self.get_items_for_slot(slot, "orders")
+        self.get_items_for_slot("auctionId", slot, "orders")
     }
 }
 
