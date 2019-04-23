@@ -66,7 +66,7 @@ pub fn run_order_listener<D, C, PF>(
             let new_state_root = H256::from(state.rolling_hash());
             
             println!("New State_hash is {}, Solution: {:?}", new_state_root, solution);
-            contract.apply_auction(slot, state_root, new_state_root, order_hash, solution.bytes(), solution.bytes())?;
+            contract.apply_auction(slot, state_root, new_state_root, order_hash, solution.bytes())?;
             return Ok(true);
         } else {
             println!("Need to wait before processing auction slot {:?}", slot);
@@ -83,11 +83,11 @@ fn compute_updated_balances(
     let mut result = balances.clone();
     for (index, order) in orders.iter().enumerate() {
         let buy_volume = solution.executed_buy_amounts[index];
-        let buy_index = (order.account_id as usize * models::TOKENS as usize) + order.buy_token as usize;
+        let buy_index = util::balance_index(order.buy_token, order.account_id);
         result[buy_index] += buy_volume;
 
         let sell_volume = solution.executed_sell_amounts[index];
-        let sell_index = (order.account_id as usize * models::TOKENS as usize) + order.buy_token as usize;
+        let sell_index = util::balance_index(order.sell_token, order.account_id);
         result[sell_index] -= sell_volume;
     }
     result
@@ -114,23 +114,28 @@ mod tests {
         };
         let order_1 = Order{
           slot_index: 1,
-          account_id: 1,
-          sell_token: 0,
-          buy_token: 1,
+          account_id: 2,
+          sell_token: 1,
+          buy_token: 2,
           sell_amount: 4,
           buy_amount: 5,
         };
         let order_2 = Order{
           slot_index: 1,
-          account_id: 0,
-          sell_token: 1,
-          buy_token: 0,
+          account_id: 1,
+          sell_token: 2,
+          buy_token: 1,
           sell_amount: 5,
           buy_amount: 4,
         };
         let orders = vec![order_1, order_2];
 
-        assert_eq!(compute_updated_balances(&balances, &orders, &solution), balances);
+        let mut updated_balances = balances.clone();
+        updated_balances[0] = 101;
+        updated_balances[1] = 99;
+        updated_balances[30] = 99;
+        updated_balances[31] = 101;
+        assert_eq!(compute_updated_balances(&balances, &orders, &solution), updated_balances);
     }
     #[test]
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
@@ -151,7 +156,7 @@ mod tests {
         contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
         contract.order_hash_for_slot.given(slot).will_return(Ok(orders.rolling_hash()));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
-        contract.apply_auction.given((slot, Any, Any, Any, Any, Any)).will_return(Ok(()));
+        contract.apply_auction.given((slot, Any, Any, Any, Any)).will_return(Ok(()));
 
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(1).will_return(Ok(orders.clone()));
@@ -216,7 +221,7 @@ mod tests {
         contract.order_hash_for_slot.given(slot-1).will_return(Ok(second_orders.rolling_hash()));
 
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
-        contract.apply_auction.given((slot - 1, Any, Any, Any, Any, Any)).will_return(Ok(()));
+        contract.apply_auction.given((slot - 1, Any, Any, Any, Any)).will_return(Ok(()));
 
         let state = models::State {
             state_hash: format!("{:x}", state_hash),

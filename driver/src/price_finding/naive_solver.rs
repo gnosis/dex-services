@@ -13,6 +13,10 @@ pub enum OrderPairType {
     BothFullyFilled,
 }
 
+fn u128_to_u256(x: u128) -> U256 {
+    U256::from_big_endian(&x.to_be_bytes())
+}
+
 impl Order {
     fn attracts(&self, other: &Order) -> bool {
         self.opposite_tokens(other) && self.have_price_overlap(other)
@@ -38,7 +42,7 @@ impl Order {
         self.buy_token == other.sell_token && self.sell_token == other.buy_token
     }
     fn have_price_overlap(&self, other: &Order) -> bool {
-        self.buy_amount * other.buy_amount <= other.sell_amount * self.sell_amount
+        u128_to_u256(self.buy_amount) * u128_to_u256(other.buy_amount) <= u128_to_u256(other.sell_amount) * u128_to_u256(self.sell_amount)
     }
     fn surplus(
         &self,
@@ -46,14 +50,13 @@ impl Order {
         exec_buy_amount: u128,
         exec_sell_amount: u128,
     ) -> U256 {
-        // TODO - Refer to Alex's Lemma [ceil(p/float(q)) == (p + q - 1) // q]
-        let relative_buy = (self.buy_amount * exec_sell_amount + self.sell_amount - 1) / self.sell_amount;
-        let res = (exec_buy_amount - relative_buy) * buy_price;
-        U256::from_big_endian(&res.to_be_bytes())
+        // Note that: ceil(p / float(q)) == (p + q - 1) // q
+        let relative_buy = (u128_to_u256(self.buy_amount) * u128_to_u256(exec_sell_amount) + u128_to_u256(self.sell_amount) - 1) / u128_to_u256(self.sell_amount);
+        (u128_to_u256(exec_buy_amount) - relative_buy) * u128_to_u256(buy_price)
     }
 }
 
-struct NaiveSolver {}
+pub struct NaiveSolver {}
 
 impl PriceFinding for NaiveSolver {
     fn find_prices(
@@ -122,12 +125,14 @@ impl PriceFinding for NaiveSolver {
                 break;
             }
         }
-        Ok(Solution {
+        let solution = Solution {
             surplus: total_surplus,
             prices,
             executed_sell_amounts: exec_sell_amount,
             executed_buy_amounts: exec_buy_amount,
-        })
+        };
+        println!("Solution: {:?}", &solution);
+        Ok(solution)
     }
 }
 

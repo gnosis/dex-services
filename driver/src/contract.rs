@@ -40,7 +40,7 @@ pub trait SnappContract {
     // Write methods
     fn apply_deposits(&self, slot: U256, prev_state: H256, new_state: H256, deposit_hash: H256) -> Result<()>;
     fn apply_withdraws(&self, slot: U256, merkle_root: H256, prev_state: H256, new_state: H256, withdraw_hash: H256) -> Result<()>;
-    fn apply_auction(&self, slot: U256, prev_state: H256, new_state: H256, order_hash: H256, prices: Vec<u8>, volumes: Vec<u8>) -> Result<()>;
+    fn apply_auction(&self, slot: U256, prev_state: H256, new_state: H256, order_hash: H256, prices_and_volumes: Vec<u8>) -> Result<()>;
 }
 
 #[allow(dead_code)] // event_loop needs to be retained to keep web3 connection open
@@ -207,15 +207,15 @@ impl SnappContract for SnappContractImpl {
         prev_state: H256,
         new_state: H256,
         order_hash: H256,
-        prices: Vec<u8>, 
-        volumes: Vec<u8>) -> Result<()> {
+        prices_and_volumes: Vec<u8>) -> Result<()> {
+            println!("prices_and_volumes: {:?}", &prices_and_volumes);
             let account = self.account_with_sufficient_balance().ok_or("Not enough balance to send Txs")?;
 
             let mut options = Options::default();
             options.gas = Some(U256::from(5000000));
             self.contract.call(
                 "applyAuction",
-                (slot, prev_state, new_state, order_hash, prices, volumes),
+                (slot, prev_state, new_state, order_hash, prices_and_volumes),
                 account,
                 options,
             ).wait()
@@ -250,7 +250,7 @@ pub mod tests {
         pub has_auction_slot_been_applied: Mock<U256, Result<bool>>,
         pub apply_deposits: Mock<(U256, Matcher<H256>, Matcher<H256>, Matcher<H256>), Result<()>>,
         pub apply_withdraws: Mock<(U256, Matcher<H256>, Matcher<H256>, Matcher<H256>, Matcher<H256>), Result<()>>,
-        pub apply_auction: Mock<(U256, Matcher<H256>, Matcher<H256>, Matcher<H256>, Matcher<Vec<u8>>, Matcher<Vec<u8>>), Result<()>>,
+        pub apply_auction: Mock<(U256, Matcher<H256>, Matcher<H256>, Matcher<H256>, Matcher<Vec<u8>>), Result<()>>,
     }
 
     impl SnappContractMock {
@@ -326,8 +326,8 @@ pub mod tests {
         fn apply_withdraws(&self, slot: U256, merkle_root: H256, prev_state: H256, new_state: H256, withdraw_hash: H256) -> Result<()> {
             self.apply_withdraws.called((slot, Val(merkle_root), Val(prev_state), Val(new_state), Val(withdraw_hash)))
         }
-        fn apply_auction(&self, slot: U256, prev_state: H256, new_state: H256, order_hash: H256, prices: Vec<u8>, volumes: Vec<u8>) -> Result<()> {
-            self.apply_auction.called((slot, Val(prev_state), Val(new_state), Val(order_hash), Val(prices), Val(volumes)))
+        fn apply_auction(&self, slot: U256, prev_state: H256, new_state: H256, order_hash: H256, prices_and_volumes: Vec<u8>) -> Result<()> {
+            self.apply_auction.called((slot, Val(prev_state), Val(new_state), Val(order_hash), Val(prices_and_volumes)))
         }
     }
 }
