@@ -45,7 +45,7 @@ class StateTransitionReceiver(SnappEventListener):
         num_tokens = self.database.get_num_tokens()
         for datum in self.__get_data_to_apply(transition):
             # Balances are stored as [b(a1, t1), b(a1, t2), ... b(a1, T), b(a2, t1), ...]
-            index = num_tokens * (datum.account_id - 1) + (datum.token_id - 1)
+            index = num_tokens * datum.account_id + datum.token_id
 
             if transition.transition_type == TransitionType.Deposit:
                 self.logger.info(
@@ -162,10 +162,10 @@ class AuctionSettlementReceiver(SnappEventListener):
         sell_amounts = solution.sell_amounts
 
         for i, order in enumerate(orders):
-            buy_index = num_tokens * (order.account_id - 1) + (order.buy_token - 1)
+            buy_index = num_tokens * order.account_id + order.buy_token
             balances[buy_index] += buy_amounts[i]
 
-            sell_index = num_tokens * (order.account_id - 1) + (order.sell_token - 1)
+            sell_index = num_tokens * order.account_id + order.sell_token
             balances[sell_index] -= sell_amounts[i]
 
         new_account_record = AccountRecord(settlement.state_index, settlement.state_hash, balances)
