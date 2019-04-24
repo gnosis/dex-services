@@ -21,7 +21,7 @@ pub fn run_order_listener<D, C, PF>(
 
     println!("Current top auction slot is {:?}", auction_slot);
     let slot = util::find_first_unapplied_slot(
-        auction_slot + 1, 
+        auction_slot, 
         Box::new(&|i| contract.has_auction_slot_been_applied(i))
     )?;
     if slot <= auction_slot {

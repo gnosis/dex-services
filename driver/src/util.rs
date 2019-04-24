@@ -9,7 +9,10 @@ pub fn find_first_unapplied_slot(
     has_slot_been_applied: Box<&Fn(U256) -> Result<bool, DriverError>>
 ) -> Result<U256, DriverError>
 {
-    let mut slot = upper_bound;
+    if upper_bound == U256::max_value() {
+        return Ok(U256::zero());
+    }
+    let mut slot = upper_bound + 1;
     while slot != U256::zero() {
         if has_slot_been_applied(slot - 1)? {
             return Ok(slot)
