@@ -30,7 +30,7 @@ sleep 5
 mongo dfusion2 --eval "db.orders.find({'auctionId': ${EXPECTED_AUCTION}}).size()" | grep 6
 mongo dfusion2 --eval "db.orders.findOne({'auctionId': ${EXPECTED_AUCTION}, 'accountId': 6}).sellAmount" | grep 280000000000000000000
 
-truffle exec scripts/mine_blocks.js 21
+truffle exec scripts/wait_seconds.js 181
 
 sleep 10
 
