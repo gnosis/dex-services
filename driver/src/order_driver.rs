@@ -114,17 +114,17 @@ mod tests {
         };
         let order_1 = Order{
           slot_index: 1,
-          account_id: 2,
-          sell_token: 1,
-          buy_token: 2,
+          account_id: 1,
+          sell_token: 0,
+          buy_token: 1,
           sell_amount: 4,
           buy_amount: 5,
         };
         let order_2 = Order{
           slot_index: 1,
-          account_id: 1,
-          sell_token: 2,
-          buy_token: 1,
+          account_id: 0,
+          sell_token: 1,
+          buy_token: 0,
           sell_amount: 5,
           buy_amount: 4,
         };
