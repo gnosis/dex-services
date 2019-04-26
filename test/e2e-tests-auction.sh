@@ -9,26 +9,26 @@ EXPECTED_AUCTION=0
 mongo dfusion2 --eval "db.orders.find({'auctionId': ${EXPECTED_AUCTION}}).size()" | grep 0
 
 # Make sure we have enough balances for the trades
-truffle exec scripts/deposit.js 1 3 300
-truffle exec scripts/deposit.js 2 2 300
-truffle exec scripts/deposit.js 3 3 200
-truffle exec scripts/deposit.js 4 2 300
-truffle exec scripts/deposit.js 5 1 300
-truffle exec scripts/deposit.js 6 1 300
+truffle exec scripts/deposit.js 0 2 300
+truffle exec scripts/deposit.js 1 1 300
+truffle exec scripts/deposit.js 2 2 200
+truffle exec scripts/deposit.js 3 1 300
+truffle exec scripts/deposit.js 4 0 300
+truffle exec scripts/deposit.js 5 0 300
 
 # Place 6 orders in current Auction (accountId, buyToken, sellToken, minBuy, maxSell)
-truffle exec scripts/sell_order.js 1 2 3 12 12
-truffle exec scripts/sell_order.js 2 3 2 2.2 2
-truffle exec scripts/sell_order.js 3 1 3 150 10
-truffle exec scripts/sell_order.js 4 1 2 180 15
-truffle exec scripts/sell_order.js 5 2 1 4 52
-truffle exec scripts/sell_order.js 6 3 1 20 280
+truffle exec scripts/sell_order.js 0 1 2 12 12
+truffle exec scripts/sell_order.js 1 2 1 2.2 2
+truffle exec scripts/sell_order.js 2 0 2 150 10
+truffle exec scripts/sell_order.js 3 0 1 180 15
+truffle exec scripts/sell_order.js 4 1 0 4 52
+truffle exec scripts/sell_order.js 5 2 0 20 280
 
 sleep 5
 
-# Test Listener: There are now 6 orders in auction slot 1 and sellAmount for accountId = 6 is 280000000000000000000
+# Test Listener: There are now 6 orders in auction slot 1 and sellAmount for accountId = 5 is 280000000000000000000
 mongo dfusion2 --eval "db.orders.find({'auctionId': ${EXPECTED_AUCTION}}).size()" | grep 6
-mongo dfusion2 --eval "db.orders.findOne({'auctionId': ${EXPECTED_AUCTION}, 'accountId': 6}).sellAmount" | grep 280000000000000000000
+mongo dfusion2 --eval "db.orders.findOne({'auctionId': ${EXPECTED_AUCTION}, 'accountId': 5}).sellAmount" | grep 280000000000000000000
 
 truffle exec scripts/mine_blocks.js 21
 

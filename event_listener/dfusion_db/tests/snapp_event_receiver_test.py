@@ -95,8 +95,8 @@ class StateTransitionReceiverTest(unittest.TestCase):
         old_state = AccountRecord(1, "old state", [42] * 10 * num_tokens)
         database.get_account_state.return_value = old_state
 
-        deposit1 = Deposit(1, 2, 10, slot_index, 0)
-        deposit2 = Deposit(7, 3, 5, slot_index, 1)
+        deposit1 = Deposit(0, 1, 10, slot_index, 0)
+        deposit2 = Deposit(6, 2, 5, slot_index, 1)
         database.get_deposits.return_value = [deposit1, deposit2]
 
         transition_event = {
@@ -110,8 +110,8 @@ class StateTransitionReceiverTest(unittest.TestCase):
         new_balances = old_state.balances
         new_balances[1] = 52
         new_balances[62] = 47
-        new_state = AccountRecord(new_state_index, "0x00000000000000000000000000000000000000000000000000000000000000",
-                                  new_balances)
+        new_state = AccountRecord(
+            new_state_index, "0x00000000000000000000000000000000000000000000000000000000000000", new_balances)
         database.write_account_state.assert_called_with(new_state)
 
     @staticmethod
@@ -126,8 +126,8 @@ class StateTransitionReceiverTest(unittest.TestCase):
         old_state = AccountRecord(1, "old state", [42] * 10 * num_tokens)
         database.get_account_state.return_value = old_state
 
-        deposit1 = Deposit(1, 2, 10, slot_index, 0)
-        deposit2 = Deposit(7, 3, 5, slot_index, 1)
+        deposit1 = Deposit(0, 1, 10, slot_index, 0)
+        deposit2 = Deposit(6, 2, 5, slot_index, 1)
         database.get_deposits.return_value = [deposit1, deposit2]
 
         transition = StateTransition(
@@ -152,8 +152,8 @@ class StateTransitionReceiverTest(unittest.TestCase):
         old_state = AccountRecord(1, "old state", [42] * 10 * num_tokens)
         database.get_account_state.return_value = old_state
 
-        withdraw1 = Withdraw(1, 2, 10, slot_index, 0)
-        withdraw2 = Withdraw(7, 3, 5, slot_index, 1)
+        withdraw1 = Withdraw(0, 1, 10, slot_index, 0)
+        withdraw2 = Withdraw(6, 2, 5, slot_index, 1)
         database.get_withdraws.return_value = [withdraw1, withdraw2]
 
         transition = StateTransition(
@@ -178,8 +178,8 @@ class StateTransitionReceiverTest(unittest.TestCase):
         old_state = AccountRecord(1, "old state", [42] * 10 * num_tokens)
         database.get_account_state.return_value = old_state
 
-        withdraw1 = Withdraw(1, 2, 10, slot_index, 0)
-        withdraw2 = Withdraw(7, 3, 100, slot_index, 1)
+        withdraw1 = Withdraw(0, 1, 10, slot_index, 0)
+        withdraw2 = Withdraw(6, 2, 100, slot_index, 1)
         database.get_withdraws.return_value = [withdraw1, withdraw2]
 
         transition = StateTransition(
@@ -201,8 +201,8 @@ class StateTransitionReceiverTest(unittest.TestCase):
         old_state = AccountRecord(1, "old state", [42] * 10 * num_tokens)
         database.get_account_state.return_value = old_state
 
-        withdraw1 = Withdraw(1, 2, 10, slot_index, 0)
-        withdraw2 = Withdraw(7, 3, 100, slot_index, 1)
+        withdraw1 = Withdraw(0, 1, 10, slot_index, 0)
+        withdraw2 = Withdraw(6, 2, 100, slot_index, 1)
         database.get_withdraws.return_value = [withdraw1, withdraw2]
 
         transition = StateTransition(
@@ -281,18 +281,18 @@ class AuctionSettlementReceiverTest(unittest.TestCase):
             Order.from_dictionary({
                 "auctionId": 1,
                 "slotIndex": 4,
-                "accountId": 1,
-                "buyToken": 2,
-                "sellToken": 1,
+                "accountId": 0,
+                "buyToken": 1,
+                "sellToken": 0,
                 "buyAmount": 10,
                 "sellAmount": 10,
             }),
             Order.from_dictionary({
                 "auctionId": 1,
                 "slotIndex": 4,
-                "accountId": 2,
-                "buyToken": 1,
-                "sellToken": 2,
+                "accountId": 1,
+                "buyToken": 0,
+                "sellToken": 1,
                 "buyAmount": 8,
                 "sellAmount": 16,
             }),

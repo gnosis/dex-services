@@ -38,5 +38,5 @@ pub fn can_process<C>(
 }
 
 pub fn balance_index(token_id: u8, account_id: u16) -> usize {
-    TOKENS as usize * (account_id - 1) as usize  + (token_id - 1) as usize
+    TOKENS as usize * account_id as usize  + token_id as usize
 }
