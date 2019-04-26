@@ -2,7 +2,7 @@ FROM gnosispm/dfusion-driver-base
 
 # Copy requirements and install
 WORKDIR /app/driver
-ADD driver/Cargo.toml .cache/target_cache.tar.gz* ./
+COPY driver/Cargo.toml ./
 RUN mkdir src && touch src/lib.rs && cargo build
 
 # Install solver if specified

@@ -7,3 +7,8 @@ RUN apt-get update \
 #Install Rust
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 RUN ln -s $HOME/.cargo/bin/* /usr/bin/
+
+# Copy requirements and install
+WORKDIR /app/driver
+COPY driver/Cargo.toml ./
+RUN mkdir src && touch src/lib.rs && cargo build
