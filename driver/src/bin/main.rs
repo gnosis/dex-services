@@ -1,6 +1,8 @@
 use driver::contract::SnappContractImpl;
 use driver::db_interface::MongoDB;
-use driver::price_finding::naive_solver::NaiveSolver;
+use driver::price_finding::NaiveSolver;
+use driver::price_finding::LinearOptimisationPriceFinder;
+use driver::price_finding::PriceFinding;
 use driver::run_driver_components;
 
 use std::thread;
@@ -13,8 +15,13 @@ fn main() {
     let db_port = env::var("DB_PORT").expect("Specify DB_PORT env variable");
     let db_instance = MongoDB::new(db_host, db_port).unwrap();
     let contract = SnappContractImpl::new().unwrap();
-    // TODO check env variable and use simple solver instead
-    let mut price_finder = NaiveSolver {};
+
+    let solver_env_var = env::var("LINEAR_OPTIMIZATION_SOLVER").unwrap_or("0".to_string());
+    let mut price_finder : Box<PriceFinding> = if solver_env_var == "1" {
+        Box::new(LinearOptimisationPriceFinder::new())
+    } else {
+        Box::new(NaiveSolver {})
+    };
     loop {
         // Start driver_components
         run_driver_components(&db_instance, &contract, &mut price_finder);

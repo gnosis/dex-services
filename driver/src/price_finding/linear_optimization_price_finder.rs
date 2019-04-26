@@ -47,9 +47,9 @@ fn account_id(account: u16) -> String {
 
 fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
     json!({
-        "accountID": account_id(order.account_id - 1),
-        "sellToken": token_id(order.sell_token - 1),
-        "buyToken": token_id(order.buy_token - 1), 
+        "accountID": account_id(order.account_id),
+        "sellToken": token_id(order.sell_token),
+        "buyToken": token_id(order.buy_token),
         "sellAmount": order.sell_amount.to_string(),
         "buyAmount": order.buy_amount.to_string(),
         "ID": id //TODO this should not be needed
@@ -225,9 +225,9 @@ pub mod tests {
     fn test_serialize_order() {
         let order = models::Order {
             slot_index: 0,
-            account_id: 1,
-            sell_token: 2,
-            buy_token: 3,
+            account_id: 0,
+            sell_token: 1,
+            buy_token: 2,
             sell_amount: 100,
             buy_amount: 200,
         };

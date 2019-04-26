@@ -3,10 +3,10 @@ set -e
 
 cd dex-contracts/
 
-truffle exec scripts/setup_environment.js
+truffle exec scripts/setup_environment.js 6
 
-# checks state after first new deposit round with a deposit of 18 from account 3 and token 3
-truffle exec scripts/deposit.js 3 3 18 
+# checks state after first new deposit round with a deposit of 18 from account 2 and token 2
+truffle exec scripts/deposit.js 2 2 18
 
 truffle exec scripts/wait_seconds.js 181
 

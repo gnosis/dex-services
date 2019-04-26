@@ -207,8 +207,8 @@ mod tests {
         let withdraws = vec![create_flux_for_test(1,1), models::PendingFlux {
             slot_index: 2,
             slot: 1,
-            account_id: 1,
-            token_id: 2,
+            account_id: 0,
+            token_id: 1,
             amount: 10,
         }];
         let mut state = models::State {
