@@ -152,7 +152,7 @@ mod tests {
         contract.has_auction_slot_been_applied.given(slot).will_return(Ok(false));
         contract.has_auction_slot_been_applied.given(slot - 1).will_return(Ok(true));
         contract.creation_timestamp_for_auction_slot.given(slot).will_return(Ok(U256::from(10)));
-        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(34)));
+        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         contract.order_hash_for_slot.given(slot).will_return(Ok(orders.rolling_hash()));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_auction.given((slot, Any, Any, Any, Any)).will_return(Ok(()));
@@ -217,7 +217,7 @@ mod tests {
 
         contract.creation_timestamp_for_auction_slot.given(slot-1).will_return(Ok(U256::from(10)));
 
-        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(34)));
+        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         contract.order_hash_for_slot.given(slot-1).will_return(Ok(second_orders.rolling_hash()));
 
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
@@ -267,7 +267,7 @@ mod tests {
         contract.has_auction_slot_been_applied.given(slot - 1).will_return(Ok(true));
 
         contract.creation_timestamp_for_auction_slot.given(slot).will_return(Ok(U256::from(10)));
-        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(34)));
+        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         
         contract.order_hash_for_slot.given(slot).will_return(Ok(H256::zero()));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
