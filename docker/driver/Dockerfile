@@ -1,17 +1,9 @@
-FROM fleupold/dfusion-solver-base:v2
-
-RUN apt-get update \ 
-    && apt-get install -y --no-install-recommends curl ssh git libc-dev gcc openssl pkg-config libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-#Install Rust
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
-RUN ln -s $HOME/.cargo/bin/* /usr/bin/
+FROM gnosispm/dfusion-driver-base
 
 # Copy requirements and install
 WORKDIR /app/driver
-ADD driver/Cargo.toml .cache/target_cache.tar.gz* ./
-RUN mkdir src && touch src/lib.rs && cargo build
+COPY driver/Cargo.toml ./
+RUN cargo build
 
 # Install solver if specified
 ARG use_solver

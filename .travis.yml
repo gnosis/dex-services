@@ -24,7 +24,6 @@ matrix:
       sudo: required
       cache: 
         directories:
-          - .cache
           - $HOME/.nvm/versions/node/v8.12.0/lib/node_modules
           - dex-contracts/node_modules/
       before_install:
@@ -43,7 +42,3 @@ matrix:
         - sh ./test/e2e-tests-auction.sh
       after_script:
         - docker-compose logs
-      before_cache:
-        # Save caches from docker images
-        - docker cp $(docker ps -lqf "name=dex-services_driver"):/app/driver/target/ . && tar -zcf .cache/target_cache.tar.gz target/
-        - docker cp $(docker ps -lqf "name=dex-services_listener"):/usr/local/lib/python3.6/site-packages/ . && tar -zcf .cache/pip_cache.tar.gz site-packages/
