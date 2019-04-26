@@ -3,7 +3,7 @@ extern crate mock_it;
 
 use web3::contract::{Contract, Options};
 use web3::futures::Future;
-use web3::types::{Address, H256, U256};
+use web3::types::{Address, H256, U256, BlockId};
 
 use crate::error::DriverError;
 
@@ -14,7 +14,7 @@ type Result<T> = std::result::Result<T, DriverError>;
 
 pub trait SnappContract {
     // General Blockchain interface
-    fn get_current_block_number(&self) -> Result<U256>;
+    fn get_current_block_timestamp(&self) -> Result<U256>;
 
     // Top level smart contract methods
     fn get_current_state_root(&self) -> Result<H256>;
@@ -23,17 +23,17 @@ pub trait SnappContract {
     fn get_current_auction_slot(&self) -> Result<U256>;
 
     // Deposit Slots
-    fn creation_block_for_deposit_slot(&self, slot: U256) -> Result<U256>;
+    fn creation_timestamp_for_deposit_slot(&self, slot: U256) -> Result<U256>;
     fn deposit_hash_for_slot(&self, slot: U256) -> Result<H256>;
     fn has_deposit_slot_been_applied(&self, slot: U256) -> Result<bool>;
 
     // Withdraw Slots
-    fn creation_block_for_withdraw_slot(&self, slot: U256) -> Result<U256>;
+    fn creation_timestamp_for_withdraw_slot(&self, slot: U256) -> Result<U256>;
     fn withdraw_hash_for_slot(&self, slot: U256) -> Result<H256>;
     fn has_withdraw_slot_been_applied(&self, slot: U256) -> Result<bool>;
 
     // Auction Slots
-    fn creation_block_for_auction_slot(&self, slot: U256) -> Result<U256>;
+    fn creation_timestamp_for_auction_slot(&self, slot: U256) -> Result<U256>;
     fn order_hash_for_slot(&self, slot: U256) -> Result<H256>;
     fn has_auction_slot_been_applied(&self, slot: U256) -> Result<bool>;
 
@@ -77,10 +77,22 @@ impl SnappContractImpl {
 }
 
 impl SnappContract for SnappContractImpl {
-    fn get_current_block_number(&self) -> Result<U256> {
+    fn get_current_block_timestamp(&self) -> Result<U256> {
         self.web3.eth()
             .block_number()
             .wait()
+            .and_then(|block_number| {
+                self.web3
+                    .eth()
+                    .block(BlockId::from(block_number.as_u64()))
+                    .wait()
+            })
+            .and_then(|block_option| {
+                match block_option {
+                    Some(block) => Ok(block.timestamp),
+                    None => Err(web3::Error::from("Current block not found"))
+                }
+            })
             .map_err(|e| DriverError::from(e))
     }
 
@@ -108,9 +120,9 @@ impl SnappContract for SnappContractImpl {
         ).wait().map_err(|e| DriverError::from(e))
     }
 
-    fn creation_block_for_deposit_slot(&self, slot: U256) -> Result<U256> {
+    fn creation_timestamp_for_deposit_slot(&self, slot: U256) -> Result<U256> {
         self.contract.query(
-            "getDepositCreationBlock", slot, None, Options::default(), None,
+            "getDepositCreationTimestamp", slot, None, Options::default(), None,
         ).wait().map_err(|e| DriverError::from(e))
     }
 
@@ -126,9 +138,9 @@ impl SnappContract for SnappContractImpl {
         ).wait().map_err(|e| DriverError::from(e))
     }
 
-    fn creation_block_for_withdraw_slot(&self, slot: U256) -> Result<U256> {
+    fn creation_timestamp_for_withdraw_slot(&self, slot: U256) -> Result<U256> {
         self.contract.query(
-            "getWithdrawCreationBlock", slot, None, Options::default(), None,
+            "getWithdrawCreationTimestamp", slot, None, Options::default(), None,
         ).wait().map_err(|e| DriverError::from(e))
     }
 
@@ -144,9 +156,9 @@ impl SnappContract for SnappContractImpl {
         ).wait().map_err(|e| DriverError::from(e))
     }
 
-    fn creation_block_for_auction_slot(&self, slot: U256) -> Result<U256> {
+    fn creation_timestamp_for_auction_slot(&self, slot: U256) -> Result<U256> {
         self.contract.query(
-            "getAuctionCreationBlock", slot, None, Options::default(), None,
+            "getAuctionCreationTimestamp", slot, None, Options::default(), None,
         ).wait().map_err(|e| DriverError::from(e))
     }
 
@@ -234,18 +246,18 @@ pub mod tests {
     
     #[derive(Clone)]
     pub struct SnappContractMock {
-        pub get_current_block_number: Mock<(), Result<U256>>,
+        pub get_current_block_timestamp: Mock<(), Result<U256>>,
         pub get_current_state_root: Mock<(), Result<H256>>,
         pub get_current_deposit_slot: Mock<(), Result<U256>>,
         pub get_current_withdraw_slot: Mock<(), Result<U256>>,
         pub get_current_auction_slot: Mock<(), Result<U256>>,
-        pub creation_block_for_deposit_slot: Mock<(U256), Result<U256>>,
+        pub creation_timestamp_for_deposit_slot: Mock<(U256), Result<U256>>,
         pub deposit_hash_for_slot: Mock<U256, Result<H256>>,
         pub has_deposit_slot_been_applied: Mock<U256, Result<bool>>,
-        pub creation_block_for_withdraw_slot: Mock<U256, Result<U256>>,
+        pub creation_timestamp_for_withdraw_slot: Mock<U256, Result<U256>>,
         pub withdraw_hash_for_slot: Mock<U256, Result<H256>>,
         pub has_withdraw_slot_been_applied: Mock<U256, Result<bool>>,
-        pub creation_block_for_auction_slot: Mock<U256, Result<U256>>,
+        pub creation_timestamp_for_auction_slot: Mock<U256, Result<U256>>,
         pub order_hash_for_slot: Mock<U256, Result<H256>>,
         pub has_auction_slot_been_applied: Mock<U256, Result<bool>>,
         pub apply_deposits: Mock<(U256, Matcher<H256>, Matcher<H256>, Matcher<H256>), Result<()>>,
@@ -256,18 +268,18 @@ pub mod tests {
     impl SnappContractMock {
         pub fn new() -> SnappContractMock {
             SnappContractMock {
-                get_current_block_number: Mock::new(Err(DriverError::new("Unexpected call to get_current_block_number", ErrorKind::Unknown))),
+                get_current_block_timestamp: Mock::new(Err(DriverError::new("Unexpected call to get_current_block_timestamp", ErrorKind::Unknown))),
                 get_current_state_root: Mock::new(Err(DriverError::new("Unexpected call to get_current_state_root", ErrorKind::Unknown))),
                 get_current_deposit_slot: Mock::new(Err(DriverError::new("Unexpected call to get_current_deposit_slot", ErrorKind::Unknown))),
                 get_current_withdraw_slot: Mock::new(Err(DriverError::new("Unexpected call to get_current_withdraw_slot", ErrorKind::Unknown))),
                 get_current_auction_slot: Mock::new(Err(DriverError::new("Unexpected call to get_current_auction_slot", ErrorKind::Unknown))),
-                creation_block_for_deposit_slot: Mock::new(Err(DriverError::new("Unexpected call to creation_block_for_deposit_slot", ErrorKind::Unknown))),
+                creation_timestamp_for_deposit_slot: Mock::new(Err(DriverError::new("Unexpected call to creation_timestamp_for_deposit_slot", ErrorKind::Unknown))),
                 deposit_hash_for_slot: Mock::new(Err(DriverError::new("Unexpected call to deposit_hash_for_slot", ErrorKind::Unknown))),
                 has_deposit_slot_been_applied: Mock::new(Err(DriverError::new("Unexpected call to has_deposit_slot_been_applied", ErrorKind::Unknown))),
-                creation_block_for_withdraw_slot: Mock::new(Err(DriverError::new("Unexpected call to creation_block_for_withdraw_slot", ErrorKind::Unknown))),
+                creation_timestamp_for_withdraw_slot: Mock::new(Err(DriverError::new("Unexpected call to creation_timestamp_for_withdraw_slot", ErrorKind::Unknown))),
                 withdraw_hash_for_slot: Mock::new(Err(DriverError::new("Unexpected call to withdraw_hash_for_slot", ErrorKind::Unknown))),
                 has_withdraw_slot_been_applied: Mock::new(Err(DriverError::new("Unexpected call to has_withdraw_slot_been_applied", ErrorKind::Unknown))),
-                creation_block_for_auction_slot: Mock::new(Err(DriverError::new("Unexpected call to creation_block_for_auction_slot", ErrorKind::Unknown))),
+                creation_timestamp_for_auction_slot: Mock::new(Err(DriverError::new("Unexpected call to creation_timestamp_for_auction_slot", ErrorKind::Unknown))),
                 order_hash_for_slot: Mock::new(Err(DriverError::new("Unexpected call to order_hash_for_slot", ErrorKind::Unknown))),
                 has_auction_slot_been_applied: Mock::new(Err(DriverError::new("Unexpected call to has_auction_slot_been_applied", ErrorKind::Unknown))),
                 apply_deposits: Mock::new(Err(DriverError::new("Unexpected call to apply_deposits", ErrorKind::Unknown))),
@@ -278,8 +290,8 @@ pub mod tests {
     }
 
     impl SnappContract for SnappContractMock {
-        fn get_current_block_number(&self) -> Result<U256> {
-            self.get_current_block_number.called(())
+        fn get_current_block_timestamp(&self) -> Result<U256> {
+            self.get_current_block_timestamp.called(())
         }
         fn get_current_state_root(&self) -> Result<H256> {
             self.get_current_state_root.called(())
@@ -293,8 +305,8 @@ pub mod tests {
         fn get_current_auction_slot(&self) -> Result<U256> {
             self.get_current_auction_slot.called(())
         }
-        fn creation_block_for_deposit_slot(&self, slot: U256) -> Result<U256>{
-            self.creation_block_for_deposit_slot.called(slot)
+        fn creation_timestamp_for_deposit_slot(&self, slot: U256) -> Result<U256>{
+            self.creation_timestamp_for_deposit_slot.called(slot)
         }
         fn deposit_hash_for_slot(&self, slot: U256) -> Result<H256> {
             self.deposit_hash_for_slot.called(slot)
@@ -302,8 +314,8 @@ pub mod tests {
         fn has_deposit_slot_been_applied(&self, slot: U256) -> Result<bool> {
             self.has_deposit_slot_been_applied.called(slot)
         }
-        fn creation_block_for_withdraw_slot(&self, slot: U256) -> Result<U256> {
-            self.creation_block_for_withdraw_slot.called(slot)
+        fn creation_timestamp_for_withdraw_slot(&self, slot: U256) -> Result<U256> {
+            self.creation_timestamp_for_withdraw_slot.called(slot)
         }
         fn withdraw_hash_for_slot(&self, slot: U256) -> Result<H256> {
             self.withdraw_hash_for_slot.called(slot)
@@ -311,8 +323,8 @@ pub mod tests {
         fn has_withdraw_slot_been_applied(&self, slot: U256) -> Result<bool> {
             self.has_withdraw_slot_been_applied.called(slot)
         }
-        fn creation_block_for_auction_slot(&self, slot: U256) -> Result<U256> {
-            self.creation_block_for_auction_slot.called(slot)
+        fn creation_timestamp_for_auction_slot(&self, slot: U256) -> Result<U256> {
+            self.creation_timestamp_for_auction_slot.called(slot)
         }
         fn order_hash_for_slot(&self, slot: U256) -> Result<H256> {
             self.order_hash_for_slot.called(slot)

@@ -40,7 +40,7 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
     if slot <= withdraw_slot {
         println!("Highest unprocessed withdraw_slot is {:?}", slot);
         if util::can_process(slot, contract,
-            Box::new(&|i| contract.creation_block_for_withdraw_slot(i))
+            Box::new(&|i| contract.creation_timestamp_for_withdraw_slot(i))
         )? {
             println!("Processing withdraw_slot {:?}", slot);
             let state_root = contract.get_current_state_root()?;
@@ -94,8 +94,8 @@ mod tests {
         contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
         contract.has_withdraw_slot_been_applied.given(slot).will_return(Ok(false));
         contract.has_withdraw_slot_been_applied.given(slot - 1).will_return(Ok(true));
-        contract.creation_block_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
-        contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
+        contract.creation_timestamp_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
+        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         contract.withdraw_hash_for_slot.given(slot).will_return(Ok(withdraws.rolling_hash()));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_withdraws.given((slot, Any, Any, Any, Any)).will_return(Ok(()));
@@ -126,8 +126,8 @@ mod tests {
         contract.has_withdraw_slot_been_applied.given(slot).will_return(Ok(false));
         contract.has_withdraw_slot_been_applied.given(slot-1).will_return(Ok(true));
 
-        contract.creation_block_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
-        contract.get_current_block_number.given(()).will_return(Ok(U256::from(11)));
+        contract.creation_timestamp_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
+        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(11)));
 
         let db = DbInterfaceMock::new();
         assert_eq!(run_withdraw_listener(&db, &contract), Ok(false));
@@ -146,9 +146,9 @@ mod tests {
         contract.has_withdraw_slot_been_applied.given(slot).will_return(Ok(false));
         contract.has_withdraw_slot_been_applied.given(slot - 1).will_return(Ok(false));
 
-        contract.creation_block_for_withdraw_slot.given(slot-1).will_return(Ok(U256::from(10)));
+        contract.creation_timestamp_for_withdraw_slot.given(slot-1).will_return(Ok(U256::from(10)));
 
-        contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
+        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         contract.withdraw_hash_for_slot.given(slot-1).will_return(Ok(second_withdraws.rolling_hash()));
 
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
@@ -186,8 +186,8 @@ mod tests {
         contract.has_withdraw_slot_been_applied.given(slot).will_return(Ok(false));
         contract.has_withdraw_slot_been_applied.given(slot - 1).will_return(Ok(true));
 
-        contract.creation_block_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
-        contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
+        contract.creation_timestamp_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
+        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         
         contract.withdraw_hash_for_slot.given(slot).will_return(Ok(H256::zero()));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
@@ -225,8 +225,8 @@ mod tests {
         contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
         contract.has_withdraw_slot_been_applied.given(slot).will_return(Ok(false));
         contract.has_withdraw_slot_been_applied.given(slot - 1).will_return(Ok(true));
-        contract.creation_block_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
-        contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
+        contract.creation_timestamp_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
+        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         contract.withdraw_hash_for_slot.given(slot).will_return(Ok(withdraws.rolling_hash()));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_withdraws.given((slot, Val(merkle_root), Any, Any, Any)).will_return(Ok(()));

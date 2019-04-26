@@ -34,7 +34,7 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
     if slot <= deposit_slot {
         println!("Highest unprocessed deposit_slot is {:?}", slot);
         if can_process(slot, contract,
-            Box::new(&|i| contract.creation_block_for_deposit_slot(i))
+            Box::new(&|i| contract.creation_timestamp_for_deposit_slot(i))
         )? {
             println!("Processing deposit_slot {:?}", slot);
             let state_root = contract.get_current_state_root()?;
@@ -90,8 +90,8 @@ mod tests {
         contract.get_current_deposit_slot.given(()).will_return(Ok(slot));
         contract.has_deposit_slot_been_applied.given(slot).will_return(Ok(false));
         contract.has_deposit_slot_been_applied.given(slot - 1).will_return(Ok(true));
-        contract.creation_block_for_deposit_slot.given(slot).will_return(Ok(U256::from(10)));
-        contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
+        contract.creation_timestamp_for_deposit_slot.given(slot).will_return(Ok(U256::from(10)));
+        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         contract.deposit_hash_for_slot.given(slot).will_return(Ok(deposits.rolling_hash()));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_deposits.given((slot, Any, Any, Any)).will_return(Ok(()));
@@ -119,8 +119,8 @@ mod tests {
         contract.get_current_deposit_slot.given(()).will_return(Ok(slot));
         contract.has_deposit_slot_been_applied.given(slot).will_return(Ok(true));
 
-        contract.get_current_block_number.given(()).will_return(Ok(U256::from(11)));
-        contract.creation_block_for_deposit_slot.given(slot + 1).will_return(Ok(U256::from(10)));
+        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(11)));
+        contract.creation_timestamp_for_deposit_slot.given(slot + 1).will_return(Ok(U256::from(10)));
         contract.deposit_hash_for_slot.given(slot + 1).will_return(Ok(H256::zero()));
 
         let db = DbInterfaceMock::new();
@@ -147,8 +147,8 @@ mod tests {
         contract.has_deposit_slot_been_applied.given(slot).will_return(Ok(false));
         contract.has_deposit_slot_been_applied.given(slot-1).will_return(Ok(true));
 
-        contract.creation_block_for_deposit_slot.given(slot).will_return(Ok(U256::from(10)));
-        contract.get_current_block_number.given(()).will_return(Ok(U256::from(11)));
+        contract.creation_timestamp_for_deposit_slot.given(slot).will_return(Ok(U256::from(10)));
+        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(11)));
         contract.deposit_hash_for_slot.given(slot).will_return(Ok(deposits.rolling_hash()));
 
         let db = DbInterfaceMock::new();
@@ -170,8 +170,8 @@ mod tests {
         contract.has_deposit_slot_been_applied.given(slot).will_return(Ok(false));
         contract.has_deposit_slot_been_applied.given(slot - 1).will_return(Ok(false));
 
-        contract.creation_block_for_deposit_slot.given(slot-1).will_return(Ok(U256::from(10)));
-        contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
+        contract.creation_timestamp_for_deposit_slot.given(slot-1).will_return(Ok(U256::from(10)));
+        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         contract.deposit_hash_for_slot.given(slot-1).will_return(Ok(second_deposits.rolling_hash()));
 
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
@@ -208,8 +208,8 @@ mod tests {
         contract.has_deposit_slot_been_applied.given(slot).will_return(Ok(false));
         contract.has_deposit_slot_been_applied.given(slot - 1).will_return(Ok(true));
 
-        contract.creation_block_for_deposit_slot.given(slot).will_return(Ok(U256::from(10)));
-        contract.get_current_block_number.given(()).will_return(Ok(U256::from(34)));
+        contract.creation_timestamp_for_deposit_slot.given(slot).will_return(Ok(U256::from(10)));
+        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         
         contract.deposit_hash_for_slot.given(slot).will_return(Ok(H256::zero()));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
