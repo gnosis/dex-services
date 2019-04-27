@@ -4,7 +4,7 @@ set -e
 cd dex-contracts/
 
 truffle exec scripts/request_withdraw.js 2 2 18
-truffle exec scripts/mine_blocks.js 21
+truffle exec scripts/wait_seconds.js 181
 
 sleep 5
 truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot'

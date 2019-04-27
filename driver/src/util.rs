@@ -33,8 +33,8 @@ pub fn can_process<C>(
     if slot_creation_block == U256::zero() {
         return Ok( false );
     }
-    let current_block = contract.get_current_block_number()?;
-    Ok(slot_creation_block + 20 < current_block)
+    let current_block = contract.get_current_block_timestamp()?;
+    Ok(slot_creation_block + 180 < current_block)
 }
 
 pub fn balance_index(token_id: u8, account_id: u16) -> usize {
