@@ -97,9 +97,9 @@ class SnappInitializationReceiver(SnappEventListener):
         # Verify integrity of post data
         assert event.keys() == {'stateHash', 'maxTokens', 'maxAccounts'}, "Unexpected Event Keys"
         state_hash = event['stateHash']
-        assert isinstance(state_hash, str) and len(state_hash) == 64, "StateHash has unexpected values %s" % state_hash
-        assert isinstance(event['maxTokens'], int), "maxTokens has unexpected values"
-        assert isinstance(event['maxAccounts'], int), "maxAccounts has unexpected values"
+        assert isinstance(state_hash, str) and len(state_hash) == 64, "StateHash has unexpected value %s" % state_hash
+        assert isinstance(event['maxTokens'], int), "maxTokens has unexpected value"
+        assert isinstance(event['maxAccounts'], int), "maxAccounts has unexpected value"
 
         try:
             self.initialize_accounts(event['maxTokens'], event['maxAccounts'], state_hash)
@@ -109,8 +109,25 @@ class SnappInitializationReceiver(SnappEventListener):
 
     def initialize_accounts(self, num_tokens: int, num_accounts: int, state_hash: str) -> None:
         account_record = AccountRecord(0, state_hash, [0 for _ in range(num_tokens * num_accounts)])
-        self.database.write_constants(num_tokens, num_accounts)
+        self.database.write_snapp_constants(num_tokens, num_accounts)
         self.database.write_account_state(account_record)
+        logging.info("Successfully included Snapp Initialization constants and account record")
+
+
+class AuctionInitializationReceiver(SnappEventListener):
+    def save(self, event: Dict[str, Any], block_info: Dict[str, Any]) -> None:
+
+        # Verify integrity of post data
+        assert event.keys() == {'maxOrders'}, "Unexpected Event Keys"
+        assert isinstance(event['maxOrders'], int), "maxOrders has unexpected value"
+
+        try:
+            self.database.write_auction_constants(event['maxOrders'])
+            logging.info(
+                "Successfully included Snapp Auction constant(s): {}".format(event.keys()))
+        except Exception as exc:
+            logging.critical(
+                "Failed to record AuctionInitialization [{}] - {}".format(exc, event))
 
 
 class WithdrawRequestReceiver(SnappEventListener):
@@ -140,7 +157,11 @@ class OrderReceiver(SnappEventListener):
 class AuctionSettlementReceiver(SnappEventListener):
     def save(self, event: Dict[str, Any], block_info: Dict[str, Any]) -> None:
         self.save_parsed(
-            AuctionSettlement.from_dictionary(event, self.database.get_num_tokens())
+            AuctionSettlement.from_dictionary(
+                event,
+                self.database.get_num_tokens(),
+                self.database.get_num_orders()
+            )
         )
 
     def save_parsed(self, settlement: AuctionSettlement) -> None:

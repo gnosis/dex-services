@@ -5,6 +5,7 @@ from django_eth_events.chainevents import AbstractEventReceiver
 
 from .snapp_event_receiver import DepositReceiver, StateTransitionReceiver, SnappInitializationReceiver
 from .snapp_event_receiver import WithdrawRequestReceiver, OrderReceiver, AuctionSettlementReceiver
+from .snapp_event_receiver import AuctionInitializationReceiver
 
 RECEIVER_MAPPING = {
     'Deposit': DepositReceiver(),
@@ -13,6 +14,7 @@ RECEIVER_MAPPING = {
     'SnappInitialization': SnappInitializationReceiver(),
     'SellOrder': OrderReceiver(),
     'AuctionSettlement': AuctionSettlementReceiver(),
+    'AuctionInitialization': AuctionInitializationReceiver(),
 }
 
 
