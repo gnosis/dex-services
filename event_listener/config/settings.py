@@ -18,8 +18,6 @@ from .contract_fetcher import abi_file_path, load_contract_abi
 env = environ.Env()
 
 ROOT_DIR = environ.Path(__file__) - 3  # (/dex-services/config/settings.py - 3 = /dex-services)
-# env.read_env(str(ROOT_DIR.path('.env')))
-# env.read_env(str(ROOT_DIR.path('.env_db')))
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
