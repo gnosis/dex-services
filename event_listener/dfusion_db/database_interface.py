@@ -40,6 +40,9 @@ class DatabaseInterface(ABC):
     def get_num_tokens(self) -> int: pass
 
     @abstractmethod
+    def get_num_orders(self) -> int: pass
+
+    @abstractmethod
     def write_order(self, order: Order) -> None: pass
 
     @abstractmethod
