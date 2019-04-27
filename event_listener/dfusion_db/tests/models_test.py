@@ -173,6 +173,7 @@ class AuctionResultsTest(unittest.TestCase):
 
         solution = AuctionResults.from_bytes(soln, 30, 6)
         self.assertEqual(solution.prices[:2], [4000000000000000000, 52000000000000000000])
+        self.assertEqual(solution.prices[2:], [1]*28)
         # Note that these amounts do not correspond to a meaningful auction settlement
         self.assertEqual(solution.buy_amounts, [0, 0, 52000000000000000000, 0, 0, 4000000000000000000])
         self.assertEqual(solution.sell_amounts, [0, 4000000000000000000, 0, 0, 52000000000000000000, 0])
