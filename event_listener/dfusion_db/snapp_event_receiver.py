@@ -124,7 +124,7 @@ class AuctionInitializationReceiver(SnappEventListener):
         try:
             self.database.write_auction_constants(event['maxOrders'])
             logging.info(
-                "Successfully included Snapp Auction constant(s): {}".format(event.keys()))
+                "Successfully included Snapp Auction constant(s)")
         except Exception as exc:
             logging.critical(
                 "Failed to record AuctionInitialization [{}] - {}".format(exc, event))
