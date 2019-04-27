@@ -30,7 +30,7 @@ pub fn run_driver_components(
     db: &MongoDB,
     contract: &SnappContractImpl, 
     price_finder: &mut Box<PriceFinding>,
-) -> () {
+) {
     if let Err(e) = run_deposit_listener(db, contract) {
         println!("Deposit_driver error: {}", e);
     }

@@ -61,7 +61,7 @@ pub struct NaiveSolver {}
 impl PriceFinding for NaiveSolver {
     fn find_prices(
         &mut self, 
-        orders: &Vec<Order>, 
+        orders: &[Order],
         state: &State
     ) -> Result<Solution, PriceFindingError> {
         // Initialize trivial solution
@@ -121,7 +121,7 @@ impl PriceFinding for NaiveSolver {
                 total_surplus = x_surplus.checked_add(y_surplus).unwrap();
                 break;
             }
-            if found_flag == true {
+            if found_flag {
                 break;
             }
         }

@@ -28,7 +28,7 @@ impl models::Serializable for Solution {
 pub trait PriceFinding {
     fn find_prices(
         &mut self, 
-        orders: &Vec<models::Order>, 
+        orders: &[models::Order],
         state: &models::State
     ) -> Result<Solution, PriceFindingError>;
 }
@@ -56,7 +56,7 @@ pub mod tests {
     impl PriceFinding for PriceFindingMock {
         fn find_prices(
             &mut self, 
-            orders: &Vec<models::Order>, 
+            orders: &[models::Order],
             state: &models::State
         ) -> Result<Solution, PriceFindingError> {
             self.find_prices.called((orders.to_vec(), state.to_owned()))

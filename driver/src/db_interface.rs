@@ -82,7 +82,7 @@ impl DbInterface for MongoDB {
         for result in cursor {
             docs.push(result?);
         }
-        if docs.len() == 0 {
+        if docs.is_empty() {
             return Err(DriverError::new(
                 &format!("Expected to find a single unique state, found {}", docs.len()), ErrorKind::StateError)
             );
