@@ -1,7 +1,5 @@
 use web3::types::U256;
 
-use crate::util::balance_index;
-
 use crate::models::{Order, State, TOKENS};
 use crate::price_finding::error::PriceFindingError;
 
@@ -23,7 +21,7 @@ impl Order {
     }
 
     fn sufficient_seller_funds(&self, state: &State) -> bool {
-        state.balances[balance_index(self.sell_token, self.account_id)] >= self.sell_amount
+        state.read_balance(self.sell_token, self.account_id) >= self.sell_amount
     }
 
     fn match_compare(&self, other: &Order, state: &State) -> Option<OrderPairType> {
@@ -143,11 +141,11 @@ pub mod tests {
 
     #[test]
     fn test_type_ia() {
-        let state = State {
-            state_hash: "test".to_string(),
-            state_index: 0,
-            balances: vec![200; (TOKENS * 2) as usize]
-        };
+        let state = State::new(
+            "test".to_string(),
+            0,
+            vec![200; (TOKENS * 2) as usize]
+        );
         let orders = vec![
             Order {
                 slot_index: 0,
@@ -173,11 +171,11 @@ pub mod tests {
 
     #[test]
     fn test_type_ib() {
-        let state = State {
-            state_hash: "test".to_string(),
-            state_index: 0,
-            balances: vec![200; (TOKENS * 2) as usize]
-        };
+        let state = State::new(
+            "test".to_string(),
+            0,
+            vec![200; (TOKENS * 2) as usize]
+        );
         let orders = vec![
             Order {
                 slot_index: 0,
@@ -203,11 +201,11 @@ pub mod tests {
 
     #[test]
     fn test_type_ii() {
-        let state = State {
-            state_hash: "test".to_string(),
-            state_index: 0,
-            balances: vec![200; (TOKENS * 2) as usize]
-        };
+        let state = State::new(
+            "test".to_string(),
+            0,
+            vec![200; (TOKENS * 2) as usize]
+        );
         let orders = vec![
             Order {
                 slot_index: 0,
@@ -233,11 +231,11 @@ pub mod tests {
 
     #[test]
     fn test_retreth_example() {
-        let state = State {
-            state_hash: "test".to_string(),
-            state_index: 0,
-            balances: vec![200; (TOKENS * 6) as usize]
-        };
+        let state = State::new(
+            "test".to_string(),
+            0,
+            vec![200; (TOKENS * 6) as usize]
+        );
         let orders = vec![
             Order {
                 slot_index: 0,
@@ -295,11 +293,11 @@ pub mod tests {
 
     #[test]
     fn test_insufficient_balance() {
-        let state = State {
-            state_hash: "test".to_string(),
-            state_index: 0,
-            balances: vec![0; (TOKENS * 2) as usize]
-        };
+        let state = State::new(
+            "test".to_string(),
+            0,
+            vec![0; (TOKENS * 2) as usize]
+        );
         let orders = vec![
             Order {
                 slot_index: 0,
@@ -325,11 +323,11 @@ pub mod tests {
 
     #[test]
     fn test_no_matches() {
-        let state = State {
-            state_hash: "test".to_string(),
-            state_index: 0,
-            balances: vec![200; (TOKENS * 2) as usize]
-        };
+        let state = State::new(
+            "test".to_string(),
+            0,
+            vec![200; (TOKENS * 2) as usize]
+        );
         let orders = vec![
             Order {
                 slot_index: 0,

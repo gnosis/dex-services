@@ -57,7 +57,7 @@ fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
 }
 
 fn serialize_balances(balances: &Vec<u128>, num_tokens: u8) -> serde_json::Value {
-    assert!((balances.len() % num_tokens as usize) == 0, "Balance vector cannot be split into equal accounts");
+    assert_eq!(balances.len() % num_tokens as usize, 0, "Balance vector cannot be split into equal accounts");
     let mut accounts: HashMap<String, HashMap<String, String>> = HashMap::new();
     let mut current_account = 0;
     for balances_for_current_account in balances.chunks(num_tokens as usize) {
@@ -142,7 +142,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
             "tokens": token_ids,
             "refToken": token_id(0),
             "pricesPrev": self.previous_prices,
-            "accounts": serialize_balances(&state.balances, self.num_tokens),
+            "accounts": serialize_balances(&state.read_balances(), self.num_tokens),
             "orders": orders, 
         });
         let input_file = format!("instance_{}.json", Utc::now().to_rfc3339());
@@ -191,11 +191,11 @@ pub mod tests {
 
     #[test]
     fn test_solver_keeps_prices_from_previous_result() {
-        let state = models::State {
-            state_hash: "hash".to_string(),
-            state_index:  0,
-            balances: vec![],
-        };
+        let state = models::State::new(
+            "hash".to_string(),
+            0,
+            vec![]
+        );
         let return_result = || { Ok(json!({
             "prices": {
                 "token0": "14024052566155238000",

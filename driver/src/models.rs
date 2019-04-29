@@ -21,9 +21,30 @@ pub trait Serializable {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct State {
-  pub state_hash: String,
-  pub state_index: i32,
-  pub balances: Vec<u128>,
+    pub state_hash: String,
+    pub state_index: i32,
+    balances: Vec<u128>,
+}
+
+impl State {
+    pub fn new(state_hash: String, state_index: i32, balances: Vec<u128>) -> Self {
+        State { state_hash, state_index, balances }
+    }
+    pub fn balance_index(token_id: u8, account_id: u16) -> usize {
+        TOKENS as usize * account_id as usize  + token_id as usize
+    }
+    pub fn read_balance(&self, token_id: u8, account_id: u16) -> u128 {
+        self.balances[State::balance_index(token_id, account_id)]
+    }
+    pub fn increment_balance(&mut self, token_id: u8, account_id: u16, amount: u128) {
+        self.balances[State::balance_index(token_id, account_id)] += amount;
+    }
+    pub fn decrement_balance(&mut self, token_id: u8, account_id: u16, amount: u128) {
+        self.balances[State::balance_index(token_id, account_id)] -= amount;
+    }
+    pub fn read_balances(&self) -> Vec<u128> {
+        self.balances.clone()
+    }
 }
 
 impl RollingHashable for State {
