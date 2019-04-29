@@ -43,11 +43,11 @@ impl LinearOptimisationPriceFinder {
     }
 }
 
-fn token_id(token: u8) -> String {
+pub fn token_id(token: u8) -> String {
     format!("token{}", token)
 }
 
-fn account_id(account: u16) -> String {
+pub fn account_id(account: u16) -> String {
     format!("account{}", account)
 }
 
@@ -60,23 +60,6 @@ fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
         "buyAmount": order.buy_amount.to_string(),
         "ID": id //TODO this should not be needed
     })
-}
-
-fn serialize_balances(balances: &[u128], num_tokens: u8) -> serde_json::Value {
-    assert_eq!(
-        (balances.len() % num_tokens as usize), 0,
-        "Balance vector cannot be split into equal accounts"
-    );
-    let mut accounts: HashMap<String, HashMap<String, String>> = HashMap::new();
-    let mut current_account = 0;
-    for balances_for_current_account in balances.chunks(num_tokens as usize) {
-        accounts.insert(account_id(current_account), (0..num_tokens)
-            .map(token_id)
-            .zip(balances_for_current_account.iter().map(|b| b.to_string()))
-            .collect());
-        current_account += 1;
-    }
-    json!(accounts)
 }
 
 fn deserialize_result(json: &serde_json::Value, num_tokens: u8) -> Result<(Prices, Solution), PriceFindingError> {
@@ -152,7 +135,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
             "tokens": token_ids,
             "refToken": token_id(0),
             "pricesPrev": self.previous_prices,
-            "accounts": serialize_balances(&state.read_balances(), self.num_tokens),
+            "accounts": state.serialize_balances(self.num_tokens),
             "orders": orders, 
         });
         let input_file = format!("instance_{}.json", Utc::now().to_rfc3339());
@@ -253,31 +236,7 @@ pub mod tests {
         assert_eq!(result, expected);
     }
 
-    #[test]
-    fn test_serialize_balances() {
-        let balances = vec![100, 200, 300, 400, 500, 600];
-        let result = serialize_balances(&balances, 3);
-        let expected = json!({
-            "account0": {
-                "token0": "100",
-                "token1": "200",
-                "token2": "300",
-            }, 
-            "account1": {
-                "token0": "400",
-                "token1": "500",
-                "token2": "600",
-            }
-        });
-        assert_eq!(result, expected)
-    }
 
-    #[test]
-    #[should_panic]
-    fn test_serialize_balances_with_bad_balance_length() {
-        let balances = vec![100, 200];
-        serialize_balances(&balances, 3);
-    }
 
     #[test]
     fn test_deserialize_result() {
