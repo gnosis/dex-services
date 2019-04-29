@@ -93,85 +93,85 @@ impl SnappContract for SnappContractImpl {
                     None => Err(web3::Error::from("Current block not found"))
                 }
             })
-            .map_err(|e| DriverError::from(e))
+            .map_err(DriverError::from)
     }
 
     fn get_current_state_root(&self) -> Result<H256> {
         self.contract.query(
             "getCurrentStateRoot", (), None, Options::default(), None
-        ).wait().map_err(|e| DriverError::from(e))
+        ).wait().map_err(DriverError::from)
     }
 
     fn get_current_deposit_slot(&self) -> Result<U256> {
         self.contract.query(
             "depositIndex", (), None, Options::default(), None
-        ).wait().map_err(|e| DriverError::from(e))
+        ).wait().map_err(DriverError::from)
     }
 
     fn get_current_withdraw_slot(&self) -> Result<U256> {
         self.contract.query(
             "withdrawIndex", (), None, Options::default(), None
-        ).wait().map_err(|e| DriverError::from(e))
+        ).wait().map_err(DriverError::from)
     }
 
     fn get_current_auction_slot(&self) -> Result<U256> {
         self.contract.query(
             "auctionIndex", (), None, Options::default(), None
-        ).wait().map_err(|e| DriverError::from(e))
+        ).wait().map_err(DriverError::from)
     }
 
     fn creation_timestamp_for_deposit_slot(&self, slot: U256) -> Result<U256> {
         self.contract.query(
             "getDepositCreationTimestamp", slot, None, Options::default(), None,
-        ).wait().map_err(|e| DriverError::from(e))
+        ).wait().map_err(DriverError::from)
     }
 
     fn deposit_hash_for_slot(&self, slot: U256) -> Result<H256> {
         self.contract.query(
             "getDepositHash", slot, None, Options::default(), None,
-        ).wait().map_err(|e| DriverError::from(e))
+        ).wait().map_err(DriverError::from)
     }
 
     fn has_deposit_slot_been_applied(&self, slot: U256) -> Result<bool> {
         self.contract.query(
             "hasDepositBeenApplied", slot, None, Options::default(), None,
-        ).wait().map_err(|e| DriverError::from(e))
+        ).wait().map_err(DriverError::from)
     }
 
     fn creation_timestamp_for_withdraw_slot(&self, slot: U256) -> Result<U256> {
         self.contract.query(
             "getWithdrawCreationTimestamp", slot, None, Options::default(), None,
-        ).wait().map_err(|e| DriverError::from(e))
+        ).wait().map_err(DriverError::from)
     }
 
     fn withdraw_hash_for_slot(&self, slot: U256) -> Result<H256> {
         self.contract.query(
             "getWithdrawHash", slot, None, Options::default(), None,
-        ).wait().map_err(|e| DriverError::from(e))
+        ).wait().map_err(DriverError::from)
     }
 
     fn has_withdraw_slot_been_applied(&self, slot: U256) -> Result<bool> {
         self.contract.query(
             "hasWithdrawBeenApplied", slot, None, Options::default(), None,
-        ).wait().map_err(|e| DriverError::from(e))
+        ).wait().map_err(DriverError::from)
     }
 
     fn creation_timestamp_for_auction_slot(&self, slot: U256) -> Result<U256> {
         self.contract.query(
             "getAuctionCreationTimestamp", slot, None, Options::default(), None,
-        ).wait().map_err(|e| DriverError::from(e))
+        ).wait().map_err(DriverError::from)
     }
 
     fn order_hash_for_slot(&self, slot: U256) -> Result<H256> {
         self.contract.query(
             "getOrderHash", slot, None, Options::default(), None,
-        ).wait().map_err(|e| DriverError::from(e))
+        ).wait().map_err(DriverError::from)
     }
 
     fn has_auction_slot_been_applied(&self, slot: U256) -> Result<bool> {
         self.contract.query(
             "hasAuctionBeenApplied", slot, None, Options::default(), None,
-        ).wait().map_err(|e| DriverError::from(e))
+        ).wait().map_err(DriverError::from)
     }
     
     fn apply_deposits(
@@ -187,7 +187,7 @@ impl SnappContract for SnappContractImpl {
                 account,
                 Options::default(),
             ).wait()
-            .map_err(|e| DriverError::from(e))
+            .map_err(DriverError::from)
             .map(|_|())
     }
 
@@ -209,7 +209,7 @@ impl SnappContract for SnappContractImpl {
                     opt.gas = Some(1_000_000.into());
                 }),
             ).wait()
-            .map_err(|e| DriverError::from(e))
+            .map_err(DriverError::from)
             .map(|_|())
     }
 
@@ -224,14 +224,14 @@ impl SnappContract for SnappContractImpl {
             let account = self.account_with_sufficient_balance().ok_or("Not enough balance to send Txs")?;
 
             let mut options = Options::default();
-            options.gas = Some(U256::from(5000000));
+            options.gas = Some(U256::from(5_000_000));
             self.contract.call(
                 "applyAuction",
                 (slot, prev_state, new_state, order_hash, prices_and_volumes),
                 account,
                 options,
             ).wait()
-            .map_err(|e| DriverError::from(e))
+            .map_err(DriverError::from)
             .map(|_|())
     }
 }
