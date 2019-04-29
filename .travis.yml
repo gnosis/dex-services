@@ -28,7 +28,7 @@ matrix:
           - dex-contracts/node_modules/
       before_install:
         - npm install -g truffle
-        - curl https://raw.githubusercontent.com/kadwanev/retry/a1b1826bdb0a78189d5c70c858dc676f5133b1d7/retry -o /usr/local/bin/retry && chmod +x /usr/local/bin/retry
+        - sudo sh -c "curl https://raw.githubusercontent.com/kadwanev/retry/a1b1826bdb0a78189d5c70c858dc676f5133b1d7/retry -o /usr/local/bin/retry && chmod +x /usr/local/bin/retry"
       install:
         - git submodule update --init
         - npm install -C dex-contracts
