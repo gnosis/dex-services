@@ -63,13 +63,7 @@ pub fn run_order_listener<D, C>(
             };
 
             // Compute updated balances
-            for (i, order) in orders.iter().enumerate() {
-                let buy_volume = solution.executed_buy_amounts[i];
-                state.increment_balance(order.buy_token, order.account_id, buy_volume);
-
-                let sell_volume = solution.executed_sell_amounts[i];
-                state.decrement_balance(order.sell_token, order.account_id, sell_volume);
-            }
+            state.update_balances(&orders, &solution);
             let new_state_root = state.rolling_hash();
             
             println!("New State_hash is {}, Solution: {:?}", new_state_root, solution);

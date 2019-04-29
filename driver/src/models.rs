@@ -2,6 +2,7 @@ use byteorder::{BigEndian, LittleEndian, WriteBytesExt};
 use serde_derive::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use web3::types::H256;
+use crate::price_finding::Solution;
 
 pub const TOKENS: u8 = 30;
 pub const DB_NAME: &str = "dfusion2";
@@ -44,6 +45,16 @@ impl State {
     }
     pub fn read_balances(&self) -> Vec<u128> {
         self.balances.clone()
+    }
+
+    pub fn update_balances(&mut self, orders: &[Order], solution: &Solution) {
+        for (i, order) in orders.iter().enumerate() {
+            let buy_volume = solution.executed_buy_amounts[i];
+            self.increment_balance(order.buy_token, order.account_id, buy_volume);
+
+            let sell_volume = solution.executed_sell_amounts[i];
+            self.decrement_balance(order.sell_token, order.account_id, sell_volume);
+        }
     }
 }
 
@@ -195,8 +206,46 @@ impl From<mongodb::ordered::OrderedDocument> for Order {
 #[cfg(test)]
 pub mod tests {
   use super::*;
-  use web3::types::H256;
+  use web3::types::{H256, U256};
   use std::str::FromStr;
+
+    #[test]
+    fn computes_updated_balance_on_example_with_equal_buy_and_sell(){
+        let mut state = State::new(
+            "test".to_string(),
+            0,
+            vec![100; 70]
+        );
+        let solution = Solution {
+            surplus: U256::from_dec_str("0").unwrap(),
+            prices: vec![1, 2],
+            executed_sell_amounts: vec![1, 1],
+            executed_buy_amounts: vec![1, 1],
+        };
+        let order_1 = Order{
+          slot_index: 1,
+          account_id: 1,
+          sell_token: 0,
+          buy_token: 1,
+          sell_amount: 4,
+          buy_amount: 5,
+        };
+        let order_2 = Order{
+          slot_index: 1,
+          account_id: 0,
+          sell_token: 1,
+          buy_token: 0,
+          sell_amount: 5,
+          buy_amount: 4,
+        };
+        let orders = vec![order_1, order_2];
+
+        state.update_balances(&orders, &solution);
+        assert_eq!(state.read_balance(0, 0), 101);
+        assert_eq!(state.read_balance(1, 0), 99);
+        assert_eq!(state.read_balance(0, 1), 99);
+        assert_eq!(state.read_balance(1, 1), 101);
+    }
 
   #[test]
   fn test_pending_flux_rolling_hash() {
