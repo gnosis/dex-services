@@ -6,11 +6,9 @@ use crate::contract::SnappContract;
 use crate::error::{DriverError, ErrorKind};
 use crate::util;
 
-use web3::types::H256;
-
 fn apply_withdraws(
     state: &models::State,
-    withdraws: &Vec<models::PendingFlux>,
+    withdraws: &[models::PendingFlux],
 ) -> (models::State, Vec<bool>) {
     let mut state = state.clone();
     let mut valid_withdraws = vec![];
@@ -58,7 +56,7 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
 
             let (updated_balances, valid_withdraws) = apply_withdraws(&balances, &withdraws);
             let withdrawal_merkle_root = withdraws.root_hash(&valid_withdraws);
-            let new_state_root = H256::from(updated_balances.rolling_hash());
+            let new_state_root = updated_balances.rolling_hash();
             
             println!("New State_hash is {}, Valid Withdraw Merkle Root is {}", new_state_root, withdrawal_merkle_root);
             contract.apply_withdraws(slot, withdrawal_merkle_root, state_root, new_state_root, contract_withdraw_hash)?;
@@ -77,7 +75,7 @@ mod tests {
     use crate::models::tests::create_flux_for_test;
     use crate::db_interface::tests::DbInterfaceMock;
     use mock_it::Matcher::*;
-    use web3::types::U256;
+    use web3::types::{H256, U256};
 
     #[test]
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {

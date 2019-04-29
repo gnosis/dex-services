@@ -20,8 +20,8 @@ truffle exec scripts/deposit.js 5 0 300
 truffle exec scripts/sell_order.js 0 1 2 12 12
 truffle exec scripts/sell_order.js 1 2 1 2.2 2
 truffle exec scripts/sell_order.js 2 0 2 150 10
-truffle exec scripts/sell_order.js 3 0 1 180 15
-truffle exec scripts/sell_order.js 4 1 0 4 52
+truffle exec scripts/sell_order.js 3 0 1 180 15 # executed sell: 4
+truffle exec scripts/sell_order.js 4 1 0 4 52 # executed sell: 52
 truffle exec scripts/sell_order.js 5 2 0 20 280
 
 sleep 5
@@ -37,4 +37,9 @@ sleep 10
 # Test balances have been updated
 EXPECTED_HASH="c4c44a0c0c17022dc987ba8abbc89d0c77d20865d0d61c07f76c889badd708a2"
 truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep ${EXPECTED_HASH}
-mongo dfusion2 --eval "db.accounts.findOne({'stateHash': '$EXPECTED_HASH'}).balances[60]" | grep 4000000000000000000
+
+# Account 4 has now 4 of token 1 
+mongo dfusion2 --eval "db.accounts.findOne({'stateHash': '$EXPECTED_HASH'}).balances[121]" | grep 4000000000000000000
+
+# Account 3 has now 52 of token 0
+mongo dfusion2 --eval "db.accounts.findOne({'stateHash': '$EXPECTED_HASH'}).balances[90]" | grep 52000000000000000000

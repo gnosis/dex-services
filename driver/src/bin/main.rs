@@ -16,7 +16,8 @@ fn main() {
     let db_instance = MongoDB::new(db_host, db_port).unwrap();
     let contract = SnappContractImpl::new().unwrap();
 
-    let solver_env_var = env::var("LINEAR_OPTIMIZATION_SOLVER").unwrap_or("0".to_string());
+    let solver_env_var = env::var("LINEAR_OPTIMIZATION_SOLVER")
+        .unwrap_or_else(|_| "0".to_string());
     let mut price_finder : Box<PriceFinding> = if solver_env_var == "1" {
         Box::new(LinearOptimisationPriceFinder::new())
     } else {
