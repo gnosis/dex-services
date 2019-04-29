@@ -6,7 +6,7 @@ use crate::models;
 use crate::price_finding::{PriceFinding, Solution};
 use crate::util;
 
-use web3::types::{H256, U256};
+use web3::types::U256;
 
 pub fn run_order_listener<D, C>(
     db: &D, 
@@ -42,7 +42,7 @@ pub fn run_order_listener<D, C>(
                 ));
             }
 
-            let solution = if orders.len() > 0 {
+            let solution = if !orders.is_empty() {
                 price_finder.find_prices(&orders, &state).unwrap_or_else(|e| {
                     println!("Error computing result: {}\n Falling back to trivial solution", e);
                     Solution {
@@ -61,6 +61,7 @@ pub fn run_order_listener<D, C>(
                     executed_buy_amounts: vec![0; orders.len()],
                 }
             };
+
             for (i, order) in orders.iter().enumerate() {
                 let buy_volume = solution.executed_buy_amounts[i];
                 state.increment_balance(order.buy_token, order.account_id, buy_volume);
@@ -68,8 +69,7 @@ pub fn run_order_listener<D, C>(
                 let sell_volume = solution.executed_sell_amounts[i];
                 state.decrement_balance(order.sell_token, order.account_id, sell_volume);
             }
-
-            let new_state_root = H256::from(state.rolling_hash());
+            let new_state_root = state.rolling_hash();
             
             println!("New State_hash is {}, Solution: {:?}", new_state_root, solution);
             contract.apply_auction(slot, state_root, new_state_root, order_hash, solution.bytes())?;
@@ -107,7 +107,7 @@ mod tests {
     use crate::db_interface::tests::DbInterfaceMock;
     use crate::price_finding::price_finder_interface::tests::PriceFindingMock;
     use mock_it::Matcher::*;
-    use web3::types::U256;
+    use web3::types::{H256, U256};
 
 //    #[test]
 //    fn computes_updated_balance_on_example_with_equal_buy_and_sell(){

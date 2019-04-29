@@ -22,10 +22,16 @@ pub struct LinearOptimisationPriceFinder {
     read_output: fn() -> std::io::Result<serde_json::Value>,
 }
 
+impl Default for LinearOptimisationPriceFinder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LinearOptimisationPriceFinder {
     pub fn new() -> Self {
         // All prices are 1 (10**18)
-        return LinearOptimisationPriceFinder {
+        LinearOptimisationPriceFinder {
             num_tokens: models::TOKENS,
             previous_prices: (0..models::TOKENS)
                 .map(|t| (token_id(t), "1000000000000000000".to_string()))
@@ -56,13 +62,16 @@ fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
     })
 }
 
-fn serialize_balances(balances: &Vec<u128>, num_tokens: u8) -> serde_json::Value {
-    assert_eq!(balances.len() % num_tokens as usize, 0, "Balance vector cannot be split into equal accounts");
+fn serialize_balances(balances: &[u128], num_tokens: u8) -> serde_json::Value {
+    assert_eq!(
+        (balances.len() % num_tokens as usize), 0,
+        "Balance vector cannot be split into equal accounts"
+    );
     let mut accounts: HashMap<String, HashMap<String, String>> = HashMap::new();
     let mut current_account = 0;
     for balances_for_current_account in balances.chunks(num_tokens as usize) {
         accounts.insert(account_id(current_account), (0..num_tokens)
-            .map(|t| token_id(t))
+            .map(token_id)
             .zip(balances_for_current_account.iter().map(|b| b.to_string()))
             .collect());
         current_account += 1;
@@ -78,13 +87,14 @@ fn deserialize_result(json: &serde_json::Value, num_tokens: u8) -> Result<(Price
         .map(|(token, price)| price
             .as_str()
             .map(|p| (token.to_owned(), p.to_owned()))
-            .ok_or_else(|| PriceFindingError::new(&format!("Could not convert price to string"), ErrorKind::JsonError))
+            .ok_or_else(|| PriceFindingError::new(
+                &"Could not convert price to string".to_string(), ErrorKind::JsonError))
         )
         .collect::<Result<Prices, PriceFindingError>>()?;
     let prices = (0..num_tokens)
         .map(|t| price_map.get(&token_id(t))
             .ok_or_else(|| PriceFindingError::new(&format!("Token {} not found in price map", t), ErrorKind::JsonError))
-            .and_then(|price| price.parse::<u128>().map_err(|e| PriceFindingError::from(e)))
+            .and_then(|price| price.parse::<u128>().map_err(PriceFindingError::from))
         )
         .collect::<Result<Vec<u128>, PriceFindingError>>()?;
     let orders = json["orders"].as_array().ok_or_else(|| "No 'orders' list in json")?;
@@ -104,8 +114,8 @@ fn deserialize_result(json: &serde_json::Value, num_tokens: u8) -> Result<(Price
         .iter()
         .map(|o| o["execSellAmount"]
             .as_str()
-            .ok_or_else(|| PriceFindingError::new("No 'execSellAmount' field on order",  ErrorKind::JsonError))
-            .and_then(|amount| amount.parse::<u128>().map_err(|e| PriceFindingError::from(e)))
+            .ok_or_else(|| PriceFindingError::new("No 'execSellAmount' field on order", ErrorKind::JsonError))
+            .and_then(|amount| amount.parse::<u128>().map_err(PriceFindingError::from))
         )
         .collect::<Result<Vec<u128>, PriceFindingError>>()?;
     let executed_buy_amounts = orders
@@ -113,7 +123,7 @@ fn deserialize_result(json: &serde_json::Value, num_tokens: u8) -> Result<(Price
         .map(|o| o["execBuyAmount"]
             .as_str()
             .ok_or_else(|| PriceFindingError::new("No 'execBuyAmount' field on order",  ErrorKind::JsonError))
-            .and_then(|amount| amount.parse::<u128>().map_err(|e| PriceFindingError::from(e)))
+            .and_then(|amount| amount.parse::<u128>().map_err(PriceFindingError::from))
         )
         .collect::<Result<Vec<u128>, PriceFindingError>>()?;
     Ok((price_map.to_owned(), Solution {
@@ -127,11 +137,11 @@ fn deserialize_result(json: &serde_json::Value, num_tokens: u8) -> Result<(Price
 impl PriceFinding for LinearOptimisationPriceFinder {
     fn find_prices(
         &mut self, 
-        orders: &Vec<models::Order>, 
+        orders: &[models::Order],
         state: &models::State
     ) -> Result<Solution, PriceFindingError> {
         let token_ids: Vec<String> = (0..self.num_tokens)
-            .map(|t| token_id(t))
+            .map(token_id)
             .collect();
         let orders: Vec<serde_json::Value> = orders
             .iter()

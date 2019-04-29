@@ -6,12 +6,10 @@ use crate::error::{DriverError, ErrorKind};
 use crate::contract::SnappContract;
 use crate::util::{find_first_unapplied_slot, can_process};
 
-use web3::types::H256;
-
 
 pub fn apply_deposits(
     state: &models::State,
-    deposits: &Vec<models::PendingFlux>,
+    deposits: &[models::PendingFlux],
 ) -> models::State {
     let mut updated_state = state.clone();
     for deposit in deposits {
@@ -51,7 +49,7 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
             }
 
             let updated_balances = apply_deposits(&balances, &deposits);
-            let new_state_root = H256::from(updated_balances.rolling_hash());
+            let new_state_root = updated_balances.rolling_hash();
             
             println!("New State_hash is {}", new_state_root);
             contract.apply_deposits(slot, state_root, new_state_root, contract_deposit_hash)?;
@@ -73,7 +71,7 @@ mod tests {
     use crate::models::tests::create_flux_for_test;
     use crate::db_interface::tests::DbInterfaceMock;
     use mock_it::Matcher::*;
-    use web3::types::U256;
+    use web3::types::{H256, U256};
 
     #[test]
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {

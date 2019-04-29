@@ -11,7 +11,7 @@ pub trait RollingHashable {
 }
 
 pub trait RootHashable {
-    fn root_hash(&self, valid_items: &Vec<bool>) -> H256;
+    fn root_hash(&self, valid_items: &[bool]) -> H256;
 }
 
 pub trait Serializable {
@@ -118,7 +118,7 @@ impl<T: Serializable> RollingHashable for Vec<T> {
 }
 
 impl RootHashable for Vec<PendingFlux> {
-    fn root_hash(&self, valid_items: &Vec<bool>) -> H256 {
+    fn root_hash(&self, valid_items: &[bool]) -> H256 {
         assert_eq!(self.len(), valid_items.len());
         let mut withdraw_bytes = vec![vec![0; 32]; 128];
         for (index, _) in valid_items.iter().enumerate().filter(|(_, valid)| **valid) {
