@@ -14,13 +14,13 @@ pub struct Solution {
 
 impl models::Serializable for Solution {
     fn bytes(&self) -> Vec<u8> {
-        let altering_sell_buy_amounts: Vec<u128> = self.executed_buy_amounts
+        let alternating_buy_sell_amounts: Vec<u128> = self.executed_buy_amounts
             .iter()
             .zip(self.executed_sell_amounts.iter())
             .flat_map(|tup| once(tup.0).chain(once(tup.1)))
             .map(|x| x.clone())
             .collect();
-        [&self.prices, &altering_sell_buy_amounts]
+        [&self.prices, &alternating_buy_sell_amounts]
             .iter()
             .flat_map(|list| list.iter())
             .flat_map(|element| element.bytes())
