@@ -62,6 +62,7 @@ pub fn run_order_listener<D, C>(
                 }
             };
 
+            // Compute updated balances
             for (i, order) in orders.iter().enumerate() {
                 let buy_volume = solution.executed_buy_amounts[i];
                 state.increment_balance(order.buy_token, order.account_id, buy_volume);
@@ -81,24 +82,6 @@ pub fn run_order_listener<D, C>(
     Ok(false)
 }
 
-//fn compute_updated_balances(
-//    balances: &Vec<u128>,
-//    orders: &Vec<Order>,
-//    solution: &Solution
-//) -> Vec<u128> {
-//    let mut result = balances.clone();
-//    for (index, order) in orders.iter().enumerate() {
-//        let buy_volume = solution.executed_buy_amounts[index];
-//        let buy_index = State::balance_index(order.buy_token, order.account_id);
-//        result[buy_index] += buy_volume;
-//
-//        let sell_volume = solution.executed_sell_amounts[index];
-//        let sell_index = State::balance_index(order.sell_token, order.account_id);
-//        result[sell_index] -= sell_volume;
-//    }
-//    result
-//}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,40 +92,6 @@ mod tests {
     use mock_it::Matcher::*;
     use web3::types::{H256, U256};
 
-//    #[test]
-//    fn computes_updated_balance_on_example_with_equal_buy_and_sell(){
-//        let balances = vec![100; 70];
-//        let solution = Solution {
-//            surplus: U256::from_dec_str("0").unwrap(),
-//            prices: vec![1, 2],
-//            executed_sell_amounts: vec![1, 1],
-//            executed_buy_amounts: vec![1, 1],
-//        };
-//        let order_1 = Order{
-//          slot_index: 1,
-//          account_id: 1,
-//          sell_token: 0,
-//          buy_token: 1,
-//          sell_amount: 4,
-//          buy_amount: 5,
-//        };
-//        let order_2 = Order{
-//          slot_index: 1,
-//          account_id: 0,
-//          sell_token: 1,
-//          buy_token: 0,
-//          sell_amount: 5,
-//          buy_amount: 4,
-//        };
-//        let orders = vec![order_1, order_2];
-//
-//        let mut updated_balances = balances.clone();
-//        updated_balances[0] = 101;
-//        updated_balances[1] = 99;
-//        updated_balances[30] = 99;
-//        updated_balances[31] = 101;
-//        assert_eq!(compute_updated_balances(&balances, &orders, &solution), updated_balances);
-//    }
     #[test]
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
         let slot = U256::from(1);
