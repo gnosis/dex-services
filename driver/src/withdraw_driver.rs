@@ -10,12 +10,11 @@ fn apply_withdraws(
     state: &models::State,
     withdraws: &[models::PendingFlux],
 ) -> (models::State, Vec<bool>) {
-    let mut state = state.clone();
+    let mut state = state.clone();  // TODO - does this really need to be cloned
     let mut valid_withdraws = vec![];
-    for i in withdraws {
-        let index = util::balance_index(i.token_id, i.account_id);
-        if state.balances[index] >= i.amount {
-            state.balances[index] -= i.amount;
+    for w in withdraws {
+        if state.read_balance(w.token_id, w.account_id) >= w.amount {
+            state.decrement_balance(w.token_id, w.account_id, w.amount);
             valid_withdraws.push(true);
         } else {
             valid_withdraws.push(false);
@@ -82,11 +81,11 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let withdraws = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
-        let state = models::State {
-            state_hash: format!("{:x}", state_hash),
-            state_index: 1,
-            balances: vec![100; ((models::TOKENS as u16) * 2) as usize],
-        };
+        let state = models::State::new(
+            format!("{:x}", state_hash),
+            1,
+            vec![100; (models::TOKENS * 2) as usize],
+        );
 
         let contract = SnappContractMock::new();
         contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
@@ -152,11 +151,11 @@ mod tests {
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_withdraws.given((slot - 1, Any, Any, Any, Any)).will_return(Ok(()));
 
-        let state = models::State {
-            state_hash: format!("{:x}", state_hash),
-            state_index: 1,
-            balances: vec![100; ((models::TOKENS as u16) * 2) as usize],
-        };
+        let state = models::State::new(
+            format!("{:x}", state_hash),
+            1,
+            vec![100; (models::TOKENS * 2) as usize],
+        );
 
         let db = DbInterfaceMock::new();
         db.get_withdraws_of_slot.given(0).will_return(Ok(first_withdraws));
@@ -173,11 +172,11 @@ mod tests {
 
         let withdraws = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
-        let state = models::State {
-            state_hash: format!("{:x}", state_hash),
-            state_index: 1,
-            balances: vec![100; ((models::TOKENS as u16) * 2) as usize],
-        };
+        let state = models::State::new(
+            format!("{:x}", state_hash),
+            1,
+            vec![100; (models::TOKENS * 2) as usize],
+        );
 
         let contract = SnappContractMock::new();
         contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
@@ -209,13 +208,12 @@ mod tests {
             token_id: 1,
             amount: 10,
         }];
-        let mut state = models::State {
-            state_hash: format!("{:x}", state_hash),
-            state_index: 1,
-            balances: vec![100; ((models::TOKENS as u16) * 2) as usize],
-        };
-
-        state.balances[1] = 0;
+        let mut state = models::State::new(
+            format!("{:x}", state_hash),
+            1,
+            vec![100; (models::TOKENS * 2) as usize],
+        );
+        state.decrement_balance(1, 0, 100);
 
         let merkle_root = withdraws.root_hash(&vec![true, false]);
 

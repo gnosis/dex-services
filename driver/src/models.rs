@@ -2,6 +2,10 @@ use byteorder::{BigEndian, LittleEndian, WriteBytesExt};
 use serde_derive::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use web3::types::H256;
+use crate::price_finding::Solution;
+use crate::price_finding::linear_optimization_price_finder::{account_id, token_id};
+use std::collections::HashMap;
+use serde_json::json;
 
 pub const TOKENS: u8 = 30;
 pub const DB_NAME: &str = "dfusion2";
@@ -21,9 +25,53 @@ pub trait Serializable {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct State {
-  pub state_hash: String,
-  pub state_index: i32,
-  pub balances: Vec<u128>,
+    pub state_hash: String,
+    pub state_index: i32,
+    balances: Vec<u128>,
+}
+
+impl State {
+    pub fn new(state_hash: String, state_index: i32, balances: Vec<u128>) -> Self {
+        State { state_hash, state_index, balances }
+    }
+    fn balance_index(token_id: u8, account_id: u16) -> usize {
+        TOKENS as usize * account_id as usize  + token_id as usize
+    }
+    pub fn read_balance(&self, token_id: u8, account_id: u16) -> u128 {
+        self.balances[State::balance_index(token_id, account_id)]
+    }
+    pub fn increment_balance(&mut self, token_id: u8, account_id: u16, amount: u128) {
+        self.balances[State::balance_index(token_id, account_id)] += amount;
+    }
+    pub fn decrement_balance(&mut self, token_id: u8, account_id: u16, amount: u128) {
+        self.balances[State::balance_index(token_id, account_id)] -= amount;
+    }
+    pub fn serialize_balances(&self, num_tokens: u8) -> serde_json::Value {
+        assert_eq!(
+            self.balances.len() % num_tokens as usize, 0,
+            "Balance vector cannot be split into equal accounts"
+        );
+        let mut accounts: HashMap<String, HashMap<String, String>> = HashMap::new();
+        let mut current_account = 0;
+        for account_balances in self.balances.chunks(num_tokens as usize) {
+            accounts.insert(account_id(current_account), (0..num_tokens)
+                .map(token_id)
+                .zip(account_balances.iter().map(|b| b.to_string()))
+                .collect());
+            current_account += 1;
+        }
+        json!(accounts)
+    }
+
+    pub fn update_balances(&mut self, orders: &[Order], solution: &Solution) {
+        for (i, order) in orders.iter().enumerate() {
+            let buy_volume = solution.executed_buy_amounts[i];
+            self.increment_balance(order.buy_token, order.account_id, buy_volume);
+
+            let sell_volume = solution.executed_sell_amounts[i];
+            self.decrement_balance(order.sell_token, order.account_id, sell_volume);
+        }
+    }
 }
 
 impl RollingHashable for State {
@@ -174,8 +222,80 @@ impl From<mongodb::ordered::OrderedDocument> for Order {
 #[cfg(test)]
 pub mod tests {
   use super::*;
-  use web3::types::H256;
+  use web3::types::{H256, U256};
   use std::str::FromStr;
+
+    #[test]
+    fn test_update_balances(){
+        let mut state = State::new(
+            "test".to_string(),
+            0,
+            vec![100; 70]
+        );
+        let solution = Solution {
+            surplus: U256::from_dec_str("0").unwrap(),
+            prices: vec![1, 2],
+            executed_sell_amounts: vec![1, 1],
+            executed_buy_amounts: vec![1, 1],
+        };
+        let order_1 = Order{
+          slot_index: 1,
+          account_id: 1,
+          sell_token: 0,
+          buy_token: 1,
+          sell_amount: 4,
+          buy_amount: 5,
+        };
+        let order_2 = Order{
+          slot_index: 1,
+          account_id: 0,
+          sell_token: 1,
+          buy_token: 0,
+          sell_amount: 5,
+          buy_amount: 4,
+        };
+        let orders = vec![order_1, order_2];
+
+        state.update_balances(&orders, &solution);
+        assert_eq!(state.read_balance(0, 0), 101);
+        assert_eq!(state.read_balance(1, 0), 99);
+        assert_eq!(state.read_balance(0, 1), 99);
+        assert_eq!(state.read_balance(1, 1), 101);
+    }
+
+    #[test]
+    fn test_serialize_balances() {
+        let state = State::new(
+            "test".to_string(),
+            0,
+            vec![100, 200, 300, 400, 500, 600]
+        );
+        let result = state.serialize_balances(3);
+        let expected = json!({
+            "account0": {
+                "token0": "100",
+                "token1": "200",
+                "token2": "300",
+            },
+            "account1": {
+                "token0": "400",
+                "token1": "500",
+                "token2": "600",
+            }
+        });
+        assert_eq!(result, expected)
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_serialize_balances_with_bad_balance_length() {
+        let state = State::new(
+            "test".to_string(),
+            0,
+            vec![100, 200]
+        );
+        state.serialize_balances( 3);
+    }
 
   #[test]
   fn test_pending_flux_rolling_hash() {

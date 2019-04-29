@@ -4,7 +4,7 @@ use crate::models::RollingHashable;
 use crate::db_interface::DbInterface;
 use crate::error::{DriverError, ErrorKind};
 use crate::contract::SnappContract;
-use crate::util::{balance_index, find_first_unapplied_slot, can_process};
+use crate::util::{find_first_unapplied_slot, can_process};
 
 
 pub fn apply_deposits(
@@ -12,8 +12,8 @@ pub fn apply_deposits(
     deposits: &[models::PendingFlux],
 ) -> models::State {
     let mut updated_state = state.clone();
-    for i in deposits {
-        updated_state.balances[balance_index(i.token_id, i.account_id)] += i.amount;
+    for deposit in deposits {
+        updated_state.increment_balance(deposit.token_id, deposit.account_id, deposit.amount)
     }
     updated_state
 }
@@ -78,11 +78,11 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
-        let state = models::State {
-            state_hash: format!("{:x}", state_hash),
-            state_index: 1,
-            balances: vec![100; (models::TOKENS * 2) as usize],
-        };
+        let state = models::State::new(
+            format!("{:x}", state_hash),
+            1,
+            vec![100; (models::TOKENS * 2) as usize],
+        );
 
         let contract = SnappContractMock::new();
         contract.get_current_deposit_slot.given(()).will_return(Ok(slot));
@@ -106,11 +106,11 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
 
-        let state = models::State {
-            state_hash: format!("{:x}", state_hash),
-            state_index: 1,
-            balances: vec![100; (models::TOKENS * 2) as usize],
-        };
+        let state = models::State::new(
+            format!("{:x}", state_hash),
+            1,
+            vec![100; (models::TOKENS * 2) as usize],
+        );
 
         let contract = SnappContractMock::new();
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));        
@@ -133,11 +133,11 @@ mod tests {
         let state_hash = H256::zero();
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
-        let state = models::State {
-            state_hash: format!("{:x}", state_hash),
-            state_index: 1,
-            balances: vec![100; (models::TOKENS * 2) as usize],
-        };
+        let state = models::State::new(
+            format!("{:x}", state_hash),
+            1,
+            vec![100; (models::TOKENS * 2) as usize],
+        );
 
         let contract = SnappContractMock::new();
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));        
@@ -175,11 +175,11 @@ mod tests {
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_deposits.given((slot - 1, Any, Any, Any)).will_return(Ok(()));
 
-        let state = models::State {
-            state_hash: format!("{:x}", state_hash),
-            state_index: 1,
-            balances: vec![100; (models::TOKENS * 2) as usize],
-        };
+        let state = models::State::new(
+            format!("{:x}", state_hash),
+            1,
+            vec![100; (models::TOKENS * 2) as usize],
+        );
 
         let db = DbInterfaceMock::new();
         db.get_deposits_of_slot.given(0).will_return(Ok(first_deposits));
@@ -195,11 +195,11 @@ mod tests {
 
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
-        let state = models::State {
-            state_hash: format!("{:x}", state_hash),
-            state_index: 1,
-            balances: vec![100; (models::TOKENS * 2) as usize],
-        };
+        let state = models::State::new(
+            format!("{:x}", state_hash),
+            1,
+            vec![100; (models::TOKENS * 2) as usize],
+        );
 
         let contract = SnappContractMock::new();
         contract.get_current_deposit_slot.given(()).will_return(Ok(slot));
