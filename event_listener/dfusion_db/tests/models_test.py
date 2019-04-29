@@ -1,6 +1,7 @@
 import unittest
 from ..models import AccountRecord, AuctionResults, AuctionSettlement
 from ..models import Deposit, Order, StateTransition, TransitionType, Withdraw
+from ..exceptions import EventParseError
 
 
 class DepositTest(unittest.TestCase):
@@ -166,12 +167,11 @@ class AccountRecordTest(unittest.TestCase):
 
 
 class AuctionResultsTest(unittest.TestCase):
-
     def test_from_bytes(self) -> None:
         price_strings = list(map(lambda x: str(hex(x))[2:].rjust(24, "0"), [1, 2, 3]))
         amount_strings = list(map(lambda x: str(hex(x))[2:].rjust(24, "0"), [1, 2, 3, 4]))
         solution_bytes = "".join(price_strings) + "".join(amount_strings)
-        solution = AuctionResults.from_bytes(solution_bytes, 3)
+        solution = AuctionResults.from_bytes(solution_bytes, 3, 2)
         self.assertEqual(solution.prices, [1, 2, 3], "Solution's prices unexpected")
         self.assertEqual(solution.buy_amounts, [1, 3], "Solution's buy amounts unexpected")
         self.assertEqual(solution.sell_amounts, [2, 4], "Solution's sell amounts unexpected")
@@ -182,15 +182,15 @@ class AuctionResultsTest(unittest.TestCase):
         bad_amount_strings = list(map(lambda x: str(hex(x))[2:].rjust(24, "0"), [1, 2, 3]))
         bad_bytes = "".join(price_strings) + "".join(bad_amount_strings)
 
-        with self.assertLogs():
-            AuctionResults.from_bytes(bad_bytes, 3)
+        with self.assertRaises(AssertionError):
+            AuctionResults.from_bytes(bad_bytes, 3, 2)
 
 
 class AuctionSettlementTest(unittest.TestCase):
-
     NUM_TOKENS = 3
-    EMPTY_SOLUTION_BYTES = "0" * 24 * NUM_TOKENS + "0" * 24 * 2
-    AUCTION_RESULTS = AuctionResults.from_bytes(EMPTY_SOLUTION_BYTES, NUM_TOKENS)
+    NUM_ORDERS = 6
+    EMPTY_SOLUTION_BYTES = "0" * 24 * NUM_TOKENS + "0" * 24 * NUM_ORDERS
+    AUCTION_RESULTS = AuctionResults.from_bytes(EMPTY_SOLUTION_BYTES, NUM_TOKENS, NUM_ORDERS)
 
     def test_from_dict(self) -> None:
         settlement_dict = {
@@ -201,7 +201,8 @@ class AuctionSettlementTest(unittest.TestCase):
         }
 
         expected = AuctionSettlement(1, 2, "hash", self.AUCTION_RESULTS)
-        self.assertEqual(expected, AuctionSettlement.from_dictionary(settlement_dict, self.NUM_TOKENS))
+        settlement = AuctionSettlement.from_dictionary(settlement_dict, self.NUM_TOKENS, self.NUM_ORDERS)
+        self.assertEqual(expected, settlement)
 
     def test_from_dict_failure(self) -> None:
         with self.assertRaises(AssertionError):
@@ -210,7 +211,19 @@ class AuctionSettlementTest(unittest.TestCase):
                 "stateIndex": 2,
                 "stateHash": "hash",
                 "pricesAndVolumes": "hashed_bytes",
-            }, self.NUM_TOKENS)
+            }, self.NUM_TOKENS, self.NUM_ORDERS)
+
+    def test_bad_results(self) -> None:
+        cropped_solution_bytes = self.EMPTY_SOLUTION_BYTES[:-24]
+        settlement_dict = {
+            "auctionId": 1,
+            "stateIndex": 2,
+            "stateHash": "hash",
+            "pricesAndVolumes": cropped_solution_bytes,
+        }
+
+        with self.assertRaises(EventParseError):
+            AuctionSettlement.from_dictionary(settlement_dict, self.NUM_TOKENS, self.NUM_ORDERS)
 
 
 class StateTransitionTest(unittest.TestCase):

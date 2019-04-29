@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import Mock
 from ..snapp_event_receiver import DepositReceiver, OrderReceiver, SnappInitializationReceiver
-from ..snapp_event_receiver import WithdrawRequestReceiver, StateTransitionReceiver, AuctionSettlementReceiver
+from ..snapp_event_receiver import WithdrawRequestReceiver, StateTransitionReceiver
+from ..snapp_event_receiver import AuctionSettlementReceiver, AuctionInitializationReceiver
 from ..models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord, Order
 from typing import List
 
@@ -244,7 +245,7 @@ class SnappInitializationReceiverTest(unittest.TestCase):
         }
         receiver.save(event, block_info={})
 
-        database.write_constants.assert_called_with(2, 3)
+        database.write_snapp_constants.assert_called_with(2, 3)
         database.write_account_state.assert_called_with(
             AccountRecord(0, EMPTY_STATE_HASH, [0 for _ in range(num_tokens * num_accounts)]))
 
@@ -257,7 +258,7 @@ class SnappInitializationReceiverTest(unittest.TestCase):
 
         state = AccountRecord(0, "initial hash", [0] * 30 * 100)
         database.write_account_state.assert_called_with(state)
-        database.write_constants.assert_called_with(30, 100)
+        database.write_snapp_constants.assert_called_with(30, 100)
 
 
 class AuctionSettlementReceiverTest(unittest.TestCase):
@@ -266,6 +267,7 @@ class AuctionSettlementReceiverTest(unittest.TestCase):
     def test_save() -> None:
         num_tokens = 2
         num_accounts = 2
+        num_orders = 2
         old_balances = [42] * num_accounts * num_tokens
         dummy_account_record = AccountRecord(1, EMPTY_STATE_HASH, old_balances)
 
@@ -312,9 +314,37 @@ class AuctionSettlementReceiverTest(unittest.TestCase):
         database.get_account_state.return_value = dummy_account_record
         database.get_orders.return_value = orders
         database.get_num_tokens.return_value = num_tokens
+        database.get_num_orders.return_value = num_orders
         receiver.save(event, block_info={})
 
         new_balances = [42 - 10, 42 + 16, 42 + 10, 42 - 16]
 
         new_account_record = AccountRecord(2, EMPTY_STATE_HASH, new_balances)
         database.write_account_state.assert_called_with(new_account_record)
+
+
+class AuctionInitializationReceiverTest(unittest.TestCase):
+
+    @staticmethod
+    def test_generic_save() -> None:
+        database = Mock()
+        receiver = AuctionInitializationReceiver(database)
+
+        num_orders = 2
+
+        event = {"maxOrders": num_orders}
+        receiver.save(event, block_info={})
+
+        database.write_auction_constants.assert_called_with(num_orders)
+
+    def test_unexpected_save(self) -> None:
+        database = Mock()
+        receiver = AuctionInitializationReceiver(database)
+
+        # Bad Value
+        with self.assertRaises(AssertionError):
+            receiver.save({"maxOrders": "not an integer"}, block_info={})
+
+        # Bad Key
+        with self.assertRaises(AssertionError):
+            receiver.save({"badKey": 1}, block_info={})

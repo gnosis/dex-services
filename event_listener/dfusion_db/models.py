@@ -1,6 +1,7 @@
 import logging
 from enum import Enum
 from typing import NamedTuple, Dict, Any, List, Optional
+from .exceptions import EventParseError
 
 
 class TransitionType(Enum):
@@ -143,17 +144,18 @@ class AuctionResults(NamedTuple):
     sell_amounts: List[int]
 
     @classmethod
-    def from_bytes(cls, byte_str: str, num_tokens: int) -> "AuctionResults":
+    def from_bytes(cls, byte_str: str, num_tokens: int, num_orders: int) -> "AuctionResults":
         # TODO - pass num_orders (as read from DB for solution verification)
-        hex_str_array = [byte_str[i: i+24] for i in range(0, len(byte_str), 24)]
+        hex_str_array = [byte_str[i: i + 24] for i in range(0, len(byte_str), 24)]
         byte_array = list(map(lambda t: int(t, 16), hex_str_array))
         prices, volumes = byte_array[:num_tokens], byte_array[num_tokens:]
         buy_amounts = volumes[0::2]  # Even elements
         sell_amounts = volumes[1::2]  # Odd elements
 
-        if len(buy_amounts) != len(sell_amounts):
-            # TODO - ensure buy and sell amounts have same length (and < num_orders)
-            logging.warning("Solution data is not correct!")
+        logging.debug("Prices: {}\nBuy Amounts: {}\n Sell Amounts: {}", prices, buy_amounts, sell_amounts)
+
+        assert len(buy_amounts) == len(sell_amounts), "Unequal buy-sell amounts {}-{}".format(buy_amounts, sell_amounts)
+        assert len(buy_amounts) <= num_orders, "Solution data contains more execution volumes than orders"
 
         return AuctionResults(prices, buy_amounts, sell_amounts)
 
@@ -165,12 +167,16 @@ class AuctionSettlement(NamedTuple):
     prices_and_volumes: AuctionResults  # Emitted as Hex String
 
     @classmethod
-    def from_dictionary(cls, data: Dict[str, Any], num_tokens: int) -> "AuctionSettlement":
+    def from_dictionary(cls, data: Dict[str, Any], num_tokens: int, num_orders: int) -> "AuctionSettlement":
         event_fields = ('auctionId', 'stateIndex', 'stateHash', 'pricesAndVolumes')
         assert all(k in data for k in event_fields), "Unexpected Event Keys: got {}".format(data.keys())
-        return AuctionSettlement(
-            int(data['auctionId']),
-            int(data['stateIndex']),
-            str(data['stateHash']),
-            AuctionResults.from_bytes(data['pricesAndVolumes'], num_tokens),
-        )
+
+        try:
+            return AuctionSettlement(
+                int(data['auctionId']),
+                int(data['stateIndex']),
+                str(data['stateHash']),
+                AuctionResults.from_bytes(data['pricesAndVolumes'], num_tokens, num_orders),
+            )
+        except AssertionError as err:
+            raise EventParseError("Auction Solution: {} - {}".format(err, data))

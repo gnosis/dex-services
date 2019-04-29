@@ -22,7 +22,10 @@ class DatabaseInterface(ABC):
     def write_account_state(self, account_record: AccountRecord) -> None: pass
 
     @abstractmethod
-    def write_constants(self, num_tokens: int, num_accounts: int) -> None: pass
+    def write_snapp_constants(self, num_tokens: int, num_accounts: int) -> None: pass
+
+    @abstractmethod
+    def write_auction_constants(self, num_orders: int) -> None: pass
 
     @abstractmethod
     def get_account_state(self, index: int) -> AccountRecord: pass
@@ -35,6 +38,9 @@ class DatabaseInterface(ABC):
 
     @abstractmethod
     def get_num_tokens(self) -> int: pass
+
+    @abstractmethod
+    def get_num_orders(self) -> int: pass
 
     @abstractmethod
     def write_order(self, order: Order) -> None: pass
@@ -70,10 +76,22 @@ class MongoDbInterface(DatabaseInterface):
     def write_account_state(self, account_record: AccountRecord) -> None:
         self.db.accounts.insert_one(account_record.to_dictionary())
 
-    def write_constants(self, num_tokens: int, num_accounts: int) -> None:
+    def write_snapp_constants(self, num_tokens: int, num_accounts: int) -> None:
+        self.db.constants.insert([
+            {
+                'name': 'num_tokens',
+                'value': num_tokens
+            },
+            {
+                'name': 'num_accounts',
+                'value': num_accounts
+            }
+        ])
+
+    def write_auction_constants(self, num_orders: int) -> None:
         self.db.constants.insert_one({
-            'num_tokens': num_tokens,
-            'num_accounts': num_accounts
+            'name': 'num_orders',
+            'value': num_orders
         })
 
     def get_account_state(self, index: int) -> AccountRecord:
@@ -87,7 +105,13 @@ class MongoDbInterface(DatabaseInterface):
         return list(map(lambda d: Withdraw.from_dictionary(d), self.db.withdraws.find({'slot': slot})))
 
     def get_num_tokens(self) -> int:
-        return int(self.db.constants.find_one()['num_tokens'])
+        return int(self.db.constants.find_one({'name': 'num_tokens'})['value'])
+
+    def get_num_accounts(self) -> int:
+        return int(self.db.constants.find_one({'name': 'num_accounts'})['value'])
+
+    def get_num_orders(self) -> int:
+        return int(self.db.constants.find_one({'name': 'num_orders'})['value'])
 
     def write_order(self, order: Order) -> None:
         order_id = self.db.orders.insert_one(order.to_dictionary()).inserted_id
