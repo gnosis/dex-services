@@ -30,7 +30,7 @@ impl State {
     pub fn new(state_hash: String, state_index: i32, balances: Vec<u128>) -> Self {
         State { state_hash, state_index, balances }
     }
-    pub fn balance_index(token_id: u8, account_id: u16) -> usize {
+    fn balance_index(token_id: u8, account_id: u16) -> usize {
         TOKENS as usize * account_id as usize  + token_id as usize
     }
     pub fn read_balance(&self, token_id: u8, account_id: u16) -> u128 {
