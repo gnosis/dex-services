@@ -51,8 +51,6 @@ services:
       - ./:/app/
     env_file:
       - common.env
-    environment:
-      - ETHEREUM_NODE_URL=http://ganache-cli:8545
 
   driver:
     command: cargo run
