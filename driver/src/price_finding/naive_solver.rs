@@ -144,7 +144,8 @@ pub mod tests {
         let state = State::new(
             "test".to_string(),
             0,
-            vec![200; (TOKENS * 2) as usize]
+            vec![200; (TOKENS * 2) as usize],
+            TOKENS,
         );
         let orders = vec![
             Order {
@@ -174,7 +175,8 @@ pub mod tests {
         let state = State::new(
             "test".to_string(),
             0,
-            vec![200; (TOKENS * 2) as usize]
+            vec![200; (TOKENS * 2) as usize],
+            TOKENS,
         );
         let orders = vec![
             Order {
@@ -204,7 +206,8 @@ pub mod tests {
         let state = State::new(
             "test".to_string(),
             0,
-            vec![200; (TOKENS * 2) as usize]
+            vec![200; (TOKENS * 2) as usize],
+            TOKENS,
         );
         let orders = vec![
             Order {
@@ -234,7 +237,8 @@ pub mod tests {
         let state = State::new(
             "test".to_string(),
             0,
-            vec![200; (TOKENS * 6) as usize]
+            vec![200; (TOKENS * 6) as usize],
+            TOKENS,
         );
         let orders = vec![
             Order {
@@ -296,7 +300,8 @@ pub mod tests {
         let state = State::new(
             "test".to_string(),
             0,
-            vec![0; (TOKENS * 2) as usize]
+            vec![0; (TOKENS * 2) as usize],
+            TOKENS,
         );
         let orders = vec![
             Order {
@@ -326,7 +331,8 @@ pub mod tests {
         let state = State::new(
             "test".to_string(),
             0,
-            vec![200; (TOKENS * 2) as usize]
+            vec![200; (TOKENS * 2) as usize],
+            TOKENS,
         );
         let orders = vec![
             Order {
