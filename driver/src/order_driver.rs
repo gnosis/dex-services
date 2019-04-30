@@ -34,7 +34,7 @@ pub fn run_order_listener<D, C>(
             let mut state = db.get_current_balances(&state_root)?;
 
             let orders = db.get_orders_of_slot(slot.low_u32())?;
-            let order_hash = orders.rolling_hash();
+            let order_hash = orders.rolling_hash(0);
             if order_hash != contract_order_hash {
                 return Err(DriverError::new(
                     &format!("Pending order hash from contract ({}), didn't match the one found in db ({})", 
@@ -64,7 +64,7 @@ pub fn run_order_listener<D, C>(
 
             // Compute updated balances
             update_balances(&mut state, &orders, &solution);
-            let new_state_root = state.rolling_hash();
+            let new_state_root = state.rolling_hash(state.state_index + 1);
             
             println!("New State_hash is {}, Solution: {:?}", new_state_root, solution);
             contract.apply_auction(slot, state_root, new_state_root, order_hash, solution.bytes())?;
@@ -113,7 +113,7 @@ mod tests {
         contract.has_auction_slot_been_applied.given(slot - 1).will_return(Ok(true));
         contract.creation_timestamp_for_auction_slot.given(slot).will_return(Ok(U256::from(10)));
         contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
-        contract.order_hash_for_slot.given(slot).will_return(Ok(orders.rolling_hash()));
+        contract.order_hash_for_slot.given(slot).will_return(Ok(orders.rolling_hash(0)));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_auction.given((slot, Any, Any, Any, Any)).will_return(Ok(()));
 
@@ -178,7 +178,7 @@ mod tests {
         contract.creation_timestamp_for_auction_slot.given(slot-1).will_return(Ok(U256::from(10)));
 
         contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
-        contract.order_hash_for_slot.given(slot-1).will_return(Ok(second_orders.rolling_hash()));
+        contract.order_hash_for_slot.given(slot-1).will_return(Ok(second_orders.rolling_hash(0)));
 
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_auction.given((slot - 1, Any, Any, Any, Any)).will_return(Ok(()));

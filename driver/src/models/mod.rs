@@ -13,7 +13,7 @@ pub const TOKENS: u8 = 30;
 pub const DB_NAME: &str = "dfusion2";
 
 pub trait RollingHashable {
-    fn rolling_hash(&self) -> H256;
+    fn rolling_hash(&self, nonce: i32) -> H256;
 }
 
 pub trait RootHashable {

@@ -35,7 +35,7 @@ truffle exec scripts/wait_seconds.js 181
 sleep 10
 
 # Test balances have been updated
-EXPECTED_HASH="c4c44a0c0c17022dc987ba8abbc89d0c77d20865d0d61c07f76c889badd708a2"
+EXPECTED_HASH="0e0369b8be154350fd09141a43d90a53427221001ba9fee5c97145e777420944"
 truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep ${EXPECTED_HASH}
 
 # Account 4 has now 4 of token 1 
