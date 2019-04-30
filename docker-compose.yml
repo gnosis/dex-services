@@ -49,12 +49,11 @@ services:
       - ganache-cli
     volumes:
       - ./:/app/
+    env_file:
+      - db.env
     environment:
       - SNAPP_CONTRACT_ADDRESS=0xD833215cBcc3f914bD1C9ece3EE7BF8B14f841bb
       - ETHEREUM_NODE_URL=http://ganache-cli:8545
-      - DB_HOST=mongo
-      - DB_PORT=27017
-      - DB_NAME=dfusion2
 
   driver:
     command: cargo run
@@ -69,9 +68,8 @@ services:
       # Don't sync target, otherwise we rebuild on every deploy
       - ./driver/src:/app/driver/src
       - ./dex-contracts:/app/dex-contracts
+    env_file:
+      - db.env
     environment:
       - SNAPP_CONTRACT_ADDRESS=D833215cBcc3f914bD1C9ece3EE7BF8B14f841bb
-      - DB_HOST=mongo
-      - DB_PORT=27017
-      - DB_NAME=dfusion2  
       - RUST_BACKTRACE=1
