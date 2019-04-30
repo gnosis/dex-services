@@ -82,6 +82,7 @@ mod tests {
             format!("{:x}", state_hash),
             1,
             vec![100; (models::TOKENS * 2) as usize],
+            models::TOKENS,
         );
 
         let contract = SnappContractMock::new();
@@ -110,6 +111,7 @@ mod tests {
             format!("{:x}", state_hash),
             1,
             vec![100; (models::TOKENS * 2) as usize],
+            models::TOKENS,
         );
 
         let contract = SnappContractMock::new();
@@ -137,6 +139,7 @@ mod tests {
             format!("{:x}", state_hash),
             1,
             vec![100; (models::TOKENS * 2) as usize],
+            models::TOKENS,
         );
 
         let contract = SnappContractMock::new();
@@ -179,6 +182,7 @@ mod tests {
             format!("{:x}", state_hash),
             1,
             vec![100; (models::TOKENS * 2) as usize],
+            models::TOKENS,
         );
 
         let db = DbInterfaceMock::new();
@@ -199,6 +203,7 @@ mod tests {
             format!("{:x}", state_hash),
             1,
             vec![100; (models::TOKENS * 2) as usize],
+            models::TOKENS,
         );
 
         let contract = SnappContractMock::new();

@@ -14,7 +14,6 @@ const RESULT_FOLDER: &str = "./results/tmp/";
 type Prices = HashMap<String, String>;
 
 pub struct LinearOptimisationPriceFinder {
-    num_tokens: u8,
     previous_prices: Prices,
     // default IO methods can be replaced for unit testing
     write_input: fn(&str, &serde_json::Value) -> std::io::Result<()>,
@@ -32,7 +31,6 @@ impl LinearOptimisationPriceFinder {
     pub fn new() -> Self {
         // All prices are 1 (10**18)
         LinearOptimisationPriceFinder {
-            num_tokens: models::TOKENS,
             previous_prices: (0..models::TOKENS)
                 .map(|t| (token_id(t), "1000000000000000000".to_string()))
                 .collect(),
@@ -43,12 +41,22 @@ impl LinearOptimisationPriceFinder {
     }
 }
 
-pub fn token_id(token: u8) -> String {
+fn token_id(token: u8) -> String {
     format!("token{}", token)
 }
 
-pub fn account_id(account: u16) -> String {
+fn account_id(account: u16) -> String {
     format!("account{}", account)
+}
+
+fn serialize_balances(state: &models::State,) -> serde_json::Value {
+    let mut accounts: HashMap<String, HashMap<String, String>> = HashMap::new();
+    for account in 0..state.accounts() {
+        accounts.insert(account_id(account), (0..state.num_tokens)
+            .map(|token| (token_id(token), state.read_balance(token, account).to_string()))
+            .collect());
+    }
+    json!(accounts)
 }
 
 fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
@@ -123,7 +131,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
         orders: &[models::Order],
         state: &models::State
     ) -> Result<Solution, PriceFindingError> {
-        let token_ids: Vec<String> = (0..self.num_tokens)
+        let token_ids: Vec<String> = (0..state.num_tokens)
             .map(token_id)
             .collect();
         let orders: Vec<serde_json::Value> = orders
@@ -135,14 +143,14 @@ impl PriceFinding for LinearOptimisationPriceFinder {
             "tokens": token_ids,
             "refToken": token_id(0),
             "pricesPrev": self.previous_prices,
-            "accounts": state.serialize_balances(self.num_tokens),
+            "accounts": serialize_balances(&state),
             "orders": orders, 
         });
         let input_file = format!("instance_{}.json", Utc::now().to_rfc3339());
         (self.write_input)(&input_file, &input)?;
         (self.run_solver)(&input_file)?;
         let result = (self.read_output)()?;
-        let (prices, solution) = deserialize_result(&result, self.num_tokens)?;
+        let (prices, solution) = deserialize_result(&result, state.num_tokens)?;
         self.previous_prices = prices;
         Ok(solution)
     }
@@ -187,7 +195,8 @@ pub mod tests {
         let state = models::State::new(
             "hash".to_string(),
             0,
-            vec![]
+            vec![0; 2],
+            2
         );
         let return_result = || { Ok(json!({
             "prices": {
@@ -197,7 +206,6 @@ pub mod tests {
             "orders": []
         }))};
         let mut solver = LinearOptimisationPriceFinder {
-            num_tokens: 2,
             previous_prices: HashMap::new(),
             write_input: |_, _| Ok(()),
             run_solver: |_| Ok(()),
@@ -422,5 +430,41 @@ pub mod tests {
         });
         let err = deserialize_result(&json, 1).expect_err("Should fail to parse");
         assert_eq!(err.kind, ErrorKind::ParseIntError);
+    }
+
+    #[test]
+    fn test_serialize_balances() {
+        let state = models::State::new(
+            "test".to_string(),
+            0,
+            vec![100, 200, 300, 400, 500, 600],
+            3
+        );
+        let result = serialize_balances(&state);
+        let expected = json!({
+            "account0": {
+                "token0": "100",
+                "token1": "200",
+                "token2": "300",
+            },
+            "account1": {
+                "token0": "400",
+                "token1": "500",
+                "token2": "600",
+            }
+        });
+        assert_eq!(result, expected)
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_serialize_balances_with_bad_balance_length() {
+        let state = models::State::new(
+            "test".to_string(),
+            0,
+            vec![100, 200],
+            30
+        );
+        serialize_balances(&state);
     }
 }

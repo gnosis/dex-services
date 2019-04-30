@@ -1,7 +1,7 @@
 use crate::contract::SnappContract;
 use crate::db_interface::DbInterface;
 use crate::error::{DriverError, ErrorKind};
-use crate::models::{RollingHashable, Serializable};
+use crate::models::{RollingHashable, Serializable, State, Order};
 use crate::models;
 use crate::price_finding::{PriceFinding, Solution};
 use crate::util;
@@ -63,7 +63,7 @@ pub fn run_order_listener<D, C>(
             };
 
             // Compute updated balances
-            state.update_balances(&orders, &solution);
+            update_balances(&mut state, &orders, &solution);
             let new_state_root = state.rolling_hash();
             
             println!("New State_hash is {}, Solution: {:?}", new_state_root, solution);
@@ -74,6 +74,16 @@ pub fn run_order_listener<D, C>(
         }
     }
     Ok(false)
+}
+
+fn update_balances(state: &mut State, orders: &[Order], solution: &Solution) {
+    for (i, order) in orders.iter().enumerate() {
+        let buy_volume = solution.executed_buy_amounts[i];
+        state.increment_balance(order.buy_token, order.account_id, buy_volume);
+
+        let sell_volume = solution.executed_sell_amounts[i];
+        state.decrement_balance(order.sell_token, order.account_id, sell_volume);
+    }
 }
 
 #[cfg(test)]
@@ -95,6 +105,7 @@ mod tests {
             format!("{:x}", state_hash),
             1,
             vec![100; (models::TOKENS * 2) as usize],
+            models::TOKENS,
         );
         let contract = SnappContractMock::new();
         contract.get_current_auction_slot.given(()).will_return(Ok(slot));
@@ -176,6 +187,7 @@ mod tests {
             format!("{:x}", state_hash),
             1,
             vec![100; (models::TOKENS * 2) as usize],
+            models::TOKENS,
         );
 
         let db = DbInterfaceMock::new();
@@ -208,6 +220,7 @@ mod tests {
             format!("{:x}", state_hash),
             1,
             vec![100; (models::TOKENS * 2) as usize],
+            models::TOKENS,
         );
 
         let contract = SnappContractMock::new();
@@ -229,5 +242,44 @@ mod tests {
 
         let error = run_order_listener(&db, &contract, &mut pf).expect_err("Expected Error");
         assert_eq!(error.kind, ErrorKind::StateError);
+    }
+
+    #[test]
+    fn test_update_balances(){
+        let mut state = State::new(
+            "test".to_string(),
+            0,
+            vec![100; 70],
+            models::TOKENS,
+        );
+        let solution = Solution {
+            surplus: U256::from_dec_str("0").unwrap(),
+            prices: vec![1, 2],
+            executed_sell_amounts: vec![1, 1],
+            executed_buy_amounts: vec![1, 1],
+        };
+        let order_1 = Order{
+          slot_index: 1,
+          account_id: 1,
+          sell_token: 0,
+          buy_token: 1,
+          sell_amount: 4,
+          buy_amount: 5,
+        };
+        let order_2 = Order{
+          slot_index: 1,
+          account_id: 0,
+          sell_token: 1,
+          buy_token: 0,
+          sell_amount: 5,
+          buy_amount: 4,
+        };
+        let orders = vec![order_1, order_2];
+
+        update_balances(&mut state, &orders, &solution);
+        assert_eq!(state.read_balance(0, 0), 101);
+        assert_eq!(state.read_balance(1, 0), 99);
+        assert_eq!(state.read_balance(0, 1), 99);
+        assert_eq!(state.read_balance(1, 1), 101);
     }
 }
