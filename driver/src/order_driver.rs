@@ -80,7 +80,7 @@ pub fn run_order_listener<D, C>(
 mod tests {
     use super::*;
     use crate::contract::tests::SnappContractMock;
-    use crate::models::tests::create_order_for_test;
+    use crate::models::order::tests::create_order_for_test;
     use crate::db_interface::tests::DbInterfaceMock;
     use crate::price_finding::price_finder_interface::tests::PriceFindingMock;
     use mock_it::Matcher::*;

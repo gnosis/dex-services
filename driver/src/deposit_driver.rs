@@ -68,7 +68,7 @@ mod tests {
     use super::*;
     use crate::models::RollingHashable;
     use crate::contract::tests::SnappContractMock;
-    use crate::models::tests::create_flux_for_test;
+    use crate::models::flux::tests::create_flux_for_test;
     use crate::db_interface::tests::DbInterfaceMock;
     use mock_it::Matcher::*;
     use web3::types::{H256, U256};
