@@ -47,8 +47,8 @@ impl From<mongodb::ordered::OrderedDocument> for Order {
 }
 
 impl<T: Serializable> RollingHashable for Vec<T> {
-    fn rolling_hash(&self) -> H256 {
-        self.iter().fold(H256::zero(), |acc, w| iter_hash(w, &acc))
+    fn rolling_hash(&self, nonce: i32) -> H256 {
+        self.iter().fold(H256::from(nonce as u64), |acc, w| iter_hash(w, &acc))
     }
 }
 
@@ -70,7 +70,7 @@ pub mod tests {
     };
 
     assert_eq!(
-    vec![order].rolling_hash(),
+    vec![order].rolling_hash(0),
     H256::from_str(
       "8c253b4588a6d87b02b5f7d1424020b7b5f8c0397e464e087d2830a126d3b699"
       ).unwrap()

@@ -40,7 +40,7 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
             let balances = db.get_current_balances(&state_root)?;
 
             let deposits = db.get_deposits_of_slot(slot.low_u32())?;
-            let deposit_hash = deposits.rolling_hash();
+            let deposit_hash = deposits.rolling_hash(0);
             if deposit_hash != contract_deposit_hash {
                 return Err(DriverError::new(
                     &format!("Pending deposit hash from contract ({}), didn't match the one found in db ({})", 
@@ -49,7 +49,7 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
             }
 
             let updated_balances = apply_deposits(&balances, &deposits);
-            let new_state_root = updated_balances.rolling_hash();
+            let new_state_root = updated_balances.rolling_hash(balances.state_index + 1);
             
             println!("New State_hash is {}", new_state_root);
             contract.apply_deposits(slot, state_root, new_state_root, contract_deposit_hash)?;
@@ -91,7 +91,7 @@ mod tests {
         contract.has_deposit_slot_been_applied.given(slot - 1).will_return(Ok(true));
         contract.creation_timestamp_for_deposit_slot.given(slot).will_return(Ok(U256::from(10)));
         contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
-        contract.deposit_hash_for_slot.given(slot).will_return(Ok(deposits.rolling_hash()));
+        contract.deposit_hash_for_slot.given(slot).will_return(Ok(deposits.rolling_hash(0)));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_deposits.given((slot, Any, Any, Any)).will_return(Ok(()));
 
@@ -150,7 +150,7 @@ mod tests {
 
         contract.creation_timestamp_for_deposit_slot.given(slot).will_return(Ok(U256::from(10)));
         contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(11)));
-        contract.deposit_hash_for_slot.given(slot).will_return(Ok(deposits.rolling_hash()));
+        contract.deposit_hash_for_slot.given(slot).will_return(Ok(deposits.rolling_hash(0)));
 
         let db = DbInterfaceMock::new();
         db.get_current_balances.given(state_hash).will_return(Ok(state));
@@ -173,7 +173,7 @@ mod tests {
 
         contract.creation_timestamp_for_deposit_slot.given(slot-1).will_return(Ok(U256::from(10)));
         contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
-        contract.deposit_hash_for_slot.given(slot-1).will_return(Ok(second_deposits.rolling_hash()));
+        contract.deposit_hash_for_slot.given(slot-1).will_return(Ok(second_deposits.rolling_hash(0)));
 
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_deposits.given((slot - 1, Any, Any, Any)).will_return(Ok(()));

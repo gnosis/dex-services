@@ -1,4 +1,4 @@
-use byteorder::{LittleEndian, WriteBytesExt};
+use byteorder::{BigEndian, WriteBytesExt};
 use serde_derive::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use web3::types::H256;
@@ -43,11 +43,12 @@ impl State {
 
 impl RollingHashable for State {
   //Todo: Exchange sha with pederson hash
-  fn rolling_hash(&self) -> H256 {
-    let mut hash = vec![0u8; 32];
+  fn rolling_hash(&self, nonce: i32) -> H256 {
+    let mut hash = vec![0u8; 28];
+    hash.write_i32::<BigEndian>(nonce).unwrap();
     for i in &self.balances {
-      let mut bs = [0u8; 32];
-      bs.as_mut().write_u128::<LittleEndian>(*i).unwrap();
+      let mut bs = vec![0u8; 16];
+      bs.write_u128::<BigEndian>(*i).unwrap();
 
       let mut hasher = Sha256::new();
       hasher.input(hash);
@@ -91,20 +92,20 @@ pub mod tests {
         num_tokens: TOKENS,
     };
     assert_eq!(
-      state.rolling_hash(),
+      state.rolling_hash(0),
       H256::from_str(&state.state_hash).unwrap()
     );
 
     // State with single deposit
     balances[62] = 18;
     let state = State {
-        state_hash: "73899d50b4ec5e351b4967e4c4e4a725e0fa3e8ab82d1bb6d3197f22e65f0c97".to_string(),
+        state_hash: "a0cde336d10dbaf3df98ba662bacf25d95062db7b3e0083bd4bad4a6c7a1cd41".to_string(),
         state_index:  1,
         balances,
         num_tokens: TOKENS,
     };
     assert_eq!(
-      state.rolling_hash(),
+      state.rolling_hash(0),
       H256::from_str(&state.state_hash).unwrap()
     );
   }
