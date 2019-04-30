@@ -52,14 +52,14 @@ pub struct SnappContractImpl {
 
 impl SnappContractImpl {
     pub fn new() -> Result<Self> {
-        let (event_loop, transport) = web3::transports::Http::new("http://ganache-cli:8545")?;
+        let (event_loop, transport) = web3::transports::Http::new(&(env::var("ETHEREUM_NODE_URL")?))?;
         let web3 = web3::Web3::new(transport);
 
         let contents = fs::read_to_string("../dex-contracts/build/contracts/SnappAuction.json")?;
         let snapp_base: serde_json::Value = serde_json::from_str(&contents)?;
         let snapp_base_abi: String = snapp_base.get("abi").ok_or("No ABI for contract")?.to_string();
 
-        let snapp_address = hex::decode(env::var("SNAPP_CONTRACT_ADDRESS")?)?;
+        let snapp_address = hex::decode(&(env::var("SNAPP_CONTRACT_ADDRESS")?)[2..])?;
         let address: Address = Address::from(&snapp_address[..]);
         let contract = Contract::from_json(web3.eth(), address, snapp_base_abi.as_bytes())?;
         Ok(SnappContractImpl { contract, web3, event_loop })
