@@ -1,7 +1,8 @@
 use crate::contract::SnappContract;
 use crate::error::DriverError;
+use crate::error::{ErrorKind};
 
-use web3::types::U256;
+use web3::types::{H256,U256};
 
 pub fn find_first_unapplied_slot(
     upper_bound: U256, 
@@ -19,6 +20,16 @@ pub fn find_first_unapplied_slot(
         slot = slot - 1;
     }
     Ok(U256::zero())
+}
+
+pub fn check_consistency_of_hashes(hash_calculated: H256, hash_from_contract: H256, flux_type: &str) -> Result<(), DriverError>{
+    if hash_calculated != hash_from_contract {
+                return Err(DriverError::new(
+                    &format!("Pending {} hash from contract ({}), didn't match the one found in db ({})", 
+                    flux_type, hash_from_contract, hash_calculated), ErrorKind::StateError
+                ));
+            } 
+    Ok(())        
 }
 
 pub fn can_process<C>(

@@ -1,10 +1,11 @@
 use crate::contract::SnappContract;
 use crate::db_interface::DbInterface;
-use crate::error::{DriverError, ErrorKind};
+use crate::error::DriverError;
 use crate::models::{RollingHashable, Serializable, State, Order};
 use crate::models;
 use crate::price_finding::{PriceFinding, Solution};
-use crate::util;
+use crate::util::{find_first_unapplied_slot, can_process, check_consistency_of_hashes};
+
 
 use web3::types::U256;
 
@@ -19,13 +20,13 @@ pub fn run_order_listener<D, C>(
     let auction_slot = contract.get_current_auction_slot()?;
 
     println!("Current top auction slot is {:?}", auction_slot);
-    let slot = util::find_first_unapplied_slot(
+    let slot = find_first_unapplied_slot(
         auction_slot, 
         Box::new(&|i| contract.has_auction_slot_been_applied(i))
     )?;
     if slot <= auction_slot {
         println!("Highest unprocessed auction slot is {:?}", slot);
-        if util::can_process(slot, contract,
+        if can_process(slot, contract,
             Box::new(&|i| contract.creation_timestamp_for_auction_slot(i))
         )? {
             println!("Processing auction slot {:?}", slot);
@@ -35,12 +36,7 @@ pub fn run_order_listener<D, C>(
 
             let orders = db.get_orders_of_slot(slot.low_u32())?;
             let order_hash = orders.rolling_hash(0);
-            if order_hash != contract_order_hash {
-                return Err(DriverError::new(
-                    &format!("Pending order hash from contract ({}), didn't match the one found in db ({})", 
-                    contract_order_hash, order_hash), ErrorKind::StateError
-                ));
-            }
+            check_consistency_of_hashes(order_hash, contract_order_hash, &(String::from("order")))?;
 
             let solution = if !orders.is_empty() {
                 price_finder.find_prices(&orders, &state).unwrap_or_else(|e| {
@@ -95,6 +91,7 @@ mod tests {
     use crate::price_finding::price_finder_interface::tests::PriceFindingMock;
     use mock_it::Matcher::*;
     use web3::types::{H256, U256};
+    use crate::error::{ErrorKind};
 
     #[test]
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
