@@ -46,7 +46,7 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
 
             let withdraws = db.get_withdraws_of_slot(slot.low_u32())?;
             let withdraw_hash = withdraws.rolling_hash(0);
-            check_consistency_of_hashes(withdraw_hash, contract_withdraw_hash, &(String::from("withdraw")))?;
+            check_consistency_of_hashes(withdraw_hash, contract_withdraw_hash, "withdraw")?;
 
             let (updated_balances, valid_withdraws) = apply_withdraws(&balances, &withdraws);
             let withdrawal_merkle_root = withdraws.root_hash(&valid_withdraws);

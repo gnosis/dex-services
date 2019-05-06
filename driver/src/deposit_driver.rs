@@ -41,7 +41,7 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
 
             let deposits = db.get_deposits_of_slot(slot.low_u32())?;
             let deposit_hash = deposits.rolling_hash(0);
-            check_consistency_of_hashes(deposit_hash, contract_deposit_hash, &(String::from("deposit")) )?;
+            check_consistency_of_hashes(deposit_hash, contract_deposit_hash, "deposit")?;
 
             let updated_balances = apply_deposits(&balances, &deposits);
             let new_state_root = updated_balances.rolling_hash(balances.state_index + 1);

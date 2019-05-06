@@ -36,7 +36,7 @@ pub fn run_order_listener<D, C>(
 
             let orders = db.get_orders_of_slot(slot.low_u32())?;
             let order_hash = orders.rolling_hash(0);
-            check_consistency_of_hashes(order_hash, contract_order_hash, &(String::from("order")))?;
+            check_consistency_of_hashes(order_hash, contract_order_hash, "order")?;
 
             let solution = if !orders.is_empty() {
                 price_finder.find_prices(&orders, &state).unwrap_or_else(|e| {
