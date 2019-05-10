@@ -28,15 +28,15 @@ matrix:
           - dex-contracts/node_modules/
       before_install:
         - npm install -g truffle
+        - sudo sh -c "curl https://raw.githubusercontent.com/kadwanev/retry/a1b1826bdb0a78189d5c70c858dc676f5133b1d7/retry -o /usr/local/bin/retry && chmod +x /usr/local/bin/retry"
       install:
         - git submodule update --init
         - npm install -C dex-contracts
         # driver/listener require compiled contracts
         - cd dex-contracts && truffle compile && cd -
         - docker-compose up -d ganache-cli driver listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
-        - sleep 2s
       script:
-        - cd dex-contracts && truffle migrate && cd -
+        - cd dex-contracts && retry truffle migrate && cd -
         - sh ./test/e2e-tests-deposit-withdraw.sh
         - sh ./test/e2e-tests-auction.sh
       after_script:
