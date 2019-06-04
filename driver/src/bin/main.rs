@@ -1,4 +1,4 @@
-extern crate simple_logger;
+extern crate stderrlog;
 
 use driver::contract::SnappContractImpl;
 use driver::db_interface::MongoDB;
@@ -13,7 +13,10 @@ use std::env;
 
 
 fn main() {
-    simple_logger::init().unwrap();
+    stderrlog::new()
+        .module(module_path!())
+        .verbosity(3)
+        .init().unwrap();
     let db_host = env::var("DB_HOST").expect("Specify DB_HOST env variable");
     let db_port = env::var("DB_PORT").expect("Specify DB_PORT env variable");
     let db_instance = MongoDB::new(db_host, db_port).unwrap();
