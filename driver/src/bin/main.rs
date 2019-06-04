@@ -1,3 +1,5 @@
+extern crate simple_logger;
+
 use driver::contract::SnappContractImpl;
 use driver::db_interface::MongoDB;
 use driver::price_finding::NaiveSolver;
@@ -11,6 +13,7 @@ use std::env;
 
 
 fn main() {
+    simple_logger::init().unwrap();
     let db_host = env::var("DB_HOST").expect("Specify DB_HOST env variable");
     let db_port = env::var("DB_PORT").expect("Specify DB_PORT env variable");
     let db_instance = MongoDB::new(db_host, db_port).unwrap();

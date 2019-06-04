@@ -53,7 +53,7 @@ pub fn run_order_listener<D, C>(
                     }
                 })
             } else {
-                warning!("No orders in batch. Falling back to trivial solution");
+                warn!("No orders in batch. Falling back to trivial solution");
                 Solution {
                     surplus: U256::zero(),
                     prices: vec![0; models::TOKENS as usize],
