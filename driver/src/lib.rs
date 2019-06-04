@@ -1,6 +1,8 @@
 extern crate byteorder;
 extern crate hex;
 extern crate mongodb;
+#[macro_use]
+extern crate log;
 extern crate rustc_hex;
 extern crate serde;
 extern crate serde_derive;
@@ -32,13 +34,13 @@ pub fn run_driver_components(
     price_finder: &mut Box<PriceFinding>,
 ) {
     if let Err(e) = run_deposit_listener(db, contract) {
-        println!("Deposit_driver error: {}", e);
+        error!("Deposit_driver error: {}", e);
     }
     if let Err(e) = run_withdraw_listener(db, contract) {
-        println!("Withdraw_driver error: {}", e);
+        error!("Withdraw_driver error: {}", e);
     }
     if let Err(e) = run_order_listener(db, contract, price_finder) {
-         println!("Order_driver error: {}", e);
+        error!("Order_driver error: {}", e);
     }
     //...
 }

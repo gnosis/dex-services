@@ -49,7 +49,7 @@ impl MongoDB {
         collection: &str,
     ) -> Result<Vec<I>, DriverError> {
         let query = format!("{{ \"{}\": {:} }}", slot_key, slot);
-        println!("Querying {}: {}", collection, query);
+        debug!("Querying {}: {}", collection, query);
 
         let bson = serde_json::from_str::<serde_json::Value>(&query)?.into();
         let query = mongodb::from_bson(bson)?;
@@ -71,7 +71,7 @@ impl DbInterface for MongoDB {
         current_state_root: &H256,
     ) -> Result<models::State, DriverError> {
         let query: String = format!("{{ \"stateHash\": \"{:x}\" }}", current_state_root);
-        println!("Querying stateHash: {}", query);
+        debug!("Querying stateHash: {}", query);
 
         let bson =  serde_json::from_str::<serde_json::Value>(&query)?.into();
         let query = mongodb::from_bson(bson)?;

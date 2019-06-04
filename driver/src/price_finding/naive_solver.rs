@@ -129,7 +129,7 @@ impl PriceFinding for NaiveSolver {
             executed_sell_amounts: exec_sell_amount,
             executed_buy_amounts: exec_buy_amount,
         };
-        println!("Solution: {:?}", &solution);
+        debug!("Solution: {:?}", &solution);
         Ok(solution)
     }
 }

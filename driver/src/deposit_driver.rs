@@ -24,17 +24,17 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
 {
     let deposit_slot = contract.get_current_deposit_slot()?;
 
-    println!("Current top deposit_slot is {:?}", deposit_slot);
+    debug!("Current top deposit_slot is {:?}", deposit_slot);
     let slot = find_first_unapplied_slot(
         deposit_slot, 
         Box::new(&|i| contract.has_deposit_slot_been_applied(i))
     )?;
     if slot <= deposit_slot {
-        println!("Highest unprocessed deposit_slot is {:?}", slot);
+        debug!("Highest unprocessed deposit_slot is {:?}", slot);
         if can_process(slot, contract,
             Box::new(&|i| contract.creation_timestamp_for_deposit_slot(i))
         )? {
-            println!("Processing deposit_slot {:?}", slot);
+            debug!("Processing deposit_slot {:?}", slot);
             let state_root = contract.get_current_state_root()?;
             let contract_deposit_hash = contract.deposit_hash_for_slot(slot)?;
             let balances = db.get_current_balances(&state_root)?;
@@ -51,14 +51,14 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
             let updated_balances = apply_deposits(&balances, &deposits);
             let new_state_root = updated_balances.rolling_hash(balances.state_index + 1);
             
-            println!("New State_hash is {}", new_state_root);
+            debug!("New State_hash is {}", new_state_root);
             contract.apply_deposits(slot, state_root, new_state_root, contract_deposit_hash)?;
             return Ok(true);
         } else {
-            println!("Need to wait before processing deposit_slot {:?}", slot);
+            info!("Need to wait before processing deposit_slot {:?}", slot);
         }
     } else {
-        println!("All deposits are already processed");
+        info!("All deposits are already processed");
     }
     Ok(false)
 }

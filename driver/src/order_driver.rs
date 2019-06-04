@@ -18,17 +18,17 @@ pub fn run_order_listener<D, C>(
 {
     let auction_slot = contract.get_current_auction_slot()?;
 
-    println!("Current top auction slot is {:?}", auction_slot);
+    debug!("Current top auction slot is {:?}", auction_slot);
     let slot = util::find_first_unapplied_slot(
         auction_slot, 
         Box::new(&|i| contract.has_auction_slot_been_applied(i))
     )?;
     if slot <= auction_slot {
-        println!("Highest unprocessed auction slot is {:?}", slot);
+        debug!("Highest unprocessed auction slot is {:?}", slot);
         if util::can_process(slot, contract,
             Box::new(&|i| contract.creation_timestamp_for_auction_slot(i))
         )? {
-            println!("Processing auction slot {:?}", slot);
+            debug!("Processing auction slot {:?}", slot);
             let state_root = contract.get_current_state_root()?;
             let contract_order_hash = contract.order_hash_for_slot(slot)?;
             let mut state = db.get_current_balances(&state_root)?;
@@ -44,7 +44,7 @@ pub fn run_order_listener<D, C>(
 
             let solution = if !orders.is_empty() {
                 price_finder.find_prices(&orders, &state).unwrap_or_else(|e| {
-                    println!("Error computing result: {}\n Falling back to trivial solution", e);
+                    error!("Error computing result: {}\n Falling back to trivial solution", e);
                     Solution {
                         surplus: U256::zero(),
                         prices: vec![0; models::TOKENS as usize],
@@ -53,7 +53,7 @@ pub fn run_order_listener<D, C>(
                     }
                 })
             } else {
-                println!("No orders in batch. Falling back to trivial solution");
+                warning!("No orders in batch. Falling back to trivial solution");
                 Solution {
                     surplus: U256::zero(),
                     prices: vec![0; models::TOKENS as usize],
@@ -66,11 +66,11 @@ pub fn run_order_listener<D, C>(
             update_balances(&mut state, &orders, &solution);
             let new_state_root = state.rolling_hash(state.state_index + 1);
             
-            println!("New State_hash is {}, Solution: {:?}", new_state_root, solution);
+            debug!("New State_hash is {}, Solution: {:?}", new_state_root, solution);
             contract.apply_auction(slot, state_root, new_state_root, order_hash, solution.bytes())?;
             return Ok(true);
         } else {
-            println!("Need to wait before processing auction slot {:?}", slot);
+            info!("Need to wait before processing auction slot {:?}", slot);
         }
     }
     Ok(false)
