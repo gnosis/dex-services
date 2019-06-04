@@ -220,7 +220,7 @@ impl SnappContract for SnappContractImpl {
         new_state: H256,
         order_hash: H256,
         prices_and_volumes: Vec<u8>) -> Result<()> {
-            debug!("prices_and_volumes: {:?}", &prices_and_volumes);
+            info!("prices_and_volumes: {:?}", &prices_and_volumes);
             let account = self.account_with_sufficient_balance().ok_or("Not enough balance to send Txs")?;
 
             let mut options = Options::default();
