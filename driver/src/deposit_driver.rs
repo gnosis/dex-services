@@ -2,9 +2,9 @@ use crate::models;
 use crate::models::RollingHashable;
 
 use crate::db_interface::DbInterface;
-use crate::error::{DriverError, ErrorKind};
+use crate::error::DriverError;
 use crate::contract::SnappContract;
-use crate::util::{find_first_unapplied_slot, can_process};
+use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
 
 
 pub fn apply_deposits(
@@ -41,12 +41,7 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
 
             let deposits = db.get_deposits_of_slot(slot.low_u32())?;
             let deposit_hash = deposits.rolling_hash(0);
-            if deposit_hash != contract_deposit_hash {
-                return Err(DriverError::new(
-                    &format!("Pending deposit hash from contract ({}), didn't match the one found in db ({})", 
-                    contract_deposit_hash, deposit_hash), ErrorKind::StateError
-                ));
-            }
+            hash_consistency_check(deposit_hash, contract_deposit_hash, "deposit")?;
 
             let updated_balances = apply_deposits(&balances, &deposits);
             let new_state_root = updated_balances.rolling_hash(balances.state_index + 1);
@@ -72,6 +67,7 @@ mod tests {
     use crate::db_interface::tests::DbInterfaceMock;
     use mock_it::Matcher::*;
     use web3::types::{H256, U256};
+    use crate::error::{ErrorKind};
 
     #[test]
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
