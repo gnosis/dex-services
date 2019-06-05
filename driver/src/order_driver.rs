@@ -26,6 +26,7 @@ pub fn run_order_listener<D, C>(
     )?;
     if slot <= auction_slot {
         info!("Highest unprocessed auction slot is {:?}", slot);
+        if can_process(slot, contract,
             Box::new(&|i| contract.creation_timestamp_for_auction_slot(i))
         )? {
             info!("Processing auction slot {:?}", slot);
