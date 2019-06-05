@@ -3,8 +3,8 @@ use crate::models::{RollingHashable, RootHashable};
 
 use crate::db_interface::DbInterface;
 use crate::contract::SnappContract;
-use crate::error::{DriverError, ErrorKind};
-use crate::util;
+use crate::error::DriverError;
+use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
 
 fn apply_withdraws(
     state: &models::State,
@@ -30,13 +30,13 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
     let withdraw_slot = contract.get_current_withdraw_slot()?;
 
     info!("Current top withdraw_slot is {:?}", withdraw_slot);
-    let slot = util::find_first_unapplied_slot(
+    let slot = find_first_unapplied_slot(
         withdraw_slot, 
         Box::new(&|i| contract.has_withdraw_slot_been_applied(i))
     )?;
     if slot <= withdraw_slot {
         info!("Highest unprocessed withdraw_slot is {:?}", slot);
-        if util::can_process(slot, contract,
+        if can_process(slot, contract,
             Box::new(&|i| contract.creation_timestamp_for_withdraw_slot(i))
         )? {
             info!("Processing withdraw_slot {:?}", slot);
@@ -46,12 +46,7 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
 
             let withdraws = db.get_withdraws_of_slot(slot.low_u32())?;
             let withdraw_hash = withdraws.rolling_hash(0);
-            if withdraw_hash != contract_withdraw_hash {
-                return Err(DriverError::new(
-                    &format!("Pending withdraw hash from contract ({}), didn't match the one found in db ({})", 
-                    withdraw_hash, contract_withdraw_hash), ErrorKind::StateError
-                ));
-            }
+            hash_consistency_check(withdraw_hash, contract_withdraw_hash, "withdraw")?;
 
             let (updated_balances, valid_withdraws) = apply_withdraws(&balances, &withdraws);
             let withdrawal_merkle_root = withdraws.root_hash(&valid_withdraws);
@@ -75,6 +70,7 @@ mod tests {
     use crate::db_interface::tests::DbInterfaceMock;
     use mock_it::Matcher::*;
     use web3::types::{H256, U256};
+    use crate::error::{ErrorKind};
 
     #[test]
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
