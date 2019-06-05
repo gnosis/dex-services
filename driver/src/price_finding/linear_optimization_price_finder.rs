@@ -171,7 +171,7 @@ fn run_solver(input_file: &str) -> Result<(), PriceFindingError> {
         .output()?;
 
     if !output.status.success() {
-        println!("Solver failed - stdout: {}, error: {}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+        error!("Solver failed - stdout: {}, error: {}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
         return Err(PriceFindingError::new("Solver execution failed", ErrorKind::ExecutionError))
     }
     Ok(())

@@ -29,17 +29,17 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
 {
     let withdraw_slot = contract.get_current_withdraw_slot()?;
 
-    println!("Current top withdraw_slot is {:?}", withdraw_slot);
+    info!("Current top withdraw_slot is {:?}", withdraw_slot);
     let slot = find_first_unapplied_slot(
         withdraw_slot, 
         Box::new(&|i| contract.has_withdraw_slot_been_applied(i))
     )?;
     if slot <= withdraw_slot {
-        println!("Highest unprocessed withdraw_slot is {:?}", slot);
+        info!("Highest unprocessed withdraw_slot is {:?}", slot);
         if can_process(slot, contract,
             Box::new(&|i| contract.creation_timestamp_for_withdraw_slot(i))
         )? {
-            println!("Processing withdraw_slot {:?}", slot);
+            info!("Processing withdraw_slot {:?}", slot);
             let state_root = contract.get_current_state_root()?;
             let contract_withdraw_hash = contract.withdraw_hash_for_slot(slot)?;
             let balances = db.get_current_balances(&state_root)?;
@@ -52,11 +52,11 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
             let withdrawal_merkle_root = withdraws.root_hash(&valid_withdraws);
             let new_state_root = updated_balances.rolling_hash(balances.state_index + 1);
             
-            println!("New State_hash is {}, Valid Withdraw Merkle Root is {}", new_state_root, withdrawal_merkle_root);
+            info!("New State_hash is {}, Valid Withdraw Merkle Root is {}", new_state_root, withdrawal_merkle_root);
             contract.apply_withdraws(slot, withdrawal_merkle_root, state_root, new_state_root, contract_withdraw_hash)?;
             return Ok(true);
         } else {
-            println!("Need to wait before processing withdraw_slot {:?}", slot);
+            info!("Need to wait before processing withdraw_slot {:?}", slot);
         }
     }
     Ok(false)
