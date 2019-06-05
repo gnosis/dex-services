@@ -4,7 +4,7 @@ use crate::error::DriverError;
 use crate::models::{RollingHashable, Serializable, State, Order};
 use crate::models;
 use crate::price_finding::{PriceFinding, Solution};
-use crate::util::{find_first_unapplied_slot, can_process, check_consistency_of_hashes};
+use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
 
 
 use web3::types::U256;
@@ -36,7 +36,7 @@ pub fn run_order_listener<D, C>(
 
             let orders = db.get_orders_of_slot(slot.low_u32())?;
             let order_hash = orders.rolling_hash(0);
-            check_consistency_of_hashes(order_hash, contract_order_hash, "order")?;
+            hash_consistency_check(order_hash, contract_order_hash, "order")?;
 
             let solution = if !orders.is_empty() {
                 price_finder.find_prices(&orders, &state).unwrap_or_else(|e| {

@@ -4,7 +4,7 @@ use crate::models::RollingHashable;
 use crate::db_interface::DbInterface;
 use crate::error::DriverError;
 use crate::contract::SnappContract;
-use crate::util::{find_first_unapplied_slot, can_process, check_consistency_of_hashes};
+use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
 
 
 pub fn apply_deposits(
@@ -41,7 +41,7 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
 
             let deposits = db.get_deposits_of_slot(slot.low_u32())?;
             let deposit_hash = deposits.rolling_hash(0);
-            check_consistency_of_hashes(deposit_hash, contract_deposit_hash, "deposit")?;
+            hash_consistency_check(deposit_hash, contract_deposit_hash, "deposit")?;
 
             let updated_balances = apply_deposits(&balances, &deposits);
             let new_state_root = updated_balances.rolling_hash(balances.state_index + 1);

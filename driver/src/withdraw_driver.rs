@@ -4,7 +4,7 @@ use crate::models::{RollingHashable, RootHashable};
 use crate::db_interface::DbInterface;
 use crate::contract::SnappContract;
 use crate::error::DriverError;
-use crate::util::{find_first_unapplied_slot, can_process, check_consistency_of_hashes};
+use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
 
 fn apply_withdraws(
     state: &models::State,
@@ -46,7 +46,7 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
 
             let withdraws = db.get_withdraws_of_slot(slot.low_u32())?;
             let withdraw_hash = withdraws.rolling_hash(0);
-            check_consistency_of_hashes(withdraw_hash, contract_withdraw_hash, "withdraw")?;
+            hash_consistency_check(withdraw_hash, contract_withdraw_hash, "withdraw")?;
 
             let (updated_balances, valid_withdraws) = apply_withdraws(&balances, &withdraws);
             let withdrawal_merkle_root = withdraws.root_hash(&valid_withdraws);

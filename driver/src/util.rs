@@ -21,7 +21,7 @@ pub fn find_first_unapplied_slot(
     Ok(U256::zero())
 }
 
-pub fn check_consistency_of_hashes(
+pub fn hash_consistency_check(
     hash_calculated: H256,
     hash_from_contract: H256,
     flux_type: &str,
