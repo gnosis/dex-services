@@ -330,12 +330,10 @@ class AuctionInitializationReceiverTest(unittest.TestCase):
         database = Mock()
         receiver = AuctionInitializationReceiver(database)
 
-        num_orders = 2
-
-        event = {"maxOrders": num_orders}
+        event = {"maxOrders": 2, 'numReservedAccounts': 1, 'ordersPerReservedAccount': 1}
         receiver.save(event, block_info={})
 
-        database.write_auction_constants.assert_called_with(num_orders)
+        database.write_auction_constants.assert_called_with(2, 1, 1)
 
     def test_unexpected_save(self) -> None:
         database = Mock()
