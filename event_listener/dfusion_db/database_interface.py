@@ -25,7 +25,9 @@ class DatabaseInterface(ABC):
     def write_snapp_constants(self, num_tokens: int, num_accounts: int) -> None: pass
 
     @abstractmethod
-    def write_auction_constants(self, num_orders: int) -> None: pass
+    def write_auction_constants(
+        self, num_orders: int, num_reserved_accounts: int, orders_per_reserved_account: int
+    ) -> None: pass
 
     @abstractmethod
     def get_account_state(self, index: int) -> AccountRecord: pass
@@ -88,11 +90,23 @@ class MongoDbInterface(DatabaseInterface):
             }
         ])
 
-    def write_auction_constants(self, num_orders: int) -> None:
-        self.db.constants.insert_one({
-            'name': 'num_orders',
-            'value': num_orders
-        })
+    def write_auction_constants(
+        self, num_orders: int, num_reserved_accounts: int, orders_per_reserved_account: int
+    ) -> None:
+        self.db.constants.insert([
+            {
+                'name': 'num_orders',
+                'value': num_orders
+            },
+            {
+                'name': 'num_reserved_accounts',
+                'value': num_reserved_accounts
+            },
+            {
+                'name': 'orders_per_reserved_account',
+                'value': orders_per_reserved_account
+            },
+        ])
 
     def get_account_state(self, index: int) -> AccountRecord:
         record = self.db.accounts.find_one({'stateIndex': index})
