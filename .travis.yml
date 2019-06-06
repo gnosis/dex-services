@@ -19,6 +19,8 @@ matrix:
       script:
         - pytest --cov=event_listener/dfusion_db/ --cov-report term-missing
         - mypy event_listener/dfusion_db/ --ignore-missing-imports --strict
+        - pep8 --config .pep8 event_listener/dfusion_db/
+        - pylint --errors-only event_listener/dfusion_db/
     - language: generic
       dist: xenial
       sudo: required
