@@ -93,7 +93,7 @@ class MongoDbInterface(DatabaseInterface):
     def write_auction_constants(
             self, num_orders: int, num_reserved_accounts: int, orders_per_reserved_account: int
     ) -> None:
-        self.db.constants.insert([
+        self.database.constants.insert([
             {
                 'name': 'num_orders',
                 'value': num_orders
