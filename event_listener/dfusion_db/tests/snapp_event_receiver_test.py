@@ -1,10 +1,10 @@
 import unittest
 from unittest.mock import Mock
+from typing import List
 from ..snapp_event_receiver import DepositReceiver, OrderReceiver, SnappInitializationReceiver
 from ..snapp_event_receiver import WithdrawRequestReceiver, StateTransitionReceiver
 from ..snapp_event_receiver import AuctionSettlementReceiver, AuctionInitializationReceiver
 from ..models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord, Order
-from typing import List
 
 EMPTY_STATE_HASH = "0x00000000000000000000000000000000000000000000000000000000000000"
 
@@ -272,7 +272,7 @@ class AuctionSettlementReceiverTest(unittest.TestCase):
         dummy_account_record = AccountRecord(1, EMPTY_STATE_HASH, old_balances)
 
         def int_list_to_hex_bytes(arr: List[int], num_bits: int) -> str:
-            assert (num_bits % 4 == 0)
+            assert num_bits % 4 == 0
             hex_length = num_bits // 4
             return "".join(map(lambda t: str(hex(t))[2:].rjust(hex_length, "0"), arr))
 

@@ -1,0 +1,8 @@
+[FORMAT]
+max-line-length=120
+
+[MESSAGES CONTROL]
+disable=
+    logging-format-interpolation,
+    missing-docstring,
+    multiple-statements,
