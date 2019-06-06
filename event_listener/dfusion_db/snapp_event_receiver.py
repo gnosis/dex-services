@@ -118,11 +118,15 @@ class AuctionInitializationReceiver(SnappEventListener):
     def save(self, event: Dict[str, Any], block_info: Dict[str, Any]) -> None:
 
         # Verify integrity of post data
-        assert event.keys() == {'maxOrders'}, "Unexpected Event Keys"
+        assert event.keys() == {'maxOrders', 'numReservedAccounts', 'ordersPerReservedAccount'}, "Unexpected Event Keys"
         assert isinstance(event['maxOrders'], int), "maxOrders has unexpected value"
+        assert isinstance(event['numReservedAccounts'], int), "maxOrders has unexpected value"
+        assert isinstance(event['ordersPerReservedAccount'], int), "maxOrders has unexpected value"
 
         try:
-            self.database.write_auction_constants(event['maxOrders'])
+            self.database.write_auction_constants(
+                event['maxOrders'], event['numReservedAccounts'], event['ordersPerReservedAccount']
+            )
             logging.info(
                 "Successfully included Snapp Auction constant(s)")
         except Exception as exc:
