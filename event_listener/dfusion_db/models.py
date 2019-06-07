@@ -152,7 +152,7 @@ class AuctionResults(NamedTuple):
         buy_amounts = volumes[0::2]  # Even elements
         sell_amounts = volumes[1::2]  # Odd elements
 
-        logging.debug("Prices: {}\nBuy Amounts: {}\n Sell Amounts: {}", prices, buy_amounts, sell_amounts)
+        logging.debug("Prices: {}\nBuy Amounts: {}\n Sell Amounts: {}".format(prices, buy_amounts, sell_amounts))
 
         assert len(buy_amounts) == len(sell_amounts), "Unequal buy-sell amounts {}-{}".format(buy_amounts, sell_amounts)
         assert len(buy_amounts) <= num_orders, "Solution data contains more execution volumes than orders"

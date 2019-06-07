@@ -23,10 +23,7 @@ class DepositReceiver(SnappEventListener):
         self.save_parsed(Deposit.from_dictionary(event))
 
     def save_parsed(self, deposit: Deposit) -> None:
-        try:
-            self.database.write_deposit(deposit)
-        except Exception as exc:
-            logging.critical("Failed to record Deposit [{}] - {}".format(exc, deposit))
+        self.database.write_deposit(deposit)
 
 
 class StateTransitionReceiver(SnappEventListener):
@@ -34,11 +31,8 @@ class StateTransitionReceiver(SnappEventListener):
         self.save_parsed(StateTransition.from_dictionary(event))
 
     def save_parsed(self, transition: StateTransition) -> None:
-        try:
-            self.__update_accounts(transition)
-            logging.info("Successfully updated state and balances")
-        except Exception as exc:
-            logging.critical("Failed to record StateTransition [{}] - {}".format(exc, transition))
+        self.__update_accounts(transition)
+        logging.info("Successfully updated state and balances")
 
     def __update_accounts(self, transition: StateTransition) -> None:
         balances = self.database.get_account_state(transition.state_index - 1).balances.copy()
@@ -101,11 +95,7 @@ class SnappInitializationReceiver(SnappEventListener):
         assert isinstance(event['maxTokens'], int), "maxTokens has unexpected value"
         assert isinstance(event['maxAccounts'], int), "maxAccounts has unexpected value"
 
-        try:
-            self.initialize_accounts(event['maxTokens'], event['maxAccounts'], state_hash)
-        except Exception as exc:
-            logging.critical(
-                "Failed to record SnappInitialization [{}] - {}".format(exc, event))
+        self.initialize_accounts(event['maxTokens'], event['maxAccounts'], state_hash)
 
     def initialize_accounts(self, num_tokens: int, num_accounts: int, state_hash: str) -> None:
         account_record = AccountRecord(0, state_hash, [0 for _ in range(num_tokens * num_accounts)])
@@ -123,15 +113,11 @@ class AuctionInitializationReceiver(SnappEventListener):
         assert isinstance(event['numReservedAccounts'], int), "maxOrders has unexpected value"
         assert isinstance(event['ordersPerReservedAccount'], int), "maxOrders has unexpected value"
 
-        try:
-            self.database.write_auction_constants(
-                event['maxOrders'], event['numReservedAccounts'], event['ordersPerReservedAccount']
-            )
-            logging.info(
-                "Successfully included Snapp Auction constant(s)")
-        except Exception as exc:
-            logging.critical(
-                "Failed to record AuctionInitialization [{}] - {}".format(exc, event))
+        self.database.write_auction_constants(
+            event['maxOrders'], event['numReservedAccounts'], event['ordersPerReservedAccount']
+        )
+        logging.info(
+            "Successfully included Snapp Auction constant(s)")
 
 
 class WithdrawRequestReceiver(SnappEventListener):
@@ -139,11 +125,7 @@ class WithdrawRequestReceiver(SnappEventListener):
         self.save_parsed(Withdraw.from_dictionary(event))
 
     def save_parsed(self, withdraw: Withdraw) -> None:
-        try:
-            self.database.write_withdraw(withdraw)
-        except Exception as exc:
-            logging.critical(
-                "Failed to record Deposit [{}] - {}".format(exc, withdraw))
+        self.database.write_withdraw(withdraw)
 
 
 class OrderReceiver(SnappEventListener):
@@ -151,11 +133,7 @@ class OrderReceiver(SnappEventListener):
         self.save_parsed(Order.from_dictionary(event))
 
     def save_parsed(self, order: Order) -> None:
-        try:
-            self.database.write_order(order)
-        except Exception as exc:
-            logging.critical(
-                "Failed to record Order [{}] - {}".format(exc, order))
+        self.database.write_order(order)
 
 
 class AuctionSettlementReceiver(SnappEventListener):
@@ -169,11 +147,7 @@ class AuctionSettlementReceiver(SnappEventListener):
         )
 
     def save_parsed(self, settlement: AuctionSettlement) -> None:
-        try:
-            self.__update_accounts(settlement)
-        except Exception as exc:
-            logging.critical(
-                "Failed to record Settlement [{}] - {}".format(exc, settlement))
+        self.__update_accounts(settlement)
 
     def __update_accounts(self, settlement: AuctionSettlement) -> None:
         state = self.database.get_account_state(settlement.state_index - 1)
