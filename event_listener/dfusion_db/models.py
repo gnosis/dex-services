@@ -1,6 +1,6 @@
 import logging
 from enum import Enum
-from typing import NamedTuple, Dict, Any, List, Optional
+from typing import NamedTuple, Dict, Any, List, Optional, Tuple
 from .exceptions import EventParseError
 
 
@@ -147,7 +147,7 @@ class AuctionResults(NamedTuple):
     def from_bytes(cls, byte_str: str, num_tokens: int, num_orders: int) -> "AuctionResults":
         # TODO - pass num_orders (as read from DB for solution verification)
         hex_str_array = [byte_str[i: i + 24] for i in range(0, len(byte_str), 24)]
-        byte_array = list(map(lambda t: int(t, 16), hex_str_array))
+        byte_array = list(map(lambda t: read_amount(t)[0], hex_str_array))
         prices, volumes = byte_array[:num_tokens], byte_array[num_tokens:]
         buy_amounts = volumes[0::2]  # Even elements
         sell_amounts = volumes[1::2]  # Odd elements
@@ -180,3 +180,62 @@ class AuctionSettlement(NamedTuple):
             )
         except AssertionError as err:
             raise EventParseError("Auction Solution: {} - {}".format(err, data))
+
+
+class OrderDetails(NamedTuple):
+    buy_token: int
+    sell_token: int
+    buy_amount: int
+    sell_amount: int
+
+    @classmethod
+    def from_bytes(cls, byte_str: str) -> "OrderDetails":
+        buy_token, remainder = read_token(byte_str)
+        sell_token, remainder = read_token(remainder)
+        buy_amount, remainder = read_amount(remainder)
+        sell_amount, remainder = read_amount(remainder)
+        return OrderDetails(
+            buy_token,
+            sell_token,
+            buy_amount,
+            sell_amount
+        )
+
+    def to_dictionary(self) -> Dict[str, Any]:
+        return {
+            'buyToken': self.buy_token,
+            'sellToken': self.sell_token,
+            'buyAmount': str(self.buy_amount),
+            'sellAmount': str(self.sell_amount),
+        }
+
+
+class StandingOrder(NamedTuple):
+    account_id: int
+    batch_index: int
+    orders: List[OrderDetails]
+
+    @classmethod
+    def from_dictionary(cls, data: Dict[str, Any]) -> "StandingOrder":
+        event_fields = ('currentBatchIndex', 'accountId', 'orders')
+        assert all(k in data for k in event_fields), "Unexpected Event Keys: got {}".format(data.keys())
+        return StandingOrder(
+            int(data['accountId']),
+            int(data['currentBatchIndex']),
+            list(map(OrderDetails.from_bytes, data['orders']))
+        )
+
+    def to_dictionary(self) -> Dict[str, Any]:
+        return {
+            'accountId': self.account_id,
+            'batchIndex': self.batch_index,
+            'orders': list(map(lambda o: o.to_dictionary(), self.orders))
+        }
+
+
+def read_amount(byte_str: str) -> Tuple[int, str]:
+    return (int(byte_str[:24], 16), byte_str[24:])
+
+
+def read_token(byte_str: str) -> Tuple[int, str]:
+    return (int(byte_str[:2], 16), byte_str[2:])
