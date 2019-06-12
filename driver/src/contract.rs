@@ -104,13 +104,13 @@ impl SnappContract for SnappContractImpl {
 
     fn get_current_deposit_slot(&self) -> Result<U256> {
         self.contract.query(
-            "depositIndex", (), None, Options::default(), None
+            "getCurrentDepositIndex", (), None, Options::default(), None
         ).wait().map_err(DriverError::from)
     }
 
     fn get_current_withdraw_slot(&self) -> Result<U256> {
         self.contract.query(
-            "withdrawIndex", (), None, Options::default(), None
+            "getCurrentWithdrawIndex", (), None, Options::default(), None
         ).wait().map_err(DriverError::from)
     }
 
