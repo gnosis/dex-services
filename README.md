@@ -87,8 +87,8 @@ For end-to-end tests, run from the project root:
 
 ```bash
 docker-compose down && docker-compose up
-test/e2e-tests-deposit.sh
-test/e2e-tests-withdraw.sh
+test/e2e-tests-deposit-withdraw.sh
+test/e2e-tests-auction.sh
 ```
 
 If end-to-end tests are failing, check the `docker-compose logs` and consider inspecting the DB state using the web interface.
