@@ -190,10 +190,10 @@ class OrderDetails(NamedTuple):
 
     @classmethod
     def from_bytes(cls, byte_str: str) -> "OrderDetails":
-        buy_token, remainder = read_token(byte_str)
-        sell_token, remainder = read_token(remainder)
-        buy_amount, remainder = read_amount(remainder)
+        buy_amount, remainder = read_amount(byte_str)
         sell_amount, remainder = read_amount(remainder)
+        sell_token, remainder = read_token(remainder)
+        buy_token, remainder = read_token(remainder)
         return OrderDetails(
             buy_token,
             sell_token,
@@ -217,12 +217,15 @@ class StandingOrder(NamedTuple):
 
     @classmethod
     def from_dictionary(cls, data: Dict[str, Any]) -> "StandingOrder":
-        event_fields = ('currentBatchIndex', 'accountId', 'orders')
+        event_fields = ('currentBatchIndex', 'accountId', 'packedOrders')
         assert all(k in data for k in event_fields), "Unexpected Event Keys: got {}".format(data.keys())
+
+        packed_order_str = data['packedOrders']
+        packed_order_array = [packed_order_str[i: i + 52] for i in range(0, len(packed_order_str), 52)]
         return StandingOrder(
             int(data['accountId']),
             int(data['currentBatchIndex']),
-            list(map(OrderDetails.from_bytes, data['orders']))
+            list(map(OrderDetails.from_bytes, packed_order_array))
         )
 
     def to_dictionary(self) -> Dict[str, Any]:

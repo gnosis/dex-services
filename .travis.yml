@@ -41,5 +41,6 @@ matrix:
         - cd dex-contracts && retry truffle migrate && cd -
         - sh ./test/e2e-tests-deposit-withdraw.sh
         - sh ./test/e2e-tests-auction.sh
+        - sh ./test/e2e-tests-standing-order.sh
       after_script:
         - docker-compose logs
