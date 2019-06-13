@@ -13,7 +13,7 @@ The [dex smart contract](https://github.com/gnosis/dex-contracts) emits these ev
 
 Upon receiving a relevant event from the contract, the event listener computes the implied changes to the underlying state. 
 E.g. if a *deposit* event is received, the list of pending deposits is updated.
-Similarily, if a *deposit state transition* event is received it updates the account balances based on the pending deposits that were included in the state transition.
+Similarly, if a *deposit state transition* event is received it updates the account balances based on the pending deposits that were included in the state transition.
 
 The *Driver* watches state updates to the database and reads relevant data from the smart contract to decide when a state transition can be applied.
 There are four types of state transitions:
@@ -38,7 +38,7 @@ Thus, our data layer has to rely only on the data emitted by the EVM. It cannot 
 More components, e.g. a watchtower to challenge invalid state transitions, will be added in the future.
 
 Install Instructions
-============
+====================
 
 Clone the repository, its submodule, and run the container
 ```bash
@@ -81,7 +81,7 @@ truffle exec scripts/claim_withdraw.js 1 3 3
 ```
 
 Tests
-========
+=====
 
 For end-to-end tests, run from the project root:
 
@@ -116,7 +116,7 @@ cd dex-contracts && rm -rf build && truffle compile && cd ..
 docker-compose build truffle
 ```
 
-or rebuild everything if you are desparate (will take longer, but might solve other problems as well)
+or rebuild everything if you are desperate (will take longer, but might solve other problems as well)
 
 ```bash
 docker-compose build
