@@ -7,7 +7,6 @@ use crate::models::{Serializable, RollingHashable, iter_hash};
 #[derive(Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct Order {
-    pub slot_index: u32,
     pub account_id: u16,
     pub sell_token: u8,
     pub buy_token: u8,
@@ -36,7 +35,6 @@ impl Serializable for u128 {
 impl From<mongodb::ordered::OrderedDocument> for Order {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
         Order {
-            slot_index: document.get_i32("slotIndex").unwrap() as u32,
             account_id: document.get_i32("accountId").unwrap() as u16,
             buy_token: document.get_i32("buyToken").unwrap() as u8,
             sell_token: document.get_i32("sellToken").unwrap() as u8,
@@ -61,7 +59,6 @@ pub mod tests {
   #[test]
   fn test_order_rolling_hash() {
     let order = Order {
-      slot_index: 0,
       account_id: 1,
       sell_token: 2,
       buy_token: 3,
@@ -77,9 +74,8 @@ pub mod tests {
     );
   }
 
-  pub fn create_order_for_test(slot_index: u32) -> Order {
+  pub fn create_order_for_test() -> Order {
       Order {
-          slot_index,
           account_id: 1,
           sell_token: 2,
           buy_token: 3,

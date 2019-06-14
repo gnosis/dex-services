@@ -97,7 +97,7 @@ mod tests {
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
         let slot = U256::from(1);
         let state_hash = H256::zero();
-        let orders = vec![create_order_for_test(1), create_order_for_test(2)];
+        let orders = vec![create_order_for_test(), create_order_for_test()];
         let state = models::State::new(
             format!("{:x}", state_hash),
             1,
@@ -163,8 +163,8 @@ mod tests {
     fn applies_all_unapplied_states_before_current() {
         let slot = U256::from(1);
         let state_hash = H256::zero();
-        let first_orders = vec![create_order_for_test(1), create_order_for_test(2)];
-        let second_orders = vec![create_order_for_test(1), create_order_for_test(2)];
+        let first_orders = vec![create_order_for_test(), create_order_for_test()];
+        let second_orders = vec![create_order_for_test(), create_order_for_test()];
 
         let contract = SnappContractMock::new();
         contract.get_current_auction_slot.given(()).will_return(Ok(slot));
@@ -211,7 +211,7 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
 
-        let orders = vec![create_order_for_test(1), create_order_for_test(2)];
+        let orders = vec![create_order_for_test(), create_order_for_test()];
 
         let state = models::State::new(
             format!("{:x}", state_hash),
@@ -256,7 +256,6 @@ mod tests {
             executed_buy_amounts: vec![1, 1],
         };
         let order_1 = Order{
-          slot_index: 1,
           account_id: 1,
           sell_token: 0,
           buy_token: 1,
@@ -264,7 +263,6 @@ mod tests {
           buy_amount: 5,
         };
         let order_2 = Order{
-          slot_index: 1,
           account_id: 0,
           sell_token: 1,
           buy_token: 0,

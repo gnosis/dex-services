@@ -4,6 +4,7 @@ extern crate mock_it;
 use crate::models;
 use crate::error::{DriverError, ErrorKind};
 
+use mongodb::{bson, doc};
 use mongodb::ordered::OrderedDocument;
 use mongodb::db::ThreadedDatabase;
 use mongodb::{Client, ThreadedClient};
@@ -28,6 +29,10 @@ pub trait DbInterface {
         &self,
         slot: u32,
     ) -> Result<Vec<models::Order>, DriverError>;
+    fn get_standing_orders_of_slot(
+        &self,
+        slot: u32,
+    ) -> Result<Vec<models::StandingOrder>, DriverError>;
 }
 
 #[derive(Clone)]
@@ -42,17 +47,12 @@ impl MongoDB {
         Ok(MongoDB { client })
     }
 
-    fn get_items_for_slot<I: From<mongodb::ordered::OrderedDocument> + std::cmp::Ord>(
+    fn get_items_from_query<I: From<mongodb::ordered::OrderedDocument> + std::cmp::Ord>(
         &self,
-        slot_key: &str,
-        slot: u32,
+        query: mongodb::Document,
         collection: &str,
     ) -> Result<Vec<I>, DriverError> {
-        let query = format!("{{ \"{}\": {:} }}", slot_key, slot);
         info!("Querying {}: {}", collection, query);
-
-        let bson = serde_json::from_str::<serde_json::Value>(&query)?.into();
-        let query = mongodb::from_bson(bson)?;
 
         let coll = self.client.db(models::DB_NAME).collection(collection);
         let cursor = coll.find(Some(query), None)?;
@@ -94,21 +94,42 @@ impl DbInterface for MongoDB {
         &self,
         slot: u32,
     ) -> Result<Vec<models::PendingFlux>, DriverError> {
-        self.get_items_for_slot("slot", slot, "deposits")
+        let query = doc!{ "slot" => slot };
+        self.get_items_from_query(query, "deposits")
     }
 
     fn get_withdraws_of_slot(
         &self,
         slot: u32,
     ) -> Result<Vec<models::PendingFlux>, DriverError> {
-        self.get_items_for_slot("slot", slot, "withdraws")
+        let query = doc!{ "slot" => slot };
+        self.get_items_from_query(query, "withdraws")
     }
 
     fn get_orders_of_slot(
         &self,
         slot: u32,
     ) -> Result<Vec<models::Order>, DriverError> {
-        self.get_items_for_slot("auctionId", slot, "orders")
+        let query = doc!{ "auctionId" => slot };
+        self.get_items_from_query(query, "orders")
+    }
+    fn get_standing_orders_of_slot(
+        &self,
+        slot: u32,
+    ) -> Result<Vec<models::StandingOrder>, DriverError> {
+        let pipeline = vec![
+            doc!{"$match" => (doc!{"validFromAuctionId" => (doc!{ "$lte" => slot})})},
+            doc!{"$sort" => (doc!{"validFromAuctionId" => -1})},
+            doc!{"$group" => (doc!{"_id" => "$accountId", "orders" => (doc!{"$first" =>"$orders" })})}
+        ];
+
+        info!("Querying standing_orders: {:?}", pipeline);
+        self.client
+            .db(models::DB_NAME)
+            .collection("standing_orders")
+            .aggregate(pipeline, None)?
+            .map(|d| d.map(models::StandingOrder::from).map_err(DriverError::from))
+            .collect::<Result<Vec<_>, _>>()
     }
 }
 
@@ -123,6 +144,7 @@ pub mod tests {
         pub get_deposits_of_slot: Mock<u32, Result<Vec<models::PendingFlux>, DriverError>>,
         pub get_withdraws_of_slot: Mock<u32, Result<Vec<models::PendingFlux>, DriverError>>,
         pub get_orders_of_slot: Mock<u32, Result<Vec<models::Order>, DriverError>>,
+        pub get_standing_orders_of_slot: Mock<u32, Result<Vec<models::StandingOrder>, DriverError>>,
     }
 
     impl DbInterfaceMock {
@@ -132,6 +154,7 @@ pub mod tests {
                 get_deposits_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_deposits_of_slot", ErrorKind::Unknown))),
                 get_withdraws_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_withdraws_of_slot", ErrorKind::Unknown))),
                 get_orders_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_withdraws_of_slot", ErrorKind::Unknown))),
+                get_standing_orders_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_withdraws_of_slot", ErrorKind::Unknown))),
             }
         }
     }
@@ -160,6 +183,12 @@ pub mod tests {
             slot: u32,
         ) -> Result<Vec<models::Order>, DriverError> {
             self.get_orders_of_slot.called(slot)
+        }
+        fn get_standing_orders_of_slot(
+            &self,
+            slot: u32,
+        ) -> Result<Vec<models::StandingOrder>, DriverError> {
+            self.get_standing_orders_of_slot.called(slot)
         }
     }
 }
