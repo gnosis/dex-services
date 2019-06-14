@@ -34,9 +34,18 @@ pub fn run_order_listener<D, C>(
             let contract_order_hash = contract.order_hash_for_slot(slot)?;
             let mut state = db.get_current_balances(&state_root)?;
 
-            let orders = db.get_orders_of_slot(slot.low_u32())?;
+
+            let mut orders = db.get_orders_of_slot(slot.low_u32())?;
             let order_hash = orders.rolling_hash(0);
             hash_consistency_check(order_hash, contract_order_hash, "order")?;
+
+            let standing_orders = db.get_standing_orders_of_slot(slot.low_u32())?;
+            orders.extend(standing_orders
+                .iter()
+                .flat_map(|standing_order| standing_order.get_orders().clone())
+            );
+            info!("Standing Orders: {:?}", standing_orders);
+            info!("All Orders: {:?}", orders);
 
             let solution = if !orders.is_empty() {
                 price_finder.find_prices(&orders, &state).unwrap_or_else(|e| {
@@ -92,6 +101,7 @@ mod tests {
     use mock_it::Matcher::*;
     use web3::types::{H256, U256};
     use crate::error::{ErrorKind};
+    use crate::price_finding::error::{PriceFindingError};
 
     #[test]
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
@@ -116,6 +126,7 @@ mod tests {
 
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(1).will_return(Ok(orders.clone()));
+        db.get_standing_orders_of_slot.given(1).will_return(Ok(vec![]));
         db.get_current_balances.given(state_hash).will_return(Ok(state.clone()));
 
         let pf = PriceFindingMock::new();
@@ -189,6 +200,7 @@ mod tests {
 
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(0).will_return(Ok(first_orders.clone()));
+        db.get_standing_orders_of_slot.given(0).will_return(Ok(vec![]));
         db.get_current_balances.given(state_hash).will_return(Ok(state.clone()));
         
         let pf = PriceFindingMock::new();
@@ -239,6 +251,44 @@ mod tests {
 
         let error = run_order_listener(&db, &contract, &mut pf).expect_err("Expected Error");
         assert_eq!(error.kind, ErrorKind::StateError);
+    }
+
+    #[test]
+    fn considers_standing_orders() {
+        let slot = U256::from(1);
+        let state_hash = H256::zero();
+        let standing_order = models::StandingOrder::new(
+            1, vec![create_order_for_test(), create_order_for_test()]
+        );
+        let state = models::State::new(
+            format!("{:x}", state_hash),
+            1,
+            vec![100; (models::TOKENS * 2) as usize],
+            models::TOKENS,
+        );
+
+        let contract = SnappContractMock::new();
+        contract.get_current_auction_slot.given(()).will_return(Ok(slot));
+        contract.has_auction_slot_been_applied.given(slot).will_return(Ok(false));
+        contract.has_auction_slot_been_applied.given(slot - 1).will_return(Ok(true));
+        contract.creation_timestamp_for_auction_slot.given(slot).will_return(Ok(U256::from(10)));
+        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
+        contract.order_hash_for_slot.given(slot).will_return(Ok(H256::zero()));
+        contract.get_current_state_root.given(()).will_return(Ok(state_hash));
+        contract.apply_auction.given((slot, Any, Any, Any, Any)).will_return(Ok(()));
+
+        let db = DbInterfaceMock::new();
+        db.get_orders_of_slot.given(1).will_return(Ok(vec![]));
+        db.get_standing_orders_of_slot.given(1).will_return(Ok(vec![standing_order.clone()]));
+        db.get_current_balances.given(state_hash).will_return(Ok(state.clone()));
+
+        let pf = PriceFindingMock::new();
+        pf.find_prices
+            .given((standing_order.get_orders().clone(), state))
+            .will_return(Err(PriceFindingError::from("Trivial solution is fine")));
+        let mut pf_box : Box<PriceFinding> = Box::new(pf);
+
+        assert_eq!(run_order_listener(&db, &contract, &mut pf_box), Ok(true));
     }
 
     #[test]

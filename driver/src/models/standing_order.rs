@@ -1,10 +1,19 @@
 use serde_derive::{Deserialize};
 
-#[derive(Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct StandingOrder {
     pub account_id: u16,
     orders: Vec<super::Order>,
+}
+
+impl StandingOrder {
+    pub fn new(account_id: u16, orders: Vec<super::Order>) -> StandingOrder {
+        StandingOrder { account_id, orders }
+    }
+    pub fn get_orders(&self) -> &Vec<super::Order> {
+        &self.orders
+    }
 }
 
 impl From<mongodb::ordered::OrderedDocument> for StandingOrder {

@@ -154,7 +154,7 @@ pub mod tests {
                 get_deposits_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_deposits_of_slot", ErrorKind::Unknown))),
                 get_withdraws_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_withdraws_of_slot", ErrorKind::Unknown))),
                 get_orders_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_withdraws_of_slot", ErrorKind::Unknown))),
-                get_standing_orders_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_withdraws_of_slot", ErrorKind::Unknown))),
+                get_standing_orders_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_standing_orders_of_slot", ErrorKind::Unknown))),
             }
         }
     }
