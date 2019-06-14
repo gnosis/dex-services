@@ -276,7 +276,7 @@ class StateTransitionTest(unittest.TestCase):
 class StandingOrderTest(unittest.TestCase):
     def test_from_dict(self) -> None:
         first_order_detail = '00' * 11 + '03' + '00' * 11 + '04' + '02' + '01'
-        second_order_detail = '00' * 11 + '07' + '00' * 11 + '08' + '06' + '05' 
+        second_order_detail = '00' * 11 + '07' + '00' * 11 + '08' + '06' + '05'
         standing_order_dict = {
             'accountId': 1,
             'currentBatchIndex': 2,
