@@ -354,6 +354,6 @@ class StandingOrderBatchReceiverTest(unittest.TestCase):
     def test_writes_order() -> None:
         database = Mock()
         receiver = StandingOrderBatchReceiver(database)
-        order = StandingOrder(1, 2, [])
+        order = StandingOrder(1, 2, 3, [])
         receiver.save_parsed(order)
         database.write_standing_order.assert_called_with(order)

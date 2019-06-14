@@ -275,15 +275,16 @@ class StateTransitionTest(unittest.TestCase):
 
 class StandingOrderTest(unittest.TestCase):
     def test_from_dict(self) -> None:
-        first_order_detail = '01' + '02' + '00' * 11 + '03' + '00' * 11 + '04'
-        second_order_detail = '05' + '06' + '00' * 11 + '07' + '00' * 11 + '08'
+        first_order_detail = '00' * 11 + '03' + '00' * 11 + '04' + '02' + '01'
+        second_order_detail = '00' * 11 + '07' + '00' * 11 + '08' + '06' + '05' 
         standing_order_dict = {
             'accountId': 1,
             'currentBatchIndex': 2,
-            'orders': [first_order_detail, second_order_detail]
+            'validFromAuctionId': 3,
+            'packedOrders': first_order_detail + second_order_detail
         }
         expected = StandingOrder(
-            1, 2, [OrderDetails(1, 2, 3, 4), OrderDetails(5, 6, 7, 8)]
+            1, 2, 3, [OrderDetails(1, 2, 3, 4), OrderDetails(5, 6, 7, 8)]
         )
         parsed = StandingOrder.from_dictionary(standing_order_dict)
         self.assertEqual(expected, parsed)
@@ -293,16 +294,18 @@ class StandingOrderTest(unittest.TestCase):
             standing_order_dict = {
                 'accountId': 1,
                 'currentBatchIndex': 2,
+                'validFromAuctionId': 3
             }
             StandingOrder.from_dictionary(standing_order_dict)
 
     def test_to_dict(self) -> None:
         order = StandingOrder(
-            1, 2, [OrderDetails(1, 2, 3, 4), OrderDetails(5, 6, 7, 8)]
+            1, 2, 3, [OrderDetails(1, 2, 3, 4), OrderDetails(5, 6, 7, 8)]
         )
         expected = {
             'accountId': 1,
             'batchIndex': 2,
+            'validFromAuctionId': 3,
             'orders': [
                 {
                     'buyToken': 1,

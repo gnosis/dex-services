@@ -213,11 +213,12 @@ class OrderDetails(NamedTuple):
 class StandingOrder(NamedTuple):
     account_id: int
     batch_index: int
+    valid_from_auction_id: int
     orders: List[OrderDetails]
 
     @classmethod
     def from_dictionary(cls, data: Dict[str, Any]) -> "StandingOrder":
-        event_fields = ('currentBatchIndex', 'accountId', 'packedOrders')
+        event_fields = ('currentBatchIndex', 'accountId', 'packedOrders', 'validFromAuctionId')
         assert all(k in data for k in event_fields), "Unexpected Event Keys: got {}".format(data.keys())
 
         packed_order_str = data['packedOrders']
@@ -225,6 +226,7 @@ class StandingOrder(NamedTuple):
         return StandingOrder(
             int(data['accountId']),
             int(data['currentBatchIndex']),
+            int(data['validFromAuctionId']),
             list(map(OrderDetails.from_bytes, packed_order_array))
         )
 
@@ -232,6 +234,7 @@ class StandingOrder(NamedTuple):
         return {
             'accountId': self.account_id,
             'batchIndex': self.batch_index,
+            'validFromAuctionId': self.valid_from_auction_id,
             'orders': list(map(lambda o: o.to_dictionary(), self.orders))
         }
 
