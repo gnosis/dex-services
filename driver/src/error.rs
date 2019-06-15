@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fmt;
 use ethabi;
+use error_chain::ChainedError;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ErrorKind {
@@ -30,7 +31,7 @@ impl From<std::io::Error> for DriverError {
 }
 impl From<web3::contract::Error> for DriverError {
     fn from(error: web3::contract::Error) -> Self {
-        DriverError::new(error.description(), ErrorKind::ContractError)
+        DriverError::new(&error.display_chain().to_string(), ErrorKind::ContractError)
     }
 }
 impl From<web3::Error> for DriverError {
