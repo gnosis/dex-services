@@ -140,7 +140,7 @@ class MongoDbInterface(DatabaseInterface):
 
         pipeline = [
             {"$match": {"validFromAuctionId": {"$lte": auction_id}}},
-            {"$sort": {"validFromAuctionId": -1}},
+            {"$sort": {"validFromAuctionId": -1, "_id": -1}},
             {"$group": {
                 "_id": "$accountId",
                 "batchIndex": {"$first": "$batchIndex"},
