@@ -5,7 +5,6 @@ pub mod order;
 pub use crate::models::state::State;
 pub use crate::models::flux::PendingFlux;
 pub use crate::models::order::Order;
-pub use crate::util::from_slice;
 
 use sha2::{Digest, Sha256};
 use web3::types::H256;
@@ -27,7 +26,7 @@ pub trait Serializable {
 
 fn merkleize(leafs: Vec<Vec<u8>>) -> H256 {
     if leafs.len() == 1 {
-        return H256::from(from_slice(&leafs[0]));
+        return H256::from_slice(&leafs[0]);
     }
     let next_layer = leafs.chunks(2).map(|pair| {
         let mut hasher = Sha256::new();
@@ -44,5 +43,5 @@ fn iter_hash<T: Serializable>(item: &T, prev_hash: &H256) -> H256 {
     hasher.input(item.bytes());
     let result = hasher.result();
     let b: Vec<u8> = result.to_vec();
-    H256::from(from_slice(&b))
+    H256::from_slice(&b)
 }
