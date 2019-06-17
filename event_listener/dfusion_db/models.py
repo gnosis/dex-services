@@ -3,6 +3,10 @@ from enum import Enum
 from typing import NamedTuple, Dict, Any, List, Optional, Tuple
 from .exceptions import EventParseError
 
+DFUSION_PACKED_ORDER_WIDTH = 52  # 26 bytes in hex
+DFUSION_AMOUNT_WIDTH = 24  # 12 bytes in hex
+DFUSION_TOKEN_WIDTH = 2  # 1 bytes in hex
+
 
 class TransitionType(Enum):
     Deposit = 0
@@ -146,7 +150,8 @@ class AuctionResults(NamedTuple):
     @classmethod
     def from_bytes(cls, byte_str: str, num_tokens: int, num_orders: int) -> "AuctionResults":
         # TODO - pass num_orders (as read from DB for solution verification)
-        hex_str_array = [byte_str[i: i + 24] for i in range(0, len(byte_str), 24)]
+        hex_str_array = [byte_str[i: i + DFUSION_AMOUNT_WIDTH]
+                         for i in range(0, len(byte_str), DFUSION_AMOUNT_WIDTH)]
         byte_array = list(map(lambda t: read_amount(t)[0], hex_str_array))
         prices, volumes = byte_array[:num_tokens], byte_array[num_tokens:]
         buy_amounts = volumes[0::2]  # Even elements
@@ -222,7 +227,8 @@ class StandingOrder(NamedTuple):
         assert all(k in data for k in event_fields), "Unexpected Event Keys: got {}".format(data.keys())
 
         packed_order_str = data['packedOrders']
-        packed_order_array = [packed_order_str[i: i + 52] for i in range(0, len(packed_order_str), 52)]
+        packed_order_array = [packed_order_str[i: i + DFUSION_PACKED_ORDER_WIDTH]
+                              for i in range(0, len(packed_order_str), DFUSION_PACKED_ORDER_WIDTH)]
         return StandingOrder(
             int(data['accountId']),
             int(data['currentBatchIndex']),
@@ -235,13 +241,13 @@ class StandingOrder(NamedTuple):
             'accountId': self.account_id,
             'batchIndex': self.batch_index,
             'validFromAuctionId': self.valid_from_auction_id,
-            'orders': list(map(lambda o: o.to_dictionary(), self.orders))
+            'orders': list(map(lambda order: order.to_dictionary(), self.orders))
         }
 
 
 def read_amount(byte_str: str) -> Tuple[int, str]:
-    return (int(byte_str[:24], 16), byte_str[24:])
+    return (int(byte_str[:DFUSION_AMOUNT_WIDTH], 16), byte_str[DFUSION_AMOUNT_WIDTH:])
 
 
 def read_token(byte_str: str) -> Tuple[int, str]:
-    return (int(byte_str[:2], 16), byte_str[2:])
+    return (int(byte_str[:DFUSION_TOKEN_WIDTH], 16), byte_str[DFUSION_TOKEN_WIDTH:])
