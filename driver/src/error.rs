@@ -28,7 +28,6 @@ impl From<std::io::Error> for DriverError {
         DriverError::new(error.description(), ErrorKind::IoError)
     }
 }
-
 impl From<web3::contract::Error> for DriverError {
     fn from(error: web3::contract::Error) -> Self {
         DriverError::new(error.description(), ErrorKind::ContractError)
@@ -79,7 +78,6 @@ impl From<rustc_hex::FromHexError> for DriverError {
         DriverError::new(error.description(), ErrorKind::DbError)
     }
 }
-
 impl From<&str> for DriverError {
     fn from(error: &str) -> Self {
         DriverError::new(error, ErrorKind::MiscError)
