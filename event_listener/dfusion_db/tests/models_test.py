@@ -1,6 +1,6 @@
 import unittest
 from ..models import AccountRecord, AuctionResults, AuctionSettlement
-from ..models import Deposit, Order, StateTransition, TransitionType, Withdraw
+from ..models import Deposit, Order, StateTransition, TransitionType, Withdraw, StandingOrder, OrderDetails
 from ..exceptions import EventParseError
 
 
@@ -271,3 +271,54 @@ class StateTransitionTest(unittest.TestCase):
                 "slot": "fart",
             }
             StateTransition.from_dictionary(bad_transition_dict)
+
+
+class StandingOrderTest(unittest.TestCase):
+    def test_from_dict(self) -> None:
+        first_order_detail = '00' * 11 + '03' + '00' * 11 + '04' + '02' + '01'
+        second_order_detail = '00' * 11 + '07' + '00' * 11 + '08' + '06' + '05'
+        standing_order_dict = {
+            'accountId': 1,
+            'currentBatchIndex': 2,
+            'validFromAuctionId': 3,
+            'packedOrders': first_order_detail + second_order_detail
+        }
+        expected = StandingOrder(
+            1, 2, 3, [OrderDetails(1, 2, 3, 4), OrderDetails(5, 6, 7, 8)]
+        )
+        parsed = StandingOrder.from_dictionary(standing_order_dict)
+        self.assertEqual(expected, parsed)
+
+    def test_from_dict_failure(self) -> None:
+        with self.assertRaises(AssertionError):
+            standing_order_dict = {
+                'accountId': 1,
+                'currentBatchIndex': 2,
+                'validFromAuctionId': 3
+            }
+            StandingOrder.from_dictionary(standing_order_dict)
+
+    def test_to_dict(self) -> None:
+        order = StandingOrder(
+            1, 2, 3, [OrderDetails(1, 2, 3, 4), OrderDetails(5, 6, 7, 8)]
+        )
+        expected = {
+            'accountId': 1,
+            'batchIndex': 2,
+            'validFromAuctionId': 3,
+            'orders': [
+                {
+                    'buyToken': 1,
+                    'sellToken': 2,
+                    'buyAmount': '3',
+                    'sellAmount': '4',
+                },
+                {
+                    'buyToken': 5,
+                    'sellToken': 6,
+                    'buyAmount': '7',
+                    'sellAmount': '8',
+                }
+            ]
+        }
+        self.assertEqual(expected, order.to_dictionary())

@@ -5,7 +5,7 @@ from typing import List
 from django.conf import settings
 from pymongo import MongoClient
 
-from .models import Deposit, Withdraw, AccountRecord, Order
+from .models import Deposit, Withdraw, AccountRecord, Order, StandingOrder
 
 
 class DatabaseInterface(ABC):
@@ -49,6 +49,9 @@ class DatabaseInterface(ABC):
 
     @abstractmethod
     def get_orders(self, auction_id: int) -> List[Order]: pass
+
+    @abstractmethod
+    def write_standing_order(self, standing_order: StandingOrder) -> None: pass
 
 
 class MongoDbInterface(DatabaseInterface):
@@ -134,3 +137,8 @@ class MongoDbInterface(DatabaseInterface):
 
     def get_orders(self, auction_id: int) -> List[Order]:
         return list(map(Order.from_dictionary, self.database.orders.find({'auctionId': auction_id})))
+
+    def write_standing_order(self, standing_order: StandingOrder) -> None:
+        standing_order_id = self.database.standing_orders.insert_one(standing_order.to_dictionary()).inserted_id
+        self.logger.info(
+            "Successfully included StandingOrder {}".format(standing_order_id))
