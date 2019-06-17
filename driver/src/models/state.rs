@@ -4,6 +4,7 @@ use sha2::{Digest, Sha256};
 use web3::types::H256;
 
 use crate::models::{TOKENS, RollingHashable};
+use crate::util::from_slice;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -56,7 +57,7 @@ impl RollingHashable for State {
       let result = hasher.result();
       hash = result.to_vec();
     }
-    H256::from(hash.as_slice())
+    H256::from(from_slice(&hash))
   }
 }
 

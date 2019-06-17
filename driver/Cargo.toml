@@ -22,7 +22,7 @@ rustc-hex = "*"
 sha2 = "*"
 byteorder = "*"
 hex = "0.3.2"
-web3 = { git = "https://github.com/tomusdrw/rust-web3", rev = "56ad08e" }
+web3 = "*"
 log = "0.4.6"
 simple_logger = "1.2.0"
 

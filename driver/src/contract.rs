@@ -59,9 +59,8 @@ impl SnappContractImpl {
         let snapp_base: serde_json::Value = serde_json::from_str(&contents)?;
         let snapp_base_abi: String = snapp_base.get("abi").ok_or("No ABI for contract")?.to_string();
 
-        let snapp_address = hex::decode(&(env::var("SNAPP_CONTRACT_ADDRESS")?)[2..])?;
-        let address: Address = Address::from(&snapp_address[..]);
-        let contract = Contract::from_json(web3.eth(), address, snapp_base_abi.as_bytes())?;
+        let address: Address = (env::var("SNAPP_CONTRACT_ADDRESS")?)[2..22].parse()?;
+        let contract = Contract::from_json(web3.eth(), address, snapp_base_abi.as_bytes()).unwrap();
         Ok(SnappContractImpl { contract, web3, event_loop })
     }
 
@@ -90,7 +89,7 @@ impl SnappContract for SnappContractImpl {
             .and_then(|block_option| {
                 match block_option {
                     Some(block) => Ok(block.timestamp),
-                    None => Err(web3::Error::from("Current block not found"))
+                    None => Err(web3::error::Error::Decoder(String::from("Current block not found")))
                 }
             })
             .map_err(DriverError::from)
