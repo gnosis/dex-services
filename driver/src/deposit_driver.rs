@@ -47,7 +47,7 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
             let new_state_root = updated_balances.rolling_hash(balances.state_index + 1);
             
             info!("New State_hash is {}", new_state_root);
-            contract.apply_deposits(slot, state_root, new_state_root, contract_deposit_hash)?;
+            contract.apply_deposits(slot + 10, state_root, new_state_root, contract_deposit_hash)?;
             return Ok(true);
         } else {
             info!("Need to wait before processing deposit_slot {:?}", slot);

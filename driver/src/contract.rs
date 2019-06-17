@@ -59,7 +59,7 @@ impl SnappContractImpl {
         let snapp_base: serde_json::Value = serde_json::from_str(&contents)?;
         let snapp_base_abi: String = snapp_base.get("abi").ok_or("No ABI for contract")?.to_string();
 
-        let address: Address = (env::var("SNAPP_CONTRACT_ADDRESS")?)[2..22].parse()?;
+        let address: Address = (env::var("SNAPP_CONTRACT_ADDRESS")?)[2..].parse()?;
         let contract = Contract::from_json(web3.eth(), address, snapp_base_abi.as_bytes())?;
         Ok(SnappContractImpl { contract, web3, event_loop })
     }
