@@ -21,7 +21,8 @@ truffle exec scripts/sell_order.js 1 2 1 1 1
 truffle exec scripts/wait_seconds.js 181
 retry -t 5 "mongo dfusion2 --eval \"db.accounts.findOne({'stateIndex': 6}).balances[1]\" | grep -2 2000000000000000000"
 
-# Cancel standing order
+# Update, then cancel standing order in same batch (make sure only cancel gets processed)
+truffle exec scripts/standing_order.js 0 1 2 1 2
 truffle exec scripts/standing_order.js 0 0 0 0 0
 
 # Make sure it's no longer traded
