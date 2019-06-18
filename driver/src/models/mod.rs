@@ -5,7 +5,6 @@ pub mod order;
 pub use crate::models::state::State;
 pub use crate::models::flux::PendingFlux;
 pub use crate::models::order::Order;
-pub use crate::util::from_slice;
 
 use sha2::{Digest, Sha256};
 use web3::types::H256;

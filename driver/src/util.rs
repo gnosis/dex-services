@@ -53,10 +53,3 @@ where
     let current_block = contract.get_current_block_timestamp()?;
     Ok(slot_creation_block + 180 < current_block)
 }
-
-pub fn from_slice(bytes: &[u8]) -> [u8; 32] {
-    let mut array = [0; 32];
-    let bytes = &bytes[..array.len()]; // panics if not enough data
-    array.copy_from_slice(bytes); 
-    array
-}
