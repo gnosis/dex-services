@@ -236,6 +236,23 @@ class StandingOrder(NamedTuple):
             list(map(OrderDetails.from_bytes, packed_order_array))
         )
 
+    @classmethod
+    def from_db_dictionary(cls, data: Dict[str, Any]) -> "StandingOrder":
+        event_fields = ('batchIndex', '_id', 'orders', 'validFromAuctionId')
+        assert all(k in data for k in event_fields), "Unexpected Event Keys: got {}".format(data.keys())
+
+        return StandingOrder(
+            int(data['_id']),
+            int(data['batchIndex']),
+            int(data['validFromAuctionId']),
+            list(map(lambda order: OrderDetails(
+                order['buyToken'],
+                order['sellToken'],
+                int(order['buyAmount']),
+                int(order['sellAmount']),
+            ), data['orders']))
+        )
+
     def to_dictionary(self) -> Dict[str, Any]:
         return {
             'accountId': self.account_id,
@@ -243,6 +260,17 @@ class StandingOrder(NamedTuple):
             'validFromAuctionId': self.valid_from_auction_id,
             'orders': list(map(lambda order: order.to_dictionary(), self.orders))
         }
+
+    def get_orders(self) -> List[Order]:
+        return list(map(lambda order_detail: Order(
+            0,  # slot
+            0,  # slotIndex
+            self.account_id,
+            order_detail.buy_token,
+            order_detail.sell_token,
+            order_detail.buy_amount,
+            order_detail.sell_amount,
+        ), self.orders))
 
 
 def read_amount(byte_str: str) -> Tuple[int, str]:

@@ -136,7 +136,22 @@ class MongoDbInterface(DatabaseInterface):
             "Successfully included Order - {}".format(order_id))
 
     def get_orders(self, auction_id: int) -> List[Order]:
-        return list(map(Order.from_dictionary, self.database.orders.find({'auctionId': auction_id})))
+        orders = list(map(Order.from_dictionary, self.database.orders.find({'auctionId': auction_id})))
+
+        pipeline = [
+            {"$match": {"validFromAuctionId": {"$lte": auction_id}}},
+            {"$sort": {"validFromAuctionId": -1, "_id": -1}},
+            {"$group": {
+                "_id": "$accountId",
+                "batchIndex": {"$first": "$batchIndex"},
+                "validFromAuctionId": {"$first": "$validFromAuctionId"},
+                "orders": {"$first": "$orders"}
+            }}
+        ]
+        standing_orders = list(map(StandingOrder.from_db_dictionary, self.database.standing_orders.aggregate(pipeline)))
+        for standing_order in standing_orders:
+            orders += standing_order.get_orders()
+        return orders
 
     def write_standing_order(self, standing_order: StandingOrder) -> None:
         standing_order_id = self.database.standing_orders.insert_one(standing_order.to_dictionary()).inserted_id
