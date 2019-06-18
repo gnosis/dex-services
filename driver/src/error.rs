@@ -30,12 +30,12 @@ impl From<std::io::Error> for DriverError {
 }
 impl From<web3::contract::Error> for DriverError {
     fn from(error: web3::contract::Error) -> Self {
-        match error {
-            web3::contract::Error::InvalidOutputType(_) => DriverError::new("invalid output error", ErrorKind::JsonError),
-            web3::contract::Error::Abi(ref e) => DriverError::new(&format!("{}", e), ErrorKind::JsonError),
-            web3::contract::Error::Api(ref e) => DriverError::new(&format!("{}", e), ErrorKind::JsonError),
-        }
-       // DriverError::new(error.description(), ErrorKind::JsonError)
+        //match error {
+        //     web3::contract::Error::InvalidOutputType(_) => DriverError::new("invalid output error", ErrorKind::ContractError),
+        //     web3::contract::Error::Abi(ref e) => DriverError::new(&format!("{}", e), ErrorKind::ContractError),
+        //     web3::contract::Error::Api(ref e) => DriverError::new(&format!("{}", e), ErrorKind::ContractError),
+        // }
+       DriverError::new(&format!("{}", error), ErrorKind::ContractError)
     }
 }
 impl From<web3::Error> for DriverError {
