@@ -73,6 +73,11 @@ impl From<mongodb::DecoderError> for DriverError {
         DriverError::new(error.description(), ErrorKind::DbError)
     }
 }
+impl From<rustc_hex::FromHexError> for DriverError {
+    fn from(error: rustc_hex::FromHexError) -> Self {
+        DriverError::new(error.description(), ErrorKind::DbError)
+    }
+}
 impl From<&str> for DriverError {
     fn from(error: &str) -> Self {
         DriverError::new(error, ErrorKind::MiscError)

@@ -119,7 +119,7 @@ impl DbInterface for MongoDB {
     ) -> Result<Vec<models::StandingOrder>, DriverError> {
         let pipeline = vec![
             doc!{"$match" => (doc!{"validFromAuctionId" => (doc!{ "$lte" => slot})})},
-            doc!{"$sort" => (doc!{"validFromAuctionId" => -1})},
+            doc!{"$sort" => (doc!{"validFromAuctionId" => -1, "_id" => -1})},
             doc!{"$group" => (doc!{"_id" => "$accountId", "orders" => (doc!{"$first" =>"$orders" })})}
         ];
 
