@@ -1,10 +1,12 @@
 pub mod state;
 pub mod flux;
 pub mod order;
+pub mod standing_order;
 
 pub use crate::models::state::State;
 pub use crate::models::flux::PendingFlux;
 pub use crate::models::order::Order;
+pub use crate::models::standing_order::StandingOrder;
 
 use sha2::{Digest, Sha256};
 use web3::types::H256;
