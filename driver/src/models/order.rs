@@ -4,7 +4,7 @@ use web3::types::H256;
 
 use crate::models::{Serializable, RollingHashable, iter_hash};
 
-#[derive(Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct Order {
     pub account_id: u16,
