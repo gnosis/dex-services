@@ -57,7 +57,7 @@ impl RollingHashable for State {
       let result = hasher.result();
       hash = result.to_vec();
     }
-    H256::from(from_slice(&hash))
+    H256::from_slice(hash.as_slice())
   }
 }
 

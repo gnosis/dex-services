@@ -1,10 +1,10 @@
 import unittest
 from unittest.mock import Mock
 from typing import List
-from ..snapp_event_receiver import DepositReceiver, OrderReceiver, SnappInitializationReceiver
-from ..snapp_event_receiver import WithdrawRequestReceiver, StateTransitionReceiver
-from ..snapp_event_receiver import AuctionSettlementReceiver, AuctionInitializationReceiver
-from ..models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord, Order
+from ..snapp_event_receiver import DepositReceiver, OrderReceiver, SnappInitializationReceiver, \
+    WithdrawRequestReceiver, StateTransitionReceiver, AuctionSettlementReceiver, AuctionInitializationReceiver, \
+    StandingOrderBatchReceiver
+from ..models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord, Order, StandingOrder
 
 EMPTY_STATE_HASH = "0x00000000000000000000000000000000000000000000000000000000000000"
 
@@ -346,3 +346,14 @@ class AuctionInitializationReceiverTest(unittest.TestCase):
         # Bad Key
         with self.assertRaises(AssertionError):
             receiver.save({"badKey": 1}, block_info={})
+
+
+class StandingOrderBatchReceiverTest(unittest.TestCase):
+
+    @staticmethod
+    def test_writes_order() -> None:
+        database = Mock()
+        receiver = StandingOrderBatchReceiver(database)
+        order = StandingOrder(1, 2, 3, [])
+        receiver.save_parsed(order)
+        database.write_standing_order.assert_called_with(order)

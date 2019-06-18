@@ -3,7 +3,8 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Union, List, Optional
 
 from .database_interface import DatabaseInterface, MongoDbInterface
-from .models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord, Order, AuctionSettlement
+from .models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord, Order, AuctionSettlement,\
+    StandingOrder
 
 
 class SnappEventListener(ABC):
@@ -169,3 +170,11 @@ class AuctionSettlementReceiver(SnappEventListener):
 
         new_account_record = AccountRecord(settlement.state_index, settlement.state_hash, balances)
         self.database.write_account_state(new_account_record)
+
+
+class StandingOrderBatchReceiver(SnappEventListener):
+    def save(self, event: Dict[str, Any], block_info: Dict[str, Any]) -> None:
+        self.save_parsed(StandingOrder.from_dictionary(event))
+
+    def save_parsed(self, standing_order: StandingOrder) -> None:
+        self.database.write_standing_order(standing_order)
