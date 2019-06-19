@@ -5,9 +5,9 @@ use crate::models::{RollingHashable, Serializable, State, Order};
 use crate::models;
 use crate::price_finding::{PriceFinding, Solution};
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
+use sha2::{Digest, Sha256};
 
-
-use web3::types::{U256, U128};
+use web3::types::{U256, H256};
 
 pub fn run_order_listener<D, C>(
     db: &D, 
@@ -36,7 +36,7 @@ pub fn run_order_listener<D, C>(
 
 
             let mut orders = db.get_orders_of_slot(slot.low_u32())?;
-            let mut order_hash = orders.rolling_hash(0);
+            let order_hash = orders.rolling_hash(0);
             hash_consistency_check(order_hash, contract_order_hash, "order")?;
 
             let standing_orders = db.get_standing_orders_of_slot(slot.low_u32())?;
@@ -74,8 +74,11 @@ pub fn run_order_listener<D, C>(
             info!("New State_hash is {}, Solution: {:?}", new_state_root, solution);
             let standing_order_index = db.get_standing_orders_index_of_slot(slot.low_u32())?;
             // next line is temporary just to make tests pass
-            order_hash = contract.calculate_order_hash(slot, standing_order_index.clone())?;
-            contract.apply_auction(slot, state_root, new_state_root, order_hash, standing_order_index, solution.bytes())?;
+            let order_hash_calculated = calculate_order_hash(order_hash, standing_orders);
+            let order_hash_from_contract = contract.calculate_order_hash(slot, standing_order_index.clone())?;
+            hash_consistency_check(order_hash_from_contract, order_hash_calculated, "order")?;
+
+            contract.apply_auction(slot, state_root, new_state_root, order_hash_calculated, standing_order_index, solution.bytes())?;
             return Ok(true);
         } else {
             info!("Need to wait before processing auction slot {:?}", slot);
@@ -92,6 +95,22 @@ fn update_balances(state: &mut State, orders: &[Order], solution: &Solution) {
         let sell_volume = solution.executed_sell_amounts[i];
         state.decrement_balance(order.sell_token, order.account_id, sell_volume);
     }
+}
+
+fn calculate_order_hash(nonreserved_order_hash: H256, standing_orders: Vec<models::StandingOrder>) -> H256 {
+    let mut hasher = Sha256::new();
+    hasher.input(nonreserved_order_hash);
+    for i in 0..models::NUM_RESERVED_ACCOUNTS {
+        hasher.input(standing_orders
+            .iter()
+            .position(|so| so.account_id == i as u16) 
+            .map(|k| standing_orders[k].get_orders())
+            .map(|o| o.rolling_hash(0))
+            .unwrap_or(H256::zero()));
+    }
+    let result = hasher.result();
+    let b: Vec<u8> = result.to_vec();
+    H256::from(b.as_slice())
 }
 
 #[cfg(test)]
