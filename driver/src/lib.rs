@@ -21,6 +21,7 @@ pub mod contract;
 pub mod db_interface;
 pub mod error;
 pub mod price_finding;
+pub mod persisted_merkle_tree;
 
 mod deposit_driver;
 mod order_driver;
