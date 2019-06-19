@@ -40,6 +40,11 @@ pub fn run_order_listener<D, C>(
             hash_consistency_check(order_hash, contract_order_hash, "order")?;
 
             let standing_orders = db.get_standing_orders_of_slot(slot.low_u32())?;
+            let standing_order_index = db.get_standing_orders_index_of_slot(slot.low_u32())?;
+            let order_hash_calculated = calculate_order_hash(order_hash, standing_orders.clone());
+            let order_hash_from_contract = contract.calculate_order_hash(slot, standing_order_index.clone())?;
+            hash_consistency_check(order_hash_from_contract, order_hash_calculated, "order")?;
+
             orders.extend(standing_orders
                 .iter()
                 .flat_map(|standing_order| standing_order.get_orders().clone())
@@ -72,11 +77,6 @@ pub fn run_order_listener<D, C>(
             let new_state_root = state.rolling_hash(state.state_index + 1);
             
             info!("New State_hash is {}, Solution: {:?}", new_state_root, solution);
-            let standing_order_index = db.get_standing_orders_index_of_slot(slot.low_u32())?;
-            // next line is temporary just to make tests pass
-            let order_hash_calculated = calculate_order_hash(order_hash, standing_orders);
-            let order_hash_from_contract = contract.calculate_order_hash(slot, standing_order_index.clone())?;
-            hash_consistency_check(order_hash_from_contract, order_hash_calculated, "order")?;
 
             contract.apply_auction(slot, state_root, new_state_root, order_hash_calculated, standing_order_index, solution.bytes())?;
             return Ok(true);
