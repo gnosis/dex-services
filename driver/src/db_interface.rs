@@ -154,7 +154,7 @@ impl DbInterface for MongoDB {
             //batchIndex is stored as i32. Probably, we should then also go with u32 in contract instead of U128
             .collect::<Vec<_>>();
 
-        let mut standing_order_index = Vec::<U128>::with_capacity(50);
+        let mut standing_order_index = Vec::<U128>::with_capacity(models::NUM_RESERVED_ACCOUNTS as usize);
         for i in 0..models::NUM_RESERVED_ACCOUNTS {
             standing_order_index.push(standing_order_index_raw
                 .iter()
