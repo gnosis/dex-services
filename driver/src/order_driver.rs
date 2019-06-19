@@ -43,7 +43,7 @@ pub fn run_order_listener<D, C>(
             let standing_order_index = db.get_standing_orders_index_of_slot(slot.low_u32())?;
             let order_hash_calculated = calculate_order_hash(order_hash, standing_orders.clone());
             let order_hash_from_contract = contract.calculate_order_hash(slot, standing_order_index.clone())?;
-            hash_consistency_check(order_hash_from_contract, order_hash_calculated, "order")?;
+            hash_consistency_check(order_hash_calculated, order_hash_from_contract, "order")?;
 
             orders.extend(standing_orders
                 .iter()
@@ -146,7 +146,7 @@ mod tests {
         contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         contract.order_hash_for_slot.given(slot).will_return(Ok(orders.rolling_hash(0)));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
-        contract.calculate_order_hash.given((slot, Any)).will_return(Ok(H256::zero()));
+        contract.calculate_order_hash.given((slot, Any)).will_return(Ok(H256::from("0x438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c")));
         contract.apply_auction.given((slot, Any, Any, Any, Any, Any)).will_return(Ok(()));
 
         let db = DbInterfaceMock::new();
@@ -214,8 +214,7 @@ mod tests {
 
         contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         contract.order_hash_for_slot.given(slot-1).will_return(Ok(second_orders.rolling_hash(0)));
-        contract.calculate_order_hash.given((slot-1, Any)).will_return(Ok(H256::zero()));
-
+        contract.calculate_order_hash.given((slot-1, Any)).will_return(Ok(H256::from("0x438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c")));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_auction.given((slot - 1, Any, Any, Any, Any, Any)).will_return(Ok(()));
 
@@ -307,7 +306,7 @@ mod tests {
         contract.creation_timestamp_for_auction_slot.given(slot).will_return(Ok(U256::from(10)));
         contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         contract.order_hash_for_slot.given(slot).will_return(Ok(H256::zero()));
-        contract.calculate_order_hash.given((slot, Any)).will_return(Ok(H256::zero()));
+        contract.calculate_order_hash.given((slot, Any)).will_return(Ok(H256::from("0x6bdda4f03645914c836a16ba8565f26dffb7bec640b31e1f23e0b3b22f0a64ae")));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_auction.given((slot, Any, Any, Any, Any, Any)).will_return(Ok(()));
 

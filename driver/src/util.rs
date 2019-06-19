@@ -30,7 +30,7 @@ pub fn hash_consistency_check(
         return Err(DriverError::new(
             &format!(
                 "Pending {} hash from contract ({}), didn't match the one found in db ({})",
-                flux_type, hash_from_contract, hash_calculated
+                flux_type, serde_json::to_string(&hash_from_contract).unwrap(), serde_json::to_string(&hash_calculated).unwrap()
             ),
             ErrorKind::StateError,
         ));
