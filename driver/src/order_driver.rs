@@ -78,6 +78,10 @@ pub fn run_order_listener<D, C>(
 
             order_hash = contract.calculate_order_hash(slot, standing_order_index.clone())?;
             println!("{:}", order_hash);
+            order_hash = contract.calculate_order_hash(slot, standing_order_index.clone())?;
+            println!("{:}", order_hash);
+            order_hash = contract.calculate_order_hash(slot, standing_order_index.clone())?;
+            println!("{:}", order_hash);
             contract.apply_auction(slot, state_root, new_state_root, order_hash, standing_order_index, solution.bytes())?;
             return Ok(true);
         } else {
