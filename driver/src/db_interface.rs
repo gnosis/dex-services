@@ -182,7 +182,6 @@ pub mod tests {
         pub get_orders_of_slot: Mock<u32, Result<Vec<models::Order>, DriverError>>,
         pub get_standing_orders_of_slot: Mock<u32, Result<Vec<models::StandingOrder>, DriverError>>,
         pub get_standing_orders_index_of_slot: Mock<u32, Result<Vec<U128>, DriverError>>,
-
     }
 
     impl DbInterfaceMock {
