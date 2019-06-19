@@ -322,3 +322,21 @@ class StandingOrderTest(unittest.TestCase):
             ]
         }
         self.assertEqual(expected, order.to_dictionary())
+
+    def test_from_db_dict(self) -> None:
+        standing_order_dict = {
+            "_id": 0,
+            "batchIndex": 1,
+            "validFromAuctionId": 2,
+            "orders": [{
+                "buyToken": 1,
+                "sellToken": 2,
+                "buyAmount": "1000000000000000000",
+                "sellAmount": "1000000000000000000"
+            }]
+        }
+        expected = StandingOrder(
+            0, 1, 2, [OrderDetails(1, 2, 1000000000000000000, 1000000000000000000)]
+        )
+        parsed = StandingOrder.from_db_dictionary(standing_order_dict)
+        self.assertEqual(expected, parsed)
