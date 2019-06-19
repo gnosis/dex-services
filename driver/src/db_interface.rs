@@ -9,7 +9,7 @@ use mongodb::ordered::OrderedDocument;
 use mongodb::db::ThreadedDatabase;
 use mongodb::{Client, ThreadedClient};
 
-use web3::types::H256;
+use web3::types::{H256,U128};
 
 
 pub trait DbInterface {
@@ -33,6 +33,10 @@ pub trait DbInterface {
         &self,
         slot: u32,
     ) -> Result<Vec<models::StandingOrder>, DriverError>;
+    fn get_standing_orders_index_of_slot(
+        &self,
+        slot: u32,
+    ) -> Result<Vec<U128>, DriverError>;
 }
 
 #[derive(Clone)]
@@ -131,6 +135,39 @@ impl DbInterface for MongoDB {
             .map(|d| d.map(models::StandingOrder::from).map_err(DriverError::from))
             .collect::<Result<Vec<_>, _>>()
     }
+    fn get_standing_orders_index_of_slot(
+        &self,
+        slot: u32,
+    ) -> Result<Vec<U128>, DriverError> {
+        let pipeline = vec![
+            doc!{"$match" => (doc!{"validFromAuctionId" => (doc!{ "$lte" => slot})})},
+            doc!{"$sort" => (doc!{"validFromAuctionId" => -1, "_id" => -1, "accountId" => -1})},
+            doc!{"$group" => (doc!{"_id" => "$accountId", "batchIndex" => (doc!{"$first" => "$batchIndex" })})}
+        ];
+
+        info!("Querying standing_orders_batch_index: {:?}", pipeline);
+            
+
+        let standing_order_index_raw = self.client
+            .db(models::DB_NAME)
+            .collection("standing_orders")
+            .aggregate(pipeline, None)?
+            .map(|doc| doc.unwrap())
+            .map(|doc| (doc.get_i32("_id").unwrap() as u16,U128::from_dec_str(&(doc.get_i32("batchIndex").unwrap() as u16).to_string()).unwrap()))
+            //batchIndex is stored as i32. Probably, we should then also go with U32 in contract instead of u128
+            .collect::<Vec<_>>();
+
+        let mut standing_order_index = Vec::<U128>::with_capacity(50);
+        for i in 0..50 {
+            standing_order_index.push(standing_order_index_raw
+                .iter()
+                .position(|&(r,_)| r == i as u16) //If I find r I want to get element _ else 0
+                .map(|k| standing_order_index_raw[k].1)
+                .unwrap_or(U128::zero()));
+        }
+        println!("{:?}",standing_order_index[0]);
+        Ok(standing_order_index)       
+    }
 }
 
 #[cfg(test)]
@@ -145,6 +182,8 @@ pub mod tests {
         pub get_withdraws_of_slot: Mock<u32, Result<Vec<models::PendingFlux>, DriverError>>,
         pub get_orders_of_slot: Mock<u32, Result<Vec<models::Order>, DriverError>>,
         pub get_standing_orders_of_slot: Mock<u32, Result<Vec<models::StandingOrder>, DriverError>>,
+        pub get_standing_orders_index_of_slot: Mock<u32, Result<Vec<U128>, DriverError>>,
+
     }
 
     impl DbInterfaceMock {
@@ -155,6 +194,7 @@ pub mod tests {
                 get_withdraws_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_withdraws_of_slot", ErrorKind::Unknown))),
                 get_orders_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_withdraws_of_slot", ErrorKind::Unknown))),
                 get_standing_orders_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_standing_orders_of_slot", ErrorKind::Unknown))),
+                get_standing_orders_index_of_slot: Mock::new(Err(DriverError::new("Unexpected call to get_standing_orders_index_of_slot", ErrorKind::Unknown))),
             }
         }
     }
@@ -189,6 +229,12 @@ pub mod tests {
             slot: u32,
         ) -> Result<Vec<models::StandingOrder>, DriverError> {
             self.get_standing_orders_of_slot.called(slot)
+        }
+        fn get_standing_orders_index_of_slot(
+            &self,
+            slot: u32,
+        ) -> Result<Vec<U128>, DriverError> {
+            self.get_standing_orders_index_of_slot.called(slot)
         }
     }
 }

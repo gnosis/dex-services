@@ -7,7 +7,7 @@ use crate::price_finding::{PriceFinding, Solution};
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
 
 
-use web3::types::U256;
+use web3::types::{U256};
 
 pub fn run_order_listener<D, C>(
     db: &D, 
@@ -36,7 +36,7 @@ pub fn run_order_listener<D, C>(
 
 
             let mut orders = db.get_orders_of_slot(slot.low_u32())?;
-            let order_hash = orders.rolling_hash(0);
+            let mut order_hash = orders.rolling_hash(0);
             hash_consistency_check(order_hash, contract_order_hash, "order")?;
 
             let standing_orders = db.get_standing_orders_of_slot(slot.low_u32())?;
@@ -72,7 +72,13 @@ pub fn run_order_listener<D, C>(
             let new_state_root = state.rolling_hash(state.state_index + 1);
             
             info!("New State_hash is {}, Solution: {:?}", new_state_root, solution);
-            contract.apply_auction(slot, state_root, new_state_root, order_hash, solution.bytes())?;
+            let standing_order_index = db.get_standing_orders_index_of_slot(slot.low_u32())?;
+            // next line is temporary just to make tests pass
+            println!("{:}", order_hash);
+
+            order_hash = contract.calculate_order_hash(slot, standing_order_index.clone())?;
+            println!("{:}", order_hash);
+            contract.apply_auction(slot, state_root, new_state_root, order_hash, standing_order_index, solution.bytes())?;
             return Ok(true);
         } else {
             info!("Need to wait before processing auction slot {:?}", slot);
@@ -122,7 +128,7 @@ mod tests {
         contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         contract.order_hash_for_slot.given(slot).will_return(Ok(orders.rolling_hash(0)));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
-        contract.apply_auction.given((slot, Any, Any, Any, Any)).will_return(Ok(()));
+        contract.apply_auction.given((slot, Any, Any, Any, Any, Any)).will_return(Ok(()));
 
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(1).will_return(Ok(orders.clone()));
@@ -189,7 +195,7 @@ mod tests {
         contract.order_hash_for_slot.given(slot-1).will_return(Ok(second_orders.rolling_hash(0)));
 
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
-        contract.apply_auction.given((slot - 1, Any, Any, Any, Any)).will_return(Ok(()));
+        contract.apply_auction.given((slot - 1, Any, Any, Any, Any, Any)).will_return(Ok(()));
 
         let state = models::State::new(
             format!("{:x}", state_hash),
@@ -275,7 +281,7 @@ mod tests {
         contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         contract.order_hash_for_slot.given(slot).will_return(Ok(H256::zero()));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
-        contract.apply_auction.given((slot, Any, Any, Any, Any)).will_return(Ok(()));
+        contract.apply_auction.given((slot, Any, Any, Any, Any, Any)).will_return(Ok(()));
 
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(1).will_return(Ok(vec![]));
