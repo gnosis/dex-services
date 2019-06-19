@@ -36,7 +36,7 @@ pub fn run_order_listener<D, C>(
 
 
             let mut orders = db.get_orders_of_slot(slot.low_u32())?;
-            let mut order_hash = orders.rolling_hash(0);
+            let order_hash = orders.rolling_hash(0);
             hash_consistency_check(order_hash, contract_order_hash, "order")?;
 
             let standing_orders = db.get_standing_orders_of_slot(slot.low_u32())?;
@@ -46,6 +46,11 @@ pub fn run_order_listener<D, C>(
             );
             info!("Standing Orders: {:?}", standing_orders);
             info!("All Orders: {:?}", orders);
+
+            let standing_order_index_u32 = get_standing_orders_index(&standing_orders);
+            // Hopefully, we can take the following line out by switching to u32 ipo U128
+            let standing_order_index: Vec<U128> = standing_order_index_u32.iter().map(|x| U128::from_dec_str(&(x).to_string()).unwrap()).collect();
+            let order_hash_from_contract = contract.calculate_order_hash(slot, standing_order_index.clone())?;
 
             let solution = if !orders.is_empty() {
                 price_finder.find_prices(&orders, &state).unwrap_or_else(|e| {
@@ -72,10 +77,8 @@ pub fn run_order_listener<D, C>(
             let new_state_root = state.rolling_hash(state.state_index + 1);
             
             info!("New State_hash is {}, Solution: {:?}", new_state_root, solution);
-            let standing_order_index = db.get_standing_orders_index_of_slot(slot.low_u32())?;
             // next line is temporary just to make tests pass
-            order_hash = contract.calculate_order_hash(slot, standing_order_index.clone())?;
-            contract.apply_auction(slot, state_root, new_state_root, order_hash, standing_order_index, solution.bytes())?;
+            contract.apply_auction(slot, state_root, new_state_root, order_hash_from_contract, standing_order_index, solution.bytes())?;
             return Ok(true);
         } else {
             info!("Need to wait before processing auction slot {:?}", slot);
@@ -92,6 +95,22 @@ fn update_balances(state: &mut State, orders: &[Order], solution: &Solution) {
         let sell_volume = solution.executed_sell_amounts[i];
         state.decrement_balance(order.sell_token, order.account_id, sell_volume);
     }
+}
+
+fn get_standing_orders_index(standing_orders: &Vec<models::StandingOrder>) -> Vec<u32> {
+    let mut standing_order_index = Vec::<u32>::with_capacity(models::NUM_RESERVED_ACCOUNTS as usize);
+        for i in 0..models::NUM_RESERVED_ACCOUNTS {
+            standing_order_index.push(standing_orders
+                .iter()
+                //If element on right side equals index, I want to get element on left side; else 0
+                .position(|x| x.account_id == i as u16) 
+                .map(|k| standing_orders[k].batch_index as u32)
+                .unwrap_or(0 as u32)
+            );
+                // Very inefficient implementation. I would just put two for loops into each other, 
+                //but wanna keep it readable
+        }
+    standing_order_index    
 }
 
 #[cfg(test)]
@@ -117,8 +136,6 @@ mod tests {
             vec![100; (models::TOKENS * 2) as usize],
             models::TOKENS,
         );
-        let standing_order_index = Vec::<U128>::with_capacity(models::NUM_RESERVED_ACCOUNTS as usize);
-
         let contract = SnappContractMock::new();
         contract.get_current_auction_slot.given(()).will_return(Ok(slot));
         contract.has_auction_slot_been_applied.given(slot).will_return(Ok(false));
@@ -134,7 +151,6 @@ mod tests {
         db.get_orders_of_slot.given(1).will_return(Ok(orders.clone()));
         db.get_standing_orders_of_slot.given(1).will_return(Ok(vec![]));
         db.get_current_balances.given(state_hash).will_return(Ok(state.clone()));
-        db.get_standing_orders_index_of_slot.given(1).will_return(Ok(standing_order_index.clone()));
 
         let pf = PriceFindingMock::new();
         let expected_solution = Solution {
@@ -183,7 +199,6 @@ mod tests {
         let state_hash = H256::zero();
         let first_orders = vec![create_order_for_test(), create_order_for_test()];
         let second_orders = vec![create_order_for_test(), create_order_for_test()];
-        let standing_order_index = Vec::<U128>::with_capacity(models::NUM_RESERVED_ACCOUNTS as usize);
 
         let contract = SnappContractMock::new();
         contract.get_current_auction_slot.given(()).will_return(Ok(slot));
@@ -210,8 +225,6 @@ mod tests {
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(0).will_return(Ok(first_orders.clone()));
         db.get_standing_orders_of_slot.given(0).will_return(Ok(vec![]));
-        db.get_standing_orders_index_of_slot.given(0).will_return(Ok(standing_order_index.clone()));
-        db.get_standing_orders_index_of_slot.given(1).will_return(Ok(standing_order_index.clone()));
 
         db.get_current_balances.given(state_hash).will_return(Ok(state.clone()));
 
@@ -270,9 +283,8 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let standing_order = models::StandingOrder::new(
-            1, vec![create_order_for_test(), create_order_for_test()]
+            1, 0, vec![create_order_for_test(), create_order_for_test()]
         );
-        let standing_order_index = Vec::<U128>::with_capacity(models::NUM_RESERVED_ACCOUNTS as usize);
 
         let state = models::State::new(
             format!("{:x}", state_hash),
@@ -295,7 +307,6 @@ mod tests {
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(1).will_return(Ok(vec![]));
         db.get_standing_orders_of_slot.given(1).will_return(Ok(vec![standing_order.clone()]));
-        db.get_standing_orders_index_of_slot.given(1).will_return(Ok(standing_order_index.clone()));
         db.get_current_balances.given(state_hash).will_return(Ok(state.clone()));
 
         let pf = PriceFindingMock::new();
