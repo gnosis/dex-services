@@ -121,7 +121,7 @@ mod tests {
     use crate::db_interface::tests::DbInterfaceMock;
     use crate::price_finding::price_finder_interface::tests::PriceFindingMock;
     use mock_it::Matcher::*;
-    use web3::types::{H256, U256};
+    use web3::types::{H256, U128, U256};
     use crate::error::{ErrorKind};
     use crate::price_finding::error::{PriceFindingError};
 
