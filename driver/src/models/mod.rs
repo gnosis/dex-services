@@ -20,6 +20,10 @@ pub trait RollingHashable {
     fn rolling_hash(&self, nonce: i32) -> H256;
 }
 
+pub trait DataHashable {
+    fn data_hash(&self, init_hash: H256) -> H256;
+}
+
 pub trait RootHashable {
     fn root_hash(&self, valid_items: &[bool]) -> H256;
 }

@@ -21,6 +21,8 @@ pub trait SnappContract {
     fn get_current_deposit_slot(&self) -> Result<U256>;
     fn get_current_withdraw_slot(&self) -> Result<U256>;
     fn get_current_auction_slot(&self) -> Result<U256>;
+    fn calculate_order_hash(&self, slot: U256, standing_order_index: Vec<U128>) -> Result<H256>;
+
 
     // Deposit Slots
     fn creation_timestamp_for_deposit_slot(&self, slot: U256) -> Result<U256>;
@@ -41,9 +43,6 @@ pub trait SnappContract {
     fn apply_deposits(&self, slot: U256, prev_state: H256, new_state: H256, deposit_hash: H256) -> Result<()>;
     fn apply_withdraws(&self, slot: U256, merkle_root: H256, prev_state: H256, new_state: H256, withdraw_hash: H256) -> Result<()>;
     fn apply_auction(&self, slot: U256, prev_state: H256, new_state: H256, order_hash: H256, standing_order_index: Vec<U128>, prices_and_volumes: Vec<u8>) -> Result<()>;
-
-    //Temporary functions
-    fn calculate_order_hash(&self, slot: U256, standing_order_index: Vec<U128>) -> Result<H256>;
 }
 
 #[allow(dead_code)] // event_loop needs to be retained to keep web3 connection open

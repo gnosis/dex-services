@@ -1,7 +1,7 @@
 use crate::contract::SnappContract;
 use crate::db_interface::DbInterface;
 use crate::error::DriverError;
-use crate::models::{RollingHashable, Serializable, State, Order};
+use crate::models::{RollingHashable, Serializable, DataHashable, State, Order};
 use crate::models;
 use crate::price_finding::{PriceFinding, Solution};
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
@@ -34,14 +34,12 @@ pub fn run_order_listener<D, C>(
             let contract_order_hash = contract.order_hash_for_slot(slot)?;
             let mut state = db.get_current_balances(&state_root)?;
 
-
             let mut orders = db.get_orders_of_slot(slot.low_u32())?;
             let order_hash = orders.rolling_hash(0);
-            hash_consistency_check(order_hash, contract_order_hash, "order")?;
+            hash_consistency_check(order_hash, contract_order_hash, "non-reserved-orders")?;
 
             let standing_orders = db.get_standing_orders_of_slot(slot.low_u32())?;
             
-
             orders.extend(standing_orders
                 .iter()
                 .flat_map(|standing_order| standing_order.get_orders().clone())
@@ -49,12 +47,12 @@ pub fn run_order_listener<D, C>(
             info!("Standing Orders: {:?}", standing_orders);
             info!("All Orders: {:?}", orders);
 
-            let standing_order_index_u32 = get_standing_orders_indexes(&standing_orders);
+            let standing_order_indexes_u32 = get_standing_orders_indexes(&standing_orders);
             // Hopefully, we can take the following line out by switching to u32 ipo U128
-            let standing_order_index: Vec<U128> = standing_order_index_u32.iter().map(|x| U128::from_dec_str(&(x).to_string()).unwrap()).collect();
-            let order_hash_from_contract = contract.calculate_order_hash(slot, standing_order_index.clone())?;
-            let order_hash_calculated = calculate_order_hash(order_hash, standing_orders.clone());
-            hash_consistency_check(order_hash_calculated, order_hash_from_contract, "order")?;
+            let standing_order_indexes: Vec<U128> = standing_order_indexes_u32.iter().map(|x| U128::from_dec_str(&(x).to_string()).unwrap()).collect();
+            let order_hash_from_contract = contract.calculate_order_hash(slot, standing_order_indexes.clone())?;
+            let order_hash_calculated = standing_orders.data_hash(order_hash);
+            hash_consistency_check(order_hash_calculated, order_hash_from_contract, "overall-order")?;
 
             let solution = if !orders.is_empty() {
                 price_finder.find_prices(&orders, &state).unwrap_or_else(|e| {
@@ -82,8 +80,7 @@ pub fn run_order_listener<D, C>(
             
             info!("New State_hash is {}, Solution: {:?}", new_state_root, solution);
 
-            // next line is temporary just to make tests pass
-            contract.apply_auction(slot, state_root, new_state_root, order_hash_from_contract, standing_order_index, solution.bytes())?;
+            contract.apply_auction(slot, state_root, new_state_root, order_hash_from_contract, standing_order_indexes, solution.bytes())?;
             return Ok(true);
         } else {
             info!("Need to wait before processing auction slot {:?}", slot);
@@ -102,34 +99,15 @@ fn update_balances(state: &mut State, orders: &[Order], solution: &Solution) {
     }
 }
 
-fn calculate_order_hash(nonreserved_order_hash: H256, standing_orders: Vec<models::StandingOrder>) -> H256 {
-    let mut hasher = Sha256::new();
-    hasher.input(nonreserved_order_hash);
-    for i in 0..models::NUM_RESERVED_ACCOUNTS {
-        hasher.input(standing_orders
-            .iter()
-            .position(|so| so.account_id == i as u16) 
-            .map(|k| standing_orders[k].get_orders())
-            .map(|o| o.rolling_hash(0))
-            .unwrap_or(H256::zero()));
-    }
-    let result = hasher.result();
-    let b: Vec<u8> = result.to_vec();
-    H256::from(b.as_slice())
-}
-
 fn get_standing_orders_indexes(standing_orders: &Vec<models::StandingOrder>) -> Vec<u32> {
     let mut standing_order_indexes = Vec::<u32>::with_capacity(models::NUM_RESERVED_ACCOUNTS as usize);
         for i in 0..models::NUM_RESERVED_ACCOUNTS {
             standing_order_indexes.push(standing_orders
                 .iter()
-                //If element on right side equals index, I want to get element on left side; else 0
                 .position(|x| x.account_id == i as u16) 
                 .map(|k| standing_orders[k].batch_index as u32)
                 .unwrap_or(0 as u32)
             );
-                // Very inefficient implementation. I would just put two for loops into each other, 
-                //but wanna keep it readable
         }
     standing_order_indexes 
 }
