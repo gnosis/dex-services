@@ -7,7 +7,7 @@ use crate::price_finding::{PriceFinding, Solution};
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
 
 
-use web3::types::U256;
+use web3::types::{U256, U128};
 
 pub fn run_order_listener<D, C>(
     db: &D, 
@@ -37,7 +37,7 @@ pub fn run_order_listener<D, C>(
 
             let mut orders = db.get_orders_of_slot(slot.low_u32())?;
             let order_hash = orders.rolling_hash(0);
-            hash_consistency_check(order_hash, contract_order_hash, "order")?;
+            hash_consistency_check(order_hash, contract_order_hash, "orders")?;
 
             let standing_orders = db.get_standing_orders_of_slot(slot.low_u32())?;
             orders.extend(standing_orders
@@ -46,6 +46,9 @@ pub fn run_order_listener<D, C>(
             );
             info!("Standing Orders: {:?}", standing_orders);
             info!("All Orders: {:?}", orders);
+
+            let standing_order_indexes = batch_index_from_standing_orders(&standing_orders);
+            let order_hash_from_contract = contract.calculate_order_hash(slot, standing_order_indexes.clone())?;
 
             let solution = if !orders.is_empty() {
                 price_finder.find_prices(&orders, &state).unwrap_or_else(|e| {
@@ -72,7 +75,8 @@ pub fn run_order_listener<D, C>(
             let new_state_root = state.rolling_hash(state.state_index + 1);
             
             info!("New State_hash is {}, Solution: {:?}", new_state_root, solution);
-            contract.apply_auction(slot, state_root, new_state_root, order_hash, solution.bytes())?;
+            // next line is temporary just to make tests pass
+            contract.apply_auction(slot, state_root, new_state_root, order_hash_from_contract, standing_order_indexes, solution.bytes())?;
             return Ok(true);
         } else {
             info!("Need to wait before processing auction slot {:?}", slot);
@@ -89,6 +93,14 @@ fn update_balances(state: &mut State, orders: &[Order], solution: &Solution) {
         let sell_volume = solution.executed_sell_amounts[i];
         state.decrement_balance(order.sell_token, order.account_id, sell_volume);
     }
+}
+
+fn batch_index_from_standing_orders(standing_orders: &Vec<models::StandingOrder>) -> Vec<U128> {
+    let mut standing_order_indexes = vec![U128::zero(); models::NUM_RESERVED_ACCOUNTS as usize];
+    for o in standing_orders {
+        standing_order_indexes[o.account_id as usize] = U128::from(o.batch_index);
+    }
+    standing_order_indexes 
 }
 
 #[cfg(test)]
@@ -122,7 +134,8 @@ mod tests {
         contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         contract.order_hash_for_slot.given(slot).will_return(Ok(orders.rolling_hash(0)));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
-        contract.apply_auction.given((slot, Any, Any, Any, Any)).will_return(Ok(()));
+        contract.calculate_order_hash.given((slot, Any)).will_return(Ok(H256::zero()));
+        contract.apply_auction.given((slot, Any, Any, Any, Any, Any)).will_return(Ok(()));
 
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(1).will_return(Ok(orders.clone()));
@@ -187,9 +200,10 @@ mod tests {
 
         contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         contract.order_hash_for_slot.given(slot-1).will_return(Ok(second_orders.rolling_hash(0)));
+        contract.calculate_order_hash.given((slot-1, Any)).will_return(Ok(H256::zero()));
 
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
-        contract.apply_auction.given((slot - 1, Any, Any, Any, Any)).will_return(Ok(()));
+        contract.apply_auction.given((slot - 1, Any, Any, Any, Any, Any)).will_return(Ok(()));
 
         let state = models::State::new(
             format!("{:x}", state_hash),
@@ -201,8 +215,9 @@ mod tests {
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(0).will_return(Ok(first_orders.clone()));
         db.get_standing_orders_of_slot.given(0).will_return(Ok(vec![]));
+
         db.get_current_balances.given(state_hash).will_return(Ok(state.clone()));
-        
+
         let pf = PriceFindingMock::new();
         let expected_solution = Solution {
             surplus: U256::from_dec_str("0").unwrap(),
@@ -258,8 +273,9 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let standing_order = models::StandingOrder::new(
-            1, vec![create_order_for_test(), create_order_for_test()]
+            1, 0, vec![create_order_for_test(), create_order_for_test()]
         );
+
         let state = models::State::new(
             format!("{:x}", state_hash),
             1,
@@ -274,8 +290,9 @@ mod tests {
         contract.creation_timestamp_for_auction_slot.given(slot).will_return(Ok(U256::from(10)));
         contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         contract.order_hash_for_slot.given(slot).will_return(Ok(H256::zero()));
+        contract.calculate_order_hash.given((slot, Any)).will_return(Ok(H256::zero()));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
-        contract.apply_auction.given((slot, Any, Any, Any, Any)).will_return(Ok(()));
+        contract.apply_auction.given((slot, Any, Any, Any, Any, Any)).will_return(Ok(()));
 
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(1).will_return(Ok(vec![]));
@@ -289,6 +306,17 @@ mod tests {
         let mut pf_box : Box<PriceFinding> = Box::new(pf);
 
         assert_eq!(run_order_listener(&db, &contract, &mut pf_box), Ok(true));
+    }
+
+    #[test]
+    fn test_get_standing_orders_indexes(){
+        let standing_order = models::StandingOrder::new(
+            1, 3, vec![create_order_for_test(), create_order_for_test()]
+        );
+        let standing_orders = vec![standing_order];
+        let mut standing_order_indexes = vec![U128::zero(); models::NUM_RESERVED_ACCOUNTS as usize];
+        standing_order_indexes[1] = U128::from(3);
+        assert_eq!(batch_index_from_standing_orders(&standing_orders), standing_order_indexes);
     }
 
     #[test]

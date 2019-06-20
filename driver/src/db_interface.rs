@@ -120,7 +120,7 @@ impl DbInterface for MongoDB {
         let pipeline = vec![
             doc!{"$match" => (doc!{"validFromAuctionId" => (doc!{ "$lte" => slot})})},
             doc!{"$sort" => (doc!{"validFromAuctionId" => -1, "_id" => -1})},
-            doc!{"$group" => (doc!{"_id" => "$accountId", "orders" => (doc!{"$first" =>"$orders" })})}
+            doc!{"$group" => (doc!{"_id" => "$accountId", "orders" => (doc!{"$first" =>"$orders" }), "batchIndex" => (doc!{"$first" => "$batchIndex" })})}
         ];
 
         info!("Querying standing_orders: {:?}", pipeline);
