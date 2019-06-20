@@ -37,7 +37,7 @@ pub fn run_order_listener<D, C>(
 
             let mut orders = db.get_orders_of_slot(slot.low_u32())?;
             let order_hash = orders.rolling_hash(0);
-            hash_consistency_check(order_hash, contract_order_hash, "order")?;
+            hash_consistency_check(order_hash, contract_order_hash, "orders")?;
 
             let standing_orders = db.get_standing_orders_of_slot(slot.low_u32())?;
             orders.extend(standing_orders
@@ -47,10 +47,10 @@ pub fn run_order_listener<D, C>(
             info!("Standing Orders: {:?}", standing_orders);
             info!("All Orders: {:?}", orders);
 
-            let standing_order_index_u32 = get_standing_orders_indexes(&standing_orders);
+            let standing_order_indexes_u32 = get_standing_orders_indexes(&standing_orders);
             // Hopefully, we can take the following line out by switching to u32 ipo U128
-            let standing_order_index: Vec<U128> = standing_order_index_u32.iter().map(|x| U128::from_dec_str(&(x).to_string()).unwrap()).collect();
-            let order_hash_from_contract = contract.calculate_order_hash(slot, standing_order_index.clone())?;
+            let standing_order_indexes: Vec<U128> = standing_order_indexes_u32.iter().map(|x| U128::from_dec_str(&(x).to_string()).unwrap()).collect();
+            let order_hash_from_contract = contract.calculate_order_hash(slot, standing_order_indexes.clone())?;
 
             let solution = if !orders.is_empty() {
                 price_finder.find_prices(&orders, &state).unwrap_or_else(|e| {
@@ -78,7 +78,7 @@ pub fn run_order_listener<D, C>(
             
             info!("New State_hash is {}, Solution: {:?}", new_state_root, solution);
             // next line is temporary just to make tests pass
-            contract.apply_auction(slot, state_root, new_state_root, order_hash_from_contract, standing_order_index, solution.bytes())?;
+            contract.apply_auction(slot, state_root, new_state_root, order_hash_from_contract, standing_order_indexes, solution.bytes())?;
             return Ok(true);
         } else {
             info!("Need to wait before processing auction slot {:?}", slot);
@@ -102,13 +102,10 @@ fn get_standing_orders_indexes(standing_orders: &Vec<models::StandingOrder>) -> 
         for i in 0..models::NUM_RESERVED_ACCOUNTS {
             standing_order_indexes.push(standing_orders
                 .iter()
-                //If element on right side equals index, I want to get element on left side; else 0
                 .position(|x| x.account_id == i as u16) 
                 .map(|k| standing_orders[k].batch_index as u32)
                 .unwrap_or(0 as u32)
             );
-                // Very inefficient implementation. I would just put two for loops into each other, 
-                //but wanna keep it readable
         }
     standing_order_indexes 
 }
