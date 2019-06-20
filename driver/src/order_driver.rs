@@ -1,7 +1,7 @@
 use crate::contract::SnappContract;
 use crate::db_interface::DbInterface;
 use crate::error::DriverError;
-use crate::models::{RollingHashable, Serializable, ConcatingHashable, State, Order};
+use crate::models::{RollingHashable, Serializable, ConcatenatingHashable, State, Order};
 use crate::models;
 use crate::price_finding::{PriceFinding, Solution};
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
@@ -30,12 +30,12 @@ pub fn run_order_listener<D, C>(
         )? {
             info!("Processing auction slot {:?}", slot);
             let state_root = contract.get_current_state_root()?;
-            let contract_order_hash = contract.order_hash_for_slot(slot)?;
+            let non_reserved_orders_hash_from_contract = contract.order_hash_for_slot(slot)?;
             let mut state = db.get_current_balances(&state_root)?;
 
             let mut orders = db.get_orders_of_slot(slot.low_u32())?;
-            let order_hash = orders.rolling_hash(0);
-            hash_consistency_check(order_hash, contract_order_hash, "non-reserved-orders")?;
+            let non_reserved_orders_hash = orders.rolling_hash(0);
+            hash_consistency_check(non_reserved_orders_hash, non_reserved_orders_hash_from_contract, "non-reserved-orders")?;
 
             let standing_orders = db.get_standing_orders_of_slot(slot.low_u32())?;
             
@@ -47,9 +47,9 @@ pub fn run_order_listener<D, C>(
             info!("All Orders: {:?}", orders);
 
             let standing_order_indexes = batch_index_from_standing_orders(&standing_orders);
-            let order_hash_from_contract = contract.calculate_order_hash(slot, standing_order_indexes.clone())?;
-            let order_hash_calculated = standing_orders.concating_hash(order_hash);
-            hash_consistency_check(order_hash_calculated, order_hash_from_contract, "overall-order")?;
+            let total_order_hash_from_contract = contract.calculate_order_hash(slot, standing_order_indexes.clone())?;
+            let total_order_hash_calculated = standing_orders.concating_hash(non_reserved_orders_hash);
+            hash_consistency_check(total_order_hash_calculated, total_order_hash_from_contract, "overall-order")?;
 
             let solution = if !orders.is_empty() {
                 price_finder.find_prices(&orders, &state).unwrap_or_else(|e| {
@@ -77,7 +77,7 @@ pub fn run_order_listener<D, C>(
             
             info!("New State_hash is {}, Solution: {:?}", new_state_root, solution);
 
-            contract.apply_auction(slot, state_root, new_state_root, order_hash_from_contract, standing_order_indexes, solution.bytes())?;
+            contract.apply_auction(slot, state_root, new_state_root, total_order_hash_from_contract, standing_order_indexes, solution.bytes())?;
             return Ok(true);
         } else {
             info!("Need to wait before processing auction slot {:?}", slot);
