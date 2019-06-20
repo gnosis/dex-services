@@ -4,12 +4,13 @@ use serde_derive::{Deserialize};
 #[serde(rename_all = "camelCase")]
 pub struct StandingOrder {
     pub account_id: u16,
+    pub batch_index: u32,
     orders: Vec<super::Order>,
 }
 
 impl StandingOrder {
-    pub fn new(account_id: u16, orders: Vec<super::Order>) -> StandingOrder {
-        StandingOrder { account_id, orders }
+    pub fn new(account_id: u16, batch_index: u32, orders: Vec<super::Order>) -> StandingOrder {
+        StandingOrder { account_id, batch_index, orders }
     }
     pub fn get_orders(&self) -> &Vec<super::Order> {
         &self.orders
@@ -19,8 +20,11 @@ impl StandingOrder {
 impl From<mongodb::ordered::OrderedDocument> for StandingOrder {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
         let account_id = document.get_i32("_id").unwrap() as u16;
+        let batch_index = document.get_i32("batchIndex").unwrap() as u32;
+
         StandingOrder {
             account_id,
+            batch_index,
             orders: document
                 .get_array("orders")
                 .unwrap()
