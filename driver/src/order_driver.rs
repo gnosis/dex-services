@@ -98,9 +98,10 @@ fn update_balances(state: &mut State, orders: &[Order], solution: &Solution) {
 
 fn batch_index_from_standing_orders(standing_orders: &Vec<models::StandingOrder>) -> Vec<U128> {
     let mut standing_order_indexes = vec![U128::zero(); models::NUM_RESERVED_ACCOUNTS as usize];
-        for o in standing_orders {
-            standing_order_indexes[o.account_id as usize] = U128::from(o.batch_index);
-        }
+
+    for o in standing_orders {
+        standing_order_indexes[o.account_id as usize] = U128::from(o.batch_index);
+    }
     standing_order_indexes 
 }
 
@@ -136,6 +137,7 @@ mod tests {
         contract.order_hash_for_slot.given(slot).will_return(Ok(orders.rolling_hash(0)));
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.calculate_order_hash.given((slot, Any)).will_return(Ok(H256::from("0x438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c")));
+
         contract.apply_auction.given((slot, Any, Any, Any, Any, Any)).will_return(Ok(()));
 
         let db = DbInterfaceMock::new();
@@ -202,6 +204,7 @@ mod tests {
         contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
         contract.order_hash_for_slot.given(slot-1).will_return(Ok(second_orders.rolling_hash(0)));
         contract.calculate_order_hash.given((slot-1, Any)).will_return(Ok(H256::from("0x438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c")));
+
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_auction.given((slot - 1, Any, Any, Any, Any, Any)).will_return(Ok(()));
 
