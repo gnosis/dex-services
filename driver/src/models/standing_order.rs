@@ -62,3 +62,34 @@ impl From<mongodb::ordered::OrderedDocument> for StandingOrder {
         }
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+  use super::*;
+  use web3::types::{H256};
+  use std::str::FromStr;
+
+  #[test]
+  fn test_concating_hash() {
+    let standing_order = models::StandingOrder::new(
+        1, 0, vec![create_order_for_test(), create_order_for_test()]
+    );
+
+    assert_eq!(
+    vec![standing_order].concating_hash(H256::from(0)),
+    H256::from_str(
+      "6bdda4f03645914c836a16ba8565f26dffb7bec640b31e1f23e0b3b22f0a64ae"
+      ).unwrap()
+    );
+  }
+
+  pub fn create_order_for_test() -> models::Order {
+      models::Order {
+          account_id: 1,
+          sell_token: 2,
+          buy_token: 3,
+          sell_amount: 4,
+          buy_amount: 5,
+      }
+    }
+  }
