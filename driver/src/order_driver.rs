@@ -1,13 +1,12 @@
 use crate::contract::SnappContract;
 use crate::db_interface::DbInterface;
 use crate::error::DriverError;
-use crate::models::{RollingHashable, Serializable, DataHashable, State, Order};
+use crate::models::{RollingHashable, Serializable, ConcatingHashable, State, Order};
 use crate::models;
 use crate::price_finding::{PriceFinding, Solution};
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
-use sha2::{Digest, Sha256};
 
-use web3::types::{U256, H256, U128};
+use web3::types::{U256, U128};
 
 pub fn run_order_listener<D, C>(
     db: &D, 
@@ -47,11 +46,9 @@ pub fn run_order_listener<D, C>(
             info!("Standing Orders: {:?}", standing_orders);
             info!("All Orders: {:?}", orders);
 
-            let standing_order_indexes_u32 = get_standing_orders_indexes(&standing_orders);
-            // Hopefully, we can take the following line out by switching to u32 ipo U128
-            let standing_order_indexes: Vec<U128> = standing_order_indexes_u32.iter().map(|x| U128::from_dec_str(&(x).to_string()).unwrap()).collect();
+            let standing_order_indexes = batch_index_from_standing_orders(&standing_orders);
             let order_hash_from_contract = contract.calculate_order_hash(slot, standing_order_indexes.clone())?;
-            let order_hash_calculated = standing_orders.data_hash(order_hash);
+            let order_hash_calculated = standing_orders.concating_hash(order_hash);
             hash_consistency_check(order_hash_calculated, order_hash_from_contract, "overall-order")?;
 
             let solution = if !orders.is_empty() {
@@ -99,15 +96,10 @@ fn update_balances(state: &mut State, orders: &[Order], solution: &Solution) {
     }
 }
 
-fn get_standing_orders_indexes(standing_orders: &Vec<models::StandingOrder>) -> Vec<u32> {
-    let mut standing_order_indexes = Vec::<u32>::with_capacity(models::NUM_RESERVED_ACCOUNTS as usize);
-        for i in 0..models::NUM_RESERVED_ACCOUNTS {
-            standing_order_indexes.push(standing_orders
-                .iter()
-                .position(|x| x.account_id == i as u16) 
-                .map(|k| standing_orders[k].batch_index as u32)
-                .unwrap_or(0 as u32)
-            );
+fn batch_index_from_standing_orders(standing_orders: &Vec<models::StandingOrder>) -> Vec<U128> {
+    let mut standing_order_indexes = vec![U128::zero(); models::NUM_RESERVED_ACCOUNTS as usize];
+        for o in standing_orders {
+            standing_order_indexes[o.account_id as usize] = U128::from(o.batch_index);
         }
     standing_order_indexes 
 }
@@ -322,9 +314,9 @@ mod tests {
             1, 3, vec![create_order_for_test(), create_order_for_test()]
         );
         let standing_orders = vec![standing_order];
-        let mut standing_order_indexes = vec![0 as u32; models::NUM_RESERVED_ACCOUNTS as usize];
-        standing_order_indexes[1] = 3 as u32;
-        assert_eq!(get_standing_orders_indexes(&standing_orders), standing_order_indexes);
+        let mut standing_order_indexes = vec![U128::zero(); models::NUM_RESERVED_ACCOUNTS as usize];
+        standing_order_indexes[1] = U128::from(3);
+        assert_eq!(batch_index_from_standing_orders(&standing_orders), standing_order_indexes);
     }
 
     #[test]

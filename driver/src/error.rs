@@ -31,7 +31,7 @@ impl From<std::io::Error> for DriverError {
 }
 impl From<web3::contract::Error> for DriverError {
     fn from(error: web3::contract::Error) -> Self {
-        DriverError::new(&format!("{:}", error), ErrorKind::ContractError)
+        DriverError::new(error.description(), ErrorKind::ContractError)
     }
 }
 impl From<web3::Error> for DriverError {

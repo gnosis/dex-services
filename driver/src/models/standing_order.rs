@@ -1,7 +1,7 @@
 use serde_derive::{Deserialize};
 use sha2::{Digest, Sha256};
 use web3::types::H256;
-use crate::models::{DataHashable, RollingHashable};
+use crate::models::{ConcatingHashable, RollingHashable};
 use crate::models;
 
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
@@ -21,8 +21,8 @@ impl StandingOrder {
     }
 }
 
-impl DataHashable for Vec<StandingOrder> {
-    fn data_hash(&self, init_hash: H256) -> H256 {
+impl ConcatingHashable for Vec<StandingOrder> {
+    fn concating_hash(&self, init_hash: H256) -> H256 {
        let mut hasher = Sha256::new();
         hasher.input(init_hash);
         for i in 0..models::NUM_RESERVED_ACCOUNTS {
