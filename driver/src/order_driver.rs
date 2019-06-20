@@ -48,7 +48,7 @@ pub fn run_order_listener<D, C>(
 
             let standing_order_indexes = batch_index_from_standing_orders(&standing_orders);
             let total_order_hash_from_contract = contract.calculate_order_hash(slot, standing_order_indexes.clone())?;
-            let total_order_hash_calculated = standing_orders.concating_hash(non_reserved_orders_hash);
+            let total_order_hash_calculated = standing_orders.concatenating_hash(non_reserved_orders_hash);
             hash_consistency_check(total_order_hash_calculated, total_order_hash_from_contract, "overall-order")?;
 
             let solution = if !orders.is_empty() {

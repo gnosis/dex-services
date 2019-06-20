@@ -22,7 +22,7 @@ impl StandingOrder {
 }
 
 impl ConcatenatingHashable for Vec<StandingOrder> {
-    fn concating_hash(&self, init_hash: H256) -> H256 {
+    fn concatenating_hash(&self, init_hash: H256) -> H256 {
        let mut hasher = Sha256::new();
         hasher.input(init_hash);
         for i in 0..models::NUM_RESERVED_ACCOUNTS {
@@ -70,13 +70,13 @@ pub mod tests {
   use std::str::FromStr;
 
   #[test]
-  fn test_concating_hash() {
+  fn test_concatenating_hash() {
     let standing_order = models::StandingOrder::new(
         1, 0, vec![create_order_for_test(), create_order_for_test()]
     );
 
     assert_eq!(
-    vec![standing_order].concating_hash(H256::from(0)),
+    vec![standing_order].concatenating_hash(H256::from(0)),
     H256::from_str(
       "6bdda4f03645914c836a16ba8565f26dffb7bec640b31e1f23e0b3b22f0a64ae"
       ).unwrap()

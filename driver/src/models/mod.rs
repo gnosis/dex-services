@@ -21,7 +21,7 @@ pub trait RollingHashable {
 }
 
 pub trait ConcatenatingHashable {
-    fn concating_hash(&self, init_hash: H256) -> H256;
+    fn concatenating_hash(&self, init_hash: H256) -> H256;
 }
 
 pub trait RootHashable {
