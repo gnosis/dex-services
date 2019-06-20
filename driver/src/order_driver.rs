@@ -97,9 +97,9 @@ fn update_balances(state: &mut State, orders: &[Order], solution: &Solution) {
 
 fn batch_index_from_standing_orders(standing_orders: &Vec<models::StandingOrder>) -> Vec<U128> {
     let mut standing_order_indexes = vec![U128::zero(); models::NUM_RESERVED_ACCOUNTS as usize];
-        for o in standing_orders {
-            standing_order_indexes[o.account_id as usize] = U128::from(o.batch_index);
-        }
+    for o in standing_orders {
+        standing_order_indexes[o.account_id as usize] = U128::from(o.batch_index);
+    }
     standing_order_indexes 
 }
 
