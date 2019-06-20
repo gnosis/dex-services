@@ -1,7 +1,6 @@
 use std::error::Error;
 use std::fmt;
 use ethabi;
-use crate::rustc_hex;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ErrorKind {
@@ -77,11 +76,6 @@ impl From<mongodb::DecoderError> for DriverError {
 impl From<&str> for DriverError {
     fn from(error: &str) -> Self {
         DriverError::new(error, ErrorKind::MiscError)
-    }
-}
-impl From<rustc_hex::FromHexError> for DriverError {
-    fn from(error: rustc_hex::FromHexError) -> Self {
-        DriverError::new(error.description(), ErrorKind::HexError)
     }
 }
 impl DriverError {
