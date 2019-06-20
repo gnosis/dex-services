@@ -20,7 +20,7 @@ impl StandingOrder {
 impl From<mongodb::ordered::OrderedDocument> for StandingOrder {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
         let account_id = document.get_i32("_id").unwrap() as u16;
-        let batch_index = document.get_i32("batch_index").unwrap() as u32;
+        let batch_index = document.get_i32("batchIndex").unwrap() as u32;
 
         StandingOrder {
             account_id,

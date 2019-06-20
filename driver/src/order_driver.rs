@@ -47,7 +47,7 @@ pub fn run_order_listener<D, C>(
             info!("Standing Orders: {:?}", standing_orders);
             info!("All Orders: {:?}", orders);
 
-            let standing_order_index_u32 = get_standing_orders_index(&standing_orders);
+            let standing_order_index_u32 = get_standing_orders_indexes(&standing_orders);
             // Hopefully, we can take the following line out by switching to u32 ipo U128
             let standing_order_index: Vec<U128> = standing_order_index_u32.iter().map(|x| U128::from_dec_str(&(x).to_string()).unwrap()).collect();
             let order_hash_from_contract = contract.calculate_order_hash(slot, standing_order_index.clone())?;
@@ -97,10 +97,10 @@ fn update_balances(state: &mut State, orders: &[Order], solution: &Solution) {
     }
 }
 
-fn get_standing_orders_index(standing_orders: &Vec<models::StandingOrder>) -> Vec<u32> {
-    let mut standing_order_index = Vec::<u32>::with_capacity(models::NUM_RESERVED_ACCOUNTS as usize);
+fn get_standing_orders_indexes(standing_orders: &Vec<models::StandingOrder>) -> Vec<u32> {
+    let mut standing_order_indexes = Vec::<u32>::with_capacity(models::NUM_RESERVED_ACCOUNTS as usize);
         for i in 0..models::NUM_RESERVED_ACCOUNTS {
-            standing_order_index.push(standing_orders
+            standing_order_indexes.push(standing_orders
                 .iter()
                 //If element on right side equals index, I want to get element on left side; else 0
                 .position(|x| x.account_id == i as u16) 
@@ -110,7 +110,7 @@ fn get_standing_orders_index(standing_orders: &Vec<models::StandingOrder>) -> Ve
                 // Very inefficient implementation. I would just put two for loops into each other, 
                 //but wanna keep it readable
         }
-    standing_order_index    
+    standing_order_indexes 
 }
 
 #[cfg(test)]
@@ -316,6 +316,17 @@ mod tests {
         let mut pf_box : Box<PriceFinding> = Box::new(pf);
 
         assert_eq!(run_order_listener(&db, &contract, &mut pf_box), Ok(true));
+    }
+
+    #[test]
+    fn test_get_standing_orders_indexes(){
+        let standing_order = models::StandingOrder::new(
+            1, 3, vec![create_order_for_test(), create_order_for_test()]
+        );
+        let standing_orders = vec![standing_order];
+        let mut standing_order_indexes = vec![0 as u32; models::NUM_RESERVED_ACCOUNTS as usize];
+        standing_order_indexes[1] = 3 as u32;
+        assert_eq!(get_standing_orders_indexes(&standing_orders), standing_order_indexes);
     }
 
     #[test]
