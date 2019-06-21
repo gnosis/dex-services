@@ -124,12 +124,21 @@ impl DbInterface for MongoDB {
         ];
 
         info!("Querying standing_orders: {:?}", pipeline);
-        self.client
+        let non_zero_standing_orders = self.client
             .db(models::DB_NAME)
             .collection("standing_orders")
             .aggregate(pipeline, None)?
             .map(|d| d.map(models::StandingOrder::from).map_err(DriverError::from))
-            .collect::<Result<Vec<_>, _>>()
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let empty_standing_order = models::StandingOrder::new(
+            0, 0, vec![]
+        );
+        let mut standing_orders = vec![empty_standing_order; models::NUM_RESERVED_ACCOUNTS as usize];
+        for standing_order in non_zero_standing_orders {
+            standing_orders[standing_order.account_id as usize] = standing_order.clone();
+        }
+        Ok(standing_orders)
     }
 }
 

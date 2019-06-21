@@ -41,6 +41,7 @@ pub fn run_order_listener<D, C>(
             
             orders.extend(standing_orders
                 .iter()
+                .filter(|standing_order| standing_order.get_orders_length() > 0)
                 .flat_map(|standing_order| standing_order.get_orders().clone())
             );
             info!("Standing Orders: {:?}", standing_orders);
@@ -97,10 +98,9 @@ fn update_balances(state: &mut State, orders: &[Order], solution: &Solution) {
 }
 
 fn batch_index_from_standing_orders(standing_orders: &Vec<models::StandingOrder>) -> Vec<U128> {
-    let mut standing_order_indexes = vec![U128::zero(); models::NUM_RESERVED_ACCOUNTS as usize];
-
+    let mut standing_order_indexes = Vec::<U128>::new();
     for o in standing_orders {
-        standing_order_indexes[o.account_id as usize] = U128::from(o.batch_index);
+        standing_order_indexes.push(U128::from(o.batch_index));
     }
     standing_order_indexes 
 }
@@ -139,10 +139,13 @@ mod tests {
         contract.calculate_order_hash.given((slot, Any)).will_return(Ok(H256::from("0x438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c")));
 
         contract.apply_auction.given((slot, Any, Any, Any, Any, Any)).will_return(Ok(()));
-
+        let empty_order = models::StandingOrder::new(
+            0, 0, vec![]
+        );
+        let standing_orders = vec![empty_order; models::NUM_RESERVED_ACCOUNTS as usize];
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(1).will_return(Ok(orders.clone()));
-        db.get_standing_orders_of_slot.given(1).will_return(Ok(vec![]));
+        db.get_standing_orders_of_slot.given(1).will_return(Ok(standing_orders));
         db.get_current_balances.given(state_hash).will_return(Ok(state.clone()));
 
         let pf = PriceFindingMock::new();
@@ -214,11 +217,13 @@ mod tests {
             vec![100; (models::TOKENS * 2) as usize],
             models::TOKENS,
         );
-
+        let empty_order = models::StandingOrder::new(
+            0, 0, vec![]
+        );
+        let standing_orders = vec![empty_order; models::NUM_RESERVED_ACCOUNTS as usize];
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(0).will_return(Ok(first_orders.clone()));
-        db.get_standing_orders_of_slot.given(0).will_return(Ok(vec![]));
-
+        db.get_standing_orders_of_slot.given(0).will_return(Ok(standing_orders));
         db.get_current_balances.given(state_hash).will_return(Ok(state.clone()));
 
         let pf = PriceFindingMock::new();
@@ -297,9 +302,14 @@ mod tests {
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_auction.given((slot, Any, Any, Any, Any, Any)).will_return(Ok(()));
 
+        let empty_order = models::StandingOrder::new(
+            0, 0, vec![]
+        );
+        let mut standing_orders = vec![empty_order; models::NUM_RESERVED_ACCOUNTS as usize];
+        standing_orders[1] = standing_order.clone();
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(1).will_return(Ok(vec![]));
-        db.get_standing_orders_of_slot.given(1).will_return(Ok(vec![standing_order.clone()]));
+        db.get_standing_orders_of_slot.given(1).will_return(Ok(standing_orders.clone()));
         db.get_current_balances.given(state_hash).will_return(Ok(state.clone()));
 
         let pf = PriceFindingMock::new();
@@ -316,7 +326,11 @@ mod tests {
         let standing_order = models::StandingOrder::new(
             1, 3, vec![create_order_for_test(), create_order_for_test()]
         );
-        let standing_orders = vec![standing_order];
+        let empty_order = models::StandingOrder::new(
+            0, 0, vec![]
+        );
+        let mut standing_orders = vec![empty_order; models::NUM_RESERVED_ACCOUNTS as usize];
+        standing_orders[1] = standing_order.clone();
         let mut standing_order_indexes = vec![U128::zero(); models::NUM_RESERVED_ACCOUNTS as usize];
         standing_order_indexes[1] = U128::from(3);
         assert_eq!(batch_index_from_standing_orders(&standing_orders), standing_order_indexes);

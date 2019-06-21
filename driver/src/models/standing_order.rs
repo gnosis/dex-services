@@ -19,6 +19,9 @@ impl StandingOrder {
     pub fn get_orders(&self) -> &Vec<super::Order> {
         &self.orders
     }
+    pub fn get_orders_length(&self) -> usize {
+        self.orders.len()
+    }
 }
 
 impl ConcatenatingHashable for Vec<StandingOrder> {
@@ -26,12 +29,7 @@ impl ConcatenatingHashable for Vec<StandingOrder> {
        let mut hasher = Sha256::new();
         hasher.input(init_hash);
         for i in 0..models::NUM_RESERVED_ACCOUNTS {
-            hasher.input(self
-                .iter()
-                .position(|o| o.account_id == i as u16) 
-                .map(|k| self[k].get_orders())
-                .map(|o| o.rolling_hash(0))
-                .unwrap_or(H256::zero()));
+            hasher.input(self[i as usize].get_orders().rolling_hash(0));
         }
         let result = hasher.result();
         let b: Vec<u8> = result.to_vec();
@@ -74,9 +72,13 @@ pub mod tests {
     let standing_order = models::StandingOrder::new(
         1, 0, vec![create_order_for_test(), create_order_for_test()]
     );
-
+    let empty_order = models::StandingOrder::new(
+        0, 0, vec![]
+    );
+    let mut standing_orders = vec![empty_order; models::NUM_RESERVED_ACCOUNTS as usize];
+    standing_orders[1] = standing_order;
     assert_eq!(
-    vec![standing_order].concatenating_hash(H256::from(0)),
+    standing_orders.concatenating_hash(H256::from(0)),
     H256::from_str(
       "6bdda4f03645914c836a16ba8565f26dffb7bec640b31e1f23e0b3b22f0a64ae"
       ).unwrap()
