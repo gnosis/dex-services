@@ -3,7 +3,7 @@ use mongodb::db::ThreadedDatabase;
 use mongodb::coll::Collection;
 use mongodb::{Client, ThreadedClient};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub struct PersistedMerkleTree {
     height: u32,
@@ -31,6 +31,8 @@ fn node_keys(chunks: &Vec<u32>) -> Vec<String> {
     result
 }
 
+type RecordMap = HashMap<String, Vec<String>>;
+
 impl PersistedMerkleTree {
     pub fn new(height: u32, bits_per_record: u32) -> PersistedMerkleTree {
         let mut zero_hashes = vec!["value_0".to_owned()];
@@ -54,10 +56,12 @@ impl PersistedMerkleTree {
     }
 
     // Finds all nodes in the db with given key. Returns a map with all existing nodes' keys and their value array
-    fn query_nodes(&self, nodes: &Vec<String>) -> HashMap<String, Vec<String>> {
+    fn query_nodes<I>(&self, nodes: I) -> RecordMap 
+        where I: IntoIterator<Item = String>
+    {
         self.collection.find(Some(
             doc!{"key" => (
-                doc!{"$in" => nodes.iter().map(|node| bson!{node}).collect::<Vec<Bson>>()}
+                doc!{"$in" => nodes.into_iter().map(|node| bson!{node}).collect::<Vec<Bson>>()}
             )}), None)
             .unwrap()
             .map(|result| result.unwrap())
@@ -67,10 +71,19 @@ impl PersistedMerkleTree {
             )).collect::<HashMap<String, Vec<String>>>()
     }
 
-    pub fn query_record_and_pages(&self, chunks: &Vec<u32>) -> (String, Vec<String>, HashMap<String, Vec<String>>) {
+    fn write_nodes(&self, pages: RecordMap, state_index: u32) -> () {
+        let documents = pages.iter().map(|(key, page)| doc!{
+            "key" => key, 
+            "value" => page.iter().map(|i| Bson::from(i)).collect::<Vec<Bson>>(), 
+            "state_index" => state_index 
+        }).collect();
+        self.collection.insert_many(documents, None).unwrap();
+    }
+
+    pub fn query_record_and_pages(&self, chunks: &Vec<u32>, existing_nodes: RecordMap) -> (String, Vec<String>, RecordMap) {
         let nodes = node_keys(&chunks);
         assert_eq!(&chunks.len(), &nodes.len());
-        let mut existing_nodes = self.query_nodes(&nodes);
+        let mut existing_nodes = existing_nodes;
 
         // Fetch merkle path
         let mut merkle_path = vec![];
@@ -114,8 +127,28 @@ impl PersistedMerkleTree {
 
     pub fn query_record(&self, index: u32) -> (String, Vec<String>) {
         let chunks = bit_chunks(index, self.bits_per_record, self.height);
-        let (item, proof, _) = self.query_record_and_pages(&chunks);
+        let (item, proof, _) = self.query_record_and_pages(&chunks, self.query_nodes(node_keys(&chunks)));
         (item, proof)
+    }
+
+    pub fn update_records<F>(&self, indices: Vec<u32>, update_fn: F, state_index: u32) -> String 
+        where F: Fn(u32, String) -> String
+    {
+        let list_of_chunks = indices.iter().map(
+            |index| bit_chunks(*index, self.bits_per_record, self.height)
+        ).collect::<Vec<Vec<u32>>>();
+
+        let node_keys = list_of_chunks.iter().flat_map(node_keys).collect::<HashSet<String>>();
+        let mut records = self.query_nodes(node_keys.clone());
+        let mut root = "".to_owned();
+        for chunks in list_of_chunks {
+            let (item, proof, pages) = self.query_record_and_pages(&chunks, records.clone());
+            let tuple = self.update_pages_with_item(update_fn(0, item), proof, pages, &chunks);
+            root = tuple.0;
+            records = tuple.1;
+        }
+        self.write_nodes(records, state_index);
+        return root;
     }
 
     #[allow(dead_code)]
@@ -125,9 +158,18 @@ impl PersistedMerkleTree {
         let chunks = bit_chunks(index, self.bits_per_record, self.height);
         let nodes = node_keys(&chunks);
 
-        let (mut item, mut proof, mut pages) = self.query_record_and_pages(&chunks);
-        item = update_fn(item);
+        let (item, proof, pages) = self.query_record_and_pages(&chunks, self.query_nodes(nodes));
+        let (root, pages) = self.update_pages_with_item(update_fn(item), proof, pages, &chunks);
+        self.write_nodes(pages, state_index);
 
+        return root;
+    }
+
+    fn update_pages_with_item(&self, item: String, proof: Vec<String>, pages: RecordMap, chunks: &Vec<u32>) -> (String, RecordMap) {
+        let nodes = node_keys(chunks);
+        let mut pages = pages;
+        let mut proof = proof;
+        let mut item = item;
         for reverse_index in 0..self.height {
             let level = self.height - (reverse_index + 1);
             let reverse_level_within_chunk = reverse_index % self.bits_per_record;
@@ -142,20 +184,14 @@ impl PersistedMerkleTree {
 
             item = format!("h({},{})", proof.pop().unwrap(), item)
         }
-        
-        let documents = pages.iter().map(|(key, page)| doc!{
-            "key" => key, 
-            "value" => page.iter().map(|i| Bson::from(i)).collect::<Vec<Bson>>(), 
-            "state_index" => state_index 
-        }).collect();
-        self.collection.insert_many(documents, None).unwrap();
-        return item;
+        (item, pages)
     }
 }
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use std::sync::{Mutex};
 
     #[test]
     fn test_bit_chunks() {
@@ -193,6 +229,29 @@ pub mod tests {
         let (node, path) = tree.query_record(0);
         assert_eq!(path.len(), 24);
         assert_eq!(node, "1");
+    }
+
+    #[test]
+    fn test_batch_update() {
+        let updates = Mutex::new(vec![
+            (0, "u1".to_owned()),
+            (1, "u2".to_owned()),
+            (1, "u3".to_owned()),
+            (1000000, "u4".to_owned()),
+            (2u32.pow(24)-1, "u5".to_owned())
+        ]);
+
+        let tree = PersistedMerkleTree::new(24, 3);
+        let mut root_after_individual_updates = "".to_owned();
+        for (i, (address, value)) in updates.lock().unwrap().iter().enumerate() {
+            root_after_individual_updates = tree.update_record(*address, |_|value.clone(), i as u32);
+        }
+
+        let tree = PersistedMerkleTree::new(24, 3);
+        let addresses : Vec<u32> = updates.lock().unwrap().iter().map(|(address, _)|*address).collect();
+        let root_after_batch_updates = tree.update_records(addresses, |_, _| updates.lock().unwrap().remove(0).1, 1);
+
+        assert_eq!(root_after_individual_updates, root_after_batch_updates);
     }
  
 }
