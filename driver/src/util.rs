@@ -29,7 +29,7 @@ pub fn hash_consistency_check(
     if hash_calculated != hash_from_contract {
         return Err(DriverError::new(
             &format!(
-                "Pending {} hash from contract ({}), didn't match the one found in db ({})",
+                "Pending {} hash from contract ({:#}), didn't match the one found in db ({:#})",
                 flux_type, hash_from_contract, hash_calculated
             ),
             ErrorKind::StateError,
