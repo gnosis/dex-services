@@ -6,7 +6,7 @@ use web3::types::{H256, U256};
 
 pub fn find_first_unapplied_slot(
     upper_bound: U256,
-    has_slot_been_applied: Box<&Fn(U256) -> Result<bool, DriverError>>,
+    has_slot_been_applied: Box<&dyn Fn(U256) -> Result<bool, DriverError>>,
 ) -> Result<U256, DriverError> {
     if upper_bound == U256::max_value() {
         return Ok(U256::zero());
@@ -41,7 +41,7 @@ pub fn hash_consistency_check(
 pub fn can_process<C>(
     slot: U256,
     contract: &C,
-    creation_block: Box<&Fn(U256) -> Result<U256, DriverError>>,
+    creation_block: Box<&dyn Fn(U256) -> Result<U256, DriverError>>,
 ) -> Result<bool, DriverError>
 where
     C: SnappContract,
