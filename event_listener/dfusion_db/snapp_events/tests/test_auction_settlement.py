@@ -7,8 +7,6 @@ from .constants import EMPTY_STATE_HASH
 from event_listener.dfusion_db.models import AccountRecord, Order
 
 
-
-
 class AuctionSettlementReceiverTest(unittest.TestCase):
 
     @staticmethod
