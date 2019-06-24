@@ -4,6 +4,7 @@ from typing import Dict, Any, Union, List
 from event_listener.dfusion_db.snapp_event_receiver import SnappEventListener
 from ..models import Deposit, StateTransition, TransitionType, Withdraw, AccountRecord
 
+
 class StateTransitionReceiver(SnappEventListener):
     def save(self, event: Dict[str, Any], block_info: Dict[str, Any]) -> None:
         self.save_parsed(StateTransition.from_dictionary(event))
@@ -61,4 +62,3 @@ class StateTransitionReceiver(SnappEventListener):
             return self.database.get_withdraws(transition.slot)
         else:
             raise Exception("Invalid transition type: {} ".format(transition.transition_type))
-

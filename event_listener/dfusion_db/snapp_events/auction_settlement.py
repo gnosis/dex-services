@@ -4,6 +4,7 @@ from typing import Dict, Any
 from event_listener.dfusion_db.snapp_event_receiver import SnappEventListener
 from ..models import AuctionSettlement, AccountRecord
 
+
 class AuctionSettlementReceiver(SnappEventListener):
     def save(self, event: Dict[str, Any], block_info: Dict[str, Any]) -> None:
         self.save_parsed(

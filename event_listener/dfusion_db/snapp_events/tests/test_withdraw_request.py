@@ -6,6 +6,7 @@ from ..withdraw_request import WithdrawRequestReceiver
 
 EMPTY_STATE_HASH = "0x00000000000000000000000000000000000000000000000000000000000000"
 
+
 class WithdrawRequestReceiverTest(unittest.TestCase):
     @staticmethod
     def test_save() -> None:
