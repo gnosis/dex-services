@@ -9,6 +9,7 @@ matrix:
           - driver/target
       script:
         - cd driver/
+        - cargo clippy
         - cargo build --verbose --all
         - cargo test --verbose --all
     - language: python
