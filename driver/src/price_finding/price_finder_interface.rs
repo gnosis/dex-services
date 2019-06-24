@@ -18,7 +18,7 @@ impl models::Serializable for Solution {
             .iter()
             .zip(self.executed_sell_amounts.iter())
             .flat_map(|tup| once(tup.0).chain(once(tup.1)))
-            .map(|x| x.clone())
+            .cloned()
             .collect();
         [&self.prices, &alternating_buy_sell_amounts]
             .iter()
