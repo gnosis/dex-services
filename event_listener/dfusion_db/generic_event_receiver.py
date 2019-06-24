@@ -1,11 +1,14 @@
 import logging
-from typing import Any, Dict
+from typing import Dict, Any
 
 from django_eth_events.chainevents import AbstractEventReceiver
 
-from .snapp_event_receiver import DepositReceiver, StateTransitionReceiver, SnappInitializationReceiver
-from .snapp_event_receiver import WithdrawRequestReceiver, OrderReceiver, AuctionSettlementReceiver
-from .snapp_event_receiver import AuctionInitializationReceiver, StandingOrderBatchReceiver
+from .snapp_events.auction_settlement import AuctionSettlementReceiver
+from .snapp_events.deposit import DepositReceiver
+from .snapp_events.orders import OrderReceiver, StandingOrderBatchReceiver
+from .snapp_events.snapp_initialization import SnappInitializationReceiver, AuctionInitializationReceiver
+from .snapp_events.state_transition import StateTransitionReceiver
+from .snapp_events.withdraw_request import WithdrawRequestReceiver
 
 RECEIVER_MAPPING = {
     'Deposit': DepositReceiver(),
