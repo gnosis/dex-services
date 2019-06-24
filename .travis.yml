@@ -7,6 +7,8 @@ matrix:
         cargo: true
         directories:
           - driver/target
+      before_script:
+        - rustup component add clippy-preview
       script:
         - cd driver/
         - cargo clippy
