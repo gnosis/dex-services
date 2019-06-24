@@ -10,7 +10,7 @@ use web3::types::{U256, U128};
 
 pub fn run_order_listener<D, C>(
     db: &D, 
-    contract: &C, 
+    contract: &C,
     price_finder: &mut PriceFinding
 ) -> Result<bool, DriverError>
     where   D: DbInterface,
@@ -166,6 +166,7 @@ mod tests {
 
         let db = DbInterfaceMock::new();
         let mut pf = PriceFindingMock::new();
+
         assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(false));
     }
 
@@ -182,6 +183,7 @@ mod tests {
 
         let db = DbInterfaceMock::new();
         let mut pf = PriceFindingMock::new();
+
         assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(false));
     }
 
@@ -303,7 +305,6 @@ mod tests {
         pf.find_prices
             .given((standing_order.get_orders().clone(), state))
             .will_return(Err(PriceFindingError::from("Trivial solution is fine")));
-
 
         assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(true));
     }

@@ -30,7 +30,7 @@ mod util;
 
 pub fn run_driver_components(
     db: &MongoDB,
-    contract: &SnappContractImpl, 
+    contract: &SnappContractImpl,
     price_finder: &mut PriceFinding,
 ) {
     if let Err(e) = run_deposit_listener(db, contract) {
