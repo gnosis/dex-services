@@ -44,8 +44,10 @@ Clone the repository, its submodule, and run the container
 ```bash
 git clone git@github.com:gnosis/dex-services.git
 cd dex-services
-git submodule init
-git submodule update
+git submodule update --init
+cd dex-contracts 
+npm install && truffle compile 
+cd ../
 docker-compose up
 ```
 
