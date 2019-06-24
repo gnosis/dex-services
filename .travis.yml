@@ -8,10 +8,10 @@ matrix:
         directories:
           - driver/target
       before_script:
-        - rustup component add clippy-preview
+        - rustup component add clippy
       script:
         - cd driver/
-        - cargo clippy
+        - cargo clippy -- -D warnings
         - cargo build --verbose --all
         - cargo test --verbose --all
     - language: python
