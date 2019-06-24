@@ -32,12 +32,12 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
     info!("Current top withdraw_slot is {:?}", withdraw_slot);
     let slot = find_first_unapplied_slot(
         withdraw_slot, 
-        Box::new(&|i| contract.has_withdraw_slot_been_applied(i))
+        &|i| contract.has_withdraw_slot_been_applied(i)
     )?;
     if slot <= withdraw_slot {
         info!("Highest unprocessed withdraw_slot is {:?}", slot);
         if can_process(slot, contract,
-            Box::new(&|i| contract.creation_timestamp_for_withdraw_slot(i))
+            &|i| contract.creation_timestamp_for_withdraw_slot(i)
         )? {
             info!("Processing withdraw_slot {:?}", slot);
             let state_root = contract.get_current_state_root()?;
