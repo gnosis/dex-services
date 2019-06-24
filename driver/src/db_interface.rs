@@ -131,13 +131,10 @@ impl DbInterface for MongoDB {
             .map(|d| d.map(models::StandingOrder::from).map_err(DriverError::from))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let empty_standing_order = models::StandingOrder::new(
-            0, 0, vec![]
-        );
-        let mut standing_orders = vec![empty_standing_order; models::NUM_RESERVED_ACCOUNTS as usize];
-        for standing_order in non_zero_standing_orders {
-            standing_orders[standing_order.account_id as usize] = standing_order.clone();
-        }
+        let mut standing_orders = (0..models::NUM_RESERVED_ACCOUNTS)
+            .map(|k| models::StandingOrder::empty(k as u16))
+            .collect::<Vec<models::StandingOrder>>();
+        non_zero_standing_orders.iter().for_each(|k| standing_orders[k.account_id as usize] = k.clone());
         Ok(standing_orders)
     }
 }

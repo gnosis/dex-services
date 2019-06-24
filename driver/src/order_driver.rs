@@ -41,7 +41,7 @@ pub fn run_order_listener<D, C>(
             
             orders.extend(standing_orders
                 .iter()
-                .filter(|standing_order| standing_order.get_orders_length() > 0)
+                .filter(|standing_order| standing_order.num_orders() > 0)
                 .flat_map(|standing_order| standing_order.get_orders().clone())
             );
             info!("Standing Orders: {:?}", standing_orders);
@@ -98,11 +98,7 @@ fn update_balances(state: &mut State, orders: &[Order], solution: &Solution) {
 }
 
 fn batch_index_from_standing_orders(standing_orders: &Vec<models::StandingOrder>) -> Vec<U128> {
-    let mut standing_order_indexes = Vec::<U128>::new();
-    for o in standing_orders {
-        standing_order_indexes.push(U128::from(o.batch_index));
-    }
-    standing_order_indexes 
+    standing_orders.iter().map(|o| U128::from(o.batch_index)).collect() 
 }
 
 #[cfg(test)]

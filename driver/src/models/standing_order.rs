@@ -19,8 +19,11 @@ impl StandingOrder {
     pub fn get_orders(&self) -> &Vec<super::Order> {
         &self.orders
     }
-    pub fn get_orders_length(&self) -> usize {
+    pub fn num_orders(&self) -> usize {
         self.orders.len()
+    }
+    pub fn empty(account_id: u16) -> StandingOrder {
+        models::StandingOrder::new(account_id, 0, vec![])
     }
 }
 
@@ -28,9 +31,7 @@ impl ConcatenatingHashable for Vec<StandingOrder> {
     fn concatenating_hash(&self, init_hash: H256) -> H256 {
        let mut hasher = Sha256::new();
         hasher.input(init_hash);
-        for i in 0..models::NUM_RESERVED_ACCOUNTS {
-            hasher.input(self[i as usize].get_orders().rolling_hash(0));
-        }
+        self.iter().for_each(|k|  hasher.input(k.get_orders().rolling_hash(0)));
         let result = hasher.result();
         let b: Vec<u8> = result.to_vec();
         H256::from(b.as_slice())
