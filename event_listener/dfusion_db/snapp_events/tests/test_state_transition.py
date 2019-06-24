@@ -2,9 +2,8 @@ import unittest
 from unittest.mock import Mock
 
 from event_listener.dfusion_db.models import AccountRecord, Deposit, TransitionType, Withdraw, StateTransition
+from .constants import EMPTY_STATE_HASH
 from ..state_transition import StateTransitionReceiver
-
-EMPTY_STATE_HASH = "0x00000000000000000000000000000000000000000000000000000000000000"
 
 
 class StateTransitionReceiverTest(unittest.TestCase):

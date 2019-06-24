@@ -3,9 +3,10 @@ from unittest.mock import Mock
 from typing import List
 
 from ..auction_settlement import AuctionSettlementReceiver
+from .constants import EMPTY_STATE_HASH
 from event_listener.dfusion_db.models import AccountRecord, Order
 
-EMPTY_STATE_HASH = "0x00000000000000000000000000000000000000000000000000000000000000"
+
 
 
 class AuctionSettlementReceiverTest(unittest.TestCase):

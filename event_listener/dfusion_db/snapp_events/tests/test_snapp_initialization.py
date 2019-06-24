@@ -1,9 +1,9 @@
 import unittest
 from unittest.mock import Mock
 
-from ..snapp_initialization import SnappInitializationReceiver, AuctionInitializationReceiver
 from event_listener.dfusion_db.models import AccountRecord
-EMPTY_STATE_HASH = "0x00000000000000000000000000000000000000000000000000000000000000"
+from .constants import EMPTY_STATE_HASH
+from ..snapp_initialization import SnappInitializationReceiver, AuctionInitializationReceiver
 
 
 class SnappInitializationReceiverTest(unittest.TestCase):

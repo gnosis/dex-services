@@ -4,8 +4,6 @@ from unittest.mock import Mock
 from event_listener.dfusion_db.models import Withdraw
 from ..withdraw_request import WithdrawRequestReceiver
 
-EMPTY_STATE_HASH = "0x00000000000000000000000000000000000000000000000000000000000000"
-
 
 class WithdrawRequestReceiverTest(unittest.TestCase):
     @staticmethod
