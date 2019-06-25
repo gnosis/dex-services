@@ -13,6 +13,7 @@ PASS=true
 printf "\nValidating Rust:\n"
 
 cd driver
+cargo test
 cargo clippy -- -D warnings
 
 if [[ "$?" == 0 ]]; then
