@@ -23,7 +23,7 @@ impl models::Serializable for Solution {
         [&self.prices, &alternating_buy_sell_amounts]
             .iter()
             .flat_map(|list| list.iter())
-            .flat_map(|element| element.bytes())
+            .flat_map(models::Serializable::bytes)
             .collect()
     }
 }
