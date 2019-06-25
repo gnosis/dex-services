@@ -27,7 +27,7 @@ fn main() {
     };
     loop {
         // Start driver_components
-        run_driver_components(&db_instance, &contract, &mut price_finder);
+        run_driver_components(&db_instance, &contract, &mut *price_finder);
         thread::sleep(Duration::from_secs(5));
     }
 }

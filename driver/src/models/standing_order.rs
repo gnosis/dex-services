@@ -28,10 +28,10 @@ impl ConcatenatingHashable for Vec<StandingOrder> {
         for i in 0..models::NUM_RESERVED_ACCOUNTS {
             hasher.input(self
                 .iter()
-                .position(|o| o.account_id == i as u16) 
+                .position(|o| o.account_id == u16::from(i))
                 .map(|k| self[k].get_orders())
                 .map(|o| o.rolling_hash(0))
-                .unwrap_or(H256::zero()));
+                .unwrap_or_else(H256::zero));
         }
         let result = hasher.result();
         let b: Vec<u8> = result.to_vec();

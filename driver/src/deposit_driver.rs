@@ -27,12 +27,12 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
     info!("Current top deposit_slot is {:?}", deposit_slot);
     let slot = find_first_unapplied_slot(
         deposit_slot, 
-        Box::new(&|i| contract.has_deposit_slot_been_applied(i))
+        &|i| contract.has_deposit_slot_been_applied(i)
     )?;
     if slot <= deposit_slot {
         info!("Highest unprocessed deposit_slot is {:?}", slot);
         if can_process(slot, contract,
-            Box::new(&|i| contract.creation_timestamp_for_deposit_slot(i))
+            &|i| contract.creation_timestamp_for_deposit_slot(i)
         )? {
             info!("Processing deposit_slot {:?}", slot);
             let state_root = contract.get_current_state_root()?;
