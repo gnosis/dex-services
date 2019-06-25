@@ -26,6 +26,5 @@ log = "0.4.6"
 simple_logger = "1.2.0"
 
 [dev-dependencies]
+cargo-husky = "1"
 mock-it = "0.2.0"
-
-
