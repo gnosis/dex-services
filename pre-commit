@@ -5,6 +5,7 @@ STAGED_RS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep ".rs$")
 
 
 if [[ ("$STAGED_PY_FILES" = "") && ("$STAGED_RS_FILES" = "") ]]; then
+  printf "\033[42mNo python or rust files were changed in this commit!\033[0m\n"
   exit 0
 fi
 
