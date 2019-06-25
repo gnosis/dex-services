@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+
+echo '+cargo test'
+cd driver
+cargo test
+cd ..
+pytest event_listener/dfusion_db
+
