@@ -1,22 +1,45 @@
 #!/bin/sh
-set -e
 
-CHANGED_PY_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep ".py$")
-CHANGED_RS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep ".rs$")
+CHANGED_PY_FILES=$(git diff master --name-only | grep ".py$")
+CHANGED_RS_FILES=$(git diff master --name-only | grep ".rs$")
 
+PASS=true
 
-if [[ ("CHANGED_RS_FILES" != "") ]]; then
+if [[ ("$CHANGED_RS_FILES" != "") ]]; then
     echo 'Running cargo test'
     cd driver
     cargo test
+
+    if [[ "$?" == 0 ]]; then
+      printf "\t\033[32mcargo test Passed!\033[0m"
+    else
+      printf "\t\033[41mcargo test Failed.\033[0m"
+      PASS=false
+    fi
+
     cd ..
 else
     echo 'Skipping cargo test; Branch does not differ from master in a rusty way!'
 fi
 
-if [[ ("CHANGED_PY_FILES" != "") ]]; then
+if [[ ("$CHANGED_PY_FILES" != "") ]]; then
     echo 'Running pytest'
     pytest event_listener/dfusion_db
+    if [[ "$?" == 0 ]]; then
+      printf "\t\033[32mpytest Passed!\033[0m"
+    else
+      printf "\t\033[41mpytest Failed.\033[0m"
+      PASS=false
+    fi
 else
     echo 'Skipping pytest; Branch does not differ from master in a pythonic way!'
 fi
+
+if ! $PASS; then
+  printf "\033[41mPUSH FAILED:\033[0m Your commit contains files that should pass unit testing but do not. Please fix the errors and try again.\n"
+  exit 1
+else
+  printf "\033[42mPUSH SUCCEEDED\033[0m\n"
+fi
+
+exit $?
