@@ -24,7 +24,7 @@ else
 fi
 cd ..
 
-printf "\Rust validation completed!\n"
+printf "\nRust validation completed!\n"
 
 printf "\nValidating Python:\n"
 
