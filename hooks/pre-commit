@@ -11,20 +11,25 @@ fi
 
 PASS=true
 
-printf "\nValidating Rust:\n"
+# If staged changes to rust code, run clippy
+if [[ ("$STAGED_RS_FILES" != "") ]]; then
+    printf "\nValidating Rust:\n"
 
-cd driver
-cargo clippy -- -D warnings
+    cd driver
+    cargo clippy -- -D warnings
 
-if [[ "$?" == 0 ]]; then
-  printf "\t\033[32mcargo clippy Passed: $FILE\033[0m"
+    if [[ "$?" == 0 ]]; then
+      printf "\t\033[32mcargo clippy Passed: $FILE\033[0m"
+    else
+      printf "\t\033[41mcargo clippy Failed: $FILE\033[0m"
+      PASS=false
+    fi
+    cd ..
+
+    printf "\nRust validation completed!\n"
 else
-  printf "\t\033[41mcargo clippy Failed: $FILE\033[0m"
-  PASS=false
+    printf "\nNo rust files touched, skipping validation\n"
 fi
-cd ..
-
-printf "\nRust validation completed!\n"
 
 printf "\nValidating Python:\n"
 
