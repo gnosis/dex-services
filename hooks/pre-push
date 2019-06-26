@@ -1,9 +1,18 @@
 #!/bin/sh
 set -e
 
-echo '+cargo test'
-cd driver
-cargo test
-cd ..
-pytest event_listener/dfusion_db
+CHANGED_PY_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep ".py$")
+CHANGED_RS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep ".rs$")
 
+
+if [[ ("CHANGED_RS_FILES" != "") ]]; then
+    echo 'Running cargo test'
+    cd driver
+    cargo test
+    cd ..
+fi
+
+if [[ ("CHANGED_PY_FILES" != "") ]]; then
+    echo 'Running pytest'
+    pytest event_listener/dfusion_db
+fi
