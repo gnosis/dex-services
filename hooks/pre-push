@@ -10,9 +10,13 @@ if [[ ("CHANGED_RS_FILES" != "") ]]; then
     cd driver
     cargo test
     cd ..
+else
+    echo 'Skipping cargo test; Branch does not differ from master in a rusty way!'
 fi
 
 if [[ ("CHANGED_PY_FILES" != "") ]]; then
     echo 'Running pytest'
     pytest event_listener/dfusion_db
+else
+    echo 'Skipping pytest; Branch does not differ from master in a pythonic way!'
 fi
