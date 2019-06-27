@@ -1,9 +1,7 @@
 #!/bin/bash
 set -e
 
-cd dex-contracts/
-
-truffle exec scripts/setup_environment.js 6
+source ./test/snap-and-setup.sh
 
 ###############
 # Deposit Tests
@@ -35,3 +33,6 @@ retry -t 5 "mongo dfusion2 --eval \"db.accounts.findOne({'stateHash': '$EXPECTED
 
 # Should now be able to claim withdraw and see a balance change
 truffle exec scripts/claim_withdraw.js 0 2 2 | grep "Success! Balance of token 2 before claim: 282000000000000000000, after claim: 300000000000000000000"
+
+cd ..
+./test/revert-cleanup.sh $SNAP_ID

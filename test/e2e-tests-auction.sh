@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 
-cd dex-contracts/
+
+source ./test/snap-and-setup.sh
 
 EXPECTED_AUCTION=0
 
@@ -31,7 +32,7 @@ retry -t 5 "mongo dfusion2 --eval \"db.orders.findOne({'auctionId': ${EXPECTED_A
 truffle exec scripts/wait_seconds.js 181
 
 # Test balances have been updated
-EXPECTED_HASH="0e0369b8be154350fd09141a43d90a53427221001ba9fee5c97145e777420944"
+EXPECTED_HASH="2b87dc830d051be72f4adcc3677daadab2f3f2253e9da51d803faeb0daa1532f"
 retry -t 5 "truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep ${EXPECTED_HASH}"
 
 # Account 4 has now 4 of token 1 
@@ -39,3 +40,7 @@ retry -t 5 "mongo dfusion2 --eval \"db.accounts.findOne({'stateHash': '$EXPECTED
 
 # Account 3 has now 52 of token 0
 retry -t 5 "mongo dfusion2 --eval \"db.accounts.findOne({'stateHash': '$EXPECTED_HASH'}).balances[90]\" | grep -2 52000000000000000000"
+
+# Cleanup (revert ganache and mongo)
+cd ..
+./test/revert-cleanup.sh $SNAP_ID
