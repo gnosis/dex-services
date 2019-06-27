@@ -340,4 +340,41 @@ pub mod tests {
         let res = solver.find_prices(&orders, &state);
         assert_eq!(U256::from(0), res.unwrap().surplus);
     }
+
+    #[test]
+    fn test_e2e_example() {
+        let state = State::new(
+        "test".to_string(),
+        0,
+        vec![2000000000000000000; (TOKENS * 2) as usize],
+        TOKENS,
+        );
+        let orders = vec![
+            Order {
+                account_id: 0,
+                sell_token: 1,
+                buy_token: 2,
+                sell_amount: 1000000000000000000,
+                buy_amount: 1000000000000000000,
+            },
+            Order {
+                account_id: 1,
+                sell_token: 2,
+                buy_token: 1,
+                sell_amount: 1000000000000000000,
+                buy_amount: 1000000000000000000,
+            },
+        ];
+        let mut solver = NaiveSolver{};
+        let result = solver.find_prices(&orders, &state).unwrap();
+
+        let mut expected_prices = vec![1; 30];
+        expected_prices[1] = 1000000000000000000;
+        expected_prices[2] = 1000000000000000000;
+
+        assert_eq!(expected_prices, result.prices);
+        // Notice that surplus is zero here!
+        // Weird, but true (since both bidders got exactly what they wanted)
+        assert_eq!(U256::from(0), result.surplus);
+    }
 }
