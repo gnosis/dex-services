@@ -20,14 +20,14 @@ fn main() {
 
     let solver_env_var = env::var("LINEAR_OPTIMIZATION_SOLVER")
         .unwrap_or_else(|_| "0".to_string());
-    let mut price_finder : Box<PriceFinding> = if solver_env_var == "1" {
+    let mut price_finder : Box<dyn PriceFinding> = if solver_env_var == "1" {
         Box::new(LinearOptimisationPriceFinder::new())
     } else {
         Box::new(NaiveSolver {})
     };
     loop {
         // Start driver_components
-        run_driver_components(&db_instance, &contract, &mut price_finder);
+        run_driver_components(&db_instance, &contract, &mut *price_finder);
         thread::sleep(Duration::from_secs(5));
     }
 }

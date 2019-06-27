@@ -10,8 +10,8 @@ use web3::types::{U256, U128};
 
 pub fn run_order_listener<D, C>(
     db: &D, 
-    contract: &C, 
-    price_finder: &mut Box<PriceFinding>
+    contract: &C,
+    price_finder: &mut PriceFinding
 ) -> Result<bool, DriverError>
     where   D: DbInterface,
             C: SnappContract,
@@ -20,13 +20,13 @@ pub fn run_order_listener<D, C>(
 
     info!("Current top auction slot is {:?}", auction_slot);
     let slot = find_first_unapplied_slot(
-        auction_slot, 
-        Box::new(&|i| contract.has_auction_slot_been_applied(i))
+        auction_slot,
+        &|i| contract.has_auction_slot_been_applied(i)
     )?;
     if slot <= auction_slot {
         info!("Highest unprocessed auction slot is {:?}", slot);
         if can_process(slot, contract,
-            Box::new(&|i| contract.creation_timestamp_for_auction_slot(i))
+            &|i| contract.creation_timestamp_for_auction_slot(i)
         )? {
             info!("Processing auction slot {:?}", slot);
             let state_root = contract.get_current_state_root()?;
@@ -97,8 +97,8 @@ fn update_balances(state: &mut State, orders: &[Order], solution: &Solution) {
     }
 }
 
-fn batch_index_from_standing_orders(standing_orders: &Vec<models::StandingOrder>) -> Vec<U128> {
-    standing_orders.iter().map(|o| U128::from(o.batch_index)).collect() 
+fn batch_index_from_standing_orders(standing_orders: &[models::StandingOrder]) -> Vec<U128> {
+        standing_orders.iter().map(|o| U128::from(o.batch_index)).collect() 
 }
 
 #[cfg(test)]
@@ -144,7 +144,7 @@ mod tests {
         db.get_standing_orders_of_slot.given(1).will_return(Ok(standing_orders));
         db.get_current_balances.given(state_hash).will_return(Ok(state.clone()));
 
-        let pf = PriceFindingMock::new();
+        let mut pf = PriceFindingMock::new();
         let expected_solution = Solution {
             surplus: U256::from_dec_str("0").unwrap(),
             prices: vec![1, 2],
@@ -152,9 +152,8 @@ mod tests {
             executed_buy_amounts: vec![0, 2],
         };
         pf.find_prices.given((orders, state)).will_return(Ok(expected_solution));
-        let mut pf_box : Box<PriceFinding> = Box::new(pf);
 
-        assert_eq!(run_order_listener(&db, &contract, &mut pf_box), Ok(true));
+        assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(true));
     }
 
     #[test]
@@ -165,7 +164,8 @@ mod tests {
         contract.has_auction_slot_been_applied.given(slot).will_return(Ok(true));
 
         let db = DbInterfaceMock::new();
-        let mut pf : Box<PriceFinding> = Box::new(PriceFindingMock::new());
+        let mut pf = PriceFindingMock::new();
+
         assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(false));
     }
 
@@ -181,7 +181,8 @@ mod tests {
         contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(11)));
 
         let db = DbInterfaceMock::new();
-        let mut pf : Box<PriceFinding> = Box::new(PriceFindingMock::new());
+        let mut pf = PriceFindingMock::new();
+
         assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(false));
     }
 
@@ -222,7 +223,7 @@ mod tests {
         db.get_standing_orders_of_slot.given(0).will_return(Ok(standing_orders));
         db.get_current_balances.given(state_hash).will_return(Ok(state.clone()));
 
-        let pf = PriceFindingMock::new();
+        let mut pf = PriceFindingMock::new();
         let expected_solution = Solution {
             surplus: U256::from_dec_str("0").unwrap(),
             prices: vec![1, 2],
@@ -231,10 +232,8 @@ mod tests {
         };
         pf.find_prices.given((first_orders, state)).will_return(Ok(expected_solution));
 
-        let mut pf_box : Box<PriceFinding> = Box::new(pf);
-
-        assert_eq!(run_order_listener(&db, &contract, &mut pf_box), Ok(true));
-        assert_eq!(run_order_listener(&db, &contract, &mut pf_box), Ok(true));
+        assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(true));
+        assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(true));
     }
 
     #[test]
@@ -266,7 +265,7 @@ mod tests {
         db.get_orders_of_slot.given(1).will_return(Ok(orders.clone()));
         db.get_current_balances.given(state_hash).will_return(Ok(state.clone()));
 
-        let mut pf : Box<PriceFinding> = Box::new(PriceFindingMock::new());
+        let mut pf = PriceFindingMock::new();
 
         let error = run_order_listener(&db, &contract, &mut pf).expect_err("Expected Error");
         assert_eq!(error.kind, ErrorKind::StateError);
@@ -308,13 +307,12 @@ mod tests {
         db.get_standing_orders_of_slot.given(1).will_return(Ok(standing_orders.clone()));
         db.get_current_balances.given(state_hash).will_return(Ok(state.clone()));
 
-        let pf = PriceFindingMock::new();
+        let mut pf = PriceFindingMock::new();
         pf.find_prices
             .given((standing_order.get_orders().clone(), state))
             .will_return(Err(PriceFindingError::from("Trivial solution is fine")));
-        let mut pf_box : Box<PriceFinding> = Box::new(pf);
 
-        assert_eq!(run_order_listener(&db, &contract, &mut pf_box), Ok(true));
+        assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(true));
     }
 
     #[test]
