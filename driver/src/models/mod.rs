@@ -1,7 +1,6 @@
 pub mod state;
 pub mod flux;
 pub mod order;
-#[macro_use]
 pub mod standing_order;
 
 pub use crate::models::state::State;
