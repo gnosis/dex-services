@@ -41,6 +41,7 @@ matrix:
         - cd dex-contracts && truffle compile && cd -
         - docker-compose up -d ganache-cli driver listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
       script:
+        - set -e # make this script fail as soon as any individual command fail
         - cd dex-contracts && retry truffle migrate && cd -
         - sh ./test/e2e-tests-deposit-withdraw.sh
         - sh ./test/e2e-tests-auction.sh
