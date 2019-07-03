@@ -1,0 +1,51 @@
+#!/bin/sh
+
+STAGED_PY_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep ".py$")
+STAGED_RS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep ".rs$")
+
+PASS=true
+
+# If staged changes to rust code, run clippy
+if [[ ("$STAGED_RS_FILES" != "") ]]; then
+    printf "\nValidating Rust:\n"
+
+    cd driver
+    cargo clippy -- -D warnings
+
+    if [[ "$?" == 0 ]]; then
+      printf "\t\033[32mcargo clippy Passed: $FILE\033[0m"
+    else
+      printf "\t\033[41mcargo clippy Failed: $FILE\033[0m"
+      PASS=false
+    fi
+    cd ..
+
+    printf "\nRust validation completed!\n"
+else
+    printf "\nNo rust files touched, skipping validation\n"
+fi
+
+printf "\nValidating Python:\n"
+
+for FILE in $STAGED_PY_FILES
+do
+  pylint "$FILE"
+
+  if [[ "$?" == 0 ]]; then
+    printf "\t\033[32mpylint Passed: $FILE\033[0m"
+  else
+    printf "\t\033[41mpylint Failed: $FILE\033[0m"
+    PASS=false
+  fi
+done
+
+printf "\nSolidity Python completed!\n"
+
+if ! $PASS; then
+  printf "\033[41mCOMMIT FAILED:\033[0m Your commit contains files that should pass Linting but do not. Please fix the errors and try again.\n"
+  exit 1
+else
+  printf "\033[42mCOMMIT SUCCEEDED\033[0m\n"
+fi
+
+exit $?
