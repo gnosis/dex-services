@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
 
-source ./test/snap-and-setup.sh
+./test/restart-containers.sh
+cd dex-contracts
+truffle exec scripts/setup_environment.js 6
 
 # Ensure sufficient Balances
 truffle exec scripts/deposit.js 0 2 300
@@ -35,7 +37,3 @@ truffle exec scripts/standing_order.js 0 0 0 0 0
 truffle exec scripts/sell_order.js 1 2 1 1 1
 truffle exec scripts/wait_seconds.js 181
 retry -t 5 "mongo dfusion2 --eval \"db.accounts.findOne({'stateIndex': 4}).balances[1]\" | grep -2 2000000000000000000"
-
-# Cleanup (revert ganache and mongo)
-cd ..
-./test/revert-cleanup.sh $SNAP_ID

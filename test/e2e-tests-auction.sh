@@ -1,8 +1,9 @@
 #!/bin/bash
 set -e
 
-
-source ./test/snap-and-setup.sh
+./test/restart-containers.sh
+cd dex-contracts
+truffle exec scripts/setup_environment.js 6
 
 EXPECTED_AUCTION=0
 
@@ -40,7 +41,3 @@ retry -t 5 "mongo dfusion2 --eval \"db.accounts.findOne({'stateHash': '$EXPECTED
 
 # Account 3 has now 52 of token 0
 retry -t 5 "mongo dfusion2 --eval \"db.accounts.findOne({'stateHash': '$EXPECTED_HASH'}).balances[90]\" | grep -2 52000000000000000000"
-
-# Cleanup (revert ganache and mongo)
-cd ..
-./test/revert-cleanup.sh $SNAP_ID
