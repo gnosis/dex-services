@@ -44,7 +44,6 @@ pub fn run_order_listener<D, C>(
                 .filter(|standing_order| standing_order.num_orders() > 0)
                 .flat_map(|standing_order| standing_order.get_orders().clone())
             );
-            info!("Standing Orders: {:?}", standing_orders);
             info!("All Orders: {:?}", orders);
 
             let standing_order_indexes = batch_index_from_standing_orders(&standing_orders);
@@ -135,10 +134,7 @@ mod tests {
         contract.calculate_order_hash.given((slot, Any)).will_return(Ok(H256::from("0x438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c")));
 
         contract.apply_auction.given((slot, Any, Any, Any, Any, Any)).will_return(Ok(()));
-        let empty_order = models::StandingOrder::new(
-            0, 0, vec![]
-        );
-        let standing_orders = vec![empty_order; models::NUM_RESERVED_ACCOUNTS as usize];
+        let standing_orders = models::StandingOrder::empty(0).initialize_array();
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(1).will_return(Ok(orders.clone()));
         db.get_standing_orders_of_slot.given(1).will_return(Ok(standing_orders));
@@ -214,10 +210,7 @@ mod tests {
             vec![100; (models::TOKENS * 2) as usize],
             models::TOKENS,
         );
-        let empty_order = models::StandingOrder::new(
-            0, 0, vec![]
-        );
-        let standing_orders = vec![empty_order; models::NUM_RESERVED_ACCOUNTS as usize];
+        let standing_orders = models::StandingOrder::empty(0).initialize_array();
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(0).will_return(Ok(first_orders.clone()));
         db.get_standing_orders_of_slot.given(0).will_return(Ok(standing_orders));
@@ -297,10 +290,7 @@ mod tests {
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_auction.given((slot, Any, Any, Any, Any, Any)).will_return(Ok(()));
 
-        let empty_order = models::StandingOrder::new(
-            0, 0, vec![]
-        );
-        let mut standing_orders = vec![empty_order; models::NUM_RESERVED_ACCOUNTS as usize];
+        let mut standing_orders = models::StandingOrder::empty(0).initialize_array();
         standing_orders[1] = standing_order.clone();
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(1).will_return(Ok(vec![]));

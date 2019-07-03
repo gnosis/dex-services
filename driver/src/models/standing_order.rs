@@ -25,9 +25,16 @@ impl StandingOrder {
     pub fn empty(account_id: u16) -> StandingOrder {
         models::StandingOrder::new(account_id, 0, vec![])
     }
+    pub fn initialize_array(&self) -> [StandingOrder; models::NUM_RESERVED_ACCOUNTS] {
+        let mut array: [StandingOrder; models::NUM_RESERVED_ACCOUNTS] = unsafe { std::mem::uninitialized() };
+        for i in array.iter_mut() {
+            unsafe { ::std::ptr::write(i, self.clone()); }
+        }
+        array
+    }
 }
 
-impl ConcatenatingHashable for Vec<StandingOrder> {
+impl ConcatenatingHashable for [models::StandingOrder; models::NUM_RESERVED_ACCOUNTS] {
     fn concatenating_hash(&self, init_hash: H256) -> H256 {
        let mut hasher = Sha256::new();
         hasher.input(init_hash);
@@ -73,10 +80,7 @@ pub mod tests {
     let standing_order = models::StandingOrder::new(
         1, 0, vec![create_order_for_test(), create_order_for_test()]
     );
-    let empty_order = models::StandingOrder::new(
-        0, 0, vec![]
-    );
-    let mut standing_orders = vec![empty_order; models::NUM_RESERVED_ACCOUNTS as usize];
+    let mut standing_orders = models::StandingOrder::empty(0).initialize_array();
     standing_orders[1] = standing_order;
     assert_eq!(
     standing_orders.concatenating_hash(H256::from(0)),
