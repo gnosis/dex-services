@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 
-cd dex-contracts/
+cd dex-contracts
+truffle exec scripts/setup_environment.js 6
 
 EXPECTED_AUCTION=0
 
@@ -31,7 +32,7 @@ retry -t 5 "mongo dfusion2 --eval \"db.orders.findOne({'auctionId': ${EXPECTED_A
 truffle exec scripts/wait_seconds.js 181
 
 # Test balances have been updated
-EXPECTED_HASH="0e0369b8be154350fd09141a43d90a53427221001ba9fee5c97145e777420944"
+EXPECTED_HASH="2b87dc830d051be72f4adcc3677daadab2f3f2253e9da51d803faeb0daa1532f"
 retry -t 5 "truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep ${EXPECTED_HASH}"
 
 # Account 4 has now 4 of token 1 

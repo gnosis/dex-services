@@ -1,8 +1,7 @@
 #!/bin/bash
 set -e
 
-cd dex-contracts/
-
+cd dex-contracts
 truffle exec scripts/setup_environment.js 6
 
 ###############
