@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 
-./test/restart-containers.sh
 cd dex-contracts
 truffle exec scripts/setup_environment.js 6
 
