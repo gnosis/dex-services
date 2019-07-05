@@ -122,7 +122,7 @@ impl DbInterface for MongoDB {
             doc!{"$group" => (doc!{"_id" => "$accountId", "orders" => (doc!{"$first" =>"$orders" }), "batchIndex" => (doc!{"$first" => "$batchIndex" })})}
         ];
 
-               info!("Querying standing_orders: {:?}", pipeline);
+        info!("Querying standing_orders: {:?}", pipeline);
         let non_zero_standing_orders = self.client
             .db(models::DB_NAME)
             .collection("standing_orders")
