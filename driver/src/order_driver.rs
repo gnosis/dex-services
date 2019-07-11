@@ -134,7 +134,7 @@ mod tests {
         contract.calculate_order_hash.given((slot, Any)).will_return(Ok(H256::from("0x438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c")));
 
         contract.apply_auction.given((slot, Any, Any, Any, Any, Any)).will_return(Ok(()));
-        let standing_orders = models::StandingOrder::empty(0).initialize_array();
+        let standing_orders = models::StandingOrder::empty_array();
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(1).will_return(Ok(orders.clone()));
         db.get_standing_orders_of_slot.given(1).will_return(Ok(standing_orders));
@@ -210,7 +210,7 @@ mod tests {
             vec![100; (models::TOKENS * 2) as usize],
             models::TOKENS,
         );
-        let standing_orders = models::StandingOrder::empty(0).initialize_array();
+        let standing_orders = models::StandingOrder::empty_array();
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(0).will_return(Ok(first_orders.clone()));
         db.get_standing_orders_of_slot.given(0).will_return(Ok(standing_orders));
@@ -290,7 +290,7 @@ mod tests {
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_auction.given((slot, Any, Any, Any, Any, Any)).will_return(Ok(()));
 
-        let mut standing_orders = models::StandingOrder::empty(0).initialize_array();
+        let mut standing_orders = models::StandingOrder::empty_array();
         standing_orders[1] = standing_order.clone();
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(1).will_return(Ok(vec![]));

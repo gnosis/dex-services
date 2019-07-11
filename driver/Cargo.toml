@@ -9,6 +9,7 @@ name = "driver"
 path = "src/lib.rs"
 
 [dependencies]
+array-macro = "1.0.4"
 chrono = "0.4.6"
 ethabi = "6.1.0"
 mongodb = "0.3.12"

@@ -3,6 +3,8 @@ use sha2::{Digest, Sha256};
 use web3::types::H256;
 use crate::models::{ConcatenatingHashable, RollingHashable};
 use crate::models;
+use array_macro::array;
+
 
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
@@ -16,6 +18,10 @@ impl StandingOrder {
     pub fn new(account_id: u16, batch_index: u32, orders: Vec<super::Order>) -> StandingOrder {
         StandingOrder { account_id, batch_index, orders }
     }
+    pub fn empty_array() -> [models::StandingOrder; models::NUM_RESERVED_ACCOUNTS]{
+        let mut i = 0u16;
+        array![models::StandingOrder::empty({i += 1; i - 1}); models::NUM_RESERVED_ACCOUNTS]
+    }
     pub fn get_orders(&self) -> &Vec<super::Order> {
         &self.orders
     }
@@ -24,13 +30,6 @@ impl StandingOrder {
     }
     pub fn empty(account_id: u16) -> StandingOrder {
         models::StandingOrder::new(account_id, 0, vec![])
-    }
-    pub fn initialize_array(&self) -> [StandingOrder; models::NUM_RESERVED_ACCOUNTS] {
-        let mut array: [StandingOrder; models::NUM_RESERVED_ACCOUNTS] = unsafe { std::mem::uninitialized() };
-        for i in array.iter_mut() {
-            unsafe { ::std::ptr::write(i, self.clone()); }
-        }
-        array
     }
 }
 
@@ -80,7 +79,7 @@ pub mod tests {
     let standing_order = models::StandingOrder::new(
         1, 0, vec![create_order_for_test(), create_order_for_test()]
     );
-    let mut standing_orders = models::StandingOrder::empty(0).initialize_array();
+    let mut standing_orders = models::StandingOrder::empty_array();
     standing_orders[1] = standing_order;
     assert_eq!(
     standing_orders.concatenating_hash(H256::from(0)),

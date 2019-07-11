@@ -123,16 +123,13 @@ impl DbInterface for MongoDB {
         ];
 
         info!("Querying standing_orders: {:?}", pipeline);
+        let mut standing_orders = models::StandingOrder::empty_array();
         let non_zero_standing_orders = self.client
             .db(models::DB_NAME)
             .collection("standing_orders")
             .aggregate(pipeline, None)?
             .map(|d| d.map(models::StandingOrder::from).map_err(DriverError::from))
             .collect::<Result<Vec<_>, _>>()?;
-
-        let mut standing_orders = models::StandingOrder::empty(0).initialize_array();
-        (0..models::NUM_RESERVED_ACCOUNTS)
-            .for_each(|k| standing_orders[k as usize] = models::StandingOrder::empty(k as u16));
         non_zero_standing_orders.into_iter().for_each(|k| {
             let acc_id = k.account_id as usize;
             standing_orders[acc_id] = k;
