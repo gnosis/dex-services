@@ -9,7 +9,7 @@ matrix:
           - driver/target
       before_script:
         - rustup component add clippy
-        - echo "cognitive-complexity-threshold = 30" > '~/.cargo/registry/src/github.com-1ecc6299db9ec823/mongodb-0.3.12/clippy.toml'
+        - echo "cognitive-complexity-threshold = 30" > '/home/travis/.cargo/registry/src/github.com-1ecc6299db9ec823/mongodb-0.3.12/clippy.toml'
       script:
         - cd driver/
         - cargo clippy -- -D warnings
