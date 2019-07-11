@@ -5,8 +5,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 #Install Rust with version 1.36
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
-RUN ln -s $HOME/.cargo/bin/* /usr/bin/
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && ln -s $HOME/.cargo/bin/* /usr/bin/
 
 # Copy requirements and install
 WORKDIR /app/driver
