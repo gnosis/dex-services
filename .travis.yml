@@ -40,8 +40,9 @@ matrix:
         # driver/listener require compiled contracts
         - cd dex-contracts && truffle compile && cd -
         - docker-compose up -d ganache-cli driver listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
+        - cd dex-contracts && retry truffle migrate && cd -
       script:
-        - sh ./test/restart-containers.sh
+        - set -e # make this script fail as soon as any individual command fail
         - sh ./test/e2e-tests-deposit-withdraw.sh
         - sh ./test/restart-containers.sh
         - sh ./test/e2e-tests-auction.sh
