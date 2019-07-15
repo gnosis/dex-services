@@ -1,4 +1,4 @@
-FROM gnosispm/dfusion-driver-base
+FROM gnosispm/dfusion-driver-base:v2
 
 # Copy requirements and install
 WORKDIR /app/driver
