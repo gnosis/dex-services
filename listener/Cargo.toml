@@ -1,0 +1,28 @@
+[package]
+name = "listener"
+version = "0.1.0"
+authors = ["Alexander Herrmann <alex@gnosis.io>", "Ben Smith <ben@gnosis.io>", "Felix Leupold <felix@gnosis.io>"]
+edition = "2018"
+
+[[bin]]
+name = "listener"
+path = "src/main.rs"
+
+[dependencies]
+graph-core = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
+graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
+graph-datasource-ethereum = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
+graph-store-postgres = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
+graph-server-http = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
+graph-server-websocket = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
+
+env_logger = "0.5.10"
+failure = "0.1.2"
+futures = "0.1.21"
+graphql-parser = "0.2.1"
+lazy_static = "1.2.0"
+parity-wasm = "0.31"
+serde_yaml = "0.7"
+slog = "2.2.3"
+tiny-keccak = "1.4.2"
+web3 = { git = "https://github.com/graphprotocol/rust-web3", branch = "trace-struct-pre-ethereum-types" }
