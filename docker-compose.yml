@@ -79,7 +79,7 @@ services:
       POSTGRES_PASSWORD: let-me-in
       POSTGRES_DB: dfusion
 
-  listener:
+  graph-listener:
     command: cargo run
     build:
       context: .
