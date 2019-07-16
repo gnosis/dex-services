@@ -1,4 +1,4 @@
-FROM gnosispm/dfusion-rust-base:v3
+FROM fleupold/dfusion-rust-base:v1
 
 # Copy requirements and install
 WORKDIR /app/listener
