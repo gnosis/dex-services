@@ -11,7 +11,7 @@ matrix:
         - rustup component add clippy
       script:
         - cd driver/
-        - cargo clippy --cap-lints #-- clippy has an issue: https://github.com/rust-lang/rust-clippy/issues/3874
+        - cargo clippy -- cap-lints -D warnings  # -- clippy has an issue: https://github.com/rust-lang/rust-clippy/issues/3874
         - cargo build --verbose --all
         - cargo test --verbose --all
     - language: python
