@@ -5,7 +5,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 #Install Rust
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y 
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 RUN ln -s $HOME/.cargo/bin/* /usr/bin/
 
 # Copy requirements and install
