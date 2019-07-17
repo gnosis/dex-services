@@ -10,6 +10,7 @@ matrix:
           - listener/target
       before_script:
         - rustup component add clippy
+        - cargo clippy --version
       script:
         - cd driver/
         - cargo clippy -- -D warnings
