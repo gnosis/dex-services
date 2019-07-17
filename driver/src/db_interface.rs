@@ -11,7 +11,6 @@ use mongodb::{Client, ThreadedClient};
 
 use web3::types::H256;
 
-
 pub trait DbInterface {
     fn get_current_balances(
         &self,
@@ -32,7 +31,7 @@ pub trait DbInterface {
     fn get_standing_orders_of_slot(
         &self,
         slot: u32,
-    ) -> Result<Vec<models::StandingOrder>, DriverError>;
+    ) -> Result<[models::StandingOrder; models::NUM_RESERVED_ACCOUNTS], DriverError>;
 }
 
 #[derive(Clone)]
@@ -116,7 +115,7 @@ impl DbInterface for MongoDB {
     fn get_standing_orders_of_slot(
         &self,
         slot: u32,
-    ) -> Result<Vec<models::StandingOrder>, DriverError> {
+    ) -> Result<[models::StandingOrder; models::NUM_RESERVED_ACCOUNTS], DriverError> {
         let pipeline = vec![
             doc!{"$match" => (doc!{"validFromAuctionId" => (doc!{ "$lte" => slot})})},
             doc!{"$sort" => (doc!{"validFromAuctionId" => -1, "_id" => -1})},
@@ -124,12 +123,18 @@ impl DbInterface for MongoDB {
         ];
 
         info!("Querying standing_orders: {:?}", pipeline);
-        self.client
+        let mut standing_orders = models::StandingOrder::empty_array();
+        let non_zero_standing_orders = self.client
             .db(models::DB_NAME)
             .collection("standing_orders")
             .aggregate(pipeline, None)?
             .map(|d| d.map(models::StandingOrder::from).map_err(DriverError::from))
-            .collect::<Result<Vec<_>, _>>()
+            .collect::<Result<Vec<_>, _>>()?;
+        non_zero_standing_orders.into_iter().for_each(|k| {
+            let acc_id = k.account_id as usize;
+            standing_orders[acc_id] = k;
+        });
+        Ok(standing_orders)
     }
 }
 
@@ -144,7 +149,7 @@ pub mod tests {
         pub get_deposits_of_slot: Mock<u32, Result<Vec<models::PendingFlux>, DriverError>>,
         pub get_withdraws_of_slot: Mock<u32, Result<Vec<models::PendingFlux>, DriverError>>,
         pub get_orders_of_slot: Mock<u32, Result<Vec<models::Order>, DriverError>>,
-        pub get_standing_orders_of_slot: Mock<u32, Result<Vec<models::StandingOrder>, DriverError>>,
+        pub get_standing_orders_of_slot: Mock<u32, Result<[models::StandingOrder; models::NUM_RESERVED_ACCOUNTS], DriverError>>,
     }
 
     impl DbInterfaceMock {
@@ -187,7 +192,7 @@ pub mod tests {
         fn get_standing_orders_of_slot(
             &self,
             slot: u32,
-        ) -> Result<Vec<models::StandingOrder>, DriverError> {
+        ) -> Result<[models::StandingOrder; models::NUM_RESERVED_ACCOUNTS], DriverError> {
             self.get_standing_orders_of_slot.called(slot)
         }
     }

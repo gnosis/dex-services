@@ -9,6 +9,7 @@ name = "driver"
 path = "src/lib.rs"
 
 [dependencies]
+array-macro = "1.0.4"
 chrono = "0.4.6"
 ethabi = "6.1.0"
 mongodb = { git = "https://github.com/mongodb-labs/mongo-rust-driver-prototype", rev = "9203ec3216976cfbfddb07856b25d061965810af"}
