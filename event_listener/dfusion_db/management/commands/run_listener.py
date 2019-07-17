@@ -14,4 +14,4 @@ class Command(BaseCommand):  # type: ignore
         event_listener = EventListener()
         while 1:
             event_listener.execute()
-            time.sleep(3)
+            time.sleep(2)
