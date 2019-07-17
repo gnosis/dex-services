@@ -9,9 +9,10 @@ name = "driver"
 path = "src/lib.rs"
 
 [dependencies]
+array-macro = "1.0.4"
 chrono = "0.4.6"
 ethabi = "6.1.0"
-mongodb = "0.3.12"
+mongodb = { git = "https://github.com/mongodb-labs/mongo-rust-driver-prototype", rev = "9203ec3216976cfbfddb07856b25d061965810af"}
 serde_json = "1.0"
 serde_derive = "1.0"
 serde = "1.0"

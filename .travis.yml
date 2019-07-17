@@ -2,7 +2,7 @@ if: (branch = master) OR (type = pull_request) OR (tag IS present)
 matrix:
   include:
     - language: rust
-      rust: 1.33.0
+      rust: 1.36.0
       cache: 
         cargo: true
         directories:

@@ -13,7 +13,7 @@ use web3::types::H256;
 
 //ToDo: get variables from database
 pub const TOKENS: u8 = 30;
-pub const NUM_RESERVED_ACCOUNTS: u8 = 50;
+pub const NUM_RESERVED_ACCOUNTS: usize = 50;
 pub const DB_NAME: &str = "dfusion2";
 
 pub trait RollingHashable {

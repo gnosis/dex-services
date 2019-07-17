@@ -3,6 +3,8 @@ use sha2::{Digest, Sha256};
 use web3::types::H256;
 use crate::models::{ConcatenatingHashable, RollingHashable};
 use crate::models;
+use array_macro::array;
+
 
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
@@ -16,23 +18,26 @@ impl StandingOrder {
     pub fn new(account_id: u16, batch_index: u32, orders: Vec<super::Order>) -> StandingOrder {
         StandingOrder { account_id, batch_index, orders }
     }
+    pub fn empty_array() -> [models::StandingOrder; models::NUM_RESERVED_ACCOUNTS]{
+        let mut i = 0u16;
+        array![models::StandingOrder::empty({i += 1; i - 1}); models::NUM_RESERVED_ACCOUNTS]
+    }
     pub fn get_orders(&self) -> &Vec<super::Order> {
         &self.orders
     }
+    pub fn num_orders(&self) -> usize {
+        self.orders.len()
+    }
+    pub fn empty(account_id: u16) -> StandingOrder {
+        models::StandingOrder::new(account_id, 0, vec![])
+    }
 }
 
-impl ConcatenatingHashable for Vec<StandingOrder> {
+impl ConcatenatingHashable for [models::StandingOrder; models::NUM_RESERVED_ACCOUNTS] {
     fn concatenating_hash(&self, init_hash: H256) -> H256 {
        let mut hasher = Sha256::new();
         hasher.input(init_hash);
-        for i in 0..models::NUM_RESERVED_ACCOUNTS {
-            hasher.input(self
-                .iter()
-                .position(|o| o.account_id == u16::from(i))
-                .map(|k| self[k].get_orders())
-                .map(|o| o.rolling_hash(0))
-                .unwrap_or_else(H256::zero));
-        }
+        self.iter().for_each(|k|  hasher.input(k.get_orders().rolling_hash(0)));
         let result = hasher.result();
         let b: Vec<u8> = result.to_vec();
         H256::from(b.as_slice())
@@ -74,9 +79,10 @@ pub mod tests {
     let standing_order = models::StandingOrder::new(
         1, 0, vec![create_order_for_test(), create_order_for_test()]
     );
-
+    let mut standing_orders = models::StandingOrder::empty_array();
+    standing_orders[1] = standing_order;
     assert_eq!(
-    vec![standing_order].concatenating_hash(H256::from(0)),
+    standing_orders.concatenating_hash(H256::from(0)),
     H256::from_str(
       "6bdda4f03645914c836a16ba8565f26dffb7bec640b31e1f23e0b3b22f0a64ae"
       ).unwrap()
