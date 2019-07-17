@@ -3,6 +3,8 @@ extern crate graph;
 extern crate graph_core;
 extern crate graph_datasource_ethereum;
 extern crate lazy_static;
+#[macro_use]
+extern crate slog;
 
 mod runtime_host;
 mod link_resolver;
@@ -13,7 +15,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use graph::components::forward;
-use graph::prelude::*;
+use graph::prelude::{
+    SubgraphRegistrar as SubgraphRegistrarTrait,
+    SubgraphAssignmentProvider as SubgraphAssignmentProviderTrait,
+    *
+};
 use graph::log::logger;
 use graph::tokio_executor;
 use graph::tokio_timer;
@@ -34,8 +40,12 @@ use link_resolver::LocalLinkResolver;
 lazy_static! {
     static ref ANCESTOR_COUNT: u64 = 50;
     static ref REORG_THRESHOLD: u64 = 50;
-    static ref NODE_ID: NodeId = NodeId::new("default").unwrap();
     static ref BLOCK_POLLING_INTERVAL: Duration = Duration::from_millis(1000);
+    
+    static ref NODE_ID: NodeId = NodeId::new("default").unwrap();
+    static ref SUBGRAPH_NAME: SubgraphName = SubgraphName::new("dfusion").unwrap();
+    static ref SUBGRAPH_ID: SubgraphDeploymentId = SubgraphDeploymentId::new("dfusion").unwrap();
+
 }
 
 fn main() {
@@ -202,6 +212,23 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
                 start_result.expect("failed to initialize subgraph provider"); 
                 Ok(())
             }),	
+    );
+
+    tokio::spawn(	
+        subgraph_registrar
+            .create_subgraph(SUBGRAPH_NAME.clone())
+            .then( move |_| {
+                subgraph_registrar.create_subgraph_version(
+                    SUBGRAPH_NAME.clone(), SUBGRAPH_ID.clone(), NODE_ID.clone()
+                )
+            })
+            .then(|result| {	
+                Ok(result.expect("Failed to deploy subgraph from `--subgraph` flag"))
+            })
+            .and_then(move |_| {
+                subgraph_provider_arc.start(SUBGRAPH_ID.clone());
+                Ok(())
+            })
     );
 
     let mut graphql_server = GraphQLQueryServer::new(

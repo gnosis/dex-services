@@ -91,6 +91,7 @@ services:
     volumes:
       # Don't sync target, otherwise we rebuild on every deploy
       - ./listener/src:/app/listener/src
+      - ./listener/subgraph_definition:/app/listener/subgraph_definition
       - ./dex-contracts:/app/dex-contracts
     env_file:
       - common.env
