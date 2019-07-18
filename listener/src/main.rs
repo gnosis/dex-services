@@ -213,7 +213,8 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
                     SUBGRAPH_NAME.clone(), SUBGRAPH_ID.clone(), NODE_ID.clone()
                 )
                 .then(|result| {	
-                    Ok(result.expect("Failed to create subgraph"))
+                    result.expect("Failed to create subgraph");
+                    Ok(())
                 })
                 .and_then(move |_| {
                     subgraph_registrar.start()

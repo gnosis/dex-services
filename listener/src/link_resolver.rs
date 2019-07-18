@@ -12,10 +12,10 @@ use std::path::Path;
 fn read_file(file: &str) -> Result<Vec<u8>, failure::Error> {
     let path = format!("subgraph_definition/{}", 
         Path::new(file)
-            .into_iter()
+            .iter()
             .last()
             .and_then(|p| p.to_str())
-            .ok_or(failure::err_msg("invalid file name"))?
+            .ok_or_else(|| failure::err_msg("invalid file name"))?
     );
     let mut f = File::open(&path)?;
     let mut buffer = Vec::new();
