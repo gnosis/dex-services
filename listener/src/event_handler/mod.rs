@@ -8,6 +8,9 @@ use graph::components::store::EntityOperation;
 
 use web3::types::{Log, Transaction};
 
+mod deposit_handler;
+pub use deposit_handler::DepositHandler;
+
 pub trait EventHandler: Send + Sync + Debug {
     fn process_event(
         &self,

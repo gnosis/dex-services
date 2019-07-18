@@ -1,3 +1,8 @@
 type Deposit @entity {
     id: ID!
+    accountId: Int!
+    tokenId: Int!
+    amount: BigInt!
+    slot: BigInt!
+    slotIndex: Int!
 }

@@ -89,6 +89,9 @@ services:
       - postgres
       - ganache-cli
     restart: always
+    ports:
+      - '8000:8000'
+      - '8001:8001'
     volumes:
       # Don't sync target, otherwise we rebuild on every deploy
       - ./listener/src:/app/listener/src
