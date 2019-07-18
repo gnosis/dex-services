@@ -181,7 +181,6 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         graphql_runner.clone(),
     );
 
-
     // Forward subgraph events from the subgraph provider to the subgraph instance manager
     tokio::spawn(forward(&mut subgraph_provider, &subgraph_instance_manager).unwrap());
     let subgraph_provider_arc = Arc::new(subgraph_provider);
