@@ -7,10 +7,15 @@ matrix:
         cargo: true
         directories:
           - driver/target
+          - listener/target
       before_script:
         - rustup component add clippy
       script:
         - cd driver/
+        - cargo clippy -- -D warnings
+        - cargo build --verbose --all
+        - cargo test --verbose --all
+        - cd ../listener
         - cargo clippy -- -D warnings
         - cargo build --verbose --all
         - cargo test --verbose --all

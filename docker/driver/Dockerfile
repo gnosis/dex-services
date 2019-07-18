@@ -1,4 +1,4 @@
-FROM gnosispm/dfusion-driver-base:v2
+FROM fleupold/dfusion-rust-base:v1
 
 # Copy requirements and install
 WORKDIR /app/driver

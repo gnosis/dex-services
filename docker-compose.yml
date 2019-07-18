@@ -69,3 +69,30 @@ services:
       - common.env
     environment:
       - RUST_BACKTRACE=1
+
+  postgres:
+    image: postgres
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: dfusion
+      POSTGRES_PASSWORD: let-me-in
+      POSTGRES_DB: dfusion
+
+  graph-listener:
+    command: cargo run
+    build:
+      context: .
+      dockerfile: docker/listener/Dockerfile
+    depends_on:
+      - postgres
+      - ganache-cli
+    restart: always
+    volumes:
+      # Don't sync target, otherwise we rebuild on every deploy
+      - ./listener/src:/app/listener/src
+      - ./dex-contracts:/app/dex-contracts
+    env_file:
+      - common.env
+    environment:
+      - RUST_BACKTRACE=1
