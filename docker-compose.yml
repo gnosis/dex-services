@@ -80,7 +80,7 @@ services:
       POSTGRES_DB: dfusion
 
   graph-listener:
-    command: cargo run
+    command: /app/docker/listener/run.sh
     build:
       context: .
       dockerfile: docker/listener/Dockerfile
@@ -93,6 +93,7 @@ services:
       - ./listener/src:/app/listener/src
       - ./listener/subgraph_definition:/app/listener/subgraph_definition
       - ./dex-contracts:/app/dex-contracts
+      - ./docker/listener:/app/docker/listener
     env_file:
       - common.env
     environment:

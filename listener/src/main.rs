@@ -17,7 +17,6 @@ use std::time::Duration;
 use graph::components::forward;
 use graph::prelude::{
     SubgraphRegistrar as SubgraphRegistrarTrait,
-    SubgraphAssignmentProvider as SubgraphAssignmentProviderTrait,
     *
 };
 use graph::log::logger;
@@ -205,14 +204,6 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         NODE_ID.clone(),	
         SubgraphVersionSwitchingMode::Instant
     ));
-    tokio::spawn(	
-        subgraph_registrar	
-            .start()	
-            .then(|start_result| {
-                start_result.expect("failed to initialize subgraph provider"); 
-                Ok(())
-            }),	
-    );
 
     tokio::spawn(	
         subgraph_registrar
@@ -221,14 +212,17 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
                 subgraph_registrar.create_subgraph_version(
                     SUBGRAPH_NAME.clone(), SUBGRAPH_ID.clone(), NODE_ID.clone()
                 )
+                .then(|result| {	
+                    Ok(result.expect("Failed to create subgraph"))
+                })
+                .and_then(move |_| {
+                    subgraph_registrar.start()
+                })
             })
-            .then(|result| {	
-                Ok(result.expect("Failed to deploy subgraph from `--subgraph` flag"))
-            })
-            .and_then(move |_| {
-                subgraph_provider_arc.start(SUBGRAPH_ID.clone());
+            .then(|start_result| {
+                start_result.expect("failed to start subgraph"); 
                 Ok(())
-            })
+            }),
     );
 
     let mut graphql_server = GraphQLQueryServer::new(
