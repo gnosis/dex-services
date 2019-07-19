@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/gnosis/dex-services.svg?branch=master)](https://travis-ci.org/gnosis/dex-services)
+
 Intro
 =====
 This repository contains the backend logic for the dfusion exchange based on the specification, see [here](github.com/gnosis/dex-research)
