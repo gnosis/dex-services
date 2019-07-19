@@ -11,7 +11,11 @@ matrix:
       before_script:
         - rustup component add clippy
       script:
-        - cd driver/
+        - cd dfusion_rust_core/
+        - cargo clippy -- -D warnings
+        - cargo build --verbose --all
+        - cargo test --verbose --all
+        - cd ../driver/
         - cargo clippy -- -D warnings
         - cargo build --verbose --all
         - cargo test --verbose --all

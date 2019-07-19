@@ -9,22 +9,18 @@ name = "driver"
 path = "src/lib.rs"
 
 [dependencies]
-array-macro = "1.0.4"
+bson = "0.9.1"
 chrono = "0.4.6"
 ethabi = "6.1.0"
+dfusion_core = { path = "../dfusion_rust_core" }
+hex = "0.3.2"
+log = "0.4.6"
 mongodb = { git = "https://github.com/mongodb-labs/mongo-rust-driver-prototype", rev = "9203ec3216976cfbfddb07856b25d061965810af"}
-serde_json = "1.0"
-serde_derive = "1.0"
-serde = "1.0"
-bson = "0.9.1"
 pairing = "0.14"
 rustc-hex = "*"
-sha2 = "*"
-byteorder = "*"
-hex = "0.3.2"
-web3 = { git = "https://github.com/tomusdrw/rust-web3", rev = "56ad08e" }
-log = "0.4.6"
+serde_json = "1.0"
 simple_logger = "1.2.0"
+web3 = { git = "https://github.com/tomusdrw/rust-web3", rev = "56ad08e" }
 
 [dev-dependencies]
 mock-it = "0.2.0"

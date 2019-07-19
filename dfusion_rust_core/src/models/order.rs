@@ -50,8 +50,21 @@ impl<T: Serializable> RollingHashable for Vec<T> {
     }
 }
 
-#[cfg(test)]
 pub mod tests {
+    use super::*;
+    pub fn create_order_for_test() -> Order {
+      Order {
+          account_id: 1,
+          sell_token: 2,
+          buy_token: 3,
+          sell_amount: 4,
+          buy_amount: 5,
+      }
+  }
+}
+
+#[cfg(test)]
+pub mod unit_test {
   use super::*;
   use web3::types::{H256};
   use std::str::FromStr;
@@ -72,15 +85,5 @@ pub mod tests {
       "8c253b4588a6d87b02b5f7d1424020b7b5f8c0397e464e087d2830a126d3b699"
       ).unwrap()
     );
-  }
-
-  pub fn create_order_for_test() -> Order {
-      Order {
-          account_id: 1,
-          sell_token: 2,
-          buy_token: 3,
-          sell_amount: 4,
-          buy_amount: 5,
-      }
   }
 }

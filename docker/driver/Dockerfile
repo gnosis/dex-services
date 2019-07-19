@@ -3,6 +3,7 @@ FROM fleupold/dfusion-rust-base:v1
 # Copy requirements and install
 WORKDIR /app/driver
 COPY driver/Cargo.toml ./
+COPY dfusion_rust_core /app/dfusion_rust_core
 RUN cargo build
 
 # Install solver if specified

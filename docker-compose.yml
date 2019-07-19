@@ -63,8 +63,9 @@ services:
     restart: always
     volumes:
       # Don't sync target, otherwise we rebuild on every deploy
-      - ./driver/src:/app/driver/src
       - ./dex-contracts:/app/dex-contracts
+      - ./dfusion_rust_core/src:/app/dfusion_rust_core/src
+      - ./driver/src:/app/driver/src
     env_file:
       - common.env
     environment:

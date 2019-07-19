@@ -1,16 +1,14 @@
-use crate::models;
-use crate::models::RollingHashable;
-
 use crate::db_interface::DbInterface;
 use crate::error::DriverError;
 use crate::contract::SnappContract;
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
 
+use dfusion_core::models::{RollingHashable, State, PendingFlux};
 
 pub fn apply_deposits(
-    state: &models::State,
-    deposits: &[models::PendingFlux],
-) -> models::State {
+    state: &State,
+    deposits: &[PendingFlux],
+) -> State {
     let mut updated_state = state.clone();
     for deposit in deposits {
         updated_state.increment_balance(deposit.token_id, deposit.account_id, deposit.amount)
@@ -61,9 +59,9 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::RollingHashable;
+    use dfusion_core::models::flux::tests::create_flux_for_test;
+    use dfusion_core::models;
     use crate::contract::tests::SnappContractMock;
-    use crate::models::flux::tests::create_flux_for_test;
     use crate::db_interface::tests::DbInterfaceMock;
     use mock_it::Matcher::*;
     use web3::types::{H256, U256};
@@ -74,7 +72,7 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
-        let state = models::State::new(
+        let state = State::new(
             format!("{:x}", state_hash),
             1,
             vec![100; (models::TOKENS * 2) as usize],
@@ -103,7 +101,7 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
 
-        let state = models::State::new(
+        let state = State::new(
             format!("{:x}", state_hash),
             1,
             vec![100; (models::TOKENS * 2) as usize],
@@ -131,7 +129,7 @@ mod tests {
         let state_hash = H256::zero();
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
-        let state = models::State::new(
+        let state = State::new(
             format!("{:x}", state_hash),
             1,
             vec![100; (models::TOKENS * 2) as usize],
@@ -174,7 +172,7 @@ mod tests {
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_deposits.given((slot - 1, Any, Any, Any)).will_return(Ok(()));
 
-        let state = models::State::new(
+        let state = State::new(
             format!("{:x}", state_hash),
             1,
             vec![100; (models::TOKENS * 2) as usize],
@@ -195,7 +193,7 @@ mod tests {
 
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
-        let state = models::State::new(
+        let state = State::new(
             format!("{:x}", state_hash),
             1,
             vec![100; (models::TOKENS * 2) as usize],

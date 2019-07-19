@@ -1,8 +1,9 @@
 #[cfg(test)]
 extern crate mock_it;
 
-use crate::models;
 use crate::error::{DriverError, ErrorKind};
+
+use dfusion_core::models;
 
 use mongodb::{bson, doc};
 use mongodb::ordered::OrderedDocument;

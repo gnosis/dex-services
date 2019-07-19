@@ -1,6 +1,7 @@
 use web3::types::U256;
 
-use crate::models::{Order, State, TOKENS};
+use dfusion_core::models::{Order, State, TOKENS};
+
 use crate::price_finding::error::PriceFindingError;
 
 use super::price_finder_interface::{PriceFinding, Solution};
@@ -14,8 +15,17 @@ pub enum OrderPairType {
 fn u128_to_u256(x: u128) -> U256 {
     U256::from_big_endian(&x.to_be_bytes())
 }
+trait Matchable {
+    fn attracts(&self, other: &Order) -> bool;
+    fn sufficient_seller_funds(&self, state: &State) -> bool;
+    fn match_compare(&self, other: &Order, state: &State) -> Option<OrderPairType>;
+    fn opposite_tokens(&self, other: &Order) -> bool;
+    fn have_price_overlap(&self, other: &Order) -> bool;
+    fn surplus(&self, buy_price: u128, exec_buy_amount: u128, exec_sell_amount: u128) -> U256;
 
-impl Order {
+}
+
+impl Matchable for Order {
     fn attracts(&self, other: &Order) -> bool {
         self.opposite_tokens(other) && self.have_price_overlap(other)
     }

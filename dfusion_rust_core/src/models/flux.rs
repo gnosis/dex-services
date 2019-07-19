@@ -47,8 +47,21 @@ impl RootHashable for Vec<PendingFlux> {
     }
 }
 
-#[cfg(test)]
 pub mod tests {
+    use super::*;
+    pub fn create_flux_for_test(slot: u32, slot_index: u32) -> PendingFlux {
+        PendingFlux {
+            slot_index,
+            slot,
+            account_id: 1,
+            token_id: 1,
+            amount: 10,
+        }
+    }
+}
+
+#[cfg(test)]
+pub mod unit_test {
   use super::*;
   use web3::types::{H256};
   use std::str::FromStr;
@@ -76,15 +89,5 @@ pub mod tests {
             "87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c"
         ).unwrap()
     );
-  }
-
-  pub fn create_flux_for_test(slot: u32, slot_index: u32) -> PendingFlux {
-      PendingFlux {
-          slot_index,
-          slot,
-          account_id: 1,
-          token_id: 1,
-          amount: 10,
-      }
   }
 }

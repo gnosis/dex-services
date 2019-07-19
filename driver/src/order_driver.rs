@@ -1,10 +1,13 @@
 use crate::contract::SnappContract;
 use crate::db_interface::DbInterface;
 use crate::error::DriverError;
-use crate::models::{RollingHashable, Serializable, ConcatenatingHashable, State, Order};
-use crate::models;
 use crate::price_finding::{PriceFinding, Solution};
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
+
+use dfusion_core::models::{
+    RollingHashable, Serializable, ConcatenatingHashable, State, Order, StandingOrder,
+    TOKENS,
+};
 
 use web3::types::{U256, U128};
 
@@ -56,7 +59,7 @@ pub fn run_order_listener<D, C>(
                     error!("Error computing result: {}\n Falling back to trivial solution", e);
                     Solution {
                         surplus: U256::zero(),
-                        prices: vec![0; models::TOKENS as usize],
+                        prices: vec![0; TOKENS as usize],
                         executed_sell_amounts: vec![0; orders.len()],
                         executed_buy_amounts: vec![0; orders.len()],
                     }
@@ -65,7 +68,7 @@ pub fn run_order_listener<D, C>(
                 warn!("No orders in batch. Falling back to trivial solution");
                 Solution {
                     surplus: U256::zero(),
-                    prices: vec![0; models::TOKENS as usize],
+                    prices: vec![0; TOKENS as usize],
                     executed_sell_amounts: vec![0; orders.len()],
                     executed_buy_amounts: vec![0; orders.len()],
                 }
@@ -96,7 +99,7 @@ fn update_balances(state: &mut State, orders: &[Order], solution: &Solution) {
     }
 }
 
-fn batch_index_from_standing_orders(standing_orders: &[models::StandingOrder]) -> Vec<U128> {
+fn batch_index_from_standing_orders(standing_orders: &[StandingOrder]) -> Vec<U128> {
         standing_orders.iter().map(|o| U128::from(o.batch_index)).collect() 
 }
 
@@ -104,7 +107,8 @@ fn batch_index_from_standing_orders(standing_orders: &[models::StandingOrder]) -
 mod tests {
     use super::*;
     use crate::contract::tests::SnappContractMock;
-    use crate::models::order::tests::create_order_for_test;
+    use dfusion_core::models::NUM_RESERVED_ACCOUNTS;
+    use dfusion_core::models::order::tests::create_order_for_test;
     use crate::db_interface::tests::DbInterfaceMock;
     use crate::price_finding::price_finder_interface::tests::PriceFindingMock;
     use mock_it::Matcher::*;
@@ -117,11 +121,11 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let orders = vec![create_order_for_test(), create_order_for_test()];
-        let state = models::State::new(
+        let state = State::new(
             format!("{:x}", state_hash),
             1,
-            vec![100; (models::TOKENS * 2) as usize],
-            models::TOKENS,
+            vec![100; (TOKENS * 2) as usize],
+            TOKENS,
         );
         let contract = SnappContractMock::new();
         contract.get_current_auction_slot.given(()).will_return(Ok(slot));
@@ -134,7 +138,7 @@ mod tests {
         contract.calculate_order_hash.given((slot, Any)).will_return(Ok(H256::from("0x438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c")));
 
         contract.apply_auction.given((slot, Any, Any, Any, Any, Any)).will_return(Ok(()));
-        let standing_orders = models::StandingOrder::empty_array();
+        let standing_orders = StandingOrder::empty_array();
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(1).will_return(Ok(orders.clone()));
         db.get_standing_orders_of_slot.given(1).will_return(Ok(standing_orders));
@@ -204,13 +208,13 @@ mod tests {
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_auction.given((slot - 1, Any, Any, Any, Any, Any)).will_return(Ok(()));
 
-        let state = models::State::new(
+        let state = State::new(
             format!("{:x}", state_hash),
             1,
-            vec![100; (models::TOKENS * 2) as usize],
-            models::TOKENS,
+            vec![100; (TOKENS * 2) as usize],
+            TOKENS,
         );
-        let standing_orders = models::StandingOrder::empty_array();
+        let standing_orders = StandingOrder::empty_array();
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(0).will_return(Ok(first_orders.clone()));
         db.get_standing_orders_of_slot.given(0).will_return(Ok(standing_orders));
@@ -236,11 +240,11 @@ mod tests {
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
 
-        let state = models::State::new(
+        let state = State::new(
             format!("{:x}", state_hash),
             1,
-            vec![100; (models::TOKENS * 2) as usize],
-            models::TOKENS,
+            vec![100; (TOKENS * 2) as usize],
+            TOKENS,
         );
 
         let contract = SnappContractMock::new();
@@ -268,15 +272,15 @@ mod tests {
     fn considers_standing_orders() {
         let slot = U256::from(1);
         let state_hash = H256::zero();
-        let standing_order = models::StandingOrder::new(
+        let standing_order = StandingOrder::new(
             1, 0, vec![create_order_for_test(), create_order_for_test()]
         );
 
-        let state = models::State::new(
+        let state = State::new(
             format!("{:x}", state_hash),
             1,
-            vec![100; (models::TOKENS * 2) as usize],
-            models::TOKENS,
+            vec![100; (TOKENS * 2) as usize],
+            TOKENS,
         );
 
         let contract = SnappContractMock::new();
@@ -290,7 +294,7 @@ mod tests {
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_auction.given((slot, Any, Any, Any, Any, Any)).will_return(Ok(()));
 
-        let mut standing_orders = models::StandingOrder::empty_array();
+        let mut standing_orders = StandingOrder::empty_array();
         standing_orders[1] = standing_order.clone();
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot.given(1).will_return(Ok(vec![]));
@@ -307,15 +311,15 @@ mod tests {
 
     #[test]
     fn test_get_standing_orders_indexes(){
-        let standing_order = models::StandingOrder::new(
+        let standing_order = StandingOrder::new(
             1, 3, vec![create_order_for_test(), create_order_for_test()]
         );
-        let empty_order = models::StandingOrder::new(
+        let empty_order = StandingOrder::new(
             0, 0, vec![]
         );
-        let mut standing_orders = vec![empty_order; models::NUM_RESERVED_ACCOUNTS as usize];
+        let mut standing_orders = vec![empty_order; NUM_RESERVED_ACCOUNTS as usize];
         standing_orders[1] = standing_order.clone();
-        let mut standing_order_indexes = vec![U128::zero(); models::NUM_RESERVED_ACCOUNTS as usize];
+        let mut standing_order_indexes = vec![U128::zero(); NUM_RESERVED_ACCOUNTS as usize];
         standing_order_indexes[1] = U128::from(3);
         assert_eq!(batch_index_from_standing_orders(&standing_orders), standing_order_indexes);
     }
@@ -326,7 +330,7 @@ mod tests {
             "test".to_string(),
             0,
             vec![100; 70],
-            models::TOKENS,
+            TOKENS,
         );
         let solution = Solution {
             surplus: U256::from_dec_str("0").unwrap(),

@@ -1,15 +1,14 @@
-use crate::models;
-use crate::models::{RollingHashable, RootHashable};
-
 use crate::db_interface::DbInterface;
 use crate::contract::SnappContract;
 use crate::error::DriverError;
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
 
+use dfusion_core::models::{RollingHashable, RootHashable, PendingFlux, State};
+
 fn apply_withdraws(
-    state: &models::State,
-    withdraws: &[models::PendingFlux],
-) -> (models::State, Vec<bool>) {
+    state: &State,
+    withdraws: &[PendingFlux],
+) -> (State, Vec<bool>) {
     let mut state = state.clone();  // TODO - does this really need to be cloned
     let mut valid_withdraws = vec![];
     for w in withdraws {
@@ -66,7 +65,8 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
 mod tests {
     use super::*;
     use crate::contract::tests::SnappContractMock;
-    use crate::models::flux::tests::create_flux_for_test;
+    use dfusion_core::models::flux::tests::create_flux_for_test;
+    use dfusion_core::models::TOKENS;
     use crate::db_interface::tests::DbInterfaceMock;
     use mock_it::Matcher::*;
     use web3::types::{H256, U256};
@@ -77,11 +77,11 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let withdraws = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
-        let state = models::State::new(
+        let state = State::new(
             format!("{:x}", state_hash),
             1,
-            vec![100; (models::TOKENS * 2) as usize],
-            models::TOKENS,
+            vec![100; (TOKENS * 2) as usize],
+            TOKENS,
         );
 
         let contract = SnappContractMock::new();
@@ -148,11 +148,11 @@ mod tests {
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_withdraws.given((slot - 1, Any, Any, Any, Any)).will_return(Ok(()));
 
-        let state = models::State::new(
+        let state = State::new(
             format!("{:x}", state_hash),
             1,
-            vec![100; (models::TOKENS * 2) as usize],
-            models::TOKENS,
+            vec![100; (TOKENS * 2) as usize],
+            TOKENS,
         );
 
         let db = DbInterfaceMock::new();
@@ -170,11 +170,11 @@ mod tests {
 
         let withdraws = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
-        let state = models::State::new(
+        let state = State::new(
             format!("{:x}", state_hash),
             1,
-            vec![100; (models::TOKENS * 2) as usize],
-            models::TOKENS,
+            vec![100; (TOKENS * 2) as usize],
+            TOKENS,
         );
 
         let contract = SnappContractMock::new();
@@ -200,18 +200,18 @@ mod tests {
     fn skips_invalid_balances_in_applied_merkle_tree() {
         let slot = U256::from(1);
         let state_hash = H256::zero();
-        let withdraws = vec![create_flux_for_test(1,1), models::PendingFlux {
+        let withdraws = vec![create_flux_for_test(1,1), PendingFlux {
             slot_index: 2,
             slot: 1,
             account_id: 0,
             token_id: 1,
             amount: 10,
         }];
-        let mut state = models::State::new(
+        let mut state = State::new(
             format!("{:x}", state_hash),
             1,
-            vec![100; (models::TOKENS * 2) as usize],
-            models::TOKENS,
+            vec![100; (TOKENS * 2) as usize],
+            TOKENS,
         );
         state.decrement_balance(1, 0, 100);
 
