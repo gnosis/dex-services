@@ -3,6 +3,8 @@ extern crate graph;
 extern crate graph_core;
 extern crate graph_datasource_ethereum;
 extern crate lazy_static;
+#[macro_use]
+extern crate slog;
 
 mod runtime_host;
 mod link_resolver;
@@ -13,8 +15,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use graph::components::forward;
-use graph::prelude::*;
+use graph::prelude::{
+    SubgraphRegistrar as SubgraphRegistrarTrait,
+    SubgraphName, SubgraphDeploymentId, SubgraphVersionSwitchingMode,
+    GraphQLServer, SubscriptionServer, future, Future,
+    NodeId, LoggerFactory, EthereumAdapter
+};
 use graph::log::logger;
+use graph::tokio;
 use graph::tokio_executor;
 use graph::tokio_timer;
 use graph::tokio_timer::timer::Timer;
@@ -34,8 +42,12 @@ use link_resolver::LocalLinkResolver;
 lazy_static! {
     static ref ANCESTOR_COUNT: u64 = 50;
     static ref REORG_THRESHOLD: u64 = 50;
-    static ref NODE_ID: NodeId = NodeId::new("default").unwrap();
     static ref BLOCK_POLLING_INTERVAL: Duration = Duration::from_millis(1000);
+    
+    static ref NODE_ID: NodeId = NodeId::new("default").unwrap();
+    static ref SUBGRAPH_NAME: SubgraphName = SubgraphName::new("dfusion").unwrap();
+    static ref SUBGRAPH_ID: SubgraphDeploymentId = SubgraphDeploymentId::new("dfusion").unwrap();
+
 }
 
 fn main() {
@@ -195,13 +207,26 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         NODE_ID.clone(),	
         SubgraphVersionSwitchingMode::Instant
     ));
+
     tokio::spawn(	
-        subgraph_registrar	
-            .start()	
+        subgraph_registrar
+            .create_subgraph(SUBGRAPH_NAME.clone())
+            .then( move |_| {
+                subgraph_registrar.create_subgraph_version(
+                    SUBGRAPH_NAME.clone(), SUBGRAPH_ID.clone(), NODE_ID.clone()
+                )
+                .then(|result| {	
+                    result.expect("Failed to create subgraph");
+                    Ok(())
+                })
+                .and_then(move |_| {
+                    subgraph_registrar.start()
+                })
+            })
             .then(|start_result| {
-                start_result.expect("failed to initialize subgraph provider"); 
+                start_result.expect("failed to start subgraph"); 
                 Ok(())
-            }),	
+            }),
     );
 
     let mut graphql_server = GraphQLQueryServer::new(

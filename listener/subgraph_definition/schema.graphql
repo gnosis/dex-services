@@ -1,0 +1,3 @@
+type Deposit @entity {
+    id: ID!
+}
