@@ -1,6 +1,11 @@
 use byteorder::{BigEndian, WriteBytesExt};
+use graph::bigdecimal::BigDecimal;
+use graph::data::store::{Entity};
 use serde_derive::{Deserialize, Serialize};
-use web3::types::{H256, U256};
+use std::convert::TryInto;
+use std::str::FromStr;
+use std::sync::Arc;
+use web3::types::{H256, U256, Log};
 
 use crate::models::{Serializable, RootHashable, merkleize};
 
@@ -34,6 +39,49 @@ impl From<mongodb::ordered::OrderedDocument> for PendingFlux {
             amount: document.get_str("amount").unwrap().parse().unwrap(),
         }
     }
+}
+
+impl From<Arc<Log>> for PendingFlux {
+    fn from(log: Arc<Log>) -> Self {
+        let mut bytes: Vec<u8> = log.data.0.clone();
+        PendingFlux {
+            account_id: read_u16(&mut bytes),
+            token_id: read_u8(&mut bytes),
+            amount: read_u128(&mut bytes),
+            slot: read_u256(&mut bytes),
+            slot_index: read_u16(&mut bytes),
+        }
+    }
+}
+
+impl Into<Entity> for PendingFlux {
+    fn into(self) -> Entity {
+        let mut entity = Entity::new();
+        entity.set("accountId", self.account_id as i32);
+        entity.set("tokenId", self.token_id as i32);
+        entity.set("amount", BigDecimal::from_str(&self.amount.to_string()).unwrap());
+        entity.set("slot", BigDecimal::from_str(&self.slot.to_string()).unwrap());
+        entity.set("slotIndex", self.slot_index as i32);
+        entity
+    }
+}
+
+fn read_u8(bytes: &mut Vec<u8>) -> u8 {
+    read_u256(bytes).as_u32().try_into().unwrap()
+}
+
+fn read_u16(bytes: &mut Vec<u8>) -> u16 {
+    read_u256(bytes).as_u32().try_into().unwrap()
+}
+
+fn read_u128(bytes: &mut Vec<u8>) -> u128 {
+    read_u256(bytes).to_string().parse().unwrap()
+}
+
+fn read_u256(bytes: &mut Vec<u8>) -> U256 {
+    U256::from_big_endian(
+        bytes.drain(0..32).collect::<Vec<u8>>().as_slice()
+    )
 }
 
 impl RootHashable for Vec<PendingFlux> {
