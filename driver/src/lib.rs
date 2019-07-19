@@ -1,14 +1,11 @@
-extern crate byteorder;
 extern crate hex;
 extern crate mongodb;
 #[macro_use]
 extern crate log;
 extern crate rustc_hex;
-extern crate serde;
-extern crate serde_derive;
 extern crate serde_json;
-extern crate sha2;
 extern crate web3;
+extern crate dfusion_core;
 
 use crate::contract::SnappContractImpl;
 use crate::db_interface::MongoDB;
@@ -24,7 +21,6 @@ pub mod price_finding;
 
 mod deposit_driver;
 mod order_driver;
-pub mod models;
 mod withdraw_driver;
 mod util;
 

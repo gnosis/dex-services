@@ -1,6 +1,7 @@
-use crate::models;
 use crate::price_finding::error::{PriceFindingError, ErrorKind};
 use crate::price_finding::price_finder_interface::{PriceFinding, Solution};
+
+use dfusion_core::models;
 
 use serde_json::json;
 use web3::types::U256;
