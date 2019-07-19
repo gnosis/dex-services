@@ -148,12 +148,13 @@ impl PriceFinding for NaiveSolver {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use web3::types::H256;
 
     #[test]
     fn test_type_ia() {
         let state = State::new(
-            "test".to_string(),
-            0,
+            H256::zero(),
+            U256::zero(),
             vec![200; (TOKENS * 2) as usize],
             TOKENS,
         );
@@ -181,8 +182,8 @@ pub mod tests {
     #[test]
     fn test_type_ib() {
         let state = State::new(
-            "test".to_string(),
-            0,
+            H256::zero(),
+            U256::zero(),
             vec![200; (TOKENS * 2) as usize],
             TOKENS,
         );
@@ -210,8 +211,8 @@ pub mod tests {
     #[test]
     fn test_type_ii() {
         let state = State::new(
-            "test".to_string(),
-            0,
+            H256::zero(),
+            U256::zero(),
             vec![200; (TOKENS * 2) as usize],
             TOKENS,
         );
@@ -239,8 +240,8 @@ pub mod tests {
     #[test]
     fn test_retreth_example() {
         let state = State::new(
-            "test".to_string(),
-            0,
+            H256::zero(),
+            U256::zero(),
             vec![200; (TOKENS * 6) as usize],
             TOKENS,
         );
@@ -296,8 +297,8 @@ pub mod tests {
     #[test]
     fn test_insufficient_balance() {
         let state = State::new(
-            "test".to_string(),
-            0,
+            H256::zero(),
+            U256::zero(),
             vec![0; (TOKENS * 2) as usize],
             TOKENS,
         );
@@ -325,8 +326,8 @@ pub mod tests {
     #[test]
     fn test_no_matches() {
         let state = State::new(
-            "test".to_string(),
-            0,
+            H256::zero(),
+            U256::zero(),
             vec![200; (TOKENS * 2) as usize],
             TOKENS,
         );
