@@ -6,22 +6,12 @@ matrix:
       cache: 
         cargo: true
         directories:
-          - driver/target
-          - listener/target
+          - target
       before_script:
         - rustup component add clippy
       script:
-        - cd dfusion_rust_core/
-        - cargo clippy -- -D warnings
-        - cargo build --verbose --all
-        - cargo test --verbose --all
-        - cd ../driver/
-        - cargo clippy -- -D warnings
-        - cargo build --verbose --all
-        - cargo test --verbose --all
-        - cd ../listener
-        - cargo clippy -- -D warnings
-        - cargo build --verbose --all
+        - cargo clippy --all -- -D warnings
+        - cargo check --verbose --all
         - cargo test --verbose --all
     - language: python
       python: 3.6
