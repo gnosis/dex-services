@@ -107,6 +107,7 @@ fn batch_index_from_standing_orders(standing_orders: &[StandingOrder]) -> Vec<U1
 mod tests {
     use super::*;
     use crate::contract::tests::SnappContractMock;
+    use dfusion_core::models::NUM_RESERVED_ACCOUNTS;
     use dfusion_core::models::order::tests::create_order_for_test;
     use crate::db_interface::tests::DbInterfaceMock;
     use crate::price_finding::price_finder_interface::tests::PriceFindingMock;

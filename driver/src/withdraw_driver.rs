@@ -66,6 +66,7 @@ mod tests {
     use super::*;
     use crate::contract::tests::SnappContractMock;
     use dfusion_core::models::flux::tests::create_flux_for_test;
+    use dfusion_core::models::TOKENS;
     use crate::db_interface::tests::DbInterfaceMock;
     use mock_it::Matcher::*;
     use web3::types::{H256, U256};

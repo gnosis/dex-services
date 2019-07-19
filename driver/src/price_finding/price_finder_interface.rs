@@ -41,9 +41,9 @@ pub mod tests {
     extern crate mock_it;
     
     use super::*;
+    use dfusion_core::models::Serializable;
     use mock_it::Mock;
     use super::super::error::ErrorKind;
-    use crate::models::Serializable;
 
     pub struct PriceFindingMock {
         pub find_prices: Mock<(Vec<models::Order>, models::State), Result<Solution, PriceFindingError>>,
