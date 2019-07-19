@@ -28,7 +28,7 @@ truffle exec scripts/request_withdraw.js 2 2 18
 truffle exec scripts/wait_seconds.js 181
 
 # Expect that driver has processed withdraw slot and ensure updated balances are as expected
-EXPECTED_HASH="7b738197bfe79b6d394499b0cac0186cdc2f65ae2239f2e9e3c698709c80cb67"
+EXPECTED_HASH="7b738197bfe79b6d394499b0cac0186cdc2f65ae2239f2e9e3c698709c80cb67_BREAK"
 retry -t 5 "truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep ${EXPECTED_HASH}"
 retry -t 5 "mongo dfusion2 --eval \"db.accounts.findOne({'stateHash': '$EXPECTED_HASH'}).balances[62]\" | grep -w 0"
 
