@@ -46,7 +46,7 @@ impl From<mongodb::ordered::OrderedDocument> for Order {
 
 impl<T: Serializable> RollingHashable for Vec<T> {
     fn rolling_hash(&self, nonce: u32) -> H256 {
-        self.iter().fold(H256::from(nonce as u64), |acc, w| iter_hash(w, &acc))
+        self.iter().fold(H256::from(u64::from(nonce)), |acc, w| iter_hash(w, &acc))
     }
 }
 
