@@ -8,6 +8,7 @@ extern crate slog;
 
 mod runtime_host;
 mod link_resolver;
+mod event_handler;
 
 use lazy_static::lazy_static;
 use std::env;
@@ -36,7 +37,7 @@ use graph_server_websocket::SubscriptionServer as GraphQLSubscriptionServer;
 
 use graph_store_postgres::{Store as DieselStore, StoreConfig};
 
-use runtime_host::RustRuntimeHost;
+use runtime_host::RustRuntimeHostBuilder;
 use link_resolver::LocalLinkResolver;
 
 lazy_static! {
@@ -180,7 +181,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     let subgraph_instance_manager = SubgraphInstanceManager::new(
         &logger_factory,
         store.clone(),
-        RustRuntimeHost {},
+        RustRuntimeHostBuilder {},
         block_stream_builder,
     );
     
