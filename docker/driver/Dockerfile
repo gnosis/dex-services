@@ -15,7 +15,7 @@ RUN if [ "$use_solver" = 1 ]; then docker/driver/clone_solver.sh; else echo "Not
 ENV LINEAR_OPTIMIZATION_SOLVER $use_solver
 ENV PYTHONPATH ${PYTHONPATH}:/app/batchauctions/
 
-# Copy smart contract build artefacts
+# Copy smart contract build artifacts
 COPY dex-contracts/build dex-contracts/build
 
 # Copy source code
