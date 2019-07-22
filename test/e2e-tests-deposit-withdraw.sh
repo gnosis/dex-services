@@ -11,6 +11,9 @@ truffle exec scripts/setup_environment.js 6
 # checks state after first new deposit round with a deposit of 18 from account 2 and token 2
 truffle exec scripts/deposit.js 2 2 18
 
+# check that deposit was added to the database
+retry -t 5 "source ../test/utils.sh && query_graphql \"{ deposits(where: { accountId: 2}) { amount } }\"" | grep 18000000000000000000
+
 # Wait till previous deposit slot becomes inactive
 truffle exec scripts/wait_seconds.js 181
 

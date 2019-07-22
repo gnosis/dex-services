@@ -38,7 +38,7 @@ matrix:
         - npm install -C dex-contracts
         # driver/listener require compiled contracts
         - cd dex-contracts && truffle compile && cd -
-        - docker-compose up -d ganache-cli driver listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
+        - docker-compose up -d driver listener graph-listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
         - cd dex-contracts && retry truffle migrate && cd -
       script:
         - set -e # make this script fail as soon as any individual command fail
