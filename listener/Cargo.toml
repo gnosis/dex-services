@@ -16,7 +16,7 @@ graph-store-postgres = { git = "https://github.com/graphprotocol/graph-node", ta
 graph-server-http = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
 graph-server-websocket = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
 
-driver = { path = "../driver" }
+dfusion_core = { path = "../dfusion_rust_core" }
 
 env_logger = "0.5.10"
 failure = "0.1.2"

@@ -2,12 +2,12 @@ use byteorder::{BigEndian, WriteBytesExt};
 use graph::bigdecimal::BigDecimal;
 use graph::data::store::{Entity};
 use serde_derive::{Deserialize, Serialize};
-use std::convert::TryInto;
 use std::str::FromStr;
 use std::sync::Arc;
 use web3::types::{H256, U256, Log};
 
 use crate::models::{Serializable, RootHashable, merkleize};
+use super::util::*;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Ord, PartialOrd, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -45,11 +45,11 @@ impl From<Arc<Log>> for PendingFlux {
     fn from(log: Arc<Log>) -> Self {
         let mut bytes: Vec<u8> = log.data.0.clone();
         PendingFlux {
-            account_id: read_u16(&mut bytes),
-            token_id: read_u8(&mut bytes),
-            amount: read_u128(&mut bytes),
-            slot: read_u256(&mut bytes),
-            slot_index: read_u16(&mut bytes),
+            account_id: pop_u16_from_log_data(&mut bytes),
+            token_id: pop_u8_from_log_data(&mut bytes),
+            amount: pop_u128_from_log_data(&mut bytes),
+            slot: pop_u256_from_log_data(&mut bytes),
+            slot_index: pop_u16_from_log_data(&mut bytes),
         }
     }
 }
@@ -57,31 +57,13 @@ impl From<Arc<Log>> for PendingFlux {
 impl Into<Entity> for PendingFlux {
     fn into(self) -> Entity {
         let mut entity = Entity::new();
-        entity.set("accountId", self.account_id as i32);
-        entity.set("tokenId", self.token_id as i32);
+        entity.set("accountId", i32::from(self.account_id));
+        entity.set("tokenId", i32::from(self.token_id));
         entity.set("amount", BigDecimal::from_str(&self.amount.to_string()).unwrap());
         entity.set("slot", BigDecimal::from_str(&self.slot.to_string()).unwrap());
-        entity.set("slotIndex", self.slot_index as i32);
+        entity.set("slotIndex", i32::from(self.slot_index));
         entity
     }
-}
-
-fn read_u8(bytes: &mut Vec<u8>) -> u8 {
-    read_u256(bytes).as_u32().try_into().unwrap()
-}
-
-fn read_u16(bytes: &mut Vec<u8>) -> u16 {
-    read_u256(bytes).as_u32().try_into().unwrap()
-}
-
-fn read_u128(bytes: &mut Vec<u8>) -> u128 {
-    read_u256(bytes).to_string().parse().unwrap()
-}
-
-fn read_u256(bytes: &mut Vec<u8>) -> U256 {
-    U256::from_big_endian(
-        bytes.drain(0..32).collect::<Vec<u8>>().as_slice()
-    )
 }
 
 impl RootHashable for Vec<PendingFlux> {
@@ -111,7 +93,7 @@ pub mod tests {
 #[cfg(test)]
 pub mod unit_test {
   use super::*;
-  use web3::types::{H256};
+  use web3::types::{H256, Bytes};
   use std::str::FromStr;
 
   #[test]
@@ -137,5 +119,60 @@ pub mod unit_test {
             "87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c"
         ).unwrap()
     );
+  }
+
+  #[test]
+  fn test_from_log() {
+      let bytes: Vec<Vec<u8>> = vec![
+        /* account_id_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        /* token_id_bytes */ vec![ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        /* amount_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0],
+        /* slot_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        /* slot_index_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      ];
+
+      let log = Arc::new(Log {
+            address: 1.into(),
+            topics: vec![],
+            data: Bytes(bytes.iter().flat_map(|i| i.iter()).cloned().collect()),
+            block_hash: Some(2.into()),
+            block_number: Some(1.into()),
+            transaction_hash: Some(3.into()),
+            transaction_index: Some(0.into()),
+            log_index: Some(0.into()),
+            transaction_log_index: Some(0.into()),
+            log_type: None,
+            removed: None,
+        });
+
+        let expected_flux = PendingFlux {
+            account_id: 1,
+            token_id: 1,
+            amount: 1 * (10 as u128).pow(18),
+            slot: U256::zero(),
+            slot_index: 0,
+        };
+
+        assert_eq!(expected_flux, PendingFlux::from(log));
+  }
+
+  #[test]
+  fn test_to_entity() {
+      let flux = PendingFlux {
+            account_id: 1,
+            token_id: 1,
+            amount: 1 * (10 as u128).pow(18),
+            slot: U256::zero(),
+            slot_index: 0,
+        };
+        
+        let mut entity = Entity::new();
+        entity.set("accountId", 1);
+        entity.set("tokenId", 1);
+        entity.set("amount", BigDecimal::from(1 * (10 as u64).pow(18)));
+        entity.set("slot", BigDecimal::from(0));
+        entity.set("slotIndex", 0);
+
+        assert_eq!(entity, flux.into());
   }
 }
