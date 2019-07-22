@@ -42,7 +42,7 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
             hash_consistency_check(deposit_hash, contract_deposit_hash, "deposit")?;
 
             let updated_balances = apply_deposits(&balances, &deposits);
-            let new_state_root = updated_balances.rolling_hash(balances.state_index + 1);
+            let new_state_root = updated_balances.rolling_hash(balances.state_index.low_u32() + 1);
             
             info!("New State_hash is {}", new_state_root);
             contract.apply_deposits(slot, state_root, new_state_root, contract_deposit_hash)?;
@@ -73,8 +73,8 @@ mod tests {
         let state_hash = H256::zero();
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
         let state = State::new(
-            format!("{:x}", state_hash),
-            1,
+            state_hash,
+            U256::one(),
             vec![100; (models::TOKENS * 2) as usize],
             models::TOKENS,
         );
@@ -102,8 +102,8 @@ mod tests {
         let state_hash = H256::zero();
 
         let state = State::new(
-            format!("{:x}", state_hash),
-            1,
+            state_hash,
+            U256::one(),
             vec![100; (models::TOKENS * 2) as usize],
             models::TOKENS,
         );
@@ -130,8 +130,8 @@ mod tests {
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
         let state = State::new(
-            format!("{:x}", state_hash),
-            1,
+            state_hash,
+            U256::one(),
             vec![100; (models::TOKENS * 2) as usize],
             models::TOKENS,
         );
@@ -173,8 +173,8 @@ mod tests {
         contract.apply_deposits.given((slot - 1, Any, Any, Any)).will_return(Ok(()));
 
         let state = State::new(
-            format!("{:x}", state_hash),
-            1,
+            state_hash,
+            U256::one(),
             vec![100; (models::TOKENS * 2) as usize],
             models::TOKENS,
         );
@@ -194,8 +194,8 @@ mod tests {
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
         let state = State::new(
-            format!("{:x}", state_hash),
-            1,
+            state_hash,
+            U256::one(),
             vec![100; (models::TOKENS * 2) as usize],
             models::TOKENS,
         );

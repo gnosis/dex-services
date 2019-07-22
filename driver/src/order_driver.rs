@@ -76,7 +76,7 @@ pub fn run_order_listener<D, C>(
 
             // Compute updated balances
             update_balances(&mut state, &orders, &solution);
-            let new_state_root = state.rolling_hash(state.state_index + 1);
+            let new_state_root = state.rolling_hash(state.state_index.low_u32() + 1);
             
             info!("New State_hash is {}, Solution: {:?}", new_state_root, solution);
 
@@ -122,8 +122,8 @@ mod tests {
         let state_hash = H256::zero();
         let orders = vec![create_order_for_test(), create_order_for_test()];
         let state = State::new(
-            format!("{:x}", state_hash),
-            1,
+            state_hash,
+            U256::one(),
             vec![100; (TOKENS * 2) as usize],
             TOKENS,
         );
@@ -209,8 +209,8 @@ mod tests {
         contract.apply_auction.given((slot - 1, Any, Any, Any, Any, Any)).will_return(Ok(()));
 
         let state = State::new(
-            format!("{:x}", state_hash),
-            1,
+            state_hash,
+            U256::one(),
             vec![100; (TOKENS * 2) as usize],
             TOKENS,
         );
@@ -241,8 +241,8 @@ mod tests {
         let orders = vec![create_order_for_test(), create_order_for_test()];
 
         let state = State::new(
-            format!("{:x}", state_hash),
-            1,
+            state_hash,
+            U256::one(),
             vec![100; (TOKENS * 2) as usize],
             TOKENS,
         );
@@ -273,12 +273,12 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let standing_order = StandingOrder::new(
-            1, 0, vec![create_order_for_test(), create_order_for_test()]
+            1, U256::zero(), vec![create_order_for_test(), create_order_for_test()]
         );
 
         let state = State::new(
-            format!("{:x}", state_hash),
-            1,
+            state_hash,
+            U256::one(),
             vec![100; (TOKENS * 2) as usize],
             TOKENS,
         );
@@ -312,10 +312,10 @@ mod tests {
     #[test]
     fn test_get_standing_orders_indexes(){
         let standing_order = StandingOrder::new(
-            1, 3, vec![create_order_for_test(), create_order_for_test()]
+            1, U256::from(3), vec![create_order_for_test(), create_order_for_test()]
         );
         let empty_order = StandingOrder::new(
-            0, 0, vec![]
+            0, U256::zero(), vec![]
         );
         let mut standing_orders = vec![empty_order; NUM_RESERVED_ACCOUNTS as usize];
         standing_orders[1] = standing_order.clone();
@@ -327,8 +327,8 @@ mod tests {
     #[test]
     fn test_update_balances(){
         let mut state = State::new(
-            "test".to_string(),
-            0,
+            H256::zero(),
+            U256::one(),
             vec![100; 70],
             TOKENS,
         );

@@ -49,7 +49,7 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
 
             let (updated_balances, valid_withdraws) = apply_withdraws(&balances, &withdraws);
             let withdrawal_merkle_root = withdraws.root_hash(&valid_withdraws);
-            let new_state_root = updated_balances.rolling_hash(balances.state_index + 1);
+            let new_state_root = updated_balances.rolling_hash(balances.state_index.low_u32() + 1);
             
             info!("New State_hash is {}, Valid Withdraw Merkle Root is {}", new_state_root, withdrawal_merkle_root);
             contract.apply_withdraws(slot, withdrawal_merkle_root, state_root, new_state_root, contract_withdraw_hash)?;
@@ -78,8 +78,8 @@ mod tests {
         let state_hash = H256::zero();
         let withdraws = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
         let state = State::new(
-            format!("{:x}", state_hash),
-            1,
+            state_hash,
+            U256::one(),
             vec![100; (TOKENS * 2) as usize],
             TOKENS,
         );
@@ -149,8 +149,8 @@ mod tests {
         contract.apply_withdraws.given((slot - 1, Any, Any, Any, Any)).will_return(Ok(()));
 
         let state = State::new(
-            format!("{:x}", state_hash),
-            1,
+            state_hash,
+            U256::one(),
             vec![100; (TOKENS * 2) as usize],
             TOKENS,
         );
@@ -171,8 +171,8 @@ mod tests {
         let withdraws = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
         let state = State::new(
-            format!("{:x}", state_hash),
-            1,
+            state_hash,
+            U256::one(),
             vec![100; (TOKENS * 2) as usize],
             TOKENS,
         );
@@ -202,14 +202,14 @@ mod tests {
         let state_hash = H256::zero();
         let withdraws = vec![create_flux_for_test(1,1), PendingFlux {
             slot_index: 2,
-            slot: 1,
+            slot: U256::one(),
             account_id: 0,
             token_id: 1,
             amount: 10,
         }];
         let mut state = State::new(
-            format!("{:x}", state_hash),
-            1,
+            state_hash,
+            U256::one(),
             vec![100; (TOKENS * 2) as usize],
             TOKENS,
         );

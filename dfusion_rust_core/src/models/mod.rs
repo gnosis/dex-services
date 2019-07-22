@@ -17,7 +17,7 @@ pub const NUM_RESERVED_ACCOUNTS: usize = 50;
 pub const DB_NAME: &str = "dfusion2";
 
 pub trait RollingHashable {
-    fn rolling_hash(&self, nonce: i32) -> H256;
+    fn rolling_hash(&self, nonce: u32) -> H256;
 }
 
 pub trait ConcatenatingHashable {

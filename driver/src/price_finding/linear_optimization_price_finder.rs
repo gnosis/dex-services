@@ -190,12 +190,13 @@ pub mod tests {
 
     use super::*;
     use std::error::Error;
+    use web3::types::H256;
 
     #[test]
     fn test_solver_keeps_prices_from_previous_result() {
         let state = models::State::new(
-            "hash".to_string(),
-            0,
+            H256::zero(),
+            U256::zero(),
             vec![0; 2],
             2
         );
@@ -435,8 +436,8 @@ pub mod tests {
     #[test]
     fn test_serialize_balances() {
         let state = models::State::new(
-            "test".to_string(),
-            0,
+            H256::zero(),
+            U256::zero(),
             vec![100, 200, 300, 400, 500, 600],
             3
         );
@@ -460,8 +461,8 @@ pub mod tests {
     #[should_panic]
     fn test_serialize_balances_with_bad_balance_length() {
         let state = models::State::new(
-            "test".to_string(),
-            0,
+            H256::zero(),
+            U256::zero(),
             vec![100, 200],
             30
         );

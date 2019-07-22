@@ -1,14 +1,14 @@
 use byteorder::{BigEndian, WriteBytesExt};
 use serde_derive::{Deserialize, Serialize};
-use web3::types::H256;
+use web3::types::{H256, U256};
 
 use crate::models::{Serializable, RootHashable, merkleize};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Ord, PartialOrd, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PendingFlux {
-  pub slot_index: u32,
-  pub slot: u32,
+  pub slot_index: u16,
+  pub slot: U256,
   pub account_id: u16,
   pub token_id: u8,
   pub amount: u128,
@@ -27,8 +27,8 @@ impl Serializable for PendingFlux {
 impl From<mongodb::ordered::OrderedDocument> for PendingFlux {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
         PendingFlux {
-            slot_index: document.get_i32("slotIndex").unwrap() as u32,
-            slot: document.get_i32("slot").unwrap() as u32,
+            slot_index: document.get_i32("slotIndex").unwrap() as u16,
+            slot: U256::from(document.get_i32("slot").unwrap()),
             account_id: document.get_i32("accountId").unwrap() as u16,
             token_id: document.get_i32("tokenId").unwrap() as u8,
             amount: document.get_str("amount").unwrap().parse().unwrap(),
@@ -49,10 +49,10 @@ impl RootHashable for Vec<PendingFlux> {
 
 pub mod tests {
     use super::*;
-    pub fn create_flux_for_test(slot: u32, slot_index: u32) -> PendingFlux {
+    pub fn create_flux_for_test(slot: u32, slot_index: u16) -> PendingFlux {
         PendingFlux {
             slot_index,
-            slot,
+            slot: U256::from(slot),
             account_id: 1,
             token_id: 1,
             amount: 10,
@@ -70,7 +70,7 @@ pub mod unit_test {
   fn test_pending_flux_root_hash() {
     let deposit = PendingFlux {
       slot_index: 0,
-      slot: 0,
+      slot: U256::zero(),
       account_id: 3,
       token_id: 3,
       amount: 18,

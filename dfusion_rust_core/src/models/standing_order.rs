@@ -1,6 +1,6 @@
 use serde_derive::{Deserialize};
 use sha2::{Digest, Sha256};
-use web3::types::H256;
+use web3::types::{H256, U256};
 use crate::models::{ConcatenatingHashable, RollingHashable};
 use crate::models;
 use array_macro::array;
@@ -10,12 +10,12 @@ use array_macro::array;
 #[serde(rename_all = "camelCase")]
 pub struct StandingOrder {
     pub account_id: u16,
-    pub batch_index: u32,
+    pub batch_index: U256,
     orders: Vec<super::Order>,
 }
 
 impl StandingOrder {
-    pub fn new(account_id: u16, batch_index: u32, orders: Vec<super::Order>) -> StandingOrder {
+    pub fn new(account_id: u16, batch_index: U256, orders: Vec<super::Order>) -> StandingOrder {
         StandingOrder { account_id, batch_index, orders }
     }
     pub fn empty_array() -> [models::StandingOrder; models::NUM_RESERVED_ACCOUNTS]{
@@ -29,7 +29,7 @@ impl StandingOrder {
         self.orders.len()
     }
     pub fn empty(account_id: u16) -> StandingOrder {
-        models::StandingOrder::new(account_id, 0, vec![])
+        models::StandingOrder::new(account_id, U256::zero(), vec![])
     }
 }
 
@@ -47,7 +47,7 @@ impl ConcatenatingHashable for [models::StandingOrder; models::NUM_RESERVED_ACCO
 impl From<mongodb::ordered::OrderedDocument> for StandingOrder {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
         let account_id = document.get_i32("_id").unwrap() as u16;
-        let batch_index = document.get_i32("batchIndex").unwrap() as u32;
+        let batch_index = U256::from(document.get_i32("batchIndex").unwrap());
         StandingOrder {
             account_id,
             batch_index,
@@ -77,7 +77,7 @@ pub mod tests {
   #[test]
   fn test_concatenating_hash() {
     let standing_order = models::StandingOrder::new(
-        1, 0, vec![create_order_for_test(), create_order_for_test()]
+        1, U256::zero(), vec![create_order_for_test(), create_order_for_test()]
     );
     let mut standing_orders = models::StandingOrder::empty_array();
     standing_orders[1] = standing_order;
