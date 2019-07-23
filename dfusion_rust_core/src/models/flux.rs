@@ -1,13 +1,11 @@
 use byteorder::{BigEndian, WriteBytesExt};
-use graph::bigdecimal::BigDecimal;
 use graph::data::store::{Entity};
 use serde_derive::{Deserialize, Serialize};
-use std::str::FromStr;
 use std::sync::Arc;
 use web3::types::{H256, U256, Log};
 
 use crate::models::{Serializable, RootHashable, merkleize};
-use super::util::*;
+use super::util::{pop_u8_from_log_data, pop_u16_from_log_data, pop_u128_from_log_data, pop_u256_from_log_data, to_value};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Ord, PartialOrd, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -59,8 +57,8 @@ impl Into<Entity> for PendingFlux {
         let mut entity = Entity::new();
         entity.set("accountId", i32::from(self.account_id));
         entity.set("tokenId", i32::from(self.token_id));
-        entity.set("amount", BigDecimal::from_str(&self.amount.to_string()).unwrap());
-        entity.set("slot", BigDecimal::from_str(&self.slot.to_string()).unwrap());
+        entity.set("amount", to_value(&self.amount));
+        entity.set("slot", to_value(&self.slot));
         entity.set("slotIndex", i32::from(self.slot_index));
         entity
     }
@@ -93,6 +91,7 @@ pub mod tests {
 #[cfg(test)]
 pub mod unit_test {
   use super::*;
+  use graph::bigdecimal::BigDecimal;
   use web3::types::{H256, Bytes};
   use std::str::FromStr;
 

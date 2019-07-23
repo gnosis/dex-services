@@ -1,9 +1,13 @@
 use byteorder::{BigEndian, WriteBytesExt};
+use graph::data::store::{Entity, Value};
 use serde_derive::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use web3::types::{H256, U256};
+use std::sync::Arc;
+use web3::types::{H256, U256, Log};
 
 use crate::models::{TOKENS, RollingHashable};
+
+use super::util::{pop_u8_from_log_data, pop_u16_from_log_data, pop_h256_from_log_data, to_value};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -78,10 +82,36 @@ impl From<mongodb::ordered::OrderedDocument> for State {
     }
 }
 
+impl From<Arc<Log>> for State {
+    fn from(log: Arc<Log>) -> Self {
+        let mut bytes: Vec<u8> = log.data.0.clone();
+        let state_hash = pop_h256_from_log_data(&mut bytes);
+        let num_tokens = pop_u8_from_log_data(&mut bytes);
+        let num_accounts = pop_u16_from_log_data(&mut bytes);
+        State {
+            state_hash,
+            state_index: U256::zero(),
+            num_tokens,
+            balances: vec![0; num_tokens as usize * num_accounts as usize]
+        }
+    }
+}
+
+impl Into<Entity> for State {
+    fn into(self) -> Entity {
+        let mut entity = Entity::new();
+        entity.set("id", format!("{:#x}", &self.state_hash));
+        entity.set("stateIndex", to_value(&self.state_index));
+        entity.set("balances", self.balances.iter().map(to_value).collect::<Vec<Value>>());
+        entity.set("numTokens", i32::from(self.num_tokens));
+        entity
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
   use super::*;
-  use web3::types::{H256};
+  use web3::types::{H256, Bytes};
 
   #[test]
   fn test_state_rolling_hash() {
@@ -112,5 +142,57 @@ pub mod tests {
       state.rolling_hash(0),
       state_hash
     );
+  }
+
+    #[test]
+  fn test_from_log() {
+      let bytes: Vec<Vec<u8>> = vec![
+        /* state_hash */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        /* num_tokens */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 30],
+        /* num_accounts */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100],
+      ];
+
+      let log = Arc::new(Log {
+            address: 1.into(),
+            topics: vec![],
+            data: Bytes(bytes.iter().flat_map(|i| i.iter()).cloned().collect()),
+            block_hash: Some(2.into()),
+            block_number: Some(1.into()),
+            transaction_hash: Some(3.into()),
+            transaction_index: Some(0.into()),
+            log_index: Some(0.into()),
+            transaction_log_index: Some(0.into()),
+            log_type: None,
+            removed: None,
+        });
+
+        let expected_state = State {
+            state_hash: H256::zero(),
+            state_index:  U256::zero(),
+            balances: vec![0; 3000],
+            num_tokens: 30,
+        };
+
+        assert_eq!(expected_state, State::from(log));
+  }
+
+  #[test]
+  fn test_to_entity() {
+        let balances = vec![0, 18, 1];
+
+        let state = State {
+            state_hash: H256::zero(),
+            state_index:  U256::one(),
+            balances: balances.clone(),
+            num_tokens: TOKENS,
+        };
+        
+        let mut entity = Entity::new();
+        entity.set("id", "0x0000000000000000000000000000000000000000000000000000000000000000");
+        entity.set("stateIndex", to_value(&1));
+        entity.set("balances", balances.iter().map(to_value).collect::<Vec<Value>>());
+        entity.set("numTokens", i32::from(TOKENS));
+
+        assert_eq!(entity, state.into());
   }
 }
