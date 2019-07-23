@@ -3,18 +3,7 @@ use crate::error::DriverError;
 use crate::contract::SnappContract;
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
 
-use dfusion_core::models::{RollingHashable, State, PendingFlux};
-
-pub fn apply_deposits(
-    state: &State,
-    deposits: &[PendingFlux],
-) -> State {
-    let mut updated_state = state.clone();
-    for deposit in deposits {
-        updated_state.increment_balance(deposit.token_id, deposit.account_id, deposit.amount)
-    }
-    updated_state
-}
+use dfusion_core::models::{RollingHashable};
 
 pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), DriverError> 
     where   D: DbInterface,
@@ -35,17 +24,16 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
             info!("Processing deposit_slot {:?}", slot);
             let state_root = contract.get_current_state_root()?;
             let contract_deposit_hash = contract.deposit_hash_for_slot(slot)?;
-            let balances = db.get_current_balances(&state_root)?;
+            let mut balances = db.get_current_balances(&state_root)?;
 
             let deposits = db.get_deposits_of_slot(slot.low_u32())?;
             let deposit_hash = deposits.rolling_hash(0);
             hash_consistency_check(deposit_hash, contract_deposit_hash, "deposit")?;
 
-            let updated_balances = apply_deposits(&balances, &deposits);
-            let new_state_root = updated_balances.rolling_hash(balances.state_index.low_u32() + 1);
+            balances.apply_deposits(&deposits);
             
-            info!("New State_hash is {}", new_state_root);
-            contract.apply_deposits(slot, state_root, new_state_root, contract_deposit_hash)?;
+            info!("New models::State_hash is {}", balances.state_hash);
+            contract.apply_deposits(slot, state_root, balances.state_hash, contract_deposit_hash)?;
             return Ok(true);
         } else {
             info!("Need to wait before processing deposit_slot {:?}", slot);
@@ -72,7 +60,7 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
-        let state = State::new(
+        let state = models::State::new(
             state_hash,
             U256::one(),
             vec![100; (models::TOKENS * 2) as usize],
@@ -101,7 +89,7 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
 
-        let state = State::new(
+        let state = models::State::new(
             state_hash,
             U256::one(),
             vec![100; (models::TOKENS * 2) as usize],
@@ -129,7 +117,7 @@ mod tests {
         let state_hash = H256::zero();
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
-        let state = State::new(
+        let state = models::State::new(
             state_hash,
             U256::one(),
             vec![100; (models::TOKENS * 2) as usize],
@@ -172,7 +160,7 @@ mod tests {
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_deposits.given((slot - 1, Any, Any, Any)).will_return(Ok(()));
 
-        let state = State::new(
+        let state = models::State::new(
             state_hash,
             U256::one(),
             vec![100; (models::TOKENS * 2) as usize],
@@ -193,7 +181,7 @@ mod tests {
 
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
-        let state = State::new(
+        let state = models::State::new(
             state_hash,
             U256::one(),
             vec![100; (models::TOKENS * 2) as usize],
