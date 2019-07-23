@@ -67,7 +67,7 @@ impl RollingHashable for State {
 impl From<mongodb::ordered::OrderedDocument> for State {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
         State {
-            state_hash: document.get_str("state_hash")
+            state_hash: document.get_str("stateHash")
                 .unwrap()
                 .parse::<H256>()
                 .unwrap(),
