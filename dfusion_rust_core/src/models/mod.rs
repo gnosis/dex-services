@@ -2,6 +2,7 @@ pub mod state;
 pub mod flux;
 pub mod order;
 pub mod standing_order;
+mod util;
 
 pub use crate::models::state::State;
 pub use crate::models::flux::PendingFlux;

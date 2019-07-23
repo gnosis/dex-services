@@ -1,4 +1,5 @@
 extern crate env_logger;
+extern crate dfusion_core;
 extern crate graph;
 extern crate graph_core;
 extern crate graph_datasource_ethereum;

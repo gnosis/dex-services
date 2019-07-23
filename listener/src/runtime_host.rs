@@ -9,9 +9,22 @@ use graph::components::subgraph::{RuntimeHost as RuntimeHostTrait, RuntimeHostBu
 
 use graph::data::subgraph::{DataSource, SubgraphDeploymentId};
 
+use tiny_keccak::keccak256;
+
 use web3::types::{Log, Transaction, H256};
 
 use crate::event_handler::EventHandler;
+use crate::event_handler::DepositHandler;
+
+type HandlerMap = HashMap<H256, Box<dyn EventHandler>>;
+
+fn register_event(handlers: &mut HandlerMap, name: &str, handler: Box<dyn EventHandler>) 
+{
+    handlers.insert(
+        H256::from(keccak256(name.as_bytes())),
+        handler
+    );
+}
 
 #[derive(Clone)]
 pub struct RustRuntimeHostBuilder {}
@@ -29,13 +42,19 @@ impl RuntimeHostBuilder for RustRuntimeHostBuilder {
 
 #[derive(Debug)]
 pub struct RustRuntimeHost {
-    handlers: HashMap<H256, Box<EventHandler>>
+    handlers: HashMap<H256, Box<dyn EventHandler>>
 }
 
 impl RustRuntimeHost {
     fn new() -> Self {
+        let mut handlers = HashMap::new();
+        register_event(
+            &mut handlers,
+            "Deposit(uint16,uint8,uint128,uint256,uint16)",
+            Box::new(DepositHandler {})
+        );
         RustRuntimeHost {
-            handlers: HashMap::new()
+            handlers
         }
     }
 }
