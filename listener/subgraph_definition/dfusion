@@ -18,5 +18,7 @@ dataSources:
       eventHandlers:
         - event: Deposit(uint16,uint8,uint128,uint256,uint16)
           handler: rust
+        - event: SnappInitialization(bytes32,uint8,uint16)
+          handler: rust
       file: 
         /: rustHandler.wasm

@@ -13,8 +13,7 @@ use tiny_keccak::keccak256;
 
 use web3::types::{Log, Transaction, H256};
 
-use crate::event_handler::EventHandler;
-use crate::event_handler::DepositHandler;
+use crate::event_handler::{EventHandler, DepositHandler, InitializationHandler};
 
 type HandlerMap = HashMap<H256, Box<dyn EventHandler>>;
 
@@ -52,6 +51,11 @@ impl RustRuntimeHost {
             &mut handlers,
             "Deposit(uint16,uint8,uint128,uint256,uint16)",
             Box::new(DepositHandler {})
+        );
+        register_event(
+            &mut handlers,
+            "SnappInitialization(bytes32,uint8,uint16)",
+            Box::new(InitializationHandler {})
         );
         RustRuntimeHost {
             handlers

@@ -11,6 +11,9 @@ use web3::types::{Log, Transaction};
 mod deposit_handler;
 pub use deposit_handler::DepositHandler;
 
+mod initialization_handler;
+pub use initialization_handler::InitializationHandler;
+
 mod util;
 
 pub trait EventHandler: Send + Sync + Debug {

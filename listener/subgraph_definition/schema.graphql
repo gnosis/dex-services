@@ -6,3 +6,10 @@ type Deposit @entity {
     slot: BigInt!
     slotIndex: Int!
 }
+
+type AccountState @entity {
+    id: ID!
+    stateIndex: BigInt!
+    balances: [BigInt]!
+    numTokens: Int!
+}
