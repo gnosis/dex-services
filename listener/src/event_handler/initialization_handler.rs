@@ -15,7 +15,7 @@ impl EventHandler for InitializationHandler {
         _transaction: Arc<Transaction>,
         log: Arc<Log>
     ) -> Result<Vec<EntityOperation>, Error> {
-        info!(logger, "Processing Initialization Event {:?}", &log.data);
+        info!(logger, "Processing SnappBase Initialization Event");
         let state = State::from(log);
         let entity: Entity = state.into();
         
