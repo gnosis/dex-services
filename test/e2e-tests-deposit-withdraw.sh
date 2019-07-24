@@ -12,7 +12,12 @@ truffle exec scripts/setup_environment.js 6
 truffle exec scripts/deposit.js 2 2 18
 
 # check that deposit was added to the database
-retry -t 5 "source ../test/utils.sh && query_graphql \"{ deposits(where: { accountId: 2}) { amount } }\" | grep 18000000000000000000"
+retry -t 5 "source ../test/utils.sh && query_graphql \
+    'query { \
+        deposits(where: { accountId: 2}) { \
+            amount \
+        } \
+    }' | grep 18000000000000000000"
 
 # Wait till previous deposit slot becomes inactive
 truffle exec scripts/wait_seconds.js 181
@@ -21,6 +26,12 @@ truffle exec scripts/wait_seconds.js 181
 EXPECTED_HASH="73815c173218e6025f7cb12d0add44354c4671e261a34a360943007ff6ac7af5"
 retry -t 5 "truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep ${EXPECTED_HASH}"
 retry -t 5 "mongo dfusion2 --eval \"db.accounts.findOne({'stateHash': '${EXPECTED_HASH}'}).balances[62]\" | grep -w 18000000000000000000"
+retry -t 5 "source ../test/utils.sh && query_graphql \
+    'query { \
+        accountStates(where: {id: \\\"${EXPECTED_HASH}\\\"}) {\
+            balances \
+        } \
+    }' | jq .data.accountStates[0].balances[62] | grep -w 18000000000000000000"
 
 ################
 # Withdraw Tests

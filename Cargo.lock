@@ -937,6 +937,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "graph-mock"
+version = "0.13.2"
+source = "git+https://github.com/graphprotocol/graph-node?tag=v0.13.2#602fba1af5322ceeb58cc09c7120bdacbaa5cbea"
+dependencies = [
+ "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)",
+ "graph 0.13.2 (git+https://github.com/graphprotocol/graph-node?tag=v0.13.2)",
+ "graph-graphql 0.13.2 (git+https://github.com/graphprotocol/graph-node?tag=v0.13.2)",
+ "graphql-parser 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "graph-runtime-derive"
 version = "0.13.2"
 source = "git+https://github.com/graphprotocol/graph-node?tag=v0.13.2#602fba1af5322ceeb58cc09c7120bdacbaa5cbea"
@@ -1332,6 +1345,7 @@ dependencies = [
  "graph 0.13.2 (git+https://github.com/graphprotocol/graph-node?tag=v0.13.2)",
  "graph-core 0.13.2 (git+https://github.com/graphprotocol/graph-node?tag=v0.13.2)",
  "graph-datasource-ethereum 0.13.2 (git+https://github.com/graphprotocol/graph-node?tag=v0.13.2)",
+ "graph-mock 0.13.2 (git+https://github.com/graphprotocol/graph-node?tag=v0.13.2)",
  "graph-server-http 0.13.2 (git+https://github.com/graphprotocol/graph-node?tag=v0.13.2)",
  "graph-server-websocket 0.13.2 (git+https://github.com/graphprotocol/graph-node?tag=v0.13.2)",
  "graph-store-postgres 0.13.2 (git+https://github.com/graphprotocol/graph-node?tag=v0.13.2)",
@@ -3436,7 +3450,7 @@ name = "yaml-rust"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "linked-hash-map 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linked-hash-map 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [metadata]
@@ -3542,6 +3556,7 @@ dependencies = [
 "checksum graph-core 0.13.2 (git+https://github.com/graphprotocol/graph-node?tag=v0.13.2)" = "<none>"
 "checksum graph-datasource-ethereum 0.13.2 (git+https://github.com/graphprotocol/graph-node?tag=v0.13.2)" = "<none>"
 "checksum graph-graphql 0.13.2 (git+https://github.com/graphprotocol/graph-node?tag=v0.13.2)" = "<none>"
+"checksum graph-mock 0.13.2 (git+https://github.com/graphprotocol/graph-node?tag=v0.13.2)" = "<none>"
 "checksum graph-runtime-derive 0.13.2 (git+https://github.com/graphprotocol/graph-node?tag=v0.13.2)" = "<none>"
 "checksum graph-runtime-wasm 0.13.2 (git+https://github.com/graphprotocol/graph-node?tag=v0.13.2)" = "<none>"
 "checksum graph-server-http 0.13.2 (git+https://github.com/graphprotocol/graph-node?tag=v0.13.2)" = "<none>"

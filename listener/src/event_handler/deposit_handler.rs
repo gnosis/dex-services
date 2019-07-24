@@ -36,7 +36,7 @@ impl EventHandler for DepositHandler {
         
         Ok(vec![
             EntityOperation::Set {
-                key: util::entity_key("Deposit", &entity_id),
+                key: util::entity_key("Deposit", &entity),
                 data: entity
             }
         ])
