@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use web3::types::{H256, U256, Log};
 
-use crate::models::{TOKENS, RollingHashable};
+use crate::models::{TOKENS, RollingHashable, PendingFlux};
 
 use super::util::{pop_u8_from_log_data, pop_u16_from_log_data, pop_h256_from_log_data, to_value};
 
@@ -42,6 +42,14 @@ impl State {
             "Balance vector cannot be split into equal accounts"
         );
         (self.balances.len() / self.num_tokens as usize) as u16
+    }
+
+    pub fn apply_deposits(&mut self, deposits: &[PendingFlux]) {
+        for deposit in deposits {
+            self.increment_balance(deposit.token_id, deposit.account_id, deposit.amount)
+        }
+        self.state_index = self.state_index.saturating_add(U256::one());
+        self.state_hash = self.rolling_hash(self.state_index.low_u32());
     }
 }
 
