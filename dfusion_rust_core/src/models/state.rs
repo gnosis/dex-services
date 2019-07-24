@@ -48,8 +48,8 @@ impl State {
         for deposit in deposits {
             self.increment_balance(deposit.token_id, deposit.account_id, deposit.amount)
         }
-        self.state_hash = self.rolling_hash(self.state_index.low_u32());
         self.state_index = self.state_index.saturating_add(U256::one());
+        self.state_hash = self.rolling_hash(self.state_index.low_u32());
     }
 }
 
