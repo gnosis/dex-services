@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Make sure jq is installed (retry doesn't give a good error message at the moment)
+jq --version
+
 cd dex-contracts
 truffle exec scripts/setup_environment.js 6
 
