@@ -44,8 +44,8 @@ impl EntityParsing for u8 {
         u8::try_from(entity
             .get(field)
             .and_then(|value| value.clone().as_int())
-            .expect(&format!("Couldn't get field {} as uint", field))
-        ).expect(&format!("Couldn't cast {} from i32 to u8", field))
+            .unwrap_or_else(|| panic!("Couldn't get field {} as uint", field))
+        ).unwrap_or_else(|_| panic!("Couldn't cast {} from i32 to u8", field))
     }
 }
 
@@ -54,8 +54,8 @@ impl EntityParsing for u16 {
         u16::try_from(entity
             .get(field)
             .and_then(|value| value.clone().as_int())
-            .expect(&format!("Couldn't get field {} as uint", field))
-        ).expect(&format!("Couldn't cast {} from i32 to u16", field))
+            .unwrap_or_else(|| panic!("Couldn't get field {} as uint", field))
+        ).unwrap_or_else(|_| panic!("Couldn't cast {} from i32 to u16", field))
     }
 }
 
@@ -65,8 +65,8 @@ impl EntityParsing for u128 {
             .get(field)
             .and_then(|value| value.clone().as_big_decimal())
             .map(|decimal| decimal.to_string())
-            .expect(&format!("Couldn't get field {} as big decimal", field))
-        ).expect(&format!("Couldn't cast {} from string to u128", field))
+            .unwrap_or_else(|| panic!("Couldn't get field {} as big decimal", field))
+        ).unwrap_or_else(|_| panic!("Couldn't cast {} from string to u128", field))
     }
 }
 
@@ -76,8 +76,8 @@ impl EntityParsing for U256 {
             .get(field)
             .and_then(|value| value.clone().as_big_decimal())
             .map(|decimal| decimal.to_string())
-            .expect(&format!("Couldn't get field {} as big decimal", field))
-        ).expect(&format!("Couldn't cast {} from string to U256", field))
+            .unwrap_or_else(|| panic!("Couldn't get field {} as big decimal", field))
+        ).unwrap_or_else(|_| panic!("Couldn't cast {} from string to U256", field))
     }
 }
 
@@ -86,8 +86,8 @@ impl EntityParsing for H256 {
         H256::from_str(&entity
             .get(field)
             .and_then(|value| value.clone().as_string())
-            .expect(&format!("Couldn't get field {} as string", field))
-        ).expect(&format!("Couldn't cast {} from string to H256", field))
+            .unwrap_or_else(|| panic!("Couldn't get field {} as string", field))
+        ).unwrap_or_else(|_| panic!("Couldn't cast {} from string to H256", field))
     }
 }
 
@@ -102,7 +102,7 @@ impl EntityParsing for Vec<u128> {
                         &value.clone()
                             .as_big_decimal()
                             .map(|decimal| decimal.to_string())
-                            .expect(&format!("Couldn't convert value {} to big decimal", &value))
+                            .unwrap_or_else(|| panic!("Couldn't convert value {} to big decimal", &value))
                     ).unwrap_or_else(|_| panic!("Couldn't parse value {} to u128", &value)))
                 .collect::<Vec<u128>>()
             ).unwrap_or_else(|| panic!("Couldn't get field {} as list", field))
