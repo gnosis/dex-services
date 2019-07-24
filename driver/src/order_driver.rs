@@ -5,7 +5,7 @@ use crate::price_finding::{PriceFinding, Solution};
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
 
 use dfusion_core::models::{
-    RollingHashable, Serializable, ConcatenatingHashable, State, Order, StandingOrder,
+    RollingHashable, Serializable, ConcatenatingHashable, AccountState, Order, StandingOrder,
     TOKENS,
 };
 
@@ -78,7 +78,7 @@ pub fn run_order_listener<D, C>(
             update_balances(&mut state, &orders, &solution);
             let new_state_root = state.rolling_hash(state.state_index.low_u32() + 1);
             
-            info!("New State_hash is {}, Solution: {:?}", new_state_root, solution);
+            info!("New AccountState_hash is {}, Solution: {:?}", new_state_root, solution);
 
             contract.apply_auction(slot, state_root, new_state_root, total_order_hash_from_contract, standing_order_indexes, solution.bytes())?;
             return Ok(true);
@@ -89,7 +89,7 @@ pub fn run_order_listener<D, C>(
     Ok(false)
 }
 
-fn update_balances(state: &mut State, orders: &[Order], solution: &Solution) {
+fn update_balances(state: &mut AccountState, orders: &[Order], solution: &Solution) {
     for (i, order) in orders.iter().enumerate() {
         let buy_volume = solution.executed_buy_amounts[i];
         state.increment_balance(order.buy_token, order.account_id, buy_volume);
@@ -121,7 +121,7 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let orders = vec![create_order_for_test(), create_order_for_test()];
-        let state = State::new(
+        let state = AccountState::new(
             state_hash,
             U256::one(),
             vec![100; (TOKENS * 2) as usize],
@@ -208,7 +208,7 @@ mod tests {
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_auction.given((slot - 1, Any, Any, Any, Any, Any)).will_return(Ok(()));
 
-        let state = State::new(
+        let state = AccountState::new(
             state_hash,
             U256::one(),
             vec![100; (TOKENS * 2) as usize],
@@ -240,7 +240,7 @@ mod tests {
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
 
-        let state = State::new(
+        let state = AccountState::new(
             state_hash,
             U256::one(),
             vec![100; (TOKENS * 2) as usize],
@@ -276,7 +276,7 @@ mod tests {
             1, U256::zero(), vec![create_order_for_test(), create_order_for_test()]
         );
 
-        let state = State::new(
+        let state = AccountState::new(
             state_hash,
             U256::one(),
             vec![100; (TOKENS * 2) as usize],
@@ -326,7 +326,7 @@ mod tests {
 
     #[test]
     fn test_update_balances(){
-        let mut state = State::new(
+        let mut state = AccountState::new(
             H256::zero(),
             U256::one(),
             vec![100; 70],
