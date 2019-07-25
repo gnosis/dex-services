@@ -40,10 +40,10 @@ matrix:
         - docker-compose up -d driver listener graph-listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
         - cd dex-contracts && sleep 1 && truffle migrate && cd -
       script:
-        - sh ./test/e2e-tests-deposit-withdraw.sh
-        - sh ./test/restart-containers.sh
-        - sh ./test/e2e-tests-auction.sh
-        - sh ./test/restart-containers.sh
-        - sh ./test/e2e-tests-standing-order.sh
+        - ./test/e2e-tests-deposit-withdraw.sh
+        - ./test/restart-containers.sh
+        - ./test/e2e-tests-auction.sh
+        - ./test/restart-containers.sh
+        - ./test/e2e-tests-standing-order.sh
       after_failure:
         - docker-compose logs
