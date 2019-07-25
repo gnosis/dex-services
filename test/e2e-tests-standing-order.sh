@@ -1,38 +1,51 @@
 #!/bin/bash
-set -e
 
 cd dex-contracts
-truffle exec scripts/setup_environment.js 6
+source ../test/utils.sh
 
-# Ensure sufficient Balances
-truffle exec scripts/deposit.js 0 2 300
-truffle exec scripts/deposit.js 1 1 300
-truffle exec scripts/wait_seconds.js 181
+step "Setup" \
+"truffle exec scripts/setup_environment.js 6"
 
+step "Ensure sufficient Balances" \
+"truffle exec scripts/deposit.js 0 2 300 && \
+ truffle exec scripts/deposit.js 1 1 300 && \
+ truffle exec scripts/wait_seconds.js 181"
 
-truffle exec scripts/sell_order.js 1 2 1 1 1
+step "Place Sell Order" \
+"truffle exec scripts/sell_order.js 1 2 1 1 1"
 
-# Place standing order in current Auction (accountId, buyToken, sellToken, minBuy, maxSell)
-truffle exec scripts/standing_order.js 0 1 2 1 1
+step "Place standing order in current Auction" \
+"truffle exec scripts/standing_order.js 0 1 2 1 1"
 
-# Check standing order has been recorded
-retry -t 5 "mongo dfusion2 --eval \"db.standing_orders.findOne({accountId:0, batchIndex:0, orders: [ { buyToken:1, sellToken:2, buyAmount:'1000000000000000000', sellAmount:'1000000000000000000' }]})\" | grep ObjectId"
+step_with_retry "Check standing order has been recorded" \
+"mongo dfusion2 --eval \"db.standing_orders.findOne({accountId:0, batchIndex:0, orders: [ { buyToken:1, sellToken:2, buyAmount:'1000000000000000000', sellAmount:'1000000000000000000' }]})\" | grep ObjectId"
 
-truffle exec scripts/wait_seconds.js 181
+step "Advance time to apply auction" \
+"truffle exec scripts/wait_seconds.js 181"
 
-# Assert Standing order account traded
-retry -t 5 "mongo dfusion2 --eval \"db.accounts.findOne({'stateIndex': 2}).balances[1]\" | grep -2 1000000000000000000"
+step_with_retry "Assert Standing order account traded" \
+"mongo dfusion2 --eval \"db.accounts.findOne({'stateIndex': 2}).balances[1]\" | grep -2 1000000000000000000"
 
-# Next Batch: Make sure standing order is still active and trading
-truffle exec scripts/sell_order.js 1 2 1 1 1
-truffle exec scripts/wait_seconds.js 181
-retry -t 5 "mongo dfusion2 --eval \"db.accounts.findOne({'stateIndex': 3}).balances[1]\" | grep -2 2000000000000000000"
+step "Place matching sell order for standing order" \
+"truffle exec scripts/sell_order.js 1 2 1 1 1"
 
-# Update, then cancel standing order in same batch (make sure only cancel gets processed)
-truffle exec scripts/standing_order.js 0 1 2 1 2
-truffle exec scripts/standing_order.js 0 0 0 0 0
+step "Advance time to apply auction" \
+"truffle exec scripts/wait_seconds.js 181"
 
-# Make sure it's no longer traded
-truffle exec scripts/sell_order.js 1 2 1 1 1
-truffle exec scripts/wait_seconds.js 181
-retry -t 5 "mongo dfusion2 --eval \"db.accounts.findOne({'stateIndex': 4}).balances[1]\" | grep -2 2000000000000000000"
+step_with_retry "Make sure standing order is still traded" \
+"mongo dfusion2 --eval \"db.accounts.findOne({'stateIndex': 3}).balances[1]\" | grep -2 2000000000000000000"
+
+step "Update standing order" \
+"truffle exec scripts/standing_order.js 0 1 2 1 2"
+
+step "Cancel standing order in same batch (make sure only cancel gets processed)" \
+"truffle exec scripts/standing_order.js 0 0 0 0 0"
+
+step "Place matching sell order for standing order" \
+"truffle exec scripts/sell_order.js 1 2 1 1 1"
+
+step "Advance time to apply auction" \
+"truffle exec scripts/wait_seconds.js 181"
+
+step_with_retry "Standing Order was no longer traded" \
+"mongo dfusion2 --eval \"db.accounts.findOne({'stateIndex': 4}).balances[1]\" | grep -2 2000000000000000000"
