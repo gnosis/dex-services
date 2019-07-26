@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use graph::components::ethereum::{EthereumCall, EthereumBlockTriggerType, EthereumBlock};
 use graph::components::subgraph::{RuntimeHost as RuntimeHostTrait, RuntimeHostBuilder, BlockState};
+use graph::components::store::Store;
 
 use graph::data::subgraph::{DataSource, SubgraphDeploymentId};
 
@@ -13,7 +14,7 @@ use tiny_keccak::keccak256;
 
 use web3::types::{Log, Transaction, H256};
 
-use crate::event_handler::{EventHandler, DepositHandler, InitializationHandler};
+use crate::event_handler::{EventHandler, DepositHandler, InitializationHandler, FluxTransitionHandler};
 
 type HandlerMap = HashMap<H256, Box<dyn EventHandler>>;
 
@@ -26,7 +27,18 @@ fn register_event(handlers: &mut HandlerMap, name: &str, handler: Box<dyn EventH
 }
 
 #[derive(Clone)]
-pub struct RustRuntimeHostBuilder {}
+pub struct RustRuntimeHostBuilder {
+    store: Arc<Store>
+}
+
+impl RustRuntimeHostBuilder {
+    pub fn new(store: Arc<Store>) -> Self {
+        RustRuntimeHostBuilder {
+            store
+        }
+    }
+}
+
 impl RuntimeHostBuilder for RustRuntimeHostBuilder {
     type Host = RustRuntimeHost;
     fn build(
@@ -35,7 +47,7 @@ impl RuntimeHostBuilder for RustRuntimeHostBuilder {
         _subgraph_id: SubgraphDeploymentId,
         _data_source: DataSource,
     ) -> Result<Self::Host, Error> {
-        Ok(RustRuntimeHost::new())
+        Ok(RustRuntimeHost::new(self.store.clone()))
     }
 }
 
@@ -45,7 +57,7 @@ pub struct RustRuntimeHost {
 }
 
 impl RustRuntimeHost {
-    fn new() -> Self {
+    fn new(store: Arc<Store>) -> Self {
         let mut handlers = HashMap::new();
         register_event(
             &mut handlers,
@@ -56,6 +68,11 @@ impl RustRuntimeHost {
             &mut handlers,
             "SnappInitialization(bytes32,uint8,uint16)",
             Box::new(InitializationHandler {})
+        );
+        register_event(
+            &mut handlers,
+            "StateTransition(uint8,uint256,bytes32,uint256)",
+            Box::new(FluxTransitionHandler::new(store))
         );
         RustRuntimeHost {
             handlers

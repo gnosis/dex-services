@@ -1,11 +1,11 @@
 use byteorder::{BigEndian, WriteBytesExt};
-use graph::data::store::{Entity};
+use graph::data::store::Entity;
 use serde_derive::{Deserialize, Serialize};
 use std::sync::Arc;
 use web3::types::{H256, U256, Log};
 
 use crate::models::{Serializable, RootHashable, merkleize};
-use super::util::{pop_u8_from_log_data, pop_u16_from_log_data, pop_u128_from_log_data, pop_u256_from_log_data, to_value};
+use super::util::*;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Ord, PartialOrd, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -48,6 +48,18 @@ impl From<Arc<Log>> for PendingFlux {
             amount: pop_u128_from_log_data(&mut bytes),
             slot: pop_u256_from_log_data(&mut bytes),
             slot_index: pop_u16_from_log_data(&mut bytes),
+        }
+    }
+}
+
+impl From<Entity> for PendingFlux {
+    fn from(entity: Entity) -> Self {
+        PendingFlux {
+            account_id: u16::from_entity(&entity, "accountId"),
+            token_id: u8::from_entity(&entity, "tokenId"),
+            amount: u128::from_entity(&entity, "amount"),
+            slot: U256::from_entity(&entity, "slot"),
+            slot_index: u16::from_entity(&entity, "slotIndex"),
         }
     }
 }
@@ -156,7 +168,7 @@ pub mod unit_test {
   }
 
   #[test]
-  fn test_to_entity() {
+  fn test_to_and_from_entity() {
       let flux = PendingFlux {
             account_id: 1,
             token_id: 1,
@@ -172,6 +184,7 @@ pub mod unit_test {
         entity.set("slot", BigDecimal::from(0));
         entity.set("slotIndex", 0);
 
-        assert_eq!(entity, flux.into());
+        assert_eq!(entity, flux.clone().into());
+        assert_eq!(flux, PendingFlux::from(entity));
   }
 }

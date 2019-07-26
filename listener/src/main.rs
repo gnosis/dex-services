@@ -182,7 +182,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     let subgraph_instance_manager = SubgraphInstanceManager::new(
         &logger_factory,
         store.clone(),
-        RustRuntimeHostBuilder {},
+        RustRuntimeHostBuilder::new(store.clone()),
         block_stream_builder,
     );
     

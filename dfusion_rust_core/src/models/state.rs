@@ -7,7 +7,7 @@ use web3::types::{H256, U256, Log};
 
 use crate::models::{TOKENS, RollingHashable, PendingFlux};
 
-use super::util::{pop_u8_from_log_data, pop_u16_from_log_data, pop_h256_from_log_data, to_value};
+use super::util::*;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -105,10 +105,21 @@ impl From<Arc<Log>> for State {
     }
 }
 
+impl From<Entity> for State {
+    fn from(entity: Entity) -> Self {
+        State {
+            state_hash: H256::from_entity(&entity, "id"),
+            state_index: U256::from_entity(&entity, "stateIndex"),
+            num_tokens: u8::from_entity(&entity, "numTokens"),
+            balances: Vec::from_entity(&entity, "balances"),
+        }
+    }
+}
+
 impl Into<Entity> for State {
     fn into(self) -> Entity {
         let mut entity = Entity::new();
-        entity.set("id", format!("{:#x}", &self.state_hash));
+        entity.set("id", format!("{:x}", &self.state_hash));
         entity.set("stateIndex", to_value(&self.state_index));
         entity.set("balances", self.balances.iter().map(to_value).collect::<Vec<Value>>());
         entity.set("numTokens", i32::from(self.num_tokens));
@@ -185,7 +196,7 @@ pub mod tests {
   }
 
   #[test]
-  fn test_to_entity() {
+  fn test_to_and_from_entity() {
         let balances = vec![0, 18, 1];
 
         let state = State {
@@ -196,11 +207,12 @@ pub mod tests {
         };
         
         let mut entity = Entity::new();
-        entity.set("id", "0x0000000000000000000000000000000000000000000000000000000000000000");
+        entity.set("id", "0000000000000000000000000000000000000000000000000000000000000000");
         entity.set("stateIndex", to_value(&1));
         entity.set("balances", balances.iter().map(to_value).collect::<Vec<Value>>());
         entity.set("numTokens", i32::from(TOKENS));
 
-        assert_eq!(entity, state.into());
+        assert_eq!(entity, state.clone().into());
+        assert_eq!(state, State::from(entity));
   }
 }

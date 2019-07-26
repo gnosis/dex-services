@@ -14,6 +14,9 @@ pub use deposit_handler::DepositHandler;
 mod initialization_handler;
 pub use initialization_handler::InitializationHandler;
 
+mod flux_transition_handler;
+pub use flux_transition_handler::FluxTransitionHandler;
+
 mod util;
 
 pub trait EventHandler: Send + Sync + Debug {
