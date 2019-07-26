@@ -59,7 +59,7 @@ impl EventHandler for FluxTransitionHandler {
         info!(logger, "Received Flux AccountState Transition Event");
 
         let account_query = util::entity_query(
-            "AccountState", EntityFilter::Equal("stateIndex".to_string(), to_value(&state_index))
+            "AccountState", EntityFilter::Equal("stateIndex".to_string(), state_index.to_value())
         );
         let mut account_state = AccountState::from(self.store
             .find_one(account_query)?
