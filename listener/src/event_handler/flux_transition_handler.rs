@@ -59,7 +59,7 @@ impl EventHandler for FluxTransitionHandler {
         info!(logger, "Received Flux AccountState Transition Event");
 
         let account_query = util::entity_query(
-            "AccountAccountState", EntityFilter::Equal("stateIndex".to_string(), to_value(&state_index))
+            "AccountState", EntityFilter::Equal("stateIndex".to_string(), to_value(&state_index))
         );
         let mut account_state = AccountState::from(self.store
             .find_one(account_query)?
@@ -83,7 +83,7 @@ impl EventHandler for FluxTransitionHandler {
                 entity.set("id", format!("{:x}", new_state_hash));
                 Ok(vec![
                     EntityOperation::Set {
-                        key: util::entity_key("AccountAccountState", &entity),
+                        key: util::entity_key("AccountState", &entity),
                         data: entity
                     }
                 ])
@@ -112,7 +112,7 @@ pub mod test {
         let existing_state = AccountState::new(H256::zero(), U256::zero(), vec![0, 0, 0, 0], 1);
         let entity = existing_state.into();
         store.apply_entity_operations(vec![EntityOperation::Set {
-            key: util::entity_key("AccountAccountState", &entity),
+            key: util::entity_key("AccountState", &entity),
             data: entity
         }], None).unwrap();
 

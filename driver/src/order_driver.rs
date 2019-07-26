@@ -78,7 +78,7 @@ pub fn run_order_listener<D, C>(
             update_balances(&mut state, &orders, &solution);
             let new_state_root = state.rolling_hash(state.state_index.low_u32() + 1);
             
-            info!("New AccountState_hash is {}, Solution: {:?}", new_state_root, solution);
+            info!("New AccountState hash is {}, Solution: {:?}", new_state_root, solution);
 
             contract.apply_auction(slot, state_root, new_state_root, total_order_hash_from_contract, standing_order_indexes, solution.bytes())?;
             return Ok(true);

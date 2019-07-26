@@ -21,7 +21,7 @@ impl EventHandler for InitializationHandler {
         
         Ok(vec![
             EntityOperation::Set {
-                key: util::entity_key("AccountAccountState", &entity),
+                key: util::entity_key("AccountState", &entity),
                 data: entity
             }
         ])

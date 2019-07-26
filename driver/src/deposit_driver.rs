@@ -32,7 +32,7 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
 
             balances.apply_deposits(&deposits);
             
-            info!("New models::AccountState_hash is {}", balances.state_hash);
+            info!("New AccountState hash is {}", balances.state_hash);
             contract.apply_deposits(slot, state_root, balances.state_hash, contract_deposit_hash)?;
             return Ok(true);
         } else {

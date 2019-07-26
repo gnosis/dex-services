@@ -51,7 +51,7 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
             let withdrawal_merkle_root = withdraws.root_hash(&valid_withdraws);
             let new_state_root = updated_balances.rolling_hash(balances.state_index.low_u32() + 1);
             
-            info!("New AccountState_hash is {}, Valid Withdraw Merkle Root is {}", new_state_root, withdrawal_merkle_root);
+            info!("New AccountState hash is {}, Valid Withdraw Merkle Root is {}", new_state_root, withdrawal_merkle_root);
             contract.apply_withdraws(slot, withdrawal_merkle_root, state_root, new_state_root, contract_withdraw_hash)?;
             return Ok(true);
         } else {
