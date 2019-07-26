@@ -43,11 +43,11 @@ impl From<Arc<Log>> for PendingFlux {
     fn from(log: Arc<Log>) -> Self {
         let mut bytes: Vec<u8> = log.data.0.clone();
         PendingFlux {
-            account_id: pop_u16_from_log_data(&mut bytes),
-            token_id: pop_u8_from_log_data(&mut bytes),
-            amount: pop_u128_from_log_data(&mut bytes),
-            slot: pop_u256_from_log_data(&mut bytes),
-            slot_index: pop_u16_from_log_data(&mut bytes),
+            account_id: u16::pop_from_log_data(&mut bytes),
+            token_id: u8::pop_from_log_data(&mut bytes),
+            amount: u128::pop_from_log_data(&mut bytes),
+            slot: U256::pop_from_log_data(&mut bytes),
+            slot_index: u16::pop_from_log_data(&mut bytes),
         }
     }
 }
@@ -67,11 +67,11 @@ impl From<Entity> for PendingFlux {
 impl Into<Entity> for PendingFlux {
     fn into(self) -> Entity {
         let mut entity = Entity::new();
-        entity.set("accountId", i32::from(self.account_id));
-        entity.set("tokenId", i32::from(self.token_id));
-        entity.set("amount", to_value(&self.amount));
-        entity.set("slot", to_value(&self.slot));
-        entity.set("slotIndex", i32::from(self.slot_index));
+        entity.set("accountId", self.account_id.to_value());
+        entity.set("tokenId", self.token_id.to_value());
+        entity.set("amount", self.amount.to_value());
+        entity.set("slot", self.slot.to_value());
+        entity.set("slotIndex", self.slot_index.to_value());
         entity
     }
 }

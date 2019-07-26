@@ -1,5 +1,5 @@
 use byteorder::{BigEndian, WriteBytesExt};
-use graph::data::store::{Entity, Value};
+use graph::data::store::Entity;
 use serde_derive::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
@@ -93,9 +93,9 @@ impl From<mongodb::ordered::OrderedDocument> for AccountState {
 impl From<Arc<Log>> for AccountState {
     fn from(log: Arc<Log>) -> Self {
         let mut bytes: Vec<u8> = log.data.0.clone();
-        let state_hash = pop_h256_from_log_data(&mut bytes);
-        let num_tokens = pop_u8_from_log_data(&mut bytes);
-        let num_accounts = pop_u16_from_log_data(&mut bytes);
+        let state_hash = H256::pop_from_log_data(&mut bytes);
+        let num_tokens = u8::pop_from_log_data(&mut bytes);
+        let num_accounts = u16::pop_from_log_data(&mut bytes);
         AccountState {
             state_hash,
             state_index: U256::zero(),
@@ -119,10 +119,10 @@ impl From<Entity> for AccountState {
 impl Into<Entity> for AccountState {
     fn into(self) -> Entity {
         let mut entity = Entity::new();
-        entity.set("id", format!("{:x}", &self.state_hash));
-        entity.set("stateIndex", to_value(&self.state_index));
-        entity.set("balances", self.balances.iter().map(to_value).collect::<Vec<Value>>());
-        entity.set("numTokens", i32::from(self.num_tokens));
+        entity.set("id", self.state_hash.to_value());
+        entity.set("stateIndex", self.state_index.to_value());
+        entity.set("balances", self.balances.to_value());
+        entity.set("numTokens", self.num_tokens.to_value());
         entity
     }
 }
@@ -207,10 +207,10 @@ pub mod tests {
         };
         
         let mut entity = Entity::new();
-        entity.set("id", "0000000000000000000000000000000000000000000000000000000000000000");
-        entity.set("stateIndex", to_value(&1));
-        entity.set("balances", balances.iter().map(to_value).collect::<Vec<Value>>());
-        entity.set("numTokens", i32::from(TOKENS));
+        entity.set("id", H256::zero().to_value());
+        entity.set("stateIndex", U256::one().to_value());
+        entity.set("balances", balances.to_value());
+        entity.set("numTokens", TOKENS.to_value());
 
         assert_eq!(entity, state.clone().into());
         assert_eq!(state, AccountState::from(entity));
