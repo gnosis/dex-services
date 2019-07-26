@@ -42,6 +42,15 @@ retry -t 5 "source ../test/utils.sh && query_graphql \
 
 # Request withdraw of 18 of token 2 by account 2 and wait till withdraw slot becomes inactive.
 truffle exec scripts/request_withdraw.js 2 2 18
+
+# check that withdraw was added to the database
+retry -t 5 "source ../test/utils.sh && query_graphql \
+    'query { \
+        withdraws(where: { accountId: 2}) { \
+            amount \
+        } \
+    }' | grep 18000000000000000000"
+
 truffle exec scripts/wait_seconds.js 181
 
 # Expect that driver has processed withdraw slot and ensure updated balances are as expected

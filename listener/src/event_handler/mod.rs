@@ -11,6 +11,9 @@ use web3::types::{Log, Transaction};
 mod deposit_handler;
 pub use deposit_handler::DepositHandler;
 
+mod withdraw_handler;
+pub use withdraw_handler::WithdrawHandler;
+
 mod initialization_handler;
 pub use initialization_handler::InitializationHandler;
 

@@ -22,5 +22,7 @@ dataSources:
           handler: rust
         - event: StateTransition(uint8,uint256,bytes32,uint256)
           handler: rust
+        - event WithdrawRequest(uint16,uint8,uint128,uint,uint16)
+          handler: rust
       file: 
         /: rustHandler.wasm

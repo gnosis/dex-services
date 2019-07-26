@@ -13,3 +13,12 @@ type AccountState @entity {
     balances: [BigInt]!
     numTokens: Int!
 }
+
+type Withdraw @entity {
+    id: ID!
+    accountId: Int!
+    tokenId: Int!
+    amount: BigInt!
+    slot: BigInt!
+    slotIndex: Int!
+}
