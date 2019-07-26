@@ -6,4 +6,4 @@ docker-compose up -d mongo
 docker-compose rm -sf ganache-cli
 docker-compose up -d ganache-cli
 docker-compose restart listener
-cd dex-contracts && retry truffle migrate && cd -
+cd dex-contracts && sleep 1 && truffle migrate && cd -
