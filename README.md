@@ -87,6 +87,10 @@ truffle exec scripts/claim_withdraw.js 1 3 3
 Tests
 ========
 
+You need the following dependencies installed locally in order to run the e2e tests:
+- [mongo-cli](https://docs.mongodb.com/manual/installation/)
+- [jq](https://stedolan.github.io/jq/)
+
 For end-to-end tests, run from the project root:
 
 ```bash
