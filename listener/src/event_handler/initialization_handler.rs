@@ -1,6 +1,6 @@
 use super::*;
 
-use dfusion_core::models::State;
+use dfusion_core::models::AccountState;
 
 use graph::data::store::Entity;
 
@@ -16,7 +16,7 @@ impl EventHandler for InitializationHandler {
         log: Arc<Log>
     ) -> Result<Vec<EntityOperation>, Error> {
         info!(logger, "Processing SnappBase Initialization Event");
-        let state = State::from(log);
+        let state = AccountState::from(log);
         let entity: Entity = state.into();
         
         Ok(vec![

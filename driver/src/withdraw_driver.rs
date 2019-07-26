@@ -3,12 +3,12 @@ use crate::contract::SnappContract;
 use crate::error::DriverError;
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
 
-use dfusion_core::models::{RollingHashable, RootHashable, PendingFlux, State};
+use dfusion_core::models::{RollingHashable, RootHashable, PendingFlux, AccountState};
 
 fn apply_withdraws(
-    state: &State,
+    state: &AccountState,
     withdraws: &[PendingFlux],
-) -> (State, Vec<bool>) {
+) -> (AccountState, Vec<bool>) {
     let mut state = state.clone();  // TODO - does this really need to be cloned
     let mut valid_withdraws = vec![];
     for w in withdraws {
@@ -51,7 +51,7 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
             let withdrawal_merkle_root = withdraws.root_hash(&valid_withdraws);
             let new_state_root = updated_balances.rolling_hash(balances.state_index.low_u32() + 1);
             
-            info!("New State_hash is {}, Valid Withdraw Merkle Root is {}", new_state_root, withdrawal_merkle_root);
+            info!("New AccountState hash is {}, Valid Withdraw Merkle Root is {}", new_state_root, withdrawal_merkle_root);
             contract.apply_withdraws(slot, withdrawal_merkle_root, state_root, new_state_root, contract_withdraw_hash)?;
             return Ok(true);
         } else {
@@ -77,7 +77,7 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let withdraws = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
-        let state = State::new(
+        let state = AccountState::new(
             state_hash,
             U256::one(),
             vec![100; (TOKENS * 2) as usize],
@@ -148,7 +148,7 @@ mod tests {
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_withdraws.given((slot - 1, Any, Any, Any, Any)).will_return(Ok(()));
 
-        let state = State::new(
+        let state = AccountState::new(
             state_hash,
             U256::one(),
             vec![100; (TOKENS * 2) as usize],
@@ -170,7 +170,7 @@ mod tests {
 
         let withdraws = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
-        let state = State::new(
+        let state = AccountState::new(
             state_hash,
             U256::one(),
             vec![100; (TOKENS * 2) as usize],
@@ -207,7 +207,7 @@ mod tests {
             token_id: 1,
             amount: 10,
         }];
-        let mut state = State::new(
+        let mut state = AccountState::new(
             state_hash,
             U256::one(),
             vec![100; (TOKENS * 2) as usize],

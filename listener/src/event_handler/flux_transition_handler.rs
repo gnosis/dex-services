@@ -1,6 +1,6 @@
 use super::*;
 
-use dfusion_core::models::{PendingFlux, State};
+use dfusion_core::models::{PendingFlux, AccountState};
 use dfusion_core::models::util::{pop_u8_from_log_data, pop_u256_from_log_data, pop_h256_from_log_data, to_value};
 
 use graph::components::store::{EntityFilter, Store};
@@ -56,12 +56,12 @@ impl EventHandler for FluxTransitionHandler {
         let new_state_hash = pop_h256_from_log_data(&mut data);
         let slot = pop_u256_from_log_data(&mut data);
 
-        info!(logger, "Received Flux State Transition Event");
+        info!(logger, "Received Flux AccountState Transition Event");
 
         let account_query = util::entity_query(
             "AccountState", EntityFilter::Equal("stateIndex".to_string(), to_value(&state_index))
         );
-        let mut account_state = State::from(self.store
+        let mut account_state = AccountState::from(self.store
             .find_one(account_query)?
             .ok_or_else(|| failure::err_msg(format!("No state record found for index {}", &state_index)))?
         );
@@ -109,7 +109,7 @@ pub mod test {
         let handler = FluxTransitionHandler::new(store.clone());
 
         // Add previous account state and pending deposits into Store
-        let existing_state = State::new(H256::zero(), U256::zero(), vec![0, 0, 0, 0], 1);
+        let existing_state = AccountState::new(H256::zero(), U256::zero(), vec![0, 0, 0, 0], 1);
         let entity = existing_state.into();
         store.apply_entity_operations(vec![EntityOperation::Set {
             key: util::entity_key("AccountState", &entity),
@@ -152,11 +152,11 @@ pub mod test {
             Arc::new(util::test::fake_tx()), 
             log
         );
-        let expected_new_state = State::new(H256::from(1), U256::one(), vec![10, 10, 0, 0], 1);
+        let expected_new_state = AccountState::new(H256::from(1), U256::one(), vec![10, 10, 0, 0], 1);
 
         assert!(result.is_ok());
         match result.unwrap().pop().unwrap() {
-            EntityOperation::Set { key: _, data } => assert_eq!(State::from(data), expected_new_state),
+            EntityOperation::Set { key: _, data } => assert_eq!(AccountState::from(data), expected_new_state),
             _ => assert!(false)
         }
     }

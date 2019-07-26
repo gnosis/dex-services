@@ -32,7 +32,7 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
 
             balances.apply_deposits(&deposits);
             
-            info!("New models::State_hash is {}", balances.state_hash);
+            info!("New AccountState hash is {}", balances.state_hash);
             contract.apply_deposits(slot, state_root, balances.state_hash, contract_deposit_hash)?;
             return Ok(true);
         } else {
@@ -60,7 +60,7 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
-        let state = models::State::new(
+        let state = models::AccountState::new(
             state_hash,
             U256::one(),
             vec![100; (models::TOKENS * 2) as usize],
@@ -89,7 +89,7 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
 
-        let state = models::State::new(
+        let state = models::AccountState::new(
             state_hash,
             U256::one(),
             vec![100; (models::TOKENS * 2) as usize],
@@ -117,7 +117,7 @@ mod tests {
         let state_hash = H256::zero();
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
-        let state = models::State::new(
+        let state = models::AccountState::new(
             state_hash,
             U256::one(),
             vec![100; (models::TOKENS * 2) as usize],
@@ -160,7 +160,7 @@ mod tests {
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
         contract.apply_deposits.given((slot - 1, Any, Any, Any)).will_return(Ok(()));
 
-        let state = models::State::new(
+        let state = models::AccountState::new(
             state_hash,
             U256::one(),
             vec![100; (models::TOKENS * 2) as usize],
@@ -181,7 +181,7 @@ mod tests {
 
         let deposits = vec![create_flux_for_test(1,1), create_flux_for_test(1,2)];
 
-        let state = models::State::new(
+        let state = models::AccountState::new(
             state_hash,
             U256::one(),
             vec![100; (models::TOKENS * 2) as usize],

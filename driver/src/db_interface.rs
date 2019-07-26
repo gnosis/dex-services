@@ -16,7 +16,7 @@ pub trait DbInterface {
     fn get_current_balances(
         &self,
         current_state_root: &H256,
-    ) -> Result<models::State, DriverError>;
+    ) -> Result<models::AccountState, DriverError>;
     fn get_deposits_of_slot(
         &self,
         slot: u32,
@@ -69,7 +69,7 @@ impl DbInterface for MongoDB {
     fn get_current_balances(
         &self,
         current_state_root: &H256,
-    ) -> Result<models::State, DriverError> {
+    ) -> Result<models::AccountState, DriverError> {
         let query: String = format!("{{ \"stateHash\": \"{:x}\" }}", current_state_root);
         info!("Querying stateHash: {}", query);
 
@@ -87,7 +87,7 @@ impl DbInterface for MongoDB {
                 &format!("Expected to find a single unique state, found {}", docs.len()), ErrorKind::StateError)
             );
         }
-        Ok(models::State::from(docs.pop().unwrap()))
+        Ok(models::AccountState::from(docs.pop().unwrap()))
     }
 
     fn get_deposits_of_slot(
@@ -146,7 +146,7 @@ pub mod tests {
 
     #[derive(Clone)]
     pub struct DbInterfaceMock {
-        pub get_current_balances: Mock<H256, Result<models::State, DriverError>>,
+        pub get_current_balances: Mock<H256, Result<models::AccountState, DriverError>>,
         pub get_deposits_of_slot: Mock<u32, Result<Vec<models::PendingFlux>, DriverError>>,
         pub get_withdraws_of_slot: Mock<u32, Result<Vec<models::PendingFlux>, DriverError>>,
         pub get_orders_of_slot: Mock<u32, Result<Vec<models::Order>, DriverError>>,
@@ -169,7 +169,7 @@ pub mod tests {
         fn get_current_balances(
             &self,
             current_state_root: &H256,
-        ) -> Result<models::State, DriverError> {
+        ) -> Result<models::AccountState, DriverError> {
             self.get_current_balances.called(*current_state_root)  // https://github.com/intellij-rust/intellij-rust/issues/3164
         }
         fn get_deposits_of_slot(
