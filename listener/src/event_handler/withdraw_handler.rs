@@ -30,8 +30,6 @@ impl EventHandler for WithdrawHandler {
         info!(logger, "Processing Withdraw {:?}", &flux);
 
         let mut entity: Entity = flux.into();
-        // We do not care about the ID inside the flux data model,
-        // so we have to set them later.
         entity.set("id", &entity_id);
 
         Ok(vec![
