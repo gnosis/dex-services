@@ -1,6 +1,6 @@
 use web3::types::U256;
 
-use dfusion_core::models::{Order, State, TOKENS};
+use dfusion_core::models::{Order, AccountState, TOKENS};
 
 use crate::price_finding::error::PriceFindingError;
 
@@ -17,8 +17,8 @@ fn u128_to_u256(x: u128) -> U256 {
 }
 trait Matchable {
     fn attracts(&self, other: &Order) -> bool;
-    fn sufficient_seller_funds(&self, state: &State) -> bool;
-    fn match_compare(&self, other: &Order, state: &State) -> Option<OrderPairType>;
+    fn sufficient_seller_funds(&self, state: &AccountState) -> bool;
+    fn match_compare(&self, other: &Order, state: &AccountState) -> Option<OrderPairType>;
     fn opposite_tokens(&self, other: &Order) -> bool;
     fn have_price_overlap(&self, other: &Order) -> bool;
     fn surplus(&self, buy_price: u128, exec_buy_amount: u128, exec_sell_amount: u128) -> U256;
@@ -30,11 +30,11 @@ impl Matchable for Order {
         self.opposite_tokens(other) && self.have_price_overlap(other)
     }
 
-    fn sufficient_seller_funds(&self, state: &State) -> bool {
+    fn sufficient_seller_funds(&self, state: &AccountState) -> bool {
         state.read_balance(self.sell_token, self.account_id) >= self.sell_amount
     }
 
-    fn match_compare(&self, other: &Order, state: &State) -> Option<OrderPairType> {
+    fn match_compare(&self, other: &Order, state: &AccountState) -> Option<OrderPairType> {
         if self.sufficient_seller_funds(&state) && other.sufficient_seller_funds(&state) && self.attracts(other) {
             if self.buy_amount <= other.sell_amount && self.sell_amount <= other.buy_amount {
                 return Some(OrderPairType::LhsFullyFilled);
@@ -70,7 +70,7 @@ impl PriceFinding for NaiveSolver {
     fn find_prices(
         &mut self, 
         orders: &[Order],
-        state: &State
+        state: &AccountState
     ) -> Result<Solution, PriceFindingError> {
         // Initialize trivial solution
         let mut prices: Vec<u128> = vec![1; TOKENS as usize];
@@ -152,7 +152,7 @@ pub mod tests {
 
     #[test]
     fn test_type_ia() {
-        let state = State::new(
+        let state = AccountState::new(
             H256::zero(),
             U256::zero(),
             vec![200; (TOKENS * 2) as usize],
@@ -181,7 +181,7 @@ pub mod tests {
 
     #[test]
     fn test_type_ib() {
-        let state = State::new(
+        let state = AccountState::new(
             H256::zero(),
             U256::zero(),
             vec![200; (TOKENS * 2) as usize],
@@ -210,7 +210,7 @@ pub mod tests {
 
     #[test]
     fn test_type_ii() {
-        let state = State::new(
+        let state = AccountState::new(
             H256::zero(),
             U256::zero(),
             vec![200; (TOKENS * 2) as usize],
@@ -239,7 +239,7 @@ pub mod tests {
 
     #[test]
     fn test_retreth_example() {
-        let state = State::new(
+        let state = AccountState::new(
             H256::zero(),
             U256::zero(),
             vec![200; (TOKENS * 6) as usize],
@@ -296,7 +296,7 @@ pub mod tests {
 
     #[test]
     fn test_insufficient_balance() {
-        let state = State::new(
+        let state = AccountState::new(
             H256::zero(),
             U256::zero(),
             vec![0; (TOKENS * 2) as usize],
@@ -325,7 +325,7 @@ pub mod tests {
 
     #[test]
     fn test_no_matches() {
-        let state = State::new(
+        let state = AccountState::new(
             H256::zero(),
             U256::zero(),
             vec![200; (TOKENS * 2) as usize],

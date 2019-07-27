@@ -1,12 +1,12 @@
 use super::*;
 
-use dfusion_core::models::{PendingFlux, State};
-use dfusion_core::models::util::{pop_u8_from_log_data, pop_u256_from_log_data, pop_h256_from_log_data, to_value};
+use dfusion_core::models::{PendingFlux, AccountState};
+use dfusion_core::models::util::{PopFromLogData, ToValue};
 
 use graph::components::store::{EntityFilter, Store};
 use graph::data::store::Entity;
 use std::fmt;
-use web3::types::U256;
+use web3::types::{H256, U256};
 
 #[derive(Clone)]
 pub struct FluxTransitionHandler {
@@ -51,17 +51,17 @@ impl EventHandler for FluxTransitionHandler {
         log: Arc<Log>
     ) -> Result<Vec<EntityOperation>, Error> {
         let mut data = log.data.0.clone();
-        let transition_type: FluxTransitionType = pop_u8_from_log_data(&mut data).into();
-        let state_index = pop_u256_from_log_data(&mut data).saturating_sub(U256::one());
-        let new_state_hash = pop_h256_from_log_data(&mut data);
-        let slot = pop_u256_from_log_data(&mut data);
+        let transition_type: FluxTransitionType = u8::pop_from_log_data(&mut data).into();
+        let state_index = U256::pop_from_log_data(&mut data).saturating_sub(U256::one());
+        let new_state_hash = H256::pop_from_log_data(&mut data);
+        let slot = U256::pop_from_log_data(&mut data);
 
-        info!(logger, "Received Flux State Transition Event");
+        info!(logger, "Received Flux AccountState Transition Event");
 
         let account_query = util::entity_query(
-            "AccountState", EntityFilter::Equal("stateIndex".to_string(), to_value(&state_index))
+            "AccountState", EntityFilter::Equal("stateIndex".to_string(), state_index.to_value())
         );
-        let mut account_state = State::from(self.store
+        let mut account_state = AccountState::from(self.store
             .find_one(account_query)?
             .ok_or_else(|| failure::err_msg(format!("No state record found for index {}", &state_index)))?
         );
@@ -69,7 +69,7 @@ impl EventHandler for FluxTransitionHandler {
         match transition_type {
             FluxTransitionType::Deposit => {
                 let deposit_query = util::entity_query(
-                    "Deposit", EntityFilter::Equal("slot".to_string(), to_value(&slot))
+                    "Deposit", EntityFilter::Equal("slot".to_string(), slot.to_value())
                 );
                 let deposits = self.store
                     .find(deposit_query)?
@@ -80,7 +80,7 @@ impl EventHandler for FluxTransitionHandler {
 
                 let mut entity: Entity = account_state.into();
                 // We set the state root as claimed by the event
-                entity.set("id", format!("{:x}", new_state_hash));
+                entity.set("id", new_state_hash.to_value());
                 Ok(vec![
                     EntityOperation::Set {
                         key: util::entity_key("AccountState", &entity),
@@ -109,7 +109,7 @@ pub mod test {
         let handler = FluxTransitionHandler::new(store.clone());
 
         // Add previous account state and pending deposits into Store
-        let existing_state = State::new(H256::zero(), U256::zero(), vec![0, 0, 0, 0], 1);
+        let existing_state = AccountState::new(H256::zero(), U256::zero(), vec![0, 0, 0, 0], 1);
         let entity = existing_state.into();
         store.apply_entity_operations(vec![EntityOperation::Set {
             key: util::entity_key("AccountState", &entity),
@@ -152,11 +152,11 @@ pub mod test {
             Arc::new(util::test::fake_tx()), 
             log
         );
-        let expected_new_state = State::new(H256::from(1), U256::one(), vec![10, 10, 0, 0], 1);
+        let expected_new_state = AccountState::new(H256::from(1), U256::one(), vec![10, 10, 0, 0], 1);
 
         assert!(result.is_ok());
         match result.unwrap().pop().unwrap() {
-            EntityOperation::Set { key: _, data } => assert_eq!(State::from(data), expected_new_state),
+            EntityOperation::Set { key: _, data } => assert_eq!(AccountState::from(data), expected_new_state),
             _ => assert!(false)
         }
     }

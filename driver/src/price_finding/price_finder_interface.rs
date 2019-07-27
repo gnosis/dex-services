@@ -32,7 +32,7 @@ pub trait PriceFinding {
     fn find_prices(
         &mut self, 
         orders: &[models::Order],
-        state: &models::State
+        state: &models::AccountState
     ) -> Result<Solution, PriceFindingError>;
 }
 
@@ -46,7 +46,7 @@ pub mod tests {
     use super::super::error::ErrorKind;
 
     pub struct PriceFindingMock {
-        pub find_prices: Mock<(Vec<models::Order>, models::State), Result<Solution, PriceFindingError>>,
+        pub find_prices: Mock<(Vec<models::Order>, models::AccountState), Result<Solution, PriceFindingError>>,
     }
 
     impl PriceFindingMock {
@@ -61,7 +61,7 @@ pub mod tests {
         fn find_prices(
             &mut self, 
             orders: &[models::Order],
-            state: &models::State
+            state: &models::AccountState
         ) -> Result<Solution, PriceFindingError> {
             self.find_prices.called((orders.to_vec(), state.to_owned()))
         }

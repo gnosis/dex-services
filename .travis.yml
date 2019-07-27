@@ -32,19 +32,18 @@ matrix:
           - dex-contracts/node_modules/
       before_install:
         - npm install -g truffle node-jq
-        - sudo sh -c "curl https://raw.githubusercontent.com/kadwanev/retry/a1b1826bdb0a78189d5c70c858dc676f5133b1d7/retry -o /usr/local/bin/retry && chmod +x /usr/local/bin/retry"
       install:
         - git submodule update --init
         - npm install -C dex-contracts
         # driver/listener require compiled contracts
         - cd dex-contracts && truffle compile && cd -
         - docker-compose up -d driver listener graph-listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
-        - cd dex-contracts && retry truffle migrate && cd -
+        - cd dex-contracts && sleep 1 && truffle migrate && cd -
       script:
-        - sh ./test/e2e-tests-deposit-withdraw.sh
-        - sh ./test/restart-containers.sh
-        - sh ./test/e2e-tests-auction.sh
-        - sh ./test/restart-containers.sh
-        - sh ./test/e2e-tests-standing-order.sh
+        - ./test/e2e-tests-deposit-withdraw.sh
+        - ./test/restart-containers.sh
+        - ./test/e2e-tests-auction.sh
+        - ./test/restart-containers.sh
+        - ./test/e2e-tests-standing-order.sh
       after_failure:
         - docker-compose logs

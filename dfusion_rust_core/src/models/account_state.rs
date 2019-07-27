@@ -1,5 +1,5 @@
 use byteorder::{BigEndian, WriteBytesExt};
-use graph::data::store::{Entity, Value};
+use graph::data::store::Entity;
 use serde_derive::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
@@ -11,16 +11,16 @@ use super::util::*;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct State {
+pub struct AccountState {
     pub state_hash: H256,
     pub state_index: U256,
     balances: Vec<u128>,
     pub num_tokens: u8,
 }
 
-impl State {
+impl AccountState {
     pub fn new(state_hash: H256, state_index: U256, balances: Vec<u128>, num_tokens: u8) -> Self {
-        State { state_hash, state_index, balances, num_tokens }
+        AccountState { state_hash, state_index, balances, num_tokens }
     }
     fn balance_index(&self, token_id: u8, account_id: u16) -> usize {
         self.num_tokens as usize * account_id as usize  + token_id as usize
@@ -53,7 +53,7 @@ impl State {
     }
 }
 
-impl RollingHashable for State {
+impl RollingHashable for AccountState {
   //Todo: Exchange sha with pederson hash
   fn rolling_hash(&self, nonce: u32) -> H256 {
     let mut hash = vec![0u8; 28];
@@ -72,9 +72,9 @@ impl RollingHashable for State {
   }
 }
 
-impl From<mongodb::ordered::OrderedDocument> for State {
+impl From<mongodb::ordered::OrderedDocument> for AccountState {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
-        State {
+        AccountState {
             state_hash: document.get_str("stateHash")
                 .unwrap()
                 .parse::<H256>()
@@ -90,13 +90,13 @@ impl From<mongodb::ordered::OrderedDocument> for State {
     }
 }
 
-impl From<Arc<Log>> for State {
+impl From<Arc<Log>> for AccountState {
     fn from(log: Arc<Log>) -> Self {
         let mut bytes: Vec<u8> = log.data.0.clone();
-        let state_hash = pop_h256_from_log_data(&mut bytes);
-        let num_tokens = pop_u8_from_log_data(&mut bytes);
-        let num_accounts = pop_u16_from_log_data(&mut bytes);
-        State {
+        let state_hash = H256::pop_from_log_data(&mut bytes);
+        let num_tokens = u8::pop_from_log_data(&mut bytes);
+        let num_accounts = u16::pop_from_log_data(&mut bytes);
+        AccountState {
             state_hash,
             state_index: U256::zero(),
             num_tokens,
@@ -105,9 +105,9 @@ impl From<Arc<Log>> for State {
     }
 }
 
-impl From<Entity> for State {
+impl From<Entity> for AccountState {
     fn from(entity: Entity) -> Self {
-        State {
+        AccountState {
             state_hash: H256::from_entity(&entity, "id"),
             state_index: U256::from_entity(&entity, "stateIndex"),
             num_tokens: u8::from_entity(&entity, "numTokens"),
@@ -116,13 +116,13 @@ impl From<Entity> for State {
     }
 }
 
-impl Into<Entity> for State {
+impl Into<Entity> for AccountState {
     fn into(self) -> Entity {
         let mut entity = Entity::new();
-        entity.set("id", format!("{:x}", &self.state_hash));
-        entity.set("stateIndex", to_value(&self.state_index));
-        entity.set("balances", self.balances.iter().map(to_value).collect::<Vec<Value>>());
-        entity.set("numTokens", i32::from(self.num_tokens));
+        entity.set("id", self.state_hash.to_value());
+        entity.set("stateIndex", self.state_index.to_value());
+        entity.set("balances", self.balances.to_value());
+        entity.set("numTokens", self.num_tokens.to_value());
         entity
     }
 }
@@ -137,7 +137,7 @@ pub mod tests {
     // Empty state
     let mut balances = vec![0; 3000];
     let state_hash = "77b01abfbad57cb7a1344b12709603ea3b9ad803ef5ea09814ca212748f54733".parse::<H256>().unwrap();
-    let state = State {
+    let state = AccountState {
         state_hash: state_hash.clone(),
         state_index:  U256::one(),
         balances: balances.clone(),
@@ -148,10 +148,10 @@ pub mod tests {
       state_hash
     );
 
-    // State with single deposit
+    // AccountState with single deposit
     balances[62] = 18;
     let state_hash = "a0cde336d10dbaf3df98ba662bacf25d95062db7b3e0083bd4bad4a6c7a1cd41".parse::<H256>().unwrap();
-    let state = State {
+    let state = AccountState {
         state_hash: state_hash.clone(),
         state_index:  U256::one(),
         balances,
@@ -185,21 +185,21 @@ pub mod tests {
             removed: None,
         });
 
-        let expected_state = State {
+        let expected_state = AccountState {
             state_hash: H256::zero(),
             state_index:  U256::zero(),
             balances: vec![0; 3000],
             num_tokens: 30,
         };
 
-        assert_eq!(expected_state, State::from(log));
+        assert_eq!(expected_state, AccountState::from(log));
   }
 
   #[test]
   fn test_to_and_from_entity() {
         let balances = vec![0, 18, 1];
 
-        let state = State {
+        let state = AccountState {
             state_hash: H256::zero(),
             state_index:  U256::one(),
             balances: balances.clone(),
@@ -207,12 +207,12 @@ pub mod tests {
         };
         
         let mut entity = Entity::new();
-        entity.set("id", "0000000000000000000000000000000000000000000000000000000000000000");
-        entity.set("stateIndex", to_value(&1));
-        entity.set("balances", balances.iter().map(to_value).collect::<Vec<Value>>());
-        entity.set("numTokens", i32::from(TOKENS));
+        entity.set("id", H256::zero().to_value());
+        entity.set("stateIndex", U256::one().to_value());
+        entity.set("balances", balances.to_value());
+        entity.set("numTokens", TOKENS.to_value());
 
         assert_eq!(entity, state.clone().into());
-        assert_eq!(state, State::from(entity));
+        assert_eq!(state, AccountState::from(entity));
   }
 }

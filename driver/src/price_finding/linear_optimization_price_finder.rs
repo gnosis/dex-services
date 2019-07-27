@@ -50,7 +50,7 @@ fn account_id(account: u16) -> String {
     format!("account{}", account)
 }
 
-fn serialize_balances(state: &models::State,) -> serde_json::Value {
+fn serialize_balances(state: &models::AccountState,) -> serde_json::Value {
     let mut accounts: HashMap<String, HashMap<String, String>> = HashMap::new();
     for account in 0..state.accounts() {
         accounts.insert(account_id(account), (0..state.num_tokens)
@@ -130,7 +130,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
     fn find_prices(
         &mut self, 
         orders: &[models::Order],
-        state: &models::State
+        state: &models::AccountState
     ) -> Result<Solution, PriceFindingError> {
         let token_ids: Vec<String> = (0..state.num_tokens)
             .map(token_id)
@@ -194,7 +194,7 @@ pub mod tests {
 
     #[test]
     fn test_solver_keeps_prices_from_previous_result() {
-        let state = models::State::new(
+        let state = models::AccountState::new(
             H256::zero(),
             U256::zero(),
             vec![0; 2],
@@ -435,7 +435,7 @@ pub mod tests {
 
     #[test]
     fn test_serialize_balances() {
-        let state = models::State::new(
+        let state = models::AccountState::new(
             H256::zero(),
             U256::zero(),
             vec![100, 200, 300, 400, 500, 600],
@@ -460,7 +460,7 @@ pub mod tests {
     #[test]
     #[should_panic]
     fn test_serialize_balances_with_bad_balance_length() {
-        let state = models::State::new(
+        let state = models::AccountState::new(
             H256::zero(),
             U256::zero(),
             vec![100, 200],
