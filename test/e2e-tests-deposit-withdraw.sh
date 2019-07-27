@@ -46,6 +46,15 @@ step_with_retry "Check graph db updated" \
 
 step "Request withdraw of 18 of token 2 by account 2" \
     "truffle exec scripts/request_withdraw.js 2 2 18"
+
+step_with_retry "Withdraw was added to graph db" \
+"source ../test/utils.sh && query_graphql \
+    \"query { \
+        withdraws(where: { accountId: 2}) { \
+            amount \
+        } \
+    }\" | grep 18000000000000000000"
+
 step "wait till withdraw slot becomes inactive" "truffle exec scripts/wait_seconds.js 181"
 
 EXPECTED_HASH="7b738197bfe79b6d394499b0cac0186cdc2f65ae2239f2e9e3c698709c80cb67"
