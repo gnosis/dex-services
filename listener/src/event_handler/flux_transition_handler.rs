@@ -33,11 +33,11 @@ enum FluxTransitionType {
 }
 
 impl From<u8> for FluxTransitionType {
-    fn from(tranition_type: u8) -> Self {
-        match tranition_type {
+    fn from(transition_type: u8) -> Self {
+        match transition_type {
             0 => FluxTransitionType::Deposit,
             1 => FluxTransitionType::Withdraw,
-            _ => panic!("Unknown transition type: {}", tranition_type),
+            _ => panic!("Unknown transition type: {}", transition_type),
         }
     }
 }
@@ -108,7 +108,6 @@ impl EventHandler for FluxTransitionHandler {
                         data: entity
                     }
                 ])
-                Ok(vec![])
             }
         }
     }
