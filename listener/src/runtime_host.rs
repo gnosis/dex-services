@@ -76,7 +76,7 @@ impl RustRuntimeHost {
         );
         register_event(
             &mut handlers,
-            "WithdrawRequest(uint16,uint8,uint128,uint,uint16)",
+            "WithdrawRequest(uint16,uint8,uint128,uint256,uint16)",
             Box::new(WithdrawHandler {})
         );
         RustRuntimeHost {
