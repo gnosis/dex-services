@@ -51,6 +51,14 @@ impl AccountState {
         self.state_index = self.state_index.saturating_add(U256::one());
         self.state_hash = self.rolling_hash(self.state_index.low_u32());
     }
+
+    pub fn apply_withdraws(&mut self, withdraws: &[PendingFlux]) {
+        for withdraw in withdraws {
+            self.decrement_balance(withdraw.token_id, withdraw.account_id, withdraw.amount)
+        }
+        self.state_index = self.state_index.saturating_add(U256::one());
+        self.state_hash = self.rolling_hash(self.state_index.low_u32());
+    }
 }
 
 impl RollingHashable for AccountState {

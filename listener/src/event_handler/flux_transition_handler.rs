@@ -89,7 +89,25 @@ impl EventHandler for FluxTransitionHandler {
                 ])
             },
             FluxTransitionType::Withdraw => {
-                warn!(logger, "Withdraw handling not yet implementd");
+                let withdraw_query = util::entity_query(
+                    "Withdraw", EntityFilter::Equal("slot".to_string(), slot.to_value())
+                );
+                let withdraws = self.store
+                    .find(withdraw_query)?
+                    .into_iter()
+                    .map(PendingFlux::from)
+                    .collect::<Vec<PendingFlux>>();
+                account_state.apply_withdraws(&withdraws);
+
+                let mut entity: Entity = account_state.into();
+                // We set the state root as claimed by the event
+                entity.set("id", new_state_hash.to_value());
+                Ok(vec![
+                    EntityOperation::Set {
+                        key: util::entity_key("AccountState", &entity),
+                        data: entity
+                    }
+                ])
                 Ok(vec![])
             }
         }
