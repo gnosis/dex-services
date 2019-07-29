@@ -185,6 +185,79 @@ pub mod test {
         assert!(result.is_err());
     }
 
+    #[test]
+    fn test_applies_withdraws_existing_state() {
+        let schema = util::test::fake_schema();
+        let store = Arc::new(MockStore::new(vec![(schema.id.clone(), schema)]));
+        let handler = FluxTransitionHandler::new(store.clone());
+
+        // Add previous account state and pending deposits into Store
+        let existing_state = AccountState::new(
+            H256::zero(),
+            U256::zero(),
+            vec![10, 20, 0, 0],
+            1
+        );
+        let entity = existing_state.into();
+        store.apply_entity_operations(vec![EntityOperation::Set {
+            key: util::entity_key("AccountState", &entity),
+            data: entity
+        }], None).unwrap();
+        let first_withdraw = PendingFlux {
+            slot_index: 0,
+            slot: U256::zero(),
+            account_id: 0,
+            token_id: 0,
+            amount: 10,
+        };
+        let mut entity: Entity = first_withdraw.into();
+        entity.set("id", "1");
+        store.apply_entity_operations(vec![EntityOperation::Set {
+            key: util::entity_key("Withdraw", &entity),
+            data: entity
+        }], None).unwrap();
+
+        let second_withdraw = PendingFlux {
+            slot_index: 1,
+            slot: U256::zero(),
+            account_id: 1,
+            token_id: 0,
+            amount: 10,
+        };
+        let mut entity: Entity = second_withdraw.into();
+        entity.set("id", "2");
+        store.apply_entity_operations(vec![EntityOperation::Set {
+            key: util::entity_key("Withdraw", &entity),
+            data: entity
+        }], None).unwrap();
+
+        // Process event
+        let log = create_state_transition_event(
+            FluxTransitionType::Withdraw,
+            1,
+            H256::from(1),
+            0
+        );
+        let result = handler.process_event(
+            util::test::logger(),
+            Arc::new(util::test::fake_block()),
+            Arc::new(util::test::fake_tx()),
+            log
+        );
+        let expected_new_state = AccountState::new(
+            H256::from(1),
+            U256::one(),
+            vec![0, 10, 0, 0],
+            1
+        );
+
+        assert!(result.is_ok());
+        match result.unwrap().pop().unwrap() {
+            EntityOperation::Set { key: _, data } => assert_eq!(AccountState::from(data), expected_new_state),
+            _ => assert!(false)
+        }
+    }
+
     fn create_state_transition_event(
         transition_type: FluxTransitionType, 
         new_state_index: u8, 
