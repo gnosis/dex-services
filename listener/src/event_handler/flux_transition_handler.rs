@@ -77,16 +77,6 @@ impl EventHandler for FluxTransitionHandler {
                     .map(PendingFlux::from)
                     .collect::<Vec<PendingFlux>>();
                 account_state.apply_deposits(&deposits);
-
-                let mut entity: Entity = account_state.into();
-                // We set the state root as claimed by the event
-                entity.set("id", new_state_hash.to_value());
-                Ok(vec![
-                    EntityOperation::Set {
-                        key: util::entity_key("AccountState", &entity),
-                        data: entity
-                    }
-                ])
             },
             FluxTransitionType::Withdraw => {
                 let withdraw_query = util::entity_query(
@@ -98,18 +88,17 @@ impl EventHandler for FluxTransitionHandler {
                     .map(PendingFlux::from)
                     .collect::<Vec<PendingFlux>>();
                 account_state.apply_withdraws(&withdraws);
-
-                let mut entity: Entity = account_state.into();
-                // We set the state root as claimed by the event
-                entity.set("id", new_state_hash.to_value());
-                Ok(vec![
-                    EntityOperation::Set {
-                        key: util::entity_key("AccountState", &entity),
-                        data: entity
-                    }
-                ])
             }
         }
+        let mut entity: Entity = account_state.into();
+        // We set the state root as claimed by the event
+        entity.set("id", new_state_hash.to_value());
+        Ok(vec![
+            EntityOperation::Set {
+                key: util::entity_key("AccountState", &entity),
+                data: entity
+            }
+        ])
     }
 }
 
