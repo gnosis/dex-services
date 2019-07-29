@@ -51,6 +51,19 @@ impl AccountState {
         self.state_index = self.state_index.saturating_add(U256::one());
         self.state_hash = self.rolling_hash(self.state_index.low_u32());
     }
+
+    pub fn apply_withdraws(&mut self, withdraws: &[PendingFlux]) -> Vec<bool> {
+        let mut valid_withdraws = vec![];
+        for withdraw in withdraws {
+            if self.read_balance(withdraw.token_id, withdraw.account_id) >= withdraw.amount {
+                self.decrement_balance(withdraw.token_id, withdraw.account_id, withdraw.amount);
+                valid_withdraws.push(true);
+            } else {
+                valid_withdraws.push(false);
+            }
+        }
+        valid_withdraws
+    }
 }
 
 impl RollingHashable for AccountState {
