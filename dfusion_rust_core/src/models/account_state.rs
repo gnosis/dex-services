@@ -62,6 +62,8 @@ impl AccountState {
                 valid_withdraws.push(false);
             }
         }
+        self.state_index = self.state_index.saturating_add(U256::one());
+        self.state_hash = self.rolling_hash(self.state_index.low_u32());
         valid_withdraws
     }
 }

@@ -50,7 +50,7 @@ step "Request withdraw of 18 of token 2 by account 2" \
 step_with_retry "Withdraw was added to graph db" \
 "source ../test/utils.sh && query_graphql \
     \"query { \
-        withdraws(where: { accountId: 2}) { \
+        withdraws(where: { accountId: 2 }) { \
             amount \
         } \
     }\" | grep 18000000000000000000"
