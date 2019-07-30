@@ -20,6 +20,9 @@ pub use initialization_handler::InitializationHandler;
 mod flux_transition_handler;
 pub use flux_transition_handler::FluxTransitionHandler;
 
+mod sellorder_handler;
+pub use sellorder_handler::SellOrderHandler;
+
 mod util;
 
 pub trait EventHandler: Send + Sync + Debug {
