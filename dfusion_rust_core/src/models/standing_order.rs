@@ -57,8 +57,8 @@ impl From<mongodb::ordered::OrderedDocument> for StandingOrder {
                 .iter()
                 .map(|raw_order| raw_order.as_document().unwrap())
                 .map(|order_doc| super::Order {
-                        slot: order_doc.get_str("slot").unwrap().parse().unwrap(),
-                        slot_index: order_doc.get_i32("slot_index").unwrap() as u16,
+                        slot: None,
+                        slot_index: None,
                         account_id,
                         buy_token: order_doc.get_i32("buyToken").unwrap() as u8,
                         sell_token: order_doc.get_i32("sellToken").unwrap() as u8,
