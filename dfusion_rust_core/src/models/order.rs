@@ -56,7 +56,7 @@ impl From<Arc<Log>> for Order {
 impl From<Entity> for Order {
     fn from(entity: Entity) -> Self {
         Order {
-            slot: U256::from_entity(&entity, "slot"),
+            slot: U256::from_entity(&entity, "auctionId"),
             slot_index: u16::from_entity(&entity, "slotIndex"),
             account_id: u16::from_entity(&entity, "accountId"),
             sell_token: u8::from_entity(&entity, "sellToken"),
