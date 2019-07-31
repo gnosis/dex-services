@@ -160,6 +160,8 @@ pub mod tests {
         );
         let orders = vec![
             Order {
+                slot: U256::zero(),
+                slot_index: 0,
                 account_id: 1,
                 sell_token: 1,
                 buy_token: 2,
@@ -167,6 +169,8 @@ pub mod tests {
                 buy_amount: 4,
             },
             Order {
+                slot: U256::zero(),
+                slot_index: 1,
                 account_id: 0,
                 sell_token: 2,
                 buy_token: 1,
@@ -189,6 +193,8 @@ pub mod tests {
         );
         let orders = vec![
             Order {
+                slot: U256::zero(),
+                slot_index: 0,
                 account_id: 0,
                 sell_token: 2,
                 buy_token: 1,
@@ -196,6 +202,8 @@ pub mod tests {
                 buy_amount: 180,
             },
             Order {
+                slot: U256::zero(),
+                slot_index: 1,
                 account_id: 1,
                 sell_token: 1,
                 buy_token: 2,
@@ -218,6 +226,8 @@ pub mod tests {
         );
         let orders = vec![
             Order {
+                slot: U256::zero(),
+                slot_index: 0,
                 account_id: 0,
                 sell_token: 2,
                 buy_token: 1,
@@ -225,6 +235,8 @@ pub mod tests {
                 buy_amount: 10,
             },
             Order {
+                slot: U256::zero(),
+                slot_index: 1,
                 account_id: 1,
                 sell_token: 1,
                 buy_token: 2,
@@ -247,6 +259,8 @@ pub mod tests {
         );
         let orders = vec![
             Order {
+                slot: U256::zero(),
+                slot_index: 0,
                 account_id: 0,
                 sell_token: 3,
                 buy_token: 2,
@@ -254,6 +268,8 @@ pub mod tests {
                 buy_amount: 12,
             },
             Order {
+                slot: U256::zero(),
+                slot_index: 1,
                 account_id: 1,
                 sell_token: 2,
                 buy_token: 3,
@@ -261,6 +277,8 @@ pub mod tests {
                 buy_amount: 22,
             },
             Order {
+                slot: U256::zero(),
+                slot_index: 2,
                 account_id: 2,
                 sell_token: 3,
                 buy_token: 1,
@@ -268,6 +286,8 @@ pub mod tests {
                 buy_amount: 150,
             },
             Order {
+                slot: U256::zero(),
+                slot_index: 3,
                 account_id: 3,
                 sell_token: 2,
                 buy_token: 1,
@@ -275,6 +295,8 @@ pub mod tests {
                 buy_amount: 180,
             },
             Order {
+                slot: U256::zero(),
+                slot_index: 4,
                 account_id: 4,
                 sell_token: 1,
                 buy_token: 2,
@@ -282,6 +304,8 @@ pub mod tests {
                 buy_amount: 4,
             },
             Order {
+                slot: U256::zero(),
+                slot_index: 5,
                 account_id: 5,
                 sell_token: 1,
                 buy_token: 3,
@@ -304,6 +328,8 @@ pub mod tests {
         );
         let orders = vec![
             Order {
+                slot: U256::zero(),
+                slot_index: 0,
                 account_id: 1,
                 sell_token: 1,
                 buy_token: 2,
@@ -311,6 +337,8 @@ pub mod tests {
                 buy_amount: 4,
             },
             Order {
+                slot: U256::zero(),
+                slot_index: 1,
                 account_id: 0,
                 sell_token: 2,
                 buy_token: 1,
@@ -333,6 +361,8 @@ pub mod tests {
         );
         let orders = vec![
             Order {
+                slot: U256::zero(),
+                slot_index: 0,
                 account_id: 1,
                 sell_token: 1,
                 buy_token: 2,
@@ -340,6 +370,8 @@ pub mod tests {
                 buy_amount: 4,
             },
             Order {
+                slot: U256::zero(),
+                slot_index: 1,
                 account_id: 0,
                 sell_token: 2,
                 buy_token: 1,
