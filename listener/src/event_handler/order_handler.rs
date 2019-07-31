@@ -2,7 +2,7 @@ use failure::Error;
 use slog::Logger;
 use std::sync::Arc;
 
-use dfusion_core::models::PendingFlux;
+use dfusion_core::models::Order;
 
 use graph::components::ethereum::EthereumBlock;
 use graph::components::store::EntityOperation;
@@ -25,11 +25,10 @@ impl EventHandler for SellOrderHandler {
         log: Arc<Log>
     ) -> Result<Vec<EntityOperation>, Error> {
         let entity_id = util::entity_id_from_log(&log);
-        let flux = PendingFlux::from(log);
+        let order = Order::from(log);
+        info!(logger, "Processing SellOrder {:?}", &order);
 
-        info!(logger, "Processing SellOrder {:?}", &flux);
-
-        let mut entity: Entity = flux.into();
+        let mut entity: Entity = order.into();
         entity.set("id", &entity_id);
 
         Ok(vec![
