@@ -1,12 +1,18 @@
 use byteorder::{BigEndian, WriteBytesExt};
+use graph::data::store::Entity;
 use serde_derive::{Deserialize};
-use web3::types::H256;
+use std::sync::Arc;
+use web3::types::{H256, U256, Log};
 
 use crate::models::{Serializable, RollingHashable, iter_hash};
+
+use super::util::*;
 
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct Order {
+    pub slot: U256,
+    pub slot_index: u16,
     pub account_id: u16,
     pub sell_token: u8,
     pub buy_token: u8,
@@ -32,15 +38,60 @@ impl Serializable for u128 {
     }
 }
 
+impl From<Arc<Log>> for Order {
+    fn from(log: Arc<Log>) -> Self {
+        let mut bytes: Vec<u8> = log.data.0.clone();
+        Order {
+            slot: U256::pop_from_log_data(&mut bytes),
+            slot_index: u16::pop_from_log_data(&mut bytes),
+            account_id: u16::pop_from_log_data(&mut bytes),
+            sell_token: u8::pop_from_log_data(&mut bytes),
+            buy_token: u8::pop_from_log_data(&mut bytes),
+            sell_amount: u128::pop_from_log_data(&mut bytes),
+            buy_amount: u128::pop_from_log_data(&mut bytes),
+        }
+    }
+}
+
+impl From<Entity> for Order {
+    fn from(entity: Entity) -> Self {
+        Order {
+            slot: U256::from_entity(&entity, "slot"),
+            slot_index: u16::from_entity(&entity, "slotIndex"),
+            account_id: u16::from_entity(&entity, "accountId"),
+            sell_token: u8::from_entity(&entity, "sellToken"),
+            buy_token: u8::from_entity(&entity, "buyToken"),
+            sell_amount: u128::from_entity(&entity, "sellAmount"),
+            buy_amount: u128::from_entity(&entity, "buyAmount"),
+        }
+    }
+}
+
 impl From<mongodb::ordered::OrderedDocument> for Order {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
         Order {
+            slot: U256::from(document.get_i32("slot").unwrap()),
+            slot_index: document.get_i32("slotIndex").unwrap() as u16,
             account_id: document.get_i32("accountId").unwrap() as u16,
             buy_token: document.get_i32("buyToken").unwrap() as u8,
             sell_token: document.get_i32("sellToken").unwrap() as u8,
             buy_amount: document.get_str("buyAmount").unwrap().parse().unwrap(),
             sell_amount: document.get_str("sellAmount").unwrap().parse().unwrap(),
         }
+    }
+}
+
+impl Into<Entity> for Order {
+    fn into(self) -> Entity {
+        let mut entity = Entity::new();
+        entity.set("slot", self.slot.to_value());
+        entity.set("slotIndex", self.slot_index.to_value());
+        entity.set("accountId", self.account_id.to_value());
+        entity.set("buyToken", self.buy_token.to_value());
+        entity.set("sellToken", self.sell_token.to_value());
+        entity.set("sellAmount", self.sell_amount.to_value());
+        entity.set("buyAmount", self.buy_amount.to_value());
+        entity
     }
 }
 
@@ -59,6 +110,8 @@ pub mod tests {
           buy_token: 3,
           sell_amount: 4,
           buy_amount: 5,
+          slot: U256::zero(),
+          slot_index: 0,
       }
   }
 }
@@ -77,6 +130,8 @@ pub mod unit_test {
       buy_token: 3,
       sell_amount: 4,
       buy_amount: 5,
+      slot: U256::zero(),
+      slot_index: 0,
     };
 
     assert_eq!(
