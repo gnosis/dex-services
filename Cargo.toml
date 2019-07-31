@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "graph_node_reader",
     "dfusion_rust_core",
     "driver",
     "listener",
