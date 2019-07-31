@@ -81,7 +81,7 @@ impl RustRuntimeHost {
         );
         register_event(
             &mut handlers,
-            "SellOrder(uint,uint16,uint16,uint8,uint8,uint96,uint96)",
+            "SellOrder(uint256,uint16,uint16,uint8,uint8,uint96,uint96)",
             Box::new(SellOrderHandler {})
         );
         RustRuntimeHost {
