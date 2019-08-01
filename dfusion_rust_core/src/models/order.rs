@@ -10,9 +10,14 @@ use super::util::*;
 
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
+pub struct BatchInformation {
+    pub slot: U256,
+    pub slot_index: u16,
+}
+#[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
+#[serde(rename_all = "camelCase")]
 pub struct Order {
-    pub slot: Option<U256>,
-    pub slot_index: Option<u16>,
+    pub batch_information: Option<BatchInformation>,
     pub account_id: u16,
     pub sell_token: u8,
     pub buy_token: u8,
@@ -42,8 +47,12 @@ impl From<Arc<Log>> for Order {
     fn from(log: Arc<Log>) -> Self {
         let mut bytes: Vec<u8> = log.data.0.clone();
         Order {
-            slot: Some(U256::pop_from_log_data(&mut bytes)),
-            slot_index: Some(u16::pop_from_log_data(&mut bytes)),
+            batch_information: Some(BatchInformation{
+                slot: U256::pop_from_log_data(&mut bytes),
+                slot_index: u16::pop_from_log_data(&mut bytes),
+            }),
+            // slot: Some(U256::pop_from_log_data(&mut bytes)),
+            // slot_index: Some(u16::pop_from_log_data(&mut bytes)),
             account_id: u16::pop_from_log_data(&mut bytes),
             buy_token: u8::pop_from_log_data(&mut bytes),
             sell_token: u8::pop_from_log_data(&mut bytes),
@@ -56,8 +65,10 @@ impl From<Arc<Log>> for Order {
 impl From<Entity> for Order {
     fn from(entity: Entity) -> Self {
         Order {
-            slot: Some(U256::from_entity(&entity, "auctionId")),
-            slot_index: Some(u16::from_entity(&entity, "slotIndex")),
+            batch_information: Some(BatchInformation{
+                slot: U256::from_entity(&entity, "auctionId"),
+                slot_index: u16::from_entity(&entity, "slotIndex"),
+            }),
             account_id: u16::from_entity(&entity, "accountId"),
             buy_token: u8::from_entity(&entity, "buyToken"),
             sell_token: u8::from_entity(&entity, "sellToken"),
@@ -70,8 +81,7 @@ impl From<Entity> for Order {
 impl From<mongodb::ordered::OrderedDocument> for Order {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
         Order {
-            slot: None,
-            slot_index: None,
+            batch_information: None,
             account_id: document.get_i32("accountId").unwrap() as u16,
             buy_token: document.get_i32("buyToken").unwrap() as u8,
             sell_token: document.get_i32("sellToken").unwrap() as u8,
@@ -83,9 +93,10 @@ impl From<mongodb::ordered::OrderedDocument> for Order {
 
 impl Into<Entity> for Order {
     fn into(self) -> Entity {
+        let batch_info = self.batch_information.unwrap();
         let mut entity = Entity::new();
-        entity.set("slot", self.slot.unwrap().to_value());
-        entity.set("slotIndex", self.slot_index.unwrap().to_value());
+        entity.set("slot", batch_info.slot.to_value());
+        entity.set("slotIndex", batch_info.slot_index.to_value());
         entity.set("accountId", self.account_id.to_value());
         entity.set("buyToken", self.buy_token.to_value());
         entity.set("sellToken", self.sell_token.to_value());
@@ -105,8 +116,10 @@ pub mod tests {
     use super::*;
     pub fn create_order_for_test() -> Order {
       Order {
-          slot: Some(U256::zero()),
-          slot_index: Some(0),
+          batch_information: Some(BatchInformation{
+            slot: U256::zero(),
+            slot_index: 0,
+          }),
           account_id: 1,
           buy_token: 3,
           sell_token: 2,
@@ -125,8 +138,10 @@ pub mod unit_test {
   #[test]
   fn test_order_rolling_hash() {
     let order = Order {
-      slot: Some(U256::zero()),
-      slot_index: Some(0),
+      batch_information: Some(BatchInformation{
+        slot: U256::zero(),
+        slot_index: 0,
+      }),
       account_id: 1,
       buy_token: 3,
       sell_token: 2,
