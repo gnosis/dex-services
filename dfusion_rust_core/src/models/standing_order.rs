@@ -57,8 +57,7 @@ impl From<mongodb::ordered::OrderedDocument> for StandingOrder {
                 .iter()
                 .map(|raw_order| raw_order.as_document().unwrap())
                 .map(|order_doc| super::Order {
-                        slot: None,
-                        slot_index: None,
+                        batch_information: None,
                         account_id,
                         buy_token: order_doc.get_i32("buyToken").unwrap() as u8,
                         sell_token: order_doc.get_i32("sellToken").unwrap() as u8,
@@ -75,6 +74,8 @@ pub mod tests {
   use super::*;
   use web3::types::{H256};
   use std::str::FromStr;
+
+  use crate::models::order::BatchInformation;
 
   #[test]
   fn test_concatenating_hash() {
@@ -93,8 +94,10 @@ pub mod tests {
 
   pub fn create_order_for_test() -> models::Order {
       models::Order {
-          slot: U256::zero(),
-          slot_index: 0,
+          batch_information: Some(BatchInformation{
+            slot: U256::zero(),
+            slot_index: 0,
+          }),
           account_id: 1,
           sell_token: 2,
           buy_token: 3,
