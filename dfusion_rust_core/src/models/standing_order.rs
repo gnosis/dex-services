@@ -75,8 +75,6 @@ pub mod tests {
   use web3::types::{H256};
   use std::str::FromStr;
 
-  use crate::models::order::BatchInformation;
-
   #[test]
   fn test_concatenating_hash() {
     let standing_order = models::StandingOrder::new(
@@ -94,10 +92,7 @@ pub mod tests {
 
   pub fn create_order_for_test() -> models::Order {
       models::Order {
-          batch_information: Some(BatchInformation{
-            slot: U256::zero(),
-            slot_index: 0,
-          }),
+          batch_information: None,
           account_id: 1,
           sell_token: 2,
           buy_token: 3,
