@@ -64,7 +64,7 @@ impl From<Entity> for Order {
     fn from(entity: Entity) -> Self {
         Order {
             batch_information: Some(BatchInformation{
-                slot: U256::from_entity(&entity, "slot"),
+                slot: U256::from_entity(&entity, "auctionId"),
                 slot_index: u16::from_entity(&entity, "slotIndex"),
             }),
             account_id: u16::from_entity(&entity, "accountId"),
@@ -80,7 +80,7 @@ impl From<mongodb::ordered::OrderedDocument> for Order {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
         Order {
             batch_information: Some(BatchInformation{
-                slot: U256::from(document.get_i32("slot").unwrap()),
+                slot: U256::from(document.get_i32("auctionId").unwrap()),
                 slot_index: document.get_i32("slotIndex").unwrap() as u16,
             }),
             account_id: document.get_i32("accountId").unwrap() as u16,
