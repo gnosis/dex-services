@@ -96,7 +96,7 @@ impl Into<Entity> for Order {
     fn into(self) -> Entity {
         let mut entity = Entity::new();
         if let Some(_batch_info) = self.batch_information {
-            entity.set("slot", _batch_info.slot.to_value());
+            entity.set("auctionId", _batch_info.slot.to_value());
             entity.set("slotIndex", _batch_info.slot_index.to_value());
         }
         entity.set("accountId", self.account_id.to_value());
