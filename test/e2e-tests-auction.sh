@@ -19,9 +19,6 @@ step "Make sure we have enough balances for the trades" \
  truffle exec scripts/deposit.js 4 0 300 && \
  truffle exec scripts/deposit.js 5 0 300"
 
-step "Advance time to apply deposits" \
-"truffle exec scripts/wait_seconds.js 181"
-
 step "Place 6 orders in current Auction" \
 "truffle exec scripts/sell_order.js 0 1 2 12 12 && \
  truffle exec scripts/sell_order.js 1 2 1 2.2 2 && \
