@@ -67,21 +67,21 @@ In order to setup some testing accounts and make the first deposits (from accoun
 ```bash
 cd dex-contracts
 truffle exec scripts/setup_environment.js
-truffle exec scripts/deposit.js 3 3 18
-truffle exec scripts/mineBlocks.js 21
+truffle exec scripts/deposit.js 1 1 18
+truffle exec scripts/wait_seconds.js 181
 ```
 
 To claim back the deposit, submit a withdraw request:
 
 ```bash
-truffle exec scripts/withdraw.js 3 3 18
+truffle exec scripts/request_withdraw.js 1 1 18
 ```
 
 After 20 blocks have passed, the driver will apply the state transition and you should be able to claim back your funds:
 
 ```bash
-truffle exec scripts/mineBlocks.js 21
-truffle exec scripts/claim_withdraw.js 1 3 3
+truffle exec scripts/wait_seconds.js 181
+truffle exec scripts/claim_withdraw.js 0 1 1
 ```
 
 Tests
