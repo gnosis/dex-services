@@ -25,11 +25,11 @@ type Withdraw @entity {
 
 type SellOrder @entity {
     id: ID!
-    auctionId: Int!
-    slotIndex: Int!
     accountId: Int!
     buyToken: Int!
     sellToken: Int!
     buyAmount: BigInt!
     sellAmount: BigInt!
+    auctionId: BigInt!
+    slotIndex: Int!
 }
