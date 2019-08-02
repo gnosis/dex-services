@@ -51,8 +51,6 @@ impl From<Arc<Log>> for Order {
                 slot: U256::pop_from_log_data(&mut bytes),
                 slot_index: u16::pop_from_log_data(&mut bytes),
             }),
-            // slot: Some(U256::pop_from_log_data(&mut bytes)),
-            // slot_index: Some(u16::pop_from_log_data(&mut bytes)),
             account_id: u16::pop_from_log_data(&mut bytes),
             buy_token: u8::pop_from_log_data(&mut bytes),
             sell_token: u8::pop_from_log_data(&mut bytes),
@@ -81,7 +79,10 @@ impl From<Entity> for Order {
 impl From<mongodb::ordered::OrderedDocument> for Order {
     fn from(document: mongodb::ordered::OrderedDocument) -> Self {
         Order {
-            batch_information: None,
+            batch_information: Some(BatchInformation{
+                slot: U256::from(document.get_i32("auctionId").unwrap()),
+                slot_index: document.get_i32("slotIndex").unwrap() as u16,
+            }),
             account_id: document.get_i32("accountId").unwrap() as u16,
             buy_token: document.get_i32("buyToken").unwrap() as u8,
             sell_token: document.get_i32("sellToken").unwrap() as u8,
@@ -93,10 +94,11 @@ impl From<mongodb::ordered::OrderedDocument> for Order {
 
 impl Into<Entity> for Order {
     fn into(self) -> Entity {
-        let batch_info = self.batch_information.unwrap();
         let mut entity = Entity::new();
-        entity.set("slot", batch_info.slot.to_value());
-        entity.set("slotIndex", batch_info.slot_index.to_value());
+        if let Some(_batch_info) = self.batch_information {
+            entity.set("slot", _batch_info.slot.to_value());
+            entity.set("slotIndex", _batch_info.slot_index.to_value());
+        }
         entity.set("accountId", self.account_id.to_value());
         entity.set("buyToken", self.buy_token.to_value());
         entity.set("sellToken", self.sell_token.to_value());
