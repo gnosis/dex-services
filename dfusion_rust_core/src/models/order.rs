@@ -14,6 +14,7 @@ pub struct BatchInformation {
     pub slot: U256,
     pub slot_index: u16,
 }
+
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct Order {
@@ -72,6 +73,28 @@ impl From<Entity> for Order {
             sell_token: u8::from_entity(&entity, "sellToken"),
             buy_amount: u128::from_entity(&entity, "buyAmount"),
             sell_amount: u128::from_entity(&entity, "sellAmount"),
+        }
+    }
+}
+
+impl From<Vec<u8>> for Order {
+    fn from (bytes: Vec<u8>) -> Self {
+        // let mut bytes = bytes.clone();
+        println!("TODO: Read order bytes: {:?}", bytes);
+        // TODO: Extract order from bytes
+        
+        Order {
+            batch_information: None,
+            // account_id: u16::pop_from_log_data(&mut bytes);,
+            // buy_token: u8::pop_from_log_data(&mut bytes),
+            // sell_token: u8::pop_from_log_data(&mut bytes),
+
+            account_id: 0,
+            buy_token: 0,
+            sell_token: 0,
+
+            buy_amount: 0,
+            sell_amount: 0
         }
     }
 }
