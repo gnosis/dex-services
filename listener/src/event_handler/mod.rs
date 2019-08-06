@@ -20,6 +20,9 @@ pub use initialization_handler::InitializationHandler;
 mod flux_transition_handler;
 pub use flux_transition_handler::FluxTransitionHandler;
 
+mod standing_order_handler;
+pub use standing_order_handler::StandingOrderHandler;
+
 mod util;
 
 pub trait EventHandler: Send + Sync + Debug {
