@@ -96,13 +96,10 @@ impl From<Arc<Log>> for StandingOrder {
         let mut packed_orders_bytes = bytes.clone();
         assert!(packed_orders_bytes.len() % 26 == 0, "Each order should be packed in 26 bytes");
         
-
         // Extract packed order info
-        let mut orders : Vec<models::Order> = Vec::new();
-        while !packed_orders_bytes.is_empty() {
-            let order_bytes : Vec<u8> = packed_orders_bytes.drain(0..26).collect::<Vec<u8>>().to_vec();
-            orders.push(models::Order::from(order_bytes))
-        }
+        let orders: Vec<models::Order> = bytes.chunks(26)
+            .map(|chunk| models::Order::from(chunk.to_vec()))
+            .collect();
 
         StandingOrder {
             account_id,
