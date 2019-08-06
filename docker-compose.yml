@@ -82,7 +82,9 @@ services:
 
   graph-listener:
     command: /app/docker/listener/run.sh
-    image: fleupold/dfusion-rust-base:v2
+    build:
+      context: .
+      dockerfile: docker/driver/Dockerfile
     depends_on:
       - postgres
       - ganache-cli

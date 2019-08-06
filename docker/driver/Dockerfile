@@ -11,3 +11,11 @@ ENV PYTHONPATH ${PYTHONPATH}:/app/batchauctions/
 
 # Copy smart contract build artifacts
 COPY dex-contracts/build dex-contracts/build
+
+# Copy and build code
+COPY dfusion_rust_core ./dfusion_rust_core
+COPY driver ./driver
+COPY listener ./listener
+
+COPY Cargo.* ./
+RUN cargo build
