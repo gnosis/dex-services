@@ -22,3 +22,19 @@ type Withdraw @entity {
     slot: BigInt!
     slotIndex: Int!
 }
+
+type StandingSellOrderBatch @entity {
+    id: ID!
+    accountId: Int!
+    batchIndex: Int!
+    validFromAuctionId: Int!
+    orders: [OrderDetails!]
+}
+
+type OrderDetails @entity {
+    id: ID!
+    buyToken: Int!
+    sellToken: Int!
+    buyAmount: Int!
+    sellAmount: Int!
+}
