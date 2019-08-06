@@ -86,6 +86,33 @@ impl From<mongodb::ordered::OrderedDocument> for StandingOrder {
     }
 }
 
+impl From<Arc<Log>> for StandingOrder {
+    fn from(log: Arc<Log>) -> Self {
+        let mut bytes: Vec<u8> = log.data.0.clone();
+        // Get basic data from event
+        let account_id = u16::pop_from_log_data(&mut bytes);
+        let batch_index = U256::pop_from_log_data(&mut bytes);
+        let valid_from_auction_id = U256::pop_from_log_data(&mut bytes);
+        let mut packed_orders_bytes = bytes.clone();
+        assert!(packed_orders_bytes.len() % 26 == 0, "Each order should be packed in 26 bytes");
+        
+
+        // Extract packed order info
+        let mut orders : Vec<models::Order> = Vec::new();
+        while !packed_orders_bytes.is_empty() {
+            let order_bytes : Vec<u8> = packed_orders_bytes.drain(0..26).collect::<Vec<u8>>().to_vec();
+            orders.push(models::Order::from(order_bytes))
+        }
+
+        StandingOrder {
+            account_id,
+            batch_index,
+            valid_from_auction_id,
+            orders
+        }
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
