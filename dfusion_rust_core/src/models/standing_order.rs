@@ -93,8 +93,8 @@ impl From<Arc<Log>> for StandingOrder {
         let account_id = u16::pop_from_log_data(&mut bytes);
         let batch_index = U256::pop_from_log_data(&mut bytes);
         let valid_from_auction_id = U256::pop_from_log_data(&mut bytes);
-        let mut packed_orders_bytes = bytes.clone();
-        assert!(packed_orders_bytes.len() % 26 == 0, "Each order should be packed in 26 bytes");
+        // let packed_orders_bytes = bytes;
+        assert!(bytes.len() % 26 == 0, "Each order should be packed in 26 bytes");
         
         // Extract packed order info
         let orders: Vec<models::Order> = bytes.chunks(26)
