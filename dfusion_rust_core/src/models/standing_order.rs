@@ -136,6 +136,54 @@ pub mod tests {
         );
     }
 
+    #[test]
+    fn test_from_log() {
+        let bytes: Vec<Vec<u8>> = vec![
+            // batch_index_bytes: 1
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 1],
+
+            // valid_from_auction_id_bytes: 1
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+
+            // account_id_bytes: 0
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+
+            // packed_orders_bytes: 000000000de0b6b3a7640000000000000de0b6b3a76400000201
+            //    00 00 00 00 0d  e0   b6   b3   a7   64   00 00 00 00 00 00 0d  e0   b6   b3   a7   64   00 00 02 01
+            vec![ 0, 0, 0, 0, 13, 224, 186, 179, 167, 100, 0, 0, 0, 0, 0, 0, 13, 224, 186, 179, 167, 100, 0, 0, 2, 1],
+        ];
+
+        let log = Arc::new(Log {
+            address: 0.into(),
+            topics: vec![],
+            data: Bytes(bytes.iter().flat_map(|i| i.iter()).cloned().collect()),
+            block_hash: Some(2.into()),
+            block_number: Some(1.into()),
+            transaction_hash: Some(3.into()),
+            transaction_index: Some(0.into()),
+            log_index: Some(0.into()),
+            transaction_log_index: Some(0.into()),
+            log_type: None,
+            removed: None,
+        });
+
+        let expected_standing_order = StandingOrder {
+            account_id: 0,
+            batch_index: U256::from(1),
+            valid_from_auction_id: U256::from(1),
+            orders: vec![models::Order {
+                account_id: 0,
+                sell_token: 2,
+                buy_token: 1,
+                sell_amount: 1 * (10 as u128).pow(18),
+                buy_amount: 1 * (10 as u128).pow(18),
+            }],
+        };
+
+        let actual_standing_order = StandingOrder::from(log);
+        assert_eq!(actual_standing_order, expected_standing_order);
+    }
+
     pub fn create_order_for_test() -> models::Order {
         models::Order {
             batch_information: None,
