@@ -10,13 +10,10 @@ RUN apt-get update \
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 RUN ln -s $HOME/.cargo/bin/* /usr/bin/
 
-# Copy driver requirements and install
-WORKDIR /app/driver
-COPY driver/Cargo.toml ./
-RUN mkdir src && touch src/lib.rs && cargo build
+WORKDIR /app/
+COPY dfusion_rust_core ./dfusion_rust_core
+COPY driver ./driver
+COPY listener ./listener
 
-# Copy listener requirements and install
-WORKDIR /app/listener
-RUN USER=docker cargo init
-COPY listener/Cargo.toml ./
+COPY Cargo.* ./
 RUN cargo build

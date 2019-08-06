@@ -1,10 +1,4 @@
-FROM fleupold/dfusion-rust-base:v1
-
-# Copy requirements and install
-WORKDIR /app/driver
-COPY driver/Cargo.* ./
-COPY dfusion_rust_core /app/dfusion_rust_core
-RUN cargo build
+FROM fleupold/dfusion-rust-base:v2
 
 # Install solver if specified
 ARG use_solver
@@ -17,8 +11,3 @@ ENV PYTHONPATH ${PYTHONPATH}:/app/batchauctions/
 
 # Copy smart contract build artifacts
 COPY dex-contracts/build dex-contracts/build
-
-# Copy source code
-WORKDIR /app/driver
-COPY driver/src ./src
-RUN cargo clean -p driver && cargo build

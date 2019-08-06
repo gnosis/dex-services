@@ -53,7 +53,7 @@ services:
       - common.env
 
   driver:
-    command: cargo run
+    command: cargo run --bin main
     build:
       context: .
       dockerfile: docker/driver/Dockerfile
@@ -82,9 +82,7 @@ services:
 
   graph-listener:
     command: /app/docker/listener/run.sh
-    build:
-      context: .
-      dockerfile: docker/listener/Dockerfile
+    image: fleupold/dfusion-rust-base:v2
     depends_on:
       - postgres
       - ganache-cli
