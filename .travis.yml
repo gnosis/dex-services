@@ -28,7 +28,7 @@ matrix:
       sudo: required
       cache: 
         directories:
-          - $HOME/.npm/
+          - $HOME/.nvm/versions/node/v8.12.0/lib/node_modules
           - dex-contracts/node_modules/
       before_install:
         - npm install -g truffle node-jq wait-port
