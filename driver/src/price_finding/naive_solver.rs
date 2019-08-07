@@ -160,6 +160,7 @@ pub mod tests {
         );
         let orders = vec![
             Order {
+                batch_information: None,
                 account_id: 1,
                 sell_token: 1,
                 buy_token: 2,
@@ -167,6 +168,7 @@ pub mod tests {
                 buy_amount: 4,
             },
             Order {
+                batch_information: None,
                 account_id: 0,
                 sell_token: 2,
                 buy_token: 1,
@@ -189,6 +191,7 @@ pub mod tests {
         );
         let orders = vec![
             Order {
+                batch_information: None,
                 account_id: 0,
                 sell_token: 2,
                 buy_token: 1,
@@ -196,6 +199,7 @@ pub mod tests {
                 buy_amount: 180,
             },
             Order {
+                batch_information: None,
                 account_id: 1,
                 sell_token: 1,
                 buy_token: 2,
@@ -218,6 +222,7 @@ pub mod tests {
         );
         let orders = vec![
             Order {
+                batch_information: None,
                 account_id: 0,
                 sell_token: 2,
                 buy_token: 1,
@@ -225,6 +230,7 @@ pub mod tests {
                 buy_amount: 10,
             },
             Order {
+                batch_information: None,
                 account_id: 1,
                 sell_token: 1,
                 buy_token: 2,
@@ -247,6 +253,7 @@ pub mod tests {
         );
         let orders = vec![
             Order {
+                batch_information: None,
                 account_id: 0,
                 sell_token: 3,
                 buy_token: 2,
@@ -254,6 +261,7 @@ pub mod tests {
                 buy_amount: 12,
             },
             Order {
+                batch_information: None,
                 account_id: 1,
                 sell_token: 2,
                 buy_token: 3,
@@ -261,6 +269,7 @@ pub mod tests {
                 buy_amount: 22,
             },
             Order {
+                batch_information: None,
                 account_id: 2,
                 sell_token: 3,
                 buy_token: 1,
@@ -268,6 +277,7 @@ pub mod tests {
                 buy_amount: 150,
             },
             Order {
+                batch_information: None,
                 account_id: 3,
                 sell_token: 2,
                 buy_token: 1,
@@ -275,6 +285,7 @@ pub mod tests {
                 buy_amount: 180,
             },
             Order {
+                batch_information: None,
                 account_id: 4,
                 sell_token: 1,
                 buy_token: 2,
@@ -282,6 +293,7 @@ pub mod tests {
                 buy_amount: 4,
             },
             Order {
+                batch_information: None,
                 account_id: 5,
                 sell_token: 1,
                 buy_token: 3,
@@ -304,6 +316,7 @@ pub mod tests {
         );
         let orders = vec![
             Order {
+                batch_information: None,
                 account_id: 1,
                 sell_token: 1,
                 buy_token: 2,
@@ -311,6 +324,7 @@ pub mod tests {
                 buy_amount: 4,
             },
             Order {
+                batch_information: None,
                 account_id: 0,
                 sell_token: 2,
                 buy_token: 1,
@@ -333,6 +347,7 @@ pub mod tests {
         );
         let orders = vec![
             Order {
+                batch_information: None,
                 account_id: 1,
                 sell_token: 1,
                 buy_token: 2,
@@ -340,6 +355,7 @@ pub mod tests {
                 buy_amount: 4,
             },
             Order {
+                batch_information: None,
                 account_id: 0,
                 sell_token: 2,
                 buy_token: 1,

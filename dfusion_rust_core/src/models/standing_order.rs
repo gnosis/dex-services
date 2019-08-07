@@ -57,6 +57,7 @@ impl From<mongodb::ordered::OrderedDocument> for StandingOrder {
                 .iter()
                 .map(|raw_order| raw_order.as_document().unwrap())
                 .map(|order_doc| super::Order {
+                        batch_information: None,
                         account_id,
                         buy_token: order_doc.get_i32("buyToken").unwrap() as u8,
                         sell_token: order_doc.get_i32("sellToken").unwrap() as u8,
@@ -91,6 +92,7 @@ pub mod tests {
 
   pub fn create_order_for_test() -> models::Order {
       models::Order {
+          batch_information: None,
           account_id: 1,
           sell_token: 2,
           buy_token: 3,

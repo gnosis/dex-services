@@ -339,6 +339,7 @@ mod tests {
             executed_buy_amounts: vec![1, 1],
         };
         let order_1 = Order{
+          batch_information: None,
           account_id: 1,
           sell_token: 0,
           buy_token: 1,
@@ -346,6 +347,7 @@ mod tests {
           buy_amount: 5,
         };
         let order_2 = Order{
+          batch_information: None,
           account_id: 0,
           sell_token: 1,
           buy_token: 0,
