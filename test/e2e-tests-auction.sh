@@ -30,6 +30,14 @@ step "Place 6 orders in current Auction" \
  truffle exec scripts/sell_order.js 4 1 0 4 52  && \
  truffle exec scripts/sell_order.js 5 2 0 20 280"
 
+step_with_retry "[theGraph]: SellOrder was added to graph db - accountId 5's sellOrder === 280" \
+"source ../test/utils.sh && query_graphql \
+    \"query { \
+        sellOrders(where: { accountId: 5}) { \
+            sellAmount \
+        } \
+    }\" | grep 28000000000000000000"
+
 step_with_retry "Test Listener: There are now 6 orders in auction slot 1" \
 "mongo dfusion2 --eval \"db.orders.find({'auctionId': ${EXPECTED_AUCTION}}).size()\" | grep -w 6"
 
