@@ -134,7 +134,8 @@ pub mod tests {
 #[cfg(test)]
 pub mod unit_test {
   use super::*;
-  use web3::types::{H256};
+  use graph::bigdecimal::BigDecimal;
+  use web3::types::{Bytes, H256};
   use std::str::FromStr;
 
   #[test]
@@ -157,5 +158,73 @@ pub mod unit_test {
       "8c253b4588a6d87b02b5f7d1424020b7b5f8c0397e464e087d2830a126d3b699"
       ).unwrap()
     );
+  }
+
+  #[test]
+  fn test_from_log() {
+      let bytes: Vec<Vec<u8>> = vec![
+        /* slot_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        /* slot_index_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        /* account_id_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        /* buy_token_bytes */ vec![ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3],
+        /* sell_token_bytes */ vec![ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+        /* buy_amount_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0],
+        /* sell_amount_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0],
+      ];
+
+      let log = Arc::new(Log {
+            address: 1.into(),
+            topics: vec![],
+            data: Bytes(bytes.iter().flat_map(|i| i.iter()).cloned().collect()),
+            block_hash: Some(2.into()),
+            block_number: Some(1.into()),
+            transaction_hash: Some(3.into()),
+            transaction_index: Some(0.into()),
+            log_index: Some(0.into()),
+            transaction_log_index: Some(0.into()),
+            log_type: None,
+            removed: None,
+        });
+
+        let expected_order = Order {
+            batch_information: Some(BatchInformation{
+                slot: U256::zero(),
+                slot_index: 0,
+            }),
+            account_id: 1,
+            buy_token: 3,
+            sell_token: 2,
+            buy_amount: 1 * (10 as u128).pow(18),
+            sell_amount: 1 * (10 as u128).pow(18),
+        };
+
+        assert_eq!(expected_order, Order::from(log));
+  }
+
+  #[test]
+  fn test_to_and_from_entity() {
+      let order = Order {
+            batch_information: Some(BatchInformation{
+                slot: U256::zero(),
+                slot_index: 0,
+            }),
+            account_id: 1,
+            buy_token: 1,
+            sell_token: 2,
+            buy_amount: 1 * (10 as u128).pow(18),
+            sell_amount: 2 * (10 as u128).pow(18),
+        };
+        
+        let mut entity = Entity::new();
+        entity.set("auctionId", BigDecimal::from(0));
+        entity.set("slotIndex", 0);
+        entity.set("accountId", 1);
+        entity.set("buyToken", 1);
+        entity.set("sellToken", 2);
+        entity.set("buyAmount", BigDecimal::from(1 * (10 as u64).pow(18)));
+        entity.set("sellAmount", BigDecimal::from(2 * (10 as u64).pow(18)));
+
+        assert_eq!(entity, order.clone().into());
+        assert_eq!(order, Order::from(entity));
   }
 }
