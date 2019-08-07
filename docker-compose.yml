@@ -56,7 +56,7 @@ services:
     command: cargo run --bin main
     build:
       context: .
-      dockerfile: docker/driver/Dockerfile
+      dockerfile: docker/rust/Dockerfile
     depends_on:
       - mongo
       - ganache-cli
@@ -81,10 +81,10 @@ services:
       POSTGRES_DB: dfusion
 
   graph-listener:
-    command: /app/docker/listener/run.sh
+    command: /app/docker/rust/run_listener.sh
     build:
       context: .
-      dockerfile: docker/driver/Dockerfile
+      dockerfile: docker/rust/Dockerfile
     depends_on:
       - postgres
       - ganache-cli
@@ -96,7 +96,7 @@ services:
       # Don't sync target, otherwise we rebuild on every deploy
       - ./dex-contracts:/app/dex-contracts
       - ./dfusion_rust_core/src:/app/dfusion_rust_core/src
-      - ./docker/listener:/app/docker/listener
+      - ./docker/rust:/app/docker/rust
       - ./listener/src:/app/listener/src
       - ./listener/subgraph_definition:/app/listener/subgraph_definition
     env_file:
