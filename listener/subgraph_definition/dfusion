@@ -24,5 +24,7 @@ dataSources:
           handler: rust
         - event: WithdrawRequest(uint16,uint8,uint128,uint256,uint16)
           handler: rust
+        - event: SellOrder(uint256,uint16,uint16,uint8,uint8,uint96,uint96)
+          handler: rust
       file: 
         /: rustHandler.wasm
