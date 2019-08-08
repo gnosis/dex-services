@@ -23,6 +23,9 @@ pub use flux_transition_handler::FluxTransitionHandler;
 mod standing_order_handler;
 pub use standing_order_handler::StandingOrderHandler;
 
+mod order_handler;
+pub use order_handler::SellOrderHandler;
+
 mod util;
 
 pub trait EventHandler: Send + Sync + Debug {

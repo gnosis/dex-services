@@ -20,10 +20,10 @@ pub struct BatchInformation {
 pub struct Order {
     pub batch_information: Option<BatchInformation>,
     pub account_id: u16,
-    pub sell_token: u8,
     pub buy_token: u8,
-    pub sell_amount: u128,
+    pub sell_token: u8,
     pub buy_amount: u128,
+    pub sell_amount: u128,
 }
 
 impl Serializable for Order {

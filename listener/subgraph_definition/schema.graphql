@@ -28,13 +28,24 @@ type StandingSellOrderBatch @entity {
     accountId: Int!
     batchIndex: Int!
     validFromAuctionId: Int!
-    orders: [OrderDetails!]
+    orders: [StandingOrder!]
 }
 
-type OrderDetails @entity {
+type StandingOrder @entity {
     id: ID!
     buyToken: Int!
     sellToken: Int!
     buyAmount: Int!
     sellAmount: Int!
+}
+
+type SellOrder @entity {
+    id: ID!
+    accountId: Int!
+    buyToken: Int!
+    sellToken: Int!
+    buyAmount: BigInt!
+    sellAmount: BigInt!
+    auctionId: BigInt!
+    slotIndex: Int!
 }

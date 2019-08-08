@@ -26,5 +26,7 @@ dataSources:
           handler: rust
         - event: StandingSellOrderBatch(uint256,uint256,uint16,bytes)
           handler: rust
+        - event: SellOrder(uint256,uint16,uint16,uint8,uint8,uint96,uint96)
+          handler: rust
       file: 
         /: rustHandler.wasm
