@@ -1,12 +1,12 @@
-use byteorder::{BigEndian, WriteBytesExt};
+use byteorder::{BigEndian, WriteBytesExt, ByteOrder};
 use graph::data::store::Entity;
 use serde_derive::{Deserialize};
 use std::sync::Arc;
 use web3::types::{H256, U256, Log};
 
-use crate::models::{Serializable, RollingHashable, iter_hash};
-
 use super::util::*;
+
+use crate::models::{Serializable, RollingHashable, iter_hash};
 
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
@@ -77,26 +77,34 @@ impl From<Entity> for Order {
     }
 }
 
-impl From<Vec<u8>> for Order {
-    fn from (bytes: Vec<u8>) -> Self {
-        // let mut bytes = bytes.clone();
-        println!("TODO: Read order bytes: {:?}", bytes);
-        // TODO: Extract order from bytes
+impl From<(u16, Vec<u8>)> for Order {
+    fn from (encoded_order_info: (u16, Vec<u8>)) -> Self {
+        let account_id = encoded_order_info.0;
+        let bytes = encoded_order_info.1;
+
+        let sell_token =  u8::from_le_bytes([bytes[25]]);
+        let buy_token = u8::from_le_bytes([bytes[24]]);
+        let sell_amount = read_amount(&bytes[12..24]);
+        let buy_amount = read_amount(&bytes[0..12]);
         
         Order {
             batch_information: None,
-            // account_id: u16::pop_from_log_data(&mut bytes);,
-            // buy_token: u8::pop_from_log_data(&mut bytes),
-            // sell_token: u8::pop_from_log_data(&mut bytes),
-
-            account_id: 0,
-            buy_token: 0,
-            sell_token: 0,
-
-            buy_amount: 0,
-            sell_amount: 0
+            account_id,
+            buy_token,
+            sell_token,
+            buy_amount,
+            sell_amount
         }
     }
+}
+
+fn read_amount(bytes: &[u8]) -> u128 {
+    let bytes = [0u8, 0u8, 0u8, 0u8].iter()
+        .chain(bytes.iter())
+        .cloned()
+        .collect::<Vec<u8>>();
+
+    BigEndian::read_u128(bytes.as_slice())
 }
 
 impl From<mongodb::ordered::OrderedDocument> for Order {

@@ -4,7 +4,7 @@ use array_macro::array;
 use serde_derive::Deserialize;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
-use web3::types::{Bytes, Log};
+use web3::types::{Log};
 use web3::types::{H256, U256};
 
 use super::util::*;
@@ -90,15 +90,15 @@ impl From<Arc<Log>> for StandingOrder {
     fn from(log: Arc<Log>) -> Self {
         let mut bytes: Vec<u8> = log.data.0.clone();
         // Get basic data from event
-        let account_id = u16::pop_from_log_data(&mut bytes);
         let batch_index = U256::pop_from_log_data(&mut bytes);
         let valid_from_auction_id = U256::pop_from_log_data(&mut bytes);
+        let account_id = u16::pop_from_log_data(&mut bytes);
         // let packed_orders_bytes = bytes;
         assert!(bytes.len() % 26 == 0, "Each order should be packed in 26 bytes");
         
         // Extract packed order info
         let orders: Vec<models::Order> = bytes.chunks(26)
-            .map(|chunk| models::Order::from(chunk.to_vec()))
+            .map(|chunk| models::Order::from((account_id, chunk.to_vec())))
             .collect();
 
         StandingOrder {
@@ -136,18 +136,19 @@ pub mod tests {
     #[test]
     fn test_from_log() {
         let bytes: Vec<Vec<u8>> = vec![
-            // batch_index_bytes: 1
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 1],
+            // batch_index: 1
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 2],
 
-            // valid_from_auction_id_bytes: 1
+            // valid_from_auction_id: 3
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3],
+
+            // account_id: 1
             vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
 
-            // account_id_bytes: 0
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-
-            // packed_orders_bytes: 000000000de0b6b3a7640000000000000de0b6b3a76400000201
-            //    00 00 00 00 0d  e0   b6   b3   a7   64   00 00 00 00 00 00 0d  e0   b6   b3   a7   64   00 00 02 01
-            vec![ 0, 0, 0, 0, 13, 224, 186, 179, 167, 100, 0, 0, 0, 0, 0, 0, 13, 224, 186, 179, 167, 100, 0, 0, 2, 1],
+            // packed_orders: Buy token 2, for token 1. Buy 1e18 for 2e18.
+            //    000000000de0b6b3a7640000 000000001bc16d674ec80000 0201
+            //    00 00 00 00 0d  e0   b6   b3   a7   64   00 00 00 00 00 00 1b  c1   6d   67   4e  c8   00 00 02 01
+            vec![ 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, 0, 0, 0, 0, 27, 193, 109, 103, 78, 200, 0, 0, 2, 1],
         ];
 
         let log = Arc::new(Log {
@@ -165,14 +166,15 @@ pub mod tests {
         });
 
         let expected_standing_order = StandingOrder {
-            account_id: 0,
-            batch_index: U256::from(1),
-            valid_from_auction_id: U256::from(1),
+            account_id: 1,
+            batch_index: U256::from(2),
+            valid_from_auction_id: U256::from(3),
             orders: vec![models::Order {
-                account_id: 0,
-                sell_token: 2,
-                buy_token: 1,
-                sell_amount: 1 * (10 as u128).pow(18),
+                batch_information: None,
+                account_id: 1,
+                sell_token: 1,
+                buy_token: 2,
+                sell_amount: 2 * (10 as u128).pow(18),
                 buy_amount: 1 * (10 as u128).pow(18),
             }],
         };
