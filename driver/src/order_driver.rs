@@ -1,9 +1,9 @@
 use crate::contract::SnappContract;
-use crate::db_interface::DbInterface;
 use crate::error::DriverError;
 use crate::price_finding::{PriceFinding, Solution};
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
 
+use dfusion_core::database::DbInterface;
 use dfusion_core::models::{
     RollingHashable, Serializable, ConcatenatingHashable, AccountState, Order, StandingOrder,
     TOKENS,

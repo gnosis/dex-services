@@ -2,6 +2,8 @@ use std::error::Error;
 use std::fmt;
 use ethabi;
 
+use dfusion_core::database::DatabaseError;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ErrorKind {
     Unknown,
@@ -68,16 +70,17 @@ impl From<std::num::ParseIntError> for DriverError {
         DriverError::new(error.description(), ErrorKind::ParseIntError)
     }
 }
-impl From<mongodb::DecoderError> for DriverError {
-    fn from(error: mongodb::DecoderError) -> Self {
-        DriverError::new(error.description(), ErrorKind::DbError)
-    }
-}
 impl From<&str> for DriverError {
     fn from(error: &str) -> Self {
         DriverError::new(error, ErrorKind::MiscError)
     }
 }
+impl From<DatabaseError> for DriverError {
+    fn from(error: DatabaseError) -> Self {
+        DriverError::new(&format!("{}", error), ErrorKind::DbError)
+    }
+}
+
 impl DriverError {
     pub fn new(msg: &str, kind: ErrorKind) -> DriverError {
         DriverError{details: msg.to_string(), kind}
@@ -85,7 +88,7 @@ impl DriverError {
 }
 impl fmt::Display for DriverError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,"{}",self.details)
+        write!(f, "Driver Error: [{}]", self.details)
     }
 }
 impl Error for DriverError {
