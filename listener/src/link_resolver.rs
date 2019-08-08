@@ -10,7 +10,7 @@ use std::io::prelude::*;
 use std::path::Path;
 
 fn read_file(file: &str) -> Result<Vec<u8>, failure::Error> {
-    let path = format!("subgraph_definition/{}", 
+    let path = format!("listener/subgraph_definition/{}", 
         Path::new(file)
             .iter()
             .last()

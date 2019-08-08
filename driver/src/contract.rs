@@ -57,7 +57,7 @@ impl SnappContractImpl {
         let (event_loop, transport) = web3::transports::Http::new(&(env::var("ETHEREUM_NODE_URL")?))?;
         let web3 = web3::Web3::new(transport);
 
-        let contents = fs::read_to_string("../dex-contracts/build/contracts/SnappAuction.json")?;
+        let contents = fs::read_to_string("dex-contracts/build/contracts/SnappAuction.json")?;
         let snapp_base: serde_json::Value = serde_json::from_str(&contents)?;
         let snapp_base_abi: String = snapp_base.get("abi").ok_or("No ABI for contract")?.to_string();
 
