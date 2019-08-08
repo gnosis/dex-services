@@ -191,7 +191,7 @@ pub mod test {
         let store = Arc::new(MockStore::new(vec![(schema.id.clone(), schema)]));
         let handler = FluxTransitionHandler::new(store.clone());
 
-        // Add previous account state and pending deposits into Store
+        // Add previous account state and pending withdraws into Store
         let existing_state = AccountState::new(
             H256::zero(),
             U256::zero(),
@@ -226,6 +226,20 @@ pub mod test {
         };
         let mut entity: Entity = second_withdraw.into();
         entity.set("id", "2");
+        store.apply_entity_operations(vec![EntityOperation::Set {
+            key: util::entity_key("Withdraw", &entity),
+            data: entity
+        }], None).unwrap();
+
+        let invalid_withdraw = PendingFlux {
+            slot_index: 1,
+            slot: U256::zero(),
+            account_id: 1,
+            token_id: 1,
+            amount: 10,
+        };
+        let mut entity: Entity = invalid_withdraw.into();
+        entity.set("id", "3");
         store.apply_entity_operations(vec![EntityOperation::Set {
             key: util::entity_key("Withdraw", &entity),
             data: entity
