@@ -8,6 +8,10 @@ pub use crate::models::account_state::AccountState;
 pub use crate::models::flux::PendingFlux;
 pub use crate::models::order::Order;
 pub use crate::models::standing_order::StandingOrder;
+pub use crate::models::standing_order::EncodedOrder;
+pub use crate::models::order::BatchInformation;
+pub use crate::models::order::NUM_SLOTS_PER_STANING_ORDER_ACCOUNT;
+pub use crate::models::order::NUM_SLOTS_REGULAR_ORDERS;
 
 use sha2::{Digest, Sha256};
 use web3::types::H256;

@@ -19,6 +19,12 @@ pub struct StandingOrder {
     pub valid_from_auction_id: U256,
     orders: Vec<super::Order>,
 }
+pub struct EncodedOrder {
+    pub account_id: u16,
+    pub auction_id: U256,
+    pub order_number: usize,
+    pub bytes: Vec<u8>
+}
 
 impl StandingOrder {
     pub fn new(
@@ -46,6 +52,22 @@ impl StandingOrder {
     }
     pub fn empty(account_id: u16) -> StandingOrder {
         models::StandingOrder::new(account_id, U256::zero(), U256::zero(), vec![])
+    }
+}
+
+impl EncodedOrder {
+    pub fn new(
+        account_id: u16,
+        auction_id: U256,
+        order_number: usize,
+        bytes: Vec<u8>
+    ) -> EncodedOrder {
+        EncodedOrder {
+            account_id,
+            auction_id,
+            order_number,
+            bytes,
+        }
     }
 }
 
@@ -96,11 +118,19 @@ impl From<Arc<Log>> for StandingOrder {
         let valid_from_auction_id = U256::pop_from_log_data(&mut bytes);
         let account_id = u16::pop_from_log_data(&mut bytes);
         // let packed_orders_bytes = bytes;
+
+        println!("Parsing orders from packedOrders. {} bytes. {:?}", bytes.len(), bytes);
         assert!(bytes.len() % 26 == 0, "Each order should be packed in 26 bytes");
         
         // Extract packed order info
         let orders: Vec<models::Order> = bytes.chunks(26)
-            .map(|chunk| models::Order::from((account_id, chunk.to_vec())))
+            .enumerate()
+            .map(|(order_number, chunk)| models::Order::from(EncodedOrder {
+                account_id: account_id,
+                auction_id: batch_index,
+                order_number,
+                bytes: chunk.to_vec()
+            }))
             .collect();
 
         StandingOrder {
@@ -252,7 +282,10 @@ pub mod tests {
             batch_index: U256::from(2),
             valid_from_auction_id: U256::from(3),
             orders: vec![models::Order {
-                batch_information: None,
+                batch_information: Some(models::BatchInformation {
+                    slot: U256::from(2),
+                    slot_index: 510, // 500 reserved accounts + acount 1 * 10 accounts + account 0 = 500 * 1 * 10 + 0 = 510
+                }),
                 account_id: 1,
                 sell_token: 1,
                 buy_token: 2,
