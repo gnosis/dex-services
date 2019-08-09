@@ -26,17 +26,17 @@ type Withdraw @entity {
 type StandingSellOrderBatch @entity {
     id: ID!
     accountId: Int!
-    batchIndex: Int!
-    validFromAuctionId: Int!
-    orders: [StandingOrder!]
+    batchIndex: BigInt!
+    validFromAuctionId: BigInt!
+    # orders: [StandingOrder!]
 }
 
 type StandingOrder @entity {
     id: ID!
     buyToken: Int!
     sellToken: Int!
-    buyAmount: Int!
-    sellAmount: Int!
+    buyAmount: BigInt!
+    sellAmount: BigInt!
 }
 
 type SellOrder @entity {

@@ -1,11 +1,13 @@
 use crate::models;
 use crate::models::{ConcatenatingHashable, RollingHashable};
+
 use array_macro::array;
 use serde_derive::Deserialize;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use web3::types::{Log};
 use web3::types::{H256, U256};
+use graph::data::store::{Entity};
 
 use super::util::*;
 
@@ -110,11 +112,61 @@ impl From<Arc<Log>> for StandingOrder {
     }
 }
 
+impl From<Entity> for StandingOrder {
+    fn from(entity: Entity) -> Self {                
+        StandingOrder {
+            account_id: u16::from_entity(&entity, "accountId"),
+            batch_index: U256::from_entity(&entity, "batchIndex"),
+            valid_from_auction_id: U256::from_entity(&entity, "validFromAuctionId"),
+            // TODO: Get orders from entity
+            /*
+                StandingOrder: 
+                    buyToken: Int!
+                    sellToken: Int!
+                    buyAmount: BigInt!
+                    sellAmount: BigInt!
+            */
+            orders: vec![]
+        }
+    }
+}
+
+impl Into<Entity> for StandingOrder {
+    fn into(self) -> Entity {
+        let mut entity = Entity::new();
+                
+        entity.set("accountId", self.account_id.to_value());
+        entity.set("batchIndex", self.batch_index.to_value());
+        entity.set("validFromAuctionId", self.valid_from_auction_id.to_value());
+        
+        // TODO: Transform orders into Value
+        /*
+        let order_entities: Vec<Entity> = self.orders
+            .into_iter()
+            .map(|order| {
+                let mut order_entity = Entity::new();
+                order_entity.set("buyToken", order.buy_token.to_value());
+                order_entity.set("sellToken", order.sell_token.to_value());
+                order_entity.set("buyAmount", order.buy_amount.to_value());
+                order_entity.set("sellAmount", order.sell_amount.to_value());
+
+                order_entity
+            })
+            .collect();
+        */
+        // entity.set("orders", graph::data::store::Value::List(order_entities));
+        
+        entity
+    }
+}
+
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
     use std::str::FromStr;
-    use web3::types::H256;
+    use graph::bigdecimal::BigDecimal;
+    use web3::types::{Bytes, H256};
 
     #[test]
     fn test_concatenating_hash() {
@@ -165,7 +217,37 @@ pub mod tests {
             removed: None,
         });
 
-        let expected_standing_order = StandingOrder {
+        let expected_standing_order = create_standing_order_for_test();
+
+        let actual_standing_order = StandingOrder::from(log);
+        assert_eq!(actual_standing_order, expected_standing_order);
+    }
+
+    #[test]
+    fn test_to_and_from_entity() {
+        let standing_order = create_standing_order_for_test();
+
+        let mut entity = Entity::new();
+        entity.set("accountId", 1);
+        entity.set("batchIndex", BigDecimal::from(2));
+        entity.set("validFromAuctionId", BigDecimal::from(3));
+
+        // TODO: Add order to StandingOrder batch 
+        /*
+        let mut orderEntity = Entity::new();
+        orderEntity.set("buyToken", 2);
+        orderEntity.set("sellToken", 1);
+        orderEntity.set("buyAmount", BigDecimal::from(1 * (10 as u64).pow(18)));
+        orderEntity.set("sellAmount", BigDecimal::from(2 * (10 as u64).pow(18)));
+        // entity.set("orders", vec![orderEntity]);
+        */
+
+        assert_eq!(entity, standing_order.clone().into(), "Converts StandardOrder into Entity");
+        assert_eq!(standing_order, StandingOrder::from(entity), "Creates StandardOrder from Entity");
+    }
+
+    pub fn create_standing_order_for_test() -> models::StandingOrder {
+        StandingOrder {
             account_id: 1,
             batch_index: U256::from(2),
             valid_from_auction_id: U256::from(3),
@@ -176,11 +258,8 @@ pub mod tests {
                 buy_token: 2,
                 sell_amount: 2 * (10 as u128).pow(18),
                 buy_amount: 1 * (10 as u128).pow(18),
-            }],
-        };
-
-        let actual_standing_order = StandingOrder::from(log);
-        assert_eq!(actual_standing_order, expected_standing_order);
+            }]
+        }
     }
 
     pub fn create_order_for_test() -> models::Order {
