@@ -66,22 +66,22 @@ In order to setup some testing accounts and make the first deposits (from accoun
 
 ```bash
 cd dex-contracts
-truffle exec scripts/setup_environment.js
-truffle exec scripts/deposit.js 1 1 18
-truffle exec scripts/wait_seconds.js 181
+npx truffle exec scripts/setup_environment.js
+npx truffle exec scripts/deposit.js 1 1 18
+npx truffle exec scripts/wait_seconds.js 181
 ```
 
 To claim back the deposit, submit a withdraw request:
 
 ```bash
-truffle exec scripts/request_withdraw.js 1 1 18
+npx truffle exec scripts/request_withdraw.js 1 1 18
 ```
 
 After 20 blocks have passed, the driver will apply the state transition and you should be able to claim back your funds:
 
 ```bash
-truffle exec scripts/wait_seconds.js 181
-truffle exec scripts/claim_withdraw.js 0 1 1
+npx truffle exec scripts/wait_seconds.js 181
+npx truffle exec scripts/claim_withdraw.js 0 1 1
 ```
 
 Tests
@@ -120,7 +120,7 @@ Troubleshooting
 If you have built the docker landscape before, and there are updates to the smart contracts submodule (*dex-contracts/*), you have to rebuild your docker environment, for them to be picked up:
 
 ```bash
-cd dex-contracts && rm -rf build && truffle compile && cd ..
+cd dex-contracts && rm -rf build && npx truffle compile && cd ..
 docker-compose build truffle
 ```
 
