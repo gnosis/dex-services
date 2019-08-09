@@ -113,17 +113,23 @@ impl From<mongodb::ordered::OrderedDocument> for StandingOrder {
 impl From<Arc<Log>> for StandingOrder {
     fn from(log: Arc<Log>) -> Self {
         let mut bytes: Vec<u8> = log.data.0.clone();
+        println!("Parsing StandingOrder from bytes. {} bytes. {:?}", bytes.len(), bytes);
+        
         // Get basic data from event
         let batch_index = U256::pop_from_log_data(&mut bytes);
         let valid_from_auction_id = U256::pop_from_log_data(&mut bytes);
         let account_id = u16::pop_from_log_data(&mut bytes);
-        // let packed_orders_bytes = bytes;
 
-        println!("Parsing orders from packedOrders. {} bytes. {:?}", bytes.len(), bytes);
-        assert!(bytes.len() % 26 == 0, "Each order should be packed in 26 bytes");
-        
+        let bytes_init = u8::pop_from_log_data(&mut bytes) as usize;
+        let byte_size = u8::pop_from_log_data(&mut bytes) as usize;
+
+        println!("Extracting packed order. Bytes: {}-{}", bytes_init, bytes_init + byte_size);
+        let packed_orders_bytes = &bytes[0..byte_size];
+        println!("Parsing orders from packedOrders. {} bytes. {:?}", packed_orders_bytes.len(), packed_orders_bytes);
+        assert!(packed_orders_bytes.len() % 26 == 0, "Each order should be packed in 26 bytes");
+                
         // Extract packed order info
-        let orders: Vec<models::Order> = bytes.chunks(26)
+        let orders: Vec<models::Order> = packed_orders_bytes.chunks(26)
             .enumerate()
             .map(|(order_number, chunk)| models::Order::from(EncodedOrder {
                 account_id,
@@ -227,10 +233,19 @@ pub mod tests {
             // account_id: 1
             vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
 
+            // bytes start position
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128],
+
+            // bytes size
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 26],
+
             // packed_orders: Buy token 2, for token 1. Buy 1e18 for 2e18.
             //    000000000de0b6b3a7640000 000000001bc16d674ec80000 0201
             //    00 00 00 00 0d  e0   b6   b3   a7   64   00 00 00 00 00 00 1b  c1   6d   67   4e  c8   00 00 02 01
             vec![ 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, 0, 0, 0, 0, 27, 193, 109, 103, 78, 200, 0, 0, 2, 1],
+
+            // Unused space for bytes field
+            vec![ 0, 0, 0, 0, 0, 0]
         ];
 
         let log = Arc::new(Log {
