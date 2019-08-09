@@ -126,7 +126,7 @@ impl From<Arc<Log>> for StandingOrder {
         let orders: Vec<models::Order> = bytes.chunks(26)
             .enumerate()
             .map(|(order_number, chunk)| models::Order::from(EncodedOrder {
-                account_id: account_id,
+                account_id,
                 auction_id: batch_index,
                 order_number,
                 bytes: chunk.to_vec()

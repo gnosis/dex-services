@@ -273,7 +273,7 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let standing_order = StandingOrder::new(
-            1, U256::zero(), vec![create_order_for_test(), create_order_for_test()]
+            1, U256::zero(), U256::from(3), vec![create_order_for_test(), create_order_for_test()]
         );
 
         let state = AccountState::new(
@@ -312,10 +312,10 @@ mod tests {
     #[test]
     fn test_get_standing_orders_indexes(){
         let standing_order = StandingOrder::new(
-            1, U256::from(3), vec![create_order_for_test(), create_order_for_test()]
+            1, U256::from(3), U256::from(2), vec![create_order_for_test(), create_order_for_test()]
         );
         let empty_order = StandingOrder::new(
-            0, U256::zero(), vec![]
+            0, U256::zero(), U256::from(2), vec![]
         );
         let mut standing_orders = vec![empty_order; NUM_RESERVED_ACCOUNTS as usize];
         standing_orders[1] = standing_order.clone();
