@@ -59,6 +59,12 @@ impl ToValue for u16 {
     }
 }
 
+impl ToValue for u32 {
+    fn to_value(&self) -> Value {
+        u128::from(self.clone()).to_value()
+    }
+}
+
 impl ToValue for u128 {
     fn to_value(&self) -> Value {
         BigDecimal::from_str(&self.to_string()).unwrap().into()

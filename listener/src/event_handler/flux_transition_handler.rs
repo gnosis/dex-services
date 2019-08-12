@@ -2,19 +2,19 @@ use super::*;
 
 use dfusion_core::models::{PendingFlux, AccountState};
 use dfusion_core::models::util::{PopFromLogData, ToValue};
+use dfusion_core::database::DbInterface;
 
-use graph::components::store::{EntityFilter, Store};
 use graph::data::store::Entity;
 use std::fmt;
 use web3::types::{H256, U256};
 
 #[derive(Clone)]
 pub struct FluxTransitionHandler {
-    store: Arc<Store>,
+    store: Arc<DbInterface>,
 }
 
 impl FluxTransitionHandler {
-    pub fn new(store: Arc<Store>) -> Self {
+    pub fn new(store: Arc<DbInterface>) -> Self {
         FluxTransitionHandler{
             store
         }
@@ -58,24 +58,16 @@ impl EventHandler for FluxTransitionHandler {
 
         info!(logger, "Received Flux AccountState Transition Event");
 
-        let account_query = util::entity_query(
-            "AccountState", EntityFilter::Equal("stateIndex".to_string(), state_index.to_value())
-        );
-        let mut account_state = AccountState::from(self.store
-            .find_one(account_query)?
-            .ok_or_else(|| failure::err_msg(format!("No state record found for index {}", &state_index)))?
-        );
+        //TODO this needs to use stateIndex
+        let mut account_state = self.store
+            .get_current_balances(&H256::zero())
+            .map_err(|e| failure::err_msg(format!("{}", e)))?;
 
         match transition_type {
             FluxTransitionType::Deposit => {
-                let deposit_query = util::entity_query(
-                    "Deposit", EntityFilter::Equal("slot".to_string(), slot.to_value())
-                );
                 let deposits = self.store
-                    .find(deposit_query)?
-                    .into_iter()
-                    .map(PendingFlux::from)
-                    .collect::<Vec<PendingFlux>>();
+                    .get_deposits_of_slot(slot.low_u32())
+                    .map_err(|e| failure::err_msg(format!("{}", e)))?;
                 account_state.apply_deposits(&deposits);
             },
             FluxTransitionType::Withdraw => {

@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use graph::components::store::{EntityFilter, EntityKey, EntityQuery, EntityRange};
+use graph::components::store::EntityKey;
 use graph::data::store::Entity;
 use web3::types::Log;
 
@@ -19,20 +19,6 @@ pub fn entity_key(entity_type: &str, entity: &Entity) -> EntityKey {
         entity_id: entity.get("id")
             .and_then(|v| v.clone().as_string())
             .unwrap(),
-    }
-}
-
-pub fn entity_query(entity_type: &str, filter: EntityFilter) -> EntityQuery {
-    EntityQuery {
-        subgraph_id: SUBGRAPH_ID.clone(),
-        entity_types: vec![entity_type.to_string()],
-        filter: Some(filter),
-        order_by: None,
-        order_direction: None,
-        range: EntityRange {
-            first: None,
-            skip: 0
-        }
     }
 }
 

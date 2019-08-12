@@ -12,6 +12,7 @@ path = "src/main.rs"
 graph-core = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
 graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
 graph-datasource-ethereum = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
+graph-node-reader = { path = "../graph_node_reader" }
 graph-store-postgres = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
 graph-server-http = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
 graph-server-websocket = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
