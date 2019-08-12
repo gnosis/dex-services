@@ -55,6 +55,12 @@ pub mod tests {
         }
     }
 
+    impl Default for DbInterfaceMock {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl DbInterface for DbInterfaceMock {
         fn get_current_balances(
             &self,
