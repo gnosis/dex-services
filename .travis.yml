@@ -10,7 +10,7 @@ matrix:
       before_script:
         - rustup component add clippy
       script:
-        - cargo clippy --all -- -D warnings
+        - cargo clippy --all --exclude graph-node-reader -- -D warnings
         - cargo check --verbose --all
         - cargo test --verbose --all
     - language: python
