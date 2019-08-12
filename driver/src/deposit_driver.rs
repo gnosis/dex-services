@@ -47,10 +47,10 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dfusion_core::database::tests::DbInterfaceMock;
     use dfusion_core::models::flux::tests::create_flux_for_test;
     use dfusion_core::models;
     use crate::contract::tests::SnappContractMock;
-    use crate::db_interface::tests::DbInterfaceMock;
     use mock_it::Matcher::*;
     use web3::types::{H256, U256};
     use crate::error::{ErrorKind};
