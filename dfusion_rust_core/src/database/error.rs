@@ -26,7 +26,7 @@ impl DatabaseError {
         description: &str, 
     ) -> Self {
         DatabaseError {
-            details: format!("{}", description),
+            details: description.to_string(),
             kind
         }
     }
