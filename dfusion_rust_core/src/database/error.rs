@@ -27,7 +27,7 @@ impl DatabaseError {
     ) -> Self {
         DatabaseError {
             details: format!("{}", description),
-            kind: kind
+            kind
         }
     }
 
@@ -38,7 +38,7 @@ impl DatabaseError {
     ) -> Self {
         DatabaseError {
             details: format!("{} - {}", description, underlying_error),
-            kind: kind
+            kind
         }
     }
 }
