@@ -8,14 +8,14 @@ extern crate web3;
 extern crate dfusion_core;
 
 use crate::contract::SnappContractImpl;
-use crate::db_interface::MongoDB;
+use crate::mongo_db::MongoDB;
 use crate::deposit_driver::run_deposit_listener;
 use crate::order_driver::run_order_listener;
 use crate::price_finding::PriceFinding;
 use crate::withdraw_driver::run_withdraw_listener;
 
 pub mod contract;
-pub mod db_interface;
+pub mod mongo_db;
 pub mod error;
 pub mod price_finding;
 
