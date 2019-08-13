@@ -4,7 +4,7 @@ use slog::Logger;
 use std::sync::Arc;
 
 use graph::components::ethereum::EthereumBlock;
-use graph::components::store::{EntityOperation, EntityKey};
+use graph::components::store::{EntityOperation};
 use graph::data::store::{Entity, Value};
 
 use dfusion_core::models::StandingOrder;
@@ -85,6 +85,7 @@ fn get_entities_from_log(logger: &Logger, log: &Arc<Log>) -> (Entity, Vec<Entity
 pub mod test {
     use super::*;
     use web3::types::{Bytes};
+    use graph::components::store::EntityKey;
 
     #[test]
     fn test_handle_standing_order() {
