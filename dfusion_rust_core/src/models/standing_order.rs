@@ -17,7 +17,7 @@ pub struct StandingOrder {
     pub account_id: u16,
     pub batch_index: U256,
     pub valid_from_auction_id: U256,
-    orders: Vec<super::Order>,
+    pub orders: Vec<super::Order>,
 }
 pub struct EncodedOrder {
     pub account_id: u16,
@@ -40,6 +40,7 @@ impl StandingOrder {
             orders,
         }
     }
+
     pub fn empty_array() -> [models::StandingOrder; models::NUM_RESERVED_ACCOUNTS] {
         let mut i = 0u16;
         array![models::StandingOrder::empty({i += 1; i - 1}); models::NUM_RESERVED_ACCOUNTS]
@@ -110,8 +111,8 @@ impl From<mongodb::ordered::OrderedDocument> for StandingOrder {
     }
 }
 
-impl From<Arc<Log>> for StandingOrder {
-    fn from(log: Arc<Log>) -> Self {
+impl From<&Arc<Log>> for StandingOrder {
+    fn from(log: &Arc<Log>) -> Self {
         let mut bytes: Vec<u8> = log.data.0.clone();
         println!("Parsing StandingOrder from bytes. {} bytes. {:?}", bytes.len(), bytes);
         
@@ -148,21 +149,18 @@ impl From<Arc<Log>> for StandingOrder {
     }
 }
 
+
 impl From<Entity> for StandingOrder {
-    fn from(entity: Entity) -> Self {                
+    fn from(entity: Entity) -> Self {
+        let account_id = u16::from_entity(&entity, "accountId");
+        let batch_index = U256::from_entity(&entity, "batchIndex");
+        let valid_from_auction_id = U256::from_entity(&entity, "validFromAuctionId");
+
         StandingOrder {
-            account_id: u16::from_entity(&entity, "accountId"),
-            batch_index: U256::from_entity(&entity, "batchIndex"),
-            valid_from_auction_id: U256::from_entity(&entity, "validFromAuctionId"),
-            // TODO: Get orders from entity
-            /*
-                StandingOrder: 
-                    buyToken: Int!
-                    sellToken: Int!
-                    buyAmount: BigInt!
-                    sellAmount: BigInt!
-            */
-            orders: vec![]
+            account_id,
+            batch_index,
+            valid_from_auction_id,            
+            orders: vec![] // Orders cannot be reconstructed just from the entity
         }
     }
 }
@@ -174,23 +172,8 @@ impl Into<Entity> for StandingOrder {
         entity.set("accountId", self.account_id.to_value());
         entity.set("batchIndex", self.batch_index.to_value());
         entity.set("validFromAuctionId", self.valid_from_auction_id.to_value());
-        
-        // TODO: Transform orders into Value
-        /*
-        let order_entities: Vec<Entity> = self.orders
-            .into_iter()
-            .map(|order| {
-                let mut order_entity = Entity::new();
-                order_entity.set("buyToken", order.buy_token.to_value());
-                order_entity.set("sellToken", order.sell_token.to_value());
-                order_entity.set("buyAmount", order.buy_amount.to_value());
-                order_entity.set("sellAmount", order.sell_amount.to_value());
+        entity.set("orders", vec![]);
 
-                order_entity
-            })
-            .collect();
-        */
-        // entity.set("orders", graph::data::store::Value::List(order_entities));
         
         entity
     }
@@ -205,7 +188,7 @@ pub mod tests {
     use web3::types::{Bytes, H256};
 
     #[test]
-    fn test_concatenating_hash() {
+    fn concatenating_hash() {
         let standing_order = models::StandingOrder::new(
             1,
             U256::zero(),
@@ -222,7 +205,74 @@ pub mod tests {
     }
 
     #[test]
-    fn test_from_log() {
+    fn from_log() {
+        let log = create_log_for_test();
+        let expected_standing_order = create_standing_order_for_test();
+
+        let actual_standing_order = StandingOrder::from(&log);
+        assert_eq!(actual_standing_order, expected_standing_order);
+    }
+
+    #[test]
+    fn into_entity() {
+        let standing_order = create_standing_order_for_test();
+        let entity = create_entity_for_test();
+
+        assert_eq!(entity, standing_order.clone().into());
+    }
+
+    #[test]
+    fn from_entity() {
+        let entity = create_entity_for_test();
+        let mut standing_order = create_standing_order_for_test();
+
+        // Remove the orders, the From<Entity> doesn't have enough info about the orders
+        standing_order.orders = vec![]; 
+
+        assert_eq!(standing_order, StandingOrder::from(entity));
+    }
+
+    pub fn create_standing_order_for_test() -> models::StandingOrder {
+        StandingOrder {
+            account_id: 1,
+            batch_index: U256::from(2),
+            valid_from_auction_id: U256::from(3),
+            orders: vec![models::Order {
+                batch_information: Some(models::BatchInformation {
+                    slot: U256::from(2),
+                    slot_index: 510, // 500 reserved accounts + acount 1 * 10 accounts + account 0 = 500 * 1 * 10 + 0 = 510
+                }),
+                account_id: 1,
+                sell_token: 1,
+                buy_token: 2,
+                sell_amount: 2 * (10 as u128).pow(18),
+                buy_amount: 1 * (10 as u128).pow(18),
+            }]
+        }
+    }
+
+    pub fn create_entity_for_test() -> Entity {
+        let mut entity = Entity::new();
+        entity.set("accountId", 1);
+        entity.set("batchIndex", BigDecimal::from(2));
+        entity.set("validFromAuctionId", BigDecimal::from(3));
+        entity.set("orders", vec![]);
+
+        entity
+    }
+
+    pub fn create_order_for_test() -> models::Order {
+        models::Order {
+            batch_information: None,
+            account_id: 1,
+            sell_token: 2,
+            buy_token: 3,
+            sell_amount: 4,
+            buy_amount: 5,
+        }
+    }
+
+    pub fn create_log_for_test() -> Arc<Log> {
         let bytes: Vec<Vec<u8>> = vec![
             // batch_index: 1
             vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 2],
@@ -248,7 +298,7 @@ pub mod tests {
             vec![ 0, 0, 0, 0, 0, 0]
         ];
 
-        let log = Arc::new(Log {
+        Arc::new(Log {
             address: 0.into(),
             topics: vec![],
             data: Bytes(bytes.iter().flat_map(|i| i.iter()).cloned().collect()),
@@ -260,64 +310,6 @@ pub mod tests {
             transaction_log_index: Some(0.into()),
             log_type: None,
             removed: None,
-        });
-
-        let expected_standing_order = create_standing_order_for_test();
-
-        let actual_standing_order = StandingOrder::from(log);
-        assert_eq!(actual_standing_order, expected_standing_order);
-    }
-
-    #[test]
-    fn test_to_and_from_entity() {
-        let standing_order = create_standing_order_for_test();
-
-        let mut entity = Entity::new();
-        entity.set("accountId", 1);
-        entity.set("batchIndex", BigDecimal::from(2));
-        entity.set("validFromAuctionId", BigDecimal::from(3));
-
-        // TODO: Add order to StandingOrder batch 
-        /*
-        let mut orderEntity = Entity::new();
-        orderEntity.set("buyToken", 2);
-        orderEntity.set("sellToken", 1);
-        orderEntity.set("buyAmount", BigDecimal::from(1 * (10 as u64).pow(18)));
-        orderEntity.set("sellAmount", BigDecimal::from(2 * (10 as u64).pow(18)));
-        // entity.set("orders", vec![orderEntity]);
-        */
-
-        assert_eq!(entity, standing_order.clone().into(), "Converts StandardOrder into Entity");
-        assert_eq!(standing_order, StandingOrder::from(entity), "Creates StandardOrder from Entity");
-    }
-
-    pub fn create_standing_order_for_test() -> models::StandingOrder {
-        StandingOrder {
-            account_id: 1,
-            batch_index: U256::from(2),
-            valid_from_auction_id: U256::from(3),
-            orders: vec![models::Order {
-                batch_information: Some(models::BatchInformation {
-                    slot: U256::from(2),
-                    slot_index: 510, // 500 reserved accounts + acount 1 * 10 accounts + account 0 = 500 * 1 * 10 + 0 = 510
-                }),
-                account_id: 1,
-                sell_token: 1,
-                buy_token: 2,
-                sell_amount: 2 * (10 as u128).pow(18),
-                buy_amount: 1 * (10 as u128).pow(18),
-            }]
-        }
-    }
-
-    pub fn create_order_for_test() -> models::Order {
-        models::Order {
-            batch_information: None,
-            account_id: 1,
-            sell_token: 2,
-            buy_token: 3,
-            sell_amount: 4,
-            buy_amount: 5,
-        }
+        })
     }
 }
