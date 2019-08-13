@@ -54,7 +54,7 @@ impl DbInterface for GraphReader {
         state_root: &H256,
     ) -> Result<models::AccountState, DatabaseError> {
         let account_query = entity_query(
-            "AccountState", EntityFilter::Equal("stateRoot".to_string(), state_root.to_value())
+            "AccountState", EntityFilter::Equal("id".to_string(), state_root.to_value())
         );
         self.get_balances_for_query(account_query)
     }
