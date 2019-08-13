@@ -38,6 +38,6 @@ type SellOrder @entity {
     sellToken: Int!
     buyAmount: BigInt!
     sellAmount: BigInt!
-    auctionId: BigInt!
-    slotIndex: Int!
+    auctionId: BigInt
+    slotIndex: Int
 }
