@@ -17,8 +17,8 @@ step "Place Sell Order" \
 step "Place standing order in current Auction" \
 "npx truffle exec scripts/standing_order.js 0 1 2 1 1"
 
-step_with_retry "Check standing order has been recorded" \
-"mongo dfusion2 --eval \"db.standing_orders.findOne({accountId:0, batchIndex:0, orders: [ { buyToken:1, sellToken:2, buyAmount:'1000000000000000000', sellAmount:'1000000000000000000' }]})\" | grep ObjectId"
+step_with_retry "Check mongo standing order has been recorded" \
+"mongo dfusion2 --eval \"db.standing_orders.findOne({accountId:0, batchIndex:0, validFromAuctionId:0, orders: [ { buyToken:1, sellToken:2, buyAmount:'1000000000000000000', sellAmount:'1000000000000000000' }]})\" | grep ObjectId"
 
 step "Advance time to apply auction" \
 "npx truffle exec scripts/wait_seconds.js 181"
