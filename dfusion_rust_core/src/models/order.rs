@@ -5,7 +5,6 @@ use std::sync::Arc;
 use web3::types::{H256, U256, Log};
 
 use super::util::*;
-use super::EncodedOrder;
 
 use crate::models::{Serializable, RollingHashable, iter_hash};
 
@@ -25,6 +24,38 @@ pub struct Order {
     pub sell_token: u8,
     pub buy_amount: u128,
     pub sell_amount: u128,
+}
+
+impl Order {
+    pub fn from_encoded_order (
+        account_id: u16,
+        auction_id: U256,
+        order_number: usize,
+        bytes: Vec<u8>
+    ) -> Self {
+
+        let sell_token =  u8::from_le_bytes([bytes[25]]);
+        let buy_token = u8::from_le_bytes([bytes[24]]);
+        let sell_amount = read_amount(&bytes[12..24]);
+        let buy_amount = read_amount(&bytes[0..12]);
+        
+        Order {
+            batch_information: Some(BatchInformation{
+                slot: auction_id,
+                slot_index: (
+                    super::NUM_SLOTS_REGULAR_ORDERS +
+                    super::NUM_SLOTS_PER_STANING_ORDER_ACCOUNT *
+                    account_id +
+                    (order_number as u16)
+                ) as u16,
+            }),
+            account_id,
+            buy_token,
+            sell_token,
+            buy_amount,
+            sell_amount
+        }
+    }
 }
 
 impl Serializable for Order {
@@ -74,35 +105,6 @@ impl From<Entity> for Order {
             sell_token: u8::from_entity(&entity, "sellToken"),
             buy_amount: u128::from_entity(&entity, "buyAmount"),
             sell_amount: u128::from_entity(&entity, "sellAmount"),
-        }
-    }
-}
-
-impl From<EncodedOrder> for Order {
-    fn from (encoded_order: EncodedOrder) -> Self {
-        let account_id = encoded_order.account_id;
-        let bytes = encoded_order.bytes;
-
-        let sell_token =  u8::from_le_bytes([bytes[25]]);
-        let buy_token = u8::from_le_bytes([bytes[24]]);
-        let sell_amount = read_amount(&bytes[12..24]);
-        let buy_amount = read_amount(&bytes[0..12]);
-        
-        Order {
-            batch_information: Some(BatchInformation{
-                slot: encoded_order.auction_id,
-                slot_index: (
-                    super::NUM_SLOTS_REGULAR_ORDERS +
-                    super::NUM_SLOTS_PER_STANING_ORDER_ACCOUNT *
-                    account_id +
-                    (encoded_order.order_number as u16)
-                ) as u16,
-            }),
-            account_id,
-            buy_token,
-            sell_token,
-            buy_amount,
-            sell_amount
         }
     }
 }

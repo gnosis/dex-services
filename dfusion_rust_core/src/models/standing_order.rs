@@ -19,12 +19,6 @@ pub struct StandingOrder {
     pub valid_from_auction_id: U256,
     pub orders: Vec<super::Order>,
 }
-pub struct EncodedOrder {
-    pub account_id: u16,
-    pub auction_id: U256,
-    pub order_number: usize,
-    pub bytes: Vec<u8>
-}
 
 impl StandingOrder {
     pub fn new(
@@ -53,22 +47,6 @@ impl StandingOrder {
     }
     pub fn empty(account_id: u16) -> StandingOrder {
         models::StandingOrder::new(account_id, U256::zero(), U256::zero(), vec![])
-    }
-}
-
-impl EncodedOrder {
-    pub fn new(
-        account_id: u16,
-        auction_id: U256,
-        order_number: usize,
-        bytes: Vec<u8>
-    ) -> EncodedOrder {
-        EncodedOrder {
-            account_id,
-            auction_id,
-            order_number,
-            bytes,
-        }
     }
 }
 
@@ -132,12 +110,12 @@ impl From<&Arc<Log>> for StandingOrder {
         // Extract packed order info
         let orders: Vec<models::Order> = packed_orders_bytes.chunks(26)
             .enumerate()
-            .map(|(order_number, chunk)| models::Order::from(EncodedOrder {
+            .map(|(order_number, chunk)| models::Order::from_encoded_order(
                 account_id,
-                auction_id: batch_index,
+                batch_index,
                 order_number,
-                bytes: chunk.to_vec()
-            }))
+                chunk.to_vec()
+            ))
             .collect();
 
         StandingOrder {
