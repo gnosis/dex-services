@@ -14,7 +14,15 @@ use tiny_keccak::keccak256;
 
 use web3::types::{Log, Transaction, H256};
 
-use crate::event_handler::{EventHandler, DepositHandler, InitializationHandler, FluxTransitionHandler, SellOrderHandler, WithdrawHandler};
+use crate::event_handler::{
+    EventHandler,
+    DepositHandler,
+    InitializationHandler,
+    FluxTransitionHandler,
+    SellOrderHandler,
+    WithdrawHandler,
+    AuctionSettlementHandler
+};
 
 type HandlerMap = HashMap<H256, Box<dyn EventHandler>>;
 
@@ -72,7 +80,7 @@ impl RustRuntimeHost {
         register_event(
             &mut handlers,
             "StateTransition(uint8,uint256,bytes32,uint256)",
-            Box::new(FluxTransitionHandler::new(store))
+            Box::new(FluxTransitionHandler::new(store.clone()))
         );
         register_event(
             &mut handlers,
@@ -83,6 +91,11 @@ impl RustRuntimeHost {
             &mut handlers,
             "SellOrder(uint256,uint16,uint16,uint8,uint8,uint96,uint96)",
             Box::new(SellOrderHandler {})
+        );
+        register_event(
+            &mut handlers,
+            "AuctionSettlement(uint256,uint256,bytes32,bytes)",
+            Box::new(AuctionSettlementHandler::new(store.clone()))
         );
         RustRuntimeHost {
             handlers

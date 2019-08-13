@@ -1,10 +1,12 @@
 pub mod account_state;
+pub mod auction_results;
 pub mod flux;
 pub mod order;
 pub mod standing_order;
 pub mod util;
 
 pub use crate::models::account_state::AccountState;
+pub use crate::models::auction_results::AuctionResults;
 pub use crate::models::flux::PendingFlux;
 pub use crate::models::order::Order;
 pub use crate::models::standing_order::StandingOrder;

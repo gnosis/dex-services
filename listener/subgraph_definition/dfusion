@@ -8,7 +8,7 @@ dataSources:
     name: SnappBaseEvents
     source:
       address: '0x9561C133DD8580860B6b7E504bC5Aa500f0f06a7'
-      abi: EnptyAbi.json
+      abi: EmptyAbi.json
     mapping:
       kind: Mapping
       apiVersion: 0.0.1
@@ -25,6 +25,8 @@ dataSources:
         - event: WithdrawRequest(uint16,uint8,uint128,uint256,uint16)
           handler: rust
         - event: SellOrder(uint256,uint16,uint16,uint8,uint8,uint96,uint96)
+          handler: rust
+        - event: AuctionSettlement(uint256,uint256,bytes32,bytes)
           handler: rust
       file: 
         /: rustHandler.wasm

@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use web3::types::{H256, U256, Log};
 
-use crate::models::{TOKENS, RollingHashable, PendingFlux};
+use crate::models::{TOKENS, RollingHashable, PendingFlux, AuctionResults, Order};
 
 use super::util::*;
 
@@ -65,6 +65,12 @@ impl AccountState {
         self.state_index = self.state_index.saturating_add(U256::one());
         self.state_hash = self.rolling_hash(self.state_index.low_u32());
         valid_withdraws
+    }
+
+    pub fn apply_auction(&mut self, orders: &[Order], results: &AuctionResults) {
+        // TODO - fill me in!
+        println!("{:?}", orders);
+        println!("{:?}", results);
     }
 }
 
