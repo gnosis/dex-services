@@ -92,7 +92,7 @@ impl From<mongodb::ordered::OrderedDocument> for StandingOrder {
 impl From<&Arc<Log>> for StandingOrder {
     fn from(log: &Arc<Log>) -> Self {
         let mut bytes: Vec<u8> = log.data.0.clone();
-        println!("Parsing StandingOrder from bytes. {} bytes. {:?}", bytes.len(), bytes);
+        info!("Parsing StandingOrder from bytes. {} bytes. {:?}", bytes.len(), bytes);
         
         // Get basic data from event
         let batch_index = U256::pop_from_log_data(&mut bytes);
@@ -102,9 +102,9 @@ impl From<&Arc<Log>> for StandingOrder {
         let bytes_init = u8::pop_from_log_data(&mut bytes) as usize;
         let byte_size = u8::pop_from_log_data(&mut bytes) as usize;
 
-        println!("Extracting packed order. Bytes: {}-{}", bytes_init, bytes_init + byte_size);
+        info!("Extracting packed order. Bytes: {}-{}", bytes_init, bytes_init + byte_size);
         let packed_orders_bytes = &bytes[0..byte_size];
-        println!("Parsing orders from packedOrders. {} bytes. {:?}", packed_orders_bytes.len(), packed_orders_bytes);
+        info!("Parsing orders from packedOrders. {} bytes. {:?}", packed_orders_bytes.len(), packed_orders_bytes);
         assert!(packed_orders_bytes.len() % 26 == 0, "Each order should be packed in 26 bytes");
                 
         // Extract packed order info
