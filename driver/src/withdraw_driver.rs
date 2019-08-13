@@ -24,9 +24,9 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
             info!("Processing withdraw_slot {:?}", slot);
             let state_root = contract.get_current_state_root()?;
             let contract_withdraw_hash = contract.withdraw_hash_for_slot(slot)?;
-            let mut balances = db.get_current_balances(&state_root)?;
+            let mut balances = db.get_balances_for_state_root(&state_root)?;
 
-            let withdraws = db.get_withdraws_of_slot(slot.low_u32())?;
+            let withdraws = db.get_withdraws_of_slot(&slot)?;
             let withdraw_hash = withdraws.rolling_hash(0);
             hash_consistency_check(withdraw_hash, contract_withdraw_hash, "withdraw")?;
 
@@ -81,8 +81,8 @@ mod tests {
         contract.apply_withdraws.given((slot, Any, Any, Any, Any)).will_return(Ok(()));
 
         let db = DbInterfaceMock::new();
-        db.get_withdraws_of_slot.given(1).will_return(Ok(withdraws));
-        db.get_current_balances.given(state_hash).will_return(Ok(state));
+        db.get_withdraws_of_slot.given(U256::one()).will_return(Ok(withdraws));
+        db.get_balances_for_state_root.given(state_hash).will_return(Ok(state));
 
         assert_eq!(run_withdraw_listener(&db, &contract), Ok(true));
     }
@@ -142,8 +142,8 @@ mod tests {
         );
 
         let db = DbInterfaceMock::new();
-        db.get_withdraws_of_slot.given(0).will_return(Ok(first_withdraws));
-        db.get_current_balances.given(state_hash).will_return(Ok(state));
+        db.get_withdraws_of_slot.given(U256::zero()).will_return(Ok(first_withdraws));
+        db.get_balances_for_state_root.given(state_hash).will_return(Ok(state));
 
         assert_eq!(run_withdraw_listener(&db, &contract), Ok(true));
         assert_eq!(run_withdraw_listener(&db, &contract), Ok(true));
@@ -175,8 +175,8 @@ mod tests {
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
 
         let db = DbInterfaceMock::new();
-        db.get_withdraws_of_slot.given(1).will_return(Ok(withdraws));
-        db.get_current_balances.given(state_hash).will_return(Ok(state));
+        db.get_withdraws_of_slot.given(U256::one()).will_return(Ok(withdraws));
+        db.get_balances_for_state_root.given(state_hash).will_return(Ok(state));
 
         let error = run_withdraw_listener(&db, &contract).expect_err("Expected Error");
         assert_eq!(error.kind, ErrorKind::StateError);
@@ -214,8 +214,8 @@ mod tests {
         contract.apply_withdraws.given((slot, Val(merkle_root), Any, Any, Any)).will_return(Ok(()));
 
         let db = DbInterfaceMock::new();
-        db.get_withdraws_of_slot.given(1).will_return(Ok(withdraws));
-        db.get_current_balances.given(state_hash).will_return(Ok(state));
+        db.get_withdraws_of_slot.given(U256::one()).will_return(Ok(withdraws));
+        db.get_balances_for_state_root.given(state_hash).will_return(Ok(state));
 
         assert_eq!(run_withdraw_listener(&db, &contract), Ok(true));
     }

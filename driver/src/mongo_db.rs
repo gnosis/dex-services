@@ -9,7 +9,7 @@ use mongodb::ordered::OrderedDocument;
 use mongodb::db::ThreadedDatabase;
 use mongodb::{Client, ThreadedClient};
 
-use web3::types::H256;
+use web3::types::{H256, U256};
 
 #[derive(Clone)]
 pub struct MongoDB {
@@ -54,16 +54,11 @@ impl MongoDB {
         docs.sort();
         Ok(docs)
     }
-}
 
-impl DbInterface for MongoDB {
-    fn get_current_balances(
+    fn get_balances_for_query(
         &self,
-        current_state_root: &H256,
+        query: mongodb::Document,
     ) -> Result<models::AccountState, DatabaseError> {
-        let query = doc!{ "stateHash" => format!("{:x}", current_state_root) };
-        info!("Querying stateHash: {}", query);
-
         let coll = self.client.db(models::DB_NAME).collection("accounts");
         let cursor = coll.find(Some(query), None)
             .map_err(
@@ -84,36 +79,56 @@ impl DbInterface for MongoDB {
         }
         Ok(models::AccountState::from(docs.pop().unwrap()))
     }
+}
+
+impl DbInterface for MongoDB {
+    fn get_balances_for_state_root(
+        &self,
+        state_root: &H256,
+    ) -> Result<models::AccountState, DatabaseError> {
+        let query = doc!{ "stateHash" => format!("{:x}", state_root) };
+        info!("Querying stateHash: {}", query);
+        self.get_balances_for_query(query)
+    }
+
+    fn get_balances_for_state_index(
+        &self,
+        state_index: &U256,
+    ) -> Result<models::AccountState, DatabaseError> {
+        let query = doc!{ "stateIndex" => state_index.to_string() };
+        info!("Querying stateIndex: {}", query);
+        self.get_balances_for_query(query)
+    }
 
     fn get_deposits_of_slot(
         &self,
-        slot: u32,
+        slot: &U256,
     ) -> Result<Vec<models::PendingFlux>, DatabaseError> {
-        let query = doc!{ "slot" => slot };
+        let query = doc!{ "slot" => slot.to_string() };
         self.get_items_from_query(query, "deposits")
     }
 
     fn get_withdraws_of_slot(
         &self,
-        slot: u32,
+        slot: &U256,
     ) -> Result<Vec<models::PendingFlux>, DatabaseError> {
-        let query = doc!{ "slot" => slot };
+        let query = doc!{ "slot" => slot.to_string() };
         self.get_items_from_query(query, "withdraws")
     }
 
     fn get_orders_of_slot(
         &self,
-        slot: u32,
+        slot: &U256,
     ) -> Result<Vec<models::Order>, DatabaseError> {
-        let query = doc!{ "auctionId" => slot };
+        let query = doc!{ "auctionId" => slot.to_string() };
         self.get_items_from_query(query, "orders")
     }
     fn get_standing_orders_of_slot(
         &self,
-        slot: u32,
+        slot: &U256,
     ) -> Result<[models::StandingOrder; models::NUM_RESERVED_ACCOUNTS], DatabaseError> {
         let pipeline = vec![
-            doc!{"$match" => (doc!{"validFromAuctionId" => (doc!{ "$lte" => slot})})},
+            doc!{"$match" => (doc!{"validFromAuctionId" => (doc!{ "$lte" => slot.to_string()})})},
             doc!{"$sort" => (doc!{"validFromAuctionId" => -1, "_id" => -1})},
             doc!{"$group" => (doc!{"_id" => "$accountId", "orders" => (doc!{"$first" =>"$orders" }), "batchIndex" => (doc!{"$first" => "$batchIndex" })})}
         ];
