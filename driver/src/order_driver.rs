@@ -1,9 +1,9 @@
 use crate::contract::SnappContract;
-use crate::db_interface::DbInterface;
 use crate::error::DriverError;
 use crate::price_finding::{PriceFinding, Solution};
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
 
+use dfusion_core::database::DbInterface;
 use dfusion_core::models::{
     RollingHashable, Serializable, ConcatenatingHashable, AccountState, Order, StandingOrder,
     TOKENS,
@@ -107,9 +107,9 @@ fn batch_index_from_standing_orders(standing_orders: &[StandingOrder]) -> Vec<U1
 mod tests {
     use super::*;
     use crate::contract::tests::SnappContractMock;
+    use dfusion_core::database::tests::DbInterfaceMock;
     use dfusion_core::models::NUM_RESERVED_ACCOUNTS;
     use dfusion_core::models::order::tests::create_order_for_test;
-    use crate::db_interface::tests::DbInterfaceMock;
     use crate::price_finding::price_finder_interface::tests::PriceFindingMock;
     use mock_it::Matcher::*;
     use web3::types::{H256, U128, U256};

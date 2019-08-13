@@ -1,8 +1,8 @@
-use crate::db_interface::DbInterface;
 use crate::contract::SnappContract;
 use crate::error::DriverError;
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
 
+use dfusion_core::database::DbInterface;
 use dfusion_core::models::{RollingHashable, RootHashable};
 
 pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), DriverError>
@@ -51,9 +51,9 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
 mod tests {
     use super::*;
     use crate::contract::tests::SnappContractMock;
+    use dfusion_core::database::tests::DbInterfaceMock;
     use dfusion_core::models::flux::tests::create_flux_for_test;
     use dfusion_core::models::{AccountState, PendingFlux, TOKENS};
-    use crate::db_interface::tests::DbInterfaceMock;
     use mock_it::Matcher::*;
     use web3::types::{H256, U256};
     use crate::error::ErrorKind;

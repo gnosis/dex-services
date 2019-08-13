@@ -1,7 +1,7 @@
 extern crate simple_logger;
 
 use driver::contract::SnappContractImpl;
-use driver::db_interface::MongoDB;
+use driver::mongo_db::MongoDB;
 use driver::price_finding::NaiveSolver;
 use driver::price_finding::LinearOptimisationPriceFinder;
 use driver::price_finding::PriceFinding;
