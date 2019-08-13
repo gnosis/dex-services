@@ -95,7 +95,7 @@ impl DbInterface for MongoDB {
         &self,
         state_index: &U256,
     ) -> Result<models::AccountState, DatabaseError> {
-        let query = doc!{ "stateIndex" => state_index.to_string() };
+        let query = doc!{ "stateIndex" => state_index.low_u64() };
         info!("Querying stateIndex: {}", query);
         self.get_balances_for_query(query)
     }
@@ -104,7 +104,7 @@ impl DbInterface for MongoDB {
         &self,
         slot: &U256,
     ) -> Result<Vec<models::PendingFlux>, DatabaseError> {
-        let query = doc!{ "slot" => slot.to_string() };
+        let query = doc!{ "slot" => slot.low_u64() };
         self.get_items_from_query(query, "deposits")
     }
 
@@ -112,7 +112,7 @@ impl DbInterface for MongoDB {
         &self,
         slot: &U256,
     ) -> Result<Vec<models::PendingFlux>, DatabaseError> {
-        let query = doc!{ "slot" => slot.to_string() };
+        let query = doc!{ "slot" => slot.low_u64() };
         self.get_items_from_query(query, "withdraws")
     }
 
@@ -120,7 +120,7 @@ impl DbInterface for MongoDB {
         &self,
         slot: &U256,
     ) -> Result<Vec<models::Order>, DatabaseError> {
-        let query = doc!{ "auctionId" => slot.to_string() };
+        let query = doc!{ "auctionId" => slot.low_u64() };
         self.get_items_from_query(query, "orders")
     }
     fn get_standing_orders_of_slot(
@@ -128,7 +128,7 @@ impl DbInterface for MongoDB {
         slot: &U256,
     ) -> Result<[models::StandingOrder; models::NUM_RESERVED_ACCOUNTS], DatabaseError> {
         let pipeline = vec![
-            doc!{"$match" => (doc!{"validFromAuctionId" => (doc!{ "$lte" => slot.to_string()})})},
+            doc!{"$match" => (doc!{"validFromAuctionId" => (doc!{ "$lte" => slot.low_u64()})})},
             doc!{"$sort" => (doc!{"validFromAuctionId" => -1, "_id" => -1})},
             doc!{"$group" => (doc!{"_id" => "$accountId", "orders" => (doc!{"$first" =>"$orders" }), "batchIndex" => (doc!{"$first" => "$batchIndex" })})}
         ];
