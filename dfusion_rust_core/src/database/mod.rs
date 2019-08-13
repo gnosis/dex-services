@@ -8,7 +8,7 @@ pub use graph_reader::GraphReader;
 use super::models;
 
 pub trait DbInterface: Send + Sync + 'static {
-    fn get_current_balances(
+    fn get_balances_for_state_root(
         &self,
         state_root: &H256,
     ) -> Result<models::AccountState, DatabaseError>;

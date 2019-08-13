@@ -24,18 +24,12 @@ pub fn entity_key(entity_type: &str, entity: &Entity) -> EntityKey {
 
 #[cfg(test)]
 pub mod test {
-    use super::*;
     use graph::components::ethereum::EthereumBlock;
-    use graph::data::schema::Schema;
     use slog::Logger;
     use web3::types::{Block, Bytes, H2048, H256, H160, Transaction, U256};
 
     pub fn logger() -> Logger {
         Logger::root(slog::Discard, o!())
-    }
-
-    pub fn fake_schema() -> Schema {
-        Schema::parse("scalar Foo", SUBGRAPH_ID.clone()).unwrap()
     }
 
     pub fn fake_tx() -> Transaction {

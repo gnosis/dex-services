@@ -61,7 +61,7 @@ impl ToValue for u16 {
 
 impl ToValue for u32 {
     fn to_value(&self) -> Value {
-        u128::from(self.clone()).to_value()
+        u128::from(*self).to_value()
     }
 }
 

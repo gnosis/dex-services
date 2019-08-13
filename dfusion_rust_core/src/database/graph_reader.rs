@@ -11,9 +11,15 @@ pub struct GraphReader {
 }
 
 impl GraphReader {
+    pub fn new(reader: Box<StoreReader>) -> Self {
+        GraphReader {
+            reader
+        }
+    }
+
     fn get_flux_of_slot(
         &self,
-        slot: u32,
+        slot: &U256,
         flux: &str,
     ) -> Result<Vec<models::PendingFlux>, DatabaseError> {
         let deposit_query = entity_query(
@@ -26,50 +32,67 @@ impl GraphReader {
             .map(models::PendingFlux::from)
             .collect::<Vec<models::PendingFlux>>())
     }
-}
 
-impl DbInterface for GraphReader {
-    fn get_current_balances(
+    fn get_balances_for_query(
         &self,
-        current_state_root: &H256,
+        query: EntityQuery
     ) -> Result<models::AccountState, DatabaseError> {
-        let account_query = entity_query(
-            "AccountState", EntityFilter::Equal("stateIndex".to_string(), current_state_root.to_value())
-        );
         Ok(models::AccountState::from(self.reader
-            .find_one(account_query)
+            .find_one(query.clone())
             .map_err(|e| DatabaseError::chain(ErrorKind::ConnectionError, "Could not execute query", e))?
             .ok_or_else(|| DatabaseError::new(
                 ErrorKind::StateError, 
-                &format!("No state record found for index {}", &current_state_root))
+                &format!("No state record found for query {:?}", &query))
             )?
         ))
+    }
+}
+
+impl DbInterface for GraphReader {
+    fn get_balances_for_state_root(
+        &self,
+        state_root: &H256,
+    ) -> Result<models::AccountState, DatabaseError> {
+        let account_query = entity_query(
+            "AccountState", EntityFilter::Equal("stateRoot".to_string(), state_root.to_value())
+        );
+        self.get_balances_for_query(account_query)
+    }
+
+    fn get_balances_for_state_index(
+        &self,
+        state_index: &U256,
+    ) -> Result<models::AccountState, DatabaseError> {
+        let account_query = entity_query(
+            "AccountState", EntityFilter::Equal("stateIndex".to_string(), state_index.to_value())
+        );
+        self.get_balances_for_query(account_query)
     }
 
     fn get_deposits_of_slot(
         &self,
-        slot: u32,
+        slot: &U256,
     ) -> Result<Vec<models::PendingFlux>, DatabaseError> {
         self.get_flux_of_slot(slot, "Deposit")
     }
 
     fn get_withdraws_of_slot(
         &self,
-        slot: u32,
+        slot: &U256,
     ) -> Result<Vec<models::PendingFlux>, DatabaseError> {
         self.get_flux_of_slot(slot, "Withdraw")
     }
 
     fn get_orders_of_slot(
         &self,
-        _: u32,
+        _: &U256,
     ) -> Result<Vec<models::Order>, DatabaseError> {
         unimplemented!()
     }
 
     fn get_standing_orders_of_slot(
         &self,
-        _: u32,
+        _: &U256,
     ) -> Result<[models::StandingOrder; models::NUM_RESERVED_ACCOUNTS], DatabaseError> {
         unimplemented!()
     }

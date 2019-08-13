@@ -151,7 +151,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
 
     let store = Arc::new(DieselStore::new(
         StoreConfig {
-            postgres_url,
+            postgres_url: postgres_url.clone(),
             network_name: network_name.clone(),
             start_block: 0,
         },
@@ -183,7 +183,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     );
 
     let store_reader = GraphNodeReader::new(postgres_url, &logger);
-    let database = Arc::new(GraphReader { reader: Box::new(store_reader) });
+    let database = Arc::new(GraphReader::new(Box::new(store_reader)));
     let subgraph_instance_manager = SubgraphInstanceManager::new(
         &logger_factory,
         store.clone(),
