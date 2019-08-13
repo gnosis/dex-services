@@ -108,14 +108,9 @@ impl From<&Arc<Log>> for StandingOrder {
         assert!(packed_orders_bytes.len() % 26 == 0, "Each order should be packed in 26 bytes");
                 
         // Extract packed order info
-        let orders: Vec<models::Order> = packed_orders_bytes.chunks(26)
-            .enumerate()
-            .map(|(order_number, chunk)| models::Order::from_encoded_order(
-                account_id,
-                batch_index,
-                order_number,
-                chunk.to_vec()
-            ))
+        let orders: Vec<models::Order> = packed_orders_bytes
+            .chunks(26)
+            .map(|chunk| models::Order::from_encoded_order(account_id, chunk.to_vec()))
             .collect();
 
         StandingOrder {
@@ -216,15 +211,12 @@ pub mod tests {
             batch_index: U256::from(2),
             valid_from_auction_id: U256::from(3),
             orders: vec![models::Order {
-                batch_information: Some(models::BatchInformation {
-                    slot: U256::from(2),
-                    slot_index: 510, // 500 reserved accounts + acount 1 * 10 accounts + account 0 = 500 * 1 * 10 + 0 = 510
-                }),
+                batch_information: None,
                 account_id: 1,
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 2 * (10 as u128).pow(18),
-                buy_amount: 1 * (10 as u128).pow(18),
+                buy_amount: (10 as u128).pow(18)
             }]
         }
     }

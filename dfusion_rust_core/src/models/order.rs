@@ -29,26 +29,15 @@ pub struct Order {
 impl Order {
     pub fn from_encoded_order (
         account_id: u16,
-        auction_id: U256,
-        order_number: usize,
         bytes: Vec<u8>
     ) -> Self {
-
         let sell_token =  u8::from_le_bytes([bytes[25]]);
         let buy_token = u8::from_le_bytes([bytes[24]]);
         let sell_amount = read_amount(&bytes[12..24]);
         let buy_amount = read_amount(&bytes[0..12]);
         
         Order {
-            batch_information: Some(BatchInformation{
-                slot: auction_id,
-                slot_index: (
-                    super::NUM_SLOTS_REGULAR_ORDERS +
-                    super::NUM_SLOTS_PER_STANING_ORDER_ACCOUNT *
-                    account_id +
-                    (order_number as u16)
-                ) as u16,
-            }),
+            batch_information: None,
             account_id,
             buy_token,
             sell_token,
