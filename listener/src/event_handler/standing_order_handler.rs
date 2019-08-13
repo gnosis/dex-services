@@ -4,7 +4,7 @@ use slog::Logger;
 use std::sync::Arc;
 
 use graph::components::ethereum::EthereumBlock;
-use graph::components::store::EntityOperation;
+use graph::components::store::{EntityOperation, EntityKey};
 use graph::data::store::{Entity, Value};
 
 use dfusion_core::models::StandingOrder;
@@ -87,7 +87,7 @@ pub mod test {
     use web3::types::{Bytes};
 
     #[test]
-    fn test_fails_if_state_does_not_exist() {
+    fn test_handle_standing_order() {
         let handler = StandingOrderHandler{};
         let log = create_log_for_test();
 
@@ -97,11 +97,24 @@ pub mod test {
             Arc::new(util::test::fake_tx()),
             log
         );
-        println!("Result: {:?}", result);
-        // TODO: Assert is equal to 
-        /*
-        Ok([Set { key: EntityKey { subgraph_id: SubgraphDeploymentId("dfusion"), entity_type: "SellOrder", entity_id: "0000000000000000000000000000000000000000000000000000000000000002_0_0" }, data: Entity({"buyToken": Int(2), "sellToken": Int(1), "sellAmount": BigDecimal(BigDecimal("2000000000000000000")), "accountId": Int(1), "slotIndex": Int(510), "id": String("0000000000000000000000000000000000000000000000000000000000000002_0_0"), "buyAmount": BigDecimal(BigDecimal("1000000000000000000")), "auctionId": BigDecimal(BigDecimal("2"))}) }, Set { key: EntityKey { subgraph_id: SubgraphDeploymentId("dfusion"), entity_type: "StandingSellOrderBatch", entity_id: "0000000000000000000000000000000000000000000000000000000000000002_0" }, data: Entity({"id": String("0000000000000000000000000000000000000000000000000000000000000002_0"), "batchIndex": BigDecimal(BigDecimal("2")), "accountId": Int(1), "validFromAuctionId": BigDecimal(BigDecimal("3")), "orders": List([String("0000000000000000000000000000000000000000000000000000000000000002_0_0")])}) }])
-        */
+
+        let operations: Vec<EntityOperation> = result.expect("The handler should succeed");
+        assert_eq!(operations.len(), 2, "Expected exactly two operations");
+        let expected_entity_types = ["SellOrder", "StandingSellOrderBatch"];
+        
+        // Check that the two operations are persisting a SellOrder and a StandingSellOrderBatch
+        for (operation, expected_entity_type) in operations.iter().zip(expected_entity_types.iter()) {
+            match operation {
+                EntityOperation::Set { key: EntityKey {
+                    subgraph_id: _subgraph_id,
+                    entity_type,
+                    entity_id: _entity_id
+                }, data: _data} => {
+                    assert_eq!(entity_type, expected_entity_type);
+                },
+                _ => panic!("Expected a Set Entity operation")
+            }
+        }
     }
 
     pub fn create_log_for_test() -> Arc<Log> {
