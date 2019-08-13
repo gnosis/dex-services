@@ -78,7 +78,7 @@ impl EventHandler for AuctionSettlementHandler {
             .collect::<Vec<Order>>();
 
         let auction_results = AuctionResults::from(encoded_solution); // TODO - implement this.
-        account_state.apply_auction(&orders, &auction_results);
+        account_state.apply_auction(&orders, auction_results);
 
         let mut entity: Entity = account_state.into();
 
