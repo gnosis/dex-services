@@ -10,8 +10,6 @@ pub use crate::models::order::Order;
 pub use crate::models::standing_order::StandingOrder;
 pub use crate::models::standing_order::EncodedOrder;
 pub use crate::models::order::BatchInformation;
-pub use crate::models::order::NUM_SLOTS_PER_STANING_ORDER_ACCOUNT;
-pub use crate::models::order::NUM_SLOTS_REGULAR_ORDERS;
 
 use sha2::{Digest, Sha256};
 use web3::types::H256;
@@ -19,6 +17,8 @@ use web3::types::H256;
 //ToDo: get variables from database
 pub const TOKENS: u8 = 30;
 pub const NUM_RESERVED_ACCOUNTS: usize = 50;
+pub const NUM_SLOTS_REGULAR_ORDERS: u16 = 500;
+pub const NUM_SLOTS_PER_STANING_ORDER_ACCOUNT: u16 = 10;
 pub const DB_NAME: &str = "dfusion2";
 
 pub trait RollingHashable {

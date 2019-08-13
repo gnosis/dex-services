@@ -9,9 +9,6 @@ use super::EncodedOrder;
 
 use crate::models::{Serializable, RollingHashable, iter_hash};
 
-pub const NUM_SLOTS_REGULAR_ORDERS: u16 = 500;
-pub const NUM_SLOTS_PER_STANING_ORDER_ACCOUNT: u16 = 10;
-
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct BatchInformation {
@@ -95,8 +92,8 @@ impl From<EncodedOrder> for Order {
             batch_information: Some(BatchInformation{
                 slot: encoded_order.auction_id,
                 slot_index: (
-                    NUM_SLOTS_REGULAR_ORDERS +
-                    NUM_SLOTS_PER_STANING_ORDER_ACCOUNT *
+                    super::NUM_SLOTS_REGULAR_ORDERS +
+                    super::NUM_SLOTS_PER_STANING_ORDER_ACCOUNT *
                     account_id +
                     (encoded_order.order_number as u16)
                 ) as u16,
