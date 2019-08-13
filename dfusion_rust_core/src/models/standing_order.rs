@@ -17,7 +17,7 @@ pub struct StandingOrder {
     pub account_id: u16,
     pub batch_index: U256,
     pub valid_from_auction_id: U256,
-    pub orders: Vec<super::Order>,
+    orders: Vec<super::Order>,
 }
 
 impl StandingOrder {
