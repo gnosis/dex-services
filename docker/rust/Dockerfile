@@ -13,7 +13,6 @@ ENV PYTHONPATH ${PYTHONPATH}:/app/batchauctions/
 COPY dex-contracts/build dex-contracts/build
 
 # Copy and build code
-COPY graph_node_reader ./graph_node_reader
 COPY dfusion_rust_core ./dfusion_rust_core
 COPY driver ./driver
 COPY listener ./listener
