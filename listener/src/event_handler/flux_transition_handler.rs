@@ -101,7 +101,9 @@ pub mod test {
 
         // Add previous account state and pending deposits into Store
         let existing_state = AccountState::new(H256::zero(), U256::zero(), vec![0, 0, 0, 0], 1);
-        store.get_balances_for_state_index.given(U256::zero()).will_return(Ok(existing_state));
+        store.get_balances_for_state_index
+            .given(U256::zero())
+            .will_return(Ok(existing_state));
 
         let first_deposit = PendingFlux {
             slot_index: 0,
@@ -118,7 +120,9 @@ pub mod test {
             token_id: 0,
             amount: 10,
         };
-        store.get_deposits_of_slot.given(U256::zero()).will_return(Ok(vec![first_deposit, second_deposit]));
+        store.get_deposits_of_slot
+            .given(U256::zero())
+            .will_return(Ok(vec![first_deposit, second_deposit]));
 
         // Process event
         let handler = FluxTransitionHandler::new(store);
@@ -143,9 +147,9 @@ pub mod test {
         let store = Arc::new(DbInterfaceMock::new());
 
         // No data in store
-        store.get_balances_for_state_index.given(U256::zero()).will_return(Err(
-            DatabaseError::new(ErrorKind::StateError, "No State found"))
-        );
+        store.get_balances_for_state_index
+            .given(U256::zero())
+            .will_return(Err(DatabaseError::new(ErrorKind::StateError, "No State found")));
 
         let handler = FluxTransitionHandler::new(store);
         let log = create_state_transition_event(FluxTransitionType::Deposit, 1, H256::from(1), 0);
@@ -169,7 +173,9 @@ pub mod test {
             vec![10, 20, 0, 0],
             1
         );
-        store.get_balances_for_state_index.given(U256::zero()).will_return(Ok(existing_state));
+        store.get_balances_for_state_index
+            .given(U256::zero())
+            .will_return(Ok(existing_state));
 
         let first_withdraw = PendingFlux {
             slot_index: 0,
@@ -193,11 +199,13 @@ pub mod test {
             amount: 10,
         };
         
-        store.get_withdraws_of_slot.given(U256::zero()).will_return(Ok(vec![
-            first_withdraw,
-            second_withdraw,
-            invalid_withdraw,
-        ]));
+        store.get_withdraws_of_slot
+            .given(U256::zero())
+            .will_return(Ok(vec![
+                first_withdraw,
+                second_withdraw,
+                invalid_withdraw,
+            ]));
 
         // Process event
         let handler = FluxTransitionHandler::new(store);

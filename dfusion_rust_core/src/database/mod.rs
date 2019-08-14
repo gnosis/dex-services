@@ -7,7 +7,7 @@ pub use error::*;
 pub use graph_reader::GraphReader;
 use super::models;
 
-pub trait DbInterface: Send + Sync + 'static {
+pub trait DbInterface: Send + Sync {
     fn get_balances_for_state_root(
         &self,
         state_root: &H256,

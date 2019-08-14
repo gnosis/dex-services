@@ -215,7 +215,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         SubgraphVersionSwitchingMode::Instant
     ));
 
-    let subgraph_name = SubgraphName::new("dfusion").unwrap();
+    let subgraph_name = SubgraphName::new(SUBGRAPH_NAME).unwrap();
     tokio::spawn(	
         subgraph_registrar
             .create_subgraph(subgraph_name.clone())
