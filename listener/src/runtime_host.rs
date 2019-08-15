@@ -4,9 +4,10 @@ use slog::Logger;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use dfusion_core::database::DbInterface;
+
 use graph::components::ethereum::{EthereumCall, EthereumBlockTriggerType, EthereumBlock};
 use graph::components::subgraph::{RuntimeHost as RuntimeHostTrait, RuntimeHostBuilder, BlockState};
-use graph::components::store::Store;
 
 use graph::data::subgraph::{DataSource, SubgraphDeploymentId};
 
@@ -28,11 +29,11 @@ fn register_event(handlers: &mut HandlerMap, name: &str, handler: Box<dyn EventH
 
 #[derive(Clone)]
 pub struct RustRuntimeHostBuilder {
-    store: Arc<Store>
+    store: Arc<DbInterface>
 }
 
 impl RustRuntimeHostBuilder {
-    pub fn new(store: Arc<Store>) -> Self {
+    pub fn new(store: Arc<DbInterface>) -> Self {
         RustRuntimeHostBuilder {
             store
         }
@@ -57,7 +58,7 @@ pub struct RustRuntimeHost {
 }
 
 impl RustRuntimeHost {
-    fn new(store: Arc<Store>) -> Self {
+    fn new(store: Arc<DbInterface>) -> Self {
         let mut handlers = HashMap::new();
         register_event(
             &mut handlers,

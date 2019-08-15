@@ -1,20 +1,19 @@
 use super::*;
 
-use dfusion_core::models::{PendingFlux, AccountState};
 use dfusion_core::models::util::{PopFromLogData, ToValue};
+use dfusion_core::database::DbInterface;
 
-use graph::components::store::{EntityFilter, Store};
 use graph::data::store::Entity;
 use std::fmt;
 use web3::types::{H256, U256};
 
 #[derive(Clone)]
 pub struct FluxTransitionHandler {
-    store: Arc<Store>,
+    store: Arc<DbInterface>,
 }
 
 impl FluxTransitionHandler {
-    pub fn new(store: Arc<Store>) -> Self {
+    pub fn new(store: Arc<DbInterface>) -> Self {
         FluxTransitionHandler{
             store
         }
@@ -58,35 +57,21 @@ impl EventHandler for FluxTransitionHandler {
 
         info!(logger, "Received Flux AccountState Transition Event");
 
-        let account_query = util::entity_query(
-            "AccountState", EntityFilter::Equal("stateIndex".to_string(), state_index.to_value())
-        );
-        let mut account_state = AccountState::from(self.store
-            .find_one(account_query)?
-            .ok_or_else(|| failure::err_msg(format!("No state record found for index {}", &state_index)))?
-        );
+        let mut account_state = self.store
+            .get_balances_for_state_index(&state_index)
+            .map_err(|e| failure::err_msg(format!("{}", e)))?;
 
         match transition_type {
             FluxTransitionType::Deposit => {
-                let deposit_query = util::entity_query(
-                    "Deposit", EntityFilter::Equal("slot".to_string(), slot.to_value())
-                );
                 let deposits = self.store
-                    .find(deposit_query)?
-                    .into_iter()
-                    .map(PendingFlux::from)
-                    .collect::<Vec<PendingFlux>>();
+                    .get_deposits_of_slot(&slot)
+                    .map_err(|e| failure::err_msg(format!("{}", e)))?;
                 account_state.apply_deposits(&deposits);
             },
             FluxTransitionType::Withdraw => {
-                let withdraw_query = util::entity_query(
-                    "Withdraw", EntityFilter::Equal("slot".to_string(), slot.to_value())
-                );
                 let withdraws = self.store
-                    .find(withdraw_query)?
-                    .into_iter()
-                    .map(PendingFlux::from)
-                    .collect::<Vec<PendingFlux>>();
+                    .get_withdraws_of_slot(&slot)
+                    .map_err(|e| failure::err_msg(format!("{}", e)))?;
                 account_state.apply_withdraws(&withdraws);
             }
         }
@@ -105,22 +90,20 @@ impl EventHandler for FluxTransitionHandler {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use graph_mock::MockStore;
+    use dfusion_core::database::tests::DbInterfaceMock;
+    use dfusion_core::database::*;
+    use dfusion_core::models::{PendingFlux, AccountState};
     use web3::types::{Bytes, H256};
 
     #[test]
     fn test_applies_deposits_existing_state() {
-        let schema = util::test::fake_schema();
-        let store = Arc::new(MockStore::new(vec![(schema.id.clone(), schema)]));
-        let handler = FluxTransitionHandler::new(store.clone());
+        let store = Arc::new(DbInterfaceMock::new());
 
         // Add previous account state and pending deposits into Store
         let existing_state = AccountState::new(H256::zero(), U256::zero(), vec![0, 0, 0, 0], 1);
-        let entity = existing_state.into();
-        store.apply_entity_operations(vec![EntityOperation::Set {
-            key: util::entity_key("AccountState", &entity),
-            data: entity
-        }], None).unwrap();
+        store.get_balances_for_state_index
+            .given(U256::zero())
+            .will_return(Ok(existing_state));
 
         let first_deposit = PendingFlux {
             slot_index: 0,
@@ -129,12 +112,6 @@ pub mod test {
             token_id: 0,
             amount: 10,
         };
-        let mut entity: Entity = first_deposit.into();
-        entity.set("id", "1");
-        store.apply_entity_operations(vec![EntityOperation::Set {
-            key: util::entity_key("Deposit", &entity),
-            data: entity
-        }], None).unwrap();
 
         let second_deposit = PendingFlux {
             slot_index: 1,
@@ -143,14 +120,12 @@ pub mod test {
             token_id: 0,
             amount: 10,
         };
-        let mut entity: Entity = second_deposit.into();
-        entity.set("id", "2");
-        store.apply_entity_operations(vec![EntityOperation::Set {
-            key: util::entity_key("Deposit", &entity),
-            data: entity
-        }], None).unwrap();
+        store.get_deposits_of_slot
+            .given(U256::zero())
+            .will_return(Ok(vec![first_deposit, second_deposit]));
 
         // Process event
+        let handler = FluxTransitionHandler::new(store);
         let log = create_state_transition_event(FluxTransitionType::Deposit, 1, H256::from(1), 0);
         let result = handler.process_event(
             util::test::logger(), 
@@ -168,13 +143,15 @@ pub mod test {
     }
 
     #[test]
-    fn test_fails_if_state_does_not_exist() {
-        let schema = util::test::fake_schema();
-        let store = Arc::new(MockStore::new(vec![(schema.id.clone(), schema)]));
-        let handler = FluxTransitionHandler::new(store.clone());
+    fn test_apply_deposit_fails_if_state_does_not_exist() {
+        let store = Arc::new(DbInterfaceMock::new());
 
         // No data in store
+        store.get_balances_for_state_index
+            .given(U256::zero())
+            .will_return(Err(DatabaseError::new(ErrorKind::StateError, "No State found")));
 
+        let handler = FluxTransitionHandler::new(store);
         let log = create_state_transition_event(FluxTransitionType::Deposit, 1, H256::from(1), 0);
         let result = handler.process_event(
             util::test::logger(), 
@@ -187,9 +164,7 @@ pub mod test {
 
     #[test]
     fn test_applies_withdraws_existing_state() {
-        let schema = util::test::fake_schema();
-        let store = Arc::new(MockStore::new(vec![(schema.id.clone(), schema)]));
-        let handler = FluxTransitionHandler::new(store.clone());
+        let store = Arc::new(DbInterfaceMock::new());
 
         // Add previous account state and pending withdraws into Store
         let existing_state = AccountState::new(
@@ -198,11 +173,10 @@ pub mod test {
             vec![10, 20, 0, 0],
             1
         );
-        let entity = existing_state.into();
-        store.apply_entity_operations(vec![EntityOperation::Set {
-            key: util::entity_key("AccountState", &entity),
-            data: entity
-        }], None).unwrap();
+        store.get_balances_for_state_index
+            .given(U256::zero())
+            .will_return(Ok(existing_state));
+
         let first_withdraw = PendingFlux {
             slot_index: 0,
             slot: U256::zero(),
@@ -210,13 +184,6 @@ pub mod test {
             token_id: 0,
             amount: 10,
         };
-        let mut entity: Entity = first_withdraw.into();
-        entity.set("id", "1");
-        store.apply_entity_operations(vec![EntityOperation::Set {
-            key: util::entity_key("Withdraw", &entity),
-            data: entity
-        }], None).unwrap();
-
         let second_withdraw = PendingFlux {
             slot_index: 1,
             slot: U256::zero(),
@@ -224,13 +191,6 @@ pub mod test {
             token_id: 0,
             amount: 10,
         };
-        let mut entity: Entity = second_withdraw.into();
-        entity.set("id", "2");
-        store.apply_entity_operations(vec![EntityOperation::Set {
-            key: util::entity_key("Withdraw", &entity),
-            data: entity
-        }], None).unwrap();
-
         let invalid_withdraw = PendingFlux {
             slot_index: 1,
             slot: U256::zero(),
@@ -238,14 +198,17 @@ pub mod test {
             token_id: 1,
             amount: 10,
         };
-        let mut entity: Entity = invalid_withdraw.into();
-        entity.set("id", "3");
-        store.apply_entity_operations(vec![EntityOperation::Set {
-            key: util::entity_key("Withdraw", &entity),
-            data: entity
-        }], None).unwrap();
+        
+        store.get_withdraws_of_slot
+            .given(U256::zero())
+            .will_return(Ok(vec![
+                first_withdraw,
+                second_withdraw,
+                invalid_withdraw,
+            ]));
 
         // Process event
+        let handler = FluxTransitionHandler::new(store);
         let log = create_state_transition_event(
             FluxTransitionType::Withdraw,
             1,

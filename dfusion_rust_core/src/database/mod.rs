@@ -1,11 +1,13 @@
 mod error;
+mod graph_reader;
 
 use web3::types::{H256, U256};
 
 pub use error::*;
+pub use graph_reader::GraphReader;
 use super::models;
 
-pub trait DbInterface {
+pub trait DbInterface: Send + Sync {
     fn get_balances_for_state_root(
         &self,
         state_root: &H256,
