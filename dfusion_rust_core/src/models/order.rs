@@ -249,7 +249,7 @@ pub mod unit_test {
     }
 
     #[test]
-    fn test_to_and_from_entity() {
+    fn test_into_and_from_entity() {
         let order = create_order_for_test();        
         let entity = create_entity_for_test();
 
@@ -258,15 +258,16 @@ pub mod unit_test {
     }
 
     #[test]
-    fn test_to_entity_no_slot() {
-        let mut order = create_order_for_test();
-        order.batch_information = None;
-
-        let mut expected_entity = create_entity_for_test();
+    fn test_into_entity_no_slot() {
+        let mut expected_entity: Entity = create_entity_for_test();
         expected_entity.remove("slotIndex");
-        expected_entity.remove("slot");
+        expected_entity.remove("auctionId");
 
-        assert_eq!(expected_entity, order.clone().into());
+        let mut order: Order = create_order_for_test();
+        order.batch_information = None;
+        let actual_entity: Entity = order.into();
+
+        assert_eq!(expected_entity, actual_entity);
     }
 
     #[test]
@@ -275,21 +276,18 @@ pub mod unit_test {
         expected_order.batch_information = None;
         let entity = create_entity_for_test();
 
-        // When slotIndex is not present, then no batch_information
         let mut actual_entity = entity.clone();
         actual_entity.remove("slotIndex");
-        assert_eq!(expected_order, Order::from(actual_entity));
+        assert_eq!(expected_order, Order::from(actual_entity), "No batch info if there's no slot index");
 
-        // When slot is not present, then no batch_information
         let mut actual_entity = entity.clone();
-        actual_entity.remove("slot");
-        assert_eq!(expected_order, Order::from(actual_entity));
+        actual_entity.remove("auctionId");
+        assert_eq!(expected_order, Order::from(actual_entity), "No batch info if there's no auctionId");
 
-        // When slot and slotIndex are not present, then no batch_information
         let mut actual_entity = entity.clone();
         actual_entity.remove("slotIndex");
-        actual_entity.remove("slot");
-        assert_eq!(expected_order, Order::from(actual_entity));
+        actual_entity.remove("auctionId");
+        assert_eq!(expected_order, Order::from(actual_entity), "No batch info if there's no slot index and auctionId");
     }
 
     fn create_order_for_test() -> Order {
