@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use web3::types::{Log};
 use web3::types::{H256, U256};
-use graph::data::store::{Entity};
+use graph::data::store::{Entity, Value};
 
 use super::util::*;
 
@@ -128,31 +128,67 @@ impl From<&Arc<Log>> for StandingOrder {
 }
 
 
-impl From<Entity> for StandingOrder {
-    fn from(entity: Entity) -> Self {
-        let account_id = u16::from_entity(&entity, "accountId");
-        let batch_index = U256::from_entity(&entity, "batchIndex");
-        let valid_from_auction_id = U256::from_entity(&entity, "validFromAuctionId");
+impl From<(Entity, Vec<Entity>)> for StandingOrder {
+    fn from(entities: (Entity, Vec<Entity>)) -> Self {
+        let batch_entity = entities.0;
+        let mut order_entities_iter = entities.1.into_iter();
+        let order_ids_value = batch_entity.get("orders").expect("it should contain order ids");
 
-        StandingOrder {
-            account_id,
-            batch_index,
-            valid_from_auction_id,            
-            orders: vec![] // Orders cannot be reconstructed just from the entity
+        if let Value::List(order_ids) = order_ids_value {
+            assert_eq!(
+                order_ids.len(),
+                order_entities_iter.len(),
+                "The entity should have the same number of orders as Vec<Entity>"
+            );
+
+            let account_id = u16::from_entity(&batch_entity, "accountId");
+            let batch_index = U256::from_entity(&batch_entity, "batchIndex");
+            let valid_from_auction_id = U256::from_entity(&batch_entity, "validFromAuctionId");
+
+            let orders = order_ids.iter()
+                .map(|order_id| {
+                    // Get matching order for the id
+                    let order_entity: Entity = order_entities_iter
+                        .find(|current_order| {
+                            let current_order_id = current_order.get("id")
+                                .expect("The entity orders should have an id that match the standing order");
+                                
+                            current_order_id == order_id
+                        })
+                        .expect("The standing order has and id not found in the entity Vec");
+
+                    // Convert order into Entity
+                    order_entity
+                })
+                .map(|a| a.into())
+                .collect();
+
+            StandingOrder {
+                account_id,
+                batch_index,
+                valid_from_auction_id,
+                orders
+            }
+        } else {
+            panic!("orders should be a List")
         }
     }
 }
 
 impl Into<Entity> for StandingOrder {
     fn into(self) -> Entity {
-        let mut entity = Entity::new();
-                
+        let mut entity = Entity::new();                
         entity.set("accountId", self.account_id.to_value());
         entity.set("batchIndex", self.batch_index.to_value());
         entity.set("validFromAuctionId", self.valid_from_auction_id.to_value());
+
+        // let orders = standing_order.get_orders().clone();
+        // let order_entities: Vec<Entity> = orders.into_iter()
+        //     .map(|order| order.into())
+        //     .collect();
+        // entity.set("orders", order_entities);
         entity.set("orders", vec![]);
 
-        
         entity
     }
 }
@@ -194,20 +230,39 @@ pub mod tests {
     #[test]
     fn into_entity() {
         let standing_order = create_standing_order_for_test();
-        let entity = create_entity_for_test();
+        let mut expected_entity = create_entity_for_test();
+        expected_entity.remove("id");
+        expected_entity.set("orders", vec![]);
 
-        assert_eq!(entity, standing_order.clone().into());
+        let actual_entity: Entity = standing_order.clone().into();
+
+        assert_eq!(actual_entity, expected_entity);
     }
 
     #[test]
-    fn from_entity() {
-        let entity = create_entity_for_test();
-        let mut standing_order = create_standing_order_for_test();
+    fn from_entity_with_no_orders() {
+        let mut entity = create_entity_for_test();
+        entity.set("orders", Value::List(vec![]));
+        let mut expected_standing_order = create_standing_order_for_test();
 
         // Remove the orders, the From<Entity> doesn't have enough info about the orders
-        standing_order.orders = vec![]; 
+        expected_standing_order.orders = vec![]; 
+        let actual_standing_order: StandingOrder = StandingOrder::from((entity, vec![]));
 
-        assert_eq!(standing_order, StandingOrder::from(entity));
+        assert_eq!(actual_standing_order, expected_standing_order);
+    }
+
+    #[test]
+    fn from_entity_with_orders() {
+        let entity = create_entity_for_test();
+        let expected_standing_order = create_standing_order_for_test();
+
+        let order_entities = vec![
+            create_entity_order_for_test()
+        ];
+        let actual_standing_order: StandingOrder = StandingOrder::from((entity, order_entities));
+
+        assert_eq!(actual_standing_order, expected_standing_order);
     }
 
     pub fn create_standing_order_for_test() -> models::StandingOrder {
@@ -228,10 +283,29 @@ pub mod tests {
 
     pub fn create_entity_for_test() -> Entity {
         let mut entity = Entity::new();
+        entity.set("id", Value::String(
+            String::from("f5eb19f104583ad72d26d51078e15c5d2203c354d8c30438d66860bc61975038_0")
+        ));
         entity.set("accountId", 1);
         entity.set("batchIndex", BigDecimal::from(2));
         entity.set("validFromAuctionId", BigDecimal::from(3));
-        entity.set("orders", vec![]);
+        entity.set("orders", vec![
+            Value::String(String::from("f5eb19f104583ad72d26d51078e15c5d2203c354d8c30438d66860bc61975038_0_0"))
+        ]);
+
+        entity
+    }
+
+    pub fn create_entity_order_for_test() -> Entity {
+        let mut entity = Entity::new();
+        entity.set("id", Value::String(
+            String::from("f5eb19f104583ad72d26d51078e15c5d2203c354d8c30438d66860bc61975038_0_0")
+        ));
+        entity.set("accountId", 1);
+        entity.set("buyToken", 2);
+        entity.set("sellToken", 1);
+        entity.set("buyAmount", BigDecimal::from(1 * (10 as u64).pow(18)));
+        entity.set("sellAmount", BigDecimal::from(2 * (10 as u64).pow(18)));
 
         entity
     }
