@@ -41,15 +41,18 @@ use graph_store_postgres::{Store as DieselStore, StoreConfig};
 use runtime_host::RustRuntimeHostBuilder;
 use link_resolver::LocalLinkResolver;
 
+use dfusion_core::SUBGRAPH_NAME;
+use dfusion_core::database::GraphReader;
+
+use graph_node_reader::Store as GraphNodeReader;
+
 lazy_static! {
     static ref ANCESTOR_COUNT: u64 = 50;
     static ref REORG_THRESHOLD: u64 = 50;
     static ref BLOCK_POLLING_INTERVAL: Duration = Duration::from_millis(1000);
     
     static ref NODE_ID: NodeId = NodeId::new("default").unwrap();
-    static ref SUBGRAPH_NAME: SubgraphName = SubgraphName::new("dfusion").unwrap();
-    static ref SUBGRAPH_ID: SubgraphDeploymentId = SubgraphDeploymentId::new("dfusion").unwrap();
-
+    static ref SUBGRAPH_ID: SubgraphDeploymentId = SubgraphDeploymentId::new(SUBGRAPH_NAME).unwrap();
 }
 
 fn main() {
@@ -148,7 +151,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
 
     let store = Arc::new(DieselStore::new(
         StoreConfig {
-            postgres_url,
+            postgres_url: postgres_url.clone(),
             network_name: network_name.clone(),
             start_block: 0,
         },
@@ -179,10 +182,12 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         *REORG_THRESHOLD,
     );
 
+    let store_reader = GraphNodeReader::new(postgres_url, &logger);
+    let database = Arc::new(GraphReader::new(Box::new(store_reader)));
     let subgraph_instance_manager = SubgraphInstanceManager::new(
         &logger_factory,
         store.clone(),
-        RustRuntimeHostBuilder::new(store.clone()),
+        RustRuntimeHostBuilder::new(database),
         block_stream_builder,
     );
     
@@ -210,12 +215,13 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         SubgraphVersionSwitchingMode::Instant
     ));
 
+    let subgraph_name = SubgraphName::new(SUBGRAPH_NAME).unwrap();
     tokio::spawn(	
         subgraph_registrar
-            .create_subgraph(SUBGRAPH_NAME.clone())
+            .create_subgraph(subgraph_name.clone())
             .then( move |_| {
                 subgraph_registrar.create_subgraph_version(
-                    SUBGRAPH_NAME.clone(), SUBGRAPH_ID.clone(), NODE_ID.clone()
+                    subgraph_name, SUBGRAPH_ID.clone(), NODE_ID.clone()
                 )
                 .then(|result| {	
                     result.expect("Failed to create subgraph");
