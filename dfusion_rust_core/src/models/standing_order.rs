@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use web3::types::{Log};
 use web3::types::{H256, U256};
-use graph::data::store::{Entity, Value};
+use graph::data::store::{Entity};
 
 use super::util::*;
 
@@ -132,45 +132,45 @@ impl From<(Entity, Vec<Entity>)> for StandingOrder {
     fn from(entities: (Entity, Vec<Entity>)) -> Self {
         let batch_entity = entities.0;
         let mut order_entities_iter = entities.1.into_iter();
-        let order_ids_value = batch_entity.get("orders").expect("it should contain order ids");
+        let order_ids = batch_entity.get("orders")
+            .expect("it should contain order ids")
+            .clone()
+            .as_list()
+            .expect("Orders should be a list");
 
-        if let Value::List(order_ids) = order_ids_value {
-            assert_eq!(
-                order_ids.len(),
-                order_entities_iter.len(),
-                "The entity should have the same number of orders as Vec<Entity>"
-            );
+        assert_eq!(
+            order_ids.len(),
+            order_entities_iter.len(),
+            "The entity should have the same number of orders as Vec<Entity>"
+        );
 
-            let account_id = u16::from_entity(&batch_entity, "accountId");
-            let batch_index = U256::from_entity(&batch_entity, "batchIndex");
-            let valid_from_auction_id = U256::from_entity(&batch_entity, "validFromAuctionId");
+        let account_id = u16::from_entity(&batch_entity, "accountId");
+        let batch_index = U256::from_entity(&batch_entity, "batchIndex");
+        let valid_from_auction_id = U256::from_entity(&batch_entity, "validFromAuctionId");
 
-            let orders = order_ids.iter()
-                .map(|order_id| {
-                    // Get matching order for the id
-                    let order_entity: Entity = order_entities_iter
-                        .find(|current_order| {
-                            let current_order_id = current_order.get("id")
-                                .expect("The entity orders should have an id that match the standing order");
-                                
-                            current_order_id == order_id
-                        })
-                        .expect("The standing order has and id not found in the entity Vec");
+        let orders = order_ids.iter()
+            .map(|order_id| {
+                // Get matching order for the id
+                let order_entity: Entity = order_entities_iter
+                    .find(|current_order| {
+                        let current_order_id = current_order.get("id")
+                            .expect("The entity orders should have an id that match the standing order");
+                            
+                        current_order_id == order_id
+                    })
+                    .expect("The standing order has and id not found in the entity Vec");
 
-                    // Convert order into Entity
-                    order_entity
-                })
-                .map(|a| a.into())
-                .collect();
+                // Convert order into Entity
+                order_entity
+            })
+            .map(|a| a.into())
+            .collect();
 
-            StandingOrder {
-                account_id,
-                batch_index,
-                valid_from_auction_id,
-                orders
-            }
-        } else {
-            panic!("orders should be a List")
+        StandingOrder {
+            account_id,
+            batch_index,
+            valid_from_auction_id,
+            orders
         }
     }
 }
@@ -181,12 +181,6 @@ impl Into<Entity> for StandingOrder {
         entity.set("accountId", self.account_id.to_value());
         entity.set("batchIndex", self.batch_index.to_value());
         entity.set("validFromAuctionId", self.valid_from_auction_id.to_value());
-
-        // let orders = standing_order.get_orders().clone();
-        // let order_entities: Vec<Entity> = orders.into_iter()
-        //     .map(|order| order.into())
-        //     .collect();
-        // entity.set("orders", order_entities);
         entity.set("orders", vec![]);
 
         entity
@@ -200,6 +194,7 @@ pub mod tests {
     use std::str::FromStr;
     use graph::bigdecimal::BigDecimal;
     use web3::types::{Bytes, H256};
+    use graph::data::store::Value;
 
     #[test]
     fn concatenating_hash() {
