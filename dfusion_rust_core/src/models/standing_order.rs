@@ -110,7 +110,12 @@ impl From<&Arc<Log>> for StandingOrder {
         // Extract packed order info
         let orders: Vec<models::Order> = packed_orders_bytes
             .chunks(26)
-            .map(|chunk| models::Order::from_encoded_order(account_id, chunk.to_vec()))
+            .map(|chunk| {
+                let mut chunk_array = [0; 26];
+                chunk_array.copy_from_slice(chunk);
+                
+                models::Order::from_encoded_order(account_id, &chunk_array)
+            })
             .collect();
 
         StandingOrder {

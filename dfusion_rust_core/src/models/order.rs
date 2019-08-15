@@ -26,15 +26,20 @@ pub struct Order {
     pub sell_amount: u128,
 }
 
+
 impl Order {
     pub fn from_encoded_order (
         account_id: u16,
-        bytes: Vec<u8>
+        bytes: &[u8; 26]
     ) -> Self {
-        let sell_token =  u8::from_le_bytes([bytes[25]]);
-        let buy_token = u8::from_le_bytes([bytes[24]]);
-        let sell_amount = read_amount(&bytes[12..24]);
-        let buy_amount = read_amount(&bytes[0..12]);
+        let sell_token =  u8::from_le_bytes([bytes[25]]); // 1 byte
+        let buy_token = u8::from_le_bytes([bytes[24]]);   // 1 byte
+        let sell_amount = read_amount(
+            &get_amount_from_slice(&bytes[12..24])         // 12 bytes
+        );
+        let buy_amount = read_amount(
+            &get_amount_from_slice(&bytes[0..12])          // 12 bytes
+        );
         
         Order {
             batch_information: None,
@@ -98,7 +103,14 @@ impl From<Entity> for Order {
     }
 }
 
-fn read_amount(bytes: &[u8]) -> u128 {
+fn get_amount_from_slice(bytes: &[u8]) -> [u8; 12] {
+    let mut bytes_12 = [0u8; 12];
+    bytes_12.copy_from_slice(bytes);
+
+    bytes_12
+}
+
+fn read_amount(bytes: &[u8; 12]) -> u128 {    
     let bytes = [0u8, 0u8, 0u8, 0u8].iter()
         .chain(bytes.iter())
         .cloned()
