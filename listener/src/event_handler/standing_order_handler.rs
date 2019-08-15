@@ -50,7 +50,12 @@ impl EventHandler for StandingOrderHandler {
 fn get_entities_from_log(logger: &Logger, log: &Arc<Log>) -> (Entity, Vec<Entity>) {
     let standing_order = StandingOrder::from(log);
     let orders = standing_order.get_orders().clone();
-    let entity_id = util::entity_id_from_log(&log);
+    let entity_id = format!(
+        "{}_{}_{}",
+        standing_order.account_id,
+        standing_order.batch_index,
+        standing_order.valid_from_auction_id
+    );
     info!(logger, "Processing StandingOrder batch. Id: {}. Data: {:?}", &entity_id, &standing_order);
 
     // Get standing order entity and set id
