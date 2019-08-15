@@ -35,7 +35,7 @@ step_with_retry "Check graph standing order batch has been recorded" \
             sellAmount \
         } \
       } \
-    }\" | grep \"buyAmount.:.1000000000000000000.,.buyToken.:2,.sellAmount.:.1000000000000000000.,.sellToken.:1\""
+    }\" | grep \"buyAmount.:.1000000000000000000.,.buyToken.:1,.sellAmount.:.1000000000000000000.,.sellToken.:2\""
 
 step "Advance time to apply auction" \
 "npx truffle exec scripts/wait_seconds.js 181"
@@ -70,7 +70,7 @@ step_with_retry "Check graph standing order batch has been updated" \
             sellAmount \
         } \
       } \
-    }\" | grep \"buyAmount.:.1000000000000000000.,.buyToken.:2,.sellAmount.:.2000000000000000000.,.sellToken.:1\""
+    }\" | grep \"buyAmount.:.1000000000000000000.,.buyToken.:1,.sellAmount.:.2000000000000000000.,.sellToken.:2\""
 
 step "Cancel standing order in same batch (make sure only cancel gets processed)" \
 "npx truffle exec scripts/standing_order.js 0 0 0 0 0"

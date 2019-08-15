@@ -29,7 +29,7 @@ impl EventHandler for SellOrderHandler {
         info!(logger, "Processing SellOrder {:?}", &order);
 
         let mut entity: Entity = order.into();
-        entity.set("id", format!("{}_0", &entity_id));
+        entity.set("id", &entity_id);
 
         Ok(vec![
             EntityOperation::Set {

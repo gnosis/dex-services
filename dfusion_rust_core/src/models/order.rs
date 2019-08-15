@@ -32,8 +32,8 @@ impl Order {
         account_id: u16,
         bytes: &[u8; 26]
     ) -> Self {
-        let sell_token =  u8::from_le_bytes([bytes[25]]); // 1 byte
-        let buy_token = u8::from_le_bytes([bytes[24]]);   // 1 byte
+        let buy_token = u8::from_le_bytes([bytes[25]]);    // 1 byte
+        let sell_token = u8::from_le_bytes([bytes[24]]);   // 1 byte
         let sell_amount = read_amount(
             &get_amount_from_slice(&bytes[12..24])         // 12 bytes
         );
