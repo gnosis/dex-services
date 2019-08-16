@@ -4,11 +4,12 @@ use failure::Error;
 use slog::Logger;
 use std::sync::Arc;
 
+use dfusion_core::database::{GraphReader, DbInterface};
 use dfusion_core::models::util::{PopFromLogData, ToValue};
 use dfusion_core::models::{AccountState, Order, AuctionResults};
 
 use graph::components::ethereum::EthereumBlock;
-use graph::components::store::{EntityFilter, EntityOperation, Store};
+use graph::components::store::{EntityFilter, EntityOperation};
 use graph::data::store::{Entity};
 
 use web3::types::{H256, U256};
@@ -22,11 +23,11 @@ use super::util;
 
 #[derive(Clone)]
 pub struct AuctionSettlementHandler {
-    store: Arc<Store>,
+    store: Arc<GraphReader>,
 }
 
 impl AuctionSettlementHandler {
-    pub fn new(store: Arc<Store>) -> Self {
+    pub fn new(store: Arc<GraphReader>) -> Self {
         AuctionSettlementHandler {
             store
         }
@@ -66,17 +67,9 @@ impl EventHandler for AuctionSettlementHandler {
             .ok_or_else(|| failure::err_msg(format!("No state record found for index {}", &state_index)))?
         );
 
-        let order_query = util::entity_query(
-            "SellOrders", EntityFilter::Equal("auctionId".to_string(), auction_id.to_value())
-        );
-        info!(logger, "Querying Orders: {:?}", order_query);
-
         let orders = self.store
-            .find(order_query)?
-            .into_iter()
-            .map(Order::from)
-            .collect::<Vec<Order>>();
-
+            .get_orders_of_slot(&auction_id)
+            .map_err(|e| failure::err_msg(format!("{}", e)))?;
         info!(logger, "Found {} Orders", orders.len());
 
         info!(logger, "Parsing auction results from {} bytes: {:?}", encoded_solution.len(), encoded_solution);
