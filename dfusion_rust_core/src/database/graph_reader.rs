@@ -4,7 +4,7 @@ use crate::SUBGRAPH_ID;
 
 
 use graph::components::store::{EntityFilter, EntityQuery, EntityRange, EntityOrder};
-use graph::data::store::{Value, ValueType};
+use graph::data::store::{ValueType};
 
 use graph_node_reader::StoreReader;
 use crate::models::{NUM_RESERVED_ACCOUNTS, StandingOrder};
@@ -90,7 +90,7 @@ impl DbInterface for GraphReader {
         &self,
         auction_id: &U256,
     ) -> Result<Vec<models::Order>, DatabaseError> {
-        let order_query = util::entity_query(
+        let order_query = entity_query(
             "SellOrder", EntityFilter::Equal("auctionId".to_string(), auction_id.to_value()),
         );
         Ok(self.reader
@@ -106,45 +106,45 @@ impl DbInterface for GraphReader {
         &self,
         auction_id: &U256,
     ) -> Result<[models::StandingOrder; models::NUM_RESERVED_ACCOUNTS], DatabaseError> {
-        let search_filter = EntityFilter::LessOrEqual("validFromAuctionId".to_string(), auction_id.to_value());
-        let mut order_ids: Vec<ValueType::ID> = vec![];
+        let mut result = StandingOrder::empty_array();
+        for reserved_account_id in 0..NUM_RESERVED_ACCOUNTS {
+            let standing_order_query = EntityQuery {
+                subgraph_id: SUBGRAPH_ID.clone(),
+                entity_types: vec!["StandingSellOrderBatch".to_string()],
+                filter: Some(
+                    EntityFilter::And(
+                        vec![
+                            EntityFilter::LessOrEqual("validFromAuctionId".to_string(), auction_id.to_value()),
+                            EntityFilter::Equal("accountId".to_string(), (reserved_account_id as u16).to_value())
+                        ]
+                    )
+                ),
+                order_by: Some(("batchIndex".to_string(), ValueType::BigInt)),
+                order_direction: Some(EntityOrder::Descending),
+                range: EntityRange {
+                    first: None,
+                    skip: 0,
+                },
+            };
+            let standing_order_option = self.reader
+                .find_one(standing_order_query)
+                .map_err(|e| DatabaseError::chain(ErrorKind::ConnectionError, "Could not execute query", e))?;
 
-//        (0..NUM_RESERVED_ACCOUNTS).map(|reserved_account_id| {
-//            let standing_order_query = EntityQuery {
-//                subgraph_id: SUBGRAPH_ID.clone(),
-//                entity_types: vec!["StandingSellOrderBatch".to_string()],
-//                filter: Some(
-//                    EntityFilter::And(
-//                        vec![
-//                            search_filter,
-//                            EntityFilter::Equal("accountId".to_string(), (reserved_account_id as u16).to_value())
-//                        ]
-//                    )
-//                ),
-//                order_by: Some(("batchIndex".to_string(), ValueType::BigInt)),
-//                order_direction: Some(EntityOrder::Descending),
-//                range: EntityRange {
-//                    first: None,
-//                    skip: 0,
-//                },
-//            };
-//            let standing_order_entity = self.reader
-//                .find_one(standing_order_query)
-//                .map_err(|e| DatabaseError::chain(ErrorKind::ConnectionError, "Could not execute query", e))?
-//
-//            match standing_order_entity {
-//                Some(standing_order) => {
-//                    let order_ids = standing_order.get("orders").as_list()?;
-//                    let relevant_order_query = entity_query("SellOrder", EntityFilter::In("id".to_string(), order_ids));
-//                    let order_entities = self.reader
-//                        .find(relevant_order_query)
-//                        .map_err(|e| DatabaseError::chain(ErrorKind::ConnectionError, "Could not execute query", e))?
-//
-//                    StandingOrder::from((standing_order_entity, order_entities))
-//                },
-//                None => StandingOrder::Default()
-//            }
-//        })
+            match standing_order_option {
+                Some(standing_order) => {
+                    let order_ids = standing_order.get("orders")
+                        .and_then(|orders| orders.clone().as_list())
+                        .ok_or_else(|| DatabaseError::new(ErrorKind::StateError, "No list orders found on standing order entity"))?;
+                    let relevant_order_query = entity_query("SellOrder", EntityFilter::In("id".to_string(), order_ids));
+                    let order_entities = self.reader
+                        .find(relevant_order_query)
+                        .map_err(|e| DatabaseError::chain(ErrorKind::ConnectionError, "Could not execute query", e))?;
+                    result[reserved_account_id] = StandingOrder::from((standing_order, order_entities));
+                },
+                None => (),
+            }
+       }
+       Ok(result)
     }
 }
 

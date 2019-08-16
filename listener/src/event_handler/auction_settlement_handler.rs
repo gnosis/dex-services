@@ -4,12 +4,12 @@ use failure::Error;
 use slog::Logger;
 use std::sync::Arc;
 
-use dfusion_core::database::{GraphReader, DbInterface};
+use dfusion_core::database::DbInterface;
 use dfusion_core::models::util::{PopFromLogData, ToValue};
-use dfusion_core::models::{AccountState, Order, AuctionResults};
+use dfusion_core::models::AuctionResults;
 
 use graph::components::ethereum::EthereumBlock;
-use graph::components::store::{EntityFilter, EntityOperation};
+use graph::components::store::EntityOperation;
 use graph::data::store::{Entity};
 
 use web3::types::{H256, U256};
@@ -23,11 +23,11 @@ use super::util;
 
 #[derive(Clone)]
 pub struct AuctionSettlementHandler {
-    store: Arc<GraphReader>,
+    store: Arc<DbInterface>,
 }
 
 impl AuctionSettlementHandler {
-    pub fn new(store: Arc<GraphReader>) -> Self {
+    pub fn new(store: Arc<DbInterface>) -> Self {
         AuctionSettlementHandler {
             store
         }
@@ -50,7 +50,7 @@ impl EventHandler for AuctionSettlementHandler {
         log: Arc<Log>
     ) -> Result<Vec<EntityOperation>, Error> {
         let mut event_data: Vec<u8> = log.data.0.clone();
-
+        info!(logger, "Parsing complete auction results from {} bytes: {:?}", event_data.len(), event_data);
         let auction_id = U256::pop_from_log_data(&mut event_data);
         let state_index = U256::pop_from_log_data(&mut event_data).saturating_sub(U256::one());
         let new_state_hash = H256::pop_from_log_data(&mut event_data);
@@ -59,18 +59,25 @@ impl EventHandler for AuctionSettlementHandler {
         info!(logger, "Received Auction Settlement Event");
 
         // Fetch relevant information for transition (accounts, orders, parsed solution)
-        let account_query = util::entity_query(
-            "AccountState", EntityFilter::Equal("stateIndex".to_string(), state_index.to_value())
-        );
-        let mut account_state = AccountState::from(
-            self.store.find_one(account_query)?
-            .ok_or_else(|| failure::err_msg(format!("No state record found for index {}", &state_index)))?
-        );
+        let mut account_state = self.store
+            .get_balances_for_state_index(&state_index)
+            .map_err(|e| failure::err_msg(format!("{}", e)))?;
 
-        let orders = self.store
+        let mut orders = self.store
             .get_orders_of_slot(&auction_id)
             .map_err(|e| failure::err_msg(format!("{}", e)))?;
         info!(logger, "Found {} Orders", orders.len());
+
+        let standing_orders = self.store
+            .get_standing_orders_of_slot(&auction_id)
+            .map_err(|e| failure::err_msg(format!("{}", e)))?;
+
+        orders.extend(standing_orders
+            .iter()
+            .filter(|standing_order| standing_order.num_orders() > 0)
+            .flat_map(|standing_order| standing_order.get_orders().clone())
+        );
+        info!(logger, "All Orders: {:?}", orders);
 
         info!(logger, "Parsing auction results from {} bytes: {:?}", encoded_solution.len(), encoded_solution);
         let auction_results = AuctionResults::from(encoded_solution);
