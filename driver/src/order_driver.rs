@@ -57,11 +57,11 @@ pub fn run_order_listener<D, C>(
             let solution = if !orders.is_empty() {
                 price_finder.find_prices(&orders, &state).unwrap_or_else(|e| {
                     error!("Error computing result: {}\n Falling back to trivial solution", e);
-                    Solution::trivial()
+                    Solution::trivial(orders.len())
                 })
             } else {
                 warn!("No orders in batch. Falling back to trivial solution");
-                Solution::trivial()
+                Solution::trivial(orders.len())
             };
 
             // Compute updated balances

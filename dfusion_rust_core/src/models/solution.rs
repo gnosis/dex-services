@@ -12,12 +12,12 @@ pub struct Solution {
 }
 
 impl Solution {
-    pub fn trivial() -> Self {
+    pub fn trivial(num_orders: usize) -> Self {
         Solution {
             surplus: Some(U256::zero()),
             prices: vec![0; TOKENS as usize],
-            executed_sell_amounts: vec![],
-            executed_buy_amounts: vec![],
+            executed_sell_amounts: vec![0; num_orders],
+            executed_buy_amounts: vec![0; num_orders],
         }
     }
 }
@@ -42,7 +42,7 @@ impl Deserializable for Solution {
     fn from_bytes(mut bytes: Vec<u8>) -> Self {
         let volumes = bytes.split_off(TOKENS as usize * 12);
         let prices = bytes
-            .chunks(12)
+            .chunks_exact(12)
             .map(|chunk| {
                 util::read_amount(
                     &util::get_amount_from_slice(chunk)
@@ -52,7 +52,7 @@ impl Deserializable for Solution {
 
         let mut executed_sell_amounts: Vec<u128> = vec![];
         let mut executed_buy_amounts: Vec<u128> = vec![];
-        volumes.chunks(2 * 12)
+        volumes.chunks_exact(2 * 12)
             .for_each(|chunk| {
                 executed_buy_amounts.push(util::read_amount(
                     &util::get_amount_from_slice(&chunk[0..12])
@@ -87,5 +87,18 @@ pub mod unit_test {
         let parsed_solution = Solution::from_bytes(bytes);
 
         assert_eq!(solution, parsed_solution);
+    }
+
+    #[test]
+    fn test_deserialize_e2e_example() {
+        let bytes = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let parsed_solution = Solution::from_bytes(bytes);
+        let expected = Solution {
+            surplus: None,
+            prices: vec![1, 10u128.pow(18), 10u128.pow(18), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            executed_sell_amounts: vec![10u128.pow(18), 10u128.pow(18)],
+            executed_buy_amounts: vec![10u128.pow(18), 10u128.pow(18)],
+        };
+        assert_eq!(parsed_solution, expected);
     }
 }
