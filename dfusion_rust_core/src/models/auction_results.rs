@@ -46,7 +46,6 @@ pub mod unit_test {
             expected_prices.push(i as u128);
         }
 
-
         bytes.push(
             /* buy_amount_1 */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3]
         );
