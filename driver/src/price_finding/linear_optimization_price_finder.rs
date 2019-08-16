@@ -1,5 +1,5 @@
 use crate::price_finding::error::{PriceFindingError, ErrorKind};
-use crate::price_finding::price_finder_interface::{PriceFinding, Solution};
+use crate::price_finding::price_finder_interface::{PriceFinding};
 
 use dfusion_core::models;
 
@@ -71,7 +71,7 @@ fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
     })
 }
 
-fn deserialize_result(json: &serde_json::Value, num_tokens: u8) -> Result<(Prices, Solution), PriceFindingError> {
+fn deserialize_result(json: &serde_json::Value, num_tokens: u8) -> Result<(Prices, models::Solution), PriceFindingError> {
     let price_map = json["prices"]
         .as_object()
         .ok_or_else(|| "No 'price' object in json")?
@@ -90,7 +90,7 @@ fn deserialize_result(json: &serde_json::Value, num_tokens: u8) -> Result<(Price
         )
         .collect::<Result<Vec<u128>, PriceFindingError>>()?;
     let orders = json["orders"].as_array().ok_or_else(|| "No 'orders' list in json")?;
-    let surplus = orders
+    let surplus = Some(orders
         .iter()
         .map(|o| o["execSurplus"]
             .as_str()
@@ -101,7 +101,7 @@ fn deserialize_result(json: &serde_json::Value, num_tokens: u8) -> Result<(Price
         )
         .collect::<Result<Vec<U256>, PriceFindingError>>()?
         .iter()
-        .fold(U256::zero(), |acc, surplus| surplus.saturating_add(acc));
+        .fold(U256::zero(), |acc, surplus| surplus.saturating_add(acc)));
     let executed_sell_amounts = orders
         .iter()
         .map(|o| o["execSellAmount"]
@@ -118,7 +118,7 @@ fn deserialize_result(json: &serde_json::Value, num_tokens: u8) -> Result<(Price
             .and_then(|amount| amount.parse::<u128>().map_err(PriceFindingError::from))
         )
         .collect::<Result<Vec<u128>, PriceFindingError>>()?;
-    Ok((price_map.to_owned(), Solution {
+    Ok((price_map.to_owned(), models::Solution {
         surplus,
         prices,
         executed_sell_amounts,
@@ -131,7 +131,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
         &mut self, 
         orders: &[models::Order],
         state: &models::AccountState
-    ) -> Result<Solution, PriceFindingError> {
+    ) -> Result<models::Solution, PriceFindingError> {
         let token_ids: Vec<String> = (0..state.num_tokens)
             .map(token_id)
             .collect();
@@ -273,8 +273,8 @@ pub mod tests {
             ("token1".to_owned(), "1526784674855762300".to_owned())
         ].iter().cloned().collect();
 
-        let expected_solution = Solution {
-            surplus: U256::from_dec_str("15854632034944469292777429010439194350").unwrap(),
+        let expected_solution = models::Solution {
+            surplus: U256::from_dec_str("15854632034944469292777429010439194350").ok(),
             prices: vec![14024052566155238000, 1526784674855762300],
             executed_sell_amounts: vec![0, 318390084925498118944],
             executed_buy_amounts: vec![0, 95042777139162480000],

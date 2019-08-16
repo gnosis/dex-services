@@ -1,15 +1,15 @@
 use crate::contract::SnappContract;
 use crate::error::DriverError;
-use crate::price_finding::{PriceFinding, Solution};
+use crate::price_finding::PriceFinding;
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
 
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::{
     RollingHashable, Serializable, ConcatenatingHashable, AccountState, Order, StandingOrder,
-    TOKENS,
+    Solution,
 };
 
-use web3::types::{U256, U128};
+use web3::types::U128;
 
 pub fn run_order_listener<D, C>(
     db: &D, 
@@ -57,21 +57,11 @@ pub fn run_order_listener<D, C>(
             let solution = if !orders.is_empty() {
                 price_finder.find_prices(&orders, &state).unwrap_or_else(|e| {
                     error!("Error computing result: {}\n Falling back to trivial solution", e);
-                    Solution {
-                        surplus: U256::zero(),
-                        prices: vec![0; TOKENS as usize],
-                        executed_sell_amounts: vec![0; orders.len()],
-                        executed_buy_amounts: vec![0; orders.len()],
-                    }
+                    Solution::trivial()
                 })
             } else {
                 warn!("No orders in batch. Falling back to trivial solution");
-                Solution {
-                    surplus: U256::zero(),
-                    prices: vec![0; TOKENS as usize],
-                    executed_sell_amounts: vec![0; orders.len()],
-                    executed_buy_amounts: vec![0; orders.len()],
-                }
+                Solution::trivial()
             };
 
             // Compute updated balances
@@ -108,7 +98,7 @@ mod tests {
     use super::*;
     use crate::contract::tests::SnappContractMock;
     use dfusion_core::database::tests::DbInterfaceMock;
-    use dfusion_core::models::NUM_RESERVED_ACCOUNTS;
+    use dfusion_core::models::{NUM_RESERVED_ACCOUNTS, TOKENS};
     use dfusion_core::models::order::tests::create_order_for_test;
     use crate::price_finding::price_finder_interface::tests::PriceFindingMock;
     use mock_it::Matcher::*;
@@ -146,7 +136,7 @@ mod tests {
 
         let mut pf = PriceFindingMock::new();
         let expected_solution = Solution {
-            surplus: U256::from_dec_str("0").unwrap(),
+            surplus: U256::from_dec_str("0").ok(),
             prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
@@ -222,7 +212,7 @@ mod tests {
 
         let mut pf = PriceFindingMock::new();
         let expected_solution = Solution {
-            surplus: U256::from_dec_str("0").unwrap(),
+            surplus: U256::from_dec_str("0").ok(),
             prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
@@ -333,7 +323,7 @@ mod tests {
             TOKENS,
         );
         let solution = Solution {
-            surplus: U256::from_dec_str("0").unwrap(),
+            surplus: U256::from_dec_str("0").ok(),
             prices: vec![1, 2],
             executed_sell_amounts: vec![1, 1],
             executed_buy_amounts: vec![1, 1],
