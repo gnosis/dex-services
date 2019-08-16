@@ -1,8 +1,8 @@
-use crate::db_interface::DbInterface;
 use crate::error::DriverError;
 use crate::contract::SnappContract;
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
 
+use dfusion_core::database::DbInterface;
 use dfusion_core::models::{RollingHashable};
 
 pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), DriverError> 
@@ -24,9 +24,9 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
             info!("Processing deposit_slot {:?}", slot);
             let state_root = contract.get_current_state_root()?;
             let contract_deposit_hash = contract.deposit_hash_for_slot(slot)?;
-            let mut balances = db.get_current_balances(&state_root)?;
+            let mut balances = db.get_balances_for_state_root(&state_root)?;
 
-            let deposits = db.get_deposits_of_slot(slot.low_u32())?;
+            let deposits = db.get_deposits_of_slot(&slot)?;
             let deposit_hash = deposits.rolling_hash(0);
             hash_consistency_check(deposit_hash, contract_deposit_hash, "deposit")?;
 
@@ -47,10 +47,10 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dfusion_core::database::tests::DbInterfaceMock;
     use dfusion_core::models::flux::tests::create_flux_for_test;
     use dfusion_core::models;
     use crate::contract::tests::SnappContractMock;
-    use crate::db_interface::tests::DbInterfaceMock;
     use mock_it::Matcher::*;
     use web3::types::{H256, U256};
     use crate::error::{ErrorKind};
@@ -78,8 +78,8 @@ mod tests {
         contract.apply_deposits.given((slot, Any, Any, Any)).will_return(Ok(()));
 
         let db = DbInterfaceMock::new();
-        db.get_deposits_of_slot.given(1).will_return(Ok(deposits));
-        db.get_current_balances.given(state_hash).will_return(Ok(state));
+        db.get_deposits_of_slot.given(U256::one()).will_return(Ok(deposits));
+        db.get_balances_for_state_root.given(state_hash).will_return(Ok(state));
 
         assert_eq!(run_deposit_listener(&db, &contract), Ok(true));
     }
@@ -106,7 +106,7 @@ mod tests {
         contract.deposit_hash_for_slot.given(slot + 1).will_return(Ok(H256::zero()));
 
         let db = DbInterfaceMock::new();
-        db.get_current_balances.given(state_hash).will_return(Ok(state));
+        db.get_balances_for_state_root.given(state_hash).will_return(Ok(state));
 
         assert_eq!(run_deposit_listener(&db, &contract), Ok(false));
     }
@@ -135,7 +135,7 @@ mod tests {
         contract.deposit_hash_for_slot.given(slot).will_return(Ok(deposits.rolling_hash(0)));
 
         let db = DbInterfaceMock::new();
-        db.get_current_balances.given(state_hash).will_return(Ok(state));
+        db.get_balances_for_state_root.given(state_hash).will_return(Ok(state));
 
         assert_eq!(run_deposit_listener(&db, &contract), Ok(false));
     }
@@ -168,8 +168,8 @@ mod tests {
         );
 
         let db = DbInterfaceMock::new();
-        db.get_deposits_of_slot.given(0).will_return(Ok(first_deposits));
-        db.get_current_balances.given(state_hash).will_return(Ok(state));
+        db.get_deposits_of_slot.given(U256::zero()).will_return(Ok(first_deposits));
+        db.get_balances_for_state_root.given(state_hash).will_return(Ok(state));
         
         assert_eq!(run_deposit_listener(&db, &contract), Ok(true));
     }
@@ -200,8 +200,8 @@ mod tests {
         contract.get_current_state_root.given(()).will_return(Ok(state_hash));
 
         let db = DbInterfaceMock::new();
-        db.get_deposits_of_slot.given(1).will_return(Ok(deposits));
-        db.get_current_balances.given(state_hash).will_return(Ok(state));
+        db.get_deposits_of_slot.given(U256::one()).will_return(Ok(deposits));
+        db.get_balances_for_state_root.given(state_hash).will_return(Ok(state));
 
         let error = run_deposit_listener(&db, &contract).expect_err("Expected Error");
         assert_eq!(error.kind, ErrorKind::StateError);

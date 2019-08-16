@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use graph::components::store::{EntityFilter, EntityKey, EntityQuery, EntityRange};
+use graph::components::store::EntityKey;
 use graph::data::store::Entity;
 use web3::types::Log;
 
@@ -22,34 +22,14 @@ pub fn entity_key(entity_type: &str, entity: &Entity) -> EntityKey {
     }
 }
 
-pub fn entity_query(entity_type: &str, filter: EntityFilter) -> EntityQuery {
-    EntityQuery {
-        subgraph_id: SUBGRAPH_ID.clone(),
-        entity_types: vec![entity_type.to_string()],
-        filter: Some(filter),
-        order_by: None,
-        order_direction: None,
-        range: EntityRange {
-            first: None,
-            skip: 0
-        }
-    }
-}
-
 #[cfg(test)]
 pub mod test {
-    use super::*;
     use graph::components::ethereum::EthereumBlock;
-    use graph::data::schema::Schema;
     use slog::Logger;
     use web3::types::{Block, Bytes, H2048, H256, H160, Transaction, U256};
 
     pub fn logger() -> Logger {
         Logger::root(slog::Discard, o!())
-    }
-
-    pub fn fake_schema() -> Schema {
-        Schema::parse("scalar Foo", SUBGRAPH_ID.clone()).unwrap()
     }
 
     pub fn fake_tx() -> Transaction {

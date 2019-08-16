@@ -4,9 +4,10 @@ use slog::Logger;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use dfusion_core::database::DbInterface;
+
 use graph::components::ethereum::{EthereumCall, EthereumBlockTriggerType, EthereumBlock};
 use graph::components::subgraph::{RuntimeHost as RuntimeHostTrait, RuntimeHostBuilder, BlockState};
-use graph::components::store::Store;
 
 use graph::data::subgraph::{DataSource, SubgraphDeploymentId};
 
@@ -19,28 +20,29 @@ use crate::event_handler::{
     DepositHandler,
     InitializationHandler,
     FluxTransitionHandler,
-    SellOrderHandler,
     WithdrawHandler,
+    StandingOrderHandler,
+    SellOrderHandler,
     AuctionSettlementHandler
 };
 
 type HandlerMap = HashMap<H256, Box<dyn EventHandler>>;
 
-fn register_event(handlers: &mut HandlerMap, name: &str, handler: Box<dyn EventHandler>) 
+fn register_event(handlers: &mut HandlerMap, name: &str, handler: Box<dyn EventHandler>)
 {
     handlers.insert(
         H256::from(keccak256(name.as_bytes())),
-        handler
+        handler,
     );
 }
 
 #[derive(Clone)]
 pub struct RustRuntimeHostBuilder {
-    store: Arc<Store>
+    store: Arc<DbInterface>
 }
 
 impl RustRuntimeHostBuilder {
-    pub fn new(store: Arc<Store>) -> Self {
+    pub fn new(store: Arc<DbInterface>) -> Self {
         RustRuntimeHostBuilder {
             store
         }
@@ -65,37 +67,42 @@ pub struct RustRuntimeHost {
 }
 
 impl RustRuntimeHost {
-    fn new(store: Arc<Store>) -> Self {
+    fn new(store: Arc<DbInterface>) -> Self {
         let mut handlers = HashMap::new();
         register_event(
             &mut handlers,
             "Deposit(uint16,uint8,uint128,uint256,uint16)",
-            Box::new(DepositHandler {})
+            Box::new(DepositHandler {}),
         );
         register_event(
             &mut handlers,
             "SnappInitialization(bytes32,uint8,uint16)",
-            Box::new(InitializationHandler {})
+            Box::new(InitializationHandler {}),
         );
         register_event(
             &mut handlers,
             "StateTransition(uint8,uint256,bytes32,uint256)",
-            Box::new(FluxTransitionHandler::new(store.clone()))
+            Box::new(FluxTransitionHandler::new(store.clone())),
         );
         register_event(
             &mut handlers,
             "WithdrawRequest(uint16,uint8,uint128,uint256,uint16)",
-            Box::new(WithdrawHandler {})
+            Box::new(WithdrawHandler {}),
+        );
+        register_event(
+            &mut handlers,
+            "StandingSellOrderBatch(uint256,uint256,uint16,bytes)",
+            Box::new(StandingOrderHandler {}),
         );
         register_event(
             &mut handlers,
             "SellOrder(uint256,uint16,uint16,uint8,uint8,uint96,uint96)",
-            Box::new(SellOrderHandler {})
+            Box::new(SellOrderHandler {}),
         );
         register_event(
             &mut handlers,
             "AuctionSettlement(uint256,uint256,bytes32,bytes)",
-            Box::new(AuctionSettlementHandler::new(store.clone()))
+            Box::new(AuctionSettlementHandler::new(store.clone())),
         );
         RustRuntimeHost {
             handlers
@@ -125,7 +132,7 @@ impl RuntimeHostTrait for RustRuntimeHost {
         transaction: Arc<Transaction>,
         log: Arc<Log>,
         state: BlockState,
-    ) -> Box<Future<Item = BlockState, Error = Error> + Send> {
+    ) -> Box<Future<Item=BlockState, Error=Error> + Send> {
         info!(logger, "Received event");
         let mut state = state;
         if let Some(handler) = self.handlers.get(&log.topics[0]) {
@@ -147,7 +154,7 @@ impl RuntimeHostTrait for RustRuntimeHost {
         _transaction: Arc<Transaction>,
         _call: Arc<EthereumCall>,
         _state: BlockState,
-    ) -> Box<Future<Item = BlockState, Error = Error> + Send> {
+    ) -> Box<Future<Item=BlockState, Error=Error> + Send> {
         unimplemented!();
     }
 
@@ -158,7 +165,7 @@ impl RuntimeHostTrait for RustRuntimeHost {
         _block: Arc<EthereumBlock>,
         _trigger_type: EthereumBlockTriggerType,
         _state: BlockState,
-    ) -> Box<Future<Item = BlockState, Error = Error> + Send> {
+    ) -> Box<Future<Item=BlockState, Error=Error> + Send> {
         unimplemented!();
     }
 }
