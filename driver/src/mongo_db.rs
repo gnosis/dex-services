@@ -128,9 +128,33 @@ impl DbInterface for MongoDB {
         slot: &U256,
     ) -> Result<[models::StandingOrder; models::NUM_RESERVED_ACCOUNTS], DatabaseError> {
         let pipeline = vec![
-            doc!{"$match" => (doc!{"validFromAuctionId" => (doc!{ "$lte" => slot.low_u64()})})},
-            doc!{"$sort" => (doc!{"validFromAuctionId" => -1, "_id" => -1})},
-            doc!{"$group" => (doc!{"_id" => "$accountId", "orders" => (doc!{"$first" =>"$orders" }), "batchIndex" => (doc!{"$first" => "$batchIndex" })})}
+            doc!{
+                "$match" => (doc!{
+                    "validFromAuctionId" => (doc!{
+                        "$lte" => slot.low_u64()
+                    })
+                })
+            },
+            doc!{
+                "$sort" => (doc!{
+                    "validFromAuctionId" => -1,
+                    "_id" => -1
+                })
+            },
+            doc!{
+                "$group" => (doc!{
+                    "_id" => "$accountId",
+                    "orders" => (doc!{
+                        "$first" =>"$orders"
+                    }),
+                    "validFromAuctionId": {
+                        "$first": "$validFromAuctionId"
+                    },
+                    "batchIndex" => (doc!{
+                        "$first" => "$batchIndex"
+                    })
+                })
+            }
         ];
 
         info!("Querying standing_orders: {:?}", pipeline);

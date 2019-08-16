@@ -516,6 +516,7 @@ dependencies = [
  "graph 0.13.2 (git+https://github.com/graphprotocol/graph-node?tag=v0.13.2)",
  "graph-node-reader 0.13.2 (git+https://github.com/fleupold/graph-node-reader?tag=v0.13.2)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "mock-it 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "mongodb 0.3.12 (git+https://github.com/mongodb-labs/mongo-rust-driver-prototype?rev=9203ec3216976cfbfddb07856b25d061965810af)",
  "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -1,12 +1,12 @@
-use byteorder::{BigEndian, WriteBytesExt};
+use byteorder::{BigEndian, WriteBytesExt, ByteOrder};
 use graph::data::store::Entity;
 use serde_derive::{Deserialize};
 use std::sync::Arc;
 use web3::types::{H256, U256, Log};
 
-use crate::models::{Serializable, RollingHashable, iter_hash};
-
 use super::util::*;
+
+use crate::models::{Serializable, RollingHashable, iter_hash};
 
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
@@ -14,6 +14,7 @@ pub struct BatchInformation {
     pub slot: U256,
     pub slot_index: u16,
 }
+
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct Order {
@@ -23,6 +24,32 @@ pub struct Order {
     pub sell_token: u8,
     pub buy_amount: u128,
     pub sell_amount: u128,
+}
+
+
+impl Order {
+    pub fn from_encoded_order (
+        account_id: u16,
+        bytes: &[u8; 26]
+    ) -> Self {
+        let buy_token = u8::from_le_bytes([bytes[25]]);    // 1 byte
+        let sell_token = u8::from_le_bytes([bytes[24]]);   // 1 byte
+        let sell_amount = read_amount(
+            &get_amount_from_slice(&bytes[12..24])         // 12 bytes
+        );
+        let buy_amount = read_amount(
+            &get_amount_from_slice(&bytes[0..12])          // 12 bytes
+        );
+        
+        Order {
+            batch_information: None,
+            account_id,
+            buy_token,
+            sell_token,
+            buy_amount,
+            sell_amount
+        }
+    }
 }
 
 impl Serializable for Order {
@@ -62,11 +89,15 @@ impl From<Arc<Log>> for Order {
 
 impl From<Entity> for Order {
     fn from(entity: Entity) -> Self {
-        Order {
-            batch_information: Some(BatchInformation{
+        let batch_information = entity.get("auctionId")
+            .and(entity.get("slotIndex"))
+            .and_then(|_| Some(BatchInformation{
                 slot: U256::from_entity(&entity, "auctionId"),
                 slot_index: u16::from_entity(&entity, "slotIndex"),
-            }),
+            }));
+
+        Order {
+            batch_information,
             account_id: u16::from_entity(&entity, "accountId"),
             buy_token: u8::from_entity(&entity, "buyToken"),
             sell_token: u8::from_entity(&entity, "sellToken"),
@@ -74,6 +105,22 @@ impl From<Entity> for Order {
             sell_amount: u128::from_entity(&entity, "sellAmount"),
         }
     }
+}
+
+fn get_amount_from_slice(bytes: &[u8]) -> [u8; 12] {
+    let mut bytes_12 = [0u8; 12];
+    bytes_12.copy_from_slice(bytes);
+
+    bytes_12
+}
+
+fn read_amount(bytes: &[u8; 12]) -> u128 {    
+    let bytes = [0u8, 0u8, 0u8, 0u8].iter()
+        .chain(bytes.iter())
+        .cloned()
+        .collect::<Vec<u8>>();
+
+    BigEndian::read_u128(bytes.as_slice())
 }
 
 impl From<mongodb::ordered::OrderedDocument> for Order {
@@ -117,52 +164,52 @@ impl<T: Serializable> RollingHashable for Vec<T> {
 pub mod tests {
     use super::*;
     pub fn create_order_for_test() -> Order {
-      Order {
-          batch_information: Some(BatchInformation{
-            slot: U256::zero(),
-            slot_index: 0,
-          }),
-          account_id: 1,
-          buy_token: 3,
-          sell_token: 2,
-          buy_amount: 5,
-          sell_amount: 4,
-      }
-  }
+        Order {
+            batch_information: Some(BatchInformation{
+                slot: U256::zero(),
+                slot_index: 0,
+            }),
+            account_id: 1,
+            buy_token: 3,
+            sell_token: 2,
+            buy_amount: 5,
+            sell_amount: 4,
+        }
+    }
 }
 
 #[cfg(test)]
 pub mod unit_test {
-  use super::*;
-  use graph::bigdecimal::BigDecimal;
-  use web3::types::{Bytes, H256};
-  use std::str::FromStr;
+    use super::*;
+    use graph::bigdecimal::BigDecimal;
+    use web3::types::{Bytes, H256};
+    use std::str::FromStr;
 
-  #[test]
-  fn test_order_rolling_hash() {
+    #[test]
+    fn test_order_rolling_hash() {
     let order = Order {
-      batch_information: Some(BatchInformation{
+        batch_information: Some(BatchInformation{
         slot: U256::zero(),
         slot_index: 0,
-      }),
-      account_id: 1,
-      buy_token: 3,
-      sell_token: 2,
-      buy_amount: 5,
-      sell_amount: 4,
+        }),
+        account_id: 1,
+        buy_token: 3,
+        sell_token: 2,
+        buy_amount: 5,
+        sell_amount: 4,
     };
 
     assert_eq!(
     vec![order].rolling_hash(0),
     H256::from_str(
-      "8c253b4588a6d87b02b5f7d1424020b7b5f8c0397e464e087d2830a126d3b699"
-      ).unwrap()
+        "8c253b4588a6d87b02b5f7d1424020b7b5f8c0397e464e087d2830a126d3b699"
+        ).unwrap()
     );
-  }
+    }
 
-  #[test]
-  fn test_from_log() {
-      let bytes: Vec<Vec<u8>> = vec![
+    #[test]
+    fn test_from_log() {
+        let bytes: Vec<Vec<u8>> = vec![
         /* slot_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         /* slot_index_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         /* account_id_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -170,9 +217,9 @@ pub mod unit_test {
         /* sell_token_bytes */ vec![ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
         /* buy_amount_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0],
         /* sell_amount_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0],
-      ];
+        ];
 
-      let log = Arc::new(Log {
+        let log = Arc::new(Log {
             address: 1.into(),
             topics: vec![],
             data: Bytes(bytes.iter().flat_map(|i| i.iter()).cloned().collect()),
@@ -199,11 +246,52 @@ pub mod unit_test {
         };
 
         assert_eq!(expected_order, Order::from(log));
-  }
+    }
 
-  #[test]
-  fn test_to_and_from_entity() {
-      let order = Order {
+    #[test]
+    fn test_into_and_from_entity() {
+        let order = create_order_for_test();        
+        let entity = create_entity_for_test();
+
+        assert_eq!(entity, order.clone().into());
+        assert_eq!(order, Order::from(entity));
+    }
+
+    #[test]
+    fn test_into_entity_no_slot() {
+        let mut expected_entity: Entity = create_entity_for_test();
+        expected_entity.remove("slotIndex");
+        expected_entity.remove("auctionId");
+
+        let mut order: Order = create_order_for_test();
+        order.batch_information = None;
+        let actual_entity: Entity = order.into();
+
+        assert_eq!(expected_entity, actual_entity);
+    }
+
+    #[test]
+    fn test_from_entity_no_slot() {
+        let mut expected_order = create_order_for_test();
+        expected_order.batch_information = None;
+        let entity = create_entity_for_test();
+
+        let mut actual_entity = entity.clone();
+        actual_entity.remove("slotIndex");
+        assert_eq!(expected_order, Order::from(actual_entity), "No batch info if there's no slot index");
+
+        let mut actual_entity = entity.clone();
+        actual_entity.remove("auctionId");
+        assert_eq!(expected_order, Order::from(actual_entity), "No batch info if there's no auctionId");
+
+        let mut actual_entity = entity.clone();
+        actual_entity.remove("slotIndex");
+        actual_entity.remove("auctionId");
+        assert_eq!(expected_order, Order::from(actual_entity), "No batch info if there's no slot index and auctionId");
+    }
+
+    fn create_order_for_test() -> Order {
+        Order {
             batch_information: Some(BatchInformation{
                 slot: U256::zero(),
                 slot_index: 0,
@@ -213,8 +301,10 @@ pub mod unit_test {
             sell_token: 2,
             buy_amount: 1 * (10 as u128).pow(18),
             sell_amount: 2 * (10 as u128).pow(18),
-        };
-        
+        }
+    }
+
+    fn create_entity_for_test() -> Entity {
         let mut entity = Entity::new();
         entity.set("auctionId", BigDecimal::from(0));
         entity.set("slotIndex", 0);
@@ -224,7 +314,6 @@ pub mod unit_test {
         entity.set("buyAmount", BigDecimal::from(1 * (10 as u64).pow(18)));
         entity.set("sellAmount", BigDecimal::from(2 * (10 as u64).pow(18)));
 
-        assert_eq!(entity, order.clone().into());
-        assert_eq!(order, Order::from(entity));
-  }
+        entity 
+    }
 }
