@@ -67,9 +67,9 @@ impl EventHandler for AuctionSettlementHandler {
         );
 
         let order_query = util::entity_query(
-            // TODO - query BatchInformation for slot == auction_id
-            "Order", EntityFilter::Equal("auction_id".to_string(), auction_id.to_value())
+            "SellOrders", EntityFilter::Equal("auctionId".to_string(), auction_id.to_value())
         );
+        info!(logger, "Querying Orders: {:?}", order_query);
 
         let orders = self.store
             .find(order_query)?
@@ -77,7 +77,11 @@ impl EventHandler for AuctionSettlementHandler {
             .map(Order::from)
             .collect::<Vec<Order>>();
 
-        let auction_results = AuctionResults::from(encoded_solution); // TODO - implement this.
+        info!(logger, "Found {} Orders", orders.len());
+
+        info!(logger, "Parsing auction results from {} bytes: {:?}", encoded_solution.len(), encoded_solution);
+        let auction_results = AuctionResults::from(encoded_solution);
+
         account_state.apply_auction(&orders, auction_results);
 
         let mut entity: Entity = account_state.into();
