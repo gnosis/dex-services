@@ -1,4 +1,4 @@
-use byteorder::{BigEndian, WriteBytesExt, ByteOrder};
+use byteorder::{BigEndian, WriteBytesExt};
 use graph::data::store::Entity;
 use serde_derive::{Deserialize};
 use std::sync::Arc;
@@ -105,22 +105,6 @@ impl From<Entity> for Order {
             sell_amount: u128::from_entity(&entity, "sellAmount"),
         }
     }
-}
-
-fn get_amount_from_slice(bytes: &[u8]) -> [u8; 12] {
-    let mut bytes_12 = [0u8; 12];
-    bytes_12.copy_from_slice(bytes);
-
-    bytes_12
-}
-
-fn read_amount(bytes: &[u8; 12]) -> u128 {    
-    let bytes = [0u8, 0u8, 0u8, 0u8].iter()
-        .chain(bytes.iter())
-        .cloned()
-        .collect::<Vec<u8>>();
-
-    BigEndian::read_u128(bytes.as_slice())
 }
 
 impl From<mongodb::ordered::OrderedDocument> for Order {
