@@ -1,3 +1,4 @@
+use byteorder::{BigEndian, ByteOrder};
 use std::convert::TryInto;
 use graph::bigdecimal::BigDecimal;
 use graph::data::store::{Entity, Value};
@@ -164,4 +165,20 @@ impl EntityParsing for Vec<u128> {
                 .collect::<Vec<u128>>()
             ).unwrap_or_else(|| panic!("Couldn't get field {} as list", field))
     }
+}
+
+pub fn get_amount_from_slice(bytes: &[u8]) -> [u8; 12] {
+    let mut bytes_12 = [0u8; 12];
+    bytes_12.copy_from_slice(bytes);
+
+    bytes_12
+}
+
+pub fn read_amount(bytes: &[u8; 12]) -> u128 {    
+    let bytes = [0u8, 0u8, 0u8, 0u8].iter()
+        .chain(bytes.iter())
+        .cloned()
+        .collect::<Vec<u8>>();
+
+    BigEndian::read_u128(bytes.as_slice())
 }

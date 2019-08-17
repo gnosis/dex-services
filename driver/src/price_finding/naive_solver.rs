@@ -1,10 +1,10 @@
 use web3::types::U256;
 
-use dfusion_core::models::{Order, AccountState, TOKENS};
+use dfusion_core::models::{Order, AccountState, Solution, TOKENS};
 
 use crate::price_finding::error::PriceFindingError;
 
-use super::price_finder_interface::{PriceFinding, Solution};
+use super::price_finder_interface::PriceFinding;
 
 pub enum OrderPairType {
     LhsFullyFilled,
@@ -134,7 +134,7 @@ impl PriceFinding for NaiveSolver {
             }
         }
         let solution = Solution {
-            surplus: total_surplus,
+            surplus: Some(total_surplus),
             prices,
             executed_sell_amounts: exec_sell_amount,
             executed_buy_amounts: exec_buy_amount,
@@ -178,7 +178,7 @@ pub mod tests {
         ];
         let mut solver = NaiveSolver{};
         let res = solver.find_prices(&orders, &state);
-        assert_eq!(U256::from(16), res.unwrap().surplus);
+        assert_eq!(Some(U256::from(16)), res.unwrap().surplus);
     }
 
     #[test]
@@ -209,7 +209,7 @@ pub mod tests {
         ];
         let mut solver = NaiveSolver{};
         let res = solver.find_prices(&orders, &state);
-        assert_eq!(U256::from(16), res.unwrap().surplus);
+        assert_eq!(Some(U256::from(16)), res.unwrap().surplus);
     }
 
     #[test]
@@ -240,7 +240,7 @@ pub mod tests {
         ];
         let mut solver = NaiveSolver{};
         let res = solver.find_prices(&orders, &state);
-        assert_eq!(U256::from(116), res.unwrap().surplus);
+        assert_eq!(Some(U256::from(116)), res.unwrap().surplus);
     }
 
     #[test]
@@ -303,7 +303,7 @@ pub mod tests {
         ];
         let mut solver = NaiveSolver{};
         let res = solver.find_prices(&orders, &state);
-        assert_eq!(U256::from(16), res.unwrap().surplus);
+        assert_eq!(Some(U256::from(16)), res.unwrap().surplus);
     }
 
     #[test]
@@ -334,7 +334,7 @@ pub mod tests {
         ];
         let mut solver = NaiveSolver{};
         let res = solver.find_prices(&orders, &state);
-        assert_eq!(U256::from(0), res.unwrap().surplus);
+        assert_eq!(Some(U256::from(0)), res.unwrap().surplus);
     }
 
     #[test]
@@ -365,6 +365,6 @@ pub mod tests {
         ];
         let mut solver = NaiveSolver{};
         let res = solver.find_prices(&orders, &state);
-        assert_eq!(U256::from(0), res.unwrap().surplus);
+        assert_eq!(Some(U256::from(0)), res.unwrap().surplus);
     }
 }

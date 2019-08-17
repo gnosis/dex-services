@@ -1,39 +1,13 @@
 use dfusion_core::models;
 
 use super::error::PriceFindingError;
-use std::iter::once;
-use web3::types::U256;
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Solution {
-    pub surplus: U256,
-    pub prices: Vec<u128>,
-    pub executed_sell_amounts: Vec<u128>,
-    pub executed_buy_amounts: Vec<u128>,
-}
-
-impl models::Serializable for Solution {
-    fn bytes(&self) -> Vec<u8> {
-        let alternating_buy_sell_amounts: Vec<u128> = self.executed_buy_amounts
-            .iter()
-            .zip(self.executed_sell_amounts.iter())
-            .flat_map(|tup| once(tup.0).chain(once(tup.1)))
-            .cloned()
-            .collect();
-        [&self.prices, &alternating_buy_sell_amounts]
-            .iter()
-            .flat_map(|list| list.iter())
-            .flat_map(models::Serializable::bytes)
-            .collect()
-    }
-}
 
 pub trait PriceFinding {
     fn find_prices(
         &mut self, 
         orders: &[models::Order],
         state: &models::AccountState
-    ) -> Result<Solution, PriceFindingError>;
+    ) -> Result<models::Solution, PriceFindingError>;
 }
 
 #[cfg(test)]
@@ -43,10 +17,11 @@ pub mod tests {
     use super::*;
     use dfusion_core::models::Serializable;
     use mock_it::Mock;
+    use web3::types::U256;
     use super::super::error::ErrorKind;
 
     pub struct PriceFindingMock {
-        pub find_prices: Mock<(Vec<models::Order>, models::AccountState), Result<Solution, PriceFindingError>>,
+        pub find_prices: Mock<(Vec<models::Order>, models::AccountState), Result<models::Solution, PriceFindingError>>,
     }
 
     impl PriceFindingMock {
@@ -62,15 +37,15 @@ pub mod tests {
             &mut self, 
             orders: &[models::Order],
             state: &models::AccountState
-        ) -> Result<Solution, PriceFindingError> {
+        ) -> Result<models::Solution, PriceFindingError> {
             self.find_prices.called((orders.to_vec(), state.to_owned()))
         }
     }
 
     #[test]
     fn test_serialize_solution() {
-        let solution = Solution {
-            surplus: U256::zero(),
+        let solution = models::Solution {
+            surplus: Some(U256::zero()),
             prices: vec![1,2],
             executed_sell_amounts: vec![3, 4],
             executed_buy_amounts: vec![5, 6],

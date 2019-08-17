@@ -2,6 +2,7 @@ pub mod account_state;
 pub mod auction_results;
 pub mod flux;
 pub mod order;
+pub mod solution;
 pub mod standing_order;
 pub mod util;
 
@@ -9,6 +10,7 @@ pub use crate::models::account_state::AccountState;
 pub use crate::models::auction_results::AuctionResults;
 pub use crate::models::flux::PendingFlux;
 pub use crate::models::order::Order;
+pub use crate::models::solution::Solution;
 pub use crate::models::standing_order::StandingOrder;
 pub use crate::models::order::BatchInformation;
 
@@ -36,6 +38,10 @@ pub trait RootHashable {
 
 pub trait Serializable {
     fn bytes(&self) -> Vec<u8>;
+}
+
+pub trait Deserializable {
+    fn from_bytes(bytes: Vec<u8>) -> Self;
 }
 
 fn merkleize(leafs: Vec<Vec<u8>>) -> H256 {
