@@ -7,7 +7,7 @@ use graph::components::store::{EntityFilter, EntityQuery, EntityRange, EntityOrd
 use graph::data::store::{ValueType};
 
 use graph_node_reader::StoreReader;
-use crate::models::{NUM_RESERVED_ACCOUNTS, StandingOrder};
+use crate::models::StandingOrder;
 
 pub struct GraphReader {
     reader: Box<StoreReader>
@@ -107,7 +107,7 @@ impl DbInterface for GraphReader {
         auction_id: &U256,
     ) -> Result<[models::StandingOrder; models::NUM_RESERVED_ACCOUNTS], DatabaseError> {
         let mut result = StandingOrder::empty_array();
-        for reserved_account_id in 0..NUM_RESERVED_ACCOUNTS {
+        for (reserved_account_id, item) in result.iter_mut().enumerate() {
             let standing_order_query = EntityQuery {
                 subgraph_id: SUBGRAPH_ID.clone(),
                 entity_types: vec!["StandingSellOrderBatch".to_string()],
@@ -130,18 +130,15 @@ impl DbInterface for GraphReader {
                 .find_one(standing_order_query)
                 .map_err(|e| DatabaseError::chain(ErrorKind::ConnectionError, "Could not execute query", e))?;
 
-            match standing_order_option {
-                Some(standing_order) => {
-                    let order_ids = standing_order.get("orders")
+            if let Some(standing_order) = standing_order_option {
+                let order_ids = standing_order.get("orders")
                         .and_then(|orders| orders.clone().as_list())
                         .ok_or_else(|| DatabaseError::new(ErrorKind::StateError, "No list orders found on standing order entity"))?;
                     let relevant_order_query = entity_query("SellOrder", EntityFilter::In("id".to_string(), order_ids));
                     let order_entities = self.reader
                         .find(relevant_order_query)
                         .map_err(|e| DatabaseError::chain(ErrorKind::ConnectionError, "Could not execute query", e))?;
-                    result[reserved_account_id] = StandingOrder::from((standing_order, order_entities));
-                },
-                None => (),
+                    *item = StandingOrder::from((standing_order, order_entities));
             }
        }
        Ok(result)
