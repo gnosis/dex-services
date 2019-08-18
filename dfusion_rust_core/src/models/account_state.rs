@@ -30,10 +30,12 @@ impl AccountState {
     }
     pub fn increment_balance(&mut self, token_id: u8, account_id: u16, amount: u128) {
         let index = self.balance_index(token_id, account_id);
+        debug!("Incrementing account {} balance of token {} by {}", account_id, token_id, amount);
         self.balances[index] += amount;
     }
     pub fn decrement_balance(&mut self, token_id: u8, account_id: u16, amount: u128) {
         let index = self.balance_index(token_id, account_id);
+        debug!("Decrementing account {} balance of token {} by {}", account_id, token_id, amount);
         self.balances[index] -= amount;
     }
     pub fn accounts(&self) -> u16 {
@@ -75,12 +77,9 @@ impl AccountState {
         // Should we assert that orders.len = results.executed amounts.len?
 
         for (i, order) in orders.iter().enumerate() {
-            info!("Executing order {:?}", order);
-            info!("Execution amounts buy {} - sell {}", buy_amounts[i], sell_amounts[i]);
             self.increment_balance(order.buy_token, order.account_id, buy_amounts[i]);
             self.decrement_balance(order.sell_token, order.account_id, sell_amounts[i]);
         }
-        // TODO - move the following 2 lines to own function.
         self.state_index = self.state_index.saturating_add(U256::one());
         self.state_hash = self.rolling_hash(self.state_index.low_u32());
     }

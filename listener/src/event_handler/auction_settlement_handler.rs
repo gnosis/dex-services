@@ -65,6 +65,7 @@ impl EventHandler for AuctionSettlementHandler {
 
         info!(logger, "Parsing packed Auction Results from {} bytes: {:?}", encoded_solution.len(), encoded_solution);
         let auction_results = Solution::from_bytes(encoded_solution);
+        debug!(logger, "Parsed Auction Results: {:?}", auction_results);
 
         // Fetch relevant information for transition (accounts, orders, parsed solution)
         let mut account_state = self.store
@@ -85,7 +86,6 @@ impl EventHandler for AuctionSettlementHandler {
             .flat_map(|standing_order| standing_order.get_orders().clone())
         );
         info!(logger, "Found {} valid Orders for this auction", orders.len());
-
         account_state.apply_auction(&orders, auction_results);
 
         let mut entity: Entity = account_state.into();
@@ -101,68 +101,111 @@ impl EventHandler for AuctionSettlementHandler {
     }
 }
 
-//#[cfg(test)]
-//pub mod unit_test {
-//    use super::*;
-//    use dfusion_core::database::tests::DbInterfaceMock;
-//    use dfusion_core::models::{AccountState, TOKENS};
-//    use graph::bigdecimal::BigDecimal;
-//    use web3::types::{H256, Bytes};
-//    use std::str::FromStr;
-//
-//    #[test]
-//    fn test_from_log() {
-//        let mut bytes: Vec<Vec<u8>> = vec![];
-//        let mut expected_prices: Vec<u128> = vec![];
-//        // Load token prices.
-//        for i in 0..TOKENS {
-//            bytes.push(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, i]);
-//            expected_prices.push(i as u128);
-//        }
-//
-//        bytes.push(
-//            /* buy_amount_1 */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
-//        );
-//        bytes.push(
-//            /* sell_amount_1 */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
-//        );
-//        bytes.push(
-//            /* buy_amount_2 */ vec![0; 32]
-//        );
-//        bytes.push(
-//            /* sell_amount_2 */ vec![0; 32]
-//        );
-//
-//        let test_data: Vec<u8> = bytes.iter().flat_map(|i| i.iter()).cloned().collect();
-//
-//        let log = Arc::new(Log {
-//            address: 1.into(),
-//            topics: vec![],
-//            data: Bytes(bytes.iter().flat_map(|i| i.iter()).cloned().collect()),
-//            block_hash: Some(2.into()),
-//            block_number: Some(1.into()),
-//            transaction_hash: Some(3.into()),
-//            transaction_index: Some(0.into()),
-//            log_index: Some(0.into()),
-//            transaction_log_index: Some(0.into()),
-//            log_type: None,
-//            removed: None,
-//        });
-//
-//        let store = Arc::new(DbInterfaceMock::new());
-//
-//        // Add previous account state and pending deposits into Store
-//        let existing_state = AccountState::new(H256::zero(), U256::zero(), vec![0, 0, 0, 0], 1);
-//        store.get_balances_for_state_index
-//            .given(U256::zero())
-//            .will_return(Ok(existing_state));
-//
-//        let res = Solution::from_bytes(test_data);
-//
-//        let expected_buy_amounts: Vec<u128> = vec![3, 4311810048];
-//        let expected_sell_amounts: Vec<u128> = vec![2, 340282366920938463463374607431768211455];
-//
-//
-//        assert_eq!(expected_flux, PendingFlux::from(log));
-//    }
-//}
+#[cfg(test)]
+pub mod unit_test {
+    use super::*;
+    use dfusion_core::database::tests::DbInterfaceMock;
+    use dfusion_core::models::{AccountState, TOKENS, Order, BatchInformation, StandingOrder};
+    use web3::types::{Bytes, H256, U256};
+
+    #[test]
+    fn test_from_log() {
+        let store = Arc::new(DbInterfaceMock::new());
+
+        // Add previous account state and pending deposits into Store
+        let existing_state = AccountState::new(
+            H256::zero(),
+            U256::from(0),
+            vec![2, 0, 0, 0],
+            TOKENS,
+        );
+        store.get_balances_for_state_index
+            .given(U256::zero())
+            .will_return(Ok(existing_state));
+
+
+        let order = Order {
+            batch_information: Some(
+                BatchInformation { slot: U256::zero(), slot_index: 0 }
+            ),
+            account_id: 0,
+            buy_token: 1,
+            sell_token: 0,
+            buy_amount: 1,
+            sell_amount: 1,
+        };
+
+        store.get_orders_of_slot
+            .given(U256::zero())
+            .will_return(Ok(vec![order]));
+
+        store.get_standing_orders_of_slot
+            .given(U256::zero())
+            .will_return(Ok(StandingOrder::empty_array()));
+
+        // Process event
+        let handler = AuctionSettlementHandler::new(store);
+        let log = create_auction_settlement_event(
+            0,
+            1,
+            H256::from(1),
+        );
+
+        let result = handler.process_event(
+            util::test::logger(),
+            Arc::new(util::test::fake_block()),
+            Arc::new(util::test::fake_tx()),
+            log,
+        );
+
+        assert!(result.is_ok());
+        let expected_new_state = AccountState::new(
+            H256::from(1),
+            U256::from(1),
+            vec![0, 1, 0, 0],
+            TOKENS,
+        );
+        match result.unwrap().pop().unwrap() {
+            EntityOperation::Set { key: _, data } => assert_eq!(AccountState::from(data), expected_new_state),
+            _ => assert!(false)
+        }
+    }
+
+    fn create_auction_settlement_event(
+        auction_id: u8,
+        new_state_index: u8,
+        new_state_root: H256,
+    ) -> Arc<Log> {
+        let mut bytes: Vec<Vec<u8>> = vec![
+            /* auction_id */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, auction_id],
+            /* new_state_index */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, new_state_index],
+            /* new_state_hash */ new_state_root[..].to_vec(),
+            /* byte_init */ vec![0; 32],
+            /* byte_length */ vec![0; 32],
+        ];
+
+        for _i in 0..TOKENS {
+            bytes.push(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        }
+        bytes.push(
+            /* executed_buy_amount_1 */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+        );
+        bytes.push(
+            /* executed_sell_amount_1 */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2]
+        );
+
+        Arc::new(Log {
+            address: 1.into(),
+            topics: vec![],
+            data: Bytes(bytes.iter().flat_map(|i| i.iter()).cloned().collect()),
+            block_hash: Some(2.into()),
+            block_number: Some(1.into()),
+            transaction_hash: Some(3.into()),
+            transaction_index: Some(0.into()),
+            log_index: Some(0.into()),
+            transaction_log_index: Some(0.into()),
+            log_type: None,
+            removed: None,
+        })
+    }
+}
