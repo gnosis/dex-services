@@ -30,7 +30,7 @@ step "Place 6 orders in current Auction" \
  npx truffle exec scripts/sell_order.js 4 1 0 4 52  && \
  npx truffle exec scripts/sell_order.js 5 2 0 20 280"
 
-step_with_retry "[theGraph]: SellOrder was added to graph db - accountId 5's sellOrder === 280" \
+step_with_retry "[theGraph] SellOrder was added to graph db - accountId 5's sellOrder === 280" \
 "source ../test/utils.sh && query_graphql \
     \"query { \
         sellOrders(where: { accountId: 5}) { \
@@ -55,4 +55,20 @@ step_with_retry "Account 4 has now 4 of token 1" \
 "mongo dfusion2 --eval \"db.accounts.findOne({'stateHash': '$EXPECTED_HASH'}).balances[121]\" | grep -w 4000000000000000000"
 
 step_with_retry "Account 3 has now 52 of token 0" \
-"mongo dfusion2 --eval \"db.accounts.findOne({'stateHash': '$EXPECTED_HASH'}).balances[90]\" | grep -2 52000000000000000000"
+"mongo dfusion2 --eval \"db.accounts.findOne({'stateHash': '$EXPECTED_HASH'}).balances[90]\" | grep -w 52000000000000000000"
+
+step_with_retry "[theGraph] Account 4 has now 4 of token 1" \
+"source ../test/utils.sh && query_graphql \
+    \"query { \
+        accountStates(where: {id: \\\"${EXPECTED_HASH}\\\"}) {\
+            balances \
+        } \
+    }\" | jq .data.accountStates[0].balances[121] | grep -w 4000000000000000000"
+
+step_with_retry "[theGraph] Account 3 has now 52 of token 0" \
+"source ../test/utils.sh && query_graphql \
+    \"query { \
+        accountStates(where: {id: \\\"${EXPECTED_HASH}\\\"}) {\
+            balances \
+        } \
+    }\" | jq .data.accountStates[0].balances[90] | grep -w 52000000000000000000"
