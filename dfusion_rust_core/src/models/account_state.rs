@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use web3::types::{H256, U256, Log};
 
-use crate::models::{TOKENS, RollingHashable, PendingFlux, AuctionResults, Order};
+use crate::models::{TOKENS, RollingHashable, PendingFlux, Order, Solution};
 
 use super::util::*;
 
@@ -67,16 +67,18 @@ impl AccountState {
         valid_withdraws
     }
 
-    pub fn apply_auction(&mut self, orders: &[Order], results: AuctionResults) {
-        let executed_buy_amounts = results.buy_amounts;
-        let executed_sell_amounts = results.sell_amounts;
+    pub fn apply_auction(&mut self, orders: &[Order], results: Solution) {
+        let buy_amounts = results.executed_buy_amounts;
+        let sell_amounts = results.executed_sell_amounts;
 
         // Should we assert that each order has the same slot index?
         // Should we assert that orders.len = results.executed amounts.len?
 
         for (i, order) in orders.iter().enumerate() {
-            self.increment_balance(order.buy_token, order.account_id, executed_buy_amounts[i]);
-            self.decrement_balance(order.sell_token, order.account_id, executed_sell_amounts[i]);
+            info!("Executing order {:?}", order);
+            info!("Execution amounts buy {} - sell {}", buy_amounts[i], sell_amounts[i]);
+            self.increment_balance(order.buy_token, order.account_id, buy_amounts[i]);
+            self.decrement_balance(order.sell_token, order.account_id, sell_amounts[i]);
         }
         // TODO - move the following 2 lines to own function.
         self.state_index = self.state_index.saturating_add(U256::one());
@@ -285,10 +287,11 @@ pub mod tests {
             sell_amount: 1
         };
 
-        let results = AuctionResults {
+        let results = Solution {
+            surplus: None,
             prices: vec![1, 1],
-            sell_amounts: vec![1, 1],
-            buy_amounts: vec![1, 1],
+            executed_buy_amounts: vec![1, 1],
+            executed_sell_amounts: vec![1, 1],
         };
 
         state.apply_auction(&[order_1, order_2], results);

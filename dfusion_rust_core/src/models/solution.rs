@@ -7,8 +7,8 @@ use std::iter::once;
 pub struct Solution {
     pub surplus: Option<U256>,
     pub prices: Vec<u128>,
-    pub executed_sell_amounts: Vec<u128>,
     pub executed_buy_amounts: Vec<u128>,
+    pub executed_sell_amounts: Vec<u128>,
 }
 
 impl Solution {
@@ -16,8 +16,8 @@ impl Solution {
         Solution {
             surplus: Some(U256::zero()),
             prices: vec![0; TOKENS as usize],
-            executed_sell_amounts: vec![0; num_orders],
             executed_buy_amounts: vec![0; num_orders],
+            executed_sell_amounts: vec![0; num_orders],
         }
     }
 }
@@ -49,9 +49,10 @@ impl Deserializable for Solution {
                 )
             })
             .collect();
+        info!("Recovered prices as: {:?}", prices);
 
-        let mut executed_sell_amounts: Vec<u128> = vec![];
         let mut executed_buy_amounts: Vec<u128> = vec![];
+        let mut executed_sell_amounts: Vec<u128> = vec![];
         volumes.chunks_exact(2 * 12)
             .for_each(|chunk| {
                 executed_buy_amounts.push(util::read_amount(
@@ -64,8 +65,8 @@ impl Deserializable for Solution {
         Solution {
             surplus: None,
             prices,
-            executed_sell_amounts,
             executed_buy_amounts,
+            executed_sell_amounts,
         }
     }
 }
@@ -79,8 +80,8 @@ pub mod unit_test {
         let solution = Solution {
             surplus: None,
             prices: vec![42; TOKENS as usize],
-            executed_sell_amounts: vec![1, 2, 3],
             executed_buy_amounts: vec![4, 5, 6],
+            executed_sell_amounts: vec![1, 2, 3],
         };
 
         let bytes = solution.bytes();
@@ -96,8 +97,8 @@ pub mod unit_test {
         let expected = Solution {
             surplus: None,
             prices: vec![1, 10u128.pow(18), 10u128.pow(18), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            executed_sell_amounts: vec![10u128.pow(18), 10u128.pow(18)],
             executed_buy_amounts: vec![10u128.pow(18), 10u128.pow(18)],
+            executed_sell_amounts: vec![10u128.pow(18), 10u128.pow(18)],
         };
         assert_eq!(parsed_solution, expected);
     }
