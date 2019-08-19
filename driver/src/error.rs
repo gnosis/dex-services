@@ -1,6 +1,6 @@
+use ethabi;
 use std::error::Error;
 use std::fmt;
-use ethabi;
 
 use dfusion_core::database::DatabaseError;
 
@@ -83,7 +83,10 @@ impl From<DatabaseError> for DriverError {
 
 impl DriverError {
     pub fn new(msg: &str, kind: ErrorKind) -> DriverError {
-        DriverError{details: msg.to_string(), kind}
+        DriverError {
+            details: msg.to_string(),
+            kind,
+        }
     }
 }
 impl fmt::Display for DriverError {

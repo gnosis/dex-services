@@ -1,26 +1,27 @@
 use crate::contract::SnappContract;
 use crate::error::DriverError;
-use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check};
+use crate::util::{can_process, find_first_unapplied_slot, hash_consistency_check};
 
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::{RollingHashable, RootHashable};
 
 pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), DriverError>
-    where D: DbInterface,
-          C: SnappContract
+where
+    D: DbInterface,
+    C: SnappContract,
 {
     let withdraw_slot = contract.get_current_withdraw_slot()?;
 
     info!("Current top withdraw_slot is {:?}", withdraw_slot);
-    let slot = find_first_unapplied_slot(
-        withdraw_slot,
-        &|i| contract.has_withdraw_slot_been_applied(i),
-    )?;
+    let slot = find_first_unapplied_slot(withdraw_slot, &|i| {
+        contract.has_withdraw_slot_been_applied(i)
+    })?;
     if slot <= withdraw_slot {
         info!("Highest unprocessed withdraw_slot is {:?}", slot);
-        if can_process(slot, contract,
-                       &|i| contract.creation_timestamp_for_withdraw_slot(i),
-        )? {
+        let creation_time_block = |i| {
+            contract.creation_timestamp_for_withdraw_slot(i)
+        };
+        if can_process(slot, contract, &creation_time_block)? {
             info!("Processing withdraw_slot {:?}", slot);
             let state_root = contract.get_current_state_root()?;
             let contract_withdraw_hash = contract.withdraw_hash_for_slot(slot)?;
@@ -35,10 +36,15 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
 
             info!(
                 "New AccountState hash is {}, Valid Withdraw Merkle Root is {}",
-                balances.state_hash,
-                withdrawal_merkle_root
+                balances.state_hash, withdrawal_merkle_root
             );
-            contract.apply_withdraws(slot, withdrawal_merkle_root, state_root, balances.state_hash, contract_withdraw_hash)?;
+            contract.apply_withdraws(
+                slot,
+                withdrawal_merkle_root,
+                state_root,
+                balances.state_hash,
+                contract_withdraw_hash,
+            )?;
             return Ok(true);
         } else {
             info!("Need to wait before processing withdraw_slot {:?}", slot);
@@ -51,12 +57,12 @@ pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Drive
 mod tests {
     use super::*;
     use crate::contract::tests::SnappContractMock;
+    use crate::error::ErrorKind;
     use dfusion_core::database::tests::DbInterfaceMock;
     use dfusion_core::models::flux::tests::create_flux_for_test;
     use dfusion_core::models::{AccountState, PendingFlux, TOKENS};
     use mock_it::Matcher::*;
     use web3::types::{H256, U256};
-    use crate::error::ErrorKind;
 
     #[test]
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
@@ -71,18 +77,46 @@ mod tests {
         );
 
         let contract = SnappContractMock::new();
-        contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
-        contract.has_withdraw_slot_been_applied.given(slot).will_return(Ok(false));
-        contract.has_withdraw_slot_been_applied.given(slot - 1).will_return(Ok(true));
-        contract.creation_timestamp_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
-        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
-        contract.withdraw_hash_for_slot.given(slot).will_return(Ok(withdraws.rolling_hash(0)));
-        contract.get_current_state_root.given(()).will_return(Ok(state_hash));
-        contract.apply_withdraws.given((slot, Any, Any, Any, Any)).will_return(Ok(()));
+        contract
+            .get_current_withdraw_slot
+            .given(())
+            .will_return(Ok(slot));
+        contract
+            .has_withdraw_slot_been_applied
+            .given(slot)
+            .will_return(Ok(false));
+        contract
+            .has_withdraw_slot_been_applied
+            .given(slot - 1)
+            .will_return(Ok(true));
+        contract
+            .creation_timestamp_for_withdraw_slot
+            .given(slot)
+            .will_return(Ok(U256::from(10)));
+        contract
+            .get_current_block_timestamp
+            .given(())
+            .will_return(Ok(U256::from(200)));
+        contract
+            .withdraw_hash_for_slot
+            .given(slot)
+            .will_return(Ok(withdraws.rolling_hash(0)));
+        contract
+            .get_current_state_root
+            .given(())
+            .will_return(Ok(state_hash));
+        contract
+            .apply_withdraws
+            .given((slot, Any, Any, Any, Any))
+            .will_return(Ok(()));
 
         let db = DbInterfaceMock::new();
-        db.get_withdraws_of_slot.given(U256::one()).will_return(Ok(withdraws));
-        db.get_balances_for_state_root.given(state_hash).will_return(Ok(state));
+        db.get_withdraws_of_slot
+            .given(U256::one())
+            .will_return(Ok(withdraws));
+        db.get_balances_for_state_root
+            .given(state_hash)
+            .will_return(Ok(state));
 
         assert_eq!(run_withdraw_listener(&db, &contract), Ok(true));
     }
@@ -91,8 +125,14 @@ mod tests {
     fn does_not_apply_if_highest_slot_already_applied() {
         let slot = U256::from(1);
         let contract = SnappContractMock::new();
-        contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
-        contract.has_withdraw_slot_been_applied.given(slot).will_return(Ok(true));
+        contract
+            .get_current_withdraw_slot
+            .given(())
+            .will_return(Ok(slot));
+        contract
+            .has_withdraw_slot_been_applied
+            .given(slot)
+            .will_return(Ok(true));
 
         let db = DbInterfaceMock::new();
         assert_eq!(run_withdraw_listener(&db, &contract), Ok(false));
@@ -102,12 +142,27 @@ mod tests {
     fn does_not_apply_if_highest_slot_too_close_to_current_block() {
         let slot = U256::from(1);
         let contract = SnappContractMock::new();
-        contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
-        contract.has_withdraw_slot_been_applied.given(slot).will_return(Ok(false));
-        contract.has_withdraw_slot_been_applied.given(slot - 1).will_return(Ok(true));
+        contract
+            .get_current_withdraw_slot
+            .given(())
+            .will_return(Ok(slot));
+        contract
+            .has_withdraw_slot_been_applied
+            .given(slot)
+            .will_return(Ok(false));
+        contract
+            .has_withdraw_slot_been_applied
+            .given(slot - 1)
+            .will_return(Ok(true));
 
-        contract.creation_timestamp_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
-        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(11)));
+        contract
+            .creation_timestamp_for_withdraw_slot
+            .given(slot)
+            .will_return(Ok(U256::from(10)));
+        contract
+            .get_current_block_timestamp
+            .given(())
+            .will_return(Ok(U256::from(11)));
 
         let db = DbInterfaceMock::new();
         assert_eq!(run_withdraw_listener(&db, &contract), Ok(false));
@@ -121,18 +176,42 @@ mod tests {
         let second_withdraws = vec![create_flux_for_test(1, 1), create_flux_for_test(1, 2)];
 
         let contract = SnappContractMock::new();
-        contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
+        contract
+            .get_current_withdraw_slot
+            .given(())
+            .will_return(Ok(slot));
 
-        contract.has_withdraw_slot_been_applied.given(slot).will_return(Ok(false));
-        contract.has_withdraw_slot_been_applied.given(slot - 1).will_return(Ok(false));
+        contract
+            .has_withdraw_slot_been_applied
+            .given(slot)
+            .will_return(Ok(false));
+        contract
+            .has_withdraw_slot_been_applied
+            .given(slot - 1)
+            .will_return(Ok(false));
 
-        contract.creation_timestamp_for_withdraw_slot.given(slot - 1).will_return(Ok(U256::from(10)));
+        contract
+            .creation_timestamp_for_withdraw_slot
+            .given(slot - 1)
+            .will_return(Ok(U256::from(10)));
 
-        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
-        contract.withdraw_hash_for_slot.given(slot - 1).will_return(Ok(second_withdraws.rolling_hash(0)));
+        contract
+            .get_current_block_timestamp
+            .given(())
+            .will_return(Ok(U256::from(200)));
+        contract
+            .withdraw_hash_for_slot
+            .given(slot - 1)
+            .will_return(Ok(second_withdraws.rolling_hash(0)));
 
-        contract.get_current_state_root.given(()).will_return(Ok(state_hash));
-        contract.apply_withdraws.given((slot - 1, Any, Any, Any, Any)).will_return(Ok(()));
+        contract
+            .get_current_state_root
+            .given(())
+            .will_return(Ok(state_hash));
+        contract
+            .apply_withdraws
+            .given((slot - 1, Any, Any, Any, Any))
+            .will_return(Ok(()));
 
         let state = AccountState::new(
             state_hash,
@@ -142,8 +221,12 @@ mod tests {
         );
 
         let db = DbInterfaceMock::new();
-        db.get_withdraws_of_slot.given(U256::zero()).will_return(Ok(first_withdraws));
-        db.get_balances_for_state_root.given(state_hash).will_return(Ok(state));
+        db.get_withdraws_of_slot
+            .given(U256::zero())
+            .will_return(Ok(first_withdraws));
+        db.get_balances_for_state_root
+            .given(state_hash)
+            .will_return(Ok(state));
 
         assert_eq!(run_withdraw_listener(&db, &contract), Ok(true));
         assert_eq!(run_withdraw_listener(&db, &contract), Ok(true));
@@ -164,19 +247,44 @@ mod tests {
         );
 
         let contract = SnappContractMock::new();
-        contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
-        contract.has_withdraw_slot_been_applied.given(slot).will_return(Ok(false));
-        contract.has_withdraw_slot_been_applied.given(slot - 1).will_return(Ok(true));
+        contract
+            .get_current_withdraw_slot
+            .given(())
+            .will_return(Ok(slot));
+        contract
+            .has_withdraw_slot_been_applied
+            .given(slot)
+            .will_return(Ok(false));
+        contract
+            .has_withdraw_slot_been_applied
+            .given(slot - 1)
+            .will_return(Ok(true));
 
-        contract.creation_timestamp_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
-        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
+        contract
+            .creation_timestamp_for_withdraw_slot
+            .given(slot)
+            .will_return(Ok(U256::from(10)));
+        contract
+            .get_current_block_timestamp
+            .given(())
+            .will_return(Ok(U256::from(200)));
 
-        contract.withdraw_hash_for_slot.given(slot).will_return(Ok(H256::zero()));
-        contract.get_current_state_root.given(()).will_return(Ok(state_hash));
+        contract
+            .withdraw_hash_for_slot
+            .given(slot)
+            .will_return(Ok(H256::zero()));
+        contract
+            .get_current_state_root
+            .given(())
+            .will_return(Ok(state_hash));
 
         let db = DbInterfaceMock::new();
-        db.get_withdraws_of_slot.given(U256::one()).will_return(Ok(withdraws));
-        db.get_balances_for_state_root.given(state_hash).will_return(Ok(state));
+        db.get_withdraws_of_slot
+            .given(U256::one())
+            .will_return(Ok(withdraws));
+        db.get_balances_for_state_root
+            .given(state_hash)
+            .will_return(Ok(state));
 
         let error = run_withdraw_listener(&db, &contract).expect_err("Expected Error");
         assert_eq!(error.kind, ErrorKind::StateError);
@@ -186,13 +294,16 @@ mod tests {
     fn skips_invalid_balances_in_applied_merkle_tree() {
         let slot = U256::from(1);
         let state_hash = H256::zero();
-        let withdraws = vec![create_flux_for_test(1, 1), PendingFlux {
-            slot_index: 2,
-            slot: U256::one(),
-            account_id: 0,
-            token_id: 1,
-            amount: 10,
-        }];
+        let withdraws = vec![
+            create_flux_for_test(1, 1),
+            PendingFlux {
+                slot_index: 2,
+                slot: U256::one(),
+                account_id: 0,
+                token_id: 1,
+                amount: 10,
+            },
+        ];
         let mut state = AccountState::new(
             state_hash,
             U256::one(),
@@ -204,18 +315,46 @@ mod tests {
         let merkle_root = withdraws.root_hash(&vec![true, false]);
 
         let contract = SnappContractMock::new();
-        contract.get_current_withdraw_slot.given(()).will_return(Ok(slot));
-        contract.has_withdraw_slot_been_applied.given(slot).will_return(Ok(false));
-        contract.has_withdraw_slot_been_applied.given(slot - 1).will_return(Ok(true));
-        contract.creation_timestamp_for_withdraw_slot.given(slot).will_return(Ok(U256::from(10)));
-        contract.get_current_block_timestamp.given(()).will_return(Ok(U256::from(200)));
-        contract.withdraw_hash_for_slot.given(slot).will_return(Ok(withdraws.rolling_hash(0)));
-        contract.get_current_state_root.given(()).will_return(Ok(state_hash));
-        contract.apply_withdraws.given((slot, Val(merkle_root), Any, Any, Any)).will_return(Ok(()));
+        contract
+            .get_current_withdraw_slot
+            .given(())
+            .will_return(Ok(slot));
+        contract
+            .has_withdraw_slot_been_applied
+            .given(slot)
+            .will_return(Ok(false));
+        contract
+            .has_withdraw_slot_been_applied
+            .given(slot - 1)
+            .will_return(Ok(true));
+        contract
+            .creation_timestamp_for_withdraw_slot
+            .given(slot)
+            .will_return(Ok(U256::from(10)));
+        contract
+            .get_current_block_timestamp
+            .given(())
+            .will_return(Ok(U256::from(200)));
+        contract
+            .withdraw_hash_for_slot
+            .given(slot)
+            .will_return(Ok(withdraws.rolling_hash(0)));
+        contract
+            .get_current_state_root
+            .given(())
+            .will_return(Ok(state_hash));
+        contract
+            .apply_withdraws
+            .given((slot, Val(merkle_root), Any, Any, Any))
+            .will_return(Ok(()));
 
         let db = DbInterfaceMock::new();
-        db.get_withdraws_of_slot.given(U256::one()).will_return(Ok(withdraws));
-        db.get_balances_for_state_root.given(state_hash).will_return(Ok(state));
+        db.get_withdraws_of_slot
+            .given(U256::one())
+            .will_return(Ok(withdraws));
+        db.get_balances_for_state_root
+            .given(state_hash)
+            .will_return(Ok(state));
 
         assert_eq!(run_withdraw_listener(&db, &contract), Ok(true));
     }

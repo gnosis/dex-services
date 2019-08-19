@@ -1,12 +1,12 @@
 #[cfg(test)]
 extern crate mock_it;
 
+use dfusion_core::database::{DatabaseError, DbInterface, ErrorKind::*};
 use dfusion_core::models;
-use dfusion_core::database::{DbInterface, DatabaseError, ErrorKind::*};
 
-use mongodb::{bson, doc};
-use mongodb::ordered::OrderedDocument;
 use mongodb::db::ThreadedDatabase;
+use mongodb::ordered::OrderedDocument;
+use mongodb::{bson, doc};
 use mongodb::{Client, ThreadedClient};
 
 use web3::types::{H256, U256};
@@ -19,16 +19,12 @@ impl MongoDB {
     pub fn new(db_host: String, db_port: String) -> Result<MongoDB, DatabaseError> {
         let port = db_port
             .parse::<u16>()
-            .map_err(
-                |e| DatabaseError::chain(ConfigurationError, "Couldn't parse port", e)
-            )?;
+            .map_err(|e| DatabaseError::chain(ConfigurationError, "Couldn't parse port", e))?;
 
         // Connect is being picked up from a trait which isn't in scope (NetworkConnector)
         // https://github.com/intellij-rust/intellij-rust/issues/3654
         let client = Client::connect(&db_host, port)
-            .map_err(
-                |e| DatabaseError::chain(ConnectionError, "Error connecting client", e)
-            )?;
+            .map_err(|e| DatabaseError::chain(ConnectionError, "Error connecting client", e))?;
         Ok(MongoDB { client })
     }
 
@@ -40,15 +36,13 @@ impl MongoDB {
         info!("Querying {}: {}", collection, query);
 
         let coll = self.client.db(models::DB_NAME).collection(collection);
-        let cursor = coll.find(Some(query), None)
-            .map_err(
-                |e| DatabaseError::chain(ConnectionError, "Failed to find items", e)
-            )?;
-        let mut docs = vec!();
+        let cursor = coll
+            .find(Some(query), None)
+            .map_err(|e| DatabaseError::chain(ConnectionError, "Failed to find items", e))?;
+        let mut docs = vec![];
         for result in cursor {
-            let result = result.map_err(
-                |e| DatabaseError::chain(ConnectionError, "Cursor Error", e)
-            )?;
+            let result =
+                result.map_err(|e| DatabaseError::chain(ConnectionError, "Cursor Error", e))?;
             docs.push(I::from(result));
         }
         docs.sort();
@@ -60,21 +54,23 @@ impl MongoDB {
         query: mongodb::Document,
     ) -> Result<models::AccountState, DatabaseError> {
         let coll = self.client.db(models::DB_NAME).collection("accounts");
-        let cursor = coll.find(Some(query), None)
-            .map_err(
-                |e| DatabaseError::chain(ConnectionError, "get_balances failed to find items", e)
-            )?;
-        let mut docs: Vec<OrderedDocument> = vec!();
+        let cursor = coll.find(Some(query), None).map_err(|e| {
+            DatabaseError::chain(ConnectionError, "get_balances failed to find items", e)
+        })?;
+        let mut docs: Vec<OrderedDocument> = vec![];
         for result in cursor {
-            let result = result.map_err(
-                |e| DatabaseError::chain(ConnectionError, "get_balances cursor Error", e)
-            )?;
+            let result = result.map_err(|e| {
+                DatabaseError::chain(ConnectionError, "get_balances cursor Error", e)
+            })?;
             docs.push(result);
         }
         if docs.is_empty() {
             return Err(DatabaseError::new(
                 StateError,
-                &format!("Expected to find a single unique account state, found {}", docs.len()),
+                &format!(
+                    "Expected to find a single unique account state, found {}",
+                    docs.len()
+                ),
             ));
         }
         Ok(models::AccountState::from(docs.pop().unwrap()))
@@ -86,7 +82,7 @@ impl DbInterface for MongoDB {
         &self,
         state_root: &H256,
     ) -> Result<models::AccountState, DatabaseError> {
-        let query = doc!{ "stateHash" => format!("{:x}", state_root) };
+        let query = doc! { "stateHash" => format!("{:x}", state_root) };
         info!("Querying stateHash: {}", query);
         self.get_balances_for_query(query)
     }
@@ -95,16 +91,13 @@ impl DbInterface for MongoDB {
         &self,
         state_index: &U256,
     ) -> Result<models::AccountState, DatabaseError> {
-        let query = doc!{ "stateIndex" => state_index.low_u64() };
+        let query = doc! { "stateIndex" => state_index.low_u64() };
         info!("Querying stateIndex: {}", query);
         self.get_balances_for_query(query)
     }
 
-    fn get_deposits_of_slot(
-        &self,
-        slot: &U256,
-    ) -> Result<Vec<models::PendingFlux>, DatabaseError> {
-        let query = doc!{ "slot" => slot.low_u64() };
+    fn get_deposits_of_slot(&self, slot: &U256) -> Result<Vec<models::PendingFlux>, DatabaseError> {
+        let query = doc! { "slot" => slot.low_u64() };
         self.get_items_from_query(query, "deposits")
     }
 
@@ -112,15 +105,12 @@ impl DbInterface for MongoDB {
         &self,
         slot: &U256,
     ) -> Result<Vec<models::PendingFlux>, DatabaseError> {
-        let query = doc!{ "slot" => slot.low_u64() };
+        let query = doc! { "slot" => slot.low_u64() };
         self.get_items_from_query(query, "withdraws")
     }
 
-    fn get_orders_of_slot(
-        &self,
-        slot: &U256,
-    ) -> Result<Vec<models::Order>, DatabaseError> {
-        let query = doc!{ "auctionId" => slot.low_u64() };
+    fn get_orders_of_slot(&self, slot: &U256) -> Result<Vec<models::Order>, DatabaseError> {
+        let query = doc! { "auctionId" => slot.low_u64() };
         self.get_items_from_query(query, "orders")
     }
     fn get_standing_orders_of_slot(
@@ -128,20 +118,20 @@ impl DbInterface for MongoDB {
         slot: &U256,
     ) -> Result<[models::StandingOrder; models::NUM_RESERVED_ACCOUNTS], DatabaseError> {
         let pipeline = vec![
-            doc!{
+            doc! {
                 "$match" => (doc!{
                     "validFromAuctionId" => (doc!{
                         "$lte" => slot.low_u64()
                     })
                 })
             },
-            doc!{
+            doc! {
                 "$sort" => (doc!{
                     "validFromAuctionId" => -1,
                     "_id" => -1
                 })
             },
-            doc!{
+            doc! {
                 "$group" => (doc!{
                     "_id" => "$accountId",
                     "orders" => (doc!{
@@ -154,19 +144,22 @@ impl DbInterface for MongoDB {
                         "$first" => "$batchIndex"
                     })
                 })
-            }
+            },
         ];
 
         info!("Querying standing_orders: {:?}", pipeline);
         let mut standing_orders = models::StandingOrder::empty_array();
-        let non_zero_standing_orders = self.client
+        let non_zero_standing_orders = self
+            .client
             .db(models::DB_NAME)
             .collection("standing_orders")
             .aggregate(pipeline, None)
             .map_err(|e| DatabaseError::chain(ConnectionError, "Failed to get standing orders", e))?
-            .map(|d| d.map(models::StandingOrder::from)
-                .map_err(|e| DatabaseError::chain(StateError, "Failed to parse standing order", e))
-            )
+            .map(|d| {
+                d.map(models::StandingOrder::from).map_err(|e| {
+                    DatabaseError::chain(StateError, "Failed to parse standing order", e)
+                })
+            })
             .collect::<Result<Vec<_>, _>>()?;
         non_zero_standing_orders.into_iter().for_each(|k| {
             let acc_id = k.account_id as usize;
