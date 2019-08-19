@@ -9,7 +9,13 @@ use dfusion_core::models::{
     StandingOrder,
 };
 
-use web3::types::U128;
+use web3::types::{U128, U256};
+
+use std::collections::HashMap;
+
+struct OrderListener {
+    auctionBids: HashMap<U256, Solution>,
+}
 
 pub fn run_order_listener<D, C>(
     db: &D,
@@ -27,10 +33,9 @@ where
         find_first_unapplied_slot(auction_slot, &|i| contract.has_auction_slot_been_applied(i))?;
     if slot <= auction_slot {
         info!("Highest unprocessed auction slot is {:?}", slot);
-        let creation_time_block = |i| {
+        if can_process(slot, contract, &|i| {
             contract.creation_timestamp_for_auction_slot(i)
-        };
-        if can_process(slot, contract, &creation_time_block)? {
+        })? {
             info!("Processing auction slot {:?}", slot);
             let state_root = contract.get_current_state_root()?;
             let non_reserved_orders_hash_from_contract = contract.order_hash_for_slot(slot)?;
@@ -89,14 +94,14 @@ where
                 new_state_root, solution
             );
 
-            contract.apply_auction(
+            contract.auction_solution_bid(
                 slot,
                 state_root,
                 new_state_root,
                 total_order_hash_from_contract,
                 standing_order_indexes,
-                solution.bytes(),
-            )?;
+                solution.surplus.unwrap_or(U256::zero()),
+            );
             return Ok(true);
         } else {
             info!("Need to wait before processing auction slot {:?}", slot);
@@ -392,7 +397,10 @@ mod tests {
             .get_current_state_root
             .given(())
             .will_return(Ok(state_hash));
+<<<<<<< HEAD
 
+=======
+>>>>>>> wip
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot
             .given(U256::one())
