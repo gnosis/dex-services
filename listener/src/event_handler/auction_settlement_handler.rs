@@ -56,7 +56,7 @@ impl EventHandler for AuctionSettlementHandler {
         let state_index = U256::pop_from_log_data(&mut event_data).saturating_sub(U256::one());
         let new_state_hash = H256::pop_from_log_data(&mut event_data);
 
-        // Strange info coming with packed bytes
+        // Meta-data coming from event attributes of type bytes (cf. Ethereum RLP Encoding)
         let _bytes_init = u16::pop_from_log_data(&mut event_data);
         let _byte_size = u16::pop_from_log_data(&mut event_data);
 
