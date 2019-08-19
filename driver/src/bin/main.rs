@@ -5,7 +5,6 @@ use driver::mongo_db::MongoDB;
 use driver::order_driver::OrderProcessor;
 use driver::price_finding::NaiveSolver;
 use driver::price_finding::LinearOptimisationPriceFinder;
-use driver::price_finding::NaiveSolver;
 use driver::price_finding::PriceFinding;
 use driver::run_driver_components;
 

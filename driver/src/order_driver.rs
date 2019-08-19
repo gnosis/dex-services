@@ -134,11 +134,14 @@ impl<'a, D: DbInterface, C: SnappContract> OrderProcessor<'a, D, C> {
             new_state_root, solution
         );
 
-        self.auction_bids.insert(auction_index, AuctionBid {
-            previous_state: state_root,
-            new_state: new_state_root,
-            solution: solution.clone(),
-        });
+        self.auction_bids.insert(
+            auction_index,
+            AuctionBid {
+                previous_state: state_root,
+                new_state: new_state_root,
+                solution: solution.clone(),
+            },
+        );
 
         self.contract.auction_solution_bid(
             auction_index,
@@ -182,7 +185,7 @@ mod tests {
     use web3::types::{H256, U128, U256};
 
     #[test]
-    fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
+    fn bids_for_auction_if_unapplied_and_enough_blocks_passed() {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let orders = vec![create_order_for_test(), create_order_for_test()];
@@ -229,8 +232,8 @@ mod tests {
             )));
 
         contract
-            .apply_auction
-            .given((slot, Any, Any, Any))
+            .auction_solution_bid
+            .given((slot, Any, Any, Any, Any, U256::zero()))
             .will_return(Ok(()));
         let standing_orders = StandingOrder::empty_array();
         let db = DbInterfaceMock::new();
@@ -246,7 +249,7 @@ mod tests {
 
         let mut pf = PriceFindingMock::new();
         let expected_solution = Solution {
-            surplus: U256::from_dec_str("0").ok(),
+            surplus: Some(U256::zero()),
             prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
@@ -255,7 +258,8 @@ mod tests {
             .given((orders, state))
             .will_return(Ok(expected_solution));
 
-        assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(true));
+        let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
+        assert_eq!(processor.run(), Ok(true));
     }
 
     #[test]
@@ -274,7 +278,8 @@ mod tests {
         let db = DbInterfaceMock::new();
         let mut pf = PriceFindingMock::new();
 
-        assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(false));
+        let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
+        assert_eq!(processor.run(), Ok(false));
     }
 
     #[test]
@@ -306,7 +311,8 @@ mod tests {
         let db = DbInterfaceMock::new();
         let mut pf = PriceFindingMock::new();
 
-        assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(false));
+        let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
+        assert_eq!(processor.run(), Ok(false));
     }
 
     #[test]
@@ -356,8 +362,8 @@ mod tests {
             .given(())
             .will_return(Ok(state_hash));
         contract
-            .apply_auction
-            .given((slot - 1, Any, Any, Any))
+            .auction_solution_bid
+            .given((slot - 1, Any, Any, Any, Any, U256::zero()))
             .will_return(Ok(()));
 
         let state = AccountState::new(
@@ -380,7 +386,7 @@ mod tests {
 
         let mut pf = PriceFindingMock::new();
         let expected_solution = Solution {
-            surplus: U256::from_dec_str("0").ok(),
+            surplus: Some(U256::zero()),
             prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
@@ -389,8 +395,9 @@ mod tests {
             .given((first_orders, state))
             .will_return(Ok(expected_solution));
 
-        assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(true));
-        assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(true));
+        let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
+        assert_eq!(processor.run(), Ok(true));
+        assert_eq!(processor.run(), Ok(true));
     }
 
     #[test]
@@ -438,10 +445,6 @@ mod tests {
             .get_current_state_root
             .given(())
             .will_return(Ok(state_hash));
-<<<<<<< HEAD
-
-=======
->>>>>>> wip
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot
             .given(U256::one())
@@ -452,12 +455,13 @@ mod tests {
 
         let mut pf = PriceFindingMock::new();
 
-        let error = run_order_listener(&db, &contract, &mut pf).expect_err("Expected Error");
+        let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
+        let error = processor.run().expect_err("Expected Error");
         assert_eq!(error.kind, ErrorKind::StateError);
     }
 
     #[test]
-    fn considers_standing_orders() {
+    fn considers_standing_orders_in_bid() {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let standing_order = StandingOrder::new(
@@ -510,8 +514,8 @@ mod tests {
             .given(())
             .will_return(Ok(state_hash));
         contract
-            .apply_auction
-            .given((slot, Any, Any))
+            .auction_solution_bid
+            .given((slot, Any, Any, Any, Any, U256::zero()))
             .will_return(Ok(()));
 
         let mut standing_orders = StandingOrder::empty_array();
@@ -532,7 +536,8 @@ mod tests {
             .given((standing_order.get_orders().clone(), state))
             .will_return(Err(PriceFindingError::from("Trivial solution is fine")));
 
-        assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(true));
+        let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
+        assert_eq!(processor.run(), Ok(true));
     }
 
     #[test]

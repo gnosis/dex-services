@@ -1,5 +1,6 @@
 use crate::contract::SnappContract;
 use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check, ProcessingState};
+use crate::error::DriverError;
 
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::RollingHashable;
