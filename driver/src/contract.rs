@@ -357,13 +357,13 @@ impl SnappContract for SnappContractImpl {
 
         self.contract
             .call(
-                "auction_solution_bid",
+                "auctionSolutionBid",
                 (
                     slot,
                     prev_state,
-                    new_state,
                     order_hash,
                     standing_order_index,
+                    new_state,
                     objective_value,
                 ),
                 account,

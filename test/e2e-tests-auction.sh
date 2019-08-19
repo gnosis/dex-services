@@ -44,6 +44,14 @@ step_with_retry "Test Listener: There are now 6 orders in auction slot 1" \
 step_with_retry "sellAmount for accountId = 5 is 280000000000000000000" \
 "mongo dfusion2 --eval \"db.orders.findOne({'auctionId': ${EXPECTED_AUCTION}, 'accountId': 5}).sellAmount\" | grep -w 280000000000000000000"
 
+step "Advance time to bid for auction" \
+"npx truffle exec scripts/wait_seconds.js 181"
+
+exit 0 
+
+step_with_retry "Wait for bid to be placed" \
+"npx truffle exect scripts/invokeViewFunction.js auctions 0 | grep "
+
 step "Advance time to apply auction" \
 "npx truffle exec scripts/wait_seconds.js 181"
 
