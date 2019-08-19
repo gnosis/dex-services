@@ -55,10 +55,10 @@ where
     let slot_creation_block_time = creation_block_time(slot)?;
     let current_block_time = contract.get_current_block_timestamp()?;
     if slot_creation_block_time + 360 < current_block_time {
-        return Ok(ProcessingState::AcceptsSolution)
+        return Ok(ProcessingState::AcceptsSolution);
     }
     if slot_creation_block_time + 180 < current_block_time {
-        return Ok(ProcessingState::AcceptsBids)
+        return Ok(ProcessingState::AcceptsBids);
     }
     Ok(ProcessingState::TooEarly)
 }
