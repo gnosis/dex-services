@@ -21,13 +21,13 @@ pub fn run_order_listener<D, C>(
 {
     let auction_slot = contract.get_current_auction_slot()?;
 
-    info!("Current top auction slot is {:?}", auction_slot);
+    debug!("Current top auction slot is {:?}", auction_slot);
     let slot = find_first_unapplied_slot(
         auction_slot,
         &|i| contract.has_auction_slot_been_applied(i)
     )?;
     if slot <= auction_slot {
-        info!("Highest unprocessed auction slot is {:?}", slot);
+        debug!("Highest unprocessed auction slot is {:?}", slot);
         if can_process(slot, contract,
             &|i| contract.creation_timestamp_for_auction_slot(i)
         )? {
@@ -47,7 +47,7 @@ pub fn run_order_listener<D, C>(
                 .filter(|standing_order| standing_order.num_orders() > 0)
                 .flat_map(|standing_order| standing_order.get_orders().clone())
             );
-            info!("All Orders: {:?}", orders);
+            debug!("All Orders: {:?}", orders);
 
             let standing_order_indexes = batch_index_from_standing_orders(&standing_orders);
             let total_order_hash_from_contract = contract.calculate_order_hash(slot, standing_order_indexes.clone())?;
@@ -73,7 +73,7 @@ pub fn run_order_listener<D, C>(
             contract.apply_auction(slot, state_root, new_state_root, total_order_hash_from_contract, standing_order_indexes, solution.bytes())?;
             return Ok(true);
         } else {
-            info!("Need to wait before processing auction slot {:?}", slot);
+            debug!("Need to wait before processing auction slot {:?}", slot);
         }
     }
     Ok(false)

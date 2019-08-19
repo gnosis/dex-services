@@ -11,13 +11,13 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
 {
     let deposit_slot = contract.get_current_deposit_slot()?;
 
-    info!("Current top deposit_slot is {:?}", deposit_slot);
+    debug!("Current top deposit_slot is {:?}", deposit_slot);
     let slot = find_first_unapplied_slot(
         deposit_slot, 
         &|i| contract.has_deposit_slot_been_applied(i)
     )?;
     if slot <= deposit_slot {
-        info!("Highest unprocessed deposit_slot is {:?}", slot);
+        debug!("Highest unprocessed deposit_slot is {:?}", slot);
         if can_process(slot, contract,
             &|i| contract.creation_timestamp_for_deposit_slot(i)
         )? {
@@ -36,10 +36,10 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
             contract.apply_deposits(slot, state_root, balances.state_hash, contract_deposit_hash)?;
             return Ok(true);
         } else {
-            info!("Need to wait before processing deposit_slot {:?}", slot);
+            debug!("Need to wait before processing deposit_slot {:?}", slot);
         }
     } else {
-        info!("All deposits are already processed");
+        debug!("All deposits are already processed");
     }
     Ok(false)
 }
