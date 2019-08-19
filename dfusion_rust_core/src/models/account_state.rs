@@ -250,8 +250,6 @@ pub mod tests {
 
     #[test]
     fn test_apply_auction() {
-//        let one_eth = 1 * (10 as u128).pow(18);
-
         let balances = vec![0, 1, 1, 0];
 
         let mut state = AccountState {
