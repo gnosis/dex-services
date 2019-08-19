@@ -63,10 +63,6 @@ impl EventHandler for AuctionSettlementHandler {
         // Remaining information is the Auction Results
         let encoded_solution = event_data;
 
-        info!(logger, "Parsing packed Auction Results from {} bytes: {:?}", encoded_solution.len(), encoded_solution);
-        let auction_results = Solution::from_bytes(encoded_solution);
-        debug!(logger, "Parsed Auction Results: {:?}", auction_results);
-
         // Fetch relevant information for transition (accounts, orders, parsed solution)
         let mut account_state = self.store
             .get_balances_for_state_index(&state_index)
@@ -85,6 +81,11 @@ impl EventHandler for AuctionSettlementHandler {
             .filter(|standing_order| standing_order.num_orders() > 0)
             .flat_map(|standing_order| standing_order.get_orders().clone())
         );
+
+        info!(logger, "Parsing packed Auction Results from {} bytes: {:?}", encoded_solution.len(), encoded_solution);
+        let auction_results = Solution::from_bytes(encoded_solution);
+        debug!(logger, "Parsed Auction Results: {:?}", auction_results);
+
         info!(logger, "Found {} valid Orders for this auction", orders.len());
         account_state.apply_auction(&orders, auction_results);
 
@@ -104,6 +105,7 @@ impl EventHandler for AuctionSettlementHandler {
 #[cfg(test)]
 pub mod unit_test {
     use super::*;
+    use dfusion_core::database::{DatabaseError, ErrorKind};
     use dfusion_core::database::tests::DbInterfaceMock;
     use dfusion_core::models::{AccountState, TOKENS, Order, BatchInformation, StandingOrder};
     use web3::types::{Bytes, H256, U256};
@@ -171,6 +173,99 @@ pub mod unit_test {
         }
     }
 
+    #[test]
+    fn test_auction_settlement_fails_if_state_does_not_exist() {
+        let store = Arc::new(DbInterfaceMock::new());
+
+        // No data in store
+        store.get_balances_for_state_index
+            .given(U256::zero())
+            .will_return(Err(DatabaseError::new(ErrorKind::StateError, "No State found")));
+
+        let handler = AuctionSettlementHandler::new(store);
+        let log = create_auction_settlement_event(
+            0,
+            1,
+            H256::from(1),
+        );
+
+        let result = handler.process_event(
+            util::test::logger(),
+            Arc::new(util::test::fake_block()),
+            Arc::new(util::test::fake_tx()),
+            log,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_auction_settlement_fails_if_orders_dont_exist() {
+        let store = Arc::new(DbInterfaceMock::new());
+
+        let existing_state = AccountState::new(
+            H256::zero(),
+            U256::from(0),
+            vec![2, 0, 0, 0],
+            TOKENS,
+        );
+        store.get_balances_for_state_index
+            .given(U256::zero())
+            .will_return(Ok(existing_state));
+
+        store.get_orders_of_slot
+            .given(U256::zero())
+            .will_return(Ok(vec![]));
+
+        let handler = AuctionSettlementHandler::new(store);
+        let log = create_auction_settlement_event(
+            0,
+            1,
+            H256::from(1),
+        );
+
+        let result = handler.process_event(
+            util::test::logger(),
+            Arc::new(util::test::fake_block()),
+            Arc::new(util::test::fake_tx()),
+            log,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_auction_settlement_fails_if_standing_orders_dont_exist() {
+        let store = Arc::new(DbInterfaceMock::new());
+
+        let existing_state = AccountState::new(
+            H256::zero(),
+            U256::from(0),
+            vec![2, 0, 0, 0],
+            TOKENS,
+        );
+        store.get_balances_for_state_index
+            .given(U256::zero())
+            .will_return(Ok(existing_state));
+
+        // No orders in store
+        store.get_orders_of_slot
+            .given(U256::zero())
+            .will_return(Err(DatabaseError::new(ErrorKind::StateError, "No Orders found")));
+
+        let handler = AuctionSettlementHandler::new(store);
+        let log = create_auction_settlement_event(
+            0,
+            1,
+            H256::from(1),
+        );
+
+        let result = handler.process_event(
+            util::test::logger(),
+            Arc::new(util::test::fake_block()),
+            Arc::new(util::test::fake_tx()),
+            log,
+        );
+        assert!(result.is_err());
+    }
     fn create_auction_settlement_event(
         auction_id: u8,
         new_state_index: u8,
