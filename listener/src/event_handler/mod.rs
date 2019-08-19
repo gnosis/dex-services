@@ -26,6 +26,9 @@ pub use standing_order_handler::StandingOrderHandler;
 mod order_handler;
 pub use order_handler::SellOrderHandler;
 
+mod auction_settlement_handler;
+pub use auction_settlement_handler::AuctionSettlementHandler;
+
 mod util;
 
 pub trait EventHandler: Send + Sync + Debug {
