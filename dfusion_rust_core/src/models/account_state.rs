@@ -73,12 +73,11 @@ impl AccountState {
         let buy_amounts = results.executed_buy_amounts;
         let sell_amounts = results.executed_sell_amounts;
 
-        // Should we assert that each order has the same slot index?
-        // Should we assert that orders.len = results.executed amounts.len?
-
-        for (i, order) in orders.iter().enumerate() {
-            self.increment_balance(order.buy_token, order.account_id, buy_amounts[i]);
-            self.decrement_balance(order.sell_token, order.account_id, sell_amounts[i]);
+        for (i, execution_amounts) in buy_amounts.iter().zip(sell_amounts.iter()).enumerate() {
+            let order = &orders[i];
+            let (buy_amount, sell_amount) = execution_amounts;
+            self.increment_balance(order.buy_token, order.account_id, *buy_amount);
+            self.decrement_balance(order.sell_token, order.account_id, *sell_amount);
         }
         self.state_index = self.state_index.saturating_add(U256::one());
         self.state_hash = self.rolling_hash(self.state_index.low_u32());
