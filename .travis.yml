@@ -45,5 +45,7 @@ matrix:
         - ./test/e2e-tests-auction.sh
         - ./test/restart-containers.sh
         - ./test/e2e-tests-standing-order.sh
+        - ./test/restart-containers.sh
+        - ./test/e2e-tests-trivial-auction.sh
       after_failure:
         - docker-compose logs
