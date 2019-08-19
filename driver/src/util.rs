@@ -38,18 +38,27 @@ pub fn hash_consistency_check(
     Ok(())
 }
 
+pub enum ProcessingState {
+    TooEarly,
+    AcceptsBids,
+    AcceptsSolution,
+}
+
 pub fn can_process<C>(
     slot: U256,
     contract: &C,
-    creation_block: &Fn(U256) -> Result<U256, DriverError>,
-) -> Result<bool, DriverError>
+    creation_block_time: &Fn(U256) -> Result<U256, DriverError>,
+) -> Result<ProcessingState, DriverError>
 where
     C: SnappContract,
 {
-    let slot_creation_block = creation_block(slot)?;
-    if slot_creation_block == U256::zero() {
-        return Ok(false);
+    let slot_creation_block_time = creation_block_time(slot)?;
+    let current_block_time = contract.get_current_block_timestamp()?;
+    if slot_creation_block_time + 360 < current_block_time {
+        return Ok(ProcessingState::AcceptsSolution)
     }
-    let current_block = contract.get_current_block_timestamp()?;
-    Ok(slot_creation_block + 180 < current_block)
+    if slot_creation_block_time + 180 < current_block_time {
+        return Ok(ProcessingState::AcceptsBids)
+    }
+    Ok(ProcessingState::TooEarly)
 }

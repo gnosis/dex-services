@@ -39,37 +39,10 @@ pub trait SnappContract {
     fn has_auction_slot_been_applied(&self, slot: U256) -> Result<bool>;
 
     // Write methods
-<<<<<<< HEAD
-    fn apply_deposits(
-        &self,
-        slot: U256,
-        prev_state: H256,
-        new_state: H256,
-        deposit_hash: H256,
-    ) -> Result<()>;
-    fn apply_withdraws(
-        &self,
-        slot: U256,
-        merkle_root: H256,
-        prev_state: H256,
-        new_state: H256,
-        withdraw_hash: H256,
-    ) -> Result<()>;
-    fn apply_auction(
-        &self,
-        slot: U256,
-        prev_state: H256,
-        new_state: H256,
-        order_hash: H256,
-        standing_order_index: Vec<U128>,
-        prices_and_volumes: Vec<u8>,
-    ) -> Result<()>;
-=======
     fn apply_deposits(&self, slot: U256, prev_state: H256, new_state: H256, deposit_hash: H256) -> Result<()>;
     fn apply_withdraws(&self, slot: U256, merkle_root: H256, prev_state: H256, new_state: H256, withdraw_hash: H256) -> Result<()>;
     fn apply_auction(&self, slot: U256, prev_state: H256, new_state: H256, prices_and_volumes: Vec<u8>) -> Result<()>;
     fn auction_solution_bid(&self, slot: U256, prev_state: H256, new_state: H256, order_hash: H256, standing_order_index: Vec<U128>, objectiveValue: U256) -> Result<()>;
->>>>>>> wip
 }
 
 #[allow(dead_code)] // event_loop needs to be retained to keep web3 connection open

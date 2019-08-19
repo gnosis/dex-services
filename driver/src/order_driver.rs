@@ -1,7 +1,9 @@
 use crate::contract::SnappContract;
 use crate::error::DriverError;
 use crate::price_finding::PriceFinding;
-use crate::util::{can_process, find_first_unapplied_slot, hash_consistency_check};
+use crate::util::{
+    can_process, find_first_unapplied_slot, hash_consistency_check, ProcessingState,
+};
 
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::{
@@ -9,105 +11,144 @@ use dfusion_core::models::{
     StandingOrder,
 };
 
-use web3::types::{U128, U256};
+use web3::types::{H256, U128, U256};
 
 use std::collections::HashMap;
 
-struct OrderListener {
-    auctionBids: HashMap<U256, Solution>,
+struct AuctionBid {
+    previous_state: H256,
+    new_state: H256,
+    solution: Solution,
 }
 
-pub fn run_order_listener<D, C>(
-    db: &D,
-    contract: &C,
-    price_finder: &mut PriceFinding,
-) -> Result<bool, DriverError>
-where
-    D: DbInterface,
-    C: SnappContract,
-{
-    let auction_slot = contract.get_current_auction_slot()?;
+pub struct OrderProcessor<'a, D: DbInterface, C: SnappContract> {
+    auction_bids: HashMap<U256, AuctionBid>,
+    db: &'a D,
+    contract: &'a C,
+    price_finder: &'a mut PriceFinding,
+}
 
-    info!("Current top auction slot is {:?}", auction_slot);
-    let slot =
-        find_first_unapplied_slot(auction_slot, &|i| contract.has_auction_slot_been_applied(i))?;
-    if slot <= auction_slot {
-        info!("Highest unprocessed auction slot is {:?}", slot);
-        if can_process(slot, contract, &|i| {
-            contract.creation_timestamp_for_auction_slot(i)
-        })? {
-            info!("Processing auction slot {:?}", slot);
-            let state_root = contract.get_current_state_root()?;
-            let non_reserved_orders_hash_from_contract = contract.order_hash_for_slot(slot)?;
-            let mut state = db.get_balances_for_state_root(&state_root)?;
-
-            let mut orders = db.get_orders_of_slot(&slot)?;
-            let non_reserved_orders_hash = orders.rolling_hash(0);
-            hash_consistency_check(
-                non_reserved_orders_hash,
-                non_reserved_orders_hash_from_contract,
-                "non-reserved-orders",
-            )?;
-
-            let standing_orders = db.get_standing_orders_of_slot(&slot)?;
-
-            orders.extend(
-                standing_orders
-                    .iter()
-                    .filter(|standing_order| standing_order.num_orders() > 0)
-                    .flat_map(|standing_order| standing_order.get_orders().clone()),
-            );
-            info!("All Orders: {:?}", orders);
-
-            let standing_order_indexes = batch_index_from_standing_orders(&standing_orders);
-            let total_order_hash_from_contract =
-                contract.calculate_order_hash(slot, standing_order_indexes.clone())?;
-            let total_order_hash_calculated =
-                standing_orders.concatenating_hash(non_reserved_orders_hash);
-            hash_consistency_check(
-                total_order_hash_calculated,
-                total_order_hash_from_contract,
-                "overall-order",
-            )?;
-
-            let solution = if !orders.is_empty() {
-                price_finder
-                    .find_prices(&orders, &state)
-                    .unwrap_or_else(|e| {
-                        error!(
-                            "Error computing result: {}\n Falling back to trivial solution",
-                            e
-                        );
-                        Solution::trivial(orders.len())
-                    })
-            } else {
-                warn!("No orders in batch. Falling back to trivial solution");
-                Solution::trivial(orders.len())
-            };
-
-            // Compute updated balances
-            update_balances(&mut state, &orders, &solution);
-            let new_state_root = state.rolling_hash(state.state_index.low_u32() + 1);
-
-            info!(
-                "New AccountState hash is {}, Solution: {:?}",
-                new_state_root, solution
-            );
-
-            contract.auction_solution_bid(
-                slot,
-                state_root,
-                new_state_root,
-                total_order_hash_from_contract,
-                standing_order_indexes,
-                solution.surplus.unwrap_or(U256::zero()),
-            );
-            return Ok(true);
-        } else {
-            info!("Need to wait before processing auction slot {:?}", slot);
+impl<'a, D: DbInterface, C: SnappContract> OrderProcessor<'a, D, C> {
+    pub fn new(db: &'a D, contract: &'a C, price_finder: &'a mut PriceFinding) -> Self {
+        OrderProcessor {
+            auction_bids: HashMap::new(),
+            db,
+            contract,
+            price_finder,
         }
     }
-    Ok(false)
+
+    pub fn run(&mut self) -> Result<bool, DriverError> {
+        let auction_slot = self.contract.get_current_auction_slot()?;
+
+        info!("Current top auction slot is {:?}", auction_slot);
+        let slot = find_first_unapplied_slot(auction_slot, &|i| {
+            self.contract.has_auction_slot_been_applied(i)
+        })?;
+        if slot <= auction_slot {
+            info!("Highest unprocessed auction slot is {:?}", slot);
+            match can_process(slot, self.contract, &|i| {
+                self.contract.creation_timestamp_for_auction_slot(i)
+            })? {
+                ProcessingState::TooEarly => {
+                    info!("Need to wait before processing auction slot {:?}", slot)
+                }
+                ProcessingState::AcceptsBids => {
+                    self.bid_for_auction(slot)?;
+                    return Ok(true);
+                }
+                ProcessingState::AcceptsSolution => {
+                    if let Some(bid) = self.auction_bids.get(&slot) {
+                        self.contract.apply_auction(
+                            slot,
+                            bid.previous_state,
+                            bid.new_state,
+                            bid.solution.bytes(),
+                        )?;
+                        return Ok(true);
+                    }
+                    info!("Cannot find saved bid for auction slot {:?}", slot);
+                }
+            }
+        }
+        Ok(false)
+    }
+    fn bid_for_auction(&mut self, auction_index: U256) -> Result<(), DriverError> {
+        info!("Processing auction slot {:?}", auction_index);
+        let state_root = self.contract.get_current_state_root()?;
+        let non_reserved_orders_hash_from_contract =
+            self.contract.order_hash_for_slot(auction_index)?;
+        let mut state = self.db.get_balances_for_state_root(&state_root)?;
+
+        let mut orders = self.db.get_orders_of_slot(&auction_index)?;
+        let non_reserved_orders_hash = orders.rolling_hash(0);
+        hash_consistency_check(
+            non_reserved_orders_hash,
+            non_reserved_orders_hash_from_contract,
+            "non-reserved-orders",
+        )?;
+
+        let standing_orders = self.db.get_standing_orders_of_slot(&auction_index)?;
+
+        orders.extend(
+            standing_orders
+                .iter()
+                .filter(|standing_order| standing_order.num_orders() > 0)
+                .flat_map(|standing_order| standing_order.get_orders().clone()),
+        );
+        info!("All Orders: {:?}", orders);
+
+        let standing_order_indexes = batch_index_from_standing_orders(&standing_orders);
+        let total_order_hash_from_contract = self
+            .contract
+            .calculate_order_hash(auction_index, standing_order_indexes.clone())?;
+        let total_order_hash_calculated =
+            standing_orders.concatenating_hash(non_reserved_orders_hash);
+        hash_consistency_check(
+            total_order_hash_calculated,
+            total_order_hash_from_contract,
+            "overall-order",
+        )?;
+
+        let solution = if !orders.is_empty() {
+            self.price_finder
+                .find_prices(&orders, &state)
+                .unwrap_or_else(|e| {
+                    error!(
+                        "Error computing result: {}\n Falling back to trivial solution",
+                        e
+                    );
+                    Solution::trivial(orders.len())
+                })
+        } else {
+            warn!("No orders in batch. Falling back to trivial solution");
+            Solution::trivial(orders.len())
+        };
+
+        // Compute updated balances
+        update_balances(&mut state, &orders, &solution);
+        let new_state_root = state.rolling_hash(state.state_index.low_u32() + 1);
+
+        info!(
+            "New AccountState hash is {}, Solution: {:?}",
+            new_state_root, solution
+        );
+
+        self.auction_bids.insert(auction_index, AuctionBid {
+            previous_state: state_root,
+            new_state: new_state_root,
+            solution: solution.clone(),
+        });
+
+        self.contract.auction_solution_bid(
+            auction_index,
+            state_root,
+            new_state_root,
+            total_order_hash_from_contract,
+            standing_order_indexes,
+            solution.surplus.unwrap_or_else(U256::zero),
+        )
+    }
 }
 
 fn update_balances(state: &mut AccountState, orders: &[Order], solution: &Solution) {
@@ -189,7 +230,7 @@ mod tests {
 
         contract
             .apply_auction
-            .given((slot, Any, Any, Any, Any, Any))
+            .given((slot, Any, Any, Any))
             .will_return(Ok(()));
         let standing_orders = StandingOrder::empty_array();
         let db = DbInterfaceMock::new();
@@ -316,7 +357,7 @@ mod tests {
             .will_return(Ok(state_hash));
         contract
             .apply_auction
-            .given((slot - 1, Any, Any, Any, Any, Any))
+            .given((slot - 1, Any, Any, Any))
             .will_return(Ok(()));
 
         let state = AccountState::new(
@@ -470,7 +511,7 @@ mod tests {
             .will_return(Ok(state_hash));
         contract
             .apply_auction
-            .given((slot, Any, Any, Any, Any, Any))
+            .given((slot, Any, Any))
             .will_return(Ok(()));
 
         let mut standing_orders = StandingOrder::empty_array();

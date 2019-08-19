@@ -10,24 +10,23 @@ extern crate web3;
 use crate::contract::SnappContractImpl;
 use crate::deposit_driver::run_deposit_listener;
 use crate::mongo_db::MongoDB;
-use crate::order_driver::run_order_listener;
-use crate::price_finding::PriceFinding;
+use crate::order_driver::OrderProcessor;
 use crate::withdraw_driver::run_withdraw_listener;
 
 pub mod contract;
 pub mod error;
 pub mod mongo_db;
+pub mod order_driver;
 pub mod price_finding;
 
 mod deposit_driver;
-mod order_driver;
 mod util;
 mod withdraw_driver;
 
 pub fn run_driver_components(
     db: &MongoDB,
     contract: &SnappContractImpl,
-    price_finder: &mut PriceFinding,
+    order_processor: &mut OrderProcessor<MongoDB, SnappContractImpl>,
 ) {
     if let Err(e) = run_deposit_listener(db, contract) {
         error!("Deposit_driver error: {}", e);
@@ -35,7 +34,7 @@ pub fn run_driver_components(
     if let Err(e) = run_withdraw_listener(db, contract) {
         error!("Withdraw_driver error: {}", e);
     }
-    if let Err(e) = run_order_listener(db, contract, price_finder) {
+    if let Err(e) = order_processor.run() {
         error!("Order_driver error: {}", e);
     }
     //...
