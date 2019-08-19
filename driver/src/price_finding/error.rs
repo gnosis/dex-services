@@ -38,12 +38,15 @@ impl From<&str> for PriceFindingError {
 }
 impl PriceFindingError {
     pub fn new(msg: &str, kind: ErrorKind) -> PriceFindingError {
-        PriceFindingError{details: msg.to_string(), kind}
+        PriceFindingError {
+            details: msg.to_string(),
+            kind,
+        }
     }
 }
 impl fmt::Display for PriceFindingError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,"{}",self.details)
+        write!(f, "{}", self.details)
     }
 }
 impl Error for PriceFindingError {

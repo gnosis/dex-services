@@ -3,9 +3,9 @@ mod graph_reader;
 
 use web3::types::{H256, U256};
 
+use super::models;
 pub use error::*;
 pub use graph_reader::GraphReader;
-use super::models;
 
 pub trait DbInterface: Send + Sync {
     fn get_balances_for_state_root(
@@ -16,18 +16,10 @@ pub trait DbInterface: Send + Sync {
         &self,
         state_index: &U256,
     ) -> Result<models::AccountState, DatabaseError>;
-    fn get_deposits_of_slot(
-        &self,
-        slot: &U256,
-    ) -> Result<Vec<models::PendingFlux>, DatabaseError>;
-    fn get_withdraws_of_slot(
-        &self,
-        slot: &U256,
-    ) -> Result<Vec<models::PendingFlux>, DatabaseError>;
-    fn get_orders_of_slot(
-        &self,
-        slot: &U256,
-    ) -> Result<Vec<models::Order>, DatabaseError>;
+    fn get_deposits_of_slot(&self, slot: &U256) -> Result<Vec<models::PendingFlux>, DatabaseError>;
+    fn get_withdraws_of_slot(&self, slot: &U256)
+        -> Result<Vec<models::PendingFlux>, DatabaseError>;
+    fn get_orders_of_slot(&self, slot: &U256) -> Result<Vec<models::Order>, DatabaseError>;
     fn get_standing_orders_of_slot(
         &self,
         slot: &U256,
@@ -47,18 +39,39 @@ pub mod tests {
         pub get_deposits_of_slot: Mock<U256, Result<Vec<models::PendingFlux>, DatabaseError>>,
         pub get_withdraws_of_slot: Mock<U256, Result<Vec<models::PendingFlux>, DatabaseError>>,
         pub get_orders_of_slot: Mock<U256, Result<Vec<models::Order>, DatabaseError>>,
-        pub get_standing_orders_of_slot: Mock<U256, Result<[models::StandingOrder; models::NUM_RESERVED_ACCOUNTS], DatabaseError>>,
+        pub get_standing_orders_of_slot: Mock<
+            U256,
+            Result<[models::StandingOrder; models::NUM_RESERVED_ACCOUNTS], DatabaseError>,
+        >,
     }
 
     impl DbInterfaceMock {
         pub fn new() -> DbInterfaceMock {
             DbInterfaceMock {
-                get_balances_for_state_root: Mock::new(Err(DatabaseError::new(ErrorKind::Unknown, "Unexpected call to get_balances_for_state_root"))),
-                get_balances_for_state_index: Mock::new(Err(DatabaseError::new(ErrorKind::Unknown, "Unexpected call to get_balances_for_state_root"))),
-                get_deposits_of_slot: Mock::new(Err(DatabaseError::new(ErrorKind::Unknown, "Unexpected call to get_deposits_of_slot"))),
-                get_withdraws_of_slot: Mock::new(Err(DatabaseError::new(ErrorKind::Unknown, "Unexpected call to get_withdraws_of_slot"))),
-                get_orders_of_slot: Mock::new(Err(DatabaseError::new(ErrorKind::Unknown, "Unexpected call to get_withdraws_of_slot"))),
-                get_standing_orders_of_slot: Mock::new(Err(DatabaseError::new(ErrorKind::Unknown, "Unexpected call to get_standing_orders_of_slot"))),
+                get_balances_for_state_root: Mock::new(Err(DatabaseError::new(
+                    ErrorKind::Unknown,
+                    "Unexpected call to get_balances_for_state_root",
+                ))),
+                get_balances_for_state_index: Mock::new(Err(DatabaseError::new(
+                    ErrorKind::Unknown,
+                    "Unexpected call to get_balances_for_state_root",
+                ))),
+                get_deposits_of_slot: Mock::new(Err(DatabaseError::new(
+                    ErrorKind::Unknown,
+                    "Unexpected call to get_deposits_of_slot",
+                ))),
+                get_withdraws_of_slot: Mock::new(Err(DatabaseError::new(
+                    ErrorKind::Unknown,
+                    "Unexpected call to get_withdraws_of_slot",
+                ))),
+                get_orders_of_slot: Mock::new(Err(DatabaseError::new(
+                    ErrorKind::Unknown,
+                    "Unexpected call to get_withdraws_of_slot",
+                ))),
+                get_standing_orders_of_slot: Mock::new(Err(DatabaseError::new(
+                    ErrorKind::Unknown,
+                    "Unexpected call to get_standing_orders_of_slot",
+                ))),
             }
         }
     }
@@ -74,7 +87,7 @@ pub mod tests {
             &self,
             state_root: &H256,
         ) -> Result<models::AccountState, DatabaseError> {
-            self.get_balances_for_state_root.called(*state_root)  // https://github.com/intellij-rust/intellij-rust/issues/3164
+            self.get_balances_for_state_root.called(*state_root) // https://github.com/intellij-rust/intellij-rust/issues/3164
         }
         fn get_balances_for_state_index(
             &self,
@@ -94,10 +107,7 @@ pub mod tests {
         ) -> Result<Vec<models::PendingFlux>, DatabaseError> {
             self.get_withdraws_of_slot.called(*slot)
         }
-        fn get_orders_of_slot(
-            &self,
-            slot: &U256,
-        ) -> Result<Vec<models::Order>, DatabaseError> {
+        fn get_orders_of_slot(&self, slot: &U256) -> Result<Vec<models::Order>, DatabaseError> {
             self.get_orders_of_slot.called(*slot)
         }
         fn get_standing_orders_of_slot(

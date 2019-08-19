@@ -1,15 +1,15 @@
-use crate::price_finding::error::{PriceFindingError, ErrorKind};
-use crate::price_finding::price_finder_interface::{PriceFinding};
+use crate::price_finding::error::{ErrorKind, PriceFindingError};
+use crate::price_finding::price_finder_interface::PriceFinding;
 
 use dfusion_core::models;
 
+use chrono::Utc;
 use serde_json::json;
-use web3::types::U256;
 use std::collections::HashMap;
-use chrono::{Utc};
 use std::fs::File;
-use std::process::Command;
 use std::io::BufReader;
+use std::process::Command;
+use web3::types::U256;
 
 const RESULT_FOLDER: &str = "./results/tmp/";
 type Prices = HashMap<String, String>;
@@ -50,12 +50,20 @@ fn account_id(account: u16) -> String {
     format!("account{}", account)
 }
 
-fn serialize_balances(state: &models::AccountState,) -> serde_json::Value {
+fn serialize_balances(state: &models::AccountState) -> serde_json::Value {
     let mut accounts: HashMap<String, HashMap<String, String>> = HashMap::new();
     for account in 0..state.accounts() {
-        accounts.insert(account_id(account), (0..state.num_tokens)
-            .map(|token| (token_id(token), state.read_balance(token, account).to_string()))
-            .collect());
+        accounts.insert(
+            account_id(account),
+            (0..state.num_tokens)
+                .map(|token| {
+                    (
+                        token_id(token),
+                        state.read_balance(token, account).to_string(),
+                    )
+                })
+                .collect(),
+        );
     }
     json!(accounts)
 }
@@ -71,70 +79,110 @@ fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
     })
 }
 
-fn deserialize_result(json: &serde_json::Value, num_tokens: u8) -> Result<(Prices, models::Solution), PriceFindingError> {
+fn deserialize_result(
+    json: &serde_json::Value,
+    num_tokens: u8,
+) -> Result<(Prices, models::Solution), PriceFindingError> {
     let price_map = json["prices"]
         .as_object()
         .ok_or_else(|| "No 'price' object in json")?
         .iter()
-        .map(|(token, price)| price
-            .as_str()
-            .map(|p| (token.to_owned(), p.to_owned()))
-            .ok_or_else(|| PriceFindingError::new(
-                &"Could not convert price to string".to_string(), ErrorKind::JsonError))
-        )
+        .map(|(token, price)| {
+            price
+                .as_str()
+                .map(|p| (token.to_owned(), p.to_owned()))
+                .ok_or_else(|| {
+                    PriceFindingError::new(
+                        &"Could not convert price to string".to_string(),
+                        ErrorKind::JsonError,
+                    )
+                })
+        })
         .collect::<Result<Prices, PriceFindingError>>()?;
     let prices = (0..num_tokens)
-        .map(|t| price_map.get(&token_id(t))
-            .ok_or_else(|| PriceFindingError::new(&format!("Token {} not found in price map", t), ErrorKind::JsonError))
-            .and_then(|price| price.parse::<u128>().map_err(PriceFindingError::from))
-        )
+        .map(|t| {
+            price_map
+                .get(&token_id(t))
+                .ok_or_else(|| {
+                    PriceFindingError::new(
+                        &format!("Token {} not found in price map", t),
+                        ErrorKind::JsonError,
+                    )
+                })
+                .and_then(|price| price.parse::<u128>().map_err(PriceFindingError::from))
+        })
         .collect::<Result<Vec<u128>, PriceFindingError>>()?;
-    let orders = json["orders"].as_array().ok_or_else(|| "No 'orders' list in json")?;
-    let surplus = Some(orders
-        .iter()
-        .map(|o| o["execSurplus"]
-            .as_str()
-            .ok_or_else(|| PriceFindingError::new("No 'execSurplus' field on order",  ErrorKind::JsonError))
-            .and_then(|surplus| U256::from_dec_str(surplus).map_err(
-                |e| PriceFindingError::new(&format!("{:?}", e), ErrorKind::ParseIntError)
-            ))
-        )
-        .collect::<Result<Vec<U256>, PriceFindingError>>()?
-        .iter()
-        .fold(U256::zero(), |acc, surplus| surplus.saturating_add(acc)));
+    let orders = json["orders"]
+        .as_array()
+        .ok_or_else(|| "No 'orders' list in json")?;
+    let surplus = Some(
+        orders
+            .iter()
+            .map(|o| {
+                o["execSurplus"]
+                    .as_str()
+                    .ok_or_else(|| {
+                        PriceFindingError::new(
+                            "No 'execSurplus' field on order",
+                            ErrorKind::JsonError,
+                        )
+                    })
+                    .and_then(|surplus| {
+                        U256::from_dec_str(surplus).map_err(|e| {
+                            PriceFindingError::new(&format!("{:?}", e), ErrorKind::ParseIntError)
+                        })
+                    })
+            })
+            .collect::<Result<Vec<U256>, PriceFindingError>>()?
+            .iter()
+            .fold(U256::zero(), |acc, surplus| surplus.saturating_add(acc)),
+    );
     let executed_sell_amounts = orders
         .iter()
-        .map(|o| o["execSellAmount"]
-            .as_str()
-            .ok_or_else(|| PriceFindingError::new("No 'execSellAmount' field on order", ErrorKind::JsonError))
-            .and_then(|amount| amount.parse::<u128>().map_err(PriceFindingError::from))
-        )
+        .map(|o| {
+            o["execSellAmount"]
+                .as_str()
+                .ok_or_else(|| {
+                    PriceFindingError::new(
+                        "No 'execSellAmount' field on order",
+                        ErrorKind::JsonError,
+                    )
+                })
+                .and_then(|amount| amount.parse::<u128>().map_err(PriceFindingError::from))
+        })
         .collect::<Result<Vec<u128>, PriceFindingError>>()?;
     let executed_buy_amounts = orders
         .iter()
-        .map(|o| o["execBuyAmount"]
-            .as_str()
-            .ok_or_else(|| PriceFindingError::new("No 'execBuyAmount' field on order",  ErrorKind::JsonError))
-            .and_then(|amount| amount.parse::<u128>().map_err(PriceFindingError::from))
-        )
+        .map(|o| {
+            o["execBuyAmount"]
+                .as_str()
+                .ok_or_else(|| {
+                    PriceFindingError::new(
+                        "No 'execBuyAmount' field on order",
+                        ErrorKind::JsonError,
+                    )
+                })
+                .and_then(|amount| amount.parse::<u128>().map_err(PriceFindingError::from))
+        })
         .collect::<Result<Vec<u128>, PriceFindingError>>()?;
-    Ok((price_map.to_owned(), models::Solution {
-        surplus,
-        prices,
-        executed_sell_amounts,
-        executed_buy_amounts,
-    }))
+    Ok((
+        price_map.to_owned(),
+        models::Solution {
+            surplus,
+            prices,
+            executed_sell_amounts,
+            executed_buy_amounts,
+        },
+    ))
 }
 
 impl PriceFinding for LinearOptimisationPriceFinder {
     fn find_prices(
-        &mut self, 
+        &mut self,
         orders: &[models::Order],
-        state: &models::AccountState
+        state: &models::AccountState,
     ) -> Result<models::Solution, PriceFindingError> {
-        let token_ids: Vec<String> = (0..state.num_tokens)
-            .map(token_id)
-            .collect();
+        let token_ids: Vec<String> = (0..state.num_tokens).map(token_id).collect();
         let orders: Vec<serde_json::Value> = orders
             .iter()
             .enumerate()
@@ -145,7 +193,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
             "refToken": token_id(0),
             "pricesPrev": self.previous_prices,
             "accounts": serialize_balances(&state),
-            "orders": orders, 
+            "orders": orders,
         });
         let input_file = format!("instance_{}.json", Utc::now().to_rfc3339());
         (self.write_input)(&input_file, &input)?;
@@ -172,8 +220,15 @@ fn run_solver(input_file: &str) -> Result<(), PriceFindingError> {
         .output()?;
 
     if !output.status.success() {
-        error!("Solver failed - stdout: {}, error: {}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
-        return Err(PriceFindingError::new("Solver execution failed", ErrorKind::ExecutionError))
+        error!(
+            "Solver failed - stdout: {}, error: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return Err(PriceFindingError::new(
+            "Solver execution failed",
+            ErrorKind::ExecutionError,
+        ));
     }
     Ok(())
 }
@@ -194,19 +249,16 @@ pub mod tests {
 
     #[test]
     fn test_solver_keeps_prices_from_previous_result() {
-        let state = models::AccountState::new(
-            H256::zero(),
-            U256::zero(),
-            vec![0; 2],
-            2
-        );
-        let return_result = || { Ok(json!({
-            "prices": {
-                "token0": "14024052566155238000",
-                "token1": "1526784674855762300",
-            },
-            "orders": []
-        }))};
+        let state = models::AccountState::new(H256::zero(), U256::zero(), vec![0; 2], 2);
+        let return_result = || {
+            Ok(json!({
+                "prices": {
+                    "token0": "14024052566155238000",
+                    "token1": "1526784674855762300",
+                },
+                "orders": []
+            }))
+        };
         let mut solver = LinearOptimisationPriceFinder {
             previous_prices: HashMap::new(),
             write_input: |_, _| Ok(()),
@@ -214,12 +266,17 @@ pub mod tests {
             read_output: return_result,
         };
 
-        solver.find_prices(&vec![], &state).expect("Should not fail");
+        solver
+            .find_prices(&vec![], &state)
+            .expect("Should not fail");
 
         let expected_prices: Prices = [
             ("token0".to_owned(), "14024052566155238000".to_owned()),
-            ("token1".to_owned(), "1526784674855762300".to_owned())
-        ].iter().cloned().collect();
+            ("token1".to_owned(), "1526784674855762300".to_owned()),
+        ]
+        .iter()
+        .cloned()
+        .collect();
 
         assert_eq!(solver.previous_prices, expected_prices);
     }
@@ -246,8 +303,6 @@ pub mod tests {
         assert_eq!(result, expected);
     }
 
-
-
     #[test]
     fn test_deserialize_result() {
         let json = json!({
@@ -270,8 +325,11 @@ pub mod tests {
         });
         let expected_prices: Prices = [
             ("token0".to_owned(), "14024052566155238000".to_owned()),
-            ("token1".to_owned(), "1526784674855762300".to_owned())
-        ].iter().cloned().collect();
+            ("token1".to_owned(), "1526784674855762300".to_owned()),
+        ]
+        .iter()
+        .cloned()
+        .collect();
 
         let expected_solution = models::Solution {
             surplus: U256::from_dec_str("15854632034944469292777429010439194350").ok(),
@@ -440,7 +498,7 @@ pub mod tests {
             H256::zero(),
             U256::zero(),
             vec![100, 200, 300, 400, 500, 600],
-            3
+            3,
         );
         let result = serialize_balances(&state);
         let expected = json!({
@@ -461,12 +519,7 @@ pub mod tests {
     #[test]
     #[should_panic]
     fn test_serialize_balances_with_bad_balance_length() {
-        let state = models::AccountState::new(
-            H256::zero(),
-            U256::zero(),
-            vec![100, 200],
-            30
-        );
+        let state = models::AccountState::new(H256::zero(), U256::zero(), vec![100, 200], 30);
         serialize_balances(&state);
     }
 }

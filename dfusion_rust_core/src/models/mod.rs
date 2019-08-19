@@ -7,10 +7,10 @@ pub mod util;
 
 pub use crate::models::account_state::AccountState;
 pub use crate::models::flux::PendingFlux;
+pub use crate::models::order::BatchInformation;
 pub use crate::models::order::Order;
 pub use crate::models::solution::Solution;
 pub use crate::models::standing_order::StandingOrder;
-pub use crate::models::order::BatchInformation;
 
 use sha2::{Digest, Sha256};
 use web3::types::H256;
@@ -46,12 +46,15 @@ fn merkleize(leafs: Vec<Vec<u8>>) -> H256 {
     if leafs.len() == 1 {
         return H256::from(leafs[0].as_slice());
     }
-    let next_layer = leafs.chunks(2).map(|pair| {
-        let mut hasher = Sha256::new();
-        hasher.input(&pair[0]);
-        hasher.input(&pair[1]);
-        hasher.result().to_vec()
-    }).collect();
+    let next_layer = leafs
+        .chunks(2)
+        .map(|pair| {
+            let mut hasher = Sha256::new();
+            hasher.input(&pair[0]);
+            hasher.input(&pair[1]);
+            hasher.result().to_vec()
+        })
+        .collect();
     merkleize(next_layer)
 }
 

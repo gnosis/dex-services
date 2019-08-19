@@ -2,29 +2,29 @@ use byteorder::{BigEndian, WriteBytesExt};
 use graph::data::store::Entity;
 use serde_derive::{Deserialize, Serialize};
 use std::sync::Arc;
-use web3::types::{H256, U256, Log};
+use web3::types::{Log, H256, U256};
 
-use crate::models::{Serializable, RootHashable, merkleize};
 use super::util::*;
+use crate::models::{merkleize, RootHashable, Serializable};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Ord, PartialOrd, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PendingFlux {
-  pub slot_index: u16,
-  pub slot: U256,
-  pub account_id: u16,
-  pub token_id: u8,
-  pub amount: u128,
+    pub slot_index: u16,
+    pub slot: U256,
+    pub account_id: u16,
+    pub token_id: u8,
+    pub amount: u128,
 }
 
 impl Serializable for PendingFlux {
-  fn bytes(&self) -> Vec<u8> {
-    let mut wtr = vec![0; 13];
-    wtr.write_u16::<BigEndian>(self.account_id).unwrap();
-    wtr.write_u8(self.token_id).unwrap();
-    wtr.write_u128::<BigEndian>(self.amount).unwrap();
-    wtr
-  }
+    fn bytes(&self) -> Vec<u8> {
+        let mut wtr = vec![0; 13];
+        wtr.write_u16::<BigEndian>(self.account_id).unwrap();
+        wtr.write_u8(self.token_id).unwrap();
+        wtr.write_u128::<BigEndian>(self.amount).unwrap();
+        wtr
+    }
 }
 
 impl From<mongodb::ordered::OrderedDocument> for PendingFlux {
@@ -102,47 +102,65 @@ pub mod tests {
 
 #[cfg(test)]
 pub mod unit_test {
-  use super::*;
-  use graph::bigdecimal::BigDecimal;
-  use web3::types::{H256, Bytes};
-  use std::str::FromStr;
+    use super::*;
+    use graph::bigdecimal::BigDecimal;
+    use std::str::FromStr;
+    use web3::types::{Bytes, H256};
 
-  #[test]
-  fn test_pending_flux_root_hash() {
-    let deposit = PendingFlux {
-      slot_index: 0,
-      slot: U256::zero(),
-      account_id: 3,
-      token_id: 3,
-      amount: 18,
-    };
-    // one valid withdraw
-    assert_eq!(
-        vec![deposit.clone()].root_hash(&vec![true]),
-        H256::from_str(
-            "4a77ba0bc619056248f2f2793075eb6f49cf35dacb5cccfe1e71392046a06b79"
-        ).unwrap()
-    );
-    // no valid withdraws
-    assert_eq!(
-        vec![deposit].root_hash(&vec![false]),
-        H256::from_str(
-            "87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c"
-        ).unwrap()
-    );
-  }
+    #[test]
+    fn test_pending_flux_root_hash() {
+        let deposit = PendingFlux {
+            slot_index: 0,
+            slot: U256::zero(),
+            account_id: 3,
+            token_id: 3,
+            amount: 18,
+        };
+        // one valid withdraw
+        assert_eq!(
+            vec![deposit.clone()].root_hash(&vec![true]),
+            H256::from_str("4a77ba0bc619056248f2f2793075eb6f49cf35dacb5cccfe1e71392046a06b79")
+                .unwrap()
+        );
+        // no valid withdraws
+        assert_eq!(
+            vec![deposit].root_hash(&vec![false]),
+            H256::from_str("87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c")
+                .unwrap()
+        );
+    }
 
-  #[test]
-  fn test_from_log() {
-      let bytes: Vec<Vec<u8>> = vec![
-        /* account_id_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        /* token_id_bytes */ vec![ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        /* amount_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0],
-        /* slot_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        /* slot_index_bytes */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      ];
+    #[test]
+    fn test_from_log() {
+        let bytes: Vec<Vec<u8>> = vec![
+            /* account_id_bytes */
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 1,
+            ],
+            /* token_id_bytes */
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 1,
+            ],
+            /* amount_bytes */
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 224,
+                182, 179, 167, 100, 0, 0,
+            ],
+            /* slot_bytes */
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
+            ],
+            /* slot_index_bytes */
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
+            ],
+        ];
 
-      let log = Arc::new(Log {
+        let log = Arc::new(Log {
             address: 1.into(),
             topics: vec![],
             data: Bytes(bytes.iter().flat_map(|i| i.iter()).cloned().collect()),
@@ -165,18 +183,18 @@ pub mod unit_test {
         };
 
         assert_eq!(expected_flux, PendingFlux::from(log));
-  }
+    }
 
-  #[test]
-  fn test_to_and_from_entity() {
-      let flux = PendingFlux {
+    #[test]
+    fn test_to_and_from_entity() {
+        let flux = PendingFlux {
             account_id: 1,
             token_id: 1,
             amount: 1 * (10 as u128).pow(18),
             slot: U256::zero(),
             slot_index: 0,
         };
-        
+
         let mut entity = Entity::new();
         entity.set("accountId", 1);
         entity.set("tokenId", 1);
@@ -186,5 +204,5 @@ pub mod unit_test {
 
         assert_eq!(entity, flux.clone().into());
         assert_eq!(flux, PendingFlux::from(entity));
-  }
+    }
 }

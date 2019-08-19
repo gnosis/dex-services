@@ -1,5 +1,5 @@
-extern crate env_logger;
 extern crate dfusion_core;
+extern crate env_logger;
 extern crate graph;
 extern crate graph_core;
 extern crate graph_datasource_ethereum;
@@ -7,9 +7,9 @@ extern crate lazy_static;
 #[macro_use]
 extern crate slog;
 
-mod runtime_host;
-mod link_resolver;
 mod event_handler;
+mod link_resolver;
+mod runtime_host;
 
 use lazy_static::lazy_static;
 use std::env;
@@ -17,19 +17,18 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use graph::components::forward;
-use graph::prelude::{
-    SubgraphRegistrar as SubgraphRegistrarTrait,
-    SubgraphName, SubgraphDeploymentId, SubgraphVersionSwitchingMode,
-    GraphQLServer, SubscriptionServer, future, Future,
-    NodeId, LoggerFactory, EthereumAdapter
-};
 use graph::log::logger;
+use graph::prelude::{
+    future, EthereumAdapter, Future, GraphQLServer, LoggerFactory, NodeId, SubgraphDeploymentId,
+    SubgraphName, SubgraphRegistrar as SubgraphRegistrarTrait, SubgraphVersionSwitchingMode,
+    SubscriptionServer,
+};
 use graph::tokio;
 use graph::tokio_executor;
 use graph::tokio_timer;
 use graph::tokio_timer::timer::Timer;
 
-use graph_core::{SubgraphInstanceManager, SubgraphRegistrar, SubgraphAssignmentProvider};
+use graph_core::{SubgraphAssignmentProvider, SubgraphInstanceManager, SubgraphRegistrar};
 
 use graph_datasource_ethereum::{BlockStreamBuilder, Transport};
 
@@ -38,11 +37,11 @@ use graph_server_websocket::SubscriptionServer as GraphQLSubscriptionServer;
 
 use graph_store_postgres::{Store as DieselStore, StoreConfig};
 
-use runtime_host::RustRuntimeHostBuilder;
 use link_resolver::LocalLinkResolver;
+use runtime_host::RustRuntimeHostBuilder;
 
-use dfusion_core::SUBGRAPH_NAME;
 use dfusion_core::database::GraphReader;
+use dfusion_core::SUBGRAPH_NAME;
 
 use graph_node_reader::Store as GraphNodeReader;
 
@@ -50,9 +49,9 @@ lazy_static! {
     static ref ANCESTOR_COUNT: u64 = 50;
     static ref REORG_THRESHOLD: u64 = 50;
     static ref BLOCK_POLLING_INTERVAL: Duration = Duration::from_millis(1000);
-    
     static ref NODE_ID: NodeId = NodeId::new("default").unwrap();
-    static ref SUBGRAPH_ID: SubgraphDeploymentId = SubgraphDeploymentId::new(SUBGRAPH_NAME).unwrap();
+    static ref SUBGRAPH_ID: SubgraphDeploymentId =
+        SubgraphDeploymentId::new(SUBGRAPH_NAME).unwrap();
 }
 
 fn main() {
@@ -133,8 +132,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     std::mem::forget(transport_event_loop);
 
     let eth_adapter = Arc::new(graph_datasource_ethereum::EthereumAdapter::new(
-        transport,
-        0,
+        transport, 0,
     ));
     let eth_net_identifiers = match eth_adapter.net_identifiers(&logger).wait() {
         Ok(net) => {
@@ -190,7 +188,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         RustRuntimeHostBuilder::new(database),
         block_stream_builder,
     );
-    
+
     let link_resolver = Arc::new(LocalLinkResolver {});
     let graphql_runner = Arc::new(graph_core::GraphQlRunner::new(&logger, store.clone()));
     let mut subgraph_provider = SubgraphAssignmentProvider::new(
@@ -204,35 +202,32 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     tokio::spawn(forward(&mut subgraph_provider, &subgraph_instance_manager).unwrap());
     let subgraph_provider_arc = Arc::new(subgraph_provider);
 
-    // Create named subgraph provider for resolving subgraph name->ID mappings	
-    let subgraph_registrar = Arc::new(SubgraphRegistrar::new(	
-        &logger_factory,	
-        link_resolver,	
-        subgraph_provider_arc.clone(),	
-        store.clone(),	
-        store.clone(),	
-        NODE_ID.clone(),	
-        SubgraphVersionSwitchingMode::Instant
+    // Create named subgraph provider for resolving subgraph name->ID mappings
+    let subgraph_registrar = Arc::new(SubgraphRegistrar::new(
+        &logger_factory,
+        link_resolver,
+        subgraph_provider_arc.clone(),
+        store.clone(),
+        store.clone(),
+        NODE_ID.clone(),
+        SubgraphVersionSwitchingMode::Instant,
     ));
 
     let subgraph_name = SubgraphName::new(SUBGRAPH_NAME).unwrap();
-    tokio::spawn(	
+    tokio::spawn(
         subgraph_registrar
             .create_subgraph(subgraph_name.clone())
-            .then( move |_| {
-                subgraph_registrar.create_subgraph_version(
-                    subgraph_name, SUBGRAPH_ID.clone(), NODE_ID.clone()
-                )
-                .then(|result| {	
-                    result.expect("Failed to create subgraph");
-                    Ok(())
-                })
-                .and_then(move |_| {
-                    subgraph_registrar.start()
-                })
+            .then(move |_| {
+                subgraph_registrar
+                    .create_subgraph_version(subgraph_name, SUBGRAPH_ID.clone(), NODE_ID.clone())
+                    .then(|result| {
+                        result.expect("Failed to create subgraph");
+                        Ok(())
+                    })
+                    .and_then(move |_| subgraph_registrar.start())
             })
             .then(|start_result| {
-                start_result.expect("failed to start subgraph"); 
+                start_result.expect("failed to start subgraph");
                 Ok(())
             }),
     );

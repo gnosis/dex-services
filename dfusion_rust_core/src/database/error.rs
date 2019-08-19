@@ -16,29 +16,22 @@ pub enum ErrorKind {
 
 impl fmt::Display for DatabaseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,"Database Error: [{}]", self.details)
+        write!(f, "Database Error: [{}]", self.details)
     }
 }
 
 impl DatabaseError {
-    pub fn new(
-        kind: ErrorKind, 
-        description: &str, 
-    ) -> Self {
+    pub fn new(kind: ErrorKind, description: &str) -> Self {
         DatabaseError {
             details: description.to_string(),
-            kind
+            kind,
         }
     }
 
-    pub fn chain<T: fmt::Display>(
-        kind: ErrorKind, 
-        description: &str, 
-        underlying_error: T
-    ) -> Self {
+    pub fn chain<T: fmt::Display>(kind: ErrorKind, description: &str, underlying_error: T) -> Self {
         DatabaseError {
             details: format!("{} - {}", description, underlying_error),
-            kind
+            kind,
         }
     }
 }
