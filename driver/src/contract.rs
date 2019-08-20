@@ -100,25 +100,25 @@ impl SnappContract for SnappContractImpl {
 
     fn get_current_state_root(&self) -> Result<H256> {
         self.contract.query(
-            "getCurrentStateRoot", (), None, Options::default(), None
+            "getCurrentStateRoot", (), None, Options::default(), None,
         ).wait().map_err(DriverError::from)
     }
 
     fn get_current_deposit_slot(&self) -> Result<U256> {
         self.contract.query(
-            "getCurrentDepositIndex", (), None, Options::default(), None
+            "getCurrentDepositIndex", (), None, Options::default(), None,
         ).wait().map_err(DriverError::from)
     }
 
     fn get_current_withdraw_slot(&self) -> Result<U256> {
         self.contract.query(
-            "getCurrentWithdrawIndex", (), None, Options::default(), None
+            "getCurrentWithdrawIndex", (), None, Options::default(), None,
         ).wait().map_err(DriverError::from)
     }
 
     fn get_current_auction_slot(&self) -> Result<U256> {
         self.contract.query(
-            "auctionIndex", (), None, Options::default(), None
+            "auctionIndex", (), None, Options::default(), None,
         ).wait().map_err(DriverError::from)
     }
 
@@ -175,69 +175,70 @@ impl SnappContract for SnappContractImpl {
             "hasAuctionBeenApplied", slot, None, Options::default(), None,
         ).wait().map_err(DriverError::from)
     }
-    
+
     fn apply_deposits(
-        &self, 
+        &self,
         slot: U256,
         prev_state: H256,
         new_state: H256,
         deposit_hash: H256) -> Result<()> {
-            let account = self.account_with_sufficient_balance().ok_or("Not enough balance to send Txs")?;
-            self.contract.call(
-                "applyDeposits",
-                (slot, prev_state, new_state, deposit_hash),
-                account,
-                Options::default(),
-            ).wait()
+        let account = self.account_with_sufficient_balance().ok_or("Not enough balance to send Txs")?;
+        self.contract.call(
+            "applyDeposits",
+            (slot, prev_state, new_state, deposit_hash),
+            account,
+            Options::default(),
+        ).wait()
             .map_err(DriverError::from)
-            .map(|_|())
+            .map(|_| ())
     }
 
     fn apply_withdraws(
-        &self, 
+        &self,
         slot: U256,
         merkle_root: H256,
         prev_state: H256,
         new_state: H256,
-        withdraw_hash: H256) -> Result<()> {
-            // HERE WE NEED TO BE SURE THAT THE SENDING ACCOUNT IS THE OWNER
-            let account = self.account_with_sufficient_balance().ok_or("Not enough balance to send Txs")?;
-            self.contract.call(
-                "applyWithdrawals",
-                (slot, merkle_root, prev_state, new_state, withdraw_hash),
-                account,    
-                Options::with(|mut opt| { // usual gas estimate is not working
-                    opt.gas_price = Some(25.into());
-                    opt.gas = Some(1_000_000.into());
-                }),
-            ).wait()
+        withdraw_hash: H256
+    ) -> Result<()> {
+        // HERE WE NEED TO BE SURE THAT THE SENDING ACCOUNT IS THE OWNER
+        let account = self.account_with_sufficient_balance().ok_or("Not enough balance to send Txs")?;
+        self.contract.call(
+            "applyWithdrawals",
+            (slot, merkle_root, prev_state, new_state, withdraw_hash),
+            account,
+            Options::with(|mut opt| { // usual gas estimate is not working
+                opt.gas_price = Some(25.into());
+                opt.gas = Some(1_000_000.into());
+            }),
+        ).wait()
             .map_err(DriverError::from)
-            .map(|_|())
+            .map(|_| ())
     }
 
     fn apply_auction(
-        &self, 
+        &self,
         slot: U256,
         prev_state: H256,
         new_state: H256,
         order_hash: H256,
         standing_order_index: Vec<U128>,
         prices_and_volumes: Vec<u8>) -> Result<()> {
-            info!("prices_and_volumes: {:?}", &prices_and_volumes);
-            let account = self.account_with_sufficient_balance().ok_or("Not enough balance to send Txs")?;
+        debug!("Applying Auction with result bytes: {:?}", &prices_and_volumes);
+        let account = self.account_with_sufficient_balance().ok_or("Not enough balance to send Txs")?;
 
-            let mut options = Options::default();
-            options.gas = Some(U256::from(5_000_000));
-            self.contract.call(
-                "applyAuction",
-                (slot, prev_state, new_state, order_hash, standing_order_index, prices_and_volumes),
-                account,
-                options,
-            ).wait()
+        let mut options = Options::default();
+        options.gas = Some(U256::from(5_000_000));
+        self.contract.call(
+            "applyAuction",
+            (slot, prev_state, new_state, order_hash, standing_order_index, prices_and_volumes),
+            account,
+            options,
+        ).wait()
             .map_err(DriverError::from)
-            .map(|_|())
+            .map(|_| ())
     }
-    
+
     fn calculate_order_hash(
         &self, slot: U256,
         standing_order_index: Vec<U128>) -> Result<H256> {
@@ -246,9 +247,9 @@ impl SnappContract for SnappContractImpl {
             (slot, standing_order_index),
             None,
             Options::default(),
-            None
+            None,
         ).wait()
-        .map_err(DriverError::from)
+            .map_err(DriverError::from)
     }
 }
 
@@ -259,7 +260,7 @@ pub mod tests {
     use mock_it::Matcher;
     use mock_it::Matcher::*;
     use crate::error::ErrorKind;
-    
+
     #[derive(Clone)]
     pub struct SnappContractMock {
         pub get_current_block_timestamp: Mock<(), Result<U256>>,
@@ -323,7 +324,7 @@ pub mod tests {
         fn get_current_auction_slot(&self) -> Result<U256> {
             self.get_current_auction_slot.called(())
         }
-        fn creation_timestamp_for_deposit_slot(&self, slot: U256) -> Result<U256>{
+        fn creation_timestamp_for_deposit_slot(&self, slot: U256) -> Result<U256> {
             self.creation_timestamp_for_deposit_slot.called(slot)
         }
         fn deposit_hash_for_slot(&self, slot: U256) -> Result<H256> {

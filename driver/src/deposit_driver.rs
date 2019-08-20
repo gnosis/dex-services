@@ -39,7 +39,7 @@ pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), Driver
             debug!("Need to wait before processing deposit_slot {:?}", slot);
         }
     } else {
-        debug!("All deposits are already processed");
+        info!("No pending deposit batches.");
     }
     Ok(false)
 }

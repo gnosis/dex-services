@@ -1,21 +1,20 @@
+extern crate dfusion_core;
 extern crate hex;
-extern crate mongodb;
 #[macro_use]
 extern crate log;
 extern crate rustc_hex;
 extern crate serde_json;
 extern crate web3;
-extern crate dfusion_core;
+
+use dfusion_core::database::GraphReader;
 
 use crate::contract::SnappContractImpl;
-use crate::mongo_db::MongoDB;
 use crate::deposit_driver::run_deposit_listener;
 use crate::order_driver::run_order_listener;
 use crate::price_finding::PriceFinding;
 use crate::withdraw_driver::run_withdraw_listener;
 
 pub mod contract;
-pub mod mongo_db;
 pub mod error;
 pub mod price_finding;
 
@@ -25,7 +24,7 @@ mod withdraw_driver;
 mod util;
 
 pub fn run_driver_components(
-    db: &MongoDB,
+    db: &GraphReader,
     contract: &SnappContractImpl,
     price_finder: &mut PriceFinding,
 ) {
@@ -38,6 +37,5 @@ pub fn run_driver_components(
     if let Err(e) = run_order_listener(db, contract, price_finder) {
         error!("Order_driver error: {}", e);
     }
-    //...
 }
 
