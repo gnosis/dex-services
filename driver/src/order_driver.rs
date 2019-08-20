@@ -35,7 +35,7 @@ where
     if slot <= auction_slot {
         debug!("Highest unprocessed auction slot is {:?}", slot);
         let creation_time_block = |i| {
-            contract.creation_timestamp_for_withdraw_slot(i)
+            contract.creation_timestamp_for_auction_slot(i)
         };
         if can_process(slot, contract, &creation_time_block)? {
             info!("Processing auction slot {:?}", slot);

@@ -14,13 +14,13 @@ where
 
     debug!("Current top deposit_slot is {:?}", deposit_slot);
     let slot = find_first_unapplied_slot(
-        deposit_slot, 
+        deposit_slot,
         &|i| contract.has_deposit_slot_been_applied(i)
     )?;
     if slot <= deposit_slot {
         debug!("Highest unprocessed deposit_slot is {:?}", slot);
         let creation_time_block = |i| {
-            contract.creation_timestamp_for_withdraw_slot(i)
+            contract.creation_timestamp_for_deposit_slot(i)
         };
         if can_process(slot, contract, &creation_time_block)? {
             info!("Processing deposit_slot {:?}", slot);
