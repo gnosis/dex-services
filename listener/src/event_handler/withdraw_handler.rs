@@ -6,12 +6,12 @@ use dfusion_core::models::PendingFlux;
 
 use graph::components::ethereum::EthereumBlock;
 use graph::components::store::EntityOperation;
-use graph::data::store::{Entity};
+use graph::data::store::Entity;
 
 use web3::types::{Log, Transaction};
 
-use super::EventHandler;
 use super::util;
+use super::EventHandler;
 
 #[derive(Debug, Clone)]
 pub struct WithdrawHandler {}
@@ -22,7 +22,7 @@ impl EventHandler for WithdrawHandler {
         logger: Logger,
         _block: Arc<EthereumBlock>,
         _transaction: Arc<Transaction>,
-        log: Arc<Log>
+        log: Arc<Log>,
     ) -> Result<Vec<EntityOperation>, Error> {
         let entity_id = util::entity_id_from_log(&log);
         let flux = PendingFlux::from(log);
@@ -32,11 +32,9 @@ impl EventHandler for WithdrawHandler {
         let mut entity: Entity = flux.into();
         entity.set("id", &entity_id);
 
-        Ok(vec![
-            EntityOperation::Set {
-                key: util::entity_key("Withdraw", &entity),
-                data: entity
-            }
-        ])
+        Ok(vec![EntityOperation::Set {
+            key: util::entity_key("Withdraw", &entity),
+            data: entity,
+        }])
     }
 }

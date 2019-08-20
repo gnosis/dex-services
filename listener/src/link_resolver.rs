@@ -2,7 +2,6 @@ use graph::components::link_resolver::JsonValueStream;
 use graph::data::subgraph::Link;
 use graph::prelude::LinkResolver as LinkResolverTrait;
 
-use futures::prelude::*;
 use futures::future::*;
 use slog::Logger;
 use std::fs::File;
@@ -10,7 +9,8 @@ use std::io::prelude::*;
 use std::path::Path;
 
 fn read_file(file: &str) -> Result<Vec<u8>, failure::Error> {
-    let path = format!("listener/subgraph_definition/{}", 
+    let path = format!(
+        "listener/subgraph_definition/{}",
         Path::new(file)
             .iter()
             .last()
@@ -35,7 +35,7 @@ impl LinkResolverTrait for LocalLinkResolver {
         info!(logger, "Resolving link {}", &link.link);
         match read_file(&link.link) {
             Ok(res) => Box::new(ok(res)),
-            Err(e) => Box::new(err(e))
+            Err(e) => Box::new(err(e)),
         }
     }
 

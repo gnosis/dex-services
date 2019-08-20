@@ -20,8 +20,8 @@ pub mod price_finding;
 
 mod deposit_driver;
 mod order_driver;
-mod withdraw_driver;
 mod util;
+mod withdraw_driver;
 
 pub fn run_driver_components(
     db: &GraphReader,
@@ -38,4 +38,3 @@ pub fn run_driver_components(
         error!("Order_driver error: {}", e);
     }
 }
-

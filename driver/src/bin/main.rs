@@ -5,17 +5,19 @@ extern crate simple_logger;
 use dfusion_core::database::GraphReader;
 
 use driver::contract::SnappContractImpl;
-use driver::price_finding::NaiveSolver;
-use driver::price_finding::LinearOptimisationPriceFinder;
-use driver::price_finding::PriceFinding;
+use driver::price_finding::{
+    NaiveSolver,
+    LinearOptimisationPriceFinder,
+    PriceFinding
+};
 use driver::run_driver_components;
 
 use graph::log::logger;
 use graph_node_reader::Store as GraphNodeReader;
 
+use std::env;
 use std::thread;
 use std::time::Duration;
-use std::env;
 
 fn main() {
     // driver logger
@@ -28,8 +30,7 @@ fn main() {
     let db_instance = GraphReader::new(Box::new(store_reader));
     let contract = SnappContractImpl::new().unwrap();
 
-    let solver_env_var = env::var("LINEAR_OPTIMIZATION_SOLVER")
-        .unwrap_or_else(|_| "0".to_string());
+    let solver_env_var = env::var("LINEAR_OPTIMIZATION_SOLVER").unwrap_or_else(|_| "0".to_string());
     let mut price_finder: Box<dyn PriceFinding> = if solver_env_var == "1" {
         Box::new(LinearOptimisationPriceFinder::new())
     } else {

@@ -1,22 +1,20 @@
-use std::sync::Arc;
 use graph::components::store::EntityKey;
 use graph::data::store::Entity;
+use std::sync::Arc;
 use web3::types::Log;
 
 use crate::SUBGRAPH_ID;
 
 pub fn entity_id_from_log(log: &Arc<Log>) -> String {
-    format!("{:x}_{}", 
-        &log.block_hash.unwrap(), 
-        &log.log_index.unwrap()
-    )
+    format!("{:x}_{}", &log.block_hash.unwrap(), &log.log_index.unwrap())
 }
 
 pub fn entity_key(entity_type: &str, entity: &Entity) -> EntityKey {
     EntityKey {
         subgraph_id: SUBGRAPH_ID.clone(),
         entity_type: entity_type.to_string(),
-        entity_id: entity.get("id")
+        entity_id: entity
+            .get("id")
             .and_then(|v| v.clone().as_string())
             .unwrap(),
     }
@@ -26,7 +24,7 @@ pub fn entity_key(entity_type: &str, entity: &Entity) -> EntityKey {
 pub mod test {
     use graph::components::ethereum::EthereumBlock;
     use slog::Logger;
-    use web3::types::{Block, Bytes, H2048, H256, H160, Transaction, U256};
+    use web3::types::{Block, Bytes, Transaction, H160, H2048, H256, U256};
 
     pub fn logger() -> Logger {
         Logger::root(slog::Discard, o!())
@@ -48,7 +46,7 @@ pub mod test {
         }
     }
 
-    pub fn fake_block() -> EthereumBlock{
+    pub fn fake_block() -> EthereumBlock {
         EthereumBlock {
             block: Block {
                 hash: None,
