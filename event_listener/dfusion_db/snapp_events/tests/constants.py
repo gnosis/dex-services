@@ -1,1 +1,0 @@
-EMPTY_STATE_HASH = "0x" + "0" * 62
