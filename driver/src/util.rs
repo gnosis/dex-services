@@ -53,6 +53,10 @@ where
     C: SnappContract,
 {
     let slot_creation_block_time = creation_block_time(slot)?;
+    if slot_creation_block_time == U256::zero() {
+        return Ok(ProcessingState::TooEarly);
+    }
+
     let current_block_time = contract.get_current_block_timestamp()?;
     if slot_creation_block_time + 360 < current_block_time {
         return Ok(ProcessingState::AcceptsSolution);

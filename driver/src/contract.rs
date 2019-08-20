@@ -355,6 +355,8 @@ impl SnappContract for SnappContractImpl {
             .account_with_sufficient_balance()
             .ok_or("Not enough balance to send Txs")?;
 
+        let mut options = Options::default();
+        options.gas = Some(U256::from(5_000_000));
         self.contract
             .call(
                 "auctionSolutionBid",
@@ -367,7 +369,7 @@ impl SnappContract for SnappContractImpl {
                     objective_value,
                 ),
                 account,
-                Options::default(),
+                options,
             )
             .wait()
             .map_err(DriverError::from)

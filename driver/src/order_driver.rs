@@ -145,6 +145,15 @@ impl<'a, D: DbInterface, C: SnappContract> OrderProcessor<'a, D, C> {
             new_state_root, solution
         );
 
+        self.contract.auction_solution_bid(
+            auction_index,
+            state_root,
+            new_state_root,
+            total_order_hash_from_contract,
+            standing_order_indexes,
+            solution.surplus.unwrap_or_else(U256::zero),
+        )?;
+
         self.auction_bids.insert(
             auction_index,
             AuctionBid {
@@ -154,14 +163,7 @@ impl<'a, D: DbInterface, C: SnappContract> OrderProcessor<'a, D, C> {
             },
         );
 
-        self.contract.auction_solution_bid(
-            auction_index,
-            state_root,
-            new_state_root,
-            total_order_hash_from_contract,
-            standing_order_indexes,
-            solution.surplus.unwrap_or_else(U256::zero),
-        )
+        Ok(())
     }
 }
 

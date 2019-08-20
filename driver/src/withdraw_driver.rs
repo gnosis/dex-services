@@ -1,6 +1,8 @@
 use crate::contract::SnappContract;
 use crate::error::DriverError;
-use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check, ProcessingState};
+use crate::util::{
+    can_process, find_first_unapplied_slot, hash_consistency_check, ProcessingState,
+};
 
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::{RollingHashable, RootHashable};
@@ -18,10 +20,12 @@ where
     })?;
     if slot <= withdraw_slot {
         info!("Highest unprocessed withdraw_slot is {:?}", slot);
-        match can_process(slot, contract,
-                       &|i| contract.creation_timestamp_for_withdraw_slot(i),
-        )? {
-            ProcessingState::TooEarly => info!("Need to wait before processing withdraw_slot {:?}", slot),
+        match can_process(slot, contract, &|i| {
+            contract.creation_timestamp_for_withdraw_slot(i)
+        })? {
+            ProcessingState::TooEarly => {
+                info!("Need to wait before processing withdraw_slot {:?}", slot)
+            }
             _ => {
                 info!("Processing withdraw_slot {:?}", slot);
                 let state_root = contract.get_current_state_root()?;
@@ -37,10 +41,15 @@ where
 
                 info!(
                     "New AccountState hash is {}, Valid Withdraw Merkle Root is {}",
-                    balances.state_hash,
-                    withdrawal_merkle_root
+                    balances.state_hash, withdrawal_merkle_root
                 );
-                contract.apply_withdraws(slot, withdrawal_merkle_root, state_root, balances.state_hash, contract_withdraw_hash)?;
+                contract.apply_withdraws(
+                    slot,
+                    withdrawal_merkle_root,
+                    state_root,
+                    balances.state_hash,
+                    contract_withdraw_hash,
+                )?;
                 return Ok(true);
             }
         }
