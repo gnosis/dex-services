@@ -16,13 +16,6 @@ matrix:
     - language: python
       python: 3.6
       cache: pip
-      install:
-        - pip install -U -r event_listener/requirements.txt
-      script:
-        - pytest --cov=event_listener/dfusion_db/ --cov-report term-missing
-        - mypy event_listener/dfusion_db/ --ignore-missing-imports --strict
-        - pep8 --config .pep8 event_listener/dfusion_db/
-        - pylint --errors-only event_listener/dfusion_db/
     - language: generic
       dist: xenial
       sudo: required
@@ -35,10 +28,9 @@ matrix:
       install:
         - git submodule update --init
         - npm install -C dex-contracts
-        # driver/listener require compiled contracts
         - cd dex-contracts && truffle compile && cd -
-        - docker-compose up -d driver listener graph-listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
-        - cd dex-contracts && wait-port -t 30000 8545 && truffle migrate && cd -
+        - docker-compose up -d driver graph-listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
+        - cd dex-contracts && wait-port -t 8545 && truffle migrate && cd -
       script:
         - ./test/e2e-tests-deposit-withdraw.sh
         - ./test/restart-containers.sh
