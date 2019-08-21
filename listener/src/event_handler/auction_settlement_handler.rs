@@ -5,22 +5,21 @@ use slog::Logger;
 use std::sync::Arc;
 
 use dfusion_core::database::DbInterface;
-use dfusion_core::models::Deserializable;
 use dfusion_core::models::util::{PopFromLogData, ToValue};
+use dfusion_core::models::Deserializable;
 use dfusion_core::models::Solution;
 
 use graph::components::ethereum::EthereumBlock;
 use graph::components::store::EntityOperation;
 use graph::data::store::Entity;
 
-use web3::types::{H256, U256};
 use web3::types::{Log, Transaction};
+use web3::types::{H256, U256};
 
 use std::fmt;
 
-use super::EventHandler;
 use super::util;
-
+use super::EventHandler;
 
 #[derive(Clone)]
 pub struct AuctionSettlementHandler {
@@ -29,9 +28,7 @@ pub struct AuctionSettlementHandler {
 
 impl AuctionSettlementHandler {
     pub fn new(store: Arc<DbInterface>) -> Self {
-        AuctionSettlementHandler {
-            store
-        }
+        AuctionSettlementHandler { store }
     }
 }
 
@@ -40,7 +37,6 @@ impl Debug for AuctionSettlementHandler {
         write!(f, "AuctionSettlementHandler")
     }
 }
-
 
 impl EventHandler for AuctionSettlementHandler {
     fn process_event(
@@ -51,7 +47,12 @@ impl EventHandler for AuctionSettlementHandler {
         log: Arc<Log>,
     ) -> Result<Vec<EntityOperation>, Error> {
         let mut event_data: Vec<u8> = log.data.0.clone();
-        info!(logger, "Parsing Auction Settlement event from {} bytes: {:?}", event_data.len(), event_data);
+        info!(
+            logger,
+            "Parsing Auction Settlement event from {} bytes: {:?}",
+            event_data.len(),
+            event_data
+        );
         let auction_id = U256::pop_from_log_data(&mut event_data);
         let state_index = U256::pop_from_log_data(&mut event_data).saturating_sub(U256::one());
         let new_state_hash = H256::pop_from_log_data(&mut event_data);
@@ -64,50 +65,61 @@ impl EventHandler for AuctionSettlementHandler {
         let encoded_solution = event_data;
 
         // Fetch relevant information for transition (accounts, orders, parsed solution)
-        let mut account_state = self.store
+        let mut account_state = self
+            .store
             .get_balances_for_state_index(&state_index)
             .map_err(|e| failure::err_msg(format!("{}", e)))?;
 
-        let mut orders = self.store
+        let mut orders = self
+            .store
             .get_orders_of_slot(&auction_id)
             .map_err(|e| failure::err_msg(format!("{}", e)))?;
 
-        let standing_orders = self.store
+        let standing_orders = self
+            .store
             .get_standing_orders_of_slot(&auction_id)
             .map_err(|e| failure::err_msg(format!("{}", e)))?;
 
-        orders.extend(standing_orders
-            .iter()
-            .filter(|standing_order| standing_order.num_orders() > 0)
-            .flat_map(|standing_order| standing_order.get_orders().clone())
+        orders.extend(
+            standing_orders
+                .iter()
+                .filter(|standing_order| standing_order.num_orders() > 0)
+                .flat_map(|standing_order| standing_order.get_orders().clone()),
         );
 
-        info!(logger, "Parsing packed Auction Results from {} bytes: {:?}", encoded_solution.len(), encoded_solution);
+        info!(
+            logger,
+            "Parsing packed Auction Results from {} bytes: {:?}",
+            encoded_solution.len(),
+            encoded_solution
+        );
         let auction_results = Solution::from_bytes(encoded_solution);
         debug!(logger, "Parsed Auction Results: {:?}", auction_results);
 
-        info!(logger, "Found {} valid Orders for this auction", orders.len());
+        info!(
+            logger,
+            "Found {} valid Orders for this auction",
+            orders.len()
+        );
         account_state.apply_auction(&orders, auction_results);
 
         let mut entity: Entity = account_state.into();
 
         // Set the state root according to event information
         entity.set("id", new_state_hash.to_value());
-        Ok(vec![
-            EntityOperation::Set {
-                key: util::entity_key("AccountState", &entity),
-                data: entity,
-            }
-        ])
+        Ok(vec![EntityOperation::Set {
+            key: util::entity_key("AccountState", &entity),
+            data: entity,
+        }])
     }
 }
 
 #[cfg(test)]
 pub mod unit_test {
     use super::*;
-    use dfusion_core::database::{DatabaseError, ErrorKind};
     use dfusion_core::database::tests::DbInterfaceMock;
-    use dfusion_core::models::{AccountState, TOKENS, Order, BatchInformation, StandingOrder};
+    use dfusion_core::database::{DatabaseError, ErrorKind};
+    use dfusion_core::models::{AccountState, BatchInformation, Order, StandingOrder, TOKENS};
     use web3::types::{Bytes, H256, U256};
 
     #[test]
@@ -115,21 +127,18 @@ pub mod unit_test {
         let store = Arc::new(DbInterfaceMock::new());
 
         // Add previous account state and pending deposits into Store
-        let existing_state = AccountState::new(
-            H256::zero(),
-            U256::from(0),
-            vec![2, 0, 0, 0],
-            TOKENS,
-        );
-        store.get_balances_for_state_index
+        let existing_state =
+            AccountState::new(H256::zero(), U256::from(0), vec![2, 0, 0, 0], TOKENS);
+        store
+            .get_balances_for_state_index
             .given(U256::zero())
             .will_return(Ok(existing_state));
 
-
         let order = Order {
-            batch_information: Some(
-                BatchInformation { slot: U256::zero(), slot_index: 0 }
-            ),
+            batch_information: Some(BatchInformation {
+                slot: U256::zero(),
+                slot_index: 0,
+            }),
             account_id: 0,
             buy_token: 1,
             sell_token: 0,
@@ -137,21 +146,19 @@ pub mod unit_test {
             sell_amount: 1,
         };
 
-        store.get_orders_of_slot
+        store
+            .get_orders_of_slot
             .given(U256::zero())
             .will_return(Ok(vec![order]));
 
-        store.get_standing_orders_of_slot
+        store
+            .get_standing_orders_of_slot
             .given(U256::zero())
             .will_return(Ok(StandingOrder::empty_array()));
 
         // Process event
         let handler = AuctionSettlementHandler::new(store);
-        let log = create_auction_settlement_event(
-            0,
-            1,
-            H256::from(1),
-        );
+        let log = create_auction_settlement_event(0, 1, H256::from(1));
 
         let result = handler.process_event(
             util::test::logger(),
@@ -161,15 +168,13 @@ pub mod unit_test {
         );
 
         assert!(result.is_ok());
-        let expected_new_state = AccountState::new(
-            H256::from(1),
-            U256::from(1),
-            vec![0, 1, 0, 0],
-            TOKENS,
-        );
+        let expected_new_state =
+            AccountState::new(H256::from(1), U256::from(1), vec![0, 1, 0, 0], TOKENS);
         match result.unwrap().pop().unwrap() {
-            EntityOperation::Set { key: _, data } => assert_eq!(AccountState::from(data), expected_new_state),
-            _ => assert!(false)
+            EntityOperation::Set { key: _, data } => {
+                assert_eq!(AccountState::from(data), expected_new_state)
+            }
+            _ => assert!(false),
         }
     }
 
@@ -178,16 +183,16 @@ pub mod unit_test {
         let store = Arc::new(DbInterfaceMock::new());
 
         // No data in store
-        store.get_balances_for_state_index
+        store
+            .get_balances_for_state_index
             .given(U256::zero())
-            .will_return(Err(DatabaseError::new(ErrorKind::StateError, "No State found")));
+            .will_return(Err(DatabaseError::new(
+                ErrorKind::StateError,
+                "No State found",
+            )));
 
         let handler = AuctionSettlementHandler::new(store);
-        let log = create_auction_settlement_event(
-            0,
-            1,
-            H256::from(1),
-        );
+        let log = create_auction_settlement_event(0, 1, H256::from(1));
 
         let result = handler.process_event(
             util::test::logger(),
@@ -202,26 +207,20 @@ pub mod unit_test {
     fn test_auction_settlement_fails_if_orders_dont_exist() {
         let store = Arc::new(DbInterfaceMock::new());
 
-        let existing_state = AccountState::new(
-            H256::zero(),
-            U256::from(0),
-            vec![2, 0, 0, 0],
-            TOKENS,
-        );
-        store.get_balances_for_state_index
+        let existing_state =
+            AccountState::new(H256::zero(), U256::from(0), vec![2, 0, 0, 0], TOKENS);
+        store
+            .get_balances_for_state_index
             .given(U256::zero())
             .will_return(Ok(existing_state));
 
-        store.get_orders_of_slot
+        store
+            .get_orders_of_slot
             .given(U256::zero())
             .will_return(Ok(vec![]));
 
         let handler = AuctionSettlementHandler::new(store);
-        let log = create_auction_settlement_event(
-            0,
-            1,
-            H256::from(1),
-        );
+        let log = create_auction_settlement_event(0, 1, H256::from(1));
 
         let result = handler.process_event(
             util::test::logger(),
@@ -236,27 +235,24 @@ pub mod unit_test {
     fn test_auction_settlement_fails_if_standing_orders_dont_exist() {
         let store = Arc::new(DbInterfaceMock::new());
 
-        let existing_state = AccountState::new(
-            H256::zero(),
-            U256::from(0),
-            vec![2, 0, 0, 0],
-            TOKENS,
-        );
-        store.get_balances_for_state_index
+        let existing_state =
+            AccountState::new(H256::zero(), U256::from(0), vec![2, 0, 0, 0], TOKENS);
+        store
+            .get_balances_for_state_index
             .given(U256::zero())
             .will_return(Ok(existing_state));
 
         // No orders in store
-        store.get_orders_of_slot
+        store
+            .get_orders_of_slot
             .given(U256::zero())
-            .will_return(Err(DatabaseError::new(ErrorKind::StateError, "No Orders found")));
+            .will_return(Err(DatabaseError::new(
+                ErrorKind::StateError,
+                "No Orders found",
+            )));
 
         let handler = AuctionSettlementHandler::new(store);
-        let log = create_auction_settlement_event(
-            0,
-            1,
-            H256::from(1),
-        );
+        let log = create_auction_settlement_event(0, 1, H256::from(1));
 
         let result = handler.process_event(
             util::test::logger(),
@@ -272,8 +268,46 @@ pub mod unit_test {
         new_state_root: H256,
     ) -> Arc<Log> {
         let mut bytes: Vec<Vec<u8>> = vec![
-            /* auction_id */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, auction_id],
-            /* new_state_index */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, new_state_index],
+            /* auction_id */
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, auction_id,
+            ],
+            /* new_state_index */
+            vec![
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                new_state_index,
+            ],
             /* new_state_hash */ new_state_root[..].to_vec(),
             /* byte_init */ vec![0; 32],
             /* byte_length */ vec![0; 32],
@@ -283,10 +317,10 @@ pub mod unit_test {
             bytes.push(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
         }
         bytes.push(
-            /* executed_buy_amount_1 */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+            /* executed_buy_amount_1 */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
         );
         bytes.push(
-            /* executed_sell_amount_1 */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2]
+            /* executed_sell_amount_1 */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
         );
 
         Arc::new(Log {

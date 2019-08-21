@@ -13,17 +13,15 @@ impl EventHandler for InitializationHandler {
         logger: Logger,
         _block: Arc<EthereumBlock>,
         _transaction: Arc<Transaction>,
-        log: Arc<Log>
+        log: Arc<Log>,
     ) -> Result<Vec<EntityOperation>, Error> {
         info!(logger, "Processing SnappBase Initialization Event");
         let state = AccountState::from(log);
         let entity: Entity = state.into();
-        
-        Ok(vec![
-            EntityOperation::Set {
-                key: util::entity_key("AccountState", &entity),
-                data: entity
-            }
-        ])
+
+        Ok(vec![EntityOperation::Set {
+            key: util::entity_key("AccountState", &entity),
+            data: entity,
+        }])
     }
 }

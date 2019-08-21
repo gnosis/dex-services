@@ -37,6 +37,6 @@ pub trait EventHandler: Send + Sync + Debug {
         logger: Logger,
         block: Arc<EthereumBlock>,
         transaction: Arc<Transaction>,
-        log: Arc<Log>
+        log: Arc<Log>,
     ) -> Result<Vec<EntityOperation>, Error>;
 }
