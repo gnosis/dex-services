@@ -12,13 +12,13 @@ where
 {
     let deposit_slot = contract.get_current_deposit_slot()?;
 
-    debug!("Current top deposit_slot is {:?}", deposit_slot);
+    info!("Current top deposit_slot is {:?}", deposit_slot);
     let slot = find_first_unapplied_slot(
         deposit_slot,
         &|i| contract.has_deposit_slot_been_applied(i)
     )?;
     if slot <= deposit_slot {
-        debug!("Highest unprocessed deposit_slot is {:?}", slot);
+        info!("Highest unprocessed deposit_slot is {:?}", slot);
         let creation_time_block = |i| {
             contract.creation_timestamp_for_deposit_slot(i)
         };
@@ -43,10 +43,10 @@ where
             )?;
             return Ok(true);
         } else {
-            debug!("Need to wait before processing deposit_slot {:?}", slot);
+            info!("Need to wait before processing deposit_slot {:?}", slot);
         }
     } else {
-        debug!("No pending deposit batches.");
+        info!("No pending deposit batches.");
     }
     Ok(false)
 }
