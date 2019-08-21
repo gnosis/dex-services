@@ -73,11 +73,10 @@ impl AccountState {
         let buy_amounts = results.executed_buy_amounts;
         let sell_amounts = results.executed_sell_amounts;
 
-        for (i, execution_amounts) in buy_amounts.iter().zip(sell_amounts.iter()).enumerate() {
+        for i in 0..buy_amounts.len() {
             let order = &orders[i];
-            let (buy_amount, sell_amount) = execution_amounts;
-            self.increment_balance(order.buy_token, order.account_id, *buy_amount);
-            self.decrement_balance(order.sell_token, order.account_id, *sell_amount);
+            self.increment_balance(order.buy_token, order.account_id, buy_amounts[i]);
+            self.decrement_balance(order.sell_token, order.account_id, sell_amounts[i]);
         }
         self.state_index = self.state_index.saturating_add(U256::one());
         self.state_hash = self.rolling_hash(self.state_index.low_u32());
