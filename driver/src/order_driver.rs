@@ -27,13 +27,13 @@ where
 {
     let auction_slot = contract.get_current_auction_slot()?;
 
-    debug!("Current top auction slot is {:?}", auction_slot);
+    info!("Current top auction slot is {:?}", auction_slot);
     let slot = find_first_unapplied_slot(
         auction_slot,
         &|i| contract.has_auction_slot_been_applied(i)
     )?;
     if slot <= auction_slot {
-        debug!("Highest unprocessed auction slot is {:?}", slot);
+        info!("Highest unprocessed auction slot is {:?}", slot);
         let creation_time_block = |i| {
             contract.creation_timestamp_for_auction_slot(i)
         };
@@ -59,7 +59,7 @@ where
                     .filter(|standing_order| standing_order.num_orders() > 0)
                     .flat_map(|standing_order| standing_order.get_orders().clone()),
             );
-            debug!("All Orders: {:?}", orders);
+            info!("All Orders: {:?}", orders);
 
             let standing_order_indexes = batch_index_from_standing_orders(&standing_orders);
             let total_order_hash_from_contract =
@@ -106,7 +106,7 @@ where
             )?;
             return Ok(true);
         } else {
-            debug!("Need to wait before processing auction slot {:?}", slot);
+            info!("Need to wait before processing auction slot {:?}", slot);
         }
     }
     Ok(false)
