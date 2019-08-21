@@ -46,7 +46,7 @@ where
             debug!("Need to wait before processing deposit_slot {:?}", slot);
         }
     } else {
-        info!("No pending deposit batches.");
+        debug!("No pending deposit batches.");
     }
     Ok(false)
 }
