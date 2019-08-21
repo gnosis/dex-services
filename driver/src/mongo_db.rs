@@ -15,7 +15,6 @@ use web3::types::{H256, U256};
 pub struct MongoDB {
     pub client: Client,
 }
-
 impl MongoDB {
     pub fn new(db_host: String, db_port: String) -> Result<MongoDB, DatabaseError> {
         let port = db_port
