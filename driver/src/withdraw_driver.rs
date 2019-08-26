@@ -1,7 +1,7 @@
 use crate::contract::SnappContract;
 use crate::error::DriverError;
 use crate::util::{
-    can_process, find_first_unapplied_slot, hash_consistency_check, ProcessingState,
+    batch_processing_state, find_first_unapplied_slot, hash_consistency_check, ProcessingState,
 };
 
 use dfusion_core::database::DbInterface;
@@ -20,7 +20,7 @@ where
     })?;
     if slot <= withdraw_slot {
         info!("Highest unprocessed withdraw_slot is {:?}", slot);
-        match can_process(slot, contract, &|i| {
+        match batch_processing_state(slot, contract, &|i| {
             contract.creation_timestamp_for_withdraw_slot(i)
         })? {
             ProcessingState::TooEarly => {

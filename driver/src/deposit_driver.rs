@@ -1,6 +1,8 @@
 use crate::contract::SnappContract;
-use crate::util::{find_first_unapplied_slot, can_process, hash_consistency_check, ProcessingState};
 use crate::error::DriverError;
+use crate::util::{
+    batch_processing_state, find_first_unapplied_slot, hash_consistency_check, ProcessingState,
+};
 
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::RollingHashable;
@@ -17,9 +19,9 @@ where
         find_first_unapplied_slot(deposit_slot, &|i| contract.has_deposit_slot_been_applied(i))?;
     if slot <= deposit_slot {
         info!("Highest unprocessed deposit_slot is {:?}", slot);
-        match can_process(slot, contract,
-            &|i| contract.creation_timestamp_for_deposit_slot(i)
-        )? {
+        match batch_processing_state(slot, contract, &|i| {
+            contract.creation_timestamp_for_deposit_slot(i)
+        })? {
             ProcessingState::TooEarly => info!("All deposits are already processed"),
             _ => {
                 info!("Processing deposit_slot {:?}", slot);
@@ -32,11 +34,15 @@ where
                 hash_consistency_check(deposit_hash, contract_deposit_hash, "deposit")?;
 
                 balances.apply_deposits(&deposits);
-                
                 info!("New AccountState hash is {}", balances.state_hash);
-                contract.apply_deposits(slot, state_root, balances.state_hash, contract_deposit_hash)?;
+                contract.apply_deposits(
+                    slot,
+                    state_root,
+                    balances.state_hash,
+                    contract_deposit_hash,
+                )?;
                 return Ok(true);
-            }   
+            }
         }
     } else {
         info!("All deposits are already processed");

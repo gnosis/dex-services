@@ -44,7 +44,7 @@ pub enum ProcessingState {
     AcceptsSolution,
 }
 
-pub fn can_process<C>(
+pub fn batch_processing_state<C>(
     slot: U256,
     contract: &C,
     creation_block_time: &Fn(U256) -> Result<U256, DriverError>,
