@@ -1,13 +1,18 @@
 use crate::contract::SnappContract;
 use crate::error::DriverError;
-use crate::price_finding::PriceFinding;
+use super::price_finding::PriceFinding;
 use crate::util::{
     batch_processing_state, find_first_unapplied_slot, hash_consistency_check, ProcessingState,
 };
 
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::{
-    AccountState, ConcatenatingHashable, Order, RollingHashable, Serializable, Solution,
+    AccountState,
+    ConcatenatingHashable,
+    Order,
+    RollingHashable,
+    Serializable,
+    Solution,
     StandingOrder,
 };
 

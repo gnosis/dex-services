@@ -15,9 +15,10 @@ where
     let withdraw_slot = contract.get_current_withdraw_slot()?;
 
     info!("Current top withdraw_slot is {:?}", withdraw_slot);
-    let slot = find_first_unapplied_slot(withdraw_slot, &|i| {
-        contract.has_withdraw_slot_been_applied(i)
-    })?;
+    let slot = find_first_unapplied_slot(
+        withdraw_slot,
+        &|i| contract.has_withdraw_slot_been_applied(i),
+    )?;
     if slot <= withdraw_slot {
         info!("Highest unprocessed withdraw_slot is {:?}", slot);
         match batch_processing_state(slot, contract, &|i| {
