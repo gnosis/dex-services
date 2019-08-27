@@ -1,4 +1,3 @@
-extern crate env_logger;
 extern crate graph;
 extern crate simple_logger;
 
@@ -22,11 +21,10 @@ use std::time::Duration;
 fn main() {
     // driver logger
     simple_logger::init_with_level(log::Level::Info).unwrap();
-
-    // graph logger
-    let logger = logger(false);
+    let graph_logger = logger(false);
+    
     let postgres_url = env::var("POSTGRES_URL").expect("Specify POSTGRES_URL variable");
-    let store_reader = GraphNodeReader::new(postgres_url, &logger);
+    let store_reader = GraphNodeReader::new(postgres_url, &graph_logger);
     let db_instance = GraphReader::new(Box::new(store_reader));
     let contract = SnappContractImpl::new().unwrap();
 

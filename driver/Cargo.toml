@@ -13,7 +13,6 @@ bson = "0.9.1"
 chrono = "0.4.6"
 ethabi = "6.1.0"
 dfusion_core = { path = "../dfusion_rust_core" }
-env_logger = "0.5.10"
 graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
 graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", tag = "v0.13.2" }
 hex = "0.3.2"
