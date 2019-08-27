@@ -15,19 +15,19 @@ where
     let withdraw_slot = contract.get_current_withdraw_slot()?;
 
     info!("Current top withdraw_slot is {:?}", withdraw_slot);
-    let slot = find_first_unapplied_slot(
-        withdraw_slot,
-        &|i| contract.has_withdraw_slot_been_applied(i),
-    )?;
+    let slot = find_first_unapplied_slot(withdraw_slot, &|i| {
+        contract.has_withdraw_slot_been_applied(i)
+    })?;
     if slot <= withdraw_slot {
         info!("Highest unprocessed withdraw_slot is {:?}", slot);
-        match batch_processing_state(slot, contract, &|i| {
+        let processing_state = batch_processing_state(slot, contract, &|i| {
             contract.creation_timestamp_for_withdraw_slot(i)
-        })? {
+        })?;
+        match processing_state {
             ProcessingState::TooEarly => {
                 info!("Need to wait before processing withdraw_slot {:?}", slot)
             }
-            _ => {
+            ProcessingState::AcceptsBids | ProcessingState::AcceptsSolution => {
                 info!("Processing withdraw_slot {:?}", slot);
                 let state_root = contract.get_current_state_root()?;
                 let contract_withdraw_hash = contract.withdraw_hash_for_slot(slot)?;

@@ -1,5 +1,5 @@
 use crate::contract::SnappContract;
-use crate::error::DriverError;
+use crate::error::{DriverError, ErrorKind};
 use super::price_finding::PriceFinding;
 use crate::util::{
     batch_processing_state, find_first_unapplied_slot, hash_consistency_check, ProcessingState,
@@ -59,9 +59,10 @@ impl<'a, D: DbInterface, C: SnappContract> OrderProcessor<'a, D, C> {
         })?;
         if slot <= auction_slot {
             info!("Highest unprocessed auction slot is {:?}", slot);
-            match batch_processing_state(slot, self.contract, &|i| {
+            let processing_state = batch_processing_state(slot, self.contract, &|i| {
                 self.contract.creation_timestamp_for_auction_slot(i)
-            })? {
+            })?;
+            match processing_state {
                 ProcessingState::TooEarly => {
                     info!("Need to wait before processing auction slot {:?}", slot)
                 }
@@ -82,7 +83,10 @@ impl<'a, D: DbInterface, C: SnappContract> OrderProcessor<'a, D, C> {
                         )?;
                         return Ok(ProcessResult::AuctionApplied(slot));
                     }
-                    info!("Cannot find saved bid for auction slot {:?}", slot);
+                    return Err(DriverError::new(
+                        &format!("Cannot find saved bid for auction slot {:?}", slot),
+                        ErrorKind::StateError
+                    ))
                 }
             }
         }

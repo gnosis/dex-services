@@ -21,11 +21,12 @@ where
     )?;
     if slot <= deposit_slot {
         info!("Highest unprocessed deposit_slot is {:?}", slot);
-        match batch_processing_state(slot, contract, &|i| {
+        let processing_state = batch_processing_state(slot, contract, &|i| {
             contract.creation_timestamp_for_deposit_slot(i)
-        })? {
+        })?;
+        match processing_state {
             ProcessingState::TooEarly => info!("All deposits are already processed"),
-            _ => {
+            ProcessingState::AcceptsBids | ProcessingState::AcceptsSolution => {
                 info!("Processing deposit_slot {:?}", slot);
                 let state_root = contract.get_current_state_root()?;
                 let contract_deposit_hash = contract.deposit_hash_for_slot(slot)?;

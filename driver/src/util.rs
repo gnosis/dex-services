@@ -4,6 +4,8 @@ use crate::error::ErrorKind;
 
 use web3::types::{H256, U256};
 
+const BATCH_TIME_SECONDS: u32 = 3 * 60;
+
 pub fn find_first_unapplied_slot(
     upper_bound: U256,
     has_slot_been_applied: &Fn(U256) -> Result<bool, DriverError>,
@@ -58,10 +60,10 @@ where
     }
 
     let current_block_time = contract.get_current_block_timestamp()?;
-    if slot_creation_block_time + 360 < current_block_time {
+    if slot_creation_block_time + 2 * BATCH_TIME_SECONDS < current_block_time {
         return Ok(ProcessingState::AcceptsSolution);
     }
-    if slot_creation_block_time + 180 < current_block_time {
+    if slot_creation_block_time + BATCH_TIME_SECONDS < current_block_time {
         return Ok(ProcessingState::AcceptsBids);
     }
     Ok(ProcessingState::TooEarly)
