@@ -60,6 +60,7 @@ impl EventHandler for FluxTransitionHandler {
             .get_balances_for_state_index(&state_index)
             .map_err(|e| failure::err_msg(format!("{}", e)))?;
 
+        let mut updated_records = vec![];
         match transition_type {
             FluxTransitionType::Deposit => {
                 let deposits = self
@@ -73,16 +74,30 @@ impl EventHandler for FluxTransitionHandler {
                     .store
                     .get_withdraws_of_slot(&slot)
                     .map_err(|e| failure::err_msg(format!("{}", e)))?;
-                account_state.apply_withdraws(&withdraws);
+                let valid_withdraws = account_state.apply_withdraws(&withdraws);
+                updated_records = valid_withdraws
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, &is_valid)| is_valid)
+                    .map(|(index, _)| {
+                        let mut entity: Entity = withdraws[index].clone().into();
+                        entity.set("valid", true);
+                        EntityOperation::Set {
+                            key: util::entity_key("Withdraw", &entity),
+                            data: entity,
+                        }
+                    })
+                    .collect();
             }
         }
         let mut entity: Entity = account_state.into();
         // We set the state root as claimed by the event
         entity.set("id", new_state_hash.to_value());
-        Ok(vec![EntityOperation::Set {
+        updated_records.push(EntityOperation::Set {
             key: util::entity_key("AccountState", &entity),
             data: entity,
-        }])
+        });
+        Ok(updated_records)
     }
 }
 

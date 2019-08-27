@@ -24,16 +24,11 @@ impl EventHandler for DepositHandler {
         _transaction: Arc<Transaction>,
         log: Arc<Log>,
     ) -> Result<Vec<EntityOperation>, Error> {
-        let entity_id = util::entity_id_from_log(&log);
         let flux = PendingFlux::from(log);
 
         info!(logger, "Processing Deposit {:?}", &flux);
 
-        let mut entity: Entity = flux.into();
-        // We do not care about the ID inside the flux data model,
-        // so we have to set them later.
-        entity.set("id", &entity_id);
-
+        let entity: Entity = flux.into();
         Ok(vec![EntityOperation::Set {
             key: util::entity_key("Deposit", &entity),
             data: entity,
