@@ -6,9 +6,9 @@ extern crate rustc_hex;
 extern crate serde_json;
 extern crate web3;
 
-use dfusion_core::database::GraphReader;
+use dfusion_core::database::DbInterface;
 
-use crate::contract::SnappContractImpl;
+use crate::contract::SnappContract;
 use crate::deposit_driver::run_deposit_listener;
 use crate::order_driver::run_order_listener;
 use crate::price_finding::PriceFinding;
@@ -23,11 +23,11 @@ mod order_driver;
 mod util;
 mod withdraw_driver;
 
-pub fn run_driver_components(
-    db: &GraphReader,
-    contract: &SnappContractImpl,
+pub fn run_driver_components<D, C>(
+    db: &D,
+    contract: &C,
     price_finder: &mut PriceFinding,
-) {
+) where D: DbInterface, C: SnappContract {
     if let Err(e) = run_deposit_listener(db, contract) {
         error!("Deposit_driver error: {}", e);
     }
