@@ -317,7 +317,7 @@ impl SnappContract for SnappContractImpl {
         standing_order_index: Vec<U128>,
         prices_and_volumes: Vec<u8>,
     ) -> Result<()> {
-        info!("prices_and_volumes: {:?}", &prices_and_volumes);
+        debug!("Applying Auction with result bytes: {:?}", &prices_and_volumes);
         let account = self
             .account_with_sufficient_balance()
             .ok_or("Not enough balance to send Txs")?;

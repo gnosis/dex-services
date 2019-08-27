@@ -5,7 +5,12 @@ use crate::util::{can_process, find_first_unapplied_slot, hash_consistency_check
 
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::{
-    AccountState, ConcatenatingHashable, Order, RollingHashable, Serializable, Solution,
+    AccountState,
+    ConcatenatingHashable,
+    Order,
+    RollingHashable,
+    Serializable,
+    Solution,
     StandingOrder,
 };
 
@@ -23,8 +28,10 @@ where
     let auction_slot = contract.get_current_auction_slot()?;
 
     info!("Current top auction slot is {:?}", auction_slot);
-    let slot =
-        find_first_unapplied_slot(auction_slot, &|i| contract.has_auction_slot_been_applied(i))?;
+    let slot = find_first_unapplied_slot(
+        auction_slot,
+        &|i| contract.has_auction_slot_been_applied(i)
+    )?;
     if slot <= auction_slot {
         info!("Highest unprocessed auction slot is {:?}", slot);
         let creation_time_block = |i| {
