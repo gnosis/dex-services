@@ -1,6 +1,8 @@
 use crate::contract::SnappContract;
 use crate::error::DriverError;
-use crate::util::{can_process, find_first_unapplied_slot, hash_consistency_check};
+use crate::util::{
+    batch_processing_state, find_first_unapplied_slot, hash_consistency_check, ProcessingState,
+};
 
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::RollingHashable;
@@ -19,31 +21,31 @@ where
     )?;
     if slot <= deposit_slot {
         info!("Highest unprocessed deposit_slot is {:?}", slot);
-        let creation_time_block = |i| {
+        let processing_state = batch_processing_state(slot, contract, &|i| {
             contract.creation_timestamp_for_deposit_slot(i)
-        };
-        if can_process(slot, contract, &creation_time_block)? {
-            info!("Processing deposit_slot {:?}", slot);
-            let state_root = contract.get_current_state_root()?;
-            let contract_deposit_hash = contract.deposit_hash_for_slot(slot)?;
-            let mut balances = db.get_balances_for_state_root(&state_root)?;
+        })?;
+        match processing_state {
+            ProcessingState::TooEarly => info!("All deposits are already processed"),
+            ProcessingState::AcceptsBids | ProcessingState::AcceptsSolution => {
+                info!("Processing deposit_slot {:?}", slot);
+                let state_root = contract.get_current_state_root()?;
+                let contract_deposit_hash = contract.deposit_hash_for_slot(slot)?;
+                let mut balances = db.get_balances_for_state_root(&state_root)?;
 
-            let deposits = db.get_deposits_of_slot(&slot)?;
-            let deposit_hash = deposits.rolling_hash(0);
-            hash_consistency_check(deposit_hash, contract_deposit_hash, "deposit")?;
+                let deposits = db.get_deposits_of_slot(&slot)?;
+                let deposit_hash = deposits.rolling_hash(0);
+                hash_consistency_check(deposit_hash, contract_deposit_hash, "deposit")?;
 
-            balances.apply_deposits(&deposits);
-
-            info!("New AccountState hash is {}", balances.state_hash);
-            contract.apply_deposits(
-                slot,
-                state_root,
-                balances.state_hash,
-                contract_deposit_hash,
-            )?;
-            return Ok(true);
-        } else {
-            info!("Need to wait before processing deposit_slot {:?}", slot);
+                balances.apply_deposits(&deposits);
+                info!("New AccountState hash is {}", balances.state_hash);
+                contract.apply_deposits(
+                    slot,
+                    state_root,
+                    balances.state_hash,
+                    contract_deposit_hash,
+                )?;
+                return Ok(true);
+            }
         }
     } else {
         info!("No pending deposit batches.");

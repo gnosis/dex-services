@@ -1,6 +1,8 @@
 use crate::contract::SnappContract;
 use crate::error::DriverError;
-use crate::util::{can_process, find_first_unapplied_slot, hash_consistency_check};
+use crate::util::{
+    batch_processing_state, find_first_unapplied_slot, hash_consistency_check, ProcessingState,
+};
 
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::{RollingHashable, RootHashable};
@@ -13,42 +15,44 @@ where
     let withdraw_slot = contract.get_current_withdraw_slot()?;
 
     info!("Current top withdraw_slot is {:?}", withdraw_slot);
-    let slot = find_first_unapplied_slot(
-        withdraw_slot,
-        &|i| contract.has_withdraw_slot_been_applied(i),
-    )?;
+    let slot = find_first_unapplied_slot(withdraw_slot, &|i| {
+        contract.has_withdraw_slot_been_applied(i)
+    })?;
     if slot <= withdraw_slot {
         info!("Highest unprocessed withdraw_slot is {:?}", slot);
-        let creation_time_block = |i| {
+        let processing_state = batch_processing_state(slot, contract, &|i| {
             contract.creation_timestamp_for_withdraw_slot(i)
-        };
-        if can_process(slot, contract, &creation_time_block)? {
-            info!("Processing withdraw_slot {:?}", slot);
-            let state_root = contract.get_current_state_root()?;
-            let contract_withdraw_hash = contract.withdraw_hash_for_slot(slot)?;
-            let mut balances = db.get_balances_for_state_root(&state_root)?;
+        })?;
+        match processing_state {
+            ProcessingState::TooEarly => {
+                info!("Need to wait before processing withdraw_slot {:?}", slot)
+            }
+            ProcessingState::AcceptsBids | ProcessingState::AcceptsSolution => {
+                info!("Processing withdraw_slot {:?}", slot);
+                let state_root = contract.get_current_state_root()?;
+                let contract_withdraw_hash = contract.withdraw_hash_for_slot(slot)?;
+                let mut balances = db.get_balances_for_state_root(&state_root)?;
 
-            let withdraws = db.get_withdraws_of_slot(&slot)?;
-            let withdraw_hash = withdraws.rolling_hash(0);
-            hash_consistency_check(withdraw_hash, contract_withdraw_hash, "withdraw")?;
+                let withdraws = db.get_withdraws_of_slot(&slot)?;
+                let withdraw_hash = withdraws.rolling_hash(0);
+                hash_consistency_check(withdraw_hash, contract_withdraw_hash, "withdraw")?;
 
-            let valid_withdraws = balances.apply_withdraws(&withdraws);
-            let withdrawal_merkle_root = withdraws.root_hash(&valid_withdraws);
+                let valid_withdraws = balances.apply_withdraws(&withdraws);
+                let withdrawal_merkle_root = withdraws.root_hash(&valid_withdraws);
 
-            info!(
-                "New AccountState hash is {}, Valid Withdraw Merkle Root is {}",
-                balances.state_hash, withdrawal_merkle_root
-            );
-            contract.apply_withdraws(
-                slot,
-                withdrawal_merkle_root,
-                state_root,
-                balances.state_hash,
-                contract_withdraw_hash,
-            )?;
-            return Ok(true);
-        } else {
-            info!("Need to wait before processing withdraw_slot {:?}", slot);
+                info!(
+                    "New AccountState hash is {}, Valid Withdraw Merkle Root is {}",
+                    balances.state_hash, withdrawal_merkle_root
+                );
+                contract.apply_withdraws(
+                    slot,
+                    withdrawal_merkle_root,
+                    state_root,
+                    balances.state_hash,
+                    contract_withdraw_hash,
+                )?;
+                return Ok(true);
+            }
         }
     }
     Ok(false)

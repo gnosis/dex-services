@@ -66,7 +66,7 @@ pub mod tests {
                 ))),
                 get_orders_of_slot: Mock::new(Err(DatabaseError::new(
                     ErrorKind::Unknown,
-                    "Unexpected call to get_withdraws_of_slot",
+                    "Unexpected call to get_orders_of_slot",
                 ))),
                 get_standing_orders_of_slot: Mock::new(Err(DatabaseError::new(
                     ErrorKind::Unknown,

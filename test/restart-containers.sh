@@ -13,5 +13,6 @@ docker-compose up -d ganache-cli
 
 docker-compose restart listener
 docker-compose restart graph-listener
+docker-compose restart driver
 
 cd dex-contracts && npx wait-port -t 30000 8545 && npx truffle migrate && cd -
