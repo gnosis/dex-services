@@ -59,9 +59,16 @@ pub trait SnappContract {
         slot: U256,
         prev_state: H256,
         new_state: H256,
+        prices_and_volumes: Vec<u8>,
+    ) -> Result<()>;
+    fn auction_solution_bid(
+        &self,
+        slot: U256,
+        prev_state: H256,
+        new_state: H256,
         order_hash: H256,
         standing_order_index: Vec<U128>,
-        prices_and_volumes: Vec<u8>,
+        objective_value: U256,
     ) -> Result<()>;
 }
 
@@ -313,8 +320,6 @@ impl SnappContract for SnappContractImpl {
         slot: U256,
         prev_state: H256,
         new_state: H256,
-        order_hash: H256,
-        standing_order_index: Vec<U128>,
         prices_and_volumes: Vec<u8>,
     ) -> Result<()> {
         debug!("Applying Auction with result bytes: {:?}", &prices_and_volumes);
@@ -327,13 +332,41 @@ impl SnappContract for SnappContractImpl {
         self.contract
             .call(
                 "applyAuction",
+                (slot, prev_state, new_state, prices_and_volumes),
+                account,
+                options,
+            )
+            .wait()
+            .map_err(DriverError::from)
+            .map(|_| ())
+    }
+
+    fn auction_solution_bid(
+        &self,
+        slot: U256,
+        prev_state: H256,
+        new_state: H256,
+        order_hash: H256,
+        standing_order_index: Vec<U128>,
+        objective_value: U256,
+    ) -> Result<()> {
+        info!("objective value: {:?}", &objective_value);
+        let account = self
+            .account_with_sufficient_balance()
+            .ok_or("Not enough balance to send Txs")?;
+
+        let mut options = Options::default();
+        options.gas = Some(U256::from(5_000_000));
+        self.contract
+            .call(
+                "auctionSolutionBid",
                 (
                     slot,
                     prev_state,
-                    new_state,
                     order_hash,
                     standing_order_index,
-                    prices_and_volumes,
+                    new_state,
+                    objective_value,
                 ),
                 account,
                 options,
@@ -392,14 +425,15 @@ pub mod tests {
             ),
             Result<()>,
         >,
-        pub apply_auction: Mock<
+        pub apply_auction: Mock<(U256, Matcher<H256>, Matcher<H256>, Matcher<Vec<u8>>), Result<()>>,
+        pub auction_solution_bid: Mock<
             (
                 U256,
                 Matcher<H256>,
                 Matcher<H256>,
                 Matcher<H256>,
                 Matcher<Vec<U128>>,
-                Matcher<Vec<u8>>,
+                U256,
             ),
             Result<()>,
         >,
@@ -475,6 +509,10 @@ pub mod tests {
                 ))),
                 apply_auction: Mock::new(Err(DriverError::new(
                     "Unexpected call to apply_auctions",
+                    ErrorKind::Unknown,
+                ))),
+                auction_solution_bid: Mock::new(Err(DriverError::new(
+                    "Unexpected call to auction_solution_bid",
                     ErrorKind::Unknown,
                 ))),
                 calculate_order_hash: Mock::new(Err(DriverError::new(
@@ -559,17 +597,31 @@ pub mod tests {
             slot: U256,
             prev_state: H256,
             new_state: H256,
-            order_hash: H256,
-            standing_order_index: Vec<U128>,
             prices_and_volumes: Vec<u8>,
         ) -> Result<()> {
             self.apply_auction.called((
                 slot,
                 Val(prev_state),
                 Val(new_state),
+                Val(prices_and_volumes),
+            ))
+        }
+        fn auction_solution_bid(
+            &self,
+            slot: U256,
+            prev_state: H256,
+            new_state: H256,
+            order_hash: H256,
+            standing_order_index: Vec<U128>,
+            objective_value: U256,
+        ) -> Result<()> {
+            self.auction_solution_bid.called((
+                slot,
+                Val(prev_state),
+                Val(new_state),
                 Val(order_hash),
                 Val(standing_order_index),
-                Val(prices_and_volumes),
+                objective_value,
             ))
         }
         fn calculate_order_hash(
