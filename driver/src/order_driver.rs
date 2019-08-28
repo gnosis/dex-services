@@ -1,7 +1,9 @@
 use crate::contract::SnappContract;
-use crate::error::DriverError;
-use crate::price_finding::PriceFinding;
-use crate::util::{can_process, find_first_unapplied_slot, hash_consistency_check};
+use crate::error::{DriverError, ErrorKind};
+use super::price_finding::PriceFinding;
+use crate::util::{
+    batch_processing_state, find_first_unapplied_slot, hash_consistency_check, ProcessingState,
+};
 
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::{
@@ -14,102 +16,164 @@ use dfusion_core::models::{
     StandingOrder,
 };
 
-use web3::types::U128;
+use web3::types::{H256, U128, U256};
 
-pub fn run_order_listener<D, C>(
-    db: &D,
-    contract: &C,
-    price_finder: &mut PriceFinding,
-) -> Result<bool, DriverError>
-where
-    D: DbInterface,
-    C: SnappContract,
-{
-    let auction_slot = contract.get_current_auction_slot()?;
+use std::collections::HashMap;
 
-    info!("Current top auction slot is {:?}", auction_slot);
-    let slot = find_first_unapplied_slot(
-        auction_slot,
-        &|i| contract.has_auction_slot_been_applied(i)
-    )?;
-    if slot <= auction_slot {
-        info!("Highest unprocessed auction slot is {:?}", slot);
-        let creation_time_block = |i| {
-            contract.creation_timestamp_for_auction_slot(i)
-        };
-        if can_process(slot, contract, &creation_time_block)? {
-            info!("Processing auction slot {:?}", slot);
-            let state_root = contract.get_current_state_root()?;
-            let non_reserved_orders_hash_from_contract = contract.order_hash_for_slot(slot)?;
-            let mut state = db.get_balances_for_state_root(&state_root)?;
+struct AuctionBid {
+    previous_state: H256,
+    new_state: H256,
+    solution: Solution,
+}
 
-            let mut orders = db.get_orders_of_slot(&slot)?;
-            let non_reserved_orders_hash = orders.rolling_hash(0);
-            hash_consistency_check(
-                non_reserved_orders_hash,
-                non_reserved_orders_hash_from_contract,
-                "non-reserved-orders",
-            )?;
+pub struct OrderProcessor<'a, D: DbInterface, C: SnappContract> {
+    auction_bids: HashMap<U256, AuctionBid>,
+    db: &'a D,
+    contract: &'a C,
+    price_finder: &'a mut PriceFinding,
+}
 
-            let standing_orders = db.get_standing_orders_of_slot(&slot)?;
+#[derive(Eq, PartialEq, Debug)]
+pub enum ProcessResult {
+    NoAction,
+    AuctionBid(U256),
+    AuctionApplied(U256),
+}
 
-            orders.extend(
-                standing_orders
-                    .iter()
-                    .filter(|standing_order| standing_order.num_orders() > 0)
-                    .flat_map(|standing_order| standing_order.get_orders().clone()),
-            );
-            info!("All Orders: {:?}", orders);
-
-            let standing_order_indexes = batch_index_from_standing_orders(&standing_orders);
-            let total_order_hash_from_contract =
-                contract.calculate_order_hash(slot, standing_order_indexes.clone())?;
-            let total_order_hash_calculated =
-                standing_orders.concatenating_hash(non_reserved_orders_hash);
-            hash_consistency_check(
-                total_order_hash_calculated,
-                total_order_hash_from_contract,
-                "overall-order",
-            )?;
-
-            let solution = if !orders.is_empty() {
-                price_finder
-                    .find_prices(&orders, &state)
-                    .unwrap_or_else(|e| {
-                        error!(
-                            "Error computing result: {}\n Falling back to trivial solution",
-                            e
-                        );
-                        Solution::trivial(orders.len())
-                    })
-            } else {
-                warn!("No orders in batch. Falling back to trivial solution");
-                Solution::trivial(orders.len())
-            };
-
-            // Compute updated balances
-            update_balances(&mut state, &orders, &solution);
-            let new_state_root = state.rolling_hash(state.state_index.low_u32() + 1);
-
-            info!(
-                "New AccountState hash is {}, Solution: {:?}",
-                new_state_root, solution
-            );
-
-            contract.apply_auction(
-                slot,
-                state_root,
-                new_state_root,
-                total_order_hash_from_contract,
-                standing_order_indexes,
-                solution.bytes(),
-            )?;
-            return Ok(true);
-        } else {
-            info!("Need to wait before processing auction slot {:?}", slot);
+impl<'a, D: DbInterface, C: SnappContract> OrderProcessor<'a, D, C> {
+    pub fn new(db: &'a D, contract: &'a C, price_finder: &'a mut PriceFinding) -> Self {
+        OrderProcessor {
+            auction_bids: HashMap::new(),
+            db,
+            contract,
+            price_finder,
         }
     }
-    Ok(false)
+
+    pub fn run(&mut self) -> Result<ProcessResult, DriverError> {
+        let auction_slot = self.contract.get_current_auction_slot()?;
+
+        info!("Current top auction slot is {:?}", auction_slot);
+        let slot = find_first_unapplied_slot(auction_slot, &|i| {
+            self.contract.has_auction_slot_been_applied(i)
+        })?;
+        if slot <= auction_slot {
+            info!("Highest unprocessed auction slot is {:?}", slot);
+            let processing_state = batch_processing_state(slot, self.contract, &|i| {
+                self.contract.creation_timestamp_for_auction_slot(i)
+            })?;
+            match processing_state {
+                ProcessingState::TooEarly => {
+                    info!("Need to wait before processing auction slot {:?}", slot)
+                }
+                ProcessingState::AcceptsBids => {
+                    if !self.auction_bids.contains_key(&slot) {
+                        self.bid_for_auction(slot)?;
+                        return Ok(ProcessResult::AuctionBid(slot));
+                    }
+                    info!("Already bid for auction slot {:?}", slot);
+                }
+                ProcessingState::AcceptsSolution => {
+                    if let Some(bid) = self.auction_bids.get(&slot) {
+                        self.contract.apply_auction(
+                            slot,
+                            bid.previous_state,
+                            bid.new_state,
+                            bid.solution.bytes(),
+                        )?;
+                        return Ok(ProcessResult::AuctionApplied(slot));
+                    }
+                    return Err(DriverError::new(
+                        &format!("Cannot find saved bid for auction slot {:?}", slot),
+                        ErrorKind::StateError
+                    ))
+                }
+            }
+        }
+        Ok(ProcessResult::NoAction)
+    }
+
+    fn bid_for_auction(&mut self, auction_index: U256) -> Result<(), DriverError> {
+        info!("Processing auction slot {:?}", auction_index);
+        let state_root = self.contract.get_current_state_root()?;
+        let non_reserved_orders_hash_from_contract =
+            self.contract.order_hash_for_slot(auction_index)?;
+        let mut state = self.db.get_balances_for_state_root(&state_root)?;
+
+        let mut orders = self.db.get_orders_of_slot(&auction_index)?;
+        let non_reserved_orders_hash = orders.rolling_hash(0);
+        hash_consistency_check(
+            non_reserved_orders_hash,
+            non_reserved_orders_hash_from_contract,
+            "non-reserved-orders",
+        )?;
+
+        let standing_orders = self.db.get_standing_orders_of_slot(&auction_index)?;
+
+        orders.extend(
+            standing_orders
+                .iter()
+                .filter(|standing_order| standing_order.num_orders() > 0)
+                .flat_map(|standing_order| standing_order.get_orders().clone()),
+        );
+        info!("All Orders: {:?}", orders);
+
+        let standing_order_indexes = batch_index_from_standing_orders(&standing_orders);
+        let total_order_hash_from_contract = self
+            .contract
+            .calculate_order_hash(auction_index, standing_order_indexes.clone())?;
+        let total_order_hash_calculated =
+            standing_orders.concatenating_hash(non_reserved_orders_hash);
+        hash_consistency_check(
+            total_order_hash_calculated,
+            total_order_hash_from_contract,
+            "overall-order",
+        )?;
+
+        let solution = if !orders.is_empty() {
+            self.price_finder
+                .find_prices(&orders, &state)
+                .unwrap_or_else(|e| {
+                    error!(
+                        "Error computing result: {}\n Falling back to trivial solution",
+                        e
+                    );
+                    Solution::trivial(orders.len())
+                })
+        } else {
+            warn!("No orders in batch. Falling back to trivial solution");
+            Solution::trivial(orders.len())
+        };
+
+        // Compute updated balances
+        update_balances(&mut state, &orders, &solution);
+        let new_state_root = state.rolling_hash(state.state_index.low_u32() + 1);
+
+        info!(
+            "New AccountState hash is {}, Solution: {:?}",
+            new_state_root, solution
+        );
+
+        self.contract.auction_solution_bid(
+            auction_index,
+            state_root,
+            new_state_root,
+            total_order_hash_from_contract,
+            standing_order_indexes,
+            solution.surplus.unwrap_or_else(U256::zero),
+        )?;
+
+        self.auction_bids.insert(
+            auction_index,
+            AuctionBid {
+                previous_state: state_root,
+                new_state: new_state_root,
+                solution: solution.clone(),
+            },
+        );
+
+        Ok(())
+    }
 }
 
 fn update_balances(state: &mut AccountState, orders: &[Order], solution: &Solution) {
@@ -143,7 +207,144 @@ mod tests {
     use web3::types::{H256, U128, U256};
 
     #[test]
-    fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
+    fn bids_for_and_applies_auction_if_unapplied_and_enough_blocks_passed() {
+        let slot = U256::from(1);
+        let state_hash = H256::zero();
+        let orders = vec![create_order_for_test(), create_order_for_test()];
+        let state = AccountState::new(
+            state_hash,
+            U256::one(),
+            vec![100; (TOKENS * 2) as usize],
+            TOKENS,
+        );
+        let contract = SnappContractMock::new();
+        contract
+            .get_current_auction_slot
+            .given(())
+            .will_return(Ok(slot));
+        contract
+            .has_auction_slot_been_applied
+            .given(slot)
+            .will_return(Ok(false));
+        contract
+            .has_auction_slot_been_applied
+            .given(slot - 1)
+            .will_return(Ok(true));
+        contract
+            .creation_timestamp_for_auction_slot
+            .given(slot)
+            .will_return(Ok(U256::from(10)));
+        let get_current_block_timestamp = contract.get_current_block_timestamp.given(());
+        get_current_block_timestamp.will_return(Ok(U256::from(200)));
+        contract
+            .order_hash_for_slot
+            .given(slot)
+            .will_return(Ok(orders.rolling_hash(0)));
+        contract
+            .get_current_state_root
+            .given(())
+            .will_return(Ok(state_hash));
+        contract
+            .calculate_order_hash
+            .given((slot, Any))
+            .will_return(Ok(H256::from(
+                "0x438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c",
+            )));
+
+        contract
+            .auction_solution_bid
+            .given((slot, Any, Any, Any, Any, U256::zero()))
+            .will_return(Ok(()));
+        let standing_orders = StandingOrder::empty_array();
+        let db = DbInterfaceMock::new();
+        db.get_orders_of_slot
+            .given(U256::one())
+            .will_return(Ok(orders.clone()));
+        db.get_standing_orders_of_slot
+            .given(U256::one())
+            .will_return(Ok(standing_orders));
+        db.get_balances_for_state_root
+            .given(state_hash)
+            .will_return(Ok(state.clone()));
+
+        let mut pf = PriceFindingMock::new();
+        let expected_solution = Solution {
+            surplus: Some(U256::zero()),
+            prices: vec![1, 2],
+            executed_sell_amounts: vec![0, 2],
+            executed_buy_amounts: vec![0, 2],
+        };
+        pf.find_prices
+            .given((orders, state))
+            .will_return(Ok(expected_solution));
+
+        let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
+        assert_eq!(processor.run(), Ok(ProcessResult::AuctionBid(slot)));
+
+        get_current_block_timestamp.will_return(Ok(U256::from(400)));
+        contract
+            .apply_auction
+            .given((slot, Any, Any, Any))
+            .will_return(Ok(()));
+
+        assert_eq!(processor.run(), Ok(ProcessResult::AuctionApplied(slot)));
+    }
+
+    #[test]
+    fn does_not_bid_if_highest_slot_already_applied() {
+        let slot = U256::from(1);
+        let contract = SnappContractMock::new();
+        contract
+            .get_current_auction_slot
+            .given(())
+            .will_return(Ok(slot));
+        contract
+            .has_auction_slot_been_applied
+            .given(slot)
+            .will_return(Ok(true));
+
+        let db = DbInterfaceMock::new();
+        let mut pf = PriceFindingMock::new();
+
+        let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
+        assert_eq!(processor.run(), Ok(ProcessResult::NoAction));
+    }
+
+    #[test]
+    fn does_not_bid_if_highest_slot_too_close_to_current_block() {
+        let slot = U256::from(1);
+        let contract = SnappContractMock::new();
+        contract
+            .get_current_auction_slot
+            .given(())
+            .will_return(Ok(slot));
+        contract
+            .has_auction_slot_been_applied
+            .given(slot)
+            .will_return(Ok(false));
+        contract
+            .has_auction_slot_been_applied
+            .given(slot - 1)
+            .will_return(Ok(true));
+
+        contract
+            .creation_timestamp_for_auction_slot
+            .given(slot)
+            .will_return(Ok(U256::from(10)));
+        contract
+            .get_current_block_timestamp
+            .given(())
+            .will_return(Ok(U256::from(11)));
+
+        let db = DbInterfaceMock::new();
+        let mut pf = PriceFindingMock::new();
+
+        let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
+        assert_eq!(processor.run(), Ok(ProcessResult::NoAction));
+    }
+
+    #[test]
+    fn test_does_not_bid_twice_on_same_slot() {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let orders = vec![create_order_for_test(), create_order_for_test()];
@@ -190,8 +391,8 @@ mod tests {
             )));
 
         contract
-            .apply_auction
-            .given((slot, Any, Any, Any, Any, Any))
+            .auction_solution_bid
+            .given((slot, Any, Any, Any, Any, U256::zero()))
             .will_return(Ok(()));
         let standing_orders = StandingOrder::empty_array();
         let db = DbInterfaceMock::new();
@@ -206,72 +407,13 @@ mod tests {
             .will_return(Ok(state.clone()));
 
         let mut pf = PriceFindingMock::new();
-        let expected_solution = Solution {
-            surplus: U256::from_dec_str("0").ok(),
-            prices: vec![1, 2],
-            executed_sell_amounts: vec![0, 2],
-            executed_buy_amounts: vec![0, 2],
-        };
-        pf.find_prices
-            .given((orders, state))
-            .will_return(Ok(expected_solution));
-
-        assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(true));
+        let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
+        assert_eq!(processor.run(), Ok(ProcessResult::AuctionBid(slot)));
+        assert_eq!(processor.run(), Ok(ProcessResult::NoAction));
     }
 
     #[test]
-    fn does_not_apply_if_highest_slot_already_applied() {
-        let slot = U256::from(1);
-        let contract = SnappContractMock::new();
-        contract
-            .get_current_auction_slot
-            .given(())
-            .will_return(Ok(slot));
-        contract
-            .has_auction_slot_been_applied
-            .given(slot)
-            .will_return(Ok(true));
-
-        let db = DbInterfaceMock::new();
-        let mut pf = PriceFindingMock::new();
-
-        assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(false));
-    }
-
-    #[test]
-    fn does_not_apply_if_highest_slot_too_close_to_current_block() {
-        let slot = U256::from(1);
-        let contract = SnappContractMock::new();
-        contract
-            .get_current_auction_slot
-            .given(())
-            .will_return(Ok(slot));
-        contract
-            .has_auction_slot_been_applied
-            .given(slot)
-            .will_return(Ok(false));
-        contract
-            .has_auction_slot_been_applied
-            .given(slot - 1)
-            .will_return(Ok(true));
-
-        contract
-            .creation_timestamp_for_auction_slot
-            .given(slot)
-            .will_return(Ok(U256::from(10)));
-        contract
-            .get_current_block_timestamp
-            .given(())
-            .will_return(Ok(U256::from(11)));
-
-        let db = DbInterfaceMock::new();
-        let mut pf = PriceFindingMock::new();
-
-        assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(false));
-    }
-
-    #[test]
-    fn applies_all_unapplied_states_before_current() {
+    fn processes_all_unapplied_states_before_current() {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let first_orders = vec![create_order_for_test(), create_order_for_test()];
@@ -283,24 +425,22 @@ mod tests {
             .given(())
             .will_return(Ok(slot));
 
+        let has_first_slot_been_applied = contract.has_auction_slot_been_applied.given(slot - 1);
         contract
             .has_auction_slot_been_applied
             .given(slot)
-            .will_return(Ok(false));
-        contract
-            .has_auction_slot_been_applied
-            .given(slot - 1)
             .will_return(Ok(false));
 
         contract
             .creation_timestamp_for_auction_slot
             .given(slot - 1)
             .will_return(Ok(U256::from(10)));
-
         contract
-            .get_current_block_timestamp
-            .given(())
+            .creation_timestamp_for_auction_slot
+            .given(slot)
             .will_return(Ok(U256::from(200)));
+
+        let get_current_block_timestamp = contract.get_current_block_timestamp.given(());
         contract
             .order_hash_for_slot
             .given(slot - 1)
@@ -311,14 +451,32 @@ mod tests {
             .will_return(Ok(H256::from(
                 "0x438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c",
             )));
+        contract
+            .order_hash_for_slot
+            .given(slot)
+            .will_return(Ok(second_orders.rolling_hash(0)));
+        contract
+            .calculate_order_hash
+            .given((slot, Any))
+            .will_return(Ok(H256::from(
+                "0x438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c",
+            )));
 
         contract
             .get_current_state_root
             .given(())
             .will_return(Ok(state_hash));
         contract
+            .auction_solution_bid
+            .given((slot - 1, Any, Any, Any, Any, U256::zero()))
+            .will_return(Ok(()));
+        contract
+            .auction_solution_bid
+            .given((slot, Any, Any, Any, Any, U256::zero()))
+            .will_return(Ok(()));
+        contract
             .apply_auction
-            .given((slot - 1, Any, Any, Any, Any, Any))
+            .given((slot - 1, Any, Any, Any))
             .will_return(Ok(()));
 
         let state = AccountState::new(
@@ -330,18 +488,25 @@ mod tests {
         let standing_orders = StandingOrder::empty_array();
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot
-            .given(U256::zero())
+            .given(slot - 1)
             .will_return(Ok(first_orders.clone()));
         db.get_standing_orders_of_slot
-            .given(U256::zero())
+            .given(slot - 1)
+            .will_return(Ok(standing_orders.clone()));
+        db.get_orders_of_slot
+            .given(slot)
+            .will_return(Ok(first_orders.clone()));
+        db.get_standing_orders_of_slot
+            .given(slot)
             .will_return(Ok(standing_orders));
+
         db.get_balances_for_state_root
             .given(state_hash)
             .will_return(Ok(state.clone()));
 
         let mut pf = PriceFindingMock::new();
         let expected_solution = Solution {
-            surplus: U256::from_dec_str("0").ok(),
+            surplus: Some(U256::zero()),
             prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
@@ -350,8 +515,17 @@ mod tests {
             .given((first_orders, state))
             .will_return(Ok(expected_solution));
 
-        assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(true));
-        assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(true));
+        let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
+        get_current_block_timestamp.will_return(Ok(U256::from(200)));
+        has_first_slot_been_applied.will_return(Ok(false));
+        assert_eq!(processor.run(), Ok(ProcessResult::AuctionBid(slot - 1)));
+
+        get_current_block_timestamp.will_return(Ok(U256::from(400)));
+        assert_eq!(processor.run(), Ok(ProcessResult::AuctionApplied(slot - 1)));
+
+        // Lastly process newer auction
+        has_first_slot_been_applied.will_return(Ok(true));
+        assert_eq!(processor.run(), Ok(ProcessResult::AuctionBid(slot)));
     }
 
     #[test]
@@ -399,7 +573,6 @@ mod tests {
             .get_current_state_root
             .given(())
             .will_return(Ok(state_hash));
-
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot
             .given(U256::one())
@@ -410,12 +583,13 @@ mod tests {
 
         let mut pf = PriceFindingMock::new();
 
-        let error = run_order_listener(&db, &contract, &mut pf).expect_err("Expected Error");
+        let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
+        let error = processor.run().expect_err("Expected Error");
         assert_eq!(error.kind, ErrorKind::StateError);
     }
 
     #[test]
-    fn considers_standing_orders() {
+    fn considers_standing_orders_in_bid() {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let standing_order = StandingOrder::new(
@@ -468,8 +642,8 @@ mod tests {
             .given(())
             .will_return(Ok(state_hash));
         contract
-            .apply_auction
-            .given((slot, Any, Any, Any, Any, Any))
+            .auction_solution_bid
+            .given((slot, Any, Any, Any, Any, U256::zero()))
             .will_return(Ok(()));
 
         let mut standing_orders = StandingOrder::empty_array();
@@ -490,7 +664,8 @@ mod tests {
             .given((standing_order.get_orders().clone(), state))
             .will_return(Err(PriceFindingError::from("Trivial solution is fine")));
 
-        assert_eq!(run_order_listener(&db, &contract, &mut pf), Ok(true));
+        let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
+        assert_eq!(processor.run(), Ok(ProcessResult::AuctionBid(slot)));
     }
 
     #[test]
