@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use web3::types::{Log, H256, U256};
 
-use crate::models::{Order, PendingFlux, RollingHashable, Solution, TOKENS};
+use crate::models::{Order, PendingFlux, RollingHashable, Solution};
 
 use super::util::*;
 
@@ -113,26 +113,6 @@ impl RollingHashable for AccountState {
     }
 }
 
-impl From<mongodb::ordered::OrderedDocument> for AccountState {
-    fn from(document: mongodb::ordered::OrderedDocument) -> Self {
-        AccountState {
-            state_hash: document
-                .get_str("stateHash")
-                .unwrap()
-                .parse::<H256>()
-                .unwrap(),
-            state_index: U256::from(document.get_i32("stateIndex").unwrap()),
-            balances: document
-                .get_array("balances")
-                .unwrap()
-                .iter()
-                .map(|e| e.as_str().unwrap().parse().unwrap())
-                .collect(),
-            num_tokens: TOKENS,
-        }
-    }
-}
-
 impl From<Arc<Log>> for AccountState {
     fn from(log: Arc<Log>) -> Self {
         let mut bytes: Vec<u8> = log.data.0.clone();
@@ -174,6 +154,7 @@ impl Into<Entity> for AccountState {
 pub mod tests {
     use super::*;
     use crate::models::order::BatchInformation;
+    use crate::models::TOKENS;
     use web3::types::{Bytes, H256};
 
     #[test]
