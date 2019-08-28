@@ -21,6 +21,7 @@ type Withdraw @entity {
     amount: BigInt!
     slot: BigInt!
     slotIndex: Int!
+    valid: Boolean
 }
 
 type StandingSellOrderBatch @entity {
