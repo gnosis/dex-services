@@ -4,9 +4,10 @@ matrix:
     - language: rust
       rust: 1.36.0
       cache: 
-        cargo: true
         directories:
-          - target
+          - /home/travis/.cargo
+      before_cache:
+        - rm -rf /home/travis/.cargo/registry
       before_script:
         - rustup component add clippy
       script:
