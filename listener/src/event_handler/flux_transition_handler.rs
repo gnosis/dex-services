@@ -154,10 +154,10 @@ pub mod test {
 
         assert!(result.is_ok());
         match result.unwrap().pop().unwrap() {
-            EntityOperation::Set { key: _, data } => {
+            EntityOperation::Set { data, .. } => {
                 assert_eq!(AccountState::from(data), expected_new_state)
             }
-            _ => assert!(false),
+            _ => panic!("Unexpected Entity operation"),
         }
     }
 
@@ -235,13 +235,26 @@ pub mod test {
         let expected_new_state =
             AccountState::new(H256::from(1), U256::one(), vec![0, 10, 0, 0], 1);
 
-        assert!(result.is_ok());
-        match result.unwrap().pop().unwrap() {
-            EntityOperation::Set { key: _, data } => {
+        let mut result = result.expect("Unexpected Error");
+        match result.pop().unwrap() {
+            EntityOperation::Set { data, .. } => {
                 assert_eq!(AccountState::from(data), expected_new_state)
             }
-            _ => assert!(false),
+            _ => panic!("Unexpected Entity operation"),
         }
+
+        // Assert the two valid withdraws are updated with valid flag
+        let valid_withdraw_updates = result
+            .iter()
+            .filter(|op| match op {
+                EntityOperation::Set { data, .. } => data
+                    .get("valid")
+                    .and_then(|valid| valid.clone().as_bool())
+                    .unwrap_or(false),
+                _ => false,
+            })
+            .count();
+        assert_eq!(valid_withdraw_updates, 2);
     }
 
     fn create_state_transition_event(
