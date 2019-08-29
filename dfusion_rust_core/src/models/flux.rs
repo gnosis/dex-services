@@ -27,18 +27,6 @@ impl Serializable for PendingFlux {
     }
 }
 
-impl From<mongodb::ordered::OrderedDocument> for PendingFlux {
-    fn from(document: mongodb::ordered::OrderedDocument) -> Self {
-        PendingFlux {
-            slot_index: document.get_i32("slotIndex").unwrap() as u16,
-            slot: U256::from(document.get_i32("slot").unwrap()),
-            account_id: document.get_i32("accountId").unwrap() as u16,
-            token_id: document.get_i32("tokenId").unwrap() as u8,
-            amount: document.get_str("amount").unwrap().parse().unwrap(),
-        }
-    }
-}
-
 impl From<Arc<Log>> for PendingFlux {
     fn from(log: Arc<Log>) -> Self {
         let mut bytes: Vec<u8> = log.data.0.clone();
