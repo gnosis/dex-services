@@ -62,33 +62,6 @@ impl ConcatenatingHashable for [models::StandingOrder; models::NUM_RESERVED_ACCO
     }
 }
 
-impl From<mongodb::ordered::OrderedDocument> for StandingOrder {
-    fn from(document: mongodb::ordered::OrderedDocument) -> Self {
-        let account_id = document.get_i32("_id").unwrap() as u16;
-        let batch_index = U256::from(document.get_i32("batchIndex").unwrap());
-        let valid_from_auction_id = U256::from(document.get_i32("validFromAuctionId").unwrap());
-        StandingOrder {
-            account_id,
-            batch_index,
-            valid_from_auction_id,
-            orders: document
-                .get_array("orders")
-                .unwrap()
-                .iter()
-                .map(|raw_order| raw_order.as_document().unwrap())
-                .map(|order_doc| super::Order {
-                    batch_information: None,
-                    account_id,
-                    buy_token: order_doc.get_i32("buyToken").unwrap() as u8,
-                    sell_token: order_doc.get_i32("sellToken").unwrap() as u8,
-                    buy_amount: order_doc.get_str("buyAmount").unwrap().parse().unwrap(),
-                    sell_amount: order_doc.get_str("sellAmount").unwrap().parse().unwrap(),
-                })
-                .collect(),
-        }
-    }
-}
-
 impl From<&Arc<Log>> for StandingOrder {
     fn from(log: &Arc<Log>) -> Self {
         let mut bytes: Vec<u8> = log.data.0.clone();

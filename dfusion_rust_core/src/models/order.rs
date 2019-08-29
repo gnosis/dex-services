@@ -106,22 +106,6 @@ impl From<Entity> for Order {
     }
 }
 
-impl From<mongodb::ordered::OrderedDocument> for Order {
-    fn from(document: mongodb::ordered::OrderedDocument) -> Self {
-        Order {
-            batch_information: Some(BatchInformation {
-                slot: U256::from(document.get_i32("auctionId").unwrap()),
-                slot_index: document.get_i32("slotIndex").unwrap() as u16,
-            }),
-            account_id: document.get_i32("accountId").unwrap() as u16,
-            buy_token: document.get_i32("buyToken").unwrap() as u8,
-            sell_token: document.get_i32("sellToken").unwrap() as u8,
-            buy_amount: document.get_str("buyAmount").unwrap().parse().unwrap(),
-            sell_amount: document.get_str("sellAmount").unwrap().parse().unwrap(),
-        }
-    }
-}
-
 impl Into<Entity> for Order {
     fn into(self) -> Entity {
         let mut entity = Entity::new();
