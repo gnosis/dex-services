@@ -27,7 +27,7 @@ matrix:
         - npm install -C dex-contracts
         - cd dex-contracts && truffle compile && cd -
         - docker-compose up -d driver graph-listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
-        - cd dex-contracts && wait-port -t 8545 && truffle migrate && cd -
+        - cd dex-contracts && wait-port -t 30000 8545 && truffle migrate && cd -
       script:
         - ./test/e2e-tests-deposit-withdraw.sh
         - ./test/restart-containers.sh
