@@ -3,27 +3,19 @@ matrix:
   include:
     - language: rust
       rust: 1.36.0
-      cache: 
-        directories:
-          - /home/travis/.cargo
+      cache: cargo
       before_cache:
-        - rm -rf /home/travis/.cargo/registry
+        - find ./target/debug -type f -maxdepth 1 -delete
+        - rm -fr ./target/debug/{deps,.fingerprint}/{*ra_*,*test*,*tools*,*gen_lsp*}
+        - rm -f  ./target/.rustc_info.json
+      env:
+        - CARGO_INCREMENTAL=0
       before_script:
         - rustup component add clippy
       script:
         - cargo clippy --all -- -D warnings
         - cargo check --verbose --all
         - cargo test --verbose --all
-    - language: python
-      python: 3.6
-      cache: pip
-      install:
-        - pip install -U -r event_listener/requirements.txt
-      script:
-        - pytest --cov=event_listener/dfusion_db/ --cov-report term-missing
-        - mypy event_listener/dfusion_db/ --ignore-missing-imports --strict
-        - pep8 --config .pep8 event_listener/dfusion_db/
-        - pylint --errors-only event_listener/dfusion_db/
     - language: generic
       dist: xenial
       sudo: required
@@ -36,9 +28,8 @@ matrix:
       install:
         - git submodule update --init
         - npm install -C dex-contracts
-        # driver/listener require compiled contracts
         - cd dex-contracts && truffle compile && cd -
-        - docker-compose up -d driver listener graph-listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
+        - docker-compose up -d driver graph-listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
         - cd dex-contracts && wait-port -t 30000 8545 && truffle migrate && cd -
       script:
         - ./test/e2e-tests-deposit-withdraw.sh
