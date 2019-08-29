@@ -13,9 +13,8 @@ matrix:
       before_script:
         - rustup component add clippy
       script:
+        - cargo test --all
         - cargo clippy --all -- -D warnings
-        - cargo check --verbose --all
-        - cargo test --verbose --all
     - language: generic
       dist: xenial
       sudo: required
