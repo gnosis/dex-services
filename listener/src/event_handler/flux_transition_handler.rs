@@ -60,6 +60,7 @@ impl EventHandler for FluxTransitionHandler {
             .get_balances_for_state_index(&state_index)
             .map_err(|e| failure::err_msg(format!("{}", e)))?;
 
+        let mut updated_records = vec![];
         match transition_type {
             FluxTransitionType::Deposit => {
                 let deposits = self
@@ -73,16 +74,30 @@ impl EventHandler for FluxTransitionHandler {
                     .store
                     .get_withdraws_of_slot(&slot)
                     .map_err(|e| failure::err_msg(format!("{}", e)))?;
-                account_state.apply_withdraws(&withdraws);
+                let valid_withdraws = account_state.apply_withdraws(&withdraws);
+                updated_records = valid_withdraws
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, &is_valid)| is_valid)
+                    .map(|(index, _)| {
+                        let mut entity: Entity = withdraws[index].clone().into();
+                        entity.set("valid", true);
+                        EntityOperation::Set {
+                            key: util::entity_key("Withdraw", &entity),
+                            data: entity,
+                        }
+                    })
+                    .collect();
             }
         }
         let mut entity: Entity = account_state.into();
         // We set the state root as claimed by the event
         entity.set("id", new_state_hash.to_value());
-        Ok(vec![EntityOperation::Set {
+        updated_records.push(EntityOperation::Set {
             key: util::entity_key("AccountState", &entity),
             data: entity,
-        }])
+        });
+        Ok(updated_records)
     }
 }
 
@@ -139,10 +154,10 @@ pub mod test {
 
         assert!(result.is_ok());
         match result.unwrap().pop().unwrap() {
-            EntityOperation::Set { key: _, data } => {
+            EntityOperation::Set { data, .. } => {
                 assert_eq!(AccountState::from(data), expected_new_state)
             }
-            _ => assert!(false),
+            _ => panic!("Unexpected Entity operation"),
         }
     }
 
@@ -220,13 +235,26 @@ pub mod test {
         let expected_new_state =
             AccountState::new(H256::from(1), U256::one(), vec![0, 10, 0, 0], 1);
 
-        assert!(result.is_ok());
-        match result.unwrap().pop().unwrap() {
-            EntityOperation::Set { key: _, data } => {
+        let mut result = result.expect("Unexpected Error");
+        match result.pop().unwrap() {
+            EntityOperation::Set { data, .. } => {
                 assert_eq!(AccountState::from(data), expected_new_state)
             }
-            _ => assert!(false),
+            _ => panic!("Unexpected Entity operation"),
         }
+
+        // Assert the two valid withdraws are updated with valid flag
+        let valid_withdraw_updates = result
+            .iter()
+            .filter(|op| match op {
+                EntityOperation::Set { data, .. } => data
+                    .get("valid")
+                    .and_then(|valid| valid.clone().as_bool())
+                    .unwrap_or(false),
+                _ => false,
+            })
+            .count();
+        assert_eq!(valid_withdraw_updates, 2);
     }
 
     fn create_state_transition_event(

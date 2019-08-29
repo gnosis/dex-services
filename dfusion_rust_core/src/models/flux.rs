@@ -67,6 +67,7 @@ impl From<Entity> for PendingFlux {
 impl Into<Entity> for PendingFlux {
     fn into(self) -> Entity {
         let mut entity = Entity::new();
+        entity.set("id", format!("{} - {}", self.slot, self.slot_index));
         entity.set("accountId", self.account_id.to_value());
         entity.set("tokenId", self.token_id.to_value());
         entity.set("amount", self.amount.to_value());
@@ -196,6 +197,7 @@ pub mod unit_test {
         };
 
         let mut entity = Entity::new();
+        entity.set("id", "0 - 0");
         entity.set("accountId", 1);
         entity.set("tokenId", 1);
         entity.set("amount", BigDecimal::from(1 * (10 as u64).pow(18)));

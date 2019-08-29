@@ -24,14 +24,11 @@ impl EventHandler for WithdrawHandler {
         _transaction: Arc<Transaction>,
         log: Arc<Log>,
     ) -> Result<Vec<EntityOperation>, Error> {
-        let entity_id = util::entity_id_from_log(&log);
         let flux = PendingFlux::from(log);
 
         info!(logger, "Processing Withdraw {:?}", &flux);
 
-        let mut entity: Entity = flux.into();
-        entity.set("id", &entity_id);
-
+        let entity: Entity = flux.into();
         Ok(vec![EntityOperation::Set {
             key: util::entity_key("Withdraw", &entity),
             data: entity,
