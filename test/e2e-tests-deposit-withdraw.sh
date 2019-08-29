@@ -13,7 +13,7 @@ step "Setup" \
 step "Deposit 18 of token 2 for user 2" \
 "npx truffle exec scripts/deposit.js 2 2 18"
 
-step_with_retry "Deposit was added to graph db" \
+step_with_retry "Deposit was added to graph DB" \
 "source ../test/utils.sh && query_graphql \
     \"query { \
         deposits(where: { accountId: 2}) { \
@@ -29,10 +29,7 @@ EXPECTED_HASH="73815c173218e6025f7cb12d0add44354c4671e261a34a360943007ff6ac7af5"
 step_with_retry "Check contract updated" \
 "npx truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep ${EXPECTED_HASH}"
 
-step_with_retry "Check mongo db updated" \
-"mongo dfusion2 --eval \"db.accounts.findOne({'stateHash': '${EXPECTED_HASH}'}).balances[62]\" | grep -w 18000000000000000000"
-
-step_with_retry "Check graph db updated" \
+step_with_retry "Check graph DB updated" \
 "source ../test/utils.sh && query_graphql \
     \"query { \
         accountStates(where: {id: \\\"${EXPECTED_HASH}\\\"}) {\
@@ -61,9 +58,6 @@ EXPECTED_HASH="7b738197bfe79b6d394499b0cac0186cdc2f65ae2239f2e9e3c698709c80cb67"
 
 step_with_retry "Check contract updated" \
 "npx truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep ${EXPECTED_HASH}"
-
-step_with_retry "Check mongo db updated" \
- "mongo dfusion2 --eval \"db.accounts.findOne({'stateHash': '$EXPECTED_HASH'}).balances[62]\" | grep -w 0"
 
 # Should now be able to claim withdraw and see a balance change
 step "Claim Withdraw" \

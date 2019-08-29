@@ -15,10 +15,8 @@ where
     let deposit_slot = contract.get_current_deposit_slot()?;
 
     info!("Current top deposit_slot is {:?}", deposit_slot);
-    let slot = find_first_unapplied_slot(
-        deposit_slot,
-        &|i| contract.has_deposit_slot_been_applied(i)
-    )?;
+    let slot =
+        find_first_unapplied_slot(deposit_slot, &|i| contract.has_deposit_slot_been_applied(i))?;
     if slot <= deposit_slot {
         info!("Highest unprocessed deposit_slot is {:?}", slot);
         let processing_state = batch_processing_state(slot, contract, &|i| {

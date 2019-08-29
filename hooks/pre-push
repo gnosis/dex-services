@@ -1,6 +1,5 @@
 #!/bin/sh
 
-CHANGED_PY_FILES=$(git diff master --name-only | grep ".py$")
 CHANGED_RS_FILES=$(git diff master --name-only | grep ".rs$")
 
 PASS=true
@@ -20,19 +19,6 @@ if [[ ("$CHANGED_RS_FILES" != "") ]]; then
     cd ..
 else
     echo 'Skipping cargo test; Branch does not differ from master in a rusty way!'
-fi
-
-if [[ ("$CHANGED_PY_FILES" != "") ]]; then
-    echo 'Running pytest'
-    pytest event_listener/dfusion_db
-    if [[ "$?" == 0 ]]; then
-      printf "\t\033[32mpytest Passed!\033[0m"
-    else
-      printf "\t\033[41mpytest Failed.\033[0m"
-      PASS=false
-    fi
-else
-    echo 'Skipping pytest; Branch does not differ from master in a pythonic way!'
 fi
 
 if ! $PASS; then
