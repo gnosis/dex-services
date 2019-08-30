@@ -59,6 +59,15 @@ EXPECTED_HASH="7b738197bfe79b6d394499b0cac0186cdc2f65ae2239f2e9e3c698709c80cb67"
 step_with_retry "Check contract updated" \
 "npx truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep ${EXPECTED_HASH}"
 
+step_with_retry "Check account DB updated" \
+"source ../test/utils.sh && query_graphql \
+    \"query { \
+        accountStates(where: {id: \\\"${EXPECTED_HASH}\\\"}) {\
+            balances \
+        } \
+    }\" | jq .data.accountStates[0].balances[62] | grep -w 0"
+
+
 # Should now be able to claim withdraw and see a balance change
 step "Claim Withdraw" \
 "npx truffle exec scripts/claim_withdraw.js 0 2 2 | grep \"Success! Balance of token 2 before claim: 282000000000000000000, after claim: 300000000000000000000\""
