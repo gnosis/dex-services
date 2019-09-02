@@ -3,16 +3,18 @@ matrix:
   include:
     - language: rust
       rust: 1.36.0
-      cache: 
-        cargo: true
-        directories:
-          - target
+      cache: cargo
+      before_cache:
+        - find ./target/debug -type f -maxdepth 1 -delete
+        - rm -fr ./target/debug/{deps,.fingerprint}/{*ra_*,*test*,*tools*,*gen_lsp*}
+        - rm -f  ./target/.rustc_info.json
+      env:
+        - CARGO_INCREMENTAL=0
       before_script:
         - rustup component add clippy
       script:
+        - cargo test --all
         - cargo clippy --all -- -D warnings
-        - cargo check --verbose --all
-        - cargo test --verbose --all
     - language: generic
       dist: xenial
       sudo: required
