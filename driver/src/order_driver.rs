@@ -1,18 +1,13 @@
+use super::price_finding::PriceFinding;
 use crate::contract::SnappContract;
 use crate::error::{DriverError, ErrorKind};
-use super::price_finding::PriceFinding;
 use crate::util::{
     batch_processing_state, find_first_unapplied_slot, hash_consistency_check, ProcessingState,
 };
 
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::{
-    AccountState,
-    ConcatenatingHashable,
-    Order,
-    RollingHashable,
-    Serializable,
-    Solution,
+    AccountState, ConcatenatingHashable, Order, RollingHashable, Serializable, Solution,
     StandingOrder,
 };
 
@@ -30,7 +25,7 @@ pub struct OrderProcessor<'a, D: DbInterface, C: SnappContract> {
     auction_bids: HashMap<U256, AuctionBid>,
     db: &'a D,
     contract: &'a C,
-    price_finder: &'a mut PriceFinding,
+    price_finder: &'a mut dyn PriceFinding,
 }
 
 #[derive(Eq, PartialEq, Debug)]
@@ -41,7 +36,7 @@ pub enum ProcessResult {
 }
 
 impl<'a, D: DbInterface, C: SnappContract> OrderProcessor<'a, D, C> {
-    pub fn new(db: &'a D, contract: &'a C, price_finder: &'a mut PriceFinding) -> Self {
+    pub fn new(db: &'a D, contract: &'a C, price_finder: &'a mut dyn PriceFinding) -> Self {
         OrderProcessor {
             auction_bids: HashMap::new(),
             db,
@@ -85,8 +80,8 @@ impl<'a, D: DbInterface, C: SnappContract> OrderProcessor<'a, D, C> {
                     }
                     return Err(DriverError::new(
                         &format!("Cannot find saved bid for auction slot {:?}", slot),
-                        ErrorKind::StateError
-                    ))
+                        ErrorKind::StateError,
+                    ));
                 }
             }
         }
@@ -217,7 +212,7 @@ mod tests {
             vec![100; (TOKENS * 2) as usize],
             TOKENS,
         );
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_auction_slot
             .given(())
@@ -267,7 +262,7 @@ mod tests {
             .given(state_hash)
             .will_return(Ok(state.clone()));
 
-        let mut pf = PriceFindingMock::new();
+        let mut pf = PriceFindingMock::default();
         let expected_solution = Solution {
             surplus: Some(U256::zero()),
             prices: vec![1, 2],
@@ -293,7 +288,7 @@ mod tests {
     #[test]
     fn does_not_bid_if_highest_slot_already_applied() {
         let slot = U256::from(1);
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_auction_slot
             .given(())
@@ -304,7 +299,7 @@ mod tests {
             .will_return(Ok(true));
 
         let db = DbInterfaceMock::new();
-        let mut pf = PriceFindingMock::new();
+        let mut pf = PriceFindingMock::default();
 
         let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
         assert_eq!(processor.run(), Ok(ProcessResult::NoAction));
@@ -313,7 +308,7 @@ mod tests {
     #[test]
     fn does_not_bid_if_highest_slot_too_close_to_current_block() {
         let slot = U256::from(1);
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_auction_slot
             .given(())
@@ -337,7 +332,7 @@ mod tests {
             .will_return(Ok(U256::from(11)));
 
         let db = DbInterfaceMock::new();
-        let mut pf = PriceFindingMock::new();
+        let mut pf = PriceFindingMock::default();
 
         let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
         assert_eq!(processor.run(), Ok(ProcessResult::NoAction));
@@ -354,7 +349,7 @@ mod tests {
             vec![100; (TOKENS * 2) as usize],
             TOKENS,
         );
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_auction_slot
             .given(())
@@ -406,7 +401,7 @@ mod tests {
             .given(state_hash)
             .will_return(Ok(state.clone()));
 
-        let mut pf = PriceFindingMock::new();
+        let mut pf = PriceFindingMock::default();
         let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
         assert_eq!(processor.run(), Ok(ProcessResult::AuctionBid(slot)));
         assert_eq!(processor.run(), Ok(ProcessResult::NoAction));
@@ -419,7 +414,7 @@ mod tests {
         let first_orders = vec![create_order_for_test(), create_order_for_test()];
         let second_orders = vec![create_order_for_test(), create_order_for_test()];
 
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_auction_slot
             .given(())
@@ -504,7 +499,7 @@ mod tests {
             .given(state_hash)
             .will_return(Ok(state.clone()));
 
-        let mut pf = PriceFindingMock::new();
+        let mut pf = PriceFindingMock::default();
         let expected_solution = Solution {
             surplus: Some(U256::zero()),
             prices: vec![1, 2],
@@ -542,7 +537,7 @@ mod tests {
             TOKENS,
         );
 
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_auction_slot
             .given(())
@@ -581,7 +576,7 @@ mod tests {
             .given(state_hash)
             .will_return(Ok(state.clone()));
 
-        let mut pf = PriceFindingMock::new();
+        let mut pf = PriceFindingMock::default();
 
         let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
         let error = processor.run().expect_err("Expected Error");
@@ -606,7 +601,7 @@ mod tests {
             TOKENS,
         );
 
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_auction_slot
             .given(())
@@ -659,7 +654,7 @@ mod tests {
             .given(state_hash)
             .will_return(Ok(state.clone()));
 
-        let mut pf = PriceFindingMock::new();
+        let mut pf = PriceFindingMock::default();
         pf.find_prices
             .given((standing_order.get_orders().clone(), state))
             .will_return(Err(PriceFindingError::from("Trivial solution is fine")));

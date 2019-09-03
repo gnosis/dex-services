@@ -236,8 +236,8 @@ pub mod unit_test {
             account_id: 1,
             buy_token: 3,
             sell_token: 2,
-            buy_amount: 1 * (10 as u128).pow(18),
-            sell_amount: 1 * (10 as u128).pow(18),
+            buy_amount: (10 as u128).pow(18),
+            sell_amount: (10 as u128).pow(18),
         };
 
         assert_eq!(expected_order, Order::from(log));
@@ -306,7 +306,7 @@ pub mod unit_test {
             account_id: 1,
             buy_token: 1,
             sell_token: 2,
-            buy_amount: 1 * (10 as u128).pow(18),
+            buy_amount: (10 as u128).pow(18),
             sell_amount: 2 * (10 as u128).pow(18),
         }
     }
@@ -318,7 +318,7 @@ pub mod unit_test {
         entity.set("accountId", 1);
         entity.set("buyToken", 1);
         entity.set("sellToken", 2);
-        entity.set("buyAmount", BigDecimal::from(1 * (10 as u64).pow(18)));
+        entity.set("buyAmount", BigDecimal::from((10 as u64).pow(18)));
         entity.set("sellAmount", BigDecimal::from(2 * (10 as u64).pow(18)));
 
         entity

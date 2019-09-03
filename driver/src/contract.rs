@@ -322,7 +322,10 @@ impl SnappContract for SnappContractImpl {
         new_state: H256,
         prices_and_volumes: Vec<u8>,
     ) -> Result<()> {
-        debug!("Applying Auction with result bytes: {:?}", &prices_and_volumes);
+        debug!(
+            "Applying Auction with result bytes: {:?}",
+            &prices_and_volumes
+        );
         let account = self
             .account_with_sufficient_balance()
             .ok_or("Not enough balance to send Txs")?;
@@ -398,6 +401,24 @@ pub mod tests {
     use mock_it::Matcher::*;
     use mock_it::Mock;
 
+    type ApplyDeopositArguments = (U256, Matcher<H256>, Matcher<H256>, Matcher<H256>);
+    type ApplyWithdrawArguments = (
+        U256,
+        Matcher<H256>,
+        Matcher<H256>,
+        Matcher<H256>,
+        Matcher<H256>,
+    );
+    type ApplyAuctionArguments = (U256, Matcher<H256>, Matcher<H256>, Matcher<Vec<u8>>);
+    type ApplySolutionArguments = (
+        U256,
+        Matcher<H256>,
+        Matcher<H256>,
+        Matcher<H256>,
+        Matcher<Vec<U128>>,
+        U256,
+    );
+
     #[derive(Clone)]
     pub struct SnappContractMock {
         pub get_current_block_timestamp: Mock<(), Result<U256>>,
@@ -414,34 +435,15 @@ pub mod tests {
         pub creation_timestamp_for_auction_slot: Mock<U256, Result<U256>>,
         pub order_hash_for_slot: Mock<U256, Result<H256>>,
         pub has_auction_slot_been_applied: Mock<U256, Result<bool>>,
-        pub apply_deposits: Mock<(U256, Matcher<H256>, Matcher<H256>, Matcher<H256>), Result<()>>,
-        pub apply_withdraws: Mock<
-            (
-                U256,
-                Matcher<H256>,
-                Matcher<H256>,
-                Matcher<H256>,
-                Matcher<H256>,
-            ),
-            Result<()>,
-        >,
-        pub apply_auction: Mock<(U256, Matcher<H256>, Matcher<H256>, Matcher<Vec<u8>>), Result<()>>,
-        pub auction_solution_bid: Mock<
-            (
-                U256,
-                Matcher<H256>,
-                Matcher<H256>,
-                Matcher<H256>,
-                Matcher<Vec<U128>>,
-                U256,
-            ),
-            Result<()>,
-        >,
+        pub apply_deposits: Mock<ApplyDeopositArguments, Result<()>>,
+        pub apply_withdraws: Mock<ApplyWithdrawArguments, Result<()>>,
+        pub apply_auction: Mock<ApplyAuctionArguments, Result<()>>,
+        pub auction_solution_bid: Mock<ApplySolutionArguments, Result<()>>,
         pub calculate_order_hash: Mock<(U256, Matcher<Vec<U128>>), Result<H256>>,
     }
 
     impl SnappContractMock {
-        pub fn new() -> SnappContractMock {
+        pub fn default() -> SnappContractMock {
             SnappContractMock {
                 get_current_block_timestamp: Mock::new(Err(DriverError::new(
                     "Unexpected call to get_current_block_timestamp",

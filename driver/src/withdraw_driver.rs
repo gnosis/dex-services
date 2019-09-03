@@ -15,10 +15,9 @@ where
     let withdraw_slot = contract.get_current_withdraw_slot()?;
 
     info!("Current top withdraw_slot is {:?}", withdraw_slot);
-    let slot = find_first_unapplied_slot(
-        withdraw_slot,
-        &|i| contract.has_withdraw_slot_been_applied(i),
-    )?;
+    let slot = find_first_unapplied_slot(withdraw_slot, &|i| {
+        contract.has_withdraw_slot_been_applied(i)
+    })?;
     if slot <= withdraw_slot {
         info!("Highest unprocessed withdraw_slot is {:?}", slot);
         let processing_state = batch_processing_state(slot, contract, &|i| {
@@ -82,7 +81,7 @@ mod tests {
             TOKENS,
         );
 
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_withdraw_slot
             .given(())
@@ -130,7 +129,7 @@ mod tests {
     #[test]
     fn does_not_apply_if_highest_slot_already_applied() {
         let slot = U256::from(1);
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_withdraw_slot
             .given(())
@@ -147,7 +146,7 @@ mod tests {
     #[test]
     fn does_not_apply_if_highest_slot_too_close_to_current_block() {
         let slot = U256::from(1);
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_withdraw_slot
             .given(())
@@ -181,7 +180,7 @@ mod tests {
         let first_withdraws = vec![create_flux_for_test(0, 1), create_flux_for_test(0, 2)];
         let second_withdraws = vec![create_flux_for_test(1, 1), create_flux_for_test(1, 2)];
 
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_withdraw_slot
             .given(())
@@ -252,7 +251,7 @@ mod tests {
             TOKENS,
         );
 
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_withdraw_slot
             .given(())
@@ -318,9 +317,9 @@ mod tests {
         );
         state.decrement_balance(1, 0, 100);
 
-        let merkle_root = withdraws.root_hash(&vec![true, false]);
+        let merkle_root = withdraws.root_hash(&[true, false]);
 
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_withdraw_slot
             .given(())

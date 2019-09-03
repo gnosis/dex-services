@@ -9,11 +9,11 @@ use crate::models::StandingOrder;
 use graph_node_reader::StoreReader;
 
 pub struct GraphReader {
-    reader: Box<StoreReader>,
+    reader: Box<dyn StoreReader>,
 }
 
 impl GraphReader {
-    pub fn new(reader: Box<StoreReader>) -> Self {
+    pub fn new(reader: Box<dyn StoreReader>) -> Self {
         GraphReader { reader }
     }
 

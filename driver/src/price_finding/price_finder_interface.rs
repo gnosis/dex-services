@@ -28,7 +28,7 @@ pub mod tests {
     }
 
     impl PriceFindingMock {
-        pub fn new() -> PriceFindingMock {
+        pub fn default() -> PriceFindingMock {
             PriceFindingMock {
                 find_prices: Mock::new(Err(PriceFindingError::new(
                     "Unexpected call to find_prices",
