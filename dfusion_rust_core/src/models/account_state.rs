@@ -3,9 +3,9 @@ use graph::data::store::Entity;
 use serde_derive::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
-use web3::types::{H256, U256, Log};
+use web3::types::{Log, H256, U256};
 
-use crate::models::{TOKENS, RollingHashable, PendingFlux, Order, Solution};
+use crate::models::{Order, PendingFlux, RollingHashable, Solution};
 
 use super::util::*;
 
@@ -20,7 +20,12 @@ pub struct AccountState {
 
 impl AccountState {
     pub fn new(state_hash: H256, state_index: U256, balances: Vec<u128>, num_tokens: u8) -> Self {
-        AccountState { state_hash, state_index, balances, num_tokens }
+        AccountState {
+            state_hash,
+            state_index,
+            balances,
+            num_tokens,
+        }
     }
     fn balance_index(&self, token_id: u8, account_id: u16) -> usize {
         self.num_tokens as usize * account_id as usize + token_id as usize
@@ -30,17 +35,24 @@ impl AccountState {
     }
     pub fn increment_balance(&mut self, token_id: u8, account_id: u16, amount: u128) {
         let index = self.balance_index(token_id, account_id);
-        debug!("Incrementing account {} balance of token {} by {}", account_id, token_id, amount);
+        debug!(
+            "Incrementing account {} balance of token {} by {}",
+            account_id, token_id, amount
+        );
         self.balances[index] += amount;
     }
     pub fn decrement_balance(&mut self, token_id: u8, account_id: u16, amount: u128) {
         let index = self.balance_index(token_id, account_id);
-        debug!("Decrementing account {} balance of token {} by {}", account_id, token_id, amount);
+        debug!(
+            "Decrementing account {} balance of token {} by {}",
+            account_id, token_id, amount
+        );
         self.balances[index] -= amount;
     }
     pub fn accounts(&self) -> u16 {
         assert_eq!(
-            self.balances.len() % self.num_tokens as usize, 0,
+            self.balances.len() % self.num_tokens as usize,
+            0,
             "Balance vector cannot be split into equal accounts"
         );
         (self.balances.len() / self.num_tokens as usize) as u16
@@ -102,24 +114,6 @@ impl RollingHashable for AccountState {
     }
 }
 
-impl From<mongodb::ordered::OrderedDocument> for AccountState {
-    fn from(document: mongodb::ordered::OrderedDocument) -> Self {
-        AccountState {
-            state_hash: document.get_str("stateHash")
-                .unwrap()
-                .parse::<H256>()
-                .unwrap(),
-            state_index: U256::from(document.get_i32("stateIndex").unwrap()),
-            balances: document.get_array("balances")
-                .unwrap()
-                .iter()
-                .map(|e| e.as_str().unwrap().parse().unwrap())
-                .collect(),
-            num_tokens: TOKENS,
-        }
-    }
-}
-
 impl From<Arc<Log>> for AccountState {
     fn from(log: Arc<Log>) -> Self {
         let mut bytes: Vec<u8> = log.data.0.clone();
@@ -160,46 +154,57 @@ impl Into<Entity> for AccountState {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use web3::types::{H256, Bytes};
     use crate::models::order::BatchInformation;
+    use crate::models::TOKENS;
+    use web3::types::{Bytes, H256};
 
     #[test]
     fn test_state_rolling_hash() {
         // Empty state
         let mut balances = vec![0; 3000];
-        let state_hash = "77b01abfbad57cb7a1344b12709603ea3b9ad803ef5ea09814ca212748f54733".parse::<H256>().unwrap();
+        let state_hash = "77b01abfbad57cb7a1344b12709603ea3b9ad803ef5ea09814ca212748f54733"
+            .parse::<H256>()
+            .unwrap();
         let state = AccountState {
             state_hash: state_hash.clone(),
             state_index: U256::one(),
             balances: balances.clone(),
             num_tokens: TOKENS,
         };
-        assert_eq!(
-            state.rolling_hash(0),
-            state_hash
-        );
+        assert_eq!(state.rolling_hash(0), state_hash);
 
         // AccountState with single deposit
         balances[62] = 18;
-        let state_hash = "a0cde336d10dbaf3df98ba662bacf25d95062db7b3e0083bd4bad4a6c7a1cd41".parse::<H256>().unwrap();
+        let state_hash = "a0cde336d10dbaf3df98ba662bacf25d95062db7b3e0083bd4bad4a6c7a1cd41"
+            .parse::<H256>()
+            .unwrap();
         let state = AccountState {
             state_hash: state_hash.clone(),
             state_index: U256::one(),
             balances,
             num_tokens: TOKENS,
         };
-        assert_eq!(
-            state.rolling_hash(0),
-            state_hash
-        );
+        assert_eq!(state.rolling_hash(0), state_hash);
     }
 
     #[test]
     fn test_from_log() {
         let bytes: Vec<Vec<u8>> = vec![
-            /* state_hash */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            /* num_tokens */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 30],
-            /* num_accounts */ vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100],
+            /* state_hash */
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
+            ],
+            /* num_tokens */
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 30,
+            ],
+            /* num_accounts */
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 100,
+            ],
         ];
 
         let log = Arc::new(Log {
@@ -267,7 +272,7 @@ pub mod tests {
             buy_token: 0,
             sell_token: 1,
             buy_amount: 1,
-            sell_amount: 1
+            sell_amount: 1,
         };
 
         let order_2 = Order {
@@ -279,7 +284,7 @@ pub mod tests {
             buy_token: 1,
             sell_token: 0,
             buy_amount: 1,
-            sell_amount: 1
+            sell_amount: 1,
         };
 
         let results = Solution {
@@ -296,15 +301,7 @@ pub mod tests {
             state.state_hash,
             "Incorrect state hash!"
         );
-        assert_eq!(
-            U256::from(2),
-            state.state_index,
-            "Incorrect state index!"
-        );
-        assert_eq!(
-            state.balances,
-            vec![1, 0, 0, 1],
-            "Incorrect balances!"
-        );
+        assert_eq!(U256::from(2), state.state_index, "Incorrect state index!");
+        assert_eq!(state.balances, vec![1, 0, 0, 1], "Incorrect balances!");
     }
 }

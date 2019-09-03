@@ -1,25 +1,5 @@
 version: '3.6'
 services:
-  mongo:
-    image: mongo:latest
-    environment:
-      - AUTH=no
-    restart: always  
-    ports:
-      - "27017:27017"
-    logging:
-      driver: "none"
-  
-  mongoclient:
-    image: mongoclient/mongoclient:2.2.0
-    environment:
-      - MONGOCLIENT_DEFAULT_CONNECTION_URL=mongodb://mongo/dfusion2
-    ports:
-      - '3000:3000'
-    depends_on:
-      - mongo
-    logging:
-      driver: "none"
 
   ganache-cli:
     ports:
@@ -39,26 +19,12 @@ services:
     volumes:
       - ./dex-contracts:/app/dex-contracts
 
-  listener:
-    command: docker/event_listener/run.sh
-    build:
-      context: .
-      dockerfile: docker/event_listener/Dockerfile
-    depends_on:
-      - mongo
-      - ganache-cli
-    volumes:
-      - ./:/app/
-    env_file:
-      - common.env
-
   driver:
     command: cargo run --bin main
     build:
       context: .
       dockerfile: docker/rust/Dockerfile
     depends_on:
-      - mongo
       - ganache-cli
     restart: always
     volumes:

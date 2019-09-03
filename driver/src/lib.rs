@@ -1,43 +1,39 @@
+extern crate dfusion_core;
 extern crate hex;
-extern crate mongodb;
 #[macro_use]
 extern crate log;
 extern crate rustc_hex;
 extern crate serde_json;
 extern crate web3;
-extern crate dfusion_core;
 
-use crate::contract::SnappContractImpl;
-use crate::mongo_db::MongoDB;
+use dfusion_core::database::DbInterface;
+
+use crate::contract::SnappContract;
 use crate::deposit_driver::run_deposit_listener;
-use crate::order_driver::run_order_listener;
-use crate::price_finding::PriceFinding;
+use crate::order_driver::OrderProcessor;
 use crate::withdraw_driver::run_withdraw_listener;
 
 pub mod contract;
-pub mod mongo_db;
 pub mod error;
+pub mod order_driver;
 pub mod price_finding;
 
 mod deposit_driver;
-mod order_driver;
-mod withdraw_driver;
 mod util;
+mod withdraw_driver;
 
-pub fn run_driver_components(
-    db: &MongoDB,
-    contract: &SnappContractImpl,
-    price_finder: &mut PriceFinding,
-) {
+pub fn run_driver_components<D, C>(
+    db: &D,
+    contract: &C,
+    order_processor: &mut OrderProcessor<D, C>,
+) where D: DbInterface, C: SnappContract {
     if let Err(e) = run_deposit_listener(db, contract) {
         error!("Deposit_driver error: {}", e);
     }
     if let Err(e) = run_withdraw_listener(db, contract) {
         error!("Withdraw_driver error: {}", e);
     }
-    if let Err(e) = run_order_listener(db, contract, price_finder) {
+    if let Err(e) = order_processor.run() {
         error!("Order_driver error: {}", e);
     }
-    //...
 }
-

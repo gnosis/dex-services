@@ -4,6 +4,8 @@ use crate::error::ErrorKind;
 
 use web3::types::{H256, U256};
 
+const BATCH_TIME_SECONDS: u32 = 3 * 60;
+
 pub fn find_first_unapplied_slot(
     upper_bound: U256,
     has_slot_been_applied: &Fn(U256) -> Result<bool, DriverError>,
@@ -38,18 +40,31 @@ pub fn hash_consistency_check(
     Ok(())
 }
 
-pub fn can_process<C>(
+pub enum ProcessingState {
+    TooEarly,
+    AcceptsBids,
+    AcceptsSolution,
+}
+
+pub fn batch_processing_state<C>(
     slot: U256,
     contract: &C,
-    creation_block: &Fn(U256) -> Result<U256, DriverError>,
-) -> Result<bool, DriverError>
+    creation_block_time: &Fn(U256) -> Result<U256, DriverError>,
+) -> Result<ProcessingState, DriverError>
 where
     C: SnappContract,
 {
-    let slot_creation_block = creation_block(slot)?;
-    if slot_creation_block == U256::zero() {
-        return Ok(false);
+    let slot_creation_block_time = creation_block_time(slot)?;
+    if slot_creation_block_time == U256::zero() {
+        return Ok(ProcessingState::TooEarly);
     }
-    let current_block = contract.get_current_block_timestamp()?;
-    Ok(slot_creation_block + 180 < current_block)
+
+    let current_block_time = contract.get_current_block_timestamp()?;
+    if slot_creation_block_time + 2 * BATCH_TIME_SECONDS < current_block_time {
+        return Ok(ProcessingState::AcceptsSolution);
+    }
+    if slot_creation_block_time + BATCH_TIME_SECONDS < current_block_time {
+        return Ok(ProcessingState::AcceptsBids);
+    }
+    Ok(ProcessingState::TooEarly)
 }

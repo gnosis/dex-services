@@ -2,12 +2,12 @@ use crate::models;
 use crate::models::{ConcatenatingHashable, RollingHashable};
 
 use array_macro::array;
+use graph::data::store::Entity;
 use serde_derive::Deserialize;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
-use web3::types::{Log};
+use web3::types::Log;
 use web3::types::{H256, U256};
-use graph::data::store::{Entity};
 
 use super::util::*;
 
@@ -62,38 +62,15 @@ impl ConcatenatingHashable for [models::StandingOrder; models::NUM_RESERVED_ACCO
     }
 }
 
-impl From<mongodb::ordered::OrderedDocument> for StandingOrder {
-    fn from(document: mongodb::ordered::OrderedDocument) -> Self {
-        let account_id = document.get_i32("_id").unwrap() as u16;
-        let batch_index = U256::from(document.get_i32("batchIndex").unwrap());
-        let valid_from_auction_id = U256::from(document.get_i32("validFromAuctionId").unwrap());
-        StandingOrder {
-            account_id,
-            batch_index,
-            valid_from_auction_id,
-            orders: document
-                .get_array("orders")
-                .unwrap()
-                .iter()
-                .map(|raw_order| raw_order.as_document().unwrap())
-                .map(|order_doc| super::Order {
-                        batch_information: None,
-                        account_id,
-                        buy_token: order_doc.get_i32("buyToken").unwrap() as u8,
-                        sell_token: order_doc.get_i32("sellToken").unwrap() as u8,
-                        buy_amount: order_doc.get_str("buyAmount").unwrap().parse().unwrap(),
-                        sell_amount: order_doc.get_str("sellAmount").unwrap().parse().unwrap(),
-                    }
-                ).collect()
-        }
-    }
-}
-
 impl From<&Arc<Log>> for StandingOrder {
     fn from(log: &Arc<Log>) -> Self {
         let mut bytes: Vec<u8> = log.data.0.clone();
-        info!("Parsing StandingOrder from bytes. {} bytes. {:?}", bytes.len(), bytes);
-        
+        info!(
+            "Parsing StandingOrder from bytes. {} bytes. {:?}",
+            bytes.len(),
+            bytes
+        );
+
         // Get basic data from event
         let batch_index = U256::pop_from_log_data(&mut bytes);
         let valid_from_auction_id = U256::pop_from_log_data(&mut bytes);
@@ -102,18 +79,29 @@ impl From<&Arc<Log>> for StandingOrder {
         let bytes_init = u8::pop_from_log_data(&mut bytes) as usize;
         let byte_size = u8::pop_from_log_data(&mut bytes) as usize;
 
-        info!("Extracting packed order. Bytes: {}-{}", bytes_init, bytes_init + byte_size);
+        info!(
+            "Extracting packed order. Bytes: {}-{}",
+            bytes_init,
+            bytes_init + byte_size
+        );
         let packed_orders_bytes = &bytes[0..byte_size];
-        info!("Parsing orders from packedOrders. {} bytes. {:?}", packed_orders_bytes.len(), packed_orders_bytes);
-        assert!(packed_orders_bytes.len() % 26 == 0, "Each order should be packed in 26 bytes");
-                
+        info!(
+            "Parsing orders from packedOrders. {} bytes. {:?}",
+            packed_orders_bytes.len(),
+            packed_orders_bytes
+        );
+        assert!(
+            packed_orders_bytes.len() % 26 == 0,
+            "Each order should be packed in 26 bytes"
+        );
+
         // Extract packed order info
         let orders: Vec<models::Order> = packed_orders_bytes
             .chunks(26)
             .map(|chunk| {
                 let mut chunk_array = [0; 26];
                 chunk_array.copy_from_slice(chunk);
-                
+
                 models::Order::from_encoded_order(account_id, &chunk_array)
             })
             .collect();
@@ -122,17 +110,17 @@ impl From<&Arc<Log>> for StandingOrder {
             account_id,
             batch_index,
             valid_from_auction_id,
-            orders
+            orders,
         }
     }
 }
-
 
 impl From<(Entity, Vec<Entity>)> for StandingOrder {
     fn from(entities: (Entity, Vec<Entity>)) -> Self {
         let batch_entity = entities.0;
         let mut order_entities_iter = entities.1.into_iter();
-        let order_ids = batch_entity.get("orders")
+        let order_ids = batch_entity
+            .get("orders")
             .expect("it should contain order ids")
             .clone()
             .as_list()
@@ -148,14 +136,16 @@ impl From<(Entity, Vec<Entity>)> for StandingOrder {
         let batch_index = U256::from_entity(&batch_entity, "batchIndex");
         let valid_from_auction_id = U256::from_entity(&batch_entity, "validFromAuctionId");
 
-        let orders = order_ids.iter()
+        let orders = order_ids
+            .iter()
             .map(|order_id| {
                 // Get matching order for the id
                 let order_entity: Entity = order_entities_iter
                     .find(|current_order| {
-                        let current_order_id = current_order.get("id")
-                            .expect("The entity orders should have an id that match the standing order");
-                            
+                        let current_order_id = current_order.get("id").expect(
+                            "The entity orders should have an id that match the standing order",
+                        );
+
                         current_order_id == order_id
                     })
                     .expect("The standing order has and id not found in the entity Vec");
@@ -170,14 +160,14 @@ impl From<(Entity, Vec<Entity>)> for StandingOrder {
             account_id,
             batch_index,
             valid_from_auction_id,
-            orders
+            orders,
         }
     }
 }
 
 impl Into<Entity> for StandingOrder {
     fn into(self) -> Entity {
-        let mut entity = Entity::new();                
+        let mut entity = Entity::new();
         entity.set("accountId", self.account_id.to_value());
         entity.set("batchIndex", self.batch_index.to_value());
         entity.set("validFromAuctionId", self.valid_from_auction_id.to_value());
@@ -187,14 +177,13 @@ impl Into<Entity> for StandingOrder {
     }
 }
 
-
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use std::str::FromStr;
     use graph::bigdecimal::BigDecimal;
-    use web3::types::{Bytes, H256};
     use graph::data::store::Value;
+    use std::str::FromStr;
+    use web3::types::{Bytes, H256};
 
     #[test]
     fn concatenating_hash() {
@@ -241,7 +230,7 @@ pub mod tests {
         let mut expected_standing_order = create_standing_order_for_test();
 
         // Remove the orders, the From<Entity> doesn't have enough info about the orders
-        expected_standing_order.orders = vec![]; 
+        expected_standing_order.orders = vec![];
         let actual_standing_order: StandingOrder = StandingOrder::from((entity, vec![]));
 
         assert_eq!(actual_standing_order, expected_standing_order);
@@ -252,9 +241,7 @@ pub mod tests {
         let entity = create_entity_for_test();
         let expected_standing_order = create_standing_order_for_test();
 
-        let order_entities = vec![
-            create_entity_order_for_test()
-        ];
+        let order_entities = vec![create_entity_order_for_test()];
         let actual_standing_order: StandingOrder = StandingOrder::from((entity, order_entities));
 
         assert_eq!(actual_standing_order, expected_standing_order);
@@ -271,31 +258,40 @@ pub mod tests {
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 2 * (10 as u128).pow(18),
-                buy_amount: (10 as u128).pow(18)
-            }]
+                buy_amount: (10 as u128).pow(18),
+            }],
         }
     }
 
     pub fn create_entity_for_test() -> Entity {
         let mut entity = Entity::new();
-        entity.set("id", Value::String(
-            String::from("f5eb19f104583ad72d26d51078e15c5d2203c354d8c30438d66860bc61975038_0")
-        ));
+        entity.set(
+            "id",
+            Value::String(String::from(
+                "f5eb19f104583ad72d26d51078e15c5d2203c354d8c30438d66860bc61975038_0",
+            )),
+        );
         entity.set("accountId", 1);
         entity.set("batchIndex", BigDecimal::from(2));
         entity.set("validFromAuctionId", BigDecimal::from(3));
-        entity.set("orders", vec![
-            Value::String(String::from("f5eb19f104583ad72d26d51078e15c5d2203c354d8c30438d66860bc61975038_0_0"))
-        ]);
+        entity.set(
+            "orders",
+            vec![Value::String(String::from(
+                "f5eb19f104583ad72d26d51078e15c5d2203c354d8c30438d66860bc61975038_0_0",
+            ))],
+        );
 
         entity
     }
 
     pub fn create_entity_order_for_test() -> Entity {
         let mut entity = Entity::new();
-        entity.set("id", Value::String(
-            String::from("f5eb19f104583ad72d26d51078e15c5d2203c354d8c30438d66860bc61975038_0_0")
-        ));
+        entity.set(
+            "id",
+            Value::String(String::from(
+                "f5eb19f104583ad72d26d51078e15c5d2203c354d8c30438d66860bc61975038_0_0",
+            )),
+        );
         entity.set("accountId", 1);
         entity.set("buyToken", 2);
         entity.set("sellToken", 1);
@@ -319,27 +315,39 @@ pub mod tests {
     pub fn create_log_for_test() -> Arc<Log> {
         let bytes: Vec<Vec<u8>> = vec![
             // batch_index: 1
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 2],
-
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 2,
+            ],
             // valid_from_auction_id: 3
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3],
-
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 3,
+            ],
             // account_id: 1
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 1,
+            ],
             // bytes start position
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128],
-
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 128,
+            ],
             // bytes size
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 26],
-
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 26,
+            ],
             // packed_orders: Buy token 2, for token 1. Buy 1e18 for 2e18.
             //    000000000de0b6b3a7640000 000000001bc16d674ec80000 0201
             //    00 00 00 00 0d  e0   b6   b3   a7   64   00 00 00 00 00 00 1b  c1   6d   67   4e  c8   00 00 02 01
-            vec![ 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, 0, 0, 0, 0, 27, 193, 109, 103, 78, 200, 0, 0, 1, 2],
-
+            vec![
+                0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, 0, 0, 0, 0, 27, 193, 109, 103, 78,
+                200, 0, 0, 1, 2,
+            ],
             // Unused space for bytes field
-            vec![ 0, 0, 0, 0, 0, 0]
+            vec![0, 0, 0, 0, 0, 0],
         ];
 
         Arc::new(Log {

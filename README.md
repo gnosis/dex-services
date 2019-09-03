@@ -1,11 +1,11 @@
 [![Build Status](https://travis-ci.org/gnosis/dex-services.svg?branch=master)](https://travis-ci.org/gnosis/dex-services)
 
-Intro
-=====
+## Intro
+
 This repository contains the backend logic for the dfusion exchange based on the specification, see [here](github.com/gnosis/dex-research)
 
-Architecture
-============
+## Architecture
+
 <p align="center">
 <img src="documentation/architecture.png" alt="dex-services architecture" width="500">
  </p>
@@ -15,7 +15,7 @@ The [dex smart contract](https://github.com/gnosis/dex-contracts) emits these ev
 
 Upon receiving a relevant event from the contract, the event listener computes the implied changes to the underlying state. 
 E.g. if a *deposit* event is received, the list of pending deposits is updated.
-Similarily, if a *deposit state transition* event is received it updates the account balances based on the pending deposits that were included in the state transition.
+Similarly, if a *deposit state transition* event is received it updates the account balances based on the pending deposits that were included in the state transition.
 
 The *Driver* watches state updates to the database and reads relevant data from the smart contract to decide when a state transition can be applied.
 There are four types of state transitions:
@@ -39,8 +39,7 @@ Thus, our data layer has to rely only on the data emitted by the EVM. It cannot 
 
 More components, e.g. a watchtower to challenge invalid state transitions, will be added in the future.
 
-Install Instructions
-============
+## Installation
 
 Clone the repository, its submodule, and run the container
 ```bash
@@ -55,11 +54,11 @@ docker-compose up
 
 This will start:
 ganache-cli, the local ethereum chain
-mongodb, the data base storing the data of the snapp
-listener, a listener pulling data from the ganache-cli and inserting it into mongodb
+postgres, the database storing the data of the snapp
+graph-listener, a listener pulling data from the ganache-cli and inserting it into postgres
 driver, a service calculating the new states and push these into the smart contract
 
-You can see the current state of the mongodb by opening [localhost:3000](http://localhost:3000) and connecting to the default database (top right).
+You can see the current state of the theGraph DB by opening [localhost:8000](http://localhost:8000) and connecting to the default database (top right).
 On the left side bar, under *Collections* select the collection you want to inspect, e.g. *accounts*.
 
 In order to setup some testing accounts and make the first deposits (from account 3, of the third registered token with an amount of 18), run in the same repo the following scripts:
@@ -84,28 +83,21 @@ npx truffle exec scripts/wait_seconds.js 181
 npx truffle exec scripts/claim_withdraw.js 0 1 1
 ```
 
-Tests
-========
+## Tests
+
 
 You need the following dependencies installed locally in order to run the e2e tests:
-- [mongo-cli](https://docs.mongodb.com/manual/installation/)
 - [jq](https://stedolan.github.io/jq/)
 
 For end-to-end tests, run from the project root:
 
 ```bash
 docker-compose down && docker-compose up
-test/e2e-tests-deposit-withdraw.sh
-test/e2e-tests-auction.sh
+./test/e2e-tests-deposit-withdraw.sh
+./test/e2e-tests-auction.sh
 ```
 
 If end-to-end tests are failing, check the `docker-compose logs` and consider inspecting the DB state using the web interface.
-
-To run unit tests and lint for the *EventListener*:
-```bash
-mypy event_listener/dfusion_db/ --ignore-missing-imports --strict
-pytest
-```
 
 To run unit tests for the *Driver*:
 ```bash
@@ -113,8 +105,7 @@ cd driver
 cargo test --lib
 ```
 
-Troubleshooting
-============
+## Troubleshooting
 
 #### docker-compose build
 If you have built the docker landscape before, and there are updates to the smart contracts submodule (*dex-contracts/*), you have to rebuild your docker environment, for them to be picked up:
@@ -124,7 +115,7 @@ cd dex-contracts && rm -rf build && npx truffle compile && cd ..
 docker-compose build truffle
 ```
 
-or rebuild everything if you are desparate (will take longer, but might solve other problems as well)
+or rebuild everything if you are desperate (will take longer, but might solve other problems as well)
 
 ```bash
 docker-compose build

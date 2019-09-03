@@ -1,6 +1,6 @@
 use web3::types::U256;
 
-use dfusion_core::models::{Order, AccountState, Solution, TOKENS};
+use dfusion_core::models::{AccountState, Order, Solution, TOKENS};
 
 use crate::price_finding::error::PriceFindingError;
 
@@ -22,7 +22,6 @@ trait Matchable {
     fn opposite_tokens(&self, other: &Order) -> bool;
     fn have_price_overlap(&self, other: &Order) -> bool;
     fn surplus(&self, buy_price: u128, exec_buy_amount: u128, exec_sell_amount: u128) -> U256;
-
 }
 
 impl Matchable for Order {
@@ -35,7 +34,10 @@ impl Matchable for Order {
     }
 
     fn match_compare(&self, other: &Order, state: &AccountState) -> Option<OrderPairType> {
-        if self.sufficient_seller_funds(&state) && other.sufficient_seller_funds(&state) && self.attracts(other) {
+        if self.sufficient_seller_funds(&state)
+            && other.sufficient_seller_funds(&state)
+            && self.attracts(other)
+        {
             if self.buy_amount <= other.sell_amount && self.sell_amount <= other.buy_amount {
                 return Some(OrderPairType::LhsFullyFilled);
             } else if self.buy_amount >= other.sell_amount && self.sell_amount >= other.buy_amount {
@@ -50,16 +52,15 @@ impl Matchable for Order {
         self.buy_token == other.sell_token && self.sell_token == other.buy_token
     }
     fn have_price_overlap(&self, other: &Order) -> bool {
-        u128_to_u256(self.buy_amount) * u128_to_u256(other.buy_amount) <= u128_to_u256(other.sell_amount) * u128_to_u256(self.sell_amount)
+        u128_to_u256(self.buy_amount) * u128_to_u256(other.buy_amount)
+            <= u128_to_u256(other.sell_amount) * u128_to_u256(self.sell_amount)
     }
-    fn surplus(
-        &self,
-        buy_price: u128,
-        exec_buy_amount: u128,
-        exec_sell_amount: u128,
-    ) -> U256 {
+    fn surplus(&self, buy_price: u128, exec_buy_amount: u128, exec_sell_amount: u128) -> U256 {
         // Note that: ceil(p / float(q)) == (p + q - 1) // q
-        let relative_buy = (u128_to_u256(self.buy_amount) * u128_to_u256(exec_sell_amount) + u128_to_u256(self.sell_amount) - 1) / u128_to_u256(self.sell_amount);
+        let relative_buy = (u128_to_u256(self.buy_amount) * u128_to_u256(exec_sell_amount)
+            + u128_to_u256(self.sell_amount)
+            - 1)
+            / u128_to_u256(self.sell_amount);
         (u128_to_u256(exec_buy_amount) - relative_buy) * u128_to_u256(buy_price)
     }
 }
@@ -68,9 +69,9 @@ pub struct NaiveSolver {}
 
 impl PriceFinding for NaiveSolver {
     fn find_prices(
-        &mut self, 
+        &mut self,
         orders: &[Order],
-        state: &AccountState
+        state: &AccountState,
     ) -> Result<Solution, PriceFindingError> {
         // Initialize trivial solution
         let mut prices: Vec<u128> = vec![1; TOKENS as usize];
@@ -113,7 +114,7 @@ impl PriceFinding for NaiveSolver {
                         exec_buy_amount[i] = y.sell_amount;
                         exec_buy_amount[j] = x.sell_amount;
                     }
-                    None => continue
+                    None => continue,
                 }
                 found_flag = true;
                 let x_surplus = x.surplus(
@@ -143,7 +144,6 @@ impl PriceFinding for NaiveSolver {
         Ok(solution)
     }
 }
-
 
 #[cfg(test)]
 pub mod tests {
@@ -176,7 +176,7 @@ pub mod tests {
                 buy_amount: 180,
             },
         ];
-        let mut solver = NaiveSolver{};
+        let mut solver = NaiveSolver {};
         let res = solver.find_prices(&orders, &state);
         assert_eq!(Some(U256::from(16)), res.unwrap().surplus);
     }
@@ -205,9 +205,9 @@ pub mod tests {
                 buy_token: 2,
                 sell_amount: 52,
                 buy_amount: 4,
-            }
+            },
         ];
-        let mut solver = NaiveSolver{};
+        let mut solver = NaiveSolver {};
         let res = solver.find_prices(&orders, &state);
         assert_eq!(Some(U256::from(16)), res.unwrap().surplus);
     }
@@ -236,9 +236,9 @@ pub mod tests {
                 buy_token: 2,
                 sell_amount: 16,
                 buy_amount: 8,
-            }
+            },
         ];
-        let mut solver = NaiveSolver{};
+        let mut solver = NaiveSolver {};
         let res = solver.find_prices(&orders, &state);
         assert_eq!(Some(U256::from(116)), res.unwrap().surplus);
     }
@@ -299,9 +299,9 @@ pub mod tests {
                 buy_token: 3,
                 sell_amount: 280,
                 buy_amount: 20,
-            }
+            },
         ];
-        let mut solver = NaiveSolver{};
+        let mut solver = NaiveSolver {};
         let res = solver.find_prices(&orders, &state);
         assert_eq!(Some(U256::from(16)), res.unwrap().surplus);
     }
@@ -332,7 +332,7 @@ pub mod tests {
                 buy_amount: 180,
             },
         ];
-        let mut solver = NaiveSolver{};
+        let mut solver = NaiveSolver {};
         let res = solver.find_prices(&orders, &state);
         assert_eq!(Some(U256::from(0)), res.unwrap().surplus);
     }
@@ -363,7 +363,7 @@ pub mod tests {
                 buy_amount: 180,
             },
         ];
-        let mut solver = NaiveSolver{};
+        let mut solver = NaiveSolver {};
         let res = solver.find_prices(&orders, &state);
         assert_eq!(Some(U256::from(0)), res.unwrap().surplus);
     }
