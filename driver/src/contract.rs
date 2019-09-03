@@ -442,8 +442,8 @@ pub mod tests {
         pub calculate_order_hash: Mock<(U256, Matcher<Vec<U128>>), Result<H256>>,
     }
 
-    impl SnappContractMock {
-        pub fn default() -> SnappContractMock {
+    impl Default for SnappContractMock {
+        fn default() -> SnappContractMock {
             SnappContractMock {
                 get_current_block_timestamp: Mock::new(Err(DriverError::new(
                     "Unexpected call to get_current_block_timestamp",
