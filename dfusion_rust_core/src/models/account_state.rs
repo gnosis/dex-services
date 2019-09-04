@@ -50,12 +50,14 @@ impl AccountState {
                 result.push(*token_balance);
                 j += 1;
             }
+            assert_eq!(j, self.num_tokens);
             i += U256::one();
         }
         result
     }
     pub fn read_balance(&self, token_id: u8, account_id: u16) -> u128 {
-        *self.balances
+        *self
+            .balances
             .get(&U256::from(account_id))
             .and_then(|token_balance| token_balance.get(&token_id))
             .unwrap_or(&0)
@@ -256,13 +258,13 @@ pub mod tests {
     fn test_to_and_from_entity() {
         let balances = vec![0, 18, 1];
 
-        let state = AccountState::new(H256::zero(), U256::one(), balances.clone(), TOKENS);
+        let state = AccountState::new(H256::zero(), U256::one(), balances.clone(), 3);
 
         let mut entity = Entity::new();
         entity.set("id", H256::zero().to_value());
         entity.set("stateIndex", U256::one().to_value());
         entity.set("balances", balances.to_value());
-        entity.set("numTokens", TOKENS.to_value());
+        entity.set("numTokens", 3u8.to_value());
 
         assert_eq!(entity, state.clone().into());
         assert_eq!(state, AccountState::from(entity));
@@ -325,5 +327,27 @@ pub mod tests {
         balances.insert(U256::zero(), account_0);
         balances.insert(U256::one(), account_1);
         assert_eq!(state.balances, balances, "Incorrect balances!");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_get_balance_vector_panics_on_spares_representation() {
+        let mut account_0 = HashMap::new();
+        account_0.insert(0, 1);
+
+        let mut account_1 = HashMap::new();
+        account_1.insert(1, 1);
+
+        let mut balances = HashMap::new();
+        balances.insert(U256::zero(), account_0);
+        balances.insert(U256::one(), account_1);
+
+        let account_state = AccountState {
+            state_hash: H256::zero(),
+            state_index: U256::zero(),
+            balances,
+            num_tokens: 2,
+        };
+        account_state.get_balance_vector();
     }
 }
