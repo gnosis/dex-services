@@ -107,13 +107,13 @@ pub mod unit_test {
         };
         // one valid withdraw
         assert_eq!(
-            vec![deposit.clone()].root_hash(&vec![true]),
+            vec![deposit.clone()].root_hash(&[true]),
             H256::from_str("4a77ba0bc619056248f2f2793075eb6f49cf35dacb5cccfe1e71392046a06b79")
                 .unwrap()
         );
         // no valid withdraws
         assert_eq!(
-            vec![deposit].root_hash(&vec![false]),
+            vec![deposit].root_hash(&[false]),
             H256::from_str("87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c")
                 .unwrap()
         );
@@ -166,7 +166,7 @@ pub mod unit_test {
         let expected_flux = PendingFlux {
             account_id: 1,
             token_id: 1,
-            amount: 1 * (10 as u128).pow(18),
+            amount: (10 as u128).pow(18),
             slot: U256::zero(),
             slot_index: 0,
         };
@@ -179,7 +179,7 @@ pub mod unit_test {
         let flux = PendingFlux {
             account_id: 1,
             token_id: 1,
-            amount: 1 * (10 as u128).pow(18),
+            amount: (10 as u128).pow(18),
             slot: U256::zero(),
             slot_index: 0,
         };
@@ -188,7 +188,7 @@ pub mod unit_test {
         entity.set("id", "0 - 0");
         entity.set("accountId", 1);
         entity.set("tokenId", 1);
-        entity.set("amount", BigDecimal::from(1 * (10 as u64).pow(18)));
+        entity.set("amount", BigDecimal::from((10 as u64).pow(18)));
         entity.set("slot", BigDecimal::from(0));
         entity.set("slotIndex", 0);
 

@@ -8,7 +8,7 @@ const BATCH_TIME_SECONDS: u32 = 3 * 60;
 
 pub fn find_first_unapplied_slot(
     upper_bound: U256,
-    has_slot_been_applied: &Fn(U256) -> Result<bool, DriverError>,
+    has_slot_been_applied: &dyn Fn(U256) -> Result<bool, DriverError>,
 ) -> Result<U256, DriverError> {
     if upper_bound == U256::max_value() {
         return Ok(U256::zero());
@@ -49,7 +49,7 @@ pub enum ProcessingState {
 pub fn batch_processing_state<C>(
     slot: U256,
     contract: &C,
-    creation_block_time: &Fn(U256) -> Result<U256, DriverError>,
+    creation_block_time: &dyn Fn(U256) -> Result<U256, DriverError>,
 ) -> Result<ProcessingState, DriverError>
 where
     C: SnappContract,

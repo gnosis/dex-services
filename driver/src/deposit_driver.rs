@@ -74,7 +74,7 @@ mod tests {
             models::TOKENS,
         );
 
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_deposit_slot
             .given(())
@@ -131,7 +131,7 @@ mod tests {
             models::TOKENS,
         );
 
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_state_root
             .given(())
@@ -179,7 +179,7 @@ mod tests {
             models::TOKENS,
         );
 
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_state_root
             .given(())
@@ -225,7 +225,7 @@ mod tests {
         let first_deposits = vec![create_flux_for_test(0, 1), create_flux_for_test(0, 2)];
         let second_deposits = vec![create_flux_for_test(1, 1), create_flux_for_test(1, 2)];
 
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_deposit_slot
             .given(())
@@ -294,7 +294,7 @@ mod tests {
             models::TOKENS,
         );
 
-        let contract = SnappContractMock::new();
+        let contract = SnappContractMock::default();
         contract
             .get_current_deposit_slot
             .given(())

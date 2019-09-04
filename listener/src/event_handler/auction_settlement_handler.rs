@@ -23,11 +23,11 @@ use super::EventHandler;
 
 #[derive(Clone)]
 pub struct AuctionSettlementHandler {
-    store: Arc<DbInterface>,
+    store: Arc<dyn DbInterface>,
 }
 
 impl AuctionSettlementHandler {
-    pub fn new(store: Arc<DbInterface>) -> Self {
+    pub fn new(store: Arc<dyn DbInterface>) -> Self {
         AuctionSettlementHandler { store }
     }
 }
@@ -171,10 +171,10 @@ pub mod unit_test {
         let expected_new_state =
             AccountState::new(H256::from(1), U256::from(1), vec![0, 1, 0, 0], TOKENS);
         match result.unwrap().pop().unwrap() {
-            EntityOperation::Set { key: _, data } => {
+            EntityOperation::Set { data, .. } => {
                 assert_eq!(AccountState::from(data), expected_new_state)
             }
-            _ => assert!(false),
+            _ => unreachable!(),
         }
     }
 

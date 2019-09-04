@@ -295,7 +295,7 @@ pub mod tests {
         entity.set("accountId", 1);
         entity.set("buyToken", 2);
         entity.set("sellToken", 1);
-        entity.set("buyAmount", BigDecimal::from(1 * (10 as u64).pow(18)));
+        entity.set("buyAmount", BigDecimal::from((10 as u64).pow(18)));
         entity.set("sellAmount", BigDecimal::from(2 * (10 as u64).pow(18)));
 
         entity

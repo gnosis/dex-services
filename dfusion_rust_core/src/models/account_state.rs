@@ -165,7 +165,7 @@ pub mod tests {
             .parse::<H256>()
             .unwrap();
         let state = AccountState {
-            state_hash: state_hash.clone(),
+            state_hash,
             state_index: U256::one(),
             balances: balances.clone(),
             num_tokens: TOKENS,
@@ -178,7 +178,7 @@ pub mod tests {
             .parse::<H256>()
             .unwrap();
         let state = AccountState {
-            state_hash: state_hash.clone(),
+            state_hash,
             state_index: U256::one(),
             balances,
             num_tokens: TOKENS,

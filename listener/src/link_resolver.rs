@@ -31,7 +31,7 @@ impl LinkResolverTrait for LocalLinkResolver {
         &self,
         logger: &Logger,
         link: &Link,
-    ) -> Box<Future<Item = Vec<u8>, Error = failure::Error> + Send> {
+    ) -> Box<dyn Future<Item = Vec<u8>, Error = failure::Error> + Send> {
         info!(logger, "Resolving link {}", &link.link);
         match read_file(&link.link) {
             Ok(res) => Box::new(ok(res)),
@@ -42,7 +42,7 @@ impl LinkResolverTrait for LocalLinkResolver {
     fn json_stream(
         &self,
         _link: &Link,
-    ) -> Box<Future<Item = JsonValueStream, Error = failure::Error> + Send + 'static> {
+    ) -> Box<dyn Future<Item = JsonValueStream, Error = failure::Error> + Send + 'static> {
         unimplemented!();
     }
 }

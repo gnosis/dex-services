@@ -266,9 +266,7 @@ pub mod tests {
             read_output: return_result,
         };
 
-        solver
-            .find_prices(&vec![], &state)
-            .expect("Should not fail");
+        solver.find_prices(&[], &state).expect("Should not fail");
 
         let expected_prices: Prices = [
             ("token0".to_owned(), "14024052566155238000".to_owned()),
@@ -333,9 +331,9 @@ pub mod tests {
 
         let expected_solution = models::Solution {
             surplus: U256::from_dec_str("15854632034944469292777429010439194350").ok(),
-            prices: vec![14024052566155238000, 1526784674855762300],
-            executed_sell_amounts: vec![0, 318390084925498118944],
-            executed_buy_amounts: vec![0, 95042777139162480000],
+            prices: vec![14_024_052_566_155_238_000, 1_526_784_674_855_762_300],
+            executed_sell_amounts: vec![0, 318_390_084_925_498_118_944],
+            executed_buy_amounts: vec![0, 95_042_777_139_162_480_000],
         };
 
         let (prices, solution) = deserialize_result(&json, 2).expect("Should not fail to parse");

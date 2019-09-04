@@ -30,11 +30,11 @@ fn register_event(handlers: &mut HandlerMap, name: &str, handler: Box<dyn EventH
 
 #[derive(Clone)]
 pub struct RustRuntimeHostBuilder {
-    store: Arc<DbInterface>,
+    store: Arc<dyn DbInterface>,
 }
 
 impl RustRuntimeHostBuilder {
-    pub fn new(store: Arc<DbInterface>) -> Self {
+    pub fn new(store: Arc<dyn DbInterface>) -> Self {
         RustRuntimeHostBuilder { store }
     }
 }
@@ -57,7 +57,7 @@ pub struct RustRuntimeHost {
 }
 
 impl RustRuntimeHost {
-    fn new(store: Arc<DbInterface>) -> Self {
+    fn new(store: Arc<dyn DbInterface>) -> Self {
         let mut handlers = HashMap::new();
         register_event(
             &mut handlers,
@@ -120,7 +120,7 @@ impl RuntimeHostTrait for RustRuntimeHost {
         transaction: Arc<Transaction>,
         log: Arc<Log>,
         state: BlockState,
-    ) -> Box<Future<Item = BlockState, Error = Error> + Send> {
+    ) -> Box<dyn Future<Item = BlockState, Error = Error> + Send> {
         info!(logger, "Received event");
         let mut state = state;
         if let Some(handler) = self.handlers.get(&log.topics[0]) {
@@ -142,7 +142,7 @@ impl RuntimeHostTrait for RustRuntimeHost {
         _transaction: Arc<Transaction>,
         _call: Arc<EthereumCall>,
         _state: BlockState,
-    ) -> Box<Future<Item = BlockState, Error = Error> + Send> {
+    ) -> Box<dyn Future<Item = BlockState, Error = Error> + Send> {
         unimplemented!();
     }
 
@@ -153,7 +153,7 @@ impl RuntimeHostTrait for RustRuntimeHost {
         _block: Arc<EthereumBlock>,
         _trigger_type: EthereumBlockTriggerType,
         _state: BlockState,
-    ) -> Box<Future<Item = BlockState, Error = Error> + Send> {
+    ) -> Box<dyn Future<Item = BlockState, Error = Error> + Send> {
         unimplemented!();
     }
 }
