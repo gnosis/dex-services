@@ -7,7 +7,12 @@ use crate::util::{
 
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::{
-    AccountState, ConcatenatingHashable, Order, RollingHashable, Serializable, Solution,
+    AccountState, 
+    ConcatenatingHashable, 
+    Order, 
+    RollingHashable, 
+    Serializable, 
+    Solution,
     StandingOrder,
 };
 

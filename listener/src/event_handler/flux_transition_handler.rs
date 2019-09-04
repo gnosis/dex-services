@@ -9,11 +9,11 @@ use web3::types::{H256, U256};
 
 #[derive(Clone)]
 pub struct FluxTransitionHandler {
-    store: Arc<DbInterface>,
+    store: Arc<dyn DbInterface>,
 }
 
 impl FluxTransitionHandler {
-    pub fn new(store: Arc<DbInterface>) -> Self {
+    pub fn new(store: Arc<dyn DbInterface>) -> Self {
         FluxTransitionHandler { store }
     }
 }
