@@ -7,12 +7,7 @@ use crate::util::{
 
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::{
-    AccountState, 
-    ConcatenatingHashable, 
-    Order, 
-    RollingHashable, 
-    Serializable, 
-    Solution,
+    AccountState, ConcatenatingHashable, Order, RollingHashable, Serializable, Solution,
     StandingOrder,
 };
 
@@ -689,7 +684,7 @@ mod tests {
 
     #[test]
     fn test_update_balances() {
-        let mut state = AccountState::new(H256::zero(), U256::one(), vec![100; 70], TOKENS);
+        let mut state = AccountState::new(H256::zero(), U256::one(), vec![100; 60], TOKENS);
         let solution = Solution {
             surplus: U256::from_dec_str("0").ok(),
             prices: vec![1, 2],

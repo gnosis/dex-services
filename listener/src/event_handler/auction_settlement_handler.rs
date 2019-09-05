@@ -127,8 +127,7 @@ pub mod unit_test {
         let store = Arc::new(DbInterfaceMock::new());
 
         // Add previous account state and pending deposits into Store
-        let existing_state =
-            AccountState::new(H256::zero(), U256::from(0), vec![2, 0, 0, 0], TOKENS);
+        let existing_state = AccountState::new(H256::zero(), U256::from(0), vec![2, 0, 0, 0], 2);
         store
             .get_balances_for_state_index
             .given(U256::zero())
@@ -169,7 +168,7 @@ pub mod unit_test {
 
         assert!(result.is_ok());
         let expected_new_state =
-            AccountState::new(H256::from(1), U256::from(1), vec![0, 1, 0, 0], TOKENS);
+            AccountState::new(H256::from(1), U256::from(1), vec![0, 1, 0, 0], 2);
         match result.unwrap().pop().unwrap() {
             EntityOperation::Set { data, .. } => {
                 assert_eq!(AccountState::from(data), expected_new_state)
@@ -207,8 +206,7 @@ pub mod unit_test {
     fn test_auction_settlement_fails_if_orders_dont_exist() {
         let store = Arc::new(DbInterfaceMock::new());
 
-        let existing_state =
-            AccountState::new(H256::zero(), U256::from(0), vec![2, 0, 0, 0], TOKENS);
+        let existing_state = AccountState::new(H256::zero(), U256::from(0), vec![2, 0, 0, 0], 2);
         store
             .get_balances_for_state_index
             .given(U256::zero())
@@ -235,8 +233,7 @@ pub mod unit_test {
     fn test_auction_settlement_fails_if_standing_orders_dont_exist() {
         let store = Arc::new(DbInterfaceMock::new());
 
-        let existing_state =
-            AccountState::new(H256::zero(), U256::from(0), vec![2, 0, 0, 0], TOKENS);
+        let existing_state = AccountState::new(H256::zero(), U256::from(0), vec![2, 0, 0, 0], 2);
         store
             .get_balances_for_state_index
             .given(U256::zero())

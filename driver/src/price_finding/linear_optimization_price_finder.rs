@@ -513,11 +513,4 @@ pub mod tests {
         });
         assert_eq!(result, expected)
     }
-
-    #[test]
-    #[should_panic]
-    fn test_serialize_balances_with_bad_balance_length() {
-        let state = models::AccountState::new(H256::zero(), U256::zero(), vec![100, 200], 30);
-        serialize_balances(&state);
-    }
 }
