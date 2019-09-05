@@ -105,6 +105,19 @@ cd driver
 cargo test --lib
 ```
 
+## Running with linear optimization solver
+
+For this to work, you will need to have read access to the [solver's gitlab repo](https://gitlab.gnosisdev.com/dfusion/batchauctions). You will also need to have SSH Key authentication for your gitlab account enabled (see [tutorial](https://docs.gitlab.com/ee/ssh/))
+
+In your top-level git folder, create a `.ssh/` folder and move or copy the private and public ssh key that are registered with your gitlab account in there.
+Then, run
+
+```sh
+docker-compose build --build-arg use_solver=1 driver
+```
+
+Afterwards, when you run your environment with `docker-compose up` the linear optimizer should be automatically used. Note that the e2e might no longer work, as their resolution depends on the naive and not the optimal solving strategy.
+
 ## Troubleshooting
 
 #### docker-compose build
