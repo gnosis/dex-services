@@ -213,7 +213,7 @@ fn write_input(input_file: &str, input: &serde_json::Value) -> std::io::Result<(
 
 fn run_solver(input_file: &str) -> Result<(), PriceFindingError> {
     let output = Command::new("python")
-        .arg("../batchauctions/scripts/optimize_e2e.py")
+        .arg("./batchauctions/scripts/optimize_e2e.py")
         .arg(input_file)
         .args(&["--solverTimelimit", "120"])
         .args(&["--outputDir", RESULT_FOLDER])
