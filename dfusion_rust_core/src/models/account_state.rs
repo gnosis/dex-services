@@ -21,6 +21,11 @@ pub struct AccountState {
 
 impl AccountState {
     pub fn new(state_hash: H256, state_index: U256, balances: Vec<u128>, num_tokens: u8) -> Self {
+        assert_eq!(
+            balances.len() % (num_tokens as usize),
+            0,
+            "Elements in balance vector needs to be a multiple of num_tokens"
+        );
         AccountState {
             state_hash,
             state_index,
@@ -41,7 +46,13 @@ impl AccountState {
             num_tokens,
         }
     }
-    pub fn get_balance_vector(&self) -> Vec<u128> {
+
+    /// Returns the balances as a vector, under the assumptions
+    /// that self.balances contains consecutive addresses (0..num_accounts)
+    /// as keys, and each address has a balance for all (0..num_tokens) tokens.
+    ///
+    /// Panics, if this is not the case.
+    fn get_balance_vector(&self) -> Vec<u128> {
         let mut i = U256::zero();
         let mut result = vec![];
         while let Some(account) = self.balances.get(&i) {
@@ -53,8 +64,10 @@ impl AccountState {
             assert_eq!(j, self.num_tokens);
             i += U256::one();
         }
+        assert_eq!(i, U256::from(self.balances.keys().len()));
         result
     }
+
     pub fn read_balance(&self, token_id: u8, account_id: u16) -> u128 {
         *self
             .balances
@@ -62,6 +75,7 @@ impl AccountState {
             .and_then(|token_balance| token_balance.get(&token_id))
             .unwrap_or(&0)
     }
+
     pub fn increment_balance(&mut self, token_id: u8, account_id: u16, amount: u128) {
         debug!(
             "Incrementing account {} balance of token {} by {}",
@@ -69,6 +83,7 @@ impl AccountState {
         );
         self.modify_balance(account_id, token_id, |balance| *balance += amount);
     }
+
     pub fn decrement_balance(&mut self, token_id: u8, account_id: u16, amount: u128) {
         debug!(
             "Decrementing account {} balance of token {} by {}",
@@ -76,14 +91,9 @@ impl AccountState {
         );
         self.modify_balance(account_id, token_id, |balance| *balance -= amount);
     }
+
     pub fn accounts(&self) -> u16 {
-        let balance_vector = self.get_balance_vector();
-        assert_eq!(
-            balance_vector.len() % self.num_tokens as usize,
-            0,
-            "Balance vector cannot be split into equal accounts"
-        );
-        (balance_vector.len() / self.num_tokens as usize) as u16
+        self.balances.keys().count() as u16
     }
 
     pub fn apply_deposits(&mut self, deposits: &[PendingFlux]) {
@@ -349,5 +359,11 @@ pub mod tests {
             num_tokens: 2,
         };
         account_state.get_balance_vector();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_cannot_create_with_bad_balance_length() {
+        AccountState::new(H256::zero(), U256::zero(), vec![100, 200], 30);
     }
 }
