@@ -50,20 +50,27 @@ fn account_id(account: u16) -> String {
     format!("account{}", account)
 }
 
-fn serialize_balances(state: &models::AccountState) -> serde_json::Value {
+fn serialize_balances(state: &models::AccountState, orders: &[models::Order]) -> serde_json::Value {
     let mut accounts: HashMap<String, HashMap<String, String>> = HashMap::new();
-    for account in 0..state.accounts() {
-        accounts.insert(
-            account_id(account),
-            (0..state.num_tokens)
-                .map(|token| {
-                    (
-                        token_id(token),
-                        state.read_balance(token, account).to_string(),
-                    )
-                })
-                .collect(),
-        );
+    for order in orders {
+        let modify_token_balance = |token_balance: &mut HashMap<String, String>| {
+            let sell_balance = state
+                .read_balance(order.sell_token, order.account_id)
+                .to_string();
+            let buy_balance = state
+                .read_balance(order.buy_token, order.account_id)
+                .to_string();
+            token_balance.insert(token_id(order.sell_token), sell_balance);
+            token_balance.insert(token_id(order.buy_token), buy_balance);
+        };
+        accounts
+            .entry(account_id(order.account_id))
+            .and_modify(modify_token_balance)
+            .or_insert_with(|| {
+                let mut token_balance = HashMap::new();
+                modify_token_balance(&mut token_balance);
+                token_balance
+            });
     }
     json!(accounts)
 }
@@ -183,6 +190,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
         state: &models::AccountState,
     ) -> Result<models::Solution, PriceFindingError> {
         let token_ids: Vec<String> = (0..state.num_tokens).map(token_id).collect();
+        let accounts = serialize_balances(&state, &orders);
         let orders: Vec<serde_json::Value> = orders
             .iter()
             .enumerate()
@@ -192,7 +200,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
             "tokens": token_ids,
             "refToken": token_id(0),
             "pricesPrev": self.previous_prices,
-            "accounts": serialize_balances(&state),
+            "accounts": accounts,
             "orders": orders,
         });
         let input_file = format!("instance_{}.json", Utc::now().to_rfc3339());
@@ -498,15 +506,31 @@ pub mod tests {
             vec![100, 200, 300, 400, 500, 600],
             3,
         );
-        let result = serialize_balances(&state);
+        let orders = [
+            models::Order {
+                batch_information: None,
+                account_id: 0,
+                sell_token: 1,
+                buy_token: 2,
+                sell_amount: 100,
+                buy_amount: 200,
+            },
+            models::Order {
+                batch_information: None,
+                account_id: 1,
+                sell_token: 2,
+                buy_token: 1,
+                sell_amount: 200,
+                buy_amount: 100,
+            },
+        ];
+        let result = serialize_balances(&state, &orders);
         let expected = json!({
             "account0": {
-                "token0": "100",
                 "token1": "200",
                 "token2": "300",
             },
             "account1": {
-                "token0": "400",
                 "token1": "500",
                 "token2": "600",
             }
