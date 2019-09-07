@@ -1,4 +1,4 @@
-use crate::contract::SnappContract;
+use crate::contracts::dfusion::SnappContract;
 use crate::error::DriverError;
 use crate::error::ErrorKind;
 

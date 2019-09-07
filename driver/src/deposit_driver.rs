@@ -1,4 +1,4 @@
-use crate::contract::SnappContract;
+use crate::contracts::dfusion::SnappContract;
 use crate::error::DriverError;
 use crate::util::{
     batch_processing_state, find_first_unapplied_slot, hash_consistency_check, ProcessingState,
@@ -54,7 +54,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contract::tests::SnappContractMock;
+    use crate::contracts::dfusion::tests::SnappContractMock;
     use crate::error::ErrorKind;
     use dfusion_core::database::tests::DbInterfaceMock;
     use dfusion_core::models;

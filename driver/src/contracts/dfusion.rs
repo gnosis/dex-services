@@ -166,6 +166,19 @@ impl SnappContract for SnappContractImpl {
             .map_err(DriverError::from)
     }
 
+    fn calculate_order_hash(&self, slot: U256, standing_order_index: Vec<U128>) -> Result<H256> {
+        self.contract
+            .query(
+                "calculateOrderHash",
+                (slot, standing_order_index),
+                None,
+                Options::default(),
+                None,
+            )
+            .wait()
+            .map_err(DriverError::from)
+    }
+
     fn creation_timestamp_for_deposit_slot(&self, slot: U256) -> Result<U256> {
         self.contract
             .query(
@@ -379,18 +392,6 @@ impl SnappContract for SnappContractImpl {
             .map(|_| ())
     }
 
-    fn calculate_order_hash(&self, slot: U256, standing_order_index: Vec<U128>) -> Result<H256> {
-        self.contract
-            .query(
-                "calculateOrderHash",
-                (slot, standing_order_index),
-                None,
-                Options::default(),
-                None,
-            )
-            .wait()
-            .map_err(DriverError::from)
-    }
 }
 
 #[cfg(test)]
@@ -401,7 +402,7 @@ pub mod tests {
     use mock_it::Matcher::*;
     use mock_it::Mock;
 
-    type ApplyDeopositArguments = (U256, Matcher<H256>, Matcher<H256>, Matcher<H256>);
+    type ApplyDepositArguments = (U256, Matcher<H256>, Matcher<H256>, Matcher<H256>);
     type ApplyWithdrawArguments = (
         U256,
         Matcher<H256>,
@@ -435,7 +436,7 @@ pub mod tests {
         pub creation_timestamp_for_auction_slot: Mock<U256, Result<U256>>,
         pub order_hash_for_slot: Mock<U256, Result<H256>>,
         pub has_auction_slot_been_applied: Mock<U256, Result<bool>>,
-        pub apply_deposits: Mock<ApplyDeopositArguments, Result<()>>,
+        pub apply_deposits: Mock<ApplyDepositArguments, Result<()>>,
         pub apply_withdraws: Mock<ApplyWithdrawArguments, Result<()>>,
         pub apply_auction: Mock<ApplyAuctionArguments, Result<()>>,
         pub auction_solution_bid: Mock<ApplySolutionArguments, Result<()>>,
