@@ -3,8 +3,8 @@ extern crate simple_logger;
 
 use dfusion_core::database::GraphReader;
 
-use driver::contracts::dfusion::SnappContractImpl;
-use driver::contracts::base_contract::SmartContract;
+use driver::contracts::snapp_contract::SnappContractImpl;
+use driver::contracts::base_contract::BaseContract;
 use driver::order_driver::OrderProcessor;
 use driver::price_finding::LinearOptimisationPriceFinder;
 use driver::price_finding::NaiveSolver;
@@ -29,7 +29,7 @@ fn main() {
     let contract_json = fs::read_to_string("dex-contracts/build/contracts/SnappAuction.json").unwrap();
     let address = env::var("SNAPP_CONTRACT_ADDRESS").unwrap();
     let dfusion_contract = SnappContractImpl::new(
-        SmartContract::new(address, contract_json).unwrap()
+        BaseContract::new(address, contract_json).unwrap()
     );
 
     let solver_env_var = env::var("LINEAR_OPTIMIZATION_SOLVER").unwrap_or_else(|_| "0".to_string());

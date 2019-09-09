@@ -1,2 +1,2 @@
 pub mod base_contract;
-pub mod dfusion;
+pub mod snapp_contract;

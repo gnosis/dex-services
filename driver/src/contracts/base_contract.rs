@@ -7,17 +7,16 @@ use web3::types::Address;
 use crate::error::DriverError;
 
 type Result<T> = std::result::Result<T, DriverError>;
-// TODO - Generalize the ContractImpl struct out from each of the two contract handlers
 
 #[allow(dead_code)] // event_loop needs to be retained to keep web3 connection open
-pub struct SmartContract {
+pub struct BaseContract {
     pub contract: Contract<web3::transports::Http>,
     pub web3: web3::Web3<web3::transports::Http>,
     event_loop: web3::transports::EventLoopHandle,
 }
 
 
-impl SmartContract {
+impl BaseContract {
     pub fn new(address: String, contents: String) -> Result<Self> {
         let (event_loop, transport) =
             web3::transports::Http::new(&(env::var("ETHEREUM_NODE_URL")?))?;
@@ -33,7 +32,7 @@ impl SmartContract {
         let contract_address: Address = Address::from(&decoded_address[..]);
         let contract = Contract::from_json(web3.eth(), contract_address, abi.as_bytes())?;
 
-        Ok(SmartContract {
+        Ok(BaseContract {
             contract,
             web3,
             event_loop,

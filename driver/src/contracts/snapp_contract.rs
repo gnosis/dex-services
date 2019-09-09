@@ -7,17 +7,16 @@ use web3::types::{BlockId, H256, U128, U256};
 
 use crate::error::DriverError;
 
-use super::base_contract::SmartContract;
+use super::base_contract::BaseContract;
 
 type Result<T> = std::result::Result<T, DriverError>;
 
 pub struct SnappContractImpl {
-    base: SmartContract
+    base: BaseContract
 }
 
 impl SnappContractImpl {
-    pub fn new(base: SmartContract) -> Self {
-        // Should we assert that the contract is indeed a Snapp contract?
+    pub fn new(base: BaseContract) -> Self {
         SnappContractImpl {
             base
         }
