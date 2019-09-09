@@ -9,6 +9,9 @@ use crate::error::DriverError;
 
 use super::base_contract::BaseContract;
 
+use std::env;
+use std::fs;
+
 type Result<T> = std::result::Result<T, DriverError>;
 
 pub struct SnappContractImpl {
@@ -16,9 +19,20 @@ pub struct SnappContractImpl {
 }
 
 impl SnappContractImpl {
-    pub fn new(base: BaseContract) -> Self {
-        SnappContractImpl {
-            base
+    pub fn new(base: Option<BaseContract>) -> Self {
+        match base {
+            Some(base) => {
+                SnappContractImpl {
+                    base
+                }
+            }
+            None => {
+                let contract_json = fs::read_to_string("dex-contracts/build/contracts/SnappAuction.json").unwrap();
+                let address = env::var("SNAPP_CONTRACT_ADDRESS").unwrap();
+                SnappContractImpl {
+                    base: BaseContract::new(address, contract_json).unwrap()
+                }
+            }
         }
     }
 }
