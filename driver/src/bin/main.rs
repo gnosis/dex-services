@@ -6,8 +6,8 @@ use dfusion_core::database::GraphReader;
 use driver::contracts::dfusion::SnappContractImpl;
 use driver::contracts::base_contract::SmartContract;
 use driver::order_driver::OrderProcessor;
-use driver::price_finding::NaiveSolver;
 use driver::price_finding::LinearOptimisationPriceFinder;
+use driver::price_finding::NaiveSolver;
 use driver::price_finding::PriceFinding;
 use driver::run_driver_components;
 
@@ -20,10 +20,8 @@ use std::thread;
 use std::time::Duration;
 
 fn main() {
-    // driver logger
     simple_logger::init_with_level(log::Level::Info).unwrap();
     let graph_logger = logger(false);
-    
     let postgres_url = env::var("POSTGRES_URL").expect("Specify POSTGRES_URL variable");
     let store_reader = GraphNodeReader::new(postgres_url, &graph_logger);
     let db_instance = GraphReader::new(Box::new(store_reader));
@@ -38,7 +36,7 @@ fn main() {
     let mut price_finder: Box<dyn PriceFinding> = if solver_env_var == "1" {
         Box::new(LinearOptimisationPriceFinder::new())
     } else {
-        Box::new(NaiveSolver {})
+        Box::new(NaiveSolver::new(None))
     };
 
     let mut order_processor = OrderProcessor::new(&db_instance, &dfusion_contract, &mut *price_finder);

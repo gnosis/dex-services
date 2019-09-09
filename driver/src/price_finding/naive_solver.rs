@@ -4,7 +4,7 @@ use dfusion_core::models::{AccountState, Order, Solution, TOKENS};
 
 use crate::price_finding::error::PriceFindingError;
 
-use super::price_finder_interface::PriceFinding;
+use super::price_finder_interface::{Fee, PriceFinding};
 
 pub enum OrderPairType {
     LhsFullyFilled,
@@ -12,20 +12,28 @@ pub enum OrderPairType {
     BothFullyFilled,
 }
 
-fn u128_to_u256(x: u128) -> U256 {
-    U256::from_big_endian(&x.to_be_bytes())
-}
 trait Matchable {
-    fn attracts(&self, other: &Order) -> bool;
+    fn attracts(&self, other: &Order, fee: &Option<Fee>) -> bool;
     fn sufficient_seller_funds(&self, state: &AccountState) -> bool;
-    fn match_compare(&self, other: &Order, state: &AccountState) -> Option<OrderPairType>;
+    fn match_compare(
+        &self,
+        other: &Order,
+        state: &AccountState,
+        fee: &Option<Fee>,
+    ) -> Option<OrderPairType>;
     fn opposite_tokens(&self, other: &Order) -> bool;
     fn have_price_overlap(&self, other: &Order) -> bool;
     fn surplus(&self, buy_price: u128, exec_buy_amount: u128, exec_sell_amount: u128) -> U256;
 }
 
 impl Matchable for Order {
-    fn attracts(&self, other: &Order) -> bool {
+    fn attracts(&self, other: &Order, fee: &Option<Fee>) -> bool {
+        // We can only match orders that touch the fee token
+        if fee.is_some()
+            && ![self.sell_token, self.buy_token].contains(&fee.as_ref().unwrap().token)
+        {
+            return false;
+        }
         self.opposite_tokens(other) && self.have_price_overlap(other)
     }
 
@@ -33,10 +41,15 @@ impl Matchable for Order {
         state.read_balance(self.sell_token, self.account_id) >= self.sell_amount
     }
 
-    fn match_compare(&self, other: &Order, state: &AccountState) -> Option<OrderPairType> {
+    fn match_compare(
+        &self,
+        other: &Order,
+        state: &AccountState,
+        fee: &Option<Fee>,
+    ) -> Option<OrderPairType> {
         if self.sufficient_seller_funds(&state)
             && other.sufficient_seller_funds(&state)
-            && self.attracts(other)
+            && self.attracts(other, fee)
         {
             if self.buy_amount <= other.sell_amount && self.sell_amount <= other.buy_amount {
                 return Some(OrderPairType::LhsFullyFilled);
@@ -51,10 +64,12 @@ impl Matchable for Order {
     fn opposite_tokens(&self, other: &Order) -> bool {
         self.buy_token == other.sell_token && self.sell_token == other.buy_token
     }
+
     fn have_price_overlap(&self, other: &Order) -> bool {
         u128_to_u256(self.buy_amount) * u128_to_u256(other.buy_amount)
             <= u128_to_u256(other.sell_amount) * u128_to_u256(self.sell_amount)
     }
+
     fn surplus(&self, buy_price: u128, exec_buy_amount: u128, exec_sell_amount: u128) -> U256 {
         // Note that: ceil(p / float(q)) == (p + q - 1) // q
         let relative_buy = (u128_to_u256(self.buy_amount) * u128_to_u256(exec_sell_amount)
@@ -65,7 +80,15 @@ impl Matchable for Order {
     }
 }
 
-pub struct NaiveSolver {}
+pub struct NaiveSolver {
+    fee: Option<Fee>,
+}
+
+impl NaiveSolver {
+    pub fn new(fee: Option<Fee>) -> Self {
+        NaiveSolver { fee }
+    }
+}
 
 impl PriceFinding for NaiveSolver {
     fn find_prices(
@@ -83,8 +106,10 @@ impl PriceFinding for NaiveSolver {
 
         for (i, x) in orders.iter().enumerate() {
             for j in i + 1..orders.len() {
-                let y = &orders[j];
-                match x.match_compare(y, &state) {
+                // Preprocess order to leave "space" for fee to be taken
+                let x = order_with_buffer_for_fee(&x, &self.fee);
+                let y = order_with_buffer_for_fee(&orders[j], &self.fee);
+                match x.match_compare(&y, &state, &self.fee) {
                     Some(OrderPairType::LhsFullyFilled) => {
                         prices[x.buy_token as usize] = x.sell_amount;
                         prices[y.buy_token as usize] = x.buy_amount;
@@ -134,6 +159,24 @@ impl PriceFinding for NaiveSolver {
                 break;
             }
         }
+
+        // Apply fee to volumes if necessary
+        if let Some(fee) = &self.fee {
+            for (i, order) in orders.iter().enumerate() {
+                // To account for the fee we have to either
+                // a) give people less (reduce buyAmount)
+                // b) take more (increase sellAmount)
+                if order.sell_token == fee.token {
+                    exec_sell_amount[i] =
+                        (exec_sell_amount[i] as f64 / (1.0 - fee.percentage)).round() as u128;
+                }
+                if order.buy_token == fee.token {
+                    exec_buy_amount[i] =
+                        (exec_buy_amount[i] as f64 * (1.0 - fee.percentage)).round() as u128;
+                }
+            }
+        }
+
         let solution = Solution {
             surplus: Some(total_surplus),
             prices,
@@ -142,6 +185,30 @@ impl PriceFinding for NaiveSolver {
         };
         info!("Solution: {:?}", &solution);
         Ok(solution)
+    }
+}
+
+fn u128_to_u256(x: u128) -> U256 {
+    U256::from_big_endian(&x.to_be_bytes())
+}
+
+fn order_with_buffer_for_fee(order: &Order, fee: &Option<Fee>) -> Order {
+    match fee {
+        Some(fee) => {
+            let mut order = order.clone();
+            // In order to make space for a fee in the existing limit, we need to
+            // a) receive more stuff (while giving away the same)
+            // b) give away less stuff (while receiving the same)
+            if fee.token == order.buy_token {
+                order.buy_amount =
+                    (order.buy_amount as f64 / (1.0 - fee.percentage)).round() as u128
+            } else if fee.token == order.sell_token {
+                order.sell_amount =
+                    (order.sell_amount as f64 * (1.0 - fee.percentage).round()) as u128
+            }
+            order
+        }
+        None => order.clone(),
     }
 }
 
@@ -176,7 +243,7 @@ pub mod tests {
                 buy_amount: 180,
             },
         ];
-        let mut solver = NaiveSolver {};
+        let mut solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state);
         assert_eq!(Some(U256::from(16)), res.unwrap().surplus);
     }
@@ -207,7 +274,7 @@ pub mod tests {
                 buy_amount: 4,
             },
         ];
-        let mut solver = NaiveSolver {};
+        let mut solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state);
         assert_eq!(Some(U256::from(16)), res.unwrap().surplus);
     }
@@ -238,7 +305,7 @@ pub mod tests {
                 buy_amount: 8,
             },
         ];
-        let mut solver = NaiveSolver {};
+        let mut solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state);
         assert_eq!(Some(U256::from(116)), res.unwrap().surplus);
     }
@@ -301,7 +368,7 @@ pub mod tests {
                 buy_amount: 20,
             },
         ];
-        let mut solver = NaiveSolver {};
+        let mut solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state);
         assert_eq!(Some(U256::from(16)), res.unwrap().surplus);
     }
@@ -332,7 +399,7 @@ pub mod tests {
                 buy_amount: 180,
             },
         ];
-        let mut solver = NaiveSolver {};
+        let mut solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state);
         assert_eq!(Some(U256::from(0)), res.unwrap().surplus);
     }
@@ -363,8 +430,79 @@ pub mod tests {
                 buy_amount: 180,
             },
         ];
-        let mut solver = NaiveSolver {};
+        let mut solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state);
         assert_eq!(Some(U256::from(0)), res.unwrap().surplus);
+    }
+
+    #[test]
+    fn test_solution_with_fee() {
+        let state = AccountState::new(
+            H256::zero(),
+            U256::zero(),
+            vec![100_000; (TOKENS * 2) as usize],
+            TOKENS,
+        );
+        let orders = vec![
+            Order {
+                batch_information: None,
+                account_id: 0,
+                sell_token: 0,
+                buy_token: 1,
+                sell_amount: 20000,
+                buy_amount: 9990,
+            },
+            Order {
+                batch_information: None,
+                account_id: 0,
+                sell_token: 1,
+                buy_token: 0,
+                sell_amount: 9990,
+                buy_amount: 19960,
+            },
+        ];
+
+        let mut solver = NaiveSolver::new(Some(Fee {
+            token: 0,
+            percentage: 0.001,
+        }));
+        let res = solver.find_prices(&orders, &state).unwrap();
+        assert_eq!(res.executed_sell_amounts, [20000, 9990]);
+        assert_eq!(res.executed_buy_amounts, [9990, 19960])
+    }
+
+    #[test]
+    fn test_does_not_trade_non_fee_tokens() {
+        let state = AccountState::new(
+            H256::zero(),
+            U256::zero(),
+            vec![100_000; (TOKENS * 2) as usize],
+            TOKENS,
+        );
+        let orders = vec![
+            Order {
+                batch_information: None,
+                account_id: 0,
+                sell_token: 0,
+                buy_token: 1,
+                sell_amount: 20000,
+                buy_amount: 9990,
+            },
+            Order {
+                batch_information: None,
+                account_id: 0,
+                sell_token: 1,
+                buy_token: 0,
+                sell_amount: 9990,
+                buy_amount: 19960,
+            },
+        ];
+
+        let mut solver = NaiveSolver::new(Some(Fee {
+            token: 2,
+            percentage: 0.001,
+        }));
+        let res = solver.find_prices(&orders, &state).unwrap();
+        assert_eq!(res.executed_sell_amounts, [0, 0]);
     }
 }

@@ -2,6 +2,13 @@ use dfusion_core::models;
 
 use super::error::PriceFindingError;
 
+#[derive(Clone)]
+pub struct Fee {
+    pub token: u8,
+    /// Value between [0, 1] mapping from 0% -> 100%
+    pub percentage: f64,
+}
+
 pub trait PriceFinding {
     fn find_prices(
         &mut self,
