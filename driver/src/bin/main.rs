@@ -28,10 +28,10 @@ fn main() {
     let store_reader = GraphNodeReader::new(postgres_url, &graph_logger);
     let db_instance = GraphReader::new(Box::new(store_reader));
 
-    let contract_path = fs::read_to_string("dex-contracts/build/contracts/SnappAuction.json").unwrap();
-    let snapp_address = env::var("SNAPP_CONTRACT_ADDRESS").unwrap();
+    let contract_json = fs::read_to_string("dex-contracts/build/contracts/SnappAuction.json").unwrap();
+    let address = env::var("SNAPP_CONTRACT_ADDRESS").unwrap();
     let dfusion_contract = SnappContractImpl::new(
-        SmartContract::new(snapp_address, contract_path).unwrap()
+        SmartContract::new(address, contract_json).unwrap()
     );
 
     let solver_env_var = env::var("LINEAR_OPTIMIZATION_SOLVER").unwrap_or_else(|_| "0".to_string());

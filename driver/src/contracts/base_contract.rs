@@ -1,5 +1,4 @@
 use std::env;
-use std::fs;
 
 use web3::contract::Contract;
 use web3::futures::Future;
@@ -19,17 +18,17 @@ pub struct SmartContract {
 
 
 impl SmartContract {
-    pub fn new(address: String, contract_path: String) -> Result<Self> {
+    pub fn new(address: String, contents: String) -> Result<Self> {
         let (event_loop, transport) =
             web3::transports::Http::new(&(env::var("ETHEREUM_NODE_URL")?))?;
         let web3 = web3::Web3::new(transport);
-        let contents = fs::read_to_string(contract_path)?;
 
         let json: serde_json::Value = serde_json::from_str(&contents)?;
         let abi: String = json
             .get("abi")
             .ok_or("No ABI for contract")?
             .to_string();
+
         let decoded_address = hex::decode(&address[2..])?;
         let contract_address: Address = Address::from(&decoded_address[..]);
         let contract = Contract::from_json(web3.eth(), contract_address, abi.as_bytes())?;
