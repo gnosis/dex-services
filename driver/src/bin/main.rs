@@ -4,6 +4,7 @@ extern crate simple_logger;
 use dfusion_core::database::GraphReader;
 
 use driver::contracts::dfusion::SnappContractImpl;
+use driver::contracts::base_contract::SmartContract;
 use driver::order_driver::OrderProcessor;
 use driver::price_finding::NaiveSolver;
 use driver::price_finding::LinearOptimisationPriceFinder;
@@ -14,6 +15,7 @@ use graph::log::logger;
 use graph_node_reader::Store as GraphNodeReader;
 
 use std::env;
+use std::fs;
 use std::thread;
 use std::time::Duration;
 
@@ -25,8 +27,12 @@ fn main() {
     let postgres_url = env::var("POSTGRES_URL").expect("Specify POSTGRES_URL variable");
     let store_reader = GraphNodeReader::new(postgres_url, &graph_logger);
     let db_instance = GraphReader::new(Box::new(store_reader));
-    let contract = SnappContractImpl::new().unwrap();
-    
+
+    let contract_path = fs::read_to_string("dex-contracts/build/contracts/SnappAuction.json").unwrap();
+    let snapp_address = env::var("SNAPP_CONTRACT_ADDRESS").unwrap();
+    let dfusion_contract = SnappContractImpl::new(
+        SmartContract::new(snapp_address, contract_path).unwrap()
+    );
 
     let solver_env_var = env::var("LINEAR_OPTIMIZATION_SOLVER").unwrap_or_else(|_| "0".to_string());
     let mut price_finder: Box<dyn PriceFinding> = if solver_env_var == "1" {
@@ -35,10 +41,10 @@ fn main() {
         Box::new(NaiveSolver {})
     };
 
-    let mut order_processor = OrderProcessor::new(&db_instance, &contract, &mut *price_finder);
+    let mut order_processor = OrderProcessor::new(&db_instance, &dfusion_contract, &mut *price_finder);
     loop {
         // Start driver_components
-        run_driver_components(&db_instance, &contract, &mut order_processor);
+        run_driver_components(&db_instance, &dfusion_contract, &mut order_processor);
         thread::sleep(Duration::from_secs(5));
     }
 }
