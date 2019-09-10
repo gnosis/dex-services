@@ -1,6 +1,6 @@
 type Deposit @entity {
     id: ID!
-    accountId: Int!
+    accountId: String!
     tokenId: Int!
     amount: BigInt!
     slot: BigInt!
@@ -16,7 +16,7 @@ type AccountState @entity {
 
 type Withdraw @entity {
     id: ID!
-    accountId: Int!
+    accountId: String!
     tokenId: Int!
     amount: BigInt!
     slot: BigInt!
@@ -26,7 +26,7 @@ type Withdraw @entity {
 
 type StandingSellOrderBatch @entity {
     id: ID!
-    accountId: Int!
+    accountId: String!
     batchIndex: BigInt!
     validFromAuctionId: BigInt!
     orders: [SellOrder!]
@@ -34,7 +34,7 @@ type StandingSellOrderBatch @entity {
 
 type SellOrder @entity {
     id: ID!
-    accountId: Int!
+    accountId: String!
     buyToken: Int!
     sellToken: Int!
     buyAmount: BigInt!

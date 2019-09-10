@@ -1,8 +1,9 @@
 use byteorder::{BigEndian, WriteBytesExt};
 use graph::data::store::Entity;
 use serde_derive::Deserialize;
+use std::convert::TryInto;
 use std::sync::Arc;
-use web3::types::{Log, H256, U256};
+use web3::types::{Log, H160, H256, U256};
 
 use super::util::*;
 
@@ -19,7 +20,7 @@ pub struct BatchInformation {
 #[serde(rename_all = "camelCase")]
 pub struct Order {
     pub batch_information: Option<BatchInformation>,
-    pub account_id: u16,
+    pub account_id: H160,
     pub buy_token: u8,
     pub sell_token: u8,
     pub buy_amount: u128,
@@ -27,7 +28,7 @@ pub struct Order {
 }
 
 impl Order {
-    pub fn from_encoded_order(account_id: u16, bytes: &[u8; 26]) -> Self {
+    pub fn from_encoded_order(account_id: H160, bytes: &[u8; 26]) -> Self {
         let buy_token = u8::from_le_bytes([bytes[25]]); // 1 byte
         let sell_token = u8::from_le_bytes([bytes[24]]); // 1 byte
         let sell_amount = read_amount(
@@ -55,7 +56,8 @@ impl Serializable for Order {
         wtr.extend(self.sell_amount.bytes());
         wtr.write_u8(self.sell_token).unwrap();
         wtr.write_u8(self.buy_token).unwrap();
-        wtr.write_u16::<BigEndian>(self.account_id).unwrap();
+        wtr.write_u16::<BigEndian>(self.account_id.low_u64().try_into().unwrap())
+            .unwrap();
         wtr
     }
 }
@@ -74,7 +76,7 @@ impl From<Arc<Log>> for Order {
                 slot: U256::pop_from_log_data(&mut bytes),
                 slot_index: u16::pop_from_log_data(&mut bytes),
             }),
-            account_id: u16::pop_from_log_data(&mut bytes),
+            account_id: H160::pop_from_log_data(&mut bytes),
             buy_token: u8::pop_from_log_data(&mut bytes),
             sell_token: u8::pop_from_log_data(&mut bytes),
             buy_amount: u128::pop_from_log_data(&mut bytes),
@@ -97,7 +99,7 @@ impl From<Entity> for Order {
 
         Order {
             batch_information,
-            account_id: u16::from_entity(&entity, "accountId"),
+            account_id: H160::from_entity(&entity, "accountId"),
             buy_token: u8::from_entity(&entity, "buyToken"),
             sell_token: u8::from_entity(&entity, "sellToken"),
             buy_amount: u128::from_entity(&entity, "buyAmount"),
@@ -137,7 +139,7 @@ pub mod tests {
                 slot: U256::zero(),
                 slot_index: 0,
             }),
-            account_id: 1,
+            account_id: H160::from(1),
             buy_token: 3,
             sell_token: 2,
             buy_amount: 5,
@@ -160,7 +162,7 @@ pub mod unit_test {
                 slot: U256::zero(),
                 slot_index: 0,
             }),
-            account_id: 1,
+            account_id: H160::from(1),
             buy_token: 3,
             sell_token: 2,
             buy_amount: 5,
@@ -233,7 +235,7 @@ pub mod unit_test {
                 slot: U256::zero(),
                 slot_index: 0,
             }),
-            account_id: 1,
+            account_id: H160::from(1),
             buy_token: 3,
             sell_token: 2,
             buy_amount: (10 as u128).pow(18),
@@ -303,7 +305,7 @@ pub mod unit_test {
                 slot: U256::zero(),
                 slot_index: 0,
             }),
-            account_id: 1,
+            account_id: H160::from(1),
             buy_token: 1,
             sell_token: 2,
             buy_amount: (10 as u128).pow(18),
@@ -315,7 +317,7 @@ pub mod unit_test {
         let mut entity = Entity::new();
         entity.set("auctionId", BigDecimal::from(0));
         entity.set("slotIndex", 0);
-        entity.set("accountId", 1);
+        entity.set("accountId", "0000000000000000000000000000000000000001");
         entity.set("buyToken", 1);
         entity.set("sellToken", 2);
         entity.set("buyAmount", BigDecimal::from((10 as u64).pow(18)));

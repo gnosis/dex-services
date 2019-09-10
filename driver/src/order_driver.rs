@@ -199,7 +199,7 @@ mod tests {
     use dfusion_core::models::order::tests::create_order_for_test;
     use dfusion_core::models::{NUM_RESERVED_ACCOUNTS, TOKENS};
     use mock_it::Matcher::*;
-    use web3::types::{H256, U128, U256};
+    use web3::types::{H160, H256, U128, U256};
 
     #[test]
     fn bids_for_and_applies_auction_if_unapplied_and_enough_blocks_passed() {
@@ -588,7 +588,7 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let standing_order = StandingOrder::new(
-            1,
+            H160::from(1),
             U256::zero(),
             U256::from(3),
             vec![create_order_for_test(), create_order_for_test()],
@@ -666,12 +666,12 @@ mod tests {
     #[test]
     fn test_get_standing_orders_indexes() {
         let standing_order = StandingOrder::new(
-            1,
+            H160::from(1),
             U256::from(3),
             U256::from(2),
             vec![create_order_for_test(), create_order_for_test()],
         );
-        let empty_order = StandingOrder::new(0, U256::zero(), U256::from(2), vec![]);
+        let empty_order = StandingOrder::new(H160::zero(), U256::zero(), U256::from(2), vec![]);
         let mut standing_orders = vec![empty_order; NUM_RESERVED_ACCOUNTS as usize];
         standing_orders[1] = standing_order.clone();
         let mut standing_order_indexes = vec![U128::zero(); NUM_RESERVED_ACCOUNTS as usize];
@@ -693,7 +693,7 @@ mod tests {
         };
         let order_1 = Order {
             batch_information: None,
-            account_id: 1,
+            account_id: H160::from(1),
             sell_token: 0,
             buy_token: 1,
             sell_amount: 4,
@@ -701,7 +701,7 @@ mod tests {
         };
         let order_2 = Order {
             batch_information: None,
-            account_id: 0,
+            account_id: H160::from(0),
             sell_token: 1,
             buy_token: 0,
             sell_amount: 5,
@@ -710,9 +710,9 @@ mod tests {
         let orders = vec![order_1, order_2];
 
         update_balances(&mut state, &orders, &solution);
-        assert_eq!(state.read_balance(0, 0), 101);
-        assert_eq!(state.read_balance(1, 0), 99);
-        assert_eq!(state.read_balance(0, 1), 99);
-        assert_eq!(state.read_balance(1, 1), 101);
+        assert_eq!(state.read_balance(0, H160::from(0)), 101);
+        assert_eq!(state.read_balance(1, H160::from(0)), 99);
+        assert_eq!(state.read_balance(0, H160::from(1)), 99);
+        assert_eq!(state.read_balance(1, H160::from(1)), 101);
     }
 }

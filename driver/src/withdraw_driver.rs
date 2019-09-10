@@ -67,7 +67,7 @@ mod tests {
     use dfusion_core::models::flux::tests::create_flux_for_test;
     use dfusion_core::models::{AccountState, PendingFlux, TOKENS};
     use mock_it::Matcher::*;
-    use web3::types::{H256, U256};
+    use web3::types::{H160, H256, U256};
 
     #[test]
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
@@ -304,7 +304,7 @@ mod tests {
             PendingFlux {
                 slot_index: 2,
                 slot: U256::one(),
-                account_id: 0,
+                account_id: H160::from(0),
                 token_id: 1,
                 amount: 10,
             },
@@ -315,7 +315,7 @@ mod tests {
             vec![100; (TOKENS * 2) as usize],
             TOKENS,
         );
-        state.decrement_balance(1, 0, 100);
+        state.decrement_balance(1, H160::from(0), 100);
 
         let merkle_root = withdraws.root_hash(&[true, false]);
 
