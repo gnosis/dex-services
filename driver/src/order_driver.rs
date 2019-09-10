@@ -1,5 +1,5 @@
 use super::price_finding::PriceFinding;
-use crate::contract::SnappContract;
+use crate::contracts::snapp_contract::SnappContract;
 use crate::error::{DriverError, ErrorKind};
 use crate::util::{
     batch_processing_state, find_first_unapplied_slot, hash_consistency_check, ProcessingState,
@@ -191,7 +191,7 @@ fn batch_index_from_standing_orders(standing_orders: &[StandingOrder]) -> Vec<U1
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contract::tests::SnappContractMock;
+    use crate::contracts::snapp_contract::tests::SnappContractMock;
     use crate::error::ErrorKind;
     use crate::price_finding::error::PriceFindingError;
     use crate::price_finding::price_finder_interface::tests::PriceFindingMock;

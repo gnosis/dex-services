@@ -8,12 +8,12 @@ extern crate web3;
 
 use dfusion_core::database::DbInterface;
 
-use crate::contract::SnappContract;
+use crate::contracts::snapp_contract::SnappContract;
 use crate::deposit_driver::run_deposit_listener;
 use crate::order_driver::OrderProcessor;
 use crate::withdraw_driver::run_withdraw_listener;
 
-pub mod contract;
+pub mod contracts;
 pub mod error;
 pub mod order_driver;
 pub mod price_finding;
