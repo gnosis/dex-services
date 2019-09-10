@@ -24,7 +24,7 @@ fn main() {
     let store_reader = GraphNodeReader::new(postgres_url, &graph_logger);
     let db_instance = GraphReader::new(Box::new(store_reader));
 
-    let snapp_contract = SnappContractImpl::new();
+    let snapp_contract = SnappContractImpl::new().unwrap();
 
     let solver_env_var = env::var("LINEAR_OPTIMIZATION_SOLVER").unwrap_or_else(|_| "0".to_string());
     let mut price_finder: Box<dyn PriceFinding> = if solver_env_var == "1" {
