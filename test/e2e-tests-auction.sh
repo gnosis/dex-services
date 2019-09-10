@@ -30,7 +30,7 @@ step "Place 6 orders in current Auction" \
 step_with_retry "[theGraph] SellOrder was added to graph db - accountId 5's sellOrder === 280" \
 "source ../test/utils.sh && query_graphql \
     \"query { \
-        sellOrders(where: { accountId: 5}) { \
+        sellOrders(where: { accountId: \\\"0000000000000000000000000000000000000005\\\" }) { \
             sellAmount \
         } \
     }\" | grep 28000000000000000000"
