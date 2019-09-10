@@ -1,7 +1,6 @@
-use byteorder::{BigEndian, WriteBytesExt};
+use byteorder::WriteBytesExt;
 use graph::data::store::Entity;
 use serde_derive::Deserialize;
-use std::convert::TryInto;
 use std::sync::Arc;
 use web3::types::{Log, H160, H256, U256};
 
@@ -56,8 +55,10 @@ impl Serializable for Order {
         wtr.extend(self.sell_amount.bytes());
         wtr.write_u8(self.sell_token).unwrap();
         wtr.write_u8(self.buy_token).unwrap();
-        wtr.write_u16::<BigEndian>(self.account_id.low_u64().try_into().unwrap())
-            .unwrap();
+        // For now we only write the low 2 bytes, since for the purpose of hashing,
+        // the account space is still 16 bits
+        wtr.write_u8(self.account_id[18]).unwrap();
+        wtr.write_u8(self.account_id[19]).unwrap();
         wtr
     }
 }

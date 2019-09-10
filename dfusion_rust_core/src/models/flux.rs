@@ -1,7 +1,6 @@
 use byteorder::{BigEndian, WriteBytesExt};
 use graph::data::store::Entity;
 use serde_derive::{Deserialize, Serialize};
-use std::convert::TryInto;
 use std::sync::Arc;
 use web3::types::{Log, H160, H256, U256};
 
@@ -21,8 +20,10 @@ pub struct PendingFlux {
 impl Serializable for PendingFlux {
     fn bytes(&self) -> Vec<u8> {
         let mut wtr = vec![0; 13];
-        wtr.write_u16::<BigEndian>(self.account_id.low_u64().try_into().unwrap())
-            .unwrap();
+        // For now we only write the low 2 bytes, since for the purpose of hashing,
+        // the account space is still 16 bits
+        wtr.write_u8(self.account_id[18]).unwrap();
+        wtr.write_u8(self.account_id[19]).unwrap();
         wtr.write_u8(self.token_id).unwrap();
         wtr.write_u128::<BigEndian>(self.amount).unwrap();
         wtr
