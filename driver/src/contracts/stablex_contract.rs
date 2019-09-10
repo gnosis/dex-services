@@ -1,38 +1,48 @@
 #[cfg(test)]
 extern crate mock_it;
 
-use web3::types::{H256, U128, U256};
+use dfusion_core::models::{AccountState, Order};
+
+// TODO - uncomment when removing "unimplemented!()"
+//use web3::contract::Options;
+//use web3::futures::Future;
+use web3::types::{H160, U128};
 
 use crate::error::DriverError;
 
 use super::base_contract::BaseContract;
 
+use std::env;
+use std::fs;
+
 type Result<T> = std::result::Result<T, DriverError>;
 
-#[allow(dead_code)] // event_loop needs to be retained to keep web3 connection open
+#[allow(dead_code)]
 struct StableXContractImpl {
-    contract: BaseContract
+    base: BaseContract
 }
 
-#[allow(dead_code)] // event_loop needs to be retained to keep web3 connection open
+#[allow(dead_code)]
 impl StableXContractImpl {
-    pub fn new(contract: BaseContract) -> Self {
-        // Should we assert that the contract is indeed a StableX contract?
-        StableXContractImpl {
-            contract
-        }
+    pub fn new() -> Result<Self> {
+        let contract_json = fs::read_to_string("dex-contracts/build/contracts/StablecoinConverter.json").unwrap();
+        let address = env::var("STABLEX_CONTRACT_ADDRESS").unwrap();
+        Ok(
+            StableXContractImpl {
+                base: BaseContract::new(address, contract_json).unwrap()
+            }
+        )
     }
 }
 
 pub trait StableXContract {
-    fn get_current_auction_index(&self) -> Result<U256>;
-    // TODO - auction_data should parse and return relevant orders and account balances.
-    fn get_auction_data(&self, _index: u32) -> Result<H256>;
+    fn get_current_auction_index(&self) -> Result<u32>;
+    fn get_auction_data(&self, _index: u32) -> Result<(AccountState, Vec<Order>)>;
 
     fn submit_solution(
         &self,
         _batch_index: u32,
-        _owners: Vec<H256>,
+        _owners: Vec<H160>,
         _order_ids: Vec<u16>,
         _volumes: Vec<U128>,
         _prices: Vec<U128>,
@@ -41,18 +51,22 @@ pub trait StableXContract {
 }
 
 impl StableXContract for StableXContractImpl {
-    fn get_current_auction_index(&self) -> Result<U256> {
+    fn get_current_auction_index(&self) -> Result<u32> {
         unimplemented!();
+//        self.base.contract
+//            .query("getCurrentStateIndex", (), None, Options::default(), None)
+//            .wait()
+//            .map_err(DriverError::from)
     }
 
-    fn get_auction_data(&self, _index: u32) -> Result<H256> {
+    fn get_auction_data(&self, _index: u32) -> Result<(AccountState, Vec<Order>)> {
         unimplemented!();
     }
 
     fn submit_solution(
         &self,
         _batch_index: u32,
-        _owners: Vec<H256>,
+        _owners: Vec<H160>,
         _order_ids: Vec<u16>,
         _volumes: Vec<U128>,
         _prices: Vec<U128>,
@@ -74,7 +88,7 @@ pub mod tests {
 
     type SubmitSolutionArguments = (
         u32,
-        Matcher<Vec<H256>>,
+        Matcher<Vec<H160>>,
         Matcher<Vec<u16>>,
         Matcher<Vec<U128>>,
         Matcher<Vec<U128>>,
@@ -83,8 +97,8 @@ pub mod tests {
 
     #[derive(Clone)]
     pub struct StableXContractMock {
-        pub get_current_auction_index: Mock<(), Result<U256>>,
-        pub get_auction_data: Mock<u32, Result<H256>>,
+        pub get_current_auction_index: Mock<(), Result<u32>>,
+        pub get_auction_data: Mock<u32, Result<(AccountState, Vec<Order>)>>,
         pub submit_solution: Mock<SubmitSolutionArguments, Result<()>>,
     }
 
@@ -108,16 +122,16 @@ pub mod tests {
     }
 
     impl StableXContract for StableXContractMock {
-        fn get_current_auction_index(&self) -> Result<U256> {
+        fn get_current_auction_index(&self) -> Result<u32> {
             self.get_current_auction_index.called(())
         }
-        fn get_auction_data(&self, index: u32) -> Result<H256> {
+        fn get_auction_data(&self, index: u32) -> Result<(AccountState, Vec<Order>)> {
             self.get_auction_data.called(index)
         }
         fn submit_solution(
             &self,
             batch_index: u32,
-            owners: Vec<H256>,
+            owners: Vec<H160>,
             order_ids: Vec<u16>,
             volumes: Vec<U128>,
             prices: Vec<U128>,
