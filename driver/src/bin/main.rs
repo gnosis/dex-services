@@ -4,7 +4,6 @@ extern crate simple_logger;
 use dfusion_core::database::GraphReader;
 
 use driver::contracts::snapp_contract::SnappContractImpl;
-use driver::contracts::base_contract::BaseContract;
 use driver::order_driver::OrderProcessor;
 use driver::price_finding::LinearOptimisationPriceFinder;
 use driver::price_finding::NaiveSolver;
@@ -15,7 +14,6 @@ use graph::log::logger;
 use graph_node_reader::Store as GraphNodeReader;
 
 use std::env;
-use std::fs;
 use std::thread;
 use std::time::Duration;
 
@@ -35,10 +33,10 @@ fn main() {
         Box::new(NaiveSolver::new(None))
     };
 
-    let mut order_processor = OrderProcessor::new(&db_instance, &dfusion_contract, &mut *price_finder);
+    let mut order_processor = OrderProcessor::new(&db_instance, &snapp_contract, &mut *price_finder);
     loop {
         // Start driver_components
-        run_driver_components(&db_instance, &dfusion_contract, &mut order_processor);
+        run_driver_components(&db_instance, &snapp_contract, &mut order_processor);
         thread::sleep(Duration::from_secs(5));
     }
 }

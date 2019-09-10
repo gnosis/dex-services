@@ -28,6 +28,11 @@ impl SnappContractImpl {
     }
 }
 
+impl Default for SnappContractImpl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 pub trait SnappContract {
     // General Blockchain interface
