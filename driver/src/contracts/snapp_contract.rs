@@ -19,20 +19,11 @@ pub struct SnappContractImpl {
 }
 
 impl SnappContractImpl {
-    pub fn new(base: Option<BaseContract>) -> Self {
-        match base {
-            Some(base) => {
-                SnappContractImpl {
-                    base
-                }
-            }
-            None => {
-                let contract_json = fs::read_to_string("dex-contracts/build/contracts/SnappAuction.json").unwrap();
-                let address = env::var("SNAPP_CONTRACT_ADDRESS").unwrap();
-                SnappContractImpl {
-                    base: BaseContract::new(address, contract_json).unwrap()
-                }
-            }
+    pub fn new() -> Self {
+        let contract_json = fs::read_to_string("dex-contracts/build/contracts/SnappAuction.json").unwrap();
+        let address = env::var("SNAPP_CONTRACT_ADDRESS").unwrap();
+        SnappContractImpl {
+            base: BaseContract::new(address, contract_json).unwrap()
         }
     }
 }

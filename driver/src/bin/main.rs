@@ -26,11 +26,7 @@ fn main() {
     let store_reader = GraphNodeReader::new(postgres_url, &graph_logger);
     let db_instance = GraphReader::new(Box::new(store_reader));
 
-    let contract_json = fs::read_to_string("dex-contracts/build/contracts/SnappAuction.json").unwrap();
-    let address = env::var("SNAPP_CONTRACT_ADDRESS").unwrap();
-    let dfusion_contract = SnappContractImpl::new(
-        Some(BaseContract::new(address, contract_json).unwrap())
-    );
+    let snapp_contract = SnappContractImpl::new();
 
     let solver_env_var = env::var("LINEAR_OPTIMIZATION_SOLVER").unwrap_or_else(|_| "0".to_string());
     let mut price_finder: Box<dyn PriceFinding> = if solver_env_var == "1" {
