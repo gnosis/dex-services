@@ -1,11 +1,11 @@
 #[cfg(test)]
 extern crate mock_it;
 
-use dfusion_core::models::{AccountState, Order};
+use dfusion_core::models::{AccountState, Order, Solution};
 
 use web3::contract::Options;
 use web3::futures::Future;
-use web3::types::{H160, U128, U256};
+use web3::types::U256;
 
 use crate::error::DriverError;
 
@@ -37,15 +37,11 @@ impl StableXContractImpl {
 pub trait StableXContract {
     fn get_current_auction_index(&self) -> Result<U256>;
     fn get_auction_data(&self, _index: U256) -> Result<(AccountState, Vec<Order>)>;
-
     fn submit_solution(
         &self,
-        batch_index: U256,
-        owners: Vec<H160>,
-        order_ids: Vec<U128>,
-        volumes: Vec<U128>,
-        prices: Vec<U128>,
-        token_ids_for_price: Vec<U128>,
+        _batch_index: U256,
+        _orders: Vec<Order>,
+        _solution: Solution,
     ) -> Result<()>;
 }
 
@@ -63,26 +59,11 @@ impl StableXContract for StableXContractImpl {
 
     fn submit_solution(
         &self,
-        batch_index: U256,
-        owners: Vec<H160>,
-        order_ids: Vec<U128>,
-        volumes: Vec<U128>,
-        prices: Vec<U128>,
-        token_ids_for_price: Vec<U128>,
+        _batch_index: U256,
+        _orders: Vec<Order>,
+        _solution: Solution,
     ) -> Result<()> {
-        let account = self.base
-            .account_with_sufficient_balance()
-            .ok_or("Not enough balance to send Txs")?;
-        self.base.contract
-            .call(
-                "submitSolution",
-               (batch_index, owners, order_ids, volumes, prices, token_ids_for_price),
-               account,
-               Options::default()
-            )
-            .wait()
-            .map_err(DriverError::from)
-            .map(|_| ())
+        unimplemented!();
     }
 }
 
@@ -98,11 +79,8 @@ pub mod tests {
 
     type SubmitSolutionArguments = (
         U256,
-        Matcher<Vec<H160>>,
-        Matcher<Vec<U128>>,
-        Matcher<Vec<U128>>,
-        Matcher<Vec<U128>>,
-        Matcher<Vec<U128>>,
+        Matcher<Vec<Order>>,
+        Matcher<Solution>,
     );
 
     #[derive(Clone)]
@@ -141,20 +119,14 @@ pub mod tests {
         fn submit_solution(
             &self,
             batch_index: U256,
-            owners: Vec<H160>,
-            order_ids: Vec<U128>,
-            volumes: Vec<U128>,
-            prices: Vec<U128>,
-            token_ids_for_price: Vec<U128>,
+            orders: Vec<Order>,
+            solution: Solution,
         ) -> Result<()> {
             self.submit_solution.called(
                 (
                     batch_index,
-                    Val(owners),
-                    Val(order_ids),
-                    Val(volumes),
-                    Val(prices),
-                    Val(token_ids_for_price)
+                    Val(orders),
+                    Val(solution)
                 )
             )
         }
