@@ -107,7 +107,7 @@ pub mod test {
     use dfusion_core::database::tests::DbInterfaceMock;
     use dfusion_core::database::*;
     use dfusion_core::models::{AccountState, PendingFlux};
-    use web3::types::{Bytes, H256};
+    use web3::types::{Bytes, H160, H256};
 
     #[test]
     fn test_applies_deposits_existing_state() {
@@ -123,7 +123,7 @@ pub mod test {
         let first_deposit = PendingFlux {
             slot_index: 0,
             slot: U256::zero(),
-            account_id: 0,
+            account_id: H160::from(0),
             token_id: 0,
             amount: 10,
         };
@@ -131,7 +131,7 @@ pub mod test {
         let second_deposit = PendingFlux {
             slot_index: 1,
             slot: U256::zero(),
-            account_id: 1,
+            account_id: H160::from(1),
             token_id: 0,
             amount: 10,
         };
@@ -199,21 +199,21 @@ pub mod test {
         let first_withdraw = PendingFlux {
             slot_index: 0,
             slot: U256::zero(),
-            account_id: 0,
+            account_id: H160::from(0),
             token_id: 0,
             amount: 10,
         };
         let second_withdraw = PendingFlux {
             slot_index: 1,
             slot: U256::zero(),
-            account_id: 1,
+            account_id: H160::from(1),
             token_id: 0,
             amount: 10,
         };
         let invalid_withdraw = PendingFlux {
             slot_index: 1,
             slot: U256::zero(),
-            account_id: 1,
+            account_id: H160::from(1),
             token_id: 1,
             amount: 10,
         };

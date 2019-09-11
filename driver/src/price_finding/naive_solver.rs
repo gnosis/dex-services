@@ -215,7 +215,7 @@ fn order_with_buffer_for_fee(order: &Order, fee: &Option<Fee>) -> Order {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use web3::types::H256;
+    use web3::types::{H160, H256};
 
     #[test]
     fn test_type_ia() {
@@ -228,7 +228,7 @@ pub mod tests {
         let orders = vec![
             Order {
                 batch_information: None,
-                account_id: 1,
+                account_id: H160::from(1),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 52,
@@ -236,7 +236,7 @@ pub mod tests {
             },
             Order {
                 batch_information: None,
-                account_id: 0,
+                account_id: H160::from(0),
                 sell_token: 2,
                 buy_token: 1,
                 sell_amount: 15,
@@ -259,7 +259,7 @@ pub mod tests {
         let orders = vec![
             Order {
                 batch_information: None,
-                account_id: 0,
+                account_id: H160::from(1),
                 sell_token: 2,
                 buy_token: 1,
                 sell_amount: 15,
@@ -267,7 +267,7 @@ pub mod tests {
             },
             Order {
                 batch_information: None,
-                account_id: 1,
+                account_id: H160::from(1),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 52,
@@ -290,7 +290,7 @@ pub mod tests {
         let orders = vec![
             Order {
                 batch_information: None,
-                account_id: 0,
+                account_id: H160::from(1),
                 sell_token: 2,
                 buy_token: 1,
                 sell_amount: 10,
@@ -298,7 +298,7 @@ pub mod tests {
             },
             Order {
                 batch_information: None,
-                account_id: 1,
+                account_id: H160::from(1),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 16,
@@ -321,7 +321,7 @@ pub mod tests {
         let orders = vec![
             Order {
                 batch_information: None,
-                account_id: 0,
+                account_id: H160::from(0),
                 sell_token: 3,
                 buy_token: 2,
                 sell_amount: 12,
@@ -329,7 +329,7 @@ pub mod tests {
             },
             Order {
                 batch_information: None,
-                account_id: 1,
+                account_id: H160::from(1),
                 sell_token: 2,
                 buy_token: 3,
                 sell_amount: 20,
@@ -337,7 +337,7 @@ pub mod tests {
             },
             Order {
                 batch_information: None,
-                account_id: 2,
+                account_id: H160::from(2),
                 sell_token: 3,
                 buy_token: 1,
                 sell_amount: 10,
@@ -345,7 +345,7 @@ pub mod tests {
             },
             Order {
                 batch_information: None,
-                account_id: 3,
+                account_id: H160::from(3),
                 sell_token: 2,
                 buy_token: 1,
                 sell_amount: 15,
@@ -353,7 +353,7 @@ pub mod tests {
             },
             Order {
                 batch_information: None,
-                account_id: 4,
+                account_id: H160::from(4),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 52,
@@ -361,7 +361,7 @@ pub mod tests {
             },
             Order {
                 batch_information: None,
-                account_id: 5,
+                account_id: H160::from(5),
                 sell_token: 1,
                 buy_token: 3,
                 sell_amount: 280,
@@ -384,7 +384,7 @@ pub mod tests {
         let orders = vec![
             Order {
                 batch_information: None,
-                account_id: 1,
+                account_id: H160::from(1),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 52,
@@ -392,7 +392,7 @@ pub mod tests {
             },
             Order {
                 batch_information: None,
-                account_id: 0,
+                account_id: H160::from(0),
                 sell_token: 2,
                 buy_token: 1,
                 sell_amount: 15,
@@ -415,7 +415,7 @@ pub mod tests {
         let orders = vec![
             Order {
                 batch_information: None,
-                account_id: 1,
+                account_id: H160::from(1),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 52,
@@ -423,7 +423,7 @@ pub mod tests {
             },
             Order {
                 batch_information: None,
-                account_id: 0,
+                account_id: H160::from(0),
                 sell_token: 2,
                 buy_token: 1,
                 sell_amount: 10,
@@ -446,7 +446,7 @@ pub mod tests {
         let orders = vec![
             Order {
                 batch_information: None,
-                account_id: 0,
+                account_id: H160::from(0),
                 sell_token: 0,
                 buy_token: 1,
                 sell_amount: 20000,
@@ -454,7 +454,7 @@ pub mod tests {
             },
             Order {
                 batch_information: None,
-                account_id: 0,
+                account_id: H160::from(0),
                 sell_token: 1,
                 buy_token: 0,
                 sell_amount: 9990,
@@ -482,7 +482,7 @@ pub mod tests {
         let orders = vec![
             Order {
                 batch_information: None,
-                account_id: 0,
+                account_id: H160::from(0),
                 sell_token: 0,
                 buy_token: 1,
                 sell_amount: 20000,
@@ -490,7 +490,7 @@ pub mod tests {
             },
             Order {
                 batch_information: None,
-                account_id: 0,
+                account_id: H160::from(0),
                 sell_token: 1,
                 buy_token: 0,
                 sell_amount: 9990,

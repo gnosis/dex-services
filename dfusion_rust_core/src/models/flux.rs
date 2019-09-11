@@ -2,7 +2,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 use graph::data::store::Entity;
 use serde_derive::{Deserialize, Serialize};
 use std::sync::Arc;
-use web3::types::{Log, H256, U256};
+use web3::types::{Log, H160, H256, U256};
 
 use super::util::*;
 use crate::models::{merkleize, RootHashable, Serializable};
@@ -12,7 +12,7 @@ use crate::models::{merkleize, RootHashable, Serializable};
 pub struct PendingFlux {
     pub slot_index: u16,
     pub slot: U256,
-    pub account_id: u16,
+    pub account_id: H160,
     pub token_id: u8,
     pub amount: u128,
 }
@@ -20,7 +20,10 @@ pub struct PendingFlux {
 impl Serializable for PendingFlux {
     fn bytes(&self) -> Vec<u8> {
         let mut wtr = vec![0; 13];
-        wtr.write_u16::<BigEndian>(self.account_id).unwrap();
+        // For now we only write the low 2 bytes, since for the purpose of hashing,
+        // the account space is still 16 bits
+        wtr.write_u8(self.account_id[18]).unwrap();
+        wtr.write_u8(self.account_id[19]).unwrap();
         wtr.write_u8(self.token_id).unwrap();
         wtr.write_u128::<BigEndian>(self.amount).unwrap();
         wtr
@@ -31,7 +34,7 @@ impl From<Arc<Log>> for PendingFlux {
     fn from(log: Arc<Log>) -> Self {
         let mut bytes: Vec<u8> = log.data.0.clone();
         PendingFlux {
-            account_id: u16::pop_from_log_data(&mut bytes),
+            account_id: H160::pop_from_log_data(&mut bytes),
             token_id: u8::pop_from_log_data(&mut bytes),
             amount: u128::pop_from_log_data(&mut bytes),
             slot: U256::pop_from_log_data(&mut bytes),
@@ -43,7 +46,7 @@ impl From<Arc<Log>> for PendingFlux {
 impl From<Entity> for PendingFlux {
     fn from(entity: Entity) -> Self {
         PendingFlux {
-            account_id: u16::from_entity(&entity, "accountId"),
+            account_id: H160::from_entity(&entity, "accountId"),
             token_id: u8::from_entity(&entity, "tokenId"),
             amount: u128::from_entity(&entity, "amount"),
             slot: U256::from_entity(&entity, "slot"),
@@ -82,7 +85,7 @@ pub mod tests {
         PendingFlux {
             slot_index,
             slot: U256::from(slot),
-            account_id: 1,
+            account_id: H160::from(1),
             token_id: 1,
             amount: 10,
         }
@@ -101,7 +104,7 @@ pub mod unit_test {
         let deposit = PendingFlux {
             slot_index: 0,
             slot: U256::zero(),
-            account_id: 3,
+            account_id: H160::from(3),
             token_id: 3,
             amount: 18,
         };
@@ -164,7 +167,7 @@ pub mod unit_test {
         });
 
         let expected_flux = PendingFlux {
-            account_id: 1,
+            account_id: H160::from(1),
             token_id: 1,
             amount: (10 as u128).pow(18),
             slot: U256::zero(),
@@ -177,7 +180,7 @@ pub mod unit_test {
     #[test]
     fn test_to_and_from_entity() {
         let flux = PendingFlux {
-            account_id: 1,
+            account_id: H160::from(1),
             token_id: 1,
             amount: (10 as u128).pow(18),
             slot: U256::zero(),
@@ -186,7 +189,7 @@ pub mod unit_test {
 
         let mut entity = Entity::new();
         entity.set("id", "0 - 0");
-        entity.set("accountId", 1);
+        entity.set("accountId", "0000000000000000000000000000000000000001");
         entity.set("tokenId", 1);
         entity.set("amount", BigDecimal::from((10 as u64).pow(18)));
         entity.set("slot", BigDecimal::from(0));

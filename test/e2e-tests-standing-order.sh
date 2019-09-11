@@ -21,7 +21,7 @@ step_with_retry "Check graph standing order batch has been recorded" \
 "source ../test/utils.sh && query_graphql \
     \"query { \
         standingSellOrderBatches(where: { \
-          accountId: 0, \
+          accountId: \\\"0000000000000000000000000000000000000000\\\" , \
           batchIndex: 0, \
           validFromAuctionId: 0 \
         }) { \
@@ -80,7 +80,7 @@ step_with_retry "Check graph standing order batch has been updated" \
 "source ../test/utils.sh && query_graphql \
     \"query { \
         standingSellOrderBatches(where: { \
-          accountId: 0, \
+          accountId: \\\"0000000000000000000000000000000000000000\\\" , \
           batchIndex: 1, \
           validFromAuctionId: 2 \
         }) { \
@@ -100,7 +100,7 @@ step_with_retry "Check graph standing order batch has been deleted" \
 "source ../test/utils.sh && query_graphql \
     \"query { \
         standingSellOrderBatches(where: { \
-          accountId: 0, \
+          accountId: \\\"0000000000000000000000000000000000000000\\\" , \
           batchIndex: 1, \
           validFromAuctionId: 2 \
         }) { \

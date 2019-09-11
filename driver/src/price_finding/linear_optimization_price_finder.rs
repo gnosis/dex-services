@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::process::Command;
-use web3::types::U256;
+use web3::types::{H160, U256};
 
 const RESULT_FOLDER: &str = "./results/tmp/";
 type Prices = HashMap<String, String>;
@@ -46,8 +46,8 @@ fn token_id(token: u8) -> String {
     format!("token{}", token)
 }
 
-fn account_id(account: u16) -> String {
-    format!("account{}", account)
+fn account_id(account: H160) -> String {
+    format!("{:x}", account)
 }
 
 fn serialize_balances(state: &models::AccountState, orders: &[models::Order]) -> serde_json::Value {
@@ -291,7 +291,7 @@ pub mod tests {
     fn test_serialize_order() {
         let order = models::Order {
             batch_information: None,
-            account_id: 0,
+            account_id: H160::from(0),
             sell_token: 1,
             buy_token: 2,
             sell_amount: 100,
@@ -303,7 +303,7 @@ pub mod tests {
             "buyToken": "token2",
             "sellAmount": "100",
             "buyAmount": "200",
-            "accountID": "account0",
+            "accountID": "0000000000000000000000000000000000000000",
             "ID": "1"
         });
         assert_eq!(result, expected);
@@ -509,7 +509,7 @@ pub mod tests {
         let orders = [
             models::Order {
                 batch_information: None,
-                account_id: 0,
+                account_id: H160::from(0),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 100,
@@ -517,7 +517,7 @@ pub mod tests {
             },
             models::Order {
                 batch_information: None,
-                account_id: 1,
+                account_id: H160::from(1),
                 sell_token: 2,
                 buy_token: 1,
                 sell_amount: 200,
@@ -526,11 +526,11 @@ pub mod tests {
         ];
         let result = serialize_balances(&state, &orders);
         let expected = json!({
-            "account0": {
+            "0000000000000000000000000000000000000000": {
                 "token1": "200",
                 "token2": "300",
             },
-            "account1": {
+            "0000000000000000000000000000000000000001": {
                 "token1": "500",
                 "token2": "600",
             }

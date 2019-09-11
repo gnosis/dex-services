@@ -4,7 +4,7 @@ use serde_derive::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{hash_map::Entry, HashMap};
 use std::sync::Arc;
-use web3::types::{Log, H256, U256};
+use web3::types::{Log, H160, H256, U256};
 
 use crate::models::{Order, PendingFlux, RollingHashable, Solution};
 
@@ -15,7 +15,7 @@ use super::util::*;
 pub struct AccountState {
     pub state_hash: H256,
     pub state_index: U256,
-    balances: HashMap<U256, HashMap<u8, u128>>, // UserId => (TokenId => balance)
+    balances: HashMap<H160, HashMap<u8, u128>>, // UserId => (TokenId => balance)
     pub num_tokens: u8,
 }
 
@@ -34,7 +34,7 @@ impl AccountState {
                 .enumerate()
                 .map(|(account, token_balances)| {
                     (
-                        U256::from(account),
+                        H160::from(account as u64),
                         token_balances
                             .iter()
                             .enumerate()
@@ -53,30 +53,30 @@ impl AccountState {
     ///
     /// Panics, if this is not the case.
     fn get_balance_vector(&self) -> Vec<u128> {
-        let mut i = U256::zero();
+        let mut i = 0u64;
         let mut result = vec![];
-        while let Some(account) = self.balances.get(&i) {
+        while let Some(account) = self.balances.get(&H160::from(i)) {
             let mut j = 0;
             while let Some(token_balance) = account.get(&j) {
                 result.push(*token_balance);
                 j += 1;
             }
             assert_eq!(j, self.num_tokens);
-            i += U256::one();
+            i += 1;
         }
-        assert_eq!(i, U256::from(self.balances.keys().len()));
+        assert_eq!(i, self.balances.keys().len() as u64);
         result
     }
 
-    pub fn read_balance(&self, token_id: u8, account_id: u16) -> u128 {
+    pub fn read_balance(&self, token_id: u8, account_id: H160) -> u128 {
         *self
             .balances
-            .get(&U256::from(account_id))
+            .get(&account_id)
             .and_then(|token_balance| token_balance.get(&token_id))
             .unwrap_or(&0)
     }
 
-    pub fn increment_balance(&mut self, token_id: u8, account_id: u16, amount: u128) {
+    pub fn increment_balance(&mut self, token_id: u8, account_id: H160, amount: u128) {
         debug!(
             "Incrementing account {} balance of token {} by {}",
             account_id, token_id, amount
@@ -84,7 +84,7 @@ impl AccountState {
         self.modify_balance(account_id, token_id, |balance| *balance += amount);
     }
 
-    pub fn decrement_balance(&mut self, token_id: u8, account_id: u16, amount: u128) {
+    pub fn decrement_balance(&mut self, token_id: u8, account_id: H160, amount: u128) {
         debug!(
             "Decrementing account {} balance of token {} by {}",
             account_id, token_id, amount
@@ -131,11 +131,11 @@ impl AccountState {
         self.state_hash = self.rolling_hash(self.state_index.low_u32());
     }
 
-    fn modify_balance<F>(&mut self, account_id: u16, token_id: u8, func: F)
+    fn modify_balance<F>(&mut self, account_id: H160, token_id: u8, func: F)
     where
         F: FnOnce(&mut u128),
     {
-        match self.balances.entry(U256::from(account_id)) {
+        match self.balances.entry(account_id) {
             Entry::Occupied(mut account) => match account.get_mut().entry(token_id) {
                 Entry::Occupied(mut balance) => func(balance.get_mut()),
                 Entry::Vacant(_) => panic!(
@@ -291,7 +291,7 @@ pub mod tests {
                 slot: U256::zero(),
                 slot_index: 0,
             }),
-            account_id: 0,
+            account_id: H160::from(0),
             buy_token: 0,
             sell_token: 1,
             buy_amount: 1,
@@ -303,7 +303,7 @@ pub mod tests {
                 slot: U256::zero(),
                 slot_index: 0,
             }),
-            account_id: 1,
+            account_id: H160::from(1),
             buy_token: 1,
             sell_token: 0,
             buy_amount: 1,
@@ -334,8 +334,8 @@ pub mod tests {
         account_1.insert(1, 1);
 
         let mut balances = HashMap::new();
-        balances.insert(U256::zero(), account_0);
-        balances.insert(U256::one(), account_1);
+        balances.insert(H160::from(0), account_0);
+        balances.insert(H160::from(1), account_1);
         assert_eq!(state.balances, balances, "Incorrect balances!");
     }
 
@@ -349,8 +349,8 @@ pub mod tests {
         account_1.insert(1, 1);
 
         let mut balances = HashMap::new();
-        balances.insert(U256::zero(), account_0);
-        balances.insert(U256::one(), account_1);
+        balances.insert(H160::from(0), account_0);
+        balances.insert(H160::from(1), account_1);
 
         let account_state = AccountState {
             state_hash: H256::zero(),

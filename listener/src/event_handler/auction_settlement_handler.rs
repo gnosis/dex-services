@@ -120,7 +120,7 @@ pub mod unit_test {
     use dfusion_core::database::tests::DbInterfaceMock;
     use dfusion_core::database::{DatabaseError, ErrorKind};
     use dfusion_core::models::{AccountState, BatchInformation, Order, StandingOrder, TOKENS};
-    use web3::types::{Bytes, H256, U256};
+    use web3::types::{Bytes, H160, H256, U256};
 
     #[test]
     fn test_from_log() {
@@ -138,7 +138,7 @@ pub mod unit_test {
                 slot: U256::zero(),
                 slot_index: 0,
             }),
-            account_id: 0,
+            account_id: H160::from(0),
             buy_token: 1,
             sell_token: 0,
             buy_amount: 1,
