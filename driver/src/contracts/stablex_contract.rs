@@ -24,11 +24,11 @@ struct StableXContractImpl {
 #[allow(dead_code)] // TODO - remove once used
 impl StableXContractImpl {
     pub fn new() -> Result<Self> {
-        let contract_json = fs::read_to_string("dex-contracts/build/contracts/StablecoinConverter.json");
-        let address = env::var("STABLEX_CONTRACT_ADDRESS");
+        let contract_json = fs::read_to_string("dex-contracts/build/contracts/StablecoinConverter.json")?;
+        let address = env::var("STABLEX_CONTRACT_ADDRESS")?;
         Ok(
             StableXContractImpl {
-                base: BaseContract::new(address?, contract_json?)?
+                base: BaseContract::new(address, contract_json)?
             }
         )
     }
