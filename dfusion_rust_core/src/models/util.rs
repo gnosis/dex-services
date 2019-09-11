@@ -4,7 +4,7 @@ use graph::data::store::{Entity, Value};
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::str::FromStr;
-use web3::types::{H256, U256};
+use web3::types::{H160, H256, U256};
 
 pub trait PopFromLogData {
     fn pop_from_log_data(bytes: &mut Vec<u8>) -> Self;
@@ -31,6 +31,12 @@ impl PopFromLogData for u128 {
 impl PopFromLogData for U256 {
     fn pop_from_log_data(bytes: &mut Vec<u8>) -> Self {
         U256::from_big_endian(bytes.drain(0..32).collect::<Vec<u8>>().as_slice())
+    }
+}
+
+impl PopFromLogData for H160 {
+    fn pop_from_log_data(bytes: &mut Vec<u8>) -> Self {
+        H256::from(bytes.drain(0..32).collect::<Vec<u8>>().as_slice()).into()
     }
 }
 
@@ -71,6 +77,12 @@ impl ToValue for u128 {
 impl ToValue for U256 {
     fn to_value(&self) -> Value {
         BigDecimal::from_str(&self.to_string()).unwrap().into()
+    }
+}
+
+impl ToValue for H160 {
+    fn to_value(&self) -> Value {
+        format!("{:x}", self).into()
     }
 }
 
@@ -140,6 +152,18 @@ impl EntityParsing for U256 {
                 .unwrap_or_else(|| panic!("Couldn't get field {} as big decimal", field)),
         )
         .unwrap_or_else(|_| panic!("Couldn't cast {} from string to U256", field))
+    }
+}
+
+impl EntityParsing for H160 {
+    fn from_entity(entity: &Entity, field: &str) -> Self {
+        H160::from_str(
+            &entity
+                .get(field)
+                .and_then(|value| value.clone().as_string())
+                .unwrap_or_else(|| panic!("Couldn't get field {} as string", field)),
+        )
+        .unwrap_or_else(|_| panic!("Couldn't cast {} from string to H160", field))
     }
 }
 

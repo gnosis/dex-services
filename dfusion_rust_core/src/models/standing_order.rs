@@ -7,14 +7,14 @@ use serde_derive::Deserialize;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use web3::types::Log;
-use web3::types::{H256, U256};
+use web3::types::{H160, H256, U256};
 
 use super::util::*;
 
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct StandingOrder {
-    pub account_id: u16,
+    pub account_id: H160,
     pub batch_index: U256,
     pub valid_from_auction_id: U256,
     orders: Vec<super::Order>,
@@ -22,7 +22,7 @@ pub struct StandingOrder {
 
 impl StandingOrder {
     pub fn new(
-        account_id: u16,
+        account_id: H160,
         batch_index: U256,
         valid_from_auction_id: U256,
         orders: Vec<super::Order>,
@@ -36,8 +36,8 @@ impl StandingOrder {
     }
 
     pub fn empty_array() -> [models::StandingOrder; models::NUM_RESERVED_ACCOUNTS] {
-        let mut i = 0u16;
-        array![models::StandingOrder::empty({i += 1; i - 1}); models::NUM_RESERVED_ACCOUNTS]
+        let mut i = 0u64;
+        array![models::StandingOrder::empty({i += 1; H160::from(i - 1)}); models::NUM_RESERVED_ACCOUNTS]
     }
     pub fn get_orders(&self) -> &Vec<super::Order> {
         &self.orders
@@ -45,7 +45,7 @@ impl StandingOrder {
     pub fn num_orders(&self) -> usize {
         self.orders.len()
     }
-    pub fn empty(account_id: u16) -> StandingOrder {
+    pub fn empty(account_id: H160) -> StandingOrder {
         models::StandingOrder::new(account_id, U256::zero(), U256::zero(), vec![])
     }
 }
@@ -74,7 +74,7 @@ impl From<&Arc<Log>> for StandingOrder {
         // Get basic data from event
         let batch_index = U256::pop_from_log_data(&mut bytes);
         let valid_from_auction_id = U256::pop_from_log_data(&mut bytes);
-        let account_id = u16::pop_from_log_data(&mut bytes);
+        let account_id = H160::pop_from_log_data(&mut bytes);
 
         let bytes_init = u8::pop_from_log_data(&mut bytes) as usize;
         let byte_size = u8::pop_from_log_data(&mut bytes) as usize;
@@ -132,7 +132,7 @@ impl From<(Entity, Vec<Entity>)> for StandingOrder {
             "The entity should have the same number of orders as Vec<Entity>"
         );
 
-        let account_id = u16::from_entity(&batch_entity, "accountId");
+        let account_id = H160::from_entity(&batch_entity, "accountId");
         let batch_index = U256::from_entity(&batch_entity, "batchIndex");
         let valid_from_auction_id = U256::from_entity(&batch_entity, "validFromAuctionId");
 
@@ -188,7 +188,7 @@ pub mod tests {
     #[test]
     fn concatenating_hash() {
         let standing_order = models::StandingOrder::new(
-            1,
+            H160::from(1),
             U256::zero(),
             U256::zero(),
             vec![create_order_for_test(), create_order_for_test()],
@@ -249,12 +249,12 @@ pub mod tests {
 
     pub fn create_standing_order_for_test() -> models::StandingOrder {
         StandingOrder {
-            account_id: 1,
+            account_id: H160::from(1),
             batch_index: U256::from(2),
             valid_from_auction_id: U256::from(3),
             orders: vec![models::Order {
                 batch_information: None,
-                account_id: 1,
+                account_id: H160::from(1),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 2 * (10 as u128).pow(18),
@@ -271,7 +271,7 @@ pub mod tests {
                 "f5eb19f104583ad72d26d51078e15c5d2203c354d8c30438d66860bc61975038_0",
             )),
         );
-        entity.set("accountId", 1);
+        entity.set("accountId", "0000000000000000000000000000000000000001");
         entity.set("batchIndex", BigDecimal::from(2));
         entity.set("validFromAuctionId", BigDecimal::from(3));
         entity.set(
@@ -292,7 +292,7 @@ pub mod tests {
                 "f5eb19f104583ad72d26d51078e15c5d2203c354d8c30438d66860bc61975038_0_0",
             )),
         );
-        entity.set("accountId", 1);
+        entity.set("accountId", "0000000000000000000000000000000000000001");
         entity.set("buyToken", 2);
         entity.set("sellToken", 1);
         entity.set("buyAmount", BigDecimal::from((10 as u64).pow(18)));
@@ -304,7 +304,7 @@ pub mod tests {
     pub fn create_order_for_test() -> models::Order {
         models::Order {
             batch_information: None,
-            account_id: 1,
+            account_id: H160::from(1),
             sell_token: 2,
             buy_token: 3,
             sell_amount: 4,
