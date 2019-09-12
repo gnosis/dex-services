@@ -5,7 +5,7 @@ use dfusion_core::models::{AccountState, Order, Solution};
 
 use web3::contract::Options;
 use web3::futures::Future;
-use web3::types::U256;
+use web3::types::{H160, U128, U256};
 
 use crate::error::DriverError;
 
@@ -39,9 +39,9 @@ pub trait StableXContract {
     fn get_auction_data(&self, _index: U256) -> Result<(AccountState, Vec<Order>)>;
     fn submit_solution(
         &self,
-        _batch_index: U256,
-        _orders: Vec<Order>,
-        _solution: Solution,
+        batch_index: U256,
+        orders: Vec<Order>,
+        solution: Solution,
     ) -> Result<()>;
 }
 
@@ -59,11 +59,51 @@ impl StableXContract for StableXContractImpl {
 
     fn submit_solution(
         &self,
-        _batch_index: U256,
-        _orders: Vec<Order>,
-        _solution: Solution,
+        batch_index: U256,
+        orders: Vec<Order>,
+        solution: Solution,
     ) -> Result<()> {
-        unimplemented!();
+        let account = self.base
+            .account_with_sufficient_balance()
+            .ok_or("Not enough balance to send Txs")?;
+
+        // Representing the solution's price vector more compactly as:
+        // touched_token_ids, sorted_prices which are logically bound by index.
+        // Example solution.prices = [3, 0, 1] will be transformed into [2, 0], [1, 3]
+        let mut price_token_binding: Vec<(U128, U128)> = vec![];
+        for (token_id, price) in solution.prices.iter().enumerate() {
+            if *price > 0 {
+                price_token_binding.push((U128::from(token_id as usize), U128::from(*price as usize)))
+            }
+        }
+        // TODO - sort this thang by second element.
+//        price_token_binding.sort_by(|x, y| x.cmp());
+        let (token_ids_for_price, prices): (Vec<U128>, Vec<U128>) = price_token_binding.iter().cloned().unzip();
+
+        let mut owners: Vec<H160> = vec![];
+        let mut order_ids: Vec<U128> = vec![];
+        let mut volumes: Vec<U128> = vec![];
+        let zipped_amounts = solution.executed_buy_amounts.iter().zip(solution.executed_sell_amounts.iter());
+        for (order_id, (buy_amount, sell_amount)) in zipped_amounts.enumerate() {
+            if *buy_amount > 0 && *sell_amount > 0 {
+                // order was touched!
+                owners.push(orders[order_id].account_id);
+                order_ids.push(U128::from(order_id));
+                // Currently all orders are sell orders, so volumes are sell_amounts.
+                volumes.push(U128::from(*sell_amount as usize));
+            }
+        }
+
+        self.base.contract
+            .call(
+                "submitSolution",
+                (batch_index, owners, order_ids, volumes, prices, token_ids_for_price),
+                account,
+                Options::default(),
+            )
+            .wait()
+            .map_err(DriverError::from)
+            .map(|_| ())
     }
 }
 
