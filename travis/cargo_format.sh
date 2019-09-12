@@ -14,7 +14,7 @@ if [[ $(git diff --stat) != '' ]]; then
   git commit -am "Travis autoformatting in build: $TRAVIS_BUILD_NUMBER"
 
   git remote add origin https://${GITHUB_GNOSIS_INFO_API_TOKEN}@github.com/gnosis/dex-services.git > /dev/null 2>&1
-  git push --quiet origin
+  git push --quiet origin autoformat
 else
   echo 'Cargo format was already clean'
 fi
