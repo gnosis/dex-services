@@ -1,8 +1,9 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
 cargo fmt
+echo $TRAVIS_BRANCH
 
 if [[ $(git diff --stat) != '' ]]; then
   echo 'Cargo format caused changes, pushing updated version'
