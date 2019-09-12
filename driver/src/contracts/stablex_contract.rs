@@ -18,19 +18,18 @@ type Result<T> = std::result::Result<T, DriverError>;
 
 #[allow(dead_code)] // TODO - remove once used
 struct StableXContractImpl {
-    base: BaseContract
+    base: BaseContract,
 }
 
 #[allow(dead_code)] // TODO - remove once used
 impl StableXContractImpl {
     pub fn new() -> Result<Self> {
-        let contract_json = fs::read_to_string("dex-contracts/build/contracts/StablecoinConverter.json")?;
+        let contract_json =
+            fs::read_to_string("dex-contracts/build/contracts/StablecoinConverter.json")?;
         let address = env::var("STABLEX_CONTRACT_ADDRESS")?;
-        Ok(
-            StableXContractImpl {
-                base: BaseContract::new(address, contract_json)?
-            }
-        )
+        Ok(StableXContractImpl {
+            base: BaseContract::new(address, contract_json)?,
+        })
     }
 }
 
@@ -47,7 +46,8 @@ pub trait StableXContract {
 
 impl StableXContract for StableXContractImpl {
     fn get_current_auction_index(&self) -> Result<U256> {
-        self.base.contract
+        self.base
+            .contract
             .query("getCurrentStateIndex", (), None, Options::default(), None)
             .wait()
             .map_err(DriverError::from)
@@ -117,11 +117,7 @@ pub mod tests {
 
     use super::*;
 
-    type SubmitSolutionArguments = (
-        U256,
-        Matcher<Vec<Order>>,
-        Matcher<Solution>,
-    );
+    type SubmitSolutionArguments = (U256, Matcher<Vec<Order>>, Matcher<Solution>);
 
     #[derive(Clone)]
     pub struct StableXContractMock {
@@ -162,13 +158,8 @@ pub mod tests {
             orders: Vec<Order>,
             solution: Solution,
         ) -> Result<()> {
-            self.submit_solution.called(
-                (
-                    batch_index,
-                    Val(orders),
-                    Val(solution)
-                )
-            )
+            self.submit_solution
+                .called((batch_index, Val(orders), Val(solution)))
         }
     }
 }
