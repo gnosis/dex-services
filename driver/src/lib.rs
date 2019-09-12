@@ -22,11 +22,11 @@ mod deposit_driver;
 mod util;
 mod withdraw_driver;
 
-pub fn run_driver_components<D, C>(
-    db: &D,
-    contract: &C,
-    order_processor: &mut OrderProcessor<D, C>,
-) where D: DbInterface, C: SnappContract {
+pub fn run_driver_components<D, C>(db: &D, contract: &C, order_processor: &mut OrderProcessor<D, C>)
+where
+    D: DbInterface,
+    C: SnappContract,
+{
     if let Err(e) = run_deposit_listener(db, contract) {
         error!("Deposit_driver error: {}", e);
     }

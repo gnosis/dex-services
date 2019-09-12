@@ -33,7 +33,8 @@ fn main() {
         Box::new(NaiveSolver::new(None))
     };
 
-    let mut order_processor = OrderProcessor::new(&db_instance, &snapp_contract, &mut *price_finder);
+    let mut order_processor =
+        OrderProcessor::new(&db_instance, &snapp_contract, &mut *price_finder);
     loop {
         // Start driver_components
         run_driver_components(&db_instance, &snapp_contract, &mut order_processor);
