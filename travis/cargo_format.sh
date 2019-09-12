@@ -13,7 +13,7 @@ if [[ $(git diff --stat) != '' ]]; then
 
   git commit -am "Travis autoformatting in build: $TRAVIS_BUILD_NUMBER"
 
-  git remote add upstream https://${GITHUB_GNOSIS_INFO_API_TOKEN}@github.com/gnosis/dex-services.git
+  git remote add upstream https://$GITHUB_GNOSIS_INFO_API_TOKEN@github.com/gnosis/dex-services.git
   git push upstream HEAD:$TRAVIS_PULL_REQUEST_BRANCH
 else
   echo 'Cargo format was already clean'
