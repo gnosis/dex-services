@@ -2,7 +2,7 @@
 
 set -e
 
-cargo format
+cargo fmt
 
 if [[ $(git diff --stat) != '' ]]; then
   echo 'Cargo format caused changes, pushing updated version'
