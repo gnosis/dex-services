@@ -63,41 +63,26 @@ impl StableXContract for StableXContractImpl {
         orders: Vec<Order>,
         solution: Solution,
     ) -> Result<()> {
-        let account = self.base
+        let account = self
+            .base
             .account_with_sufficient_balance()
             .ok_or("Not enough balance to send Txs")?;
 
-        // Representing the solution's price vector more compactly as:
-        // sorted_touched_token_ids, non_zero_prices which are logically bound by index.
-        // Example solution.prices = [3, 0, 1] will be transformed into [0, 2], [3, 1]
-        let mut token_ids_for_price: Vec<U128> = vec![];
-        let mut prices: Vec<U128> = vec![];
+        let (owners, order_ids, volumes, prices, token_ids_for_price) =
+            parse_auction_results(orders, solution);
 
-        for (token_id, price) in solution.prices.into_iter().enumerate() {
-            if price > 0 {
-                token_ids_for_price.push(U128::from(token_id as usize));
-                prices.push(U128::from(price as usize));
-            }
-        }
-
-        let mut owners: Vec<H160> = vec![];
-        let mut order_ids: Vec<U128> = vec![];
-        let mut volumes: Vec<U128> = vec![];
-        let zipped_amounts = solution.executed_buy_amounts.into_iter().zip(solution.executed_sell_amounts.into_iter());
-        for (order_id, (buy_amount, sell_amount)) in zipped_amounts.enumerate() {
-            if buy_amount > 0 && sell_amount > 0 {
-                // order was touched!
-                owners.push(orders[order_id].account_id);
-                order_ids.push(U128::from(order_id));
-                // Currently all orders are sell orders, so volumes are sell_amounts.
-                volumes.push(U128::from(sell_amount as usize));
-            }
-        }
-
-        self.base.contract
+        self.base
+            .contract
             .call(
                 "submitSolution",
-                (batch_index, owners, order_ids, volumes, prices, token_ids_for_price),
+                (
+                    batch_index,
+                    owners,
+                    order_ids,
+                    volumes,
+                    prices,
+                    token_ids_for_price,
+                ),
                 account,
                 Options::default(),
             )
@@ -105,6 +90,41 @@ impl StableXContract for StableXContractImpl {
             .map_err(DriverError::from)
             .map(|_| ())
     }
+}
+
+fn parse_auction_results(
+    orders: Vec<Order>,
+    solution: Solution,
+) -> (Vec<H160>, Vec<U128>, Vec<U128>, Vec<U128>, Vec<U128>) {
+    // Representing the solution's price vector more compactly as:
+    // sorted_touched_token_ids, non_zero_prices which are logically bound by index.
+    // Example solution.prices = [3, 0, 1] will be transformed into [0, 2], [3, 1]
+    let mut ordered_token_ids: Vec<U128> = vec![];
+    let mut prices: Vec<U128> = vec![];
+    for (token_id, price) in solution.prices.into_iter().enumerate() {
+        if price > 0 {
+            ordered_token_ids.push(U128::from(token_id as usize));
+            prices.push(U128::from(price as usize));
+        }
+    }
+
+    let mut owners: Vec<H160> = vec![];
+    let mut order_ids: Vec<U128> = vec![];
+    let mut volumes: Vec<U128> = vec![];
+    let zipped_amounts = solution
+        .executed_buy_amounts
+        .into_iter()
+        .zip(solution.executed_sell_amounts.into_iter());
+    for (order_id, (buy_amount, sell_amount)) in zipped_amounts.enumerate() {
+        if buy_amount > 0 && sell_amount > 0 {
+            // order was touched!
+            owners.push(orders[order_id].account_id);
+            order_ids.push(U128::from(order_id));
+            // Currently all orders are sell orders, so volumes are sell_amounts.
+            volumes.push(U128::from(sell_amount as usize));
+        }
+    }
+    (owners, order_ids, volumes, prices, ordered_token_ids)
 }
 
 #[cfg(test)]
@@ -161,5 +181,59 @@ pub mod tests {
             self.submit_solution
                 .called((batch_index, Val(orders), Val(solution)))
         }
+    }
+
+    #[test]
+    fn test_parse_auction_results() {
+        let solution = Solution {
+            surplus: None,
+            prices: vec![3, 0, 1],
+            executed_sell_amounts: vec![1, 3],
+            executed_buy_amounts: vec![3, 1],
+        };
+
+        let address_1 = H160::from(1);
+        let address_2 = H160::from(0);
+
+        let order_1 = Order {
+            batch_information: None,
+            account_id: address_1,
+            sell_token: 0,
+            buy_token: 2,
+            sell_amount: 1,
+            buy_amount: 2,
+        };
+        let order_2 = Order {
+            batch_information: None,
+            account_id: address_2,
+            sell_token: 2,
+            buy_token: 0,
+            sell_amount: 3,
+            buy_amount: 4,
+        };
+
+        let zero = U128::from(0);
+        let one = U128::from(1);
+        let two = U128::from(2);
+        let three = U128::from(3);
+
+        let expected_owners = vec![address_1, address_2];
+        let expected_order_ids = vec![zero, one];
+        let expected_volumes = vec![one, three];
+        let expected_prices = vec![three, one];
+        let expected_token_ids = vec![zero, two];
+
+        let expected_results = (
+            expected_owners,
+            expected_order_ids,
+            expected_volumes,
+            expected_prices,
+            expected_token_ids,
+        );
+
+        assert_eq!(
+            parse_auction_results(vec![order_1, order_2], solution),
+            expected_results
+        );
     }
 }
