@@ -77,7 +77,7 @@ impl StableXContract for StableXContractImpl {
             }
         }
         // TODO - sort this thang by second element.
-//        price_token_binding.sort_by(|x, y| x.cmp());
+        price_token_binding.sort_by_key(|x| x.1);
         let (token_ids_for_price, prices): (Vec<U128>, Vec<U128>) = price_token_binding.iter().cloned().unzip();
 
         let mut owners: Vec<H160> = vec![];

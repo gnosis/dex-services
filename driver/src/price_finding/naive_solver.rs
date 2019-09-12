@@ -96,7 +96,7 @@ impl PriceFinding for NaiveSolver {
         orders: &[Order],
         state: &AccountState,
     ) -> Result<Solution, PriceFindingError> {
-        // Initialize trivial solution
+        // Initialize trivial solution (default of zero indicates untouched token).
         let mut prices: Vec<u128> = vec![0; TOKENS as usize];
         let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
         let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
