@@ -4,6 +4,6 @@ matrix:
     - language: rust
       rust: 1.36.0
       before_script:
-        - rustup component add clippy
+        - rustup component add rustfmt
       script:
         - ./travis/cargo_format.sh
