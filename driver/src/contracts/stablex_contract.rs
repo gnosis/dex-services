@@ -69,7 +69,7 @@ impl StableXContract for StableXContractImpl {
 
         // Representing the solution's price vector more compactly as:
         // sorted_touched_token_ids, non_zero_prices which are logically bound by index.
-        // Example solution.prices = [3, 0, 1] will be transformed into [2, 0], [1, 3]
+        // Example solution.prices = [3, 0, 1] will be transformed into [0, 2], [3, 1]
         let mut token_ids_for_price: Vec<U128> = vec![];
         let mut prices: Vec<U128> = vec![];
 
