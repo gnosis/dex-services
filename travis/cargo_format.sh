@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -e
+
 cargo format
 
 if [[ $(git diff --stat) != '' ]]; then

@@ -12,9 +12,6 @@ matrix:
         - CARGO_INCREMENTAL=0
       before_script:
         - rustup component add clippy
-      script:
-        - cargo test --all
-        - cargo clippy --all -- -D warnings
     - language: generic
       dist: xenial
       sudo: required
