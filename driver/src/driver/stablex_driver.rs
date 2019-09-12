@@ -6,6 +6,7 @@ use std::collections::HashSet;
 
 use web3::types::U256;
 
+<<<<<<< HEAD
 pub struct StableXDriver<'a> {
     past_auctions: HashSet<U256>,
     contract: &'a dyn StableXContract,
@@ -14,6 +15,16 @@ pub struct StableXDriver<'a> {
 
 impl<'a> StableXDriver<'a> {
     pub fn new(contract: &'a dyn StableXContract, price_finder: &'a mut dyn PriceFinding) -> Self {
+=======
+pub struct StableXDriver<'a, C: StableXContract> {
+    past_auctions: HashSet<U256>,
+    contract: &'a C,
+    price_finder: &'a mut dyn PriceFinding,
+}
+
+impl<'a, C: StableXContract> StableXDriver<'a, C> {
+    pub fn new(contract: &'a C, price_finder: &'a mut dyn PriceFinding) -> Self {
+>>>>>>> [StableX] Driver component
         StableXDriver {
             past_auctions: HashSet::new(),
             contract,
@@ -65,12 +76,20 @@ mod tests {
 
         contract
             .get_auction_data
+<<<<<<< HEAD
             .given(batch - 1)
+=======
+            .given(batch)
+>>>>>>> [StableX] Driver component
             .will_return(Ok((state.clone(), orders.clone())));
 
         contract
             .submit_solution
+<<<<<<< HEAD
             .given((batch - 1, Val(orders.clone()), Any))
+=======
+            .given((batch, Val(orders.clone()), Any))
+>>>>>>> [StableX] Driver component
             .will_return(Ok(()));
 
         let solution = Solution {
@@ -103,12 +122,20 @@ mod tests {
 
         contract
             .get_auction_data
+<<<<<<< HEAD
             .given(batch - 1)
+=======
+            .given(batch)
+>>>>>>> [StableX] Driver component
             .will_return(Ok((state.clone(), orders.clone())));
 
         contract
             .submit_solution
+<<<<<<< HEAD
             .given((batch - 1, Val(orders.clone()), Any))
+=======
+            .given((batch, Val(orders.clone()), Any))
+>>>>>>> [StableX] Driver component
             .will_return(Ok(()));
 
         let solution = Solution {
@@ -156,12 +183,20 @@ mod tests {
 
         contract
             .get_auction_data
+<<<<<<< HEAD
             .given(batch - 1)
+=======
+            .given(batch)
+>>>>>>> [StableX] Driver component
             .will_return(Ok((state.clone(), orders.clone())));
 
         contract
             .submit_solution
+<<<<<<< HEAD
             .given((batch - 1, Val(orders.clone()), Any))
+=======
+            .given((batch, Val(orders.clone()), Any))
+>>>>>>> [StableX] Driver component
             .will_return(Ok(()));
 
         let mut driver = StableXDriver::new(&contract, &mut pf);
