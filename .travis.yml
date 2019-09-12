@@ -18,21 +18,5 @@ matrix:
     - language: generic
       dist: xenial
       sudo: required
-      cache: 
-        directories:
-          - $HOME/.nvm/versions/node/v8.12.0/lib/node_modules
-          - dex-contracts/node_modules/
-      install:
-        - git submodule update --init
-        - npm install -C dex-contracts
-        - cd dex-contracts && npx truffle compile && cd -
-        - docker-compose up -d driver graph-listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
-        - cd dex-contracts && npx wait-port -t 30000 8545 && npx truffle migrate && cd -
-      script:
-        - ./test/e2e-tests-deposit-withdraw.sh
-        - ./test/restart-containers.sh
-        - ./test/e2e-tests-auction.sh
-        - ./test/restart-containers.sh
-        - ./test/e2e-tests-standing-order.sh
-      after_failure:
-        - docker-compose logs
+      after_success:
+        - ./travis/cargo_format.sh
