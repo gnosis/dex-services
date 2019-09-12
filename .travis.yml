@@ -12,8 +12,5 @@ matrix:
         - CARGO_INCREMENTAL=0
       before_script:
         - rustup component add clippy
-    - language: generic
-      dist: xenial
-      sudo: required
       after_success:
         - ./travis/cargo_format.sh
