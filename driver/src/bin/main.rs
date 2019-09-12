@@ -4,7 +4,7 @@ extern crate simple_logger;
 use dfusion_core::database::GraphReader;
 
 use driver::contracts::snapp_contract::SnappContractImpl;
-use driver::order_driver::OrderProcessor;
+use driver::driver::order_driver::OrderProcessor;
 use driver::price_finding::LinearOptimisationPriceFinder;
 use driver::price_finding::NaiveSolver;
 use driver::price_finding::PriceFinding;

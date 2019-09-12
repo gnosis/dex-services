@@ -9,18 +9,16 @@ extern crate web3;
 use dfusion_core::database::DbInterface;
 
 use crate::contracts::snapp_contract::SnappContract;
-use crate::deposit_driver::run_deposit_listener;
-use crate::order_driver::OrderProcessor;
-use crate::withdraw_driver::run_withdraw_listener;
+use crate::driver::deposit_driver::run_deposit_listener;
+use crate::driver::order_driver::OrderProcessor;
+use crate::driver::withdraw_driver::run_withdraw_listener;
 
 pub mod contracts;
+pub mod driver;
 pub mod error;
-pub mod order_driver;
 pub mod price_finding;
 
-mod deposit_driver;
 mod util;
-mod withdraw_driver;
 
 pub fn run_driver_components<D, C>(db: &D, contract: &C, order_processor: &mut OrderProcessor<D, C>)
 where

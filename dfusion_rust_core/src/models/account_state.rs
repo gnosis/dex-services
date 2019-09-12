@@ -2,7 +2,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 use graph::data::store::Entity;
 use serde_derive::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::HashMap;
 use std::sync::Arc;
 use web3::types::{Log, H160, H256, U256};
 
@@ -135,16 +135,9 @@ impl AccountState {
     where
         F: FnOnce(&mut u128),
     {
-        match self.balances.entry(account_id) {
-            Entry::Occupied(mut account) => match account.get_mut().entry(token_id) {
-                Entry::Occupied(mut balance) => func(balance.get_mut()),
-                Entry::Vacant(_) => panic!(
-                    "No balance for token {} at account {}",
-                    token_id, account_id
-                ),
-            },
-            Entry::Vacant(_) => panic!("No balances for account {}", account_id),
-        };
+        let account: &mut HashMap<u8, u128> =
+            self.balances.entry(account_id).or_insert_with(HashMap::new);
+        func(account.entry(token_id).or_insert(0));
     }
 }
 
@@ -197,6 +190,22 @@ impl Into<Entity> for AccountState {
         entity.set("balances", self.get_balance_vector().to_value());
         entity.set("numTokens", self.num_tokens.to_value());
         entity
+    }
+}
+
+pub mod test_util {
+    use super::*;
+    pub fn create_account_state_with_balance_for(orders: &[Order]) -> AccountState {
+        let mut state = AccountState {
+            state_index: U256::zero(),
+            state_hash: H256::zero(),
+            balances: HashMap::new(),
+            num_tokens: std::u8::MAX,
+        };
+        for order in orders {
+            state.increment_balance(order.sell_token, order.account_id, order.sell_amount);
+        }
+        state
     }
 }
 
