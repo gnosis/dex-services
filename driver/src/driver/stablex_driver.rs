@@ -22,7 +22,8 @@ impl<'a, C: StableXContract> StableXDriver<'a, C> {
     }
 
     pub fn run(&mut self) -> Result<bool, DriverError> {
-        let batch = self.contract.get_current_auction_index()?;
+        // Try to process previous batch auction
+        let batch = self.contract.get_current_auction_index()? - 1;
         if self.past_auctions.contains(&batch) {
             info!("Already processed batch {}", batch);
             return Ok(false);
@@ -64,12 +65,12 @@ mod tests {
 
         contract
             .get_auction_data
-            .given(batch)
+            .given(batch - 1)
             .will_return(Ok((state.clone(), orders.clone())));
 
         contract
             .submit_solution
-            .given((batch, Val(orders.clone()), Any))
+            .given((batch - 1, Val(orders.clone()), Any))
             .will_return(Ok(()));
 
         let solution = Solution {
@@ -102,12 +103,12 @@ mod tests {
 
         contract
             .get_auction_data
-            .given(batch)
+            .given(batch - 1)
             .will_return(Ok((state.clone(), orders.clone())));
 
         contract
             .submit_solution
-            .given((batch, Val(orders.clone()), Any))
+            .given((batch - 1, Val(orders.clone()), Any))
             .will_return(Ok(()));
 
         let solution = Solution {
@@ -155,12 +156,12 @@ mod tests {
 
         contract
             .get_auction_data
-            .given(batch)
+            .given(batch - 1)
             .will_return(Ok((state.clone(), orders.clone())));
 
         contract
             .submit_solution
-            .given((batch, Val(orders.clone()), Any))
+            .given((batch - 1, Val(orders.clone()), Any))
             .will_return(Ok(()));
 
         let mut driver = StableXDriver::new(&contract, &mut pf);
