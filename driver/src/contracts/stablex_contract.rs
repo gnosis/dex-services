@@ -92,10 +92,12 @@ impl StableXContract for StableXContractImpl {
     }
 }
 
+type ContractRecognizedAuctionResults = (Vec<H160>, Vec<U128>, Vec<U128>, Vec<U128>, Vec<U128>);
+
 fn parse_auction_results(
     orders: Vec<Order>,
     solution: Solution,
-) -> (Vec<H160>, Vec<U128>, Vec<U128>, Vec<U128>, Vec<U128>) {
+) -> ContractRecognizedAuctionResults {
     // Representing the solution's price vector more compactly as:
     // sorted_touched_token_ids, non_zero_prices which are logically bound by index.
     // Example solution.prices = [3, 0, 1] will be transformed into [0, 2], [3, 1]
