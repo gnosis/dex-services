@@ -4,14 +4,14 @@ cd dex-contracts
 source ../test/utils.sh
 
 step "Setup" \
-"npx truffle exec scripts/setup_environment.js 6"
+"npx truffle exec scripts/snapp/setup_environment.js"
 
 ###############
 # Deposit Tests
 ###############
 
 step "Deposit 18 of token 2 for user 2" \
-"npx truffle exec scripts/deposit.js 2 2 18"
+"npx truffle exec scripts/snapp/deposit.js --accountId=2 --tokenId=2 --amount=18"
 
 step_with_retry "Deposit was added to graph DB" \
 "source ../test/utils.sh && query_graphql \
@@ -27,7 +27,7 @@ step "Advance time to finalize batch" \
 EXPECTED_HASH="73815c173218e6025f7cb12d0add44354c4671e261a34a360943007ff6ac7af5"
 
 step_with_retry "Check contract updated" \
-"npx truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep ${EXPECTED_HASH}"
+"npx truffle exec scripts/snapp/invokeViewFunction.js 'getCurrentStateRoot' | grep ${EXPECTED_HASH}"
 
 step_with_retry "Check graph DB updated" \
 "source ../test/utils.sh && query_graphql \
@@ -42,7 +42,7 @@ step_with_retry "Check graph DB updated" \
 ################
 
 step "Request withdraw of 18 of token 2 by account 2" \
-    "npx truffle exec scripts/request_withdraw.js 2 2 18"
+    "npx truffle exec scripts/snapp/request_withdraw.js --accountId=2 --tokenId=2 --amount=18"
 
 step_with_retry "Withdraw was added to graph db" \
 "source ../test/utils.sh && query_graphql \
@@ -57,7 +57,7 @@ step "wait till withdraw slot becomes inactive" "npx truffle exec scripts/wait_s
 EXPECTED_HASH="7b738197bfe79b6d394499b0cac0186cdc2f65ae2239f2e9e3c698709c80cb67"
 
 step_with_retry "Check contract updated" \
-"npx truffle exec scripts/invokeViewFunction.js 'getCurrentStateRoot' | grep ${EXPECTED_HASH}"
+"npx truffle exec scripts/snapp/invokeViewFunction.js 'getCurrentStateRoot' | grep ${EXPECTED_HASH}"
 
 step_with_retry "Check account DB updated" \
 "source ../test/utils.sh && query_graphql \
@@ -70,5 +70,5 @@ step_with_retry "Check account DB updated" \
 
 # Should now be able to claim withdraw and see a balance change
 step "Claim Withdraw" \
-"npx truffle exec scripts/claim_withdraw.js 0 2 2 | grep \"Success! Balance of token 2 before claim: 282000000000000000000, after claim: 300000000000000000000\""
+"npx truffle exec scripts/snapp/claim_withdraw.js --slot=0 --accountId=2 --tokenId=2 | grep \"Success! Balance of token 2 before claim: 282000000000000000000, after claim: 300000000000000000000\""
 
