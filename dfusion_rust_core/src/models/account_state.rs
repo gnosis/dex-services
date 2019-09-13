@@ -135,7 +135,7 @@ impl AccountState {
     where
         F: FnOnce(&mut u128),
     {
-        let account: &mut HashMap<u8, u128> =
+        let account: &mut HashMap<u16, u128> =
             self.balances.entry(account_id).or_insert_with(HashMap::new);
         func(account.entry(token_id).or_insert(0));
     }
@@ -200,7 +200,7 @@ pub mod test_util {
             state_index: U256::zero(),
             state_hash: H256::zero(),
             balances: HashMap::new(),
-            num_tokens: std::u8::MAX,
+            num_tokens: std::u16::MAX,
         };
         for order in orders {
             state.increment_balance(order.sell_token, order.account_id, order.sell_amount);
