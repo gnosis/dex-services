@@ -245,11 +245,10 @@ pub mod tests {
         let one = U128::from(1);
         let two = U128::from(2);
         let three = U128::from(3);
-        let four = U128::from(4);
 
-        let expected_owners = vec![address_1, address_2, address_3, address_4];
-        let expected_order_ids = vec![zero, one, three, four];
-        let expected_volumes = vec![one, three, zero, four];
+        let expected_owners = vec![address_1, address_2];
+        let expected_order_ids = vec![zero, one];
+        let expected_volumes = vec![one, three];
         let expected_prices = vec![three, one];
         let expected_token_ids = vec![zero, two];
 
