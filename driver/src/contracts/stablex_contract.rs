@@ -16,12 +16,10 @@ use std::fs;
 
 type Result<T> = std::result::Result<T, DriverError>;
 
-#[allow(dead_code)] // TODO - remove once used
-struct StableXContractImpl {
+pub struct StableXContractImpl {
     base: BaseContract,
 }
 
-#[allow(dead_code)] // TODO - remove once used
 impl StableXContractImpl {
     pub fn new() -> Result<Self> {
         let contract_json =
