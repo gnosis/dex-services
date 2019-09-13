@@ -123,6 +123,7 @@ fn parse_auction_results(
             owners.push(orders[order_id].account_id);
             order_ids.push(U128::from(order_id));
             // Currently all orders are sell orders, so volumes are sell_amounts.
+            // TODO - push buy about if not sellOrder
             volumes.push(U128::from(sell_amount as usize));
         }
     }
@@ -190,12 +191,14 @@ pub mod tests {
         let solution = Solution {
             surplus: None,
             prices: vec![3, 0, 1],
-            executed_sell_amounts: vec![1, 3],
-            executed_buy_amounts: vec![3, 1],
+            executed_sell_amounts: vec![1, 3, 0, 0, 4],
+            executed_buy_amounts: vec![3, 1, 0, 2, 0],
         };
 
         let address_1 = H160::from(1);
-        let address_2 = H160::from(0);
+        let address_2 = H160::from(2);
+        let address_3 = H160::from(3);
+        let address_4 = H160::from(4);
 
         let order_1 = Order {
             batch_information: None,
@@ -213,15 +216,40 @@ pub mod tests {
             sell_amount: 3,
             buy_amount: 4,
         };
+        let order_3 = Order {
+            batch_information: None,
+            account_id: H160::from(0),
+            sell_token: 2,
+            buy_token: 0,
+            sell_amount: 2,
+            buy_amount: 1,
+        };
+        let order_4 = Order {
+            batch_information: None,
+            account_id: address_3,
+            sell_token: 2,
+            buy_token: 0,
+            sell_amount: 2,
+            buy_amount: 1,
+        };
+        let order_5 = Order {
+            batch_information: None,
+            account_id: address_4,
+            sell_token: 2,
+            buy_token: 0,
+            sell_amount: 2,
+            buy_amount: 1,
+        };
 
         let zero = U128::from(0);
         let one = U128::from(1);
         let two = U128::from(2);
         let three = U128::from(3);
+        let four = U128::from(4);
 
-        let expected_owners = vec![address_1, address_2];
-        let expected_order_ids = vec![zero, one];
-        let expected_volumes = vec![one, three];
+        let expected_owners = vec![address_1, address_2, address_3, address_4];
+        let expected_order_ids = vec![zero, one, three, four];
+        let expected_volumes = vec![one, three, zero, four];
         let expected_prices = vec![three, one];
         let expected_token_ids = vec![zero, two];
 
@@ -234,7 +262,7 @@ pub mod tests {
         );
 
         assert_eq!(
-            parse_auction_results(vec![order_1, order_2], solution),
+            parse_auction_results(vec![order_1, order_2, order_3, order_4, order_5], solution),
             expected_results
         );
     }
