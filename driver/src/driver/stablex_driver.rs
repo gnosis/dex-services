@@ -6,14 +6,14 @@ use std::collections::HashSet;
 
 use web3::types::U256;
 
-pub struct StableXDriver<'a, C: StableXContract> {
+pub struct StableXDriver<'a> {
     past_auctions: HashSet<U256>,
-    contract: &'a C,
+    contract: &'a dyn StableXContract,
     price_finder: &'a mut dyn PriceFinding,
 }
 
-impl<'a, C: StableXContract> StableXDriver<'a, C> {
-    pub fn new(contract: &'a C, price_finder: &'a mut dyn PriceFinding) -> Self {
+impl<'a> StableXDriver<'a> {
+    pub fn new(contract: &'a dyn StableXContract, price_finder: &'a mut dyn PriceFinding) -> Self {
         StableXDriver {
             past_auctions: HashSet::new(),
             contract,

@@ -21,10 +21,10 @@ struct AuctionBid {
     solution: Solution,
 }
 
-pub struct OrderProcessor<'a, D: DbInterface, C: SnappContract> {
+pub struct OrderProcessor<'a> {
     auction_bids: HashMap<U256, AuctionBid>,
-    db: &'a D,
-    contract: &'a C,
+    db: &'a dyn DbInterface,
+    contract: &'a dyn SnappContract,
     price_finder: &'a mut dyn PriceFinding,
 }
 
@@ -35,8 +35,12 @@ pub enum ProcessResult {
     AuctionApplied(U256),
 }
 
-impl<'a, D: DbInterface, C: SnappContract> OrderProcessor<'a, D, C> {
-    pub fn new(db: &'a D, contract: &'a C, price_finder: &'a mut dyn PriceFinding) -> Self {
+impl<'a> OrderProcessor<'a> {
+    pub fn new(
+        db: &'a dyn DbInterface, 
+        contract: &'a dyn SnappContract, 
+        price_finder: &'a mut dyn PriceFinding
+    ) -> Self {
         OrderProcessor {
             auction_bids: HashMap::new(),
             db,

@@ -46,14 +46,11 @@ pub enum ProcessingState {
     AcceptsSolution,
 }
 
-pub fn batch_processing_state<C>(
+pub fn batch_processing_state(
     slot: U256,
-    contract: &C,
+    contract: &dyn SnappContract,
     creation_block_time: &dyn Fn(U256) -> Result<U256, DriverError>,
-) -> Result<ProcessingState, DriverError>
-where
-    C: SnappContract,
-{
+) -> Result<ProcessingState, DriverError> {
     let slot_creation_block_time = creation_block_time(slot)?;
     if slot_creation_block_time == U256::zero() {
         return Ok(ProcessingState::TooEarly);

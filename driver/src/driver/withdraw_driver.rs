@@ -7,11 +7,10 @@ use crate::util::{
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::{RollingHashable, RootHashable};
 
-pub fn run_withdraw_listener<D, C>(db: &D, contract: &C) -> Result<(bool), DriverError>
-where
-    D: DbInterface,
-    C: SnappContract,
-{
+pub fn run_withdraw_listener(
+    db: &dyn DbInterface, 
+    contract: &dyn SnappContract
+) -> Result<(bool), DriverError> {
     let withdraw_slot = contract.get_current_withdraw_slot()?;
 
     info!("Current top withdraw_slot is {:?}", withdraw_slot);
