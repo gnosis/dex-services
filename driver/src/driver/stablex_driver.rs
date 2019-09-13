@@ -65,28 +65,12 @@ mod tests {
 
         contract
             .get_auction_data
-<<<<<<< HEAD
-<<<<<<< HEAD
             .given(batch - 1)
-=======
-            .given(batch)
->>>>>>> [StableX] Driver component
-=======
-            .given(batch - 1)
->>>>>>> Using previous auction
             .will_return(Ok((state.clone(), orders.clone())));
 
         contract
             .submit_solution
-<<<<<<< HEAD
-<<<<<<< HEAD
             .given((batch - 1, Val(orders.clone()), Any))
-=======
-            .given((batch, Val(orders.clone()), Any))
->>>>>>> [StableX] Driver component
-=======
-            .given((batch - 1, Val(orders.clone()), Any))
->>>>>>> Using previous auction
             .will_return(Ok(()));
 
         let solution = Solution {
@@ -119,28 +103,12 @@ mod tests {
 
         contract
             .get_auction_data
-<<<<<<< HEAD
-<<<<<<< HEAD
             .given(batch - 1)
-=======
-            .given(batch)
->>>>>>> [StableX] Driver component
-=======
-            .given(batch - 1)
->>>>>>> Using previous auction
             .will_return(Ok((state.clone(), orders.clone())));
 
         contract
             .submit_solution
-<<<<<<< HEAD
-<<<<<<< HEAD
             .given((batch - 1, Val(orders.clone()), Any))
-=======
-            .given((batch, Val(orders.clone()), Any))
->>>>>>> [StableX] Driver component
-=======
-            .given((batch - 1, Val(orders.clone()), Any))
->>>>>>> Using previous auction
             .will_return(Ok(()));
 
         let solution = Solution {
@@ -188,28 +156,12 @@ mod tests {
 
         contract
             .get_auction_data
-<<<<<<< HEAD
-<<<<<<< HEAD
             .given(batch - 1)
-=======
-            .given(batch)
->>>>>>> [StableX] Driver component
-=======
-            .given(batch - 1)
->>>>>>> Using previous auction
             .will_return(Ok((state.clone(), orders.clone())));
 
         contract
             .submit_solution
-<<<<<<< HEAD
-<<<<<<< HEAD
             .given((batch - 1, Val(orders.clone()), Any))
-=======
-            .given((batch, Val(orders.clone()), Any))
->>>>>>> [StableX] Driver component
-=======
-            .given((batch - 1, Val(orders.clone()), Any))
->>>>>>> Using previous auction
             .will_return(Ok(()));
 
         let mut driver = StableXDriver::new(&contract, &mut pf);
