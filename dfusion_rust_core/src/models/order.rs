@@ -1,6 +1,7 @@
 use byteorder::WriteBytesExt;
 use graph::data::store::Entity;
 use serde_derive::Deserialize;
+use std::convert::TryInto;
 use std::sync::Arc;
 use web3::types::{Log, H160, H256, U256};
 
@@ -20,16 +21,16 @@ pub struct BatchInformation {
 pub struct Order {
     pub batch_information: Option<BatchInformation>,
     pub account_id: H160,
-    pub buy_token: u8,
-    pub sell_token: u8,
+    pub buy_token: u16,
+    pub sell_token: u16,
     pub buy_amount: u128,
     pub sell_amount: u128,
 }
 
 impl Order {
     pub fn from_encoded_order(account_id: H160, bytes: &[u8; 26]) -> Self {
-        let buy_token = u8::from_le_bytes([bytes[25]]); // 1 byte
-        let sell_token = u8::from_le_bytes([bytes[24]]); // 1 byte
+        let buy_token = u16::from(u8::from_le_bytes([bytes[25]])); // 1 byte
+        let sell_token = u16::from(u8::from_le_bytes([bytes[24]])); // 1 byte
         let sell_amount = read_amount(
             &get_amount_from_slice(&bytes[12..24]), // 12 bytes
         );
@@ -53,8 +54,8 @@ impl Serializable for Order {
         let mut wtr = vec![0; 4];
         wtr.extend(self.buy_amount.bytes());
         wtr.extend(self.sell_amount.bytes());
-        wtr.write_u8(self.sell_token).unwrap();
-        wtr.write_u8(self.buy_token).unwrap();
+        wtr.write_u8(self.sell_token.try_into().unwrap()).unwrap();
+        wtr.write_u8(self.buy_token.try_into().unwrap()).unwrap();
         // For now we only write the low 2 bytes, since for the purpose of hashing,
         // the account space is still 16 bits
         wtr.write_u8(self.account_id[18]).unwrap();
@@ -78,8 +79,8 @@ impl From<Arc<Log>> for Order {
                 slot_index: u16::pop_from_log_data(&mut bytes),
             }),
             account_id: H160::pop_from_log_data(&mut bytes),
-            buy_token: u8::pop_from_log_data(&mut bytes),
-            sell_token: u8::pop_from_log_data(&mut bytes),
+            buy_token: u16::pop_from_log_data(&mut bytes),
+            sell_token: u16::pop_from_log_data(&mut bytes),
             buy_amount: u128::pop_from_log_data(&mut bytes),
             sell_amount: u128::pop_from_log_data(&mut bytes),
         }
@@ -101,8 +102,8 @@ impl From<Entity> for Order {
         Order {
             batch_information,
             account_id: H160::from_entity(&entity, "accountId"),
-            buy_token: u8::from_entity(&entity, "buyToken"),
-            sell_token: u8::from_entity(&entity, "sellToken"),
+            buy_token: u16::from_entity(&entity, "buyToken"),
+            sell_token: u16::from_entity(&entity, "sellToken"),
             buy_amount: u128::from_entity(&entity, "buyAmount"),
             sell_amount: u128::from_entity(&entity, "sellAmount"),
         }

@@ -42,7 +42,7 @@ impl LinearOptimisationPriceFinder {
     }
 }
 
-fn token_id(token: u8) -> String {
+fn token_id(token: u16) -> String {
     format!("token{}", token)
 }
 
@@ -88,7 +88,7 @@ fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
 
 fn deserialize_result(
     json: &serde_json::Value,
-    num_tokens: u8,
+    num_tokens: u16,
 ) -> Result<(Prices, models::Solution), PriceFindingError> {
     let price_map = json["prices"]
         .as_object()

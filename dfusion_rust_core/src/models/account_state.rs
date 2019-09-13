@@ -15,12 +15,12 @@ use super::util::*;
 pub struct AccountState {
     pub state_hash: H256,
     pub state_index: U256,
-    balances: HashMap<H160, HashMap<u8, u128>>, // UserId => (TokenId => balance)
-    pub num_tokens: u8,
+    balances: HashMap<H160, HashMap<u16, u128>>, // UserId => (TokenId => balance)
+    pub num_tokens: u16,
 }
 
 impl AccountState {
-    pub fn new(state_hash: H256, state_index: U256, balances: Vec<u128>, num_tokens: u8) -> Self {
+    pub fn new(state_hash: H256, state_index: U256, balances: Vec<u128>, num_tokens: u16) -> Self {
         assert_eq!(
             balances.len() % (num_tokens as usize),
             0,
@@ -38,7 +38,7 @@ impl AccountState {
                         token_balances
                             .iter()
                             .enumerate()
-                            .map(|(token, balance)| (token as u8, *balance))
+                            .map(|(token, balance)| (token as u16, *balance))
                             .collect(),
                     )
                 })
@@ -68,7 +68,7 @@ impl AccountState {
         result
     }
 
-    pub fn read_balance(&self, token_id: u8, account_id: H160) -> u128 {
+    pub fn read_balance(&self, token_id: u16, account_id: H160) -> u128 {
         *self
             .balances
             .get(&account_id)
@@ -76,7 +76,7 @@ impl AccountState {
             .unwrap_or(&0)
     }
 
-    pub fn increment_balance(&mut self, token_id: u8, account_id: H160, amount: u128) {
+    pub fn increment_balance(&mut self, token_id: u16, account_id: H160, amount: u128) {
         debug!(
             "Incrementing account {} balance of token {} by {}",
             account_id, token_id, amount
@@ -84,7 +84,7 @@ impl AccountState {
         self.modify_balance(account_id, token_id, |balance| *balance += amount);
     }
 
-    pub fn decrement_balance(&mut self, token_id: u8, account_id: H160, amount: u128) {
+    pub fn decrement_balance(&mut self, token_id: u16, account_id: H160, amount: u128) {
         debug!(
             "Decrementing account {} balance of token {} by {}",
             account_id, token_id, amount
@@ -131,7 +131,7 @@ impl AccountState {
         self.state_hash = self.rolling_hash(self.state_index.low_u32());
     }
 
-    fn modify_balance<F>(&mut self, account_id: H160, token_id: u8, func: F)
+    fn modify_balance<F>(&mut self, account_id: H160, token_id: u16, func: F)
     where
         F: FnOnce(&mut u128),
     {
@@ -171,7 +171,7 @@ impl From<Arc<Log>> for AccountState {
     fn from(log: Arc<Log>) -> Self {
         let mut bytes: Vec<u8> = log.data.0.clone();
         let state_hash = H256::pop_from_log_data(&mut bytes);
-        let num_tokens = u8::pop_from_log_data(&mut bytes);
+        let num_tokens = u16::pop_from_log_data(&mut bytes);
         let num_accounts = u16::pop_from_log_data(&mut bytes);
         let balances = vec![0; num_tokens as usize * num_accounts as usize];
         AccountState::new(state_hash, U256::zero(), balances, num_tokens)
@@ -184,7 +184,7 @@ impl From<Entity> for AccountState {
             H256::from_entity(&entity, "id"),
             U256::from_entity(&entity, "stateIndex"),
             Vec::from_entity(&entity, "balances"),
-            u8::from_entity(&entity, "numTokens"),
+            u16::from_entity(&entity, "numTokens"),
         )
     }
 }
