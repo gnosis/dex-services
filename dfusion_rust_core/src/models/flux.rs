@@ -1,6 +1,7 @@
 use byteorder::{BigEndian, WriteBytesExt};
 use graph::data::store::Entity;
 use serde_derive::{Deserialize, Serialize};
+use std::convert::TryInto;
 use std::sync::Arc;
 use web3::types::{Log, H160, H256, U256};
 
@@ -13,7 +14,7 @@ pub struct PendingFlux {
     pub slot_index: u16,
     pub slot: U256,
     pub account_id: H160,
-    pub token_id: u8,
+    pub token_id: u16,
     pub amount: u128,
 }
 
@@ -24,7 +25,7 @@ impl Serializable for PendingFlux {
         // the account space is still 16 bits
         wtr.write_u8(self.account_id[18]).unwrap();
         wtr.write_u8(self.account_id[19]).unwrap();
-        wtr.write_u8(self.token_id).unwrap();
+        wtr.write_u8(self.token_id.try_into().unwrap()).unwrap();
         wtr.write_u128::<BigEndian>(self.amount).unwrap();
         wtr
     }
@@ -35,7 +36,7 @@ impl From<Arc<Log>> for PendingFlux {
         let mut bytes: Vec<u8> = log.data.0.clone();
         PendingFlux {
             account_id: H160::pop_from_log_data(&mut bytes),
-            token_id: u8::pop_from_log_data(&mut bytes),
+            token_id: u16::pop_from_log_data(&mut bytes),
             amount: u128::pop_from_log_data(&mut bytes),
             slot: U256::pop_from_log_data(&mut bytes),
             slot_index: u16::pop_from_log_data(&mut bytes),
@@ -47,7 +48,7 @@ impl From<Entity> for PendingFlux {
     fn from(entity: Entity) -> Self {
         PendingFlux {
             account_id: H160::from_entity(&entity, "accountId"),
-            token_id: u8::from_entity(&entity, "tokenId"),
+            token_id: u16::from_entity(&entity, "tokenId"),
             amount: u128::from_entity(&entity, "amount"),
             slot: U256::from_entity(&entity, "slot"),
             slot_index: u16::from_entity(&entity, "slotIndex"),
