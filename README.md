@@ -66,21 +66,21 @@ In order to setup some testing accounts and make the first deposits (from accoun
 ```bash
 cd dex-contracts
 npx truffle exec scripts/setup_environment.js
-npx truffle exec scripts/deposit.js 1 1 18
+npx truffle exec scripts/deposit.js --accountId=1 --tokenId=1 --amount=18
 npx truffle exec scripts/wait_seconds.js 181
 ```
 
 To claim back the deposit, submit a withdraw request:
 
 ```bash
-npx truffle exec scripts/request_withdraw.js 1 1 18
+npx truffle exec scripts/request_withdraw.js --accountId=1 --tokenId=1 --amount=18
 ```
 
 After 20 blocks have passed, the driver will apply the state transition and you should be able to claim back your funds:
 
 ```bash
 npx truffle exec scripts/wait_seconds.js 181
-npx truffle exec scripts/claim_withdraw.js 0 1 1
+npx truffle exec scripts/claim_withdraw.js --slot=0 --accountId=1 --tokenId=1
 ```
 
 ## Tests
