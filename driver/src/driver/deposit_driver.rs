@@ -7,11 +7,10 @@ use crate::util::{
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::RollingHashable;
 
-pub fn run_deposit_listener<D, C>(db: &D, contract: &C) -> Result<(bool), DriverError>
-where
-    D: DbInterface,
-    C: SnappContract,
-{
+pub fn run_deposit_listener(
+    db: &dyn DbInterface, 
+    contract: &dyn SnappContract
+) -> Result<(bool), DriverError> {
     let deposit_slot = contract.get_current_deposit_slot()?;
 
     info!("Current top deposit_slot is {:?}", deposit_slot);

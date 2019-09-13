@@ -133,7 +133,7 @@ impl<T: Serializable> RollingHashable for Vec<T> {
     }
 }
 
-pub mod tests {
+pub mod test_util {
     use super::*;
     pub fn create_order_for_test() -> Order {
         Order {
@@ -151,7 +151,7 @@ pub mod tests {
 }
 
 #[cfg(test)]
-pub mod unit_test {
+pub mod tests {
     use super::*;
     use graph::bigdecimal::BigDecimal;
     use std::str::FromStr;
