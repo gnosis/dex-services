@@ -1,3 +1,5 @@
+use crate::price_finding::error::PriceFindingError;
+
 use ethabi;
 use std::error::Error;
 use std::fmt;
@@ -17,6 +19,7 @@ pub enum ErrorKind {
     DbError,
     ParseIntError,
     StateError,
+    PriceFindingError,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -84,6 +87,13 @@ impl From<DatabaseError> for DriverError {
         DriverError::new(&format!("{}", error), ErrorKind::DbError)
     }
 }
+
+impl From<PriceFindingError> for DriverError {
+    fn from(error: PriceFindingError) -> Self {
+        DriverError::new(&format!("{}", error), ErrorKind::PriceFindingError)
+    }
+}
+
 
 impl DriverError {
     pub fn new(msg: &str, kind: ErrorKind) -> DriverError {

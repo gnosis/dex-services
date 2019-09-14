@@ -1,6 +1,6 @@
-use super::price_finding::PriceFinding;
 use crate::contracts::snapp_contract::SnappContract;
 use crate::error::{DriverError, ErrorKind};
+use crate::price_finding::PriceFinding;
 use crate::util::{
     batch_processing_state, find_first_unapplied_slot, hash_consistency_check, ProcessingState,
 };
@@ -21,10 +21,10 @@ struct AuctionBid {
     solution: Solution,
 }
 
-pub struct OrderProcessor<'a, D: DbInterface, C: SnappContract> {
+pub struct OrderProcessor<'a> {
     auction_bids: HashMap<U256, AuctionBid>,
-    db: &'a D,
-    contract: &'a C,
+    db: &'a dyn DbInterface,
+    contract: &'a dyn SnappContract,
     price_finder: &'a mut dyn PriceFinding,
 }
 
@@ -35,8 +35,12 @@ pub enum ProcessResult {
     AuctionApplied(U256),
 }
 
-impl<'a, D: DbInterface, C: SnappContract> OrderProcessor<'a, D, C> {
-    pub fn new(db: &'a D, contract: &'a C, price_finder: &'a mut dyn PriceFinding) -> Self {
+impl<'a> OrderProcessor<'a> {
+    pub fn new(
+        db: &'a dyn DbInterface, 
+        contract: &'a dyn SnappContract, 
+        price_finder: &'a mut dyn PriceFinding
+    ) -> Self {
         OrderProcessor {
             auction_bids: HashMap::new(),
             db,
@@ -196,7 +200,7 @@ mod tests {
     use crate::price_finding::error::PriceFindingError;
     use crate::price_finding::price_finder_interface::tests::PriceFindingMock;
     use dfusion_core::database::tests::DbInterfaceMock;
-    use dfusion_core::models::order::tests::create_order_for_test;
+    use dfusion_core::models::order::test_util::create_order_for_test;
     use dfusion_core::models::{NUM_RESERVED_ACCOUNTS, TOKENS};
     use mock_it::Matcher::*;
     use web3::types::{H160, H256, U128, U256};
