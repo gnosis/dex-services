@@ -5,7 +5,7 @@ use dfusion_core::models::{AccountState, Order, Solution};
 
 use web3::contract::Options;
 use web3::futures::Future;
-use web3::types::{H160, U128};
+use web3::types::{H160, U128, U256};
 
 use crate::error::DriverError;
 
@@ -34,19 +34,18 @@ impl StableXContractImpl {
 }
 
 pub trait StableXContract {
-    fn get_current_auction_index(&self) -> Result<U128>;
-    // TODO - Make sure this works!
-    fn get_auction_data(&self, _index: u32) -> Result<(AccountState, Vec<Order>)>;
+    fn get_current_auction_index(&self) -> Result<U256>;
+    fn get_auction_data(&self, _index: U256) -> Result<(AccountState, Vec<Order>)>;
     fn submit_solution(
         &self,
-        batch_index: u32,
+        batch_index: U256,
         orders: Vec<Order>,
         solution: Solution,
     ) -> Result<()>;
 }
 
 impl StableXContract for StableXContractImpl {
-    fn get_current_auction_index(&self) -> Result<U128> {
+    fn get_current_auction_index(&self) -> Result<U256> {
         self.base
             .contract
             .query("getCurrentStateIndex", (), None, Options::default(), None)
@@ -54,13 +53,13 @@ impl StableXContract for StableXContractImpl {
             .map_err(DriverError::from)
     }
 
-    fn get_auction_data(&self, _index: u32) -> Result<(AccountState, Vec<Order>)> {
+    fn get_auction_data(&self, _index: U256) -> Result<(AccountState, Vec<Order>)> {
         unimplemented!();
     }
 
     fn submit_solution(
         &self,
-        batch_index: u32,
+        batch_index: U256,
         orders: Vec<Order>,
         solution: Solution,
     ) -> Result<()> {
@@ -77,7 +76,7 @@ impl StableXContract for StableXContractImpl {
             .call(
                 "submitSolution",
                 (
-                    U128::from(batch_index), // TODO - Ensure that this works!
+                    batch_index,
                     owners,
                     order_ids,
                     volumes,
@@ -153,12 +152,12 @@ pub mod tests {
     use super::*;
     use dfusion_core::models::BatchInformation;
 
-    type SubmitSolutionArguments = (u32, Matcher<Vec<Order>>, Matcher<Solution>);
+    type SubmitSolutionArguments = (U256, Matcher<Vec<Order>>, Matcher<Solution>);
 
     #[derive(Clone)]
     pub struct StableXContractMock {
-        pub get_current_auction_index: Mock<(), Result<U128>>,
-        pub get_auction_data: Mock<u32, Result<(AccountState, Vec<Order>)>>,
+        pub get_current_auction_index: Mock<(), Result<U256>>,
+        pub get_auction_data: Mock<U256, Result<(AccountState, Vec<Order>)>>,
         pub submit_solution: Mock<SubmitSolutionArguments, Result<()>>,
     }
 
@@ -182,15 +181,15 @@ pub mod tests {
     }
 
     impl StableXContract for StableXContractMock {
-        fn get_current_auction_index(&self) -> Result<U128> {
+        fn get_current_auction_index(&self) -> Result<U256> {
             self.get_current_auction_index.called(())
         }
-        fn get_auction_data(&self, index: u32) -> Result<(AccountState, Vec<Order>)> {
+        fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
             self.get_auction_data.called(index)
         }
         fn submit_solution(
             &self,
-            batch_index: u32,
+            batch_index: U256,
             orders: Vec<Order>,
             solution: Solution,
         ) -> Result<()> {
