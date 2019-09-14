@@ -34,7 +34,8 @@ impl StableXContractImpl {
 }
 
 pub trait StableXContract {
-    fn get_current_auction_index(&self) -> Result<U128>;  // TODO - Make sure this works!
+    fn get_current_auction_index(&self) -> Result<U128>;
+    // TODO - Make sure this works!
     fn get_auction_data(&self, _index: u32) -> Result<(AccountState, Vec<Order>)>;
     fn submit_solution(
         &self,
@@ -76,7 +77,7 @@ impl StableXContract for StableXContractImpl {
             .call(
                 "submitSolution",
                 (
-                    U128::from(batch_index),  // TODO - Ensure that this works!
+                    U128::from(batch_index), // TODO - Ensure that this works!
                     owners,
                     order_ids,
                     volumes,
@@ -98,6 +99,11 @@ fn parse_auction_results(
     orders: Vec<Order>,
     solution: Solution,
 ) -> ContractRecognizedAuctionResults {
+    assert_eq!(
+        orders.len(),
+        solution.executed_buy_amounts.len(),
+        "Received inconsistent auction result data."
+    );
     // Representing the solution's price vector more compactly as:
     // sorted_touched_token_ids, non_zero_prices which are logically bound by index.
     // Example solution.prices = [3, 0, 1] will be transformed into [0, 2], [3, 1]
@@ -105,8 +111,8 @@ fn parse_auction_results(
     let mut prices: Vec<U128> = vec![];
     for (token_id, price) in solution.prices.into_iter().enumerate() {
         if price > 0 {
-            ordered_token_ids.push(U128::from(token_id as usize));
-            prices.push(U128::from(price as usize));
+            ordered_token_ids.push(U128::from(token_id));
+            prices.push(U128::from(price.to_be_bytes()));
         }
     }
 
@@ -117,14 +123,20 @@ fn parse_auction_results(
         .executed_buy_amounts
         .into_iter()
         .zip(solution.executed_sell_amounts.into_iter());
-    for (order_id, (buy_amount, sell_amount)) in zipped_amounts.enumerate() {
-        if buy_amount > 0 && sell_amount > 0 {
+    for (order_index, (_buy_amount, sell_amount)) in zipped_amounts.enumerate() {
+        if sell_amount > 0 {
             // order was touched!
-            owners.push(orders[order_id].account_id);
-            order_ids.push(U128::from(order_id));
-            // Currently all orders are sell orders, so volumes are sell_amounts.
-            // TODO - push buy about if not sellOrder
-            volumes.push(U128::from(sell_amount as usize));
+            // Note that above condition is only holds for sell orders.
+            owners.push(orders[order_index].account_id);
+            let order_batch_info = orders[order_index]
+                .batch_information
+                .as_ref()
+                .expect("Batch Information on StableX Order");
+            // TODO - using slot_index (u16) for order_id (U128) is temporary and not sustainable.
+            order_ids.push(U128::from(order_batch_info.slot_index));
+            // all orders are sell orders, so volumes are sell_amounts.
+            // TODO - push buy_amount if not sellOrder
+            volumes.push(U128::from(sell_amount.to_be_bytes()));
         }
     }
     (owners, order_ids, volumes, prices, ordered_token_ids)
@@ -139,6 +151,7 @@ pub mod tests {
     use crate::error::ErrorKind;
 
     use super::*;
+    use dfusion_core::models::BatchInformation;
 
     type SubmitSolutionArguments = (u32, Matcher<Vec<Order>>, Matcher<Solution>);
 
@@ -187,6 +200,51 @@ pub mod tests {
     }
 
     #[test]
+    #[should_panic]
+    fn parse_auction_results_fails_on_order_without_batch_info() {
+        let empty_solution = Solution {
+            surplus: None,
+            prices: vec![1],
+            executed_sell_amounts: vec![1],
+            executed_buy_amounts: vec![1],
+        };
+
+        let insufficient_order = Order {
+            batch_information: None,
+            account_id: H160::from(1),
+            sell_token: 0,
+            buy_token: 1,
+            sell_amount: 1,
+            buy_amount: 1,
+        };
+        parse_auction_results(vec![insufficient_order], empty_solution);
+    }
+
+    #[test]
+    #[should_panic]
+    fn parse_auction_results_fails_on_inconsistent_results() {
+        let empty_solution = Solution {
+            surplus: None,
+            prices: vec![],
+            executed_sell_amounts: vec![],
+            executed_buy_amounts: vec![],
+        };
+
+        let some_reasonable_order = Order {
+            batch_information: Some(BatchInformation {
+                slot_index: 0,
+                slot: U256::from(0),
+            }),
+            account_id: H160::from(1),
+            sell_token: 0,
+            buy_token: 1,
+            sell_amount: 1,
+            buy_amount: 1,
+        };
+        parse_auction_results(vec![some_reasonable_order], empty_solution);
+    }
+
+    #[test]
     fn test_parse_auction_results() {
         let solution = Solution {
             surplus: None,
@@ -199,9 +257,13 @@ pub mod tests {
         let address_2 = H160::from(2);
         let address_3 = H160::from(3);
         let address_4 = H160::from(4);
+        let address_5 = H160::from(5);
 
         let order_1 = Order {
-            batch_information: None,
+            batch_information: Some(BatchInformation {
+                slot_index: 0,
+                slot: U256::from(0),
+            }),
             account_id: address_1,
             sell_token: 0,
             buy_token: 2,
@@ -209,7 +271,10 @@ pub mod tests {
             buy_amount: 2,
         };
         let order_2 = Order {
-            batch_information: None,
+            batch_information: Some(BatchInformation {
+                slot_index: 1,
+                slot: U256::from(0),
+            }),
             account_id: address_2,
             sell_token: 2,
             buy_token: 0,
@@ -217,24 +282,33 @@ pub mod tests {
             buy_amount: 4,
         };
         let order_3 = Order {
-            batch_information: None,
-            account_id: H160::from(0),
-            sell_token: 2,
-            buy_token: 0,
-            sell_amount: 2,
-            buy_amount: 1,
-        };
-        let order_4 = Order {
-            batch_information: None,
+            batch_information: Some(BatchInformation {
+                slot_index: 2,
+                slot: U256::from(0),
+            }),
             account_id: address_3,
             sell_token: 2,
             buy_token: 0,
             sell_amount: 2,
             buy_amount: 1,
         };
-        let order_5 = Order {
-            batch_information: None,
+        let order_4 = Order {
+            batch_information: Some(BatchInformation {
+                slot_index: 3,
+                slot: U256::from(0),
+            }),
             account_id: address_4,
+            sell_token: 2,
+            buy_token: 0,
+            sell_amount: 2,
+            buy_amount: 1,
+        };
+        let order_5 = Order {
+            batch_information: Some(BatchInformation {
+                slot_index: 4,
+                slot: U256::from(0),
+            }),
+            account_id: address_5,
             sell_token: 2,
             buy_token: 0,
             sell_amount: 2,
@@ -245,10 +319,11 @@ pub mod tests {
         let one = U128::from(1);
         let two = U128::from(2);
         let three = U128::from(3);
+        let four = U128::from(4);
 
-        let expected_owners = vec![address_1, address_2];
-        let expected_order_ids = vec![zero, one];
-        let expected_volumes = vec![one, three];
+        let expected_owners = vec![address_1, address_2, address_5];
+        let expected_order_ids = vec![zero, one, four];
+        let expected_volumes = vec![one, three, four];
         let expected_prices = vec![three, one];
         let expected_token_ids = vec![zero, two];
 
