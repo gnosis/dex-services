@@ -10,6 +10,12 @@ pub trait PopFromLogData {
     fn pop_from_log_data(bytes: &mut Vec<u8>) -> Self;
 }
 
+impl PopFromLogData for bool {
+    fn pop_from_log_data(bytes: &mut Vec<u8>) -> Self {
+        U256::pop_from_log_data(bytes).as_u32() != 0
+    }
+}
+
 impl PopFromLogData for u8 {
     fn pop_from_log_data(bytes: &mut Vec<u8>) -> Self {
         U256::pop_from_log_data(bytes).as_u32().try_into().unwrap()

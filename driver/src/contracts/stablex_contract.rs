@@ -12,6 +12,7 @@ use crate::error::DriverError;
 
 use super::base_contract::BaseContract;
 
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 
@@ -48,26 +49,24 @@ pub trait StableXContract {
 struct AuctionElement {
     valid_from: U256,
     valid_until: U256,
+    _balance_record: HashMap<H160, HashMap<u16, u128>>,
     order: Order,
 }
 
 impl AuctionElement {
+    fn in_auction(&self, index: U256) -> bool {
+        self.valid_from < index && index <= self.valid_until
+    }
+
     fn from_bytes(bytes: &[u8; 113]) -> Self {
         let mut data_vector = bytes.to_vec();
-        println!("{}", bytes.len());
         let account_id = H160::pop_from_log_data(&mut data_vector);
-        // TODO - not sure what this is for.
-        let _sell_token_balance = U256::pop_from_log_data(&mut data_vector);
-        println!("{}", bytes.len());
+        let sell_token_balance = u128::pop_from_log_data(&mut data_vector);
         let buy_token = u16::pop_from_log_data(&mut data_vector);
         let sell_token = u16::pop_from_log_data(&mut data_vector);
-        println!("{}", bytes.len());
         let valid_from = U256::from(u32::pop_from_log_data(&mut data_vector));
         let valid_until = U256::from(u32::pop_from_log_data(&mut data_vector));
-        // TODO - not sure about this boolean...
-        u8::pop_from_log_data(&mut data_vector);
-        let is_sell_order = true;
-        println!("{}", bytes.len());
+        let is_sell_order = bool::pop_from_log_data(&mut data_vector);
         let price_numerator = u128::pop_from_log_data(&mut data_vector);
         let price_denominator = u128::pop_from_log_data(&mut data_vector);
         let remaining_amount = u128::pop_from_log_data(&mut data_vector);
@@ -84,9 +83,16 @@ impl AuctionElement {
             sell_amount = (price_denominator * remaining_amount) / price_numerator;
         }
 
+        let mut account_record = HashMap::new();
+        account_record.insert(sell_token, sell_token_balance);
+
+        let mut _balance_record = HashMap::new();
+        _balance_record.insert(account_id, account_record);
+
         AuctionElement {
             valid_from,
             valid_until,
+            _balance_record,
             order: Order {
                 batch_information: None,
                 account_id,
@@ -128,7 +134,7 @@ impl StableXContract for StableXContractImpl {
             0,
             "Each auction should be packed in 113 bytes"
         );
-        let auction_info: Vec<AuctionElement> = packed_auction_bytes
+        let auction_elements: Vec<AuctionElement> = packed_auction_bytes
             .chunks(AUCTION_ELEMENT_WIDTH)
             .map(|chunk| {
                 let mut chunk_array = [0; AUCTION_ELEMENT_WIDTH];
@@ -137,14 +143,13 @@ impl StableXContract for StableXContractImpl {
             })
             .collect();
 
-        // TODO - can we use drain_filter here?
-        let mut relevant_orders: Vec<Order> = vec![];
-        for element in auction_info {
-            if element.valid_from < index && element.valid_until < index {
-                relevant_orders.push(element.order);
-            }
-        }
+        let relevant_orders = auction_elements
+            .into_iter() // using iter here gives "cannot move out of borrowed content"
+            .filter(|x| x.in_auction(index))
+            .map(|e| e.order)
+            .collect();
 
+        // can we still use sell_token_balance?
         // TODO - extract state of accounts
         let balances = vec![];
         let account_state = AccountState::new(H256::from(0), index, balances, 0);
