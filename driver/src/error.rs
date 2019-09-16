@@ -94,7 +94,6 @@ impl From<PriceFindingError> for DriverError {
     }
 }
 
-
 impl DriverError {
     pub fn new(msg: &str, kind: ErrorKind) -> DriverError {
         DriverError {
