@@ -10,7 +10,7 @@ use crate::models::{Order, PendingFlux, RollingHashable, Solution};
 
 use super::util::*;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Default, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountState {
     pub state_hash: H256,
@@ -20,14 +20,14 @@ pub struct AccountState {
 }
 
 impl AccountState {
-    pub fn default(state_index: U256) -> Self {
-        AccountState {
-            state_hash: H256::from(0),
-            state_index,
-            balances: HashMap::new(),
-            num_tokens: 0,
-        }
-    }
+    //    pub fn default(state_index: U256) -> Self {
+    //        AccountState {
+    //            state_hash: H256::from(0),
+    //            state_index,
+    //            balances: HashMap::new(),
+    //            num_tokens: 0,
+    //        }
+    //    }
 
     pub fn new(state_hash: H256, state_index: U256, balances: Vec<u128>, num_tokens: u16) -> Self {
         assert_eq!(
@@ -140,7 +140,13 @@ impl AccountState {
         self.state_hash = self.rolling_hash(self.state_index.low_u32());
     }
 
-    pub fn modify_balance<F>(&mut self, account_id: H160, token_id: u16, func: F)
+    pub fn set_balance(&mut self, account_id: H160, token_id: u16, value: u128) {
+        let mut account = HashMap::new();
+        account.insert(token_id, value);
+        self.balances.insert(account_id, account);
+    }
+
+    fn modify_balance<F>(&mut self, account_id: H160, token_id: u16, func: F)
     where
         F: FnOnce(&mut u128),
     {

@@ -66,21 +66,15 @@ impl AuctionElement {
         let valid_from = U256::from(u32::pop_from_log_data(&mut data_vector));
         let valid_until = U256::from(u32::pop_from_log_data(&mut data_vector));
         let is_sell_order = bool::pop_from_log_data(&mut data_vector);
-        let price_numerator = u128::pop_from_log_data(&mut data_vector);
-        let price_denominator = u128::pop_from_log_data(&mut data_vector);
-        let remaining_amount = u128::pop_from_log_data(&mut data_vector);
+        let numerator = u128::pop_from_log_data(&mut data_vector);
+        let denominator = u128::pop_from_log_data(&mut data_vector);
+        let remaining = u128::pop_from_log_data(&mut data_vector);
 
-        // Todo - Will likely have to compute this differently.
-        // TODO - put in own function fn [u128; 3] -> [u128; 2]
-        let buy_amount: u128;
-        let sell_amount: u128;
-        if is_sell_order {
-            sell_amount = remaining_amount;
-            buy_amount = (price_numerator * remaining_amount) / price_denominator;
+        let (buy_amount, sell_amount) = if is_sell_order {
+            (remaining, (numerator * remaining) / denominator)
         } else {
-            buy_amount = remaining_amount;
-            sell_amount = (price_denominator * remaining_amount) / price_numerator;
-        }
+            ((denominator * remaining) / numerator, remaining)
+        };
 
         AuctionElement {
             valid_from,
@@ -127,24 +121,21 @@ impl StableXContract for StableXContractImpl {
             0,
             "Each auction should be packed in 113 bytes"
         );
-        let auction_elements: Vec<AuctionElement> = packed_auction_bytes
+
+        let mut account_state = AccountState::default();
+        let relevant_orders = packed_auction_bytes
             .chunks(AUCTION_ELEMENT_WIDTH)
             .map(|chunk| {
                 let mut chunk_array = [0; AUCTION_ELEMENT_WIDTH];
                 chunk_array.copy_from_slice(chunk);
                 AuctionElement::from_bytes(&chunk_array)
             })
-            .collect();
-
-        let mut account_state = AccountState::default(index);
-        let relevant_orders = auction_elements
-            .into_iter() // using iter here gives "cannot move out of borrowed content"
             .filter(|x| x.in_auction(index))
             .map(|element| {
-                account_state.modify_balance(
+                account_state.set_balance(
                     element.order.account_id,
                     element.order.sell_token,
-                    |x| *x += element.sell_token_balance,
+                    element.sell_token_balance,
                 );
                 element.order
             })
