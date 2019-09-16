@@ -1,7 +1,7 @@
 use crate::contracts::snapp_contract::SnappContract;
 use crate::error::DriverError;
 use crate::error::ErrorKind;
-use crate::price_finding::{ LinearOptimisationPriceFinder, NaiveSolver, PriceFinding};
+use crate::price_finding::{LinearOptimisationPriceFinder, NaiveSolver, PriceFinding};
 
 use std::env;
 use web3::types::{H256, U256};

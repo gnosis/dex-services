@@ -37,9 +37,9 @@ pub enum ProcessResult {
 
 impl<'a> OrderProcessor<'a> {
     pub fn new(
-        db: &'a dyn DbInterface, 
-        contract: &'a dyn SnappContract, 
-        price_finder: &'a mut dyn PriceFinding
+        db: &'a dyn DbInterface,
+        contract: &'a dyn SnappContract,
+        price_finder: &'a mut dyn PriceFinding,
     ) -> Self {
         OrderProcessor {
             auction_bids: HashMap::new(),
