@@ -1,4 +1,4 @@
-FROM fleupold/dfusion-rust-base:v2
+FROM fleupold/dfusion-rust-base:v3
 
 # Install solver if specified
 ARG use_solver

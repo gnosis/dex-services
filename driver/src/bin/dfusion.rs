@@ -5,9 +5,6 @@ use dfusion_core::database::GraphReader;
 
 use driver::contracts::snapp_contract::SnappContractImpl;
 use driver::driver::order_driver::OrderProcessor;
-use driver::price_finding::LinearOptimisationPriceFinder;
-use driver::price_finding::NaiveSolver;
-use driver::price_finding::PriceFinding;
 use driver::run_driver_components;
 
 use graph::log::logger;
@@ -26,13 +23,7 @@ fn main() {
 
     let snapp_contract = SnappContractImpl::new().unwrap();
 
-    let solver_env_var = env::var("LINEAR_OPTIMIZATION_SOLVER").unwrap_or_else(|_| "0".to_string());
-    let mut price_finder: Box<dyn PriceFinding> = if solver_env_var == "1" {
-        Box::new(LinearOptimisationPriceFinder::new())
-    } else {
-        Box::new(NaiveSolver::new(None))
-    };
-
+    let mut price_finder = driver::util::create_price_finder();
     let mut order_processor =
         OrderProcessor::new(&db_instance, &snapp_contract, &mut *price_finder);
     loop {

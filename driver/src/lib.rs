@@ -17,8 +17,7 @@ pub mod contracts;
 pub mod driver;
 pub mod error;
 pub mod price_finding;
-
-mod util;
+pub mod util;
 
 pub fn run_driver_components(
     db: &dyn DbInterface,

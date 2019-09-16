@@ -20,7 +20,7 @@ services:
       - ./dex-contracts:/app/dex-contracts
 
   driver:
-    command: cargo run --bin main
+    command: cargo run --bin dfusion
     build:
       context: .
       dockerfile: docker/rust/Dockerfile
