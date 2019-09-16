@@ -67,9 +67,9 @@ impl StableXContract for StableXContractImpl {
             .base
             .account_with_sufficient_balance()
             .ok_or("Not enough balance to send Txs")?;
-
-        let (owners, order_ids, volumes, prices, token_ids_for_price) =
-            parse_auction_results(orders, solution);
+        let (prices, token_ids_for_price) = encode_prices_for_contract(solution.prices);
+        let (owners, order_ids, volumes) =
+            encode_execution_for_contract(orders, solution.executed_sell_amounts);
 
         self.base
             .contract
@@ -92,33 +92,35 @@ impl StableXContract for StableXContractImpl {
     }
 }
 
-type ContractRecognizedAuctionResults = (Vec<H160>, Vec<U128>, Vec<U128>, Vec<U128>, Vec<U128>);
-
-fn parse_auction_results(
-    orders: Vec<Order>,
-    solution: Solution,
-) -> ContractRecognizedAuctionResults {
-    assert_eq!(
-        orders.len(),
-        solution.executed_buy_amounts.len(),
-        "Received inconsistent auction result data."
-    );
+fn encode_prices_for_contract(price_vector: Vec<u128>) -> (Vec<U128>, Vec<U128>) {
     // Representing the solution's price vector more compactly as:
     // sorted_touched_token_ids, non_zero_prices which are logically bound by index.
     // Example solution.prices = [3, 0, 1] will be transformed into [0, 2], [3, 1]
     let mut ordered_token_ids: Vec<U128> = vec![];
     let mut prices: Vec<U128> = vec![];
-    for (token_id, price) in solution.prices.into_iter().enumerate() {
+    for (token_id, price) in price_vector.into_iter().enumerate() {
         if price > 0 {
             ordered_token_ids.push(U128::from(token_id));
             prices.push(U128::from(price.to_be_bytes()));
         }
     }
+    (prices, ordered_token_ids)
+}
 
+fn encode_execution_for_contract(
+    orders: Vec<Order>,
+    executed_sell_amounts: Vec<u128>,
+) -> (Vec<H160>, Vec<U128>, Vec<U128>) {
+    assert_eq!(
+        orders.len(),
+        executed_sell_amounts.len(),
+        "Received inconsistent auction result data."
+    );
+    // Note that buy_amounts do not play a role here since all orders are sell orders.
     let mut owners: Vec<H160> = vec![];
     let mut order_ids: Vec<U128> = vec![];
     let mut volumes: Vec<U128> = vec![];
-    for (order_index, sell_amount) in solution.executed_sell_amounts.into_iter().enumerate() {
+    for (order_index, sell_amount) in executed_sell_amounts.into_iter().enumerate() {
         if sell_amount > 0 {
             // order was touched!
             // Note that above condition is only holds for sell orders.
@@ -134,7 +136,7 @@ fn parse_auction_results(
             volumes.push(U128::from(sell_amount.to_be_bytes()));
         }
     }
-    (owners, order_ids, volumes, prices, ordered_token_ids)
+    (owners, order_ids, volumes)
 }
 
 #[cfg(test)]
@@ -196,14 +198,7 @@ pub mod tests {
 
     #[test]
     #[should_panic]
-    fn parse_auction_results_fails_on_order_without_batch_info() {
-        let empty_solution = Solution {
-            surplus: None,
-            prices: vec![1],
-            executed_sell_amounts: vec![1],
-            executed_buy_amounts: vec![1],
-        };
-
+    fn encode_execution_fails_on_order_without_batch_info() {
         let insufficient_order = Order {
             batch_information: None,
             account_id: H160::from(1),
@@ -212,19 +207,12 @@ pub mod tests {
             sell_amount: 1,
             buy_amount: 1,
         };
-        parse_auction_results(vec![insufficient_order], empty_solution);
+        encode_execution_for_contract(vec![insufficient_order], vec![1]);
     }
 
     #[test]
     #[should_panic]
-    fn parse_auction_results_fails_on_inconsistent_results() {
-        let empty_solution = Solution {
-            surplus: None,
-            prices: vec![],
-            executed_sell_amounts: vec![],
-            executed_buy_amounts: vec![],
-        };
-
+    fn encode_execution_fails_on_inconsistent_results() {
         let some_reasonable_order = Order {
             batch_information: Some(BatchInformation {
                 slot_index: 0,
@@ -236,23 +224,15 @@ pub mod tests {
             sell_amount: 1,
             buy_amount: 1,
         };
-        parse_auction_results(vec![some_reasonable_order], empty_solution);
+        encode_execution_for_contract(vec![some_reasonable_order], vec![]);
     }
 
     #[test]
-    fn test_parse_auction_results() {
-        let solution = Solution {
-            surplus: None,
-            prices: vec![3, 0, 1],
-            executed_sell_amounts: vec![1, 3, 0, 0, 4],
-            executed_buy_amounts: vec![3, 1, 0, 2, 0],
-        };
+    fn generic_encode_execution_test() {
+        let executed_sell_amounts = vec![1, 0];
 
         let address_1 = H160::from(1);
         let address_2 = H160::from(2);
-        let address_3 = H160::from(3);
-        let address_4 = H160::from(4);
-        let address_5 = H160::from(5);
 
         let order_1 = Order {
             batch_information: Some(BatchInformation {
@@ -276,63 +256,37 @@ pub mod tests {
             sell_amount: 3,
             buy_amount: 4,
         };
-        let order_3 = Order {
-            batch_information: Some(BatchInformation {
-                slot_index: 2,
-                slot: U256::from(0),
-            }),
-            account_id: address_3,
-            sell_token: 2,
-            buy_token: 0,
-            sell_amount: 2,
-            buy_amount: 1,
-        };
-        let order_4 = Order {
-            batch_information: Some(BatchInformation {
-                slot_index: 3,
-                slot: U256::from(0),
-            }),
-            account_id: address_4,
-            sell_token: 2,
-            buy_token: 0,
-            sell_amount: 2,
-            buy_amount: 1,
-        };
-        let order_5 = Order {
-            batch_information: Some(BatchInformation {
-                slot_index: 4,
-                slot: U256::from(0),
-            }),
-            account_id: address_5,
-            sell_token: 2,
-            buy_token: 0,
-            sell_amount: 2,
-            buy_amount: 1,
-        };
+
+        let zero = U128::from(0);
+        let one = U128::from(1);
+
+        let expected_owners = vec![address_1];
+        let expected_order_ids = vec![zero];
+        let expected_volumes = vec![one];
+
+        let expected_results = (expected_owners, expected_order_ids, expected_volumes);
+
+        assert_eq!(
+            encode_execution_for_contract(vec![order_1, order_2], executed_sell_amounts),
+            expected_results
+        );
+    }
+
+    #[test]
+    fn generic_price_encoding() {
+        let price_vector = vec![u128::max_value(), 0, 1];
 
         let zero = U128::from(0);
         let one = U128::from(1);
         let two = U128::from(2);
-        let three = U128::from(3);
-        let four = U128::from(4);
+        let max = U128::max_value();
 
-        let expected_owners = vec![address_1, address_2, address_5];
-        let expected_order_ids = vec![zero, one, four];
-        let expected_volumes = vec![one, three, four];
-        let expected_prices = vec![three, one];
+        let expected_prices = vec![max, one];
         let expected_token_ids = vec![zero, two];
 
-        let expected_results = (
-            expected_owners,
-            expected_order_ids,
-            expected_volumes,
-            expected_prices,
-            expected_token_ids,
-        );
-
         assert_eq!(
-            parse_auction_results(vec![order_1, order_2, order_3, order_4, order_5], solution),
-            expected_results
+            encode_prices_for_contract(price_vector),
+            (expected_prices, expected_token_ids)
         );
     }
 }
