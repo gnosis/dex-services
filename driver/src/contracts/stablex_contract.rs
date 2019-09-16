@@ -1,11 +1,12 @@
 #[cfg(test)]
 extern crate mock_it;
 
+use dfusion_core::models::util::PopFromLogData;
 use dfusion_core::models::{AccountState, Order, Solution};
 
 use web3::contract::Options;
 use web3::futures::Future;
-use web3::types::{H160, U128, U256};
+use web3::types::{H160, H256, U128, U256};
 
 use crate::error::DriverError;
 
@@ -15,6 +16,8 @@ use std::env;
 use std::fs;
 
 type Result<T> = std::result::Result<T, DriverError>;
+
+const AUCTION_ELEMENT_WIDTH: usize = 113;
 
 pub struct StableXContractImpl {
     base: BaseContract,
@@ -42,6 +45,60 @@ pub trait StableXContract {
     ) -> Result<()>;
 }
 
+struct AuctionElement {
+    valid_from: U256,
+    valid_until: U256,
+    order: Order,
+}
+
+impl AuctionElement {
+    fn from_bytes(bytes: &[u8; 113]) -> Self {
+        let mut data_vector = bytes.to_vec();
+        println!("{}", bytes.len());
+        let account_id = H160::pop_from_log_data(&mut data_vector);
+        // TODO - not sure what this is for.
+        let _sell_token_balance = U256::pop_from_log_data(&mut data_vector);
+        println!("{}", bytes.len());
+        let buy_token = u16::pop_from_log_data(&mut data_vector);
+        let sell_token = u16::pop_from_log_data(&mut data_vector);
+        println!("{}", bytes.len());
+        let valid_from = U256::from(u32::pop_from_log_data(&mut data_vector));
+        let valid_until = U256::from(u32::pop_from_log_data(&mut data_vector));
+        // TODO - not sure about this boolean...
+        u8::pop_from_log_data(&mut data_vector);
+        let is_sell_order = true;
+        println!("{}", bytes.len());
+        let price_numerator = u128::pop_from_log_data(&mut data_vector);
+        let price_denominator = u128::pop_from_log_data(&mut data_vector);
+        let remaining_amount = u128::pop_from_log_data(&mut data_vector);
+
+        // Todo - Will likely have to compute this differently.
+        // TODO - put in own function fn [u128; 3] -> [u128; 2]
+        let buy_amount: u128;
+        let sell_amount: u128;
+        if is_sell_order {
+            sell_amount = remaining_amount;
+            buy_amount = (price_numerator * remaining_amount) / price_denominator;
+        } else {
+            buy_amount = remaining_amount;
+            sell_amount = (price_denominator * remaining_amount) / price_numerator;
+        }
+
+        AuctionElement {
+            valid_from,
+            valid_until,
+            order: Order {
+                batch_information: None,
+                account_id,
+                buy_token,
+                sell_token,
+                buy_amount,
+                sell_amount,
+            },
+        }
+    }
+}
+
 impl StableXContract for StableXContractImpl {
     fn get_current_auction_index(&self) -> Result<U256> {
         self.base
@@ -51,8 +108,48 @@ impl StableXContract for StableXContractImpl {
             .map_err(DriverError::from)
     }
 
-    fn get_auction_data(&self, _index: U256) -> Result<(AccountState, Vec<Order>)> {
-        unimplemented!();
+    fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
+        let packed_auction_bytes: Vec<u8> = self
+            .base
+            .contract
+            .query(
+                "getEncodedAuctionElements",
+                (),
+                None,
+                Options::default(),
+                None,
+            )
+            .wait()
+            .map_err(DriverError::from)?;
+
+        // extract packed auction info
+        assert_eq!(
+            packed_auction_bytes.len() % AUCTION_ELEMENT_WIDTH,
+            0,
+            "Each auction should be packed in 113 bytes"
+        );
+        let auction_info: Vec<AuctionElement> = packed_auction_bytes
+            .chunks(AUCTION_ELEMENT_WIDTH)
+            .map(|chunk| {
+                let mut chunk_array = [0; AUCTION_ELEMENT_WIDTH];
+                chunk_array.copy_from_slice(chunk);
+                AuctionElement::from_bytes(&chunk_array)
+            })
+            .collect();
+
+        // TODO - can we use drain_filter here?
+        let mut relevant_orders: Vec<Order> = vec![];
+        for element in auction_info {
+            if element.valid_from < index && element.valid_until < index {
+                relevant_orders.push(element.order);
+            }
+        }
+
+        // TODO - extract state of accounts
+        let balances = vec![];
+        let account_state = AccountState::new(H256::from(0), index, balances, 0);
+
+        Ok((account_state, relevant_orders))
     }
 
     fn submit_solution(

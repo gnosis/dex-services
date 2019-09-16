@@ -90,8 +90,9 @@ impl From<&Arc<Log>> for StandingOrder {
             packed_orders_bytes.len(),
             packed_orders_bytes
         );
-        assert!(
-            packed_orders_bytes.len() % 26 == 0,
+        assert_eq!(
+            packed_orders_bytes.len() % 26,
+            0,
             "Each order should be packed in 26 bytes"
         );
 
