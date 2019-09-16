@@ -21,9 +21,9 @@ pub mod price_finding;
 mod util;
 
 pub fn run_driver_components(
-    db: &dyn DbInterface, 
-    contract: &dyn SnappContract, 
-    order_processor: &mut OrderProcessor
+    db: &dyn DbInterface,
+    contract: &dyn SnappContract,
+    order_processor: &mut OrderProcessor,
 ) {
     if let Err(e) = run_deposit_listener(db, contract) {
         error!("Deposit_driver error: {}", e);

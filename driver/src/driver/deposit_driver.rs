@@ -8,8 +8,8 @@ use dfusion_core::database::DbInterface;
 use dfusion_core::models::RollingHashable;
 
 pub fn run_deposit_listener(
-    db: &dyn DbInterface, 
-    contract: &dyn SnappContract
+    db: &dyn DbInterface,
+    contract: &dyn SnappContract,
 ) -> Result<(bool), DriverError> {
     let deposit_slot = contract.get_current_deposit_slot()?;
 

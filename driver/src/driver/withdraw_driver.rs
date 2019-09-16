@@ -8,8 +8,8 @@ use dfusion_core::database::DbInterface;
 use dfusion_core::models::{RollingHashable, RootHashable};
 
 pub fn run_withdraw_listener(
-    db: &dyn DbInterface, 
-    contract: &dyn SnappContract
+    db: &dyn DbInterface,
+    contract: &dyn SnappContract,
 ) -> Result<(bool), DriverError> {
     let withdraw_slot = contract.get_current_withdraw_slot()?;
 
