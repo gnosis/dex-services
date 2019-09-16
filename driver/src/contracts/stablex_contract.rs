@@ -6,13 +6,12 @@ use dfusion_core::models::{AccountState, Order, Solution};
 
 use web3::contract::Options;
 use web3::futures::Future;
-use web3::types::{H160, H256, U128, U256};
+use web3::types::{H160, U128, U256};
 
 use crate::error::DriverError;
 
 use super::base_contract::BaseContract;
 
-use std::collections::HashMap;
 use std::env;
 use std::fs;
 
@@ -49,7 +48,7 @@ pub trait StableXContract {
 struct AuctionElement {
     valid_from: U256,
     valid_until: U256,
-    _balance_record: HashMap<H160, HashMap<u16, u128>>,
+    sell_token_balance: u128,
     order: Order,
 }
 
@@ -83,18 +82,12 @@ impl AuctionElement {
             sell_amount = (price_denominator * remaining_amount) / price_numerator;
         }
 
-        let mut account_record = HashMap::new();
-        account_record.insert(sell_token, sell_token_balance);
-
-        let mut _balance_record = HashMap::new();
-        _balance_record.insert(account_id, account_record);
-
         AuctionElement {
             valid_from,
             valid_until,
-            _balance_record,
+            sell_token_balance,
             order: Order {
-                batch_information: None,
+                batch_information: None, // TODO - can't recover order_id from this information include it in the return of
                 account_id,
                 buy_token,
                 sell_token,
@@ -143,16 +136,19 @@ impl StableXContract for StableXContractImpl {
             })
             .collect();
 
+        let mut account_state = AccountState::default(index);
         let relevant_orders = auction_elements
             .into_iter() // using iter here gives "cannot move out of borrowed content"
             .filter(|x| x.in_auction(index))
-            .map(|e| e.order)
+            .map(|element| {
+                account_state.modify_balance(
+                    element.order.account_id,
+                    element.order.sell_token,
+                    |x| *x += element.sell_token_balance,
+                );
+                element.order
+            })
             .collect();
-
-        // can we still use sell_token_balance?
-        // TODO - extract state of accounts
-        let balances = vec![];
-        let account_state = AccountState::new(H256::from(0), index, balances, 0);
 
         Ok((account_state, relevant_orders))
     }
