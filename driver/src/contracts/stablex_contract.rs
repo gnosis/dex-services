@@ -118,11 +118,7 @@ fn parse_auction_results(
     let mut owners: Vec<H160> = vec![];
     let mut order_ids: Vec<U128> = vec![];
     let mut volumes: Vec<U128> = vec![];
-    let zipped_amounts = solution
-        .executed_buy_amounts
-        .into_iter()
-        .zip(solution.executed_sell_amounts.into_iter());
-    for (order_index, (_buy_amount, sell_amount)) in zipped_amounts.enumerate() {
+    for (order_index, sell_amount) in solution.executed_sell_amounts.into_iter().enumerate() {
         if sell_amount > 0 {
             // order was touched!
             // Note that above condition is only holds for sell orders.
@@ -130,7 +126,7 @@ fn parse_auction_results(
             let order_batch_info = orders[order_index]
                 .batch_information
                 .as_ref()
-                .expect("Batch Information on StableX Order");
+                .expect("StableX Orders must have Batch Information");
             // TODO - using slot_index (u16) for order_id (U128) is temporary and not sustainable.
             order_ids.push(U128::from(order_batch_info.slot_index));
             // all orders are sell orders, so volumes are sell_amounts.
