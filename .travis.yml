@@ -11,10 +11,11 @@ matrix:
       env:
         - CARGO_INCREMENTAL=0
       before_script:
-        - rustup component add clippy
+        - rustup component add clippy rustfmt
       script:
         - cargo test --all
         - cargo clippy --all -- -D warnings
+        - cargo fmt -- --check
     - language: generic
       dist: xenial
       sudo: required
