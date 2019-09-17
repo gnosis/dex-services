@@ -32,16 +32,17 @@ impl AuctionElement {
         let buy_token = u16::from_le_bytes([bytes[60], bytes[59]]);
         let sell_token = u16::from_le_bytes([bytes[58], bytes[57]]);
         let valid_from = U256::from(u32::from_le_bytes([
-            bytes[56], bytes[55], bytes[54], bytes[53]
+            bytes[56], bytes[55], bytes[54], bytes[53],
         ]));
         let valid_until = U256::from(u32::from_le_bytes([
-            bytes[52], bytes[51], bytes[50], bytes[49]
+            bytes[52], bytes[51], bytes[50], bytes[49],
         ]));
         let is_sell_order = bytes[48] > 0;
         let numerator = BigEndian::read_u128(&bytes[32..48]);
         let denominator = BigEndian::read_u128(&bytes[16..32]);
         let amount = BigEndian::read_u128(&bytes[0..16]);
-        let (buy_amount, sell_amount) = compute_buy_sell_amounts(numerator, denominator, amount, is_sell_order);
+        let (buy_amount, sell_amount) =
+            compute_buy_sell_amounts(numerator, denominator, amount, is_sell_order);
         let order_counter = order_count.entry(account_id).or_insert(0);
         *order_counter += 1;
         AuctionElement {
@@ -63,7 +64,12 @@ impl AuctionElement {
     }
 }
 
-fn compute_buy_sell_amounts(numerator: u128, denominator: u128, amount: u128, is_sell_order: bool) -> (u128, u128){
+fn compute_buy_sell_amounts(
+    numerator: u128,
+    denominator: u128,
+    amount: u128,
+    is_sell_order: bool,
+) -> (u128, u128) {
     if denominator > 0 {
         let other = (numerator * amount) / denominator;
         if is_sell_order {
@@ -72,7 +78,7 @@ fn compute_buy_sell_amounts(numerator: u128, denominator: u128, amount: u128, is
             (amount, other)
         }
     } else {
-        (0,0)
+        (0, 0)
     }
 }
 
@@ -99,14 +105,14 @@ pub mod tests {
         let denominator = 14;
         let amount = 5;
         let result = compute_buy_sell_amounts(numerator, denominator, amount, true);
-        assert_eq!(result, (5*19/14, 5));
+        assert_eq!(result, (5 * 19 / 14, 5));
         let result = compute_buy_sell_amounts(numerator, denominator, amount, false);
-        assert_eq!(result, (5, 5*19/14));
+        assert_eq!(result, (5, 5 * 19 / 14));
     }
     #[test]
     fn custom_auction_element_from_bytes() {
         let bytes: [u8; 113] = [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // remainingAmount: 2**8 + 2 = 257
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // remainingAmount: 2**8 + 1 = 257
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNominator: 258
             1, // is_sell_order: true
