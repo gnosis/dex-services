@@ -32,10 +32,10 @@ impl AuctionElement {
         let buy_token = u16::from_le_bytes([bytes[53], bytes[52]]);
         let sell_token = u16::from_le_bytes([bytes[55], bytes[54]]);
         let valid_from = U256::from(u32::from_le_bytes([
-            bytes[59], bytes[58], bytes[57], bytes[56]
+            bytes[59], bytes[58], bytes[57], bytes[56],
         ]));
         let valid_until = U256::from(u32::from_le_bytes([
-            bytes[63], bytes[62], bytes[61], bytes[60]
+            bytes[63], bytes[62], bytes[61], bytes[60],
         ]));
         let is_sell_order = bytes[64] > 0;
         let numerator = BigEndian::read_u128(&bytes[65..81]);
@@ -115,14 +115,14 @@ pub mod tests {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // user: 20 elements
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 3, // sellTokenBalance: 3, 32 elements
-            1, 2, // buyToken: 256+2, 
+            1, 2, // buyToken: 256+2,
             1, 1, // sellToken: 256+1,
-            0, 0, 0, 2, // validFrom: 2 
-            0, 0, 1, 5, // validUntil: 256+5 
+            0, 0, 0, 2, // validFrom: 2
+            0, 0, 1, 5, // validUntil: 256+5
             1, // is_sell_order: true
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // remainingAmount: 2**8 + 1 = 257 
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // remainingAmount: 2**8 + 1 = 257
         ];
         let mut order_count = HashMap::new();
         let res = AuctionElement::from_bytes(&mut order_count, &bytes);
@@ -150,14 +150,14 @@ pub mod tests {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // user: 20 elements
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 3, // sellTokenBalance: 3, 32 elements
-            1, 2, // buyToken: 256+2, 
+            1, 2, // buyToken: 256+2,
             1, 1, // sellToken: 256+1, 56
-            0, 0, 0, 2, // validFrom: 2 
+            0, 0, 0, 2, // validFrom: 2
             0, 0, 1, 5, // validUntil: 256+5 64
             1, // is_sell_order: true
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // remainingAmount: 2**8 + 1 = 257 
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // remainingAmount: 2**8 + 1 = 257
         ];
         let mut order_count = HashMap::new();
         AuctionElement::from_bytes(&mut order_count, &bytes);
