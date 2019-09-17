@@ -86,10 +86,10 @@ impl StableXContract for StableXContractImpl {
             })
             .filter(|x| x.in_auction(index))
             .map(|element| {
-                account_state.set_balance(
+                account_state.modify_balance(
                     element.order.account_id,
                     element.order.sell_token,
-                    element.sell_token_balance,
+                    |x| *x = element.sell_token_balance,
                 );
                 element.order
             })

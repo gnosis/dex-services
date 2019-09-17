@@ -131,13 +131,7 @@ impl AccountState {
         self.state_hash = self.rolling_hash(self.state_index.low_u32());
     }
 
-    pub fn set_balance(&mut self, account_id: H160, token_id: u16, value: u128) {
-        let mut account = HashMap::new();
-        account.insert(token_id, value);
-        self.balances.insert(account_id, account);
-    }
-
-    fn modify_balance<F>(&mut self, account_id: H160, token_id: u16, func: F)
+    pub fn modify_balance<F>(&mut self, account_id: H160, token_id: u16, func: F)
     where
         F: FnOnce(&mut u128),
     {
