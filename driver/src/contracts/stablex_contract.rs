@@ -1,19 +1,20 @@
 #[cfg(test)]
 extern crate mock_it;
 
-use dfusion_core::models::util::PopFromLogData;
-use dfusion_core::models::{AccountState, Order, Solution};
+use std::collections::HashMap;
+use std::env;
+use std::fs;
 
 use web3::contract::Options;
 use web3::futures::Future;
 use web3::types::{H160, U128, U256};
 
+use dfusion_core::models::util::PopFromLogData;
+use dfusion_core::models::{AccountState, BatchInformation, Order, Solution};
+
 use crate::error::DriverError;
 
 use super::base_contract::BaseContract;
-
-use std::env;
-use std::fs;
 
 type Result<T> = std::result::Result<T, DriverError>;
 
@@ -45,6 +46,7 @@ pub trait StableXContract {
     ) -> Result<()>;
 }
 
+#[derive(Debug, Default, PartialEq)]
 struct AuctionElement {
     valid_from: U256,
     valid_until: U256,
@@ -57,8 +59,9 @@ impl AuctionElement {
         self.valid_from < index && index <= self.valid_until
     }
 
-    fn from_bytes(bytes: &[u8; 113]) -> Self {
+    fn from_bytes(order_count: &mut HashMap<H160, u16>, bytes: &[u8; 113]) -> Self {
         let mut data_vector = bytes.to_vec();
+        // TODO - not coming from log data. Must read as in Order.from_encoded_order!
         let account_id = H160::pop_from_log_data(&mut data_vector);
         let sell_token_balance = u128::pop_from_log_data(&mut data_vector);
         let buy_token = u16::pop_from_log_data(&mut data_vector);
@@ -76,12 +79,19 @@ impl AuctionElement {
             ((denominator * remaining) / numerator, remaining)
         };
 
+        // Increment order count for account.
+        let counter = order_count.entry(account_id).or_insert(0);
+        *counter += 1;
+
         AuctionElement {
             valid_from,
             valid_until,
             sell_token_balance,
             order: Order {
-                batch_information: None, // TODO - can't recover order_id from this information include it in the return of
+                batch_information: Some(BatchInformation {
+                    slot_index: *counter,
+                    slot: U256::from(0),
+                }),
                 account_id,
                 buy_token,
                 sell_token,
@@ -123,12 +133,13 @@ impl StableXContract for StableXContractImpl {
         );
 
         let mut account_state = AccountState::default();
+        let mut order_count = HashMap::new();
         let relevant_orders = packed_auction_bytes
             .chunks(AUCTION_ELEMENT_WIDTH)
             .map(|chunk| {
                 let mut chunk_array = [0; AUCTION_ELEMENT_WIDTH];
                 chunk_array.copy_from_slice(chunk);
-                AuctionElement::from_bytes(&chunk_array)
+                AuctionElement::from_bytes(&mut order_count, &chunk_array)
             })
             .filter(|x| x.in_auction(index))
             .map(|element| {
@@ -232,10 +243,11 @@ pub mod tests {
     use mock_it::Matcher::*;
     use mock_it::Mock;
 
+    use dfusion_core::models::BatchInformation;
+
     use crate::error::ErrorKind;
 
     use super::*;
-    use dfusion_core::models::BatchInformation;
 
     type SubmitSolutionArguments = (U256, Matcher<Vec<Order>>, Matcher<Solution>);
 
@@ -376,4 +388,14 @@ pub mod tests {
             (expected_prices, expected_token_ids)
         );
     }
+
+    //    #[test]
+    //    fn auction_element_from_bytes() {
+    //        let null_auction_elt = AuctionElement::default();
+    //        println!("{:?}", null_auction_elt);
+    //        let res = AuctionElement::from_bytes(&[0u8; 113]);
+    //        println!("{:?}", res);
+    //
+    //        assert_eq!(res, null_auction_elt);
+    //    }
 }
