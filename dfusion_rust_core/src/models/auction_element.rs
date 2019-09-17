@@ -83,7 +83,7 @@ pub mod tests {
     use super::*;
 
     #[test]
-    fn test_nearly_null_auction_element_from_bytes() {
+    fn null_auction_element_from_bytes() {
         let mut nearly_null_auction_elt = AuctionElement::default();
         nearly_null_auction_elt.order.batch_information = Some(BatchInformation {
             slot_index: 1,
@@ -93,6 +93,27 @@ pub mod tests {
         let res = AuctionElement::from_bytes(&mut order_count, &[0u8; 113]);
 
         assert_eq!(res, nearly_null_auction_elt);
+    }
+
+    #[test]
+    fn generic_auction_element_from_bytes() {
+        let bytes: [u8; 113] = [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // remainingAmount: 1
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, // priceDenominator: 2
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, // priceDenominator: 2
+            0, // is_sell_order: False
+            0, 0, 0, 5, // validUntil: 5
+            0, 0, 0, 2, // validFrom: 2
+            0, 1, // sellToken: 1
+            0, 2, // buyToken: 2
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 3, // sellTokenBalance: 3
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // user:
+        ];
+        let mut order_count = HashMap::new();
+        let res = AuctionElement::from_bytes(&mut order_count, &bytes);
+
+        assert_eq!(res, AuctionElement::default());
     }
 
     #[test]
