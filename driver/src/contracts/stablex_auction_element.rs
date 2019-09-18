@@ -91,7 +91,7 @@ fn compute_buy_sell_amounts(
         //            let p = denominator * remaining;
         //            let q = numerator;
         //            other = (p + q - 1) / q;
-        //            (amount, other)
+        //            (remaining, other)
         //        }
     };
     (buy_amount, sell_amount)
@@ -118,10 +118,10 @@ pub mod tests {
     fn computation_of_buy_sell_amounts() {
         let numerator = 19;
         let denominator = 14;
-        let amount = 5;
-        let result = compute_buy_sell_amounts(numerator, denominator, amount, true);
+        let remaining = 5;
+        let result = compute_buy_sell_amounts(numerator, denominator, remaining, true);
         assert_eq!(result, (5 * 19 / 14, 5));
-        let result = compute_buy_sell_amounts(numerator, denominator, amount, false);
+        let result = compute_buy_sell_amounts(numerator, denominator, remaining, false);
         assert_eq!(result, (5, 5 * 19 / 14));
     }
     #[test]
@@ -253,7 +253,7 @@ pub mod tests {
         let (numerator, denominator) = (1 as u128, 2 as u128);
         let remaining = 3 as u128;
         // Note that contract does not allow remaining > denominator!
-        let (buy, sell) = compute_buy_sell_amounts(numerator, denominator, amount, true);
+        let (buy, sell) = compute_buy_sell_amounts(numerator, denominator, remaining, true);
         // Sell at most 3 for at least 2 (i.e. as long as the price at least 1:2)
         assert_eq!((buy, sell), (2, 3));
     }
