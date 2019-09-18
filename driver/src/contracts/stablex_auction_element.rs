@@ -68,19 +68,33 @@ impl StableXAuctionElement {
 fn compute_buy_sell_amounts(
     numerator: u128,
     denominator: u128,
-    amount: u128,
+    remaining: u128,
     is_sell_order: bool,
 ) -> (u128, u128) {
-    if denominator > 0 {
-        let other = (numerator * amount) / denominator;
-        if is_sell_order {
-            (other, amount)
-        } else {
-            (amount, other)
+    // TODO - use u128_to_u256 for overflow handling (this is a conversion used in naive_solver)
+    //    assert!(remaining <= denominator);
+    let mut other = 0;
+    let (buy_amount, sell_amount) = if is_sell_order {
+        // 0 on sellAmount (remaining <= denominator) is nonsense, but solver can handle it.
+        // 0 on buyAmount (numerator) is a Market Sell Order.
+        if denominator > 0 {
+            let p = remaining * numerator;
+            let q = denominator;
+            // Recall that ceil(p / float(q)) == (p + q - 1) / q
+            other = (p + q - 1) / q;
         }
+        (other, remaining)
     } else {
+        error!("Unable to to handle buy orders, returning unfulfillable amounts");
         (0, 0)
-    }
+        //        if numerator > 0 {
+        //            let p = denominator * remaining;
+        //            let q = numerator;
+        //            other = (p + q - 1) / q;
+        //            (amount, other)
+        //        }
+    };
+    (buy_amount, sell_amount)
 }
 
 #[cfg(test)]
@@ -193,11 +207,11 @@ pub mod tests {
 
     // Testing in_auction
     #[test]
-    fn in_auction_left() {
+    fn not_in_auction_left() {
         let mut element = StableXAuctionElement::default();
         element.valid_from = U256::from(2);
         element.valid_until = U256::from(5);
-        assert_eq!(element.in_auction(U256::from(2)), true);
+        assert_eq!(element.in_auction(U256::from(1)), false);
     }
 
     #[test]
@@ -221,7 +235,45 @@ pub mod tests {
         let mut element = StableXAuctionElement::default();
         element.valid_from = U256::from(2);
         element.valid_until = U256::from(5);
-        assert_eq!(element.in_auction(U256::from(5)), true);
+        assert_eq!(
+            element.in_auction(U256::from(5)),
+            true,
+            "failed on right boundary"
+        );
+        assert_eq!(
+            element.in_auction(U256::from(2)),
+            true,
+            "failed on left boundary"
+        );
+    }
+
+    //tests for compute_buy_sell_amounts
+    #[test]
+    fn compute_buy_sell_recoverable_overflow() {
+        let (numerator, denominator) = (1 as u128, 2 as u128);
+        let remaining = 3 as u128;
+        // Note that contract does not allow remaining > denominator!
+        let (buy, sell) = compute_buy_sell_amounts(numerator, denominator, amount, true);
+        // Sell at most 3 for at least 2 (i.e. as long as the price at least 1:2)
+        assert_eq!((buy, sell), (2, 3));
+    }
+
+    #[test]
+    fn generic_compute_buy_sell() {
+        let (numerator, denominator) = (1000 as u128, 1500 as u128);
+        let remaining = 1486 as u128;
+        let (buy, sell) = compute_buy_sell_amounts(numerator, denominator, remaining, true);
+
+        assert_eq!((buy, sell), (991, remaining));
+    }
+
+    #[test]
+    fn generic_compute_buy_sell_2() {
+        let (numerator, denominator) = (1000 as u128, 1500 as u128);
+        let remaining = 1485 as u128;
+        let (buy, sell) = compute_buy_sell_amounts(numerator, denominator, remaining, true);
+
+        assert_eq!((buy, sell), (990, remaining));
     }
 
 }
