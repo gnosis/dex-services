@@ -3,6 +3,7 @@ use web3::types::U256;
 use dfusion_core::models::{AccountState, Order, Solution, TOKENS};
 
 use crate::price_finding::error::PriceFindingError;
+use crate::util::u128_to_u256;
 
 use super::price_finder_interface::{Fee, PriceFinding};
 
@@ -186,10 +187,6 @@ impl PriceFinding for NaiveSolver {
         info!("Solution: {:?}", &solution);
         Ok(solution)
     }
-}
-
-fn u128_to_u256(x: u128) -> U256 {
-    U256::from_big_endian(&x.to_be_bytes())
 }
 
 fn order_with_buffer_for_fee(order: &Order, fee: &Option<Fee>) -> Order {
