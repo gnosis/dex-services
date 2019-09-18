@@ -6,7 +6,6 @@ extern crate rustc_hex;
 extern crate serde_json;
 extern crate web3;
 
-
 use dfusion_core::database::DbInterface;
 
 use crate::contracts::snapp_contract::SnappContract;

@@ -22,12 +22,6 @@ impl PopFromLogData for u16 {
     }
 }
 
-impl PopFromLogData for u32 {
-    fn pop_from_log_data(bytes: &mut Vec<u8>) -> Self {
-        U256::pop_from_log_data(bytes).as_u32()
-    }
-}
-
 impl PopFromLogData for u128 {
     fn pop_from_log_data(bytes: &mut Vec<u8>) -> Self {
         U256::pop_from_log_data(bytes).to_string().parse().unwrap()
