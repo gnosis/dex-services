@@ -14,7 +14,7 @@ use dfusion_core::models::{AccountState, Order, Solution};
 use crate::error::DriverError;
 
 use super::base_contract::BaseContract;
-use super::stablex_contract_auction_element::AuctionElement;
+use super::stablex_auction_element::StableXAuctionElement;
 
 type Result<T> = std::result::Result<T, DriverError>;
 
@@ -121,7 +121,7 @@ fn parse_auction_data(packed_auction_bytes: Vec<u8>, index: U256) -> (AccountSta
         .map(|chunk| {
             let mut chunk_array = [0; AUCTION_ELEMENT_WIDTH];
             chunk_array.copy_from_slice(chunk);
-            AuctionElement::from_bytes(&mut order_count, &chunk_array)
+            StableXAuctionElement::from_bytes(&mut order_count, &chunk_array)
         })
         .filter(|x| x.in_auction(index))
         .map(|element| {
