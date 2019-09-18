@@ -1,12 +1,10 @@
-extern crate mock_it;
-
 use byteorder::{BigEndian, ByteOrder};
 
 use std::collections::HashMap;
 
 use web3::types::{H160, U256};
 
-use crate::models::{BatchInformation, Order};
+use dfusion_core::models::{BatchInformation, Order};
 
 #[derive(Debug, Default, PartialEq)]
 pub struct AuctionElement {

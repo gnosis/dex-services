@@ -9,11 +9,12 @@ use web3::contract::Options;
 use web3::futures::Future;
 use web3::types::{H160, U128, U256};
 
-use dfusion_core::models::{AccountState, AuctionElement, Order, Solution};
+use dfusion_core::models::{AccountState, Order, Solution};
 
 use crate::error::DriverError;
 
 use super::base_contract::BaseContract;
+use super::stablex_contract_auction_element::AuctionElement;
 
 type Result<T> = std::result::Result<T, DriverError>;
 

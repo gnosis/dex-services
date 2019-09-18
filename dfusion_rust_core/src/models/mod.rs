@@ -1,5 +1,4 @@
 pub mod account_state;
-pub mod auction_element;
 pub mod flux;
 pub mod order;
 pub mod solution;
@@ -7,7 +6,6 @@ pub mod standing_order;
 pub mod util;
 
 pub use crate::models::account_state::AccountState;
-pub use crate::models::auction_element::AuctionElement;
 pub use crate::models::flux::PendingFlux;
 pub use crate::models::order::BatchInformation;
 pub use crate::models::order::Order;
