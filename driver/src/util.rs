@@ -1,12 +1,17 @@
+use std::env;
+
+use web3::types::{H256, U256};
+
 use crate::contracts::snapp_contract::SnappContract;
 use crate::error::DriverError;
 use crate::error::ErrorKind;
 use crate::price_finding::{LinearOptimisationPriceFinder, NaiveSolver, PriceFinding};
 
-use std::env;
-use web3::types::{H256, U256};
-
 const BATCH_TIME_SECONDS: u32 = 3 * 60;
+
+pub fn u128_to_u256(x: u128) -> U256 {
+    U256::from_big_endian(&x.to_be_bytes())
+}
 
 pub fn find_first_unapplied_slot(
     upper_bound: U256,
@@ -76,5 +81,24 @@ pub fn create_price_finder() -> Box<dyn PriceFinding> {
     } else {
         info!("Using naive price finder");
         Box::new(NaiveSolver::new(None))
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    fn test_u128_to_u256_on_one() {
+        let a: u128 = 1;
+        assert_eq!(U256::from(1), u128_to_u256(a));
+    }
+    #[test]
+    fn test_u128_to_u256_on_max() {
+        let a = u128::max_value();
+        assert_eq!(
+            U256::from_dec_str("340282366920938463463374607431768211455").unwrap(),
+            u128_to_u256(a)
+        );
     }
 }

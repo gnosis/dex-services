@@ -144,7 +144,7 @@ impl EntityParsing for u128 {
 
 impl EntityParsing for U256 {
     fn from_entity(entity: &Entity, field: &str) -> Self {
-        U256::from_str(
+        U256::from_dec_str(
             &entity
                 .get(field)
                 .and_then(|value| value.clone().as_big_decimal())
