@@ -131,8 +131,8 @@ impl PriceFinding for NaiveSolver {
                         exec_buy_amount[j] = y.buy_amount;
                     }
                     Some(OrderPairType::BothFullyFilled) => {
-                        prices[x.buy_token as usize] = y.sell_amount;
-                        prices[y.buy_token as usize] = x.sell_amount;
+                        prices[y.buy_token as usize] = y.sell_amount;
+                        prices[x.buy_token as usize] = x.sell_amount;
 
                         exec_sell_amount[i] = x.sell_amount;
                         exec_sell_amount[j] = y.sell_amount;
@@ -201,7 +201,7 @@ fn order_with_buffer_for_fee(order: &Order, fee: &Option<Fee>) -> Order {
                     (order.buy_amount as f64 / (1.0 - fee.percentage)).round() as u128
             } else if fee.token == order.sell_token {
                 order.sell_amount =
-                    (order.sell_amount as f64 * (1.0 - fee.percentage).round()) as u128
+                    (order.sell_amount as f64 * (1.0 - fee.percentage)).round() as u128
             }
             order
         }
@@ -212,109 +212,91 @@ fn order_with_buffer_for_fee(order: &Order, fee: &Option<Fee>) -> Order {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use dfusion_core::models::account_state::test_util::*;
+    use std::collections::HashMap;
     use web3::types::{H160, H256};
 
     #[test]
-    fn test_type_ia() {
-        let state = AccountState::new(
-            H256::zero(),
-            U256::zero(),
-            vec![200; (TOKENS * 2) as usize],
-            TOKENS,
-        );
-        let orders = vec![
-            Order {
-                batch_information: None,
-                account_id: H160::from(1),
-                sell_token: 1,
-                buy_token: 2,
-                sell_amount: 52,
-                buy_amount: 4,
-            },
-            Order {
-                batch_information: None,
-                account_id: H160::from(0),
-                sell_token: 2,
-                buy_token: 1,
-                sell_amount: 15,
-                buy_amount: 180,
-            },
-        ];
+    fn test_type_left_fully_matched_no_fee() {
+        let orders = order_pair_first_fully_matching_second();
+        let state = create_account_state_with_balance_for(&orders);
+
         let mut solver = NaiveSolver::new(None);
-        let res = solver.find_prices(&orders, &state);
-        assert_eq!(Some(U256::from(16)), res.unwrap().surplus);
+        let res = solver.find_prices(&orders, &state).unwrap();
+        assert_eq!(Some(u128_to_u256(16 * 10u128.pow(36))), res.surplus);
+        check_solution(&orders, res, &None).unwrap();
     }
 
     #[test]
-    fn test_type_ib() {
-        let state = AccountState::new(
-            H256::zero(),
-            U256::zero(),
-            vec![200; (TOKENS * 2) as usize],
-            TOKENS,
-        );
-        let orders = vec![
-            Order {
-                batch_information: None,
-                account_id: H160::from(1),
-                sell_token: 2,
-                buy_token: 1,
-                sell_amount: 15,
-                buy_amount: 180,
-            },
-            Order {
-                batch_information: None,
-                account_id: H160::from(1),
-                sell_token: 1,
-                buy_token: 2,
-                sell_amount: 52,
-                buy_amount: 4,
-            },
-        ];
-        let mut solver = NaiveSolver::new(None);
-        let res = solver.find_prices(&orders, &state);
-        assert_eq!(Some(U256::from(16)), res.unwrap().surplus);
+    fn test_type_left_fully_matched_with_fee() {
+        let orders = order_pair_first_fully_matching_second();
+        let state = create_account_state_with_balance_for(&orders);
+        let fee = Some(Fee {
+            token: 0,
+            percentage: 0.001,
+        });
+
+        let mut solver = NaiveSolver::new(fee.clone());
+        let res = solver.find_prices(&orders, &state).unwrap();
+        check_solution(&orders, res, &fee).unwrap();
     }
 
     #[test]
-    fn test_type_ii() {
-        let state = AccountState::new(
-            H256::zero(),
-            U256::zero(),
-            vec![200; (TOKENS * 2) as usize],
-            TOKENS,
-        );
-        let orders = vec![
-            Order {
-                batch_information: None,
-                account_id: H160::from(1),
-                sell_token: 2,
-                buy_token: 1,
-                sell_amount: 10,
-                buy_amount: 10,
-            },
-            Order {
-                batch_information: None,
-                account_id: H160::from(1),
-                sell_token: 1,
-                buy_token: 2,
-                sell_amount: 16,
-                buy_amount: 8,
-            },
-        ];
+    fn test_type_right_fully_matched_no_fee() {
+        let mut orders = order_pair_first_fully_matching_second();
+        orders.reverse();
+        let state = create_account_state_with_balance_for(&orders);
+
         let mut solver = NaiveSolver::new(None);
-        let res = solver.find_prices(&orders, &state);
-        assert_eq!(Some(U256::from(116)), res.unwrap().surplus);
+        let res = solver.find_prices(&orders, &state).unwrap();
+        assert_eq!(Some(u128_to_u256(16 * 10u128.pow(36))), res.surplus);
+
+        check_solution(&orders, res, &None).unwrap();
+    }
+
+    #[test]
+    fn test_type_right_fully_matched_with_fee() {
+        let mut orders = order_pair_first_fully_matching_second();
+        orders.reverse();
+        let state = create_account_state_with_balance_for(&orders);
+        let fee = Some(Fee {
+            token: 2,
+            percentage: 0.001,
+        });
+
+        let mut solver = NaiveSolver::new(fee.clone());
+        let res = solver.find_prices(&orders, &state).unwrap();
+        check_solution(&orders, res, &fee).unwrap();
+    }
+
+    #[test]
+    fn test_type_both_fully_matched_no_fee() {
+        let orders = order_pair_both_fully_matched();
+        let state = create_account_state_with_balance_for(&orders);
+
+        let mut solver = NaiveSolver::new(None);
+        let res = solver.find_prices(&orders, &state).unwrap();
+        assert_eq!(Some(u128_to_u256(92 * 10u128.pow(36))), res.surplus);
+
+        check_solution(&orders, res, &None).unwrap();
+    }
+
+    #[test]
+    fn test_type_both_fully_matched_with_fee() {
+        let orders = order_pair_both_fully_matched();
+        let state = create_account_state_with_balance_for(&orders);
+        let fee = Some(Fee {
+            token: 2,
+            percentage: 0.001,
+        });
+        let mut solver = NaiveSolver::new(fee.clone());
+        let res = solver.find_prices(&orders, &state).unwrap();
+
+        check_solution(&orders, res, &fee).unwrap();
     }
 
     #[test]
     fn test_retreth_example() {
-        let state = AccountState::new(
-            H256::zero(),
-            U256::zero(),
-            vec![200; (TOKENS * 6) as usize],
-            TOKENS,
-        );
         let orders = vec![
             Order {
                 batch_information: None,
@@ -365,9 +347,13 @@ pub mod tests {
                 buy_amount: 20,
             },
         ];
+        let state = create_account_state_with_balance_for(&orders);
+
         let mut solver = NaiveSolver::new(None);
-        let res = solver.find_prices(&orders, &state);
-        assert_eq!(Some(U256::from(16)), res.unwrap().surplus);
+        let res = solver.find_prices(&orders, &state).unwrap();
+        assert_eq!(Some(U256::from(16)), res.surplus);
+
+        check_solution(&orders, res, &None).unwrap();
     }
 
     #[test]
@@ -396,6 +382,7 @@ pub mod tests {
                 buy_amount: 180,
             },
         ];
+
         let mut solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state);
         assert_eq!(Some(U256::from(0)), res.unwrap().surplus);
@@ -403,12 +390,6 @@ pub mod tests {
 
     #[test]
     fn test_no_matches() {
-        let state = AccountState::new(
-            H256::zero(),
-            U256::zero(),
-            vec![200; (TOKENS * 2) as usize],
-            TOKENS,
-        );
         let orders = vec![
             Order {
                 batch_information: None,
@@ -427,19 +408,15 @@ pub mod tests {
                 buy_amount: 180,
             },
         ];
+        let state = create_account_state_with_balance_for(&orders);
+
         let mut solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state);
         assert_eq!(Some(U256::from(0)), res.unwrap().surplus);
     }
 
     #[test]
-    fn test_solution_with_fee() {
-        let state = AccountState::new(
-            H256::zero(),
-            U256::zero(),
-            vec![100_000; (TOKENS * 2) as usize],
-            TOKENS,
-        );
+    fn test_stablex_contract_example() {
         let orders = vec![
             Order {
                 batch_information: None,
@@ -458,24 +435,22 @@ pub mod tests {
                 buy_amount: 19960,
             },
         ];
+        let state = create_account_state_with_balance_for(&orders);
 
-        let mut solver = NaiveSolver::new(Some(Fee {
+        let fee = Some(Fee {
             token: 0,
             percentage: 0.001,
-        }));
+        });
+        let mut solver = NaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
         assert_eq!(res.executed_sell_amounts, [20000, 9990]);
-        assert_eq!(res.executed_buy_amounts, [9990, 19960])
+        assert_eq!(res.executed_buy_amounts, [9990, 19960]);
+
+        check_solution(&orders, res, &fee).unwrap();
     }
 
     #[test]
     fn test_does_not_trade_non_fee_tokens() {
-        let state = AccountState::new(
-            H256::zero(),
-            U256::zero(),
-            vec![100_000; (TOKENS * 2) as usize],
-            TOKENS,
-        );
         let orders = vec![
             Order {
                 batch_information: None,
@@ -494,12 +469,110 @@ pub mod tests {
                 buy_amount: 19960,
             },
         ];
+        let state = create_account_state_with_balance_for(&orders);
 
-        let mut solver = NaiveSolver::new(Some(Fee {
+        let fee = Some(Fee {
             token: 2,
             percentage: 0.001,
-        }));
+        });
+        let mut solver = NaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
         assert_eq!(res.executed_sell_amounts, [0, 0]);
+
+        check_solution(&orders, res, &fee).unwrap();
+    }
+
+    fn order_pair_first_fully_matching_second() -> Vec<Order> {
+        vec![
+            Order {
+                batch_information: None,
+                account_id: H160::from(1),
+                sell_token: 0,
+                buy_token: 1,
+                sell_amount: 52 * 10u128.pow(18),
+                buy_amount: 4 * 10u128.pow(18),
+            },
+            Order {
+                batch_information: None,
+                account_id: H160::from(0),
+                sell_token: 1,
+                buy_token: 0,
+                sell_amount: 15 * 10u128.pow(18),
+                buy_amount: 180 * 10u128.pow(18),
+            },
+        ]
+    }
+
+    fn order_pair_both_fully_matched() -> Vec<Order> {
+        vec![
+            Order {
+                batch_information: None,
+                account_id: H160::from(1),
+                sell_token: 2,
+                buy_token: 1,
+                sell_amount: 10 * 10u128.pow(18),
+                buy_amount: 10 * 10u128.pow(18),
+            },
+            Order {
+                batch_information: None,
+                account_id: H160::from(1),
+                sell_token: 1,
+                buy_token: 2,
+                sell_amount: 16 * 10u128.pow(18),
+                buy_amount: 8 * 10u128.pow(18),
+            },
+        ]
+    }
+
+    fn check_solution(
+        orders: &[Order],
+        solution: Solution,
+        fee: &Option<Fee>,
+    ) -> Result<(), String> {
+        let mut token_conservation = HashMap::new();
+        for (i, order) in orders.iter().enumerate() {
+            let buy_token_price = solution.prices[order.buy_token as usize];
+            let sell_token_price = solution.prices[order.sell_token as usize];
+
+            let exec_sell_amount = solution.executed_sell_amounts[i];
+            let mut exec_buy_amount = if buy_token_price > 0 {
+                exec_sell_amount * sell_token_price / buy_token_price
+            } else {
+                0
+            };
+            if let Some(fee) = fee {
+                exec_buy_amount = (exec_buy_amount as f64 * (1.0 - fee.percentage)) as u128;
+            }
+
+            if exec_sell_amount > order.sell_amount {
+                return Err(format!(
+                    "ExecutedSellAmount for order {} bigger than allowed ({} > {})",
+                    i, exec_sell_amount, order.sell_amount
+                ));
+            }
+
+            let limit_lhs = u128_to_u256(exec_sell_amount) * u128_to_u256(order.buy_amount);
+            let limit_rhs = u128_to_u256(exec_buy_amount) * u128_to_u256(order.sell_amount);
+            if limit_lhs > limit_rhs {
+                return Err(format!(
+                    "LimitPrice for order {} not satisifed ({} > {})",
+                    i, limit_lhs, limit_rhs
+                ));
+            }
+
+            *token_conservation.entry(order.buy_token).or_insert(0) += exec_buy_amount as i128;
+            *token_conservation.entry(order.sell_token).or_insert(0) -= exec_sell_amount as i128;
+        }
+
+        for j in 0..solution.prices.len() {
+            let balance = token_conservation.entry(j as u16).or_insert(0);
+            if *balance != 0 && (fee.is_none() || j as u16 != fee.as_ref().unwrap().token) {
+                return Err(format!(
+                    "Token balance of token {} not 0 (was {})",
+                    j, balance
+                ));
+            }
+        }
+        Ok(())
     }
 }
