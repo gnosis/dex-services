@@ -111,7 +111,8 @@ fn parse_auction_data(packed_auction_bytes: Vec<u8>, index: U256) -> (AccountSta
     assert_eq!(
         packed_auction_bytes.len() % AUCTION_ELEMENT_WIDTH,
         0,
-        "Each auction should be packed in 113 bytes"
+        "Each auction should be packed in {} bytes",
+        AUCTION_ELEMENT_WIDTH
     );
 
     let mut account_state = AccountState::default();
@@ -354,7 +355,7 @@ pub mod tests {
             sell_token: 257,
             buy_token: 258,
             sell_amount: 257,
-            buy_amount: 256,
+            buy_amount: 257,
         };
         let order_2 = Order {
             batch_information: Some(BatchInformation {
@@ -365,7 +366,7 @@ pub mod tests {
             sell_token: 257,
             buy_token: 258,
             sell_amount: 256,
-            buy_amount: 255,
+            buy_amount: 256,
         };
         let relevant_orders: Vec<Order> = vec![order_1, order_2];
         account_state.modify_balance(H160::from(1), 257, |x| *x = 3);
