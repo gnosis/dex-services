@@ -120,9 +120,7 @@ pub mod tests {
         let denominator = 14;
         let remaining = 5;
         let result = compute_buy_sell_amounts(numerator, denominator, remaining, true);
-        assert_eq!(result, (5 * 19 / 14, 5));
-        let result = compute_buy_sell_amounts(numerator, denominator, remaining, false);
-        assert_eq!(result, (5, 5 * 19 / 14));
+        assert_eq!(result, ((5 * 19 + 13) / 14, 5));
     }
     #[test]
     fn custom_auction_element_from_bytes() {
@@ -153,7 +151,7 @@ pub mod tests {
                 account_id: H160::from(1),
                 buy_token: 258,
                 sell_token: 257,
-                buy_amount: 258 * 257 / 259,
+                buy_amount: (258 * 257 + 258) / 259,
                 sell_amount: 257,
             },
         };
@@ -191,7 +189,7 @@ pub mod tests {
                 account_id: H160::from(1),
                 buy_token: 258,
                 sell_token: 257,
-                buy_amount: 258 * 256 / 259,
+                buy_amount: (258 * 256 + 258) / 259,
                 sell_amount: 256,
             },
         };

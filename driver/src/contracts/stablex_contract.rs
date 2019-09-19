@@ -354,7 +354,7 @@ pub mod tests {
             sell_token: 257,
             buy_token: 258,
             sell_amount: 257,
-            buy_amount: 256,
+            buy_amount: 257,
         };
         let order_2 = Order {
             batch_information: Some(BatchInformation {
@@ -365,7 +365,7 @@ pub mod tests {
             sell_token: 257,
             buy_token: 258,
             sell_amount: 256,
-            buy_amount: 255,
+            buy_amount: 256,
         };
         let relevant_orders: Vec<Order> = vec![order_1, order_2];
         account_state.modify_balance(H160::from(1), 257, |x| *x = 3);
