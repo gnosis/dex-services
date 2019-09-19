@@ -16,7 +16,7 @@ pub struct BatchInformation {
     pub slot_index: u16,
 }
 
-#[derive(Debug, Clone, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct Order {
     pub batch_information: Option<BatchInformation>,

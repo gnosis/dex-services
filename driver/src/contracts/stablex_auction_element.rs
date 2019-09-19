@@ -7,7 +7,7 @@ use dfusion_core::models::{BatchInformation, Order};
 
 use crate::util::u128_to_u256;
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct StableXAuctionElement {
     valid_from: U256,
     valid_until: U256,
@@ -110,17 +110,31 @@ fn compute_buy_sell_amounts(
 pub mod tests {
     use super::*;
 
+    fn emptyish_auction_element() -> StableXAuctionElement {
+        StableXAuctionElement {
+            valid_from: U256::from(0),
+            valid_until: U256::from(0),
+            sell_token_balance: 0,
+            order: Order {
+                batch_information: Some(BatchInformation {
+                    slot_index: 0,
+                    slot: U256::from(0),
+                }),
+                account_id: H160::from(0),
+                buy_token: 0,
+                sell_token: 0,
+                buy_amount: 0,
+                sell_amount: 0,
+            },
+        }
+    }
+
     #[test]
     fn null_auction_element_from_bytes() {
-        let mut nearly_null_auction_elt = StableXAuctionElement::default();
-        nearly_null_auction_elt.order.batch_information = Some(BatchInformation {
-            slot_index: 0,
-            slot: U256::from(0),
-        });
         let mut order_count = HashMap::new();
         let res = StableXAuctionElement::from_bytes(&mut order_count, &[0u8; 113]);
 
-        assert_eq!(res, nearly_null_auction_elt);
+        assert_eq!(res, emptyish_auction_element());
     }
 
     #[test]
@@ -215,7 +229,7 @@ pub mod tests {
     // Testing in_auction
     #[test]
     fn not_in_auction_left() {
-        let mut element = StableXAuctionElement::default();
+        let mut element = emptyish_auction_element();
         element.valid_from = U256::from(2);
         element.valid_until = U256::from(5);
         assert_eq!(element.in_auction(U256::from(1)), false);
@@ -223,7 +237,7 @@ pub mod tests {
 
     #[test]
     fn not_in_auction_right() {
-        let mut element = StableXAuctionElement::default();
+        let mut element = emptyish_auction_element();
         element.valid_from = U256::from(2);
         element.valid_until = U256::from(5);
         assert_eq!(element.in_auction(U256::from(6)), false);
@@ -231,7 +245,7 @@ pub mod tests {
 
     #[test]
     fn in_auction_interior() {
-        let mut element = StableXAuctionElement::default();
+        let mut element = emptyish_auction_element();
         element.valid_from = U256::from(2);
         element.valid_until = U256::from(5);
         assert_eq!(element.in_auction(U256::from(3)), true);
@@ -239,7 +253,7 @@ pub mod tests {
 
     #[test]
     fn in_auction_boundary() {
-        let mut element = StableXAuctionElement::default();
+        let mut element = emptyish_auction_element();
         element.valid_from = U256::from(2);
         element.valid_until = U256::from(5);
         assert_eq!(
