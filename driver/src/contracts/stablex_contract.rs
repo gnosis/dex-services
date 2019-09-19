@@ -111,7 +111,8 @@ fn parse_auction_data(packed_auction_bytes: Vec<u8>, index: U256) -> (AccountSta
     assert_eq!(
         packed_auction_bytes.len() % AUCTION_ELEMENT_WIDTH,
         0,
-        "Each auction should be packed in 113 bytes"
+        "Each auction should be packed in {} bytes",
+        AUCTION_ELEMENT_WIDTH
     );
 
     let mut account_state = AccountState::default();
