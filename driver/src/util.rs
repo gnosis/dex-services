@@ -97,16 +97,16 @@ pub mod tests {
     use super::*;
 
     #[test]
-    fn test_u128_to_u256_on_one() {
-        assert_eq!(U256::from(1), u128_to_u256(1u128));
-    }
-    #[test]
-    fn test_u128_to_u256_on_max() {
+    fn test_u128_to_u256() {
         assert_eq!(
+            u128_to_u256(u128::max_value()),
             U256::from_dec_str("340282366920938463463374607431768211455").unwrap(),
-            u128_to_u256(u128::max_value())
+            "failed on 128::max_value()"
         );
+        assert_eq!(u128_to_u256(1u128), U256::from(1), "failed on 1u128");
+        assert_eq!(u128_to_u256(0u128), U256::from(0), "failed on 0u128");
     }
+
     #[test]
     fn test_256_to_u128_works() {
         assert_eq!(0u128, u256_to_u128(U256::from(0)));
