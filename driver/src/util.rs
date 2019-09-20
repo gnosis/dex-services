@@ -24,6 +24,13 @@ impl CeiledDiv for u128 {
     }
 }
 
+impl CeiledDiv for U256 {
+    fn ceiled_div(&self, divisor: U256) -> U256 {
+        //ceil(p / float(q)) == (p + q - 1) / q
+        (self + divisor - 1) / divisor
+    }
+}
+
 pub fn find_first_unapplied_slot(
     upper_bound: U256,
     has_slot_been_applied: &dyn Fn(U256) -> Result<bool, DriverError>,

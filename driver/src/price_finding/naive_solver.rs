@@ -72,11 +72,8 @@ impl Matchable for Order {
     }
 
     fn surplus(&self, buy_price: u128, exec_buy_amount: u128, exec_sell_amount: u128) -> U256 {
-        // Note that: ceil(p / float(q)) == (p + q - 1) // q
-        let relative_buy = (u128_to_u256(self.buy_amount) * u128_to_u256(exec_sell_amount)
-            + u128_to_u256(self.sell_amount)
-            - 1)
-            / u128_to_u256(self.sell_amount);
+        let relative_buy = 
+            (u128_to_u256(self.buy_amount) * u128_to_u256(exec_sell_amount)).ceiled_div(u128_to_u256(self.sell_amount));
         (u128_to_u256(exec_buy_amount) - relative_buy) * u128_to_u256(buy_price)
     }
 }
