@@ -119,4 +119,30 @@ pub mod tests {
             u128_to_u256(a)
         );
     }
+
+    #[test]
+    fn test_ceiled_div_u128() {
+        assert_eq!(0u128.ceiled_div(10), 0);
+        assert_eq!(1u128.ceiled_div(10), 1);
+        assert_eq!(10u128.ceiled_div(10), 1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_ceiled_div_by_0_u128() {
+        1u128.ceiled_div(0);
+    }
+
+    #[test]
+    fn test_ceiled_div_u256() {
+        assert_eq!(U256::from(0).ceiled_div(U256::from(10)), U256::from(0));
+        assert_eq!(U256::from(1).ceiled_div(U256::from(10)), U256::from(1));
+        assert_eq!(U256::from(10).ceiled_div(U256::from(10)), U256::from(1));
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_ceiled_div_by_0_u256() {
+        U256::one().ceiled_div(U256::zero());
+    }
 }
