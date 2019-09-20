@@ -95,7 +95,7 @@ fn compute_buy_sell_amounts(
         (other, remaining)
     } else {
         error!("Unable to to handle buy orders, returning unfulfillable amounts");
-        (0 as u128, 0 as u128)
+        (0u128, 0u128)
         //        if numerator > 0 {
         //            let p = denominator * remaining;
         //            let q = numerator;
