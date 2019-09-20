@@ -13,6 +13,17 @@ pub fn u128_to_u256(x: u128) -> U256 {
     U256::from_big_endian(&x.to_be_bytes())
 }
 
+pub trait CeiledDiv {
+    fn ceiled_div(&self, divisor: Self) -> Self;
+}
+
+impl CeiledDiv for u128 {
+    fn ceiled_div(&self, divisor: u128) -> u128 {
+        //ceil(p / float(q)) == (p + q - 1) / q
+        (self + divisor - 1) / divisor
+    }
+}
+
 pub fn find_first_unapplied_slot(
     upper_bound: U256,
     has_slot_been_applied: &dyn Fn(U256) -> Result<bool, DriverError>,

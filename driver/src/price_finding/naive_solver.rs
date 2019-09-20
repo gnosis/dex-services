@@ -3,7 +3,7 @@ use web3::types::U256;
 use dfusion_core::models::{AccountState, Order, Solution, TOKENS};
 
 use crate::price_finding::error::PriceFindingError;
-use crate::util::u128_to_u256;
+use crate::util::{u128_to_u256, CeiledDiv};
 
 use super::price_finder_interface::{Fee, PriceFinding};
 
@@ -167,13 +167,14 @@ impl PriceFinding for NaiveSolver {
                 // To account for the fee we have to either
                 // a) give people less (reduce buyAmount)
                 // b) take more (increase sellAmount)
+                let fee_denominator = (1.0 / fee.percentage) as u128;
                 if order.sell_token == fee.token {
                     exec_sell_amount[i] =
-                        (exec_sell_amount[i] as f64 / (1.0 - fee.percentage)).round() as u128;
+                        exec_sell_amount[i] * fee_denominator / (fee_denominator - 1);
                 }
                 if order.buy_token == fee.token {
                     exec_buy_amount[i] =
-                        (exec_buy_amount[i] as f64 * (1.0 - fee.percentage)).round() as u128;
+                        (exec_buy_amount[i] * (fee_denominator - 1)).ceiled_div(fee_denominator);
                 }
             }
         }
@@ -196,12 +197,12 @@ fn order_with_buffer_for_fee(order: &Order, fee: &Option<Fee>) -> Order {
             // In order to make space for a fee in the existing limit, we need to
             // a) receive more stuff (while giving away the same)
             // b) give away less stuff (while receiving the same)
+            let fee_denominator = (1.0 / fee.percentage) as u128;
             if fee.token == order.buy_token {
                 order.buy_amount =
-                    (order.buy_amount as f64 / (1.0 - fee.percentage)).round() as u128
+                    (order.buy_amount * fee_denominator).ceiled_div(fee_denominator - 1)
             } else if fee.token == order.sell_token {
-                order.sell_amount =
-                    (order.sell_amount as f64 * (1.0 - fee.percentage)).round() as u128
+                order.sell_amount = order.sell_amount * (fee_denominator - 1) / fee_denominator
             }
             order
         }
@@ -223,7 +224,19 @@ pub mod tests {
 
         let mut solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
+
         assert_eq!(Some(u128_to_u256(16 * 10u128.pow(36))), res.surplus);
+        assert_eq!(
+            vec![4 * 10u128.pow(18), 52 * 10u128.pow(18)],
+            res.executed_buy_amounts
+        );
+        assert_eq!(
+            vec![52 * 10u128.pow(18), 4 * 10u128.pow(18)],
+            res.executed_sell_amounts
+        );
+        assert_eq!(4 * 10u128.pow(18), res.prices[0]);
+        assert_eq!(52 * 10u128.pow(18), res.prices[1]);
+
         check_solution(&orders, res, &None).unwrap();
     }
 
@@ -249,7 +262,18 @@ pub mod tests {
 
         let mut solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
+
         assert_eq!(Some(u128_to_u256(16 * 10u128.pow(36))), res.surplus);
+        assert_eq!(
+            vec![52 * 10u128.pow(18), 4 * 10u128.pow(18)],
+            res.executed_buy_amounts
+        );
+        assert_eq!(
+            vec![4 * 10u128.pow(18), 52 * 10u128.pow(18)],
+            res.executed_sell_amounts
+        );
+        assert_eq!(4 * 10u128.pow(18), res.prices[0]);
+        assert_eq!(52 * 10u128.pow(18), res.prices[1]);
 
         check_solution(&orders, res, &None).unwrap();
     }
@@ -276,7 +300,18 @@ pub mod tests {
 
         let mut solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
+
         assert_eq!(Some(u128_to_u256(92 * 10u128.pow(36))), res.surplus);
+        assert_eq!(
+            vec![16 * 10u128.pow(18), 10 * 10u128.pow(18)],
+            res.executed_buy_amounts
+        );
+        assert_eq!(
+            vec![10 * 10u128.pow(18), 16 * 10u128.pow(18)],
+            res.executed_sell_amounts
+        );
+        assert_eq!(10 * 10u128.pow(18), res.prices[1]);
+        assert_eq!(16 * 10u128.pow(18), res.prices[2]);
 
         check_solution(&orders, res, &None).unwrap();
     }
@@ -351,7 +386,12 @@ pub mod tests {
 
         let mut solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
+
         assert_eq!(Some(U256::from(16)), res.surplus);
+        assert_eq!(vec![0, 0, 0, 52, 4, 0], res.executed_buy_amounts);
+        assert_eq!(vec![0, 0, 0, 4, 52, 0], res.executed_sell_amounts);
+        assert_eq!(4, res.prices[1]);
+        assert_eq!(52, res.prices[2]);
 
         check_solution(&orders, res, &None).unwrap();
     }
@@ -384,8 +424,8 @@ pub mod tests {
         ];
 
         let mut solver = NaiveSolver::new(None);
-        let res = solver.find_prices(&orders, &state);
-        assert_eq!(Some(U256::from(0)), res.unwrap().surplus);
+        let res = solver.find_prices(&orders, &state).unwrap();
+        assert_eq!(res, Solution::trivial(orders.len()));
     }
 
     #[test]
@@ -411,8 +451,8 @@ pub mod tests {
         let state = create_account_state_with_balance_for(&orders);
 
         let mut solver = NaiveSolver::new(None);
-        let res = solver.find_prices(&orders, &state);
-        assert_eq!(Some(U256::from(0)), res.unwrap().surplus);
+        let res = solver.find_prices(&orders, &state).unwrap();
+        assert_eq!(res, Solution::trivial(orders.len()));
     }
 
     #[test]
@@ -443,8 +483,11 @@ pub mod tests {
         });
         let mut solver = NaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
+
         assert_eq!(res.executed_sell_amounts, [20000, 9990]);
-        assert_eq!(res.executed_buy_amounts, [9990, 19960]);
+        assert_eq!(res.executed_buy_amounts, [9990, 19961]);
+        assert_eq!(res.prices[0], 9990);
+        assert_eq!(res.prices[1], 19980);
 
         check_solution(&orders, res, &fee).unwrap();
     }
@@ -477,7 +520,7 @@ pub mod tests {
         });
         let mut solver = NaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
-        assert_eq!(res.executed_sell_amounts, [0, 0]);
+        assert_eq!(res, Solution::trivial(orders.len()));
 
         check_solution(&orders, res, &fee).unwrap();
     }
@@ -536,12 +579,13 @@ pub mod tests {
 
             let exec_sell_amount = solution.executed_sell_amounts[i];
             let mut exec_buy_amount = if buy_token_price > 0 {
-                exec_sell_amount * sell_token_price / buy_token_price
+                (exec_sell_amount * sell_token_price).ceiled_div(buy_token_price)
             } else {
                 0
             };
             if let Some(fee) = fee {
-                exec_buy_amount = (exec_buy_amount as f64 * (1.0 - fee.percentage)) as u128;
+                let fee_denominator = (1.0 / fee.percentage) as u128;
+                exec_buy_amount = exec_buy_amount * (fee_denominator - 1) / fee_denominator
             }
 
             if exec_sell_amount > order.sell_amount {
