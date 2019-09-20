@@ -13,6 +13,14 @@ pub fn u128_to_u256(x: u128) -> U256 {
     U256::from_big_endian(&x.to_be_bytes())
 }
 
+pub fn u256_to_u128(x: U256) -> u128 {
+    let arr = x.0;
+    if arr[2] | arr[3] != 0 {
+        panic!("Overflow");
+    }
+    u128::from(arr[0]) + u128::from(arr[1]) * (2u128).pow(64)
+}
+
 pub fn find_first_unapplied_slot(
     upper_bound: U256,
     has_slot_been_applied: &dyn Fn(U256) -> Result<bool, DriverError>,
@@ -90,15 +98,28 @@ pub mod tests {
 
     #[test]
     fn test_u128_to_u256_on_one() {
-        let a: u128 = 1;
-        assert_eq!(U256::from(1), u128_to_u256(a));
+        assert_eq!(U256::from(1), u128_to_u256(1u128));
     }
     #[test]
     fn test_u128_to_u256_on_max() {
-        let a = u128::max_value();
         assert_eq!(
             U256::from_dec_str("340282366920938463463374607431768211455").unwrap(),
-            u128_to_u256(a)
+            u128_to_u256(u128::max_value())
         );
+    }
+
+    #[test]
+    fn test_256_to_u128_works() {
+        assert_eq!(0u128, u256_to_u128(U256::from(0)));
+        assert_eq!(1u128, u256_to_u128(U256::from(1)));
+        assert_eq!(
+            u128::max_value(),
+            u256_to_u128(U256::from_dec_str("340282366920938463463374607431768211455").unwrap())
+        );
+    }
+    #[test]
+    #[should_panic]
+    fn test_u256_to_u128_panics_on_overflow() {
+        u256_to_u128(U256::from_dec_str("340282366920938463463374607431768211456").unwrap());
     }
 }

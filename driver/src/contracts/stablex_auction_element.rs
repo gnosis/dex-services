@@ -5,7 +5,7 @@ use web3::types::{H160, U256};
 
 use dfusion_core::models::{BatchInformation, Order};
 
-use crate::util::u128_to_u256;
+use crate::util::{u128_to_u256, u256_to_u128};
 
 #[derive(Debug, PartialEq)]
 pub struct StableXAuctionElement {
@@ -84,11 +84,7 @@ fn compute_buy_sell_amounts(
             let top = u128_to_u256(remaining) * u128_to_u256(numerator);
             let bottom = u128_to_u256(denominator);
             // Recall that ceil(p / float(q)) == (p + q - 1) / q
-            let temp_u256 = (top + bottom - 1) / bottom;
-
-            // Conversion never overflows because remaining <= denominator
-            let x = temp_u256.0;
-            u128::from(x[0]) + u128::from(x[1]) * (2u128).pow(64)
+            u256_to_u128((top + bottom - 1) / bottom)
         } else {
             0
         };
