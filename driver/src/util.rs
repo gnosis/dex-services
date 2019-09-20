@@ -107,7 +107,6 @@ pub mod tests {
             u128_to_u256(u128::max_value())
         );
     }
-
     #[test]
     fn test_256_to_u128_works() {
         assert_eq!(0u128, u256_to_u128(U256::from(0)));
