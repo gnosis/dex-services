@@ -1,4 +1,5 @@
 use std::env;
+use std::str::FromStr;
 
 use web3::types::{H256, U256};
 
@@ -14,11 +15,7 @@ pub fn u128_to_u256(x: u128) -> U256 {
 }
 
 pub fn u256_to_u128(x: U256) -> u128 {
-    let arr = x.0;
-    if arr[2] | arr[3] != 0 {
-        panic!("Overflow");
-    }
-    u128::from(arr[0]) + u128::from(arr[1]) * (2u128).pow(64)
+    u128::from_str(&x.to_string()).unwrap()
 }
 
 pub fn find_first_unapplied_slot(
