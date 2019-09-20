@@ -67,7 +67,9 @@ impl Matchable for Order {
     }
 
     fn have_price_overlap(&self, other: &Order) -> bool {
-        u128_to_u256(self.buy_amount) * u128_to_u256(other.buy_amount)
+        self.sell_amount > 0
+        && other.sell_amount > 0
+        && u128_to_u256(self.buy_amount) * u128_to_u256(other.buy_amount)
             <= u128_to_u256(other.sell_amount) * u128_to_u256(self.sell_amount)
     }
 
@@ -518,8 +520,33 @@ pub mod tests {
         let mut solver = NaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
         assert_eq!(res, Solution::trivial(orders.len()));
+    }
 
-        check_solution(&orders, res, &fee).unwrap();
+    #[test]
+    fn test_empty_sell_volume() {
+        let orders = vec![
+            Order {
+                batch_information: None,
+                account_id: H160::from(0),
+                sell_token: 0,
+                buy_token: 1,
+                sell_amount: 0,
+                buy_amount: 0,
+            },
+            Order {
+                batch_information: None,
+                account_id: H160::from(0),
+                sell_token: 1,
+                buy_token: 0,
+                sell_amount: 0,
+                buy_amount: 0,
+            },
+        ];
+        let state = create_account_state_with_balance_for(&orders);
+
+        let mut solver = NaiveSolver::new(None);
+        let res = solver.find_prices(&orders, &state).unwrap();
+        assert_eq!(res, Solution::trivial(orders.len()));
     }
 
     fn order_pair_first_fully_matching_second() -> Vec<Order> {
