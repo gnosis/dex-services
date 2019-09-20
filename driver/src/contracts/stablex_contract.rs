@@ -50,7 +50,7 @@ impl StableXContract for StableXContractImpl {
     fn get_current_auction_index(&self) -> Result<U256> {
         self.base
             .contract
-            .query("getCurrentStateIndex", (), None, Options::default(), None)
+            .query("getCurrentBatchId", (), None, Options::default(), None)
             .wait()
             .map_err(DriverError::from)
     }
@@ -98,7 +98,11 @@ impl StableXContract for StableXContractImpl {
                     token_ids_for_price,
                 ),
                 account,
-                Options::default(),
+                Options::with(|mut opt| {
+                    // usual gas estimate is not working
+                    opt.gas_price = Some(25.into());
+                    opt.gas = Some(1_000_000.into());
+                }),
             )
             .wait()
             .map_err(DriverError::from)

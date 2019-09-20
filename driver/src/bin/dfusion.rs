@@ -23,7 +23,7 @@ fn main() {
 
     let snapp_contract = SnappContractImpl::new().unwrap();
 
-    let mut price_finder = driver::util::create_price_finder();
+    let mut price_finder = driver::util::create_price_finder(None);
     let mut order_processor =
         OrderProcessor::new(&db_instance, &snapp_contract, &mut *price_finder);
     loop {
