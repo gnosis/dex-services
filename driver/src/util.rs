@@ -134,6 +134,12 @@ pub mod tests {
     }
 
     #[test]
+    #[should_panic]
+    fn test_ceiled_div_overflow_u128() {
+        u128::max_value().ceiled_div(1);
+    }
+
+    #[test]
     fn test_ceiled_div_u256() {
         assert_eq!(U256::from(0).ceiled_div(U256::from(10)), U256::from(0));
         assert_eq!(U256::from(1).ceiled_div(U256::from(10)), U256::from(1));
@@ -144,5 +150,11 @@ pub mod tests {
     #[should_panic]
     fn test_ceiled_div_by_0_u256() {
         U256::one().ceiled_div(U256::zero());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_ceiled_div_overflow_u256() {
+        U256::max_value().ceiled_div(U256::from(1));
     }
 }
