@@ -72,38 +72,31 @@ fn compute_buy_sell_amounts(
     remaining: u128,
     is_sell_order: bool,
 ) -> (u128, u128) {
-    // TODO - use u128_to_u256 for overflow handling (this is a conversion used in naive_solver)
     assert!(
         remaining <= denominator,
         "Smart contract should never allow this inequality"
     );
-    let mut other = 0 as u128;
-    let (buy_amount, sell_amount) = if is_sell_order {
+    if is_sell_order {
         // 0 on sellAmount (remaining <= denominator) is nonsense, but solver can handle it.
         // 0 on buyAmount (numerator) is a Market Sell Order.
-        if denominator > 0 {
+        let buy_amount = if denominator > 0 {
             // up-casting to handle overflow
             let top = u128_to_u256(remaining) * u128_to_u256(numerator);
             let bottom = u128_to_u256(denominator);
             // Recall that ceil(p / float(q)) == (p + q - 1) / q
-            let other_u256 = (top + bottom - 1) / bottom;
+            let temp_u256 = (top + bottom - 1) / bottom;
 
             // Conversion never overflows because remaining <= denominator
-            let x = other_u256.0;
-            other = u128::from(x[0]) + u128::from(x[1]) * (2 as u128).pow(64);
-        }
-        (other, remaining)
+            let x = temp_u256.0;
+            u128::from(x[0]) + u128::from(x[1]) * (2u128).pow(64)
+        } else {
+            0
+        };
+        (buy_amount, remaining)
     } else {
         error!("Unable to to handle buy orders, returning unfulfillable amounts");
         (0u128, 0u128)
-        //        if numerator > 0 {
-        //            let p = denominator * remaining;
-        //            let q = numerator;
-        //            other = (p + q - 1) / q;
-        //            (remaining, other)
-        //        }
-    };
-    (buy_amount, sell_amount)
+    }
 }
 
 #[cfg(test)]
@@ -268,12 +261,12 @@ pub mod tests {
         );
     }
 
-    //tests for compute_buy_sell_amounts
+    // tests for compute_buy_sell_amounts
     #[test]
     fn compute_buy_sell_tiny_numbers() {
-        let numerator = 1 as u128;
-        let denominator = 3 as u128;
-        let remaining = 2 as u128;
+        let numerator = 1u128;
+        let denominator = 3u128;
+        let remaining = 2u128;
         // Note that contract does not allow remaining > denominator!
         let (buy, sell) = compute_buy_sell_amounts(numerator, denominator, remaining, true);
         // Sell at most 2 for at least 1 (i.e. as long as the price at least 1:3)
@@ -282,7 +275,7 @@ pub mod tests {
 
     #[test]
     fn compute_buy_sell_recoverable_overflow() {
-        let numerator = 2 as u128;
+        let numerator = 2u128;
         let denominator = u128::max_value();
         let remaining = u128::max_value();
 
@@ -294,19 +287,17 @@ pub mod tests {
 
     #[test]
     fn generic_compute_buy_sell() {
-        let (numerator, denominator) = (1000 as u128, 1500 as u128);
-        let remaining = 1486 as u128;
+        let (numerator, denominator) = (1_000u128, 1_500u128);
+        let remaining = 1_486u128;
         let (buy, sell) = compute_buy_sell_amounts(numerator, denominator, remaining, true);
-
         assert_eq!((buy, sell), (991, remaining));
     }
 
     #[test]
     fn generic_compute_buy_sell_2() {
-        let (numerator, denominator) = (1000 as u128, 1500 as u128);
-        let remaining = 1485 as u128;
+        let (numerator, denominator) = (1_000u128, 1_500u128);
+        let remaining = 1_485u128;
         let (buy, sell) = compute_buy_sell_amounts(numerator, denominator, remaining, true);
-
         assert_eq!((buy, sell), (990, remaining));
     }
 
