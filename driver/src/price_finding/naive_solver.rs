@@ -212,6 +212,7 @@ fn order_with_buffer_for_fee(order: &Order, fee: &Option<Fee>) -> Order {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::util::{u256_to_u128};
     use dfusion_core::models::account_state::test_util::*;
     use std::collections::HashMap;
     use web3::types::{H160, H256};
@@ -601,16 +602,26 @@ pub mod tests {
             let buy_token_price = solution.prices[order.buy_token as usize];
             let sell_token_price = solution.prices[order.sell_token as usize];
 
-            let exec_sell_amount = solution.executed_sell_amounts[i];
-            let mut exec_buy_amount = if buy_token_price > 0 {
-                (exec_sell_amount * sell_token_price).ceiled_div(buy_token_price)
+            let exec_buy_amount = solution.executed_buy_amounts[i];
+            let exec_sell_amount = if sell_token_price > 0 {
+                if let Some(fee) = fee {
+                    let fee_denominator = (1.0 / fee.percentage) as u128;
+                    // We compute:
+                    // sell_amount_wo_fee = buy_amount * buy_token_price / sell_token_price
+                    // sell_amount_w_fee = sell_amount_wo_fee * fee_denominator / (fee_denominator - 1)
+                    // Rearranged to avoid 256 bit overflow and still have minimal rounding error.
+                    u256_to_u128(
+                        (u128_to_u256(exec_buy_amount) * u128_to_u256(buy_token_price))
+                            / u128_to_u256(fee_denominator - 1)
+                            * u128_to_u256(fee_denominator)
+                            / u128_to_u256(sell_token_price),
+                    )
+                } else {
+                    (exec_buy_amount * buy_token_price) / sell_token_price
+                }
             } else {
                 0
             };
-            if let Some(fee) = fee {
-                let fee_denominator = (1.0 / fee.percentage) as u128;
-                exec_buy_amount = exec_buy_amount * (fee_denominator - 1) / fee_denominator
-            }
 
             if exec_sell_amount > order.sell_amount {
                 return Err(format!(

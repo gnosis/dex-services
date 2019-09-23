@@ -1,4 +1,5 @@
 use std::env;
+use std::str::FromStr;
 
 use web3::types::{H256, U256};
 
@@ -11,6 +12,10 @@ const BATCH_TIME_SECONDS: u32 = 3 * 60;
 
 pub fn u128_to_u256(x: u128) -> U256 {
     U256::from_big_endian(&x.to_be_bytes())
+}
+
+pub fn u256_to_u128(x: U256) -> u128 {
+    u128::from_str(&x.to_string()).unwrap()
 }
 
 pub trait CeiledDiv {
