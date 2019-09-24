@@ -42,9 +42,9 @@ impl StableXAuctionElement {
         let is_sell_order = bytes[64] > 0;
         let numerator = BigEndian::read_u128(&bytes[65..81]);
         let denominator = BigEndian::read_u128(&bytes[81..97]);
-        let amount = BigEndian::read_u128(&bytes[97..113]);
+        let remaining = BigEndian::read_u128(&bytes[97..113]);
         let (buy_amount, sell_amount) =
-            compute_buy_sell_amounts(numerator, denominator, amount, is_sell_order);
+            compute_buy_sell_amounts(numerator, denominator, remaining, is_sell_order);
         let order_counter = order_count.entry(account_id).or_insert(0);
         *order_counter += 1;
         StableXAuctionElement {
