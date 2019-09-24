@@ -128,8 +128,6 @@ fn encode_execution_for_contract(
                 .expect("StableX Orders must have Batch Information");
             // TODO - using slot_index (u16) for order_id (U128) is temporary and not sustainable.
             order_ids.push(U128::from(order_batch_info.slot_index));
-            // all orders are sell orders, so volumes are sell_amounts.
-            // TODO - push buy_amount if not sellOrder
             volumes.push(U128::from(buy_amount.to_be_bytes()));
         }
     }
