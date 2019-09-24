@@ -82,9 +82,7 @@ fn compute_buy_sell_amounts(
         let buy_amount = if denominator > 0 {
             // up-casting to handle overflow
             let top = u128_to_u256(remaining) * u128_to_u256(numerator);
-            let bottom = u128_to_u256(denominator);
-            // Recall that ceil(p / float(q)) == (p + q - 1) / q
-            u256_to_u128((top + bottom - 1).ceiled_div(bottom))
+            u256_to_u128((top).ceiled_div(u128_to_u256(denominator)))
         } else {
             0
         };
