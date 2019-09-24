@@ -100,7 +100,7 @@ pub fn create_price_finder(fee: Option<Fee>) -> Box<dyn PriceFinding> {
     let solver_env_var = env::var("LINEAR_OPTIMIZATION_SOLVER").unwrap_or_else(|_| "0".to_string());
     if solver_env_var == "1" {
         info!("Using linear optimisation price finder");
-        Box::new(LinearOptimisationPriceFinder::new())
+        Box::new(LinearOptimisationPriceFinder::new(fee))
     } else {
         info!("Using naive price finder");
         Box::new(NaiveSolver::new(fee))

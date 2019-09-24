@@ -1,5 +1,5 @@
 use crate::price_finding::error::{ErrorKind, PriceFindingError};
-use crate::price_finding::price_finder_interface::PriceFinding;
+use crate::price_finding::price_finder_interface::{Fee, PriceFinding};
 
 use dfusion_core::models;
 
@@ -20,16 +20,11 @@ pub struct LinearOptimisationPriceFinder {
     write_input: fn(&str, &serde_json::Value) -> std::io::Result<()>,
     run_solver: fn(&str) -> Result<(), PriceFindingError>,
     read_output: fn() -> std::io::Result<serde_json::Value>,
-}
-
-impl Default for LinearOptimisationPriceFinder {
-    fn default() -> Self {
-        Self::new()
-    }
+    fee: Option<Fee>,
 }
 
 impl LinearOptimisationPriceFinder {
-    pub fn new() -> Self {
+    pub fn new(fee: Option<Fee>) -> Self {
         // All prices are 1 (10**18)
         LinearOptimisationPriceFinder {
             previous_prices: (0..models::TOKENS)
@@ -38,6 +33,7 @@ impl LinearOptimisationPriceFinder {
             write_input,
             run_solver,
             read_output,
+            fee,
         }
     }
 }
@@ -196,13 +192,17 @@ impl PriceFinding for LinearOptimisationPriceFinder {
             .enumerate()
             .map(|(index, order)| serialize_order(&order, &index.to_string()))
             .collect();
-        let input = json!({
+        let mut input = json!({
             "tokens": token_ids,
             "refToken": token_id(0),
             "pricesPrev": self.previous_prices,
             "accounts": accounts,
             "orders": orders,
         });
+        if let Some(fee) = &self.fee {
+            input["fee_token"] = json!(token_id(fee.token));
+            input["fee_percentage"] = json!(fee.percentage);
+        }
         let input_file = format!("instance_{}.json", Utc::now().to_rfc3339());
         (self.write_input)(&input_file, &input)?;
         (self.run_solver)(&input_file)?;
@@ -252,6 +252,7 @@ fn read_output() -> std::io::Result<serde_json::Value> {
 pub mod tests {
 
     use super::*;
+    use dfusion_core::models::account_state::test_util::*;
     use std::error::Error;
     use web3::types::H256;
 
@@ -272,6 +273,7 @@ pub mod tests {
             write_input: |_, _| Ok(()),
             run_solver: |_| Ok(()),
             read_output: return_result,
+            fee: None,
         };
 
         solver.find_prices(&[], &state).expect("Should not fail");
@@ -536,5 +538,28 @@ pub mod tests {
             }
         });
         assert_eq!(result, expected)
+    }
+
+    #[test]
+    fn test_serialize_input_with_fee() {
+        let fee = Fee {
+            token: 0,
+            percentage: 0.001,
+        };
+        let mut solver = LinearOptimisationPriceFinder {
+            previous_prices: HashMap::new(),
+            write_input: |_, json: &serde_json::Value| {
+                assert_eq!(json["fee_token"], json!("token0"));
+                assert_eq!(json["fee_percentage"], json!(0.001));
+                Ok(())
+            },
+            run_solver: |_| Ok(()),
+            read_output: || Err(std::io::Error::last_os_error()),
+            fee: Some(fee),
+        };
+        let orders = vec![];
+        assert!(solver
+            .find_prices(&orders, &create_account_state_with_balance_for(&orders))
+            .is_err());
     }
 }
