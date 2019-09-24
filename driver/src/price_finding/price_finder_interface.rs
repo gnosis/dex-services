@@ -20,7 +20,7 @@ impl Default for Fee {
 
 pub trait PriceFinding {
     fn find_prices(
-        &mut self,
+        &self,
         orders: &[models::Order],
         state: &models::AccountState,
     ) -> Result<models::Solution, PriceFindingError>;
@@ -56,7 +56,7 @@ pub mod tests {
 
     impl PriceFinding for PriceFindingMock {
         fn find_prices(
-            &mut self,
+            &self,
             orders: &[models::Order],
             state: &models::AccountState,
         ) -> Result<models::Solution, PriceFindingError> {

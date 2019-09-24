@@ -15,7 +15,6 @@ const RESULT_FOLDER: &str = "./results/tmp/";
 type Prices = HashMap<String, String>;
 
 pub struct LinearOptimisationPriceFinder {
-    previous_prices: Prices,
     // default IO methods can be replaced for unit testing
     write_input: fn(&str, &serde_json::Value) -> std::io::Result<()>,
     run_solver: fn(&str) -> Result<(), PriceFindingError>,
@@ -27,9 +26,6 @@ impl LinearOptimisationPriceFinder {
     pub fn new(fee: Option<Fee>) -> Self {
         // All prices are 1 (10**18)
         LinearOptimisationPriceFinder {
-            previous_prices: (0..models::TOKENS)
-                .map(|t| (token_id(t), "1000000000000000000".to_string()))
-                .collect(),
             write_input,
             run_solver,
             read_output,
@@ -85,7 +81,7 @@ fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
 fn deserialize_result(
     json: &serde_json::Value,
     num_tokens: u16,
-) -> Result<(Prices, models::Solution), PriceFindingError> {
+) -> Result<models::Solution, PriceFindingError> {
     let price_map = json["prices"]
         .as_object()
         .ok_or_else(|| "No 'price' object in json")?
@@ -94,14 +90,9 @@ fn deserialize_result(
             price
                 .as_str()
                 .map(|p| (token.to_owned(), p.to_owned()))
-                .ok_or_else(|| {
-                    PriceFindingError::new(
-                        &"Could not convert price to string".to_string(),
-                        ErrorKind::JsonError,
-                    )
-                })
+                .unwrap_or_else(|| (token.to_owned(), "0".to_string()))
         })
-        .collect::<Result<Prices, PriceFindingError>>()?;
+        .collect::<Prices>();
     let prices = (0..num_tokens)
         .map(|t| {
             price_map
@@ -122,11 +113,11 @@ fn deserialize_result(
         orders
             .iter()
             .map(|o| {
-                o["execSurplus"]
+                o["execUtility"]
                     .as_str()
                     .ok_or_else(|| {
                         PriceFindingError::new(
-                            "No 'execSurplus' field on order",
+                            "No 'execUtility' field on order",
                             ErrorKind::JsonError,
                         )
                     })
@@ -168,24 +159,21 @@ fn deserialize_result(
                 .and_then(|amount| amount.parse::<u128>().map_err(PriceFindingError::from))
         })
         .collect::<Result<Vec<u128>, PriceFindingError>>()?;
-    Ok((
-        price_map.to_owned(),
-        models::Solution {
-            surplus,
-            prices,
-            executed_sell_amounts,
-            executed_buy_amounts,
-        },
-    ))
+    Ok(models::Solution {
+        surplus,
+        prices,
+        executed_sell_amounts,
+        executed_buy_amounts,
+    })
 }
 
 impl PriceFinding for LinearOptimisationPriceFinder {
     fn find_prices(
-        &mut self,
+        &self,
         orders: &[models::Order],
         state: &models::AccountState,
     ) -> Result<models::Solution, PriceFindingError> {
-        let token_ids: Vec<String> = (0..state.num_tokens).map(token_id).collect();
+        let token_ids: Vec<String> = (0..models::TOKENS).map(token_id).collect();
         let accounts = serialize_balances(&state, &orders);
         let orders: Vec<serde_json::Value> = orders
             .iter()
@@ -195,20 +183,21 @@ impl PriceFinding for LinearOptimisationPriceFinder {
         let mut input = json!({
             "tokens": token_ids,
             "refToken": token_id(0),
-            "pricesPrev": self.previous_prices,
             "accounts": accounts,
             "orders": orders,
+            "pricesPrev": HashMap::<String, String>::new(),
         });
         if let Some(fee) = &self.fee {
-            input["fee_token"] = json!(token_id(fee.token));
-            input["fee_percentage"] = json!(fee.percentage);
+            input["fee"] = json!({
+                "token": token_id(fee.token),
+                "ratio": fee.percentage,
+            });
         }
         let input_file = format!("instance_{}.json", Utc::now().to_rfc3339());
         (self.write_input)(&input_file, &input)?;
         (self.run_solver)(&input_file)?;
         let result = (self.read_output)()?;
-        let (prices, solution) = deserialize_result(&result, state.num_tokens)?;
-        self.previous_prices = prices;
+        let solution = deserialize_result(&result, models::TOKENS)?;
         Ok(solution)
     }
 }
@@ -221,10 +210,9 @@ fn write_input(input_file: &str, input: &serde_json::Value) -> std::io::Result<(
 
 fn run_solver(input_file: &str) -> Result<(), PriceFindingError> {
     let output = Command::new("python")
-        .arg("./batchauctions/scripts/optimize_e2e.py")
-        .arg(input_file)
-        .args(&["--solverTimelimit", "120"])
-        .args(&["--outputDir", RESULT_FOLDER])
+        .arg("./batchauctions/scripts/e2e/_run.py")
+        .arg(RESULT_FOLDER)
+        .args(&["--jsonFile", input_file])
         .output()?;
 
     if !output.status.success() {
@@ -242,7 +230,7 @@ fn run_solver(input_file: &str) -> Result<(), PriceFindingError> {
 }
 
 fn read_output() -> std::io::Result<serde_json::Value> {
-    let file = File::open(format!("{}{}", RESULT_FOLDER, "03_output_snark.json"))?;
+    let file = File::open(format!("{}{}", RESULT_FOLDER, "06_solution_int_valid.json"))?;
     let reader = BufReader::new(file);
     let value = serde_json::from_reader(reader)?;
     Ok(value)
@@ -255,39 +243,6 @@ pub mod tests {
     use dfusion_core::models::account_state::test_util::*;
     use std::error::Error;
     use web3::types::H256;
-
-    #[test]
-    fn test_solver_keeps_prices_from_previous_result() {
-        let state = models::AccountState::new(H256::zero(), U256::zero(), vec![0; 2], 2);
-        let return_result = || {
-            Ok(json!({
-                "prices": {
-                    "token0": "14024052566155238000",
-                    "token1": "1526784674855762300",
-                },
-                "orders": []
-            }))
-        };
-        let mut solver = LinearOptimisationPriceFinder {
-            previous_prices: HashMap::new(),
-            write_input: |_, _| Ok(()),
-            run_solver: |_| Ok(()),
-            read_output: return_result,
-            fee: None,
-        };
-
-        solver.find_prices(&[], &state).expect("Should not fail");
-
-        let expected_prices: Prices = [
-            ("token0".to_owned(), "14024052566155238000".to_owned()),
-            ("token1".to_owned(), "1526784674855762300".to_owned()),
-        ]
-        .iter()
-        .cloned()
-        .collect();
-
-        assert_eq!(solver.previous_prices, expected_prices);
-    }
 
     #[test]
     fn test_serialize_order() {
@@ -322,22 +277,15 @@ pub mod tests {
                 {
                     "execSellAmount": "0",
                     "execBuyAmount": "0",
-                    "execSurplus": "0"
+                    "execUtility": "0"
                 },
                 {
                     "execSellAmount": "318390084925498118944",
                     "execBuyAmount": "95042777139162480000",
-                    "execSurplus": "15854632034944469292777429010439194350"
+                    "execUtility": "15854632034944469292777429010439194350"
                 },
             ]
         });
-        let expected_prices: Prices = [
-            ("token0".to_owned(), "14024052566155238000".to_owned()),
-            ("token1".to_owned(), "1526784674855762300".to_owned()),
-        ]
-        .iter()
-        .cloned()
-        .collect();
 
         let expected_solution = models::Solution {
             surplus: U256::from_dec_str("15854632034944469292777429010439194350").ok(),
@@ -346,8 +294,7 @@ pub mod tests {
             executed_buy_amounts: vec![0, 95_042_777_139_162_480_000],
         };
 
-        let (prices, solution) = deserialize_result(&json, 2).expect("Should not fail to parse");
-        assert_eq!(prices, expected_prices);
+        let solution = deserialize_result(&json, 2).expect("Should not fail to parse");
         assert_eq!(solution, expected_solution);
     }
 
@@ -358,19 +305,6 @@ pub mod tests {
         });
         let err = deserialize_result(&json, 2).expect_err("Should fail to parse");
         assert_eq!(err.description(), "No 'price' object in json");
-    }
-
-    #[test]
-    fn serialize_result_fails_if_price_not_string() {
-        let json = json!({
-            "prices": {
-                "token0": 100,
-                "token1": 200,
-            },
-            "orders": []
-        });
-        let err = deserialize_result(&json, 2).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "Could not convert price to string");
     }
 
     #[test]
@@ -409,7 +343,7 @@ pub mod tests {
             ]
         });
         let err = deserialize_result(&json, 1).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "No 'execSurplus' field on order");
+        assert_eq!(err.description(), "No 'execUtility' field on order");
     }
 
     #[test]
@@ -422,7 +356,7 @@ pub mod tests {
                 {
                     "execSellAmount": "0",
                     "execBuyAmount": "0",
-                    "execSurplus": "0a0b"
+                    "execUtility": "0a0b"
                 }
             ]
         });
@@ -439,7 +373,7 @@ pub mod tests {
             "orders": [
                 {
                     "execBuyAmount": "0",
-                    "execSurplus": "0"
+                    "execUtility": "0"
                 }
             ]
         });
@@ -457,7 +391,7 @@ pub mod tests {
                 {
                     "execSellAmount": "0a",
                     "execBuyAmount": "0",
-                    "execSurplus": "0"
+                    "execUtility": "0"
                 }
             ]
         });
@@ -474,7 +408,7 @@ pub mod tests {
             "orders": [
                 {
                     "execSellAmount": "0",
-                    "execSurplus": "0"
+                    "execUtility": "0"
                 }
             ]
         });
@@ -492,7 +426,7 @@ pub mod tests {
                 {
                     "execSellAmount": "0",
                     "execBuyAmount": "0a",
-                    "execSurplus": "0"
+                    "execUtility": "0"
                 }
             ]
         });
@@ -546,11 +480,10 @@ pub mod tests {
             token: 0,
             percentage: 0.001,
         };
-        let mut solver = LinearOptimisationPriceFinder {
-            previous_prices: HashMap::new(),
+        let solver = LinearOptimisationPriceFinder {
             write_input: |_, json: &serde_json::Value| {
-                assert_eq!(json["fee_token"], json!("token0"));
-                assert_eq!(json["fee_percentage"], json!(0.001));
+                assert_eq!(json["feeToken"], json!("token0"));
+                assert_eq!(json["feePercentage"], json!(0.001));
                 Ok(())
             },
             run_solver: |_| Ok(()),
