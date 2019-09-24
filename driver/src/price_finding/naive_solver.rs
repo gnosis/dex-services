@@ -212,7 +212,7 @@ fn order_with_buffer_for_fee(order: &Order, fee: &Option<Fee>) -> Order {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::util::{u256_to_u128};
+    use crate::util::u256_to_u128;
     use dfusion_core::models::account_state::test_util::*;
     use std::collections::HashMap;
     use web3::types::{H160, H256};

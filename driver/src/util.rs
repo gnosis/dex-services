@@ -126,6 +126,22 @@ pub mod tests {
     }
 
     #[test]
+    fn test_256_to_u128_works() {
+        assert_eq!(0u128, u256_to_u128(U256::from(0)));
+        assert_eq!(1u128, u256_to_u128(U256::from(1)));
+        assert_eq!(
+            u128::max_value(),
+            u256_to_u128(U256::from_dec_str("340282366920938463463374607431768211455").unwrap())
+        );
+    }
+    
+    #[test]
+    #[should_panic]
+    fn test_u256_to_u128_panics_on_overflow() {
+        u256_to_u128(U256::from_dec_str("340282366920938463463374607431768211456").unwrap());
+    }
+
+    #[test]
     fn test_ceiled_div_u128() {
         assert_eq!(0u128.ceiled_div(10), 0);
         assert_eq!(1u128.ceiled_div(10), 1);
