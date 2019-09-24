@@ -67,7 +67,7 @@ impl StableXContract for StableXContractImpl {
             .ok_or("Not enough balance to send Txs")?;
         let (prices, token_ids_for_price) = encode_prices_for_contract(solution.prices);
         let (owners, order_ids, volumes) =
-            encode_execution_for_contract(orders, solution.executed_sell_amounts);
+            encode_execution_for_contract(orders, solution.executed_buy_amounts);
 
         self.base
             .contract
@@ -107,19 +107,18 @@ fn encode_prices_for_contract(price_vector: Vec<u128>) -> (Vec<U128>, Vec<U128>)
 
 fn encode_execution_for_contract(
     orders: Vec<Order>,
-    executed_sell_amounts: Vec<u128>,
+    executed_buy_amounts: Vec<u128>,
 ) -> (Vec<H160>, Vec<U128>, Vec<U128>) {
     assert_eq!(
         orders.len(),
-        executed_sell_amounts.len(),
+        executed_buy_amounts.len(),
         "Received inconsistent auction result data."
     );
-    // Note that buy_amounts do not play a role here since all orders are sell orders.
     let mut owners: Vec<H160> = vec![];
     let mut order_ids: Vec<U128> = vec![];
     let mut volumes: Vec<U128> = vec![];
-    for (order_index, sell_amount) in executed_sell_amounts.into_iter().enumerate() {
-        if sell_amount > 0 {
+    for (order_index, buy_amount) in executed_buy_amounts.into_iter().enumerate() {
+        if buy_amount > 0 {
             // order was touched!
             // Note that above condition is only holds for sell orders.
             owners.push(orders[order_index].account_id);
@@ -129,9 +128,7 @@ fn encode_execution_for_contract(
                 .expect("StableX Orders must have Batch Information");
             // TODO - using slot_index (u16) for order_id (U128) is temporary and not sustainable.
             order_ids.push(U128::from(order_batch_info.slot_index));
-            // all orders are sell orders, so volumes are sell_amounts.
-            // TODO - push buy_amount if not sellOrder
-            volumes.push(U128::from(sell_amount.to_be_bytes()));
+            volumes.push(U128::from(buy_amount.to_be_bytes()));
         }
     }
     (owners, order_ids, volumes)
@@ -227,7 +224,7 @@ pub mod tests {
 
     #[test]
     fn generic_encode_execution_test() {
-        let executed_sell_amounts = vec![1, 0];
+        let executed_buy_amounts = vec![1, 0];
 
         let address_1 = H160::from(1);
         let address_2 = H160::from(2);
@@ -265,7 +262,7 @@ pub mod tests {
         let expected_results = (expected_owners, expected_order_ids, expected_volumes);
 
         assert_eq!(
-            encode_execution_for_contract(vec![order_1, order_2], executed_sell_amounts),
+            encode_execution_for_contract(vec![order_1, order_2], executed_buy_amounts),
             expected_results
         );
     }
