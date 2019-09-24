@@ -20,5 +20,8 @@ step "Advance time to start auction" \
 step "Request withdraw" \
 "npx truffle exec scripts/stablex/request_withdraw.js --accountId=0 --tokenId=1 --amount=999"
 
+step "Advance time to finalize withdraw" \
+"npx truffle exec scripts/wait_seconds.js 300"
+
 step "Claim withdraw" \
 "npx truffle exec scripts/stablex/claim_withdraw.js --accountId=0 --tokenId=1 | grep \"Success! Balance of token 1 before claim: 3000000000000000000000, after claim: 3999000000000000000000\""

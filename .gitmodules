@@ -1,3 +1,3 @@
 [submodule "dex-contracts"]
 	path = dex-contracts
-	url = https://github.com/gnosis/dex-contracts
+	url = git@github.com:gnosis/dex-contracts.git
