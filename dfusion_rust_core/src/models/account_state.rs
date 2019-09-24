@@ -10,7 +10,7 @@ use crate::models::{Order, PendingFlux, RollingHashable, Solution};
 
 use super::util::*;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Default, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountState {
     pub state_hash: H256,
@@ -34,7 +34,7 @@ impl AccountState {
                 .enumerate()
                 .map(|(account, token_balances)| {
                     (
-                        H160::from(account as u64),
+                        H160::from(account as u64), // TODO - these are not accurate addresses.
                         token_balances
                             .iter()
                             .enumerate()
@@ -131,7 +131,7 @@ impl AccountState {
         self.state_hash = self.rolling_hash(self.state_index.low_u32());
     }
 
-    fn modify_balance<F>(&mut self, account_id: H160, token_id: u16, func: F)
+    pub fn modify_balance<F>(&mut self, account_id: H160, token_id: u16, func: F)
     where
         F: FnOnce(&mut u128),
     {

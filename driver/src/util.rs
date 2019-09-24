@@ -24,7 +24,7 @@ pub trait CeiledDiv {
 
 impl CeiledDiv for u128 {
     fn ceiled_div(&self, divisor: u128) -> u128 {
-        //ceil(p / float(q)) == (p + q - 1) / q
+        // ceil(p / float(q)) == (p + q - 1) / q
         (self + divisor - 1) / divisor
     }
 }
@@ -112,18 +112,14 @@ pub mod tests {
     use super::*;
 
     #[test]
-    fn test_u128_to_u256_on_one() {
-        let a: u128 = 1;
-        assert_eq!(U256::from(1), u128_to_u256(a));
-    }
-
-    #[test]
-    fn test_u128_to_u256_on_max() {
-        let a = u128::max_value();
+    fn test_u128_to_u256() {
         assert_eq!(
+            u128_to_u256(u128::max_value()),
             U256::from_dec_str("340282366920938463463374607431768211455").unwrap(),
-            u128_to_u256(a)
+            "failed on 128::max_value()"
         );
+        assert_eq!(u128_to_u256(1u128), U256::from(1), "failed on 1u128");
+        assert_eq!(u128_to_u256(0u128), U256::from(0), "failed on 0u128");
     }
 
     #[test]

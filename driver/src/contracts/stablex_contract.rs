@@ -1,20 +1,24 @@
 #[cfg(test)]
 extern crate mock_it;
 
-use dfusion_core::models::{AccountState, Order, Solution};
+use std::collections::HashMap;
+use std::env;
+use std::fs;
 
 use web3::contract::Options;
 use web3::futures::Future;
 use web3::types::{H160, U128, U256};
 
+use dfusion_core::models::{AccountState, Order, Solution};
+
 use crate::error::DriverError;
 
 use super::base_contract::BaseContract;
-
-use std::env;
-use std::fs;
+use super::stablex_auction_element::StableXAuctionElement;
 
 type Result<T> = std::result::Result<T, DriverError>;
+
+const AUCTION_ELEMENT_WIDTH: usize = 113;
 
 pub struct StableXContractImpl {
     base: BaseContract,
@@ -51,8 +55,20 @@ impl StableXContract for StableXContractImpl {
             .map_err(DriverError::from)
     }
 
-    fn get_auction_data(&self, _index: U256) -> Result<(AccountState, Vec<Order>)> {
-        unimplemented!();
+    fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
+        let packed_auction_bytes: Vec<u8> = self
+            .base
+            .contract
+            .query(
+                "getEncodedAuctionElements",
+                (),
+                None,
+                Options::default(),
+                None,
+            )
+            .wait()
+            .map_err(DriverError::from)?;
+        Ok(parse_auction_data(packed_auction_bytes, index))
     }
 
     fn submit_solution(
@@ -88,6 +104,35 @@ impl StableXContract for StableXContractImpl {
             .map_err(DriverError::from)
             .map(|_| ())
     }
+}
+
+fn parse_auction_data(packed_auction_bytes: Vec<u8>, index: U256) -> (AccountState, Vec<Order>) {
+    // extract packed auction info
+    assert_eq!(
+        packed_auction_bytes.len() % AUCTION_ELEMENT_WIDTH,
+        0,
+        "Each auction should be packed in {} bytes",
+        AUCTION_ELEMENT_WIDTH
+    );
+
+    let mut account_state = AccountState::default();
+    let mut order_count = HashMap::new();
+    let relevant_orders = packed_auction_bytes
+        .chunks(AUCTION_ELEMENT_WIDTH)
+        .map(|chunk| {
+            let mut chunk_array = [0; AUCTION_ELEMENT_WIDTH];
+            chunk_array.copy_from_slice(chunk);
+            StableXAuctionElement::from_bytes(&mut order_count, &chunk_array)
+        })
+        .filter(|x| x.in_auction(index) && x.order.sell_amount > 0)
+        .map(|element| {
+            account_state.modify_balance(element.order.account_id, element.order.sell_token, |x| {
+                *x = element.sell_token_balance
+            });
+            element.order
+        })
+        .collect();
+    (account_state, relevant_orders)
 }
 
 fn encode_prices_for_contract(price_vector: Vec<u128>) -> (Vec<U128>, Vec<U128>) {
@@ -140,10 +185,11 @@ pub mod tests {
     use mock_it::Matcher::*;
     use mock_it::Mock;
 
+    use dfusion_core::models::BatchInformation;
+
     use crate::error::ErrorKind;
 
     use super::*;
-    use dfusion_core::models::BatchInformation;
 
     type SubmitSolutionArguments = (U256, Matcher<Vec<Order>>, Matcher<Solution>);
 
@@ -264,6 +310,66 @@ pub mod tests {
         assert_eq!(
             encode_execution_for_contract(vec![order_1, order_2], executed_buy_amounts),
             expected_results
+        );
+    }
+
+    #[test]
+    fn generic_parse_auction_data_test() {
+        let bytes: Vec<u8> = vec![
+            // order 1
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // user: 20 elements
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 3, // sellTokenBalance: 3, 32 elements
+            1, 2, // buyToken: 256+2,
+            1, 1, // sellToken: 256+1, 56
+            0, 0, 0, 2, // validFrom: 2
+            0, 0, 1, 5, // validUntil: 256+5 64
+            1, // is_sell_order: true
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // remainingAmount: 2**8 + 1 = 257
+            // order 2
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // user:
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 3, // sellTokenBalance: 3
+            1, 2, // buyToken: 256+2
+            1, 1, // sellToken: 256+1
+            0, 0, 0, 2, // validFrom: 2
+            0, 0, 1, 5, // validUntil: 256+5
+            1, // is_sell_order: true
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258;
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, // remainingAmount: 2**8 = 256
+        ];
+        let mut account_state = AccountState::default();
+
+        let order_1 = Order {
+            batch_information: Some(BatchInformation {
+                slot_index: 0,
+                slot: U256::from(0),
+            }),
+            account_id: H160::from(1),
+            sell_token: 257,
+            buy_token: 258,
+            sell_amount: 257,
+            buy_amount: 257,
+        };
+        let order_2 = Order {
+            batch_information: Some(BatchInformation {
+                slot_index: 1,
+                slot: U256::from(0),
+            }),
+            account_id: H160::from(1),
+            sell_token: 257,
+            buy_token: 258,
+            sell_amount: 256,
+            buy_amount: 256,
+        };
+        let relevant_orders: Vec<Order> = vec![order_1, order_2];
+        account_state.modify_balance(H160::from(1), 257, |x| *x = 3);
+        assert_eq!(
+            (account_state, relevant_orders),
+            parse_auction_data(bytes, U256::from(3))
         );
     }
 
