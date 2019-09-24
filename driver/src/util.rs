@@ -24,7 +24,7 @@ pub trait CeiledDiv {
 
 impl CeiledDiv for u128 {
     fn ceiled_div(&self, divisor: u128) -> u128 {
-        //ceil(p / float(q)) == (p + q - 1) / q
+        // ceil(p / float(q)) == (p + q - 1) / q
         (self + divisor - 1) / divisor
     }
 }
