@@ -124,7 +124,7 @@ fn parse_auction_data(packed_auction_bytes: Vec<u8>, index: U256) -> (AccountSta
             chunk_array.copy_from_slice(chunk);
             StableXAuctionElement::from_bytes(&mut order_count, &chunk_array)
         })
-        .filter(|x| x.in_auction(index))
+    .filter(|x| x.in_auction(index) && x.order.sell_amount > 0) 
         .map(|element| {
             account_state.modify_balance(element.order.account_id, element.order.sell_token, |x| {
                 *x = element.sell_token_balance
