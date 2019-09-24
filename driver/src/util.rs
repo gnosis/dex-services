@@ -1,4 +1,5 @@
 use std::env;
+use std::str::FromStr;
 
 use web3::types::{H256, U256};
 
@@ -11,6 +12,28 @@ const BATCH_TIME_SECONDS: u32 = 3 * 60;
 
 pub fn u128_to_u256(x: u128) -> U256 {
     U256::from_big_endian(&x.to_be_bytes())
+}
+
+pub fn u256_to_u128(x: U256) -> u128 {
+    u128::from_str(&x.to_string()).unwrap()
+}
+
+pub trait CeiledDiv {
+    fn ceiled_div(&self, divisor: Self) -> Self;
+}
+
+impl CeiledDiv for u128 {
+    fn ceiled_div(&self, divisor: u128) -> u128 {
+        //ceil(p / float(q)) == (p + q - 1) / q
+        (self + divisor - 1) / divisor
+    }
+}
+
+impl CeiledDiv for U256 {
+    fn ceiled_div(&self, divisor: U256) -> U256 {
+        //ceil(p / float(q)) == (p + q - 1) / q
+        (self + divisor - 1) / divisor
+    }
 }
 
 pub fn find_first_unapplied_slot(
@@ -93,6 +116,7 @@ pub mod tests {
         let a: u128 = 1;
         assert_eq!(U256::from(1), u128_to_u256(a));
     }
+
     #[test]
     fn test_u128_to_u256_on_max() {
         let a = u128::max_value();
@@ -100,5 +124,59 @@ pub mod tests {
             U256::from_dec_str("340282366920938463463374607431768211455").unwrap(),
             u128_to_u256(a)
         );
+    }
+
+    #[test]
+    fn test_256_to_u128_works() {
+        assert_eq!(0u128, u256_to_u128(U256::from(0)));
+        assert_eq!(1u128, u256_to_u128(U256::from(1)));
+        assert_eq!(
+            u128::max_value(),
+            u256_to_u128(U256::from_dec_str("340282366920938463463374607431768211455").unwrap())
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_u256_to_u128_panics_on_overflow() {
+        u256_to_u128(U256::from_dec_str("340282366920938463463374607431768211456").unwrap());
+    }
+
+    #[test]
+    fn test_ceiled_div_u128() {
+        assert_eq!(0u128.ceiled_div(10), 0);
+        assert_eq!(1u128.ceiled_div(10), 1);
+        assert_eq!(10u128.ceiled_div(10), 1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_ceiled_div_by_0_u128() {
+        1u128.ceiled_div(0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_ceiled_div_overflow_u128() {
+        u128::max_value().ceiled_div(1);
+    }
+
+    #[test]
+    fn test_ceiled_div_u256() {
+        assert_eq!(U256::from(0).ceiled_div(U256::from(10)), U256::from(0));
+        assert_eq!(U256::from(1).ceiled_div(U256::from(10)), U256::from(1));
+        assert_eq!(U256::from(10).ceiled_div(U256::from(10)), U256::from(1));
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_ceiled_div_by_0_u256() {
+        U256::one().ceiled_div(U256::zero());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_ceiled_div_overflow_u256() {
+        U256::max_value().ceiled_div(U256::from(1));
     }
 }
