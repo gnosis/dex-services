@@ -116,6 +116,7 @@ pub mod tests {
         let a: u128 = 1;
         assert_eq!(U256::from(1), u128_to_u256(a));
     }
+
     #[test]
     fn test_u128_to_u256_on_max() {
         let a = u128::max_value();
@@ -134,7 +135,7 @@ pub mod tests {
             u256_to_u128(U256::from_dec_str("340282366920938463463374607431768211455").unwrap())
         );
     }
-    
+
     #[test]
     #[should_panic]
     fn test_u256_to_u128_panics_on_overflow() {
