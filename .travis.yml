@@ -29,17 +29,19 @@ matrix:
         - cd dex-contracts && npx truffle compile && cd -
       matrix:
         include:
-          - script:
-            - docker-compose up -d driver graph-listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
-            - cd dex-contracts && npx wait-port -t 30000 8545 && npx truffle migrate && cd -
-            - ./test/e2e-tests-deposit-withdraw.sh
-            - ./test/restart-containers.sh
-            - ./test/e2e-tests-auction.sh
-            - ./test/restart-containers.sh
-            - ./test/e2e-tests-standing-order.sh
-          - script:
-            - docker-compose up -d stablex
-            - cd dex-contracts && npx wait-port -t 30000 8545 && npx truffle migrate && cd -
-            - ./test/e2e-tests-stablex.sh
+          - language: generic
+            script:
+              - docker-compose up -d driver graph-listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
+              - cd dex-contracts && npx wait-port -t 30000 8545 && npx truffle migrate && cd -
+              - ./test/e2e-tests-deposit-withdraw.sh
+              - ./test/restart-containers.sh
+              - ./test/e2e-tests-auction.sh
+              - ./test/restart-containers.sh
+              - ./test/e2e-tests-standing-order.sh
+          - language: generic
+            script:
+              - docker-compose up -d stablex
+              - cd dex-contracts && npx wait-port -t 30000 8545 && npx truffle migrate && cd -
+              - ./test/e2e-tests-stablex.sh
       after_failure:
         - docker-compose logs
