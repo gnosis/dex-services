@@ -1,45 +1,43 @@
 if: (branch = master) OR (type = pull_request) OR (tag IS present)
-language: generic
-  dist: xenial
-  sudo: required
-  cache: 
-    directories:
-      - $HOME/.nvm/versions/node/v8.12.0/lib/node_modules
-      - dex-contracts/node_modules/
-  install:
-    - git submodule update --init
-    - npm install -C dex-contracts
-    - cd dex-contracts && npx truffle compile && cd -
-  after_failure:
-    - docker-compose logs
-matrix:
-  include:
-    - language: rust
-      rust: 1.36.0
-      cache: cargo
-      before_cache:
-        - find ./target/debug -type f -maxdepth 1 -delete
-        - rm -fr ./target/debug/{deps,.fingerprint}/{*ra_*,*test*,*tools*,*gen_lsp*}
-        - rm -f  ./target/.rustc_info.json
-      env:
-        - CARGO_INCREMENTAL=0
-      before_script:
-        - rustup component add clippy rustfmt
-      script:
-        - cargo test --all
-        - cargo clippy --all -- -D warnings
-        - cargo fmt -- --check
-    - script:
-        - docker-compose up -d driver graph-listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
-        - cd dex-contracts && npx wait-port -t 30000 8545 && npx truffle migrate && cd -
-        - ./test/e2e-tests-deposit-withdraw.sh
-        - ./test/restart-containers.sh
-        - ./test/e2e-tests-auction.sh
-        - ./test/restart-containers.sh
-        - ./test/e2e-tests-standing-order.sh
-    - script:
-        - docker-compose up -d stablex
-        - cd dex-contracts && npx wait-port -t 30000 8545 && npx truffle migrate && cd -
-        - ./test/e2e-tests-stablex.sh
-      
-    
+  language: generic
+    dist: xenial
+    sudo: required
+    cache: 
+      directories:
+        - $HOME/.nvm/versions/node/v8.12.0/lib/node_modules
+        - dex-contracts/node_modules/
+    install:
+      - git submodule update --init
+      - npm install -C dex-contracts
+      - cd dex-contracts && npx truffle compile && cd -
+    after_failure:
+      - docker-compose logs
+  matrix:
+    include:
+      - language: rust
+        rust: 1.36.0
+        cache: cargo
+        before_cache:
+          - find ./target/debug -type f -maxdepth 1 -delete
+          - rm -fr ./target/debug/{deps,.fingerprint}/{*ra_*,*test*,*tools*,*gen_lsp*}
+          - rm -f  ./target/.rustc_info.json
+        env:
+          - CARGO_INCREMENTAL=0
+        before_script:
+          - rustup component add clippy rustfmt
+        script:
+          - cargo test --all
+          - cargo clippy --all -- -D warnings
+          - cargo fmt -- --check
+      - script:
+          - docker-compose up -d driver graph-listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
+          - cd dex-contracts && npx wait-port -t 30000 8545 && npx truffle migrate && cd -
+          - ./test/e2e-tests-deposit-withdraw.sh
+          - ./test/restart-containers.sh
+          - ./test/e2e-tests-auction.sh
+          - ./test/restart-containers.sh
+          - ./test/e2e-tests-standing-order.sh
+      - script:
+          - docker-compose up -d stablex
+          - cd dex-contracts && npx wait-port -t 30000 8545 && npx truffle migrate && cd -
+          - ./test/e2e-tests-stablex.sh
