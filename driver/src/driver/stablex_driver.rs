@@ -34,7 +34,7 @@ impl<'a> StableXDriver<'a> {
         info!("Submitting solution: {:?}", &solution);
         self.contract.submit_solution(batch, orders, solution)?;
         self.past_auctions.insert(batch);
-        info!("Succesfully applied solution to batch {}", batch);
+        info!("Successfully applied solution to batch {}", batch);
         Ok(true)
     }
 }
