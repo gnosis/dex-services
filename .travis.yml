@@ -2,6 +2,7 @@ if: (branch = master) OR (type = pull_request) OR (tag IS present)
 matrix:
   include:
     - language: rust
+      name: "Unit Tests"
       rust: 1.36.0
       cache: cargo
       before_cache:
@@ -17,10 +18,9 @@ matrix:
         - cargo clippy --all -- -D warnings
         - cargo fmt -- --check
     - language: generic
-      dist: xenial
+      name: "dƒusion e2e Tests"
       cache: 
         directories:
-          - $HOME/.nvm/versions/node/v8.12.0/lib/node_modules
           - dex-contracts/node_modules/
       install:
         - npm install -C dex-contracts
@@ -36,10 +36,9 @@ matrix:
       after_failure:
         - docker-compose logs
     - language: generic
-      dist: xenial
+      name: "StableX e2e Tests"
       cache: 
         directories:
-          - $HOME/.nvm/versions/node/v8.12.0/lib/node_modules
           - dex-contracts/node_modules/
       install:
         - npm install -C dex-contracts
