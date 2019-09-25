@@ -166,7 +166,7 @@ impl PriceFinding for NaiveSolver {
                 // To account for the fee we have to either
                 // a) give people less (reduce buyAmount)
                 // b) take more (increase sellAmount)
-                let fee_denominator = (1.0 / fee.percentage) as u128;
+                let fee_denominator = (1.0 / fee.ratio) as u128;
                 if order.sell_token == fee.token {
                     exec_sell_amount[i] =
                         exec_sell_amount[i] * fee_denominator / (fee_denominator - 1);
@@ -196,7 +196,7 @@ fn order_with_buffer_for_fee(order: &Order, fee: &Option<Fee>) -> Order {
             // In order to make space for a fee in the existing limit, we need to
             // a) receive more stuff (while giving away the same)
             // b) give away less stuff (while receiving the same)
-            let fee_denominator = (1.0 / fee.percentage) as u128;
+            let fee_denominator = (1.0 / fee.ratio) as u128;
             if fee.token == order.buy_token {
                 order.buy_amount =
                     (order.buy_amount * fee_denominator).ceiled_div(fee_denominator - 1)
@@ -246,7 +246,7 @@ pub mod tests {
         let state = create_account_state_with_balance_for(&orders);
         let fee = Some(Fee {
             token: 0,
-            percentage: 0.001,
+            ratio: 0.001,
         });
 
         let mut solver = NaiveSolver::new(fee.clone());
@@ -285,7 +285,7 @@ pub mod tests {
         let state = create_account_state_with_balance_for(&orders);
         let fee = Some(Fee {
             token: 2,
-            percentage: 0.001,
+            ratio: 0.001,
         });
 
         let mut solver = NaiveSolver::new(fee.clone());
@@ -322,7 +322,7 @@ pub mod tests {
         let state = create_account_state_with_balance_for(&orders);
         let fee = Some(Fee {
             token: 2,
-            percentage: 0.001,
+            ratio: 0.001,
         });
         let mut solver = NaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
@@ -479,7 +479,7 @@ pub mod tests {
 
         let fee = Some(Fee {
             token: 0,
-            percentage: 0.001,
+            ratio: 0.001,
         });
         let mut solver = NaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
@@ -516,7 +516,7 @@ pub mod tests {
 
         let fee = Some(Fee {
             token: 2,
-            percentage: 0.001,
+            ratio: 0.001,
         });
         let mut solver = NaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
@@ -605,7 +605,7 @@ pub mod tests {
             let exec_buy_amount = solution.executed_buy_amounts[i];
             let exec_sell_amount = if sell_token_price > 0 {
                 if let Some(fee) = fee {
-                    let fee_denominator = (1.0 / fee.percentage) as u128;
+                    let fee_denominator = (1.0 / fee.ratio) as u128;
                     // We compute:
                     // sell_amount_wo_fee = buy_amount * buy_token_price / sell_token_price
                     // sell_amount_w_fee = sell_amount_wo_fee * fee_denominator / (fee_denominator - 1)
