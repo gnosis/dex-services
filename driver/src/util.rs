@@ -6,7 +6,7 @@ use web3::types::{H256, U256};
 use crate::contracts::snapp_contract::SnappContract;
 use crate::error::DriverError;
 use crate::error::ErrorKind;
-use crate::price_finding::{LinearOptimisationPriceFinder, NaiveSolver, PriceFinding, Fee};
+use crate::price_finding::{Fee, LinearOptimisationPriceFinder, NaiveSolver, PriceFinding};
 
 const BATCH_TIME_SECONDS: u32 = 3 * 60;
 
