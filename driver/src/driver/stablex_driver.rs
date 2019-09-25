@@ -31,8 +31,10 @@ impl<'a> StableXDriver<'a> {
         let (account_state, orders) = self.contract.get_auction_data(batch)?;
         let solution = self.price_finder.find_prices(&orders, &account_state)?;
 
+        info!("Submitting solution: {:?}", &solution);
         self.contract.submit_solution(batch, orders, solution)?;
         self.past_auctions.insert(batch);
+        info!("Successfully applied solution to batch {}", batch);
         Ok(true)
     }
 }

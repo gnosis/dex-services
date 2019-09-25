@@ -9,6 +9,15 @@ pub struct Fee {
     pub percentage: f64,
 }
 
+impl Default for Fee {
+    fn default() -> Self {
+        Fee {
+            token: 0,
+            percentage: 0.001,
+        }
+    }
+}
+
 pub trait PriceFinding {
     fn find_prices(
         &mut self,
