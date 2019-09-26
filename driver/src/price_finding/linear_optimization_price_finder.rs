@@ -478,12 +478,17 @@ pub mod tests {
     fn test_serialize_input_with_fee() {
         let fee = Fee {
             token: 0,
-            percentage: 0.001,
+            ratio: 0.001,
         };
         let solver = LinearOptimisationPriceFinder {
             write_input: |_, json: &serde_json::Value| {
-                assert_eq!(json["feeToken"], json!("token0"));
-                assert_eq!(json["feePercentage"], json!(0.001));
+                assert_eq!(
+                    json["fee"],
+                    json!({
+                        "token": "token0",
+                        "ratio": 0.001
+                    })
+                );
                 Ok(())
             },
             run_solver: |_| Ok(()),
