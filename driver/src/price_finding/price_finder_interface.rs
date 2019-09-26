@@ -13,7 +13,7 @@ impl Default for Fee {
     fn default() -> Self {
         Fee {
             token: 0,
-            percentage: 0.001,
+            ratio: 0.001,
         }
     }
 }
