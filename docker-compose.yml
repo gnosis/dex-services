@@ -1,6 +1,18 @@
 version: '3.6'
-services:
+x-rust-service:
+  &rust-service
+  build:
+    context: .
+    dockerfile: docker/rust/Dockerfile
+  depends_on:
+    - ganache-cli
+  restart: always
+  env_file:
+    - common.env
+  environment:
+    - RUST_BACKTRACE=1
 
+services:
   ganache-cli:
     ports:
       - '8545:8545'
@@ -18,25 +30,7 @@ services:
       - ganache-cli
     volumes:
       - ./dex-contracts:/app/dex-contracts
-
-  driver:
-    command: cargo run --bin dfusion
-    build:
-      context: .
-      dockerfile: docker/rust/Dockerfile
-    depends_on:
-      - ganache-cli
-    restart: always
-    volumes:
-      # Don't sync target, otherwise we rebuild on every deploy
-      - ./dex-contracts:/app/dex-contracts
-      - ./dfusion_rust_core/src:/app/dfusion_rust_core/src
-      - ./driver/src:/app/driver/src
-    env_file:
-      - common.env
-    environment:
-      - RUST_BACKTRACE=1
-
+  
   postgres:
     image: postgres
     ports:
@@ -46,15 +40,21 @@ services:
       POSTGRES_PASSWORD: let-me-in
       POSTGRES_DB: dfusion
 
+  driver:
+    << : *rust-service
+    command: cargo run --bin dfusion
+    volumes:
+      # Don't sync target, otherwise we rebuild on every deploy
+      - ./dex-contracts:/app/dex-contracts
+      - ./dfusion_rust_core/src:/app/dfusion_rust_core/src
+      - ./driver/src:/app/driver/src
+
   graph-listener:
+    << : *rust-service
     command: /app/docker/rust/run_listener.sh
-    build:
-      context: .
-      dockerfile: docker/rust/Dockerfile
     depends_on:
-      - postgres
       - ganache-cli
-    restart: always
+      - postgres
     ports:
       - '8000:8000'
       - '8001:8001'
@@ -65,7 +65,13 @@ services:
       - ./docker/rust:/app/docker/rust
       - ./listener/src:/app/listener/src
       - ./listener/subgraph_definition:/app/listener/subgraph_definition
-    env_file:
-      - common.env
-    environment:
-      - RUST_BACKTRACE=1
+
+  stablex:
+    << : *rust-service
+    command: cargo run --bin stablex
+    restart: always
+    volumes:
+      # Don't sync target, otherwise we rebuild on every deploy
+      - ./dex-contracts:/app/dex-contracts
+      - ./dfusion_rust_core/src:/app/dfusion_rust_core/src
+      - ./driver/src:/app/driver/src
