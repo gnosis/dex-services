@@ -2,6 +2,7 @@ if: (branch = master) OR (type = pull_request) OR (tag IS present)
 matrix:
   include:
     - language: rust
+      name: "Unit Tests"
       rust: 1.36.0
       cache: cargo
       before_cache:
@@ -17,23 +18,30 @@ matrix:
         - cargo clippy --all -- -D warnings
         - cargo fmt -- --check
     - language: generic
-      dist: xenial
-      sudo: required
+      name: "dƒusion e2e Tests"
       cache: 
         directories:
-          - $HOME/.nvm/versions/node/v8.12.0/lib/node_modules
           - dex-contracts/node_modules/
       install:
-        - git submodule update --init
-        - npm install -C dex-contracts
-        - cd dex-contracts && npx truffle compile && cd -
-        - docker-compose up -d driver graph-listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
-        - cd dex-contracts && npx wait-port -t 30000 8545 && npx truffle migrate && cd -
+        - ./test/setup_contracts.sh
       script:
+        - docker-compose up -d driver graph-listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
         - ./test/e2e-tests-deposit-withdraw.sh
         - ./test/restart-containers.sh
         - ./test/e2e-tests-auction.sh
         - ./test/restart-containers.sh
         - ./test/e2e-tests-standing-order.sh
+      after_failure:
+        - docker-compose logs
+    - language: generic
+      name: "StableX e2e Tests"
+      cache: 
+        directories:
+          - dex-contracts/node_modules/
+      install:
+        - ./test/setup_contracts.sh
+      script:
+        - docker-compose up -d stablex
+        - ./test/e2e-tests-stablex.sh
       after_failure:
         - docker-compose logs
