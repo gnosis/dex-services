@@ -6,7 +6,7 @@ use super::error::PriceFindingError;
 pub struct Fee {
     pub token: u16,
     /// Value between [0, 1] mapping from 0% -> 100%
-    pub percentage: f64,
+    pub ratio: f64,
 }
 
 impl Default for Fee {
