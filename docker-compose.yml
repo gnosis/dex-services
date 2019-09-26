@@ -48,7 +48,6 @@ services:
       - ./dex-contracts:/app/dex-contracts
       - ./dfusion_rust_core/src:/app/dfusion_rust_core/src
       - ./driver/src:/app/driver/src
-      - ../batchauctions:/app/batchauctions/
 
   graph-listener:
     << : *rust-service
@@ -76,4 +75,3 @@ services:
       - ./dex-contracts:/app/dex-contracts
       - ./dfusion_rust_core/src:/app/dfusion_rust_core/src
       - ./driver/src:/app/driver/src
-      - ../batchauctions:/app/batchauctions/

@@ -190,7 +190,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
         if let Some(fee) = &self.fee {
             input["fee"] = json!({
                 "token": token_id(fee.token),
-                "ratio": fee.percentage,
+                "ratio": fee.ratio,
             });
         }
         let input_file = format!("instance_{}.json", Utc::now().to_rfc3339());
