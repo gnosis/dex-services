@@ -101,7 +101,7 @@ impl StableXContract for StableXContractImpl {
                 Options::with(|mut opt| {
                     // usual gas estimate is not working
                     opt.gas_price = Some(25.into());
-                    opt.gas = Some(1_000_000.into());
+                    opt.gas = Some(5_000_000.into());
                 }),
             )
             .wait()

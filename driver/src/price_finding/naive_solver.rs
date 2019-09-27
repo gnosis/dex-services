@@ -92,7 +92,7 @@ impl NaiveSolver {
 
 impl PriceFinding for NaiveSolver {
     fn find_prices(
-        &mut self,
+        &self,
         orders: &[Order],
         state: &AccountState,
     ) -> Result<Solution, PriceFindingError> {
@@ -222,7 +222,7 @@ pub mod tests {
         let orders = order_pair_first_fully_matching_second();
         let state = create_account_state_with_balance_for(&orders);
 
-        let mut solver = NaiveSolver::new(None);
+        let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
         assert_eq!(Some(u128_to_u256(16 * 10u128.pow(36))), res.surplus);
@@ -249,7 +249,7 @@ pub mod tests {
             ratio: 0.001,
         });
 
-        let mut solver = NaiveSolver::new(fee.clone());
+        let solver = NaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
         check_solution(&orders, res, &fee).unwrap();
     }
@@ -260,7 +260,7 @@ pub mod tests {
         orders.reverse();
         let state = create_account_state_with_balance_for(&orders);
 
-        let mut solver = NaiveSolver::new(None);
+        let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
         assert_eq!(Some(u128_to_u256(16 * 10u128.pow(36))), res.surplus);
@@ -288,7 +288,7 @@ pub mod tests {
             ratio: 0.001,
         });
 
-        let mut solver = NaiveSolver::new(fee.clone());
+        let solver = NaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
         check_solution(&orders, res, &fee).unwrap();
     }
@@ -298,7 +298,7 @@ pub mod tests {
         let orders = order_pair_both_fully_matched();
         let state = create_account_state_with_balance_for(&orders);
 
-        let mut solver = NaiveSolver::new(None);
+        let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
         assert_eq!(Some(u128_to_u256(92 * 10u128.pow(36))), res.surplus);
@@ -324,7 +324,7 @@ pub mod tests {
             token: 2,
             ratio: 0.001,
         });
-        let mut solver = NaiveSolver::new(fee.clone());
+        let solver = NaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
 
         check_solution(&orders, res, &fee).unwrap();
@@ -384,7 +384,7 @@ pub mod tests {
         ];
         let state = create_account_state_with_balance_for(&orders);
 
-        let mut solver = NaiveSolver::new(None);
+        let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
         assert_eq!(Some(U256::from(16)), res.surplus);
@@ -423,7 +423,7 @@ pub mod tests {
             },
         ];
 
-        let mut solver = NaiveSolver::new(None);
+        let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
         assert_eq!(res, Solution::trivial(orders.len()));
     }
@@ -450,7 +450,7 @@ pub mod tests {
         ];
         let state = create_account_state_with_balance_for(&orders);
 
-        let mut solver = NaiveSolver::new(None);
+        let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
         assert_eq!(res, Solution::trivial(orders.len()));
     }
@@ -481,7 +481,7 @@ pub mod tests {
             token: 0,
             ratio: 0.001,
         });
-        let mut solver = NaiveSolver::new(fee.clone());
+        let solver = NaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
 
         assert_eq!(res.executed_sell_amounts, [20000, 9990]);
@@ -518,7 +518,7 @@ pub mod tests {
             token: 2,
             ratio: 0.001,
         });
-        let mut solver = NaiveSolver::new(fee.clone());
+        let solver = NaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
         assert_eq!(res, Solution::trivial(orders.len()));
     }
@@ -545,7 +545,7 @@ pub mod tests {
         ];
         let state = create_account_state_with_balance_for(&orders);
 
-        let mut solver = NaiveSolver::new(None);
+        let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
         assert_eq!(res, Solution::trivial(orders.len()));
     }

@@ -13,5 +13,5 @@ cp .ssh/id_rsa.pub /root/.ssh/id_rsa.pub
 # Clone and install dependencies
 git clone git@gitlab.gnosisdev.com:dfusion/batchauctions.git
 cd batchauctions
-git checkout v0.1
+git checkout v0.2
 pip install -r requirements.txt
