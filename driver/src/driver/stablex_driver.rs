@@ -44,7 +44,7 @@ impl<'a> StableXDriver<'a> {
             info!("Successfully applied solution to batch {}", batch);
             true
         } else {
-            info!("Not submitting 0 volume solution for batch {}", batch);
+            info!("Not submitting trivial solution for batch {}", batch);
             false
         };
         self.past_auctions.insert(batch);
