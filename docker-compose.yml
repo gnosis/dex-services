@@ -8,7 +8,7 @@ x-rust-service:
     - ganache-cli
   restart: always
   env_file:
-    - common-rinkeby.env
+    - common.env
   environment:
     - RUST_BACKTRACE=1
 
