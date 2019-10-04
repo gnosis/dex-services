@@ -39,14 +39,20 @@ impl<'a> StableXDriver<'a> {
             solution
         };
 
-        let submitted = if solution.executed_sell_amounts.iter().sum::<u128>() > 0 {
-            self.contract.submit_solution(batch, orders, solution)?;
-            info!("Successfully applied solution to batch {}", batch);
-            true
+        let current_objective_value = self.contract.get_current_objective_value()?;
+        let submitted = if let Some(surplus) = solution.surplus {
+            if current_objective_value < surplus {
+                self.contract.submit_solution(batch, orders, solution)?;
+                info!("Successfully applied solution to batch {}", batch);
+                true
+            } else {
+                false
+            }
         } else {
             info!("Not submitting trivial solution for batch {}", batch);
             false
         };
+
         self.past_auctions.insert(batch);
         Ok(submitted)
     }
@@ -81,6 +87,10 @@ mod tests {
             .get_auction_data
             .given(batch - 1)
             .will_return(Ok((state.clone(), orders.clone())));
+        contract
+            .get_current_objective_value
+            .given(())
+            .will_return(Ok(U256::zero()));
 
         contract
             .submit_solution
@@ -88,7 +98,7 @@ mod tests {
             .will_return(Ok(()));
 
         let solution = Solution {
-            surplus: Some(U256::zero()),
+            surplus: Some(U256::one()),
             prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
@@ -121,12 +131,17 @@ mod tests {
             .will_return(Ok((state.clone(), orders.clone())));
 
         contract
+            .get_current_objective_value
+            .given(())
+            .will_return(Ok(U256::zero()));
+
+        contract
             .submit_solution
             .given((batch - 1, Val(orders.clone()), Any))
             .will_return(Ok(()));
 
         let solution = Solution {
-            surplus: Some(U256::zero()),
+            surplus: Some(U256::one()),
             prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
@@ -141,6 +156,45 @@ mod tests {
         assert_eq!(driver.run().unwrap(), true);
 
         //Second auction
+        assert_eq!(driver.run().unwrap(), false);
+    }
+    #[test]
+
+    fn does_not_process_solution_if_better_one_exists() {
+        let contract = StableXContractMock::default();
+        let mut pf = PriceFindingMock::default();
+
+        let orders = vec![create_order_for_test(), create_order_for_test()];
+        let state = create_account_state_with_balance_for(&orders);
+
+        let batch = U256::from(42);
+        contract
+            .get_current_auction_index
+            .given(())
+            .will_return(Ok(batch));
+
+        contract
+            .get_auction_data
+            .given(batch - 1)
+            .will_return(Ok((state.clone(), orders.clone())));
+
+        contract
+            .get_current_objective_value
+            .given(())
+            .will_return(Ok(U256::from(100)));
+
+        let solution = Solution {
+            surplus: Some(U256::one()),
+            prices: vec![1, 2],
+            executed_sell_amounts: vec![0, 2],
+            executed_buy_amounts: vec![0, 2],
+        };
+        pf.find_prices
+            .given((orders, state))
+            .will_return(Ok(solution));
+
+        let mut driver = StableXDriver::new(&contract, &mut pf);
+
         assert_eq!(driver.run().unwrap(), false);
     }
 
@@ -198,13 +252,18 @@ mod tests {
             .will_return(Ok(batch));
 
         contract
+            .get_current_objective_value
+            .given(())
+            .will_return(Ok(U256::zero()));
+
+        contract
             .get_auction_data
             .given(batch - 1)
             .will_return(Ok((state.clone(), orders.clone())));
 
         let mut driver = StableXDriver::new(&contract, &mut pf);
 
-        assert!(driver.run().is_ok());
+        assert_eq!(driver.run().unwrap(), false);
         assert!(!mock_it::verify(
             pf.find_prices.was_called_with((orders, state))
         ));
@@ -223,6 +282,11 @@ mod tests {
             .get_current_auction_index
             .given(())
             .will_return(Ok(batch));
+
+        contract
+            .get_current_objective_value
+            .given(())
+            .will_return(Ok(U256::zero()));
 
         contract
             .get_auction_data

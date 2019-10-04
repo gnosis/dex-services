@@ -37,6 +37,7 @@ impl StableXContractImpl {
 
 pub trait StableXContract {
     fn get_current_auction_index(&self) -> Result<U256>;
+    fn get_current_objective_value(&self) -> Result<U256>;
     fn get_auction_data(&self, _index: U256) -> Result<(AccountState, Vec<Order>)>;
     fn submit_solution(
         &self,
@@ -51,6 +52,20 @@ impl StableXContract for StableXContractImpl {
         self.base
             .contract
             .query("getCurrentBatchId", (), None, Options::default(), None)
+            .wait()
+            .map_err(DriverError::from)
+    }
+
+    fn get_current_objective_value(&self) -> Result<U256> {
+        self.base
+            .contract
+            .query(
+                "getCurrentObjectiveValue",
+                (),
+                None,
+                Options::default(),
+                None,
+            )
             .wait()
             .map_err(DriverError::from)
     }
@@ -200,6 +215,7 @@ pub mod tests {
     #[derive(Clone)]
     pub struct StableXContractMock {
         pub get_current_auction_index: Mock<(), Result<U256>>,
+        pub get_current_objective_value: Mock<(), Result<U256>>,
         pub get_auction_data: Mock<U256, Result<(AccountState, Vec<Order>)>>,
         pub submit_solution: Mock<SubmitSolutionArguments, Result<()>>,
     }
@@ -209,6 +225,10 @@ pub mod tests {
             StableXContractMock {
                 get_current_auction_index: Mock::new(Err(DriverError::new(
                     "Unexpected call to get_current_auction_index",
+                    ErrorKind::Unknown,
+                ))),
+                get_current_objective_value: Mock::new(Err(DriverError::new(
+                    "Unexpected call to get_current_objective_value",
                     ErrorKind::Unknown,
                 ))),
                 get_auction_data: Mock::new(Err(DriverError::new(
@@ -226,6 +246,9 @@ pub mod tests {
     impl StableXContract for StableXContractMock {
         fn get_current_auction_index(&self) -> Result<U256> {
             self.get_current_auction_index.called(())
+        }
+        fn get_current_objective_value(&self) -> Result<U256> {
+            self.get_current_objective_value.called(())
         }
         fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
             self.get_auction_data.called(index)
