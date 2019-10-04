@@ -46,6 +46,7 @@ impl<'a> StableXDriver<'a> {
                 info!("Successfully applied solution to batch {}", batch);
                 true
             } else {
+                info!("Not submitting trivial solution for batch {}", batch);
                 false
             }
         } else {
