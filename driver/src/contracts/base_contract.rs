@@ -42,7 +42,7 @@ impl BaseContract {
         let contract = Contract::from_json(web3.eth(), contract_address, abi)?;
 
         let network_id = env::var("NETWORK_ID")?.parse()?;
-        let private_key = H256::from_str(&env::var("PRIVATE_KEY")?).unwrap();
+        let private_key = H256::from_str(&env::var("PRIVATE_KEY")?)?;
 
         Ok(BaseContract {
             contract,
