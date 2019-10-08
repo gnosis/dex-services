@@ -92,7 +92,11 @@ impl StableXContract for StableXContractImpl {
                     prices,
                     token_ids_for_price,
                 ),
-                Options::default(),
+                Options::with(|mut opt| {
+                    // usual gas estimate is not working
+                    opt.gas_price = Some(25.into());
+                    opt.gas = Some(5_000_000.into());
+                }),
             )
             .map(|_| ())
     }
