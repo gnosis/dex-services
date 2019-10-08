@@ -184,7 +184,7 @@ pub mod tests {
         ];
         let mut order_count = HashMap::new();
         StableXAuctionElement::from_bytes(&mut order_count, &bytes);
-        let mut bytes_modified = bytes.clone();
+        let mut bytes_modified = bytes;
         bytes_modified[112] = 0; // setting remainingAmount: 2**8  = 256
         let res = StableXAuctionElement::from_bytes(&mut order_count, &bytes_modified);
         let auction_element = StableXAuctionElement {

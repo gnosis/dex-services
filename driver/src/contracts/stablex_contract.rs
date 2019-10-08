@@ -77,17 +77,12 @@ impl StableXContract for StableXContractImpl {
         orders: Vec<Order>,
         solution: Solution,
     ) -> Result<()> {
-        let account = self
-            .base
-            .account_with_sufficient_balance()
-            .ok_or("Not enough balance to send Txs")?;
         let (prices, token_ids_for_price) = encode_prices_for_contract(solution.prices);
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
 
         self.base
-            .contract
-            .call(
+            .send_signed_transaction(
                 "submitSolution",
                 (
                     batch_index,
@@ -97,15 +92,8 @@ impl StableXContract for StableXContractImpl {
                     prices,
                     token_ids_for_price,
                 ),
-                account,
-                Options::with(|mut opt| {
-                    // usual gas estimate is not working
-                    opt.gas_price = Some(25.into());
-                    opt.gas = Some(5_000_000.into());
-                }),
+                Options::default(),
             )
-            .wait()
-            .map_err(DriverError::from)
             .map(|_| ())
     }
 }
