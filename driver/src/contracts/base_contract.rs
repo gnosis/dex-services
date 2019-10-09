@@ -79,7 +79,7 @@ impl BaseContract {
             .abi
             .function(function)
             .and_then(|function| function.encode_input(&params.into_tokens()))
-            .map(move |data| {
+            .map(|data| {
                 let tx = RawTransaction {
                     nonce,
                     to: Some(self.contract.address()),
@@ -90,7 +90,7 @@ impl BaseContract {
                     gas: options.gas.unwrap_or_else(|| U256::from(100_000)),
                     data,
                 };
-                tx.sign(&self.private_key, &4)
+                tx.sign(&self.private_key, &self.network_id)
             })?;
 
         self.web3

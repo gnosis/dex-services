@@ -293,7 +293,7 @@ impl SnappContract for SnappContractImpl {
         new_state: H256,
         withdraw_hash: H256,
     ) -> Result<()> {
-        // HERE WE NEED TO BE SURE THAT THE SENDING ACCOUNT IS THE OWNER
+        // SENDING ACCOUNT MUST BE CONTRACT OWNER
         self.base
             .send_signed_transaction(
                 "applyWithdrawals",
