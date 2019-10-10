@@ -276,20 +276,12 @@ impl SnappContract for SnappContractImpl {
         new_state: H256,
         deposit_hash: H256,
     ) -> Result<()> {
-        let account = self
-            .base
-            .account_with_sufficient_balance()
-            .ok_or("Not enough balance to send Txs")?;
         self.base
-            .contract
-            .call(
+            .send_signed_transaction(
                 "applyDeposits",
                 (slot, prev_state, new_state, deposit_hash),
-                account,
                 Options::default(),
             )
-            .wait()
-            .map_err(DriverError::from)
             .map(|_| ())
     }
 
@@ -301,25 +293,17 @@ impl SnappContract for SnappContractImpl {
         new_state: H256,
         withdraw_hash: H256,
     ) -> Result<()> {
-        // HERE WE NEED TO BE SURE THAT THE SENDING ACCOUNT IS THE OWNER
-        let account = self
-            .base
-            .account_with_sufficient_balance()
-            .ok_or("Not enough balance to send Txs")?;
+        // SENDING ACCOUNT MUST BE CONTRACT OWNER
         self.base
-            .contract
-            .call(
+            .send_signed_transaction(
                 "applyWithdrawals",
                 (slot, merkle_root, prev_state, new_state, withdraw_hash),
-                account,
                 Options::with(|mut opt| {
                     // usual gas estimate is not working
                     opt.gas_price = Some(25.into());
                     opt.gas = Some(1_000_000.into());
                 }),
             )
-            .wait()
-            .map_err(DriverError::from)
             .map(|_| ())
     }
 
@@ -334,23 +318,15 @@ impl SnappContract for SnappContractImpl {
             "Applying Auction with result bytes: {:?}",
             &prices_and_volumes
         );
-        let account = self
-            .base
-            .account_with_sufficient_balance()
-            .ok_or("Not enough balance to send Txs")?;
 
         let mut options = Options::default();
         options.gas = Some(U256::from(5_000_000));
         self.base
-            .contract
-            .call(
+            .send_signed_transaction(
                 "applyAuction",
                 (slot, prev_state, new_state, prices_and_volumes),
-                account,
                 options,
             )
-            .wait()
-            .map_err(DriverError::from)
             .map(|_| ())
     }
 
@@ -364,16 +340,11 @@ impl SnappContract for SnappContractImpl {
         objective_value: U256,
     ) -> Result<()> {
         info!("objective value: {:?}", &objective_value);
-        let account = self
-            .base
-            .account_with_sufficient_balance()
-            .ok_or("Not enough balance to send Txs")?;
 
         let mut options = Options::default();
         options.gas = Some(U256::from(5_000_000));
         self.base
-            .contract
-            .call(
+            .send_signed_transaction(
                 "auctionSolutionBid",
                 (
                     slot,
@@ -383,11 +354,8 @@ impl SnappContract for SnappContractImpl {
                     new_state,
                     objective_value,
                 ),
-                account,
                 options,
             )
-            .wait()
-            .map_err(DriverError::from)
             .map(|_| ())
     }
 }
