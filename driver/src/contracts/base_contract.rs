@@ -5,7 +5,6 @@ use clarity::PrivateKey;
 use ethereum_tx_sign::RawTransaction;
 
 use std::env;
-use std::str::FromStr;
 
 use web3::contract::tokens::Tokenize;
 use web3::contract::{Contract, Options};
@@ -42,7 +41,7 @@ impl BaseContract {
         let contract = Contract::from_json(web3.eth(), contract_address, abi)?;
 
         let network_id = env::var("NETWORK_ID")?.parse()?;
-        let private_key = H256::from_str(&env::var("PRIVATE_KEY")?)?;
+        let private_key = env::var("PRIVATE_KEY")?.parse()?;
 
         Ok(BaseContract {
             contract,
