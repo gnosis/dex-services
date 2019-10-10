@@ -1,9 +1,8 @@
-use std::collections::HashMap;
-
 use byteorder::{BigEndian, ByteOrder};
-use web3::types::{H160, U256};
-
 use dfusion_core::models::{BatchInformation, Order};
+use log::error;
+use std::collections::HashMap;
+use web3::types::{H160, U256};
 
 use crate::util::{u128_to_u256, u256_to_u128, CeiledDiv};
 

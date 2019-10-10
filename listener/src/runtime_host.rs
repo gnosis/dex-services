@@ -1,6 +1,6 @@
 use failure::Error;
 use futures::future::*;
-use slog::Logger;
+use slog::{info, warn, Logger};
 use std::collections::HashMap;
 use std::sync::Arc;
 

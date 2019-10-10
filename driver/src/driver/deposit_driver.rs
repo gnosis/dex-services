@@ -6,6 +6,7 @@ use crate::util::{
 
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::RollingHashable;
+use log::info;
 
 pub fn run_deposit_listener(
     db: &dyn DbInterface,

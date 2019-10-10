@@ -3,6 +3,7 @@ use crate::models::{ConcatenatingHashable, RollingHashable};
 
 use array_macro::array;
 use graph::data::store::Entity;
+use log::info;
 use serde_derive::Deserialize;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;

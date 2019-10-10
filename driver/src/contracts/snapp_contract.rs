@@ -1,5 +1,4 @@
-#[cfg(test)]
-extern crate mock_it;
+use log::{debug, info};
 
 use web3::contract::Options;
 use web3::futures::Future;

@@ -1,13 +1,9 @@
-#[macro_use]
-extern crate log;
-
 pub mod database;
 pub mod models;
 
 use graph::prelude::SubgraphDeploymentId;
 
-#[macro_use]
-extern crate lazy_static;
+use lazy_static::lazy_static;
 
 pub const SUBGRAPH_NAME: &str = "dfusion";
 

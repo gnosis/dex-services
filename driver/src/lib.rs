@@ -1,12 +1,6 @@
-extern crate dfusion_core;
-extern crate hex;
-#[macro_use]
-extern crate log;
-extern crate rustc_hex;
-extern crate serde_json;
-extern crate web3;
-
 use dfusion_core::database::DbInterface;
+
+use log::error;
 
 use crate::contracts::snapp_contract::SnappContract;
 use crate::driver::deposit_driver::run_deposit_listener;

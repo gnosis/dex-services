@@ -1,6 +1,3 @@
-#[cfg(test)]
-extern crate mock_it;
-
 use std::collections::HashMap;
 use std::env;
 use std::fs;

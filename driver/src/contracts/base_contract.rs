@@ -1,8 +1,8 @@
-extern crate ethereum_tx_sign;
-
 use clarity::PrivateKey;
 
 use ethereum_tx_sign::RawTransaction;
+
+use log::info;
 
 use std::env;
 
