@@ -4,8 +4,6 @@ x-rust-service:
   build:
     context: .
     dockerfile: docker/rust/Dockerfile
-  depends_on:
-    - ganache-cli
   restart: always
   env_file:
     - common.env

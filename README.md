@@ -136,9 +136,10 @@ docker-compose build
 
 #### Different networks:
 
-In order to start StableX for the Rinkeby network, replace the env-file in the docker-compose, like that:
+In order to start StableX for the Rinkeby network, overwrite certain environmental variables by adding common-rinkeby.env in the docker-compose, like this:
 
 ```
 env_file:
+    - common.env
     - common-rinkeby.env
 ```

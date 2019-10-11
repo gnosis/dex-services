@@ -41,6 +41,7 @@ matrix:
       install:
         - ./test/setup_contracts.sh
       script:
+        - docker-compose up -d ganache
         - docker-compose up -d stablex
         - ./test/e2e-tests-stablex.sh
       after_failure:
