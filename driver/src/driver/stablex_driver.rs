@@ -4,6 +4,8 @@ use crate::price_finding::PriceFinding;
 
 use dfusion_core::models::Solution;
 
+use log::info;
+
 use std::collections::HashSet;
 
 use web3::types::U256;

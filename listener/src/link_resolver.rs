@@ -3,7 +3,7 @@ use graph::data::subgraph::Link;
 use graph::prelude::LinkResolver as LinkResolverTrait;
 
 use futures::future::*;
-use slog::Logger;
+use slog::{info, Logger};
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;

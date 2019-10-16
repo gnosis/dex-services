@@ -28,8 +28,6 @@ pub trait PriceFinding {
 
 #[cfg(test)]
 pub mod tests {
-    extern crate mock_it;
-
     use super::super::error::ErrorKind;
     use super::*;
     use dfusion_core::models::Serializable;

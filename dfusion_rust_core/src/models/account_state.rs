@@ -1,5 +1,6 @@
 use byteorder::{BigEndian, WriteBytesExt};
 use graph::data::store::Entity;
+use log::debug;
 use serde_derive::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;

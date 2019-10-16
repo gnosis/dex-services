@@ -1,3 +1,5 @@
+use log::info;
+
 use std::env;
 use std::str::FromStr;
 

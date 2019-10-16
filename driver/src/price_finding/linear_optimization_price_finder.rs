@@ -4,6 +4,7 @@ use crate::price_finding::price_finder_interface::{Fee, PriceFinding};
 use dfusion_core::models;
 
 use chrono::Utc;
+use log::error;
 use serde_json::json;
 use std::collections::HashMap;
 use std::fs::File;

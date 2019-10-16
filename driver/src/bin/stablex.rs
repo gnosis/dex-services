@@ -1,10 +1,8 @@
-#[macro_use]
-extern crate log;
-extern crate simple_logger;
-
 use driver::contracts::stablex_contract::StableXContractImpl;
 use driver::driver::stablex_driver::StableXDriver;
 use driver::price_finding::Fee;
+
+use log::error;
 
 use std::thread;
 use std::time::Duration;

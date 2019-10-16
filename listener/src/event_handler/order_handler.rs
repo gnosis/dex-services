@@ -1,5 +1,5 @@
 use failure::Error;
-use slog::Logger;
+use slog::{info, Logger};
 use std::sync::Arc;
 
 use dfusion_core::models::Order;

@@ -1,6 +1,6 @@
 use super::EventHandler;
 use failure::Error;
-use slog::Logger;
+use slog::{info, Logger};
 use std::sync::Arc;
 
 use graph::components::ethereum::EthereumBlock;

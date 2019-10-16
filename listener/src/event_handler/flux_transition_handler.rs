@@ -4,6 +4,7 @@ use dfusion_core::database::DbInterface;
 use dfusion_core::models::util::{PopFromLogData, ToValue};
 
 use graph::data::store::Entity;
+use slog::info;
 use std::fmt;
 use web3::types::{H256, U256};
 

@@ -23,11 +23,11 @@ pub fn entity_key(entity_type: &str, entity: &Entity) -> EntityKey {
 #[cfg(test)]
 pub mod test {
     use graph::components::ethereum::EthereumBlock;
-    use slog::Logger;
+    use slog::{o, Discard, Logger};
     use web3::types::{Block, Bytes, Transaction, H160, H2048, H256, U256};
 
     pub fn logger() -> Logger {
-        Logger::root(slog::Discard, o!())
+        Logger::root(Discard, o!())
     }
 
     pub fn fake_tx() -> Transaction {

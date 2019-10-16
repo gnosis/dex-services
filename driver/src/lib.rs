@@ -1,12 +1,14 @@
-extern crate dfusion_core;
-extern crate hex;
-#[macro_use]
-extern crate log;
-extern crate rustc_hex;
-extern crate serde_json;
+// TODO(nlordell): The order in which these two crates get linked seems to
+//   matter (usure why). And when we remove `extern crate` statements and let
+//   cargo decide the order it leads to a linking error. So for now, until we
+//   figure out exactly why this is happening lets keep this these two `extern
+//   crate` statements so we successfully link.
+extern crate ethereum_tx_sign;
 extern crate web3;
 
 use dfusion_core::database::DbInterface;
+
+use log::error;
 
 use crate::contracts::snapp_contract::SnappContract;
 use crate::driver::deposit_driver::run_deposit_listener;
