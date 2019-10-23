@@ -24,7 +24,12 @@ trait Matchable {
     ) -> Option<OrderPairType>;
     fn opposite_tokens(&self, other: &Order) -> bool;
     fn have_price_overlap(&self, other: &Order) -> bool;
-    fn objective_value(&self, buy_price: u128, exec_buy_amount: u128, exec_sell_amount: u128) -> U256;
+    fn objective_value(
+        &self,
+        buy_price: u128,
+        exec_buy_amount: u128,
+        exec_sell_amount: u128,
+    ) -> U256;
 }
 
 impl Matchable for Order {
@@ -73,7 +78,12 @@ impl Matchable for Order {
                 <= u128_to_u256(other.sell_amount) * u128_to_u256(self.sell_amount)
     }
 
-    fn objective_value(&self, buy_price: u128, exec_buy_amount: u128, exec_sell_amount: u128) -> U256 {
+    fn objective_value(
+        &self,
+        buy_price: u128,
+        exec_buy_amount: u128,
+        exec_sell_amount: u128,
+    ) -> U256 {
         let relative_buy = (u128_to_u256(self.buy_amount) * u128_to_u256(exec_sell_amount))
             .ceiled_div(u128_to_u256(self.sell_amount));
         (u128_to_u256(exec_buy_amount) - relative_buy) * u128_to_u256(buy_price)
