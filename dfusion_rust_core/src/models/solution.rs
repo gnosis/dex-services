@@ -8,7 +8,7 @@ use std::iter::once;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Solution {
-    pub surplus: Option<U256>,
+    pub objective_value: Option<U256>,
     pub prices: Vec<u128>,
     pub executed_buy_amounts: Vec<u128>,
     pub executed_sell_amounts: Vec<u128>,
@@ -17,7 +17,7 @@ pub struct Solution {
 impl Solution {
     pub fn trivial(num_orders: usize) -> Self {
         Solution {
-            surplus: Some(U256::zero()),
+            objective_value: Some(U256::zero()),
             prices: vec![0; TOKENS as usize],
             executed_buy_amounts: vec![0; num_orders],
             executed_sell_amounts: vec![0; num_orders],
@@ -62,7 +62,7 @@ impl Deserializable for Solution {
             )));
         });
         Solution {
-            surplus: None,
+            objective_value: None,
             prices,
             executed_buy_amounts,
             executed_sell_amounts,
@@ -77,7 +77,7 @@ pub mod unit_test {
     #[test]
     fn test_serialize_deserialize() {
         let solution = Solution {
-            surplus: None,
+            objective_value: None,
             prices: vec![42; TOKENS as usize],
             executed_buy_amounts: vec![4, 5, 6],
             executed_sell_amounts: vec![1, 2, 3],
@@ -111,7 +111,7 @@ pub mod unit_test {
         ];
         let parsed_solution = Solution::from_bytes(bytes);
         let expected = Solution {
-            surplus: None,
+            objective_value: None,
             prices: vec![
                 1,
                 10u128.pow(18),
