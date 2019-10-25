@@ -42,8 +42,8 @@ impl<'a> StableXDriver<'a> {
         };
 
         let current_objective_value = self.contract.get_current_objective_value()?;
-        let submitted = if let Some(surplus) = solution.surplus {
-            if current_objective_value < surplus {
+        let submitted = if let Some(objective_value) = solution.objective_value {
+            if current_objective_value < objective_value {
                 self.contract.submit_solution(batch, orders, solution)?;
                 info!("Successfully applied solution to batch {}", batch);
                 true
@@ -101,7 +101,7 @@ mod tests {
             .will_return(Ok(()));
 
         let solution = Solution {
-            objective_value: Some(U256::zero()),
+            objective_value: Some(U256::one()),
             prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
@@ -144,7 +144,7 @@ mod tests {
             .will_return(Ok(()));
 
         let solution = Solution {
-            objective_value: Some(U256::zero()),
+            objective_value: Some(U256::one()),
             prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
@@ -187,7 +187,7 @@ mod tests {
             .will_return(Ok(U256::from(100)));
 
         let solution = Solution {
-            surplus: Some(U256::one()),
+            objective_value: Some(U256::one()),
             prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
