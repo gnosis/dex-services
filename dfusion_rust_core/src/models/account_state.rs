@@ -1,5 +1,6 @@
 use byteorder::{BigEndian, WriteBytesExt};
 use graph::data::store::Entity;
+use log::debug;
 use serde_derive::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -320,7 +321,7 @@ pub mod tests {
         };
 
         let results = Solution {
-            surplus: None,
+            objective_value: None,
             prices: vec![1, 1],
             executed_buy_amounts: vec![1, 1],
             executed_sell_amounts: vec![1, 1],

@@ -27,8 +27,6 @@ pub trait DbInterface: Send + Sync {
 }
 
 pub mod tests {
-    extern crate mock_it;
-
     use super::*;
     use mock_it::Mock;
 

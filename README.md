@@ -133,3 +133,11 @@ or rebuild everything if you are desperate (will take longer, but might solve ot
 ```bash
 docker-compose build
 ```
+
+#### Different networks:
+
+In order to start StableX for the Rinkeby network, make sure that the env variables in common-rinkeby.env are up to date and then start the specific docker:
+
+```
+docker-compose up stablex-rinkeby
+```

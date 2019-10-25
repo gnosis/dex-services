@@ -28,8 +28,6 @@ pub trait PriceFinding {
 
 #[cfg(test)]
 pub mod tests {
-    extern crate mock_it;
-
     use super::super::error::ErrorKind;
     use super::*;
     use dfusion_core::models::Serializable;
@@ -67,7 +65,7 @@ pub mod tests {
     #[test]
     fn test_serialize_solution() {
         let solution = models::Solution {
-            surplus: Some(U256::zero()),
+            objective_value: Some(U256::zero()),
             prices: vec![1, 2],
             executed_sell_amounts: vec![3, 4],
             executed_buy_amounts: vec![5, 6],

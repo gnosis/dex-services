@@ -7,6 +7,8 @@ use crate::util::{
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::{RollingHashable, RootHashable};
 
+use log::info;
+
 pub fn run_withdraw_listener(
     db: &dyn DbInterface,
     contract: &dyn SnappContract,

@@ -1,6 +1,3 @@
-extern crate graph;
-extern crate simple_logger;
-
 use dfusion_core::database::GraphReader;
 
 use driver::contracts::snapp_contract::SnappContractImpl;

@@ -1,13 +1,13 @@
+use super::util;
+use super::EventHandler;
 use super::*;
-
-use failure::Error;
-use slog::Logger;
-use std::sync::Arc;
 
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::util::{PopFromLogData, ToValue};
 use dfusion_core::models::Deserializable;
 use dfusion_core::models::Solution;
+
+use failure::Error;
 
 use graph::components::ethereum::EthereumBlock;
 use graph::components::store::EntityOperation;
@@ -16,10 +16,10 @@ use graph::data::store::Entity;
 use web3::types::{Log, Transaction};
 use web3::types::{H256, U256};
 
-use std::fmt;
+use slog::{debug, info, Logger};
 
-use super::util;
-use super::EventHandler;
+use std::fmt;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AuctionSettlementHandler {

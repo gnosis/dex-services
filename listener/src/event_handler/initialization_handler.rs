@@ -4,6 +4,8 @@ use dfusion_core::models::AccountState;
 
 use graph::data::store::Entity;
 
+use slog::info;
+
 #[derive(Debug, Clone)]
 pub struct InitializationHandler {}
 

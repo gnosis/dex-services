@@ -1,17 +1,9 @@
-extern crate dfusion_core;
-extern crate env_logger;
-extern crate graph;
-extern crate graph_core;
-extern crate graph_datasource_ethereum;
-extern crate lazy_static;
-#[macro_use]
-extern crate slog;
-
 mod event_handler;
 mod link_resolver;
 mod runtime_host;
 
 use lazy_static::lazy_static;
+use slog::{error, info};
 use std::env;
 use std::sync::Arc;
 use std::time::Duration;
