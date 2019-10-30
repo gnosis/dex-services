@@ -7,8 +7,8 @@ This repository contains the backend logic for the dfusion exchange based on the
 ## Architecture
 
 <p align="center">
-<img src="documentation/architecture.png" alt="dex-services architecture" width="500">
- </p>
+  <img src="documentation/architecture.png" alt="dex-services architecture" width="500">
+</p>
 
 The *Event Listener* registers for certain EVM events via the [Gnosis Trading DB](https://github.com/gnosis/pm-trading-db).
 The [dex smart contract](https://github.com/gnosis/dex-contracts) emits these events on user interaction (deposit, withdraw, order) as well as when the saved state root hash is updated (state transitions).
@@ -39,7 +39,17 @@ Thus, our data layer has to rely only on the data emitted by the EVM. It cannot 
 
 More components, e.g. a watchtower to challenge invalid state transitions, will be added in the future.
 
-## Installation
+## Getting Started
+
+### Requirements
+
+- Rust ^1.37
+- NodeJS ^11.0, starting with version 12 some deprecated APIs were removed that cause `scrypt`, `keccak`, `secp256k1`, and `sha3` packages to fail to build
+- Docker ^19.03 and Docker-compose ^1.24
+
+The project may work with older versions of these tools but they are not tested.
+
+### Installation
 
 Clone the repository, its submodule, and run the container
 ```bash
@@ -47,7 +57,7 @@ git clone git@github.com:gnosis/dex-services.git
 cd dex-services
 git submodule update --init
 cd dex-contracts 
-npm install && npx truffle compile 
+npm install --production && npx truffle compile 
 cd ../
 docker-compose up
 ```
@@ -84,7 +94,6 @@ npx truffle exec scripts/claim_withdraw.js --slot=0 --accountId=1 --tokenId=1
 ```
 
 ## Tests
-
 
 You need the following dependencies installed locally in order to run the e2e tests:
 - [jq](https://stedolan.github.io/jq/)
