@@ -134,6 +134,10 @@ fn deserialize_result(
                 objective_value.saturating_add(acc)
             }),
     );
+
+    // TODO(nlordell): determine what this objective value is
+    let _ = objective_value;
+
     let executed_sell_amounts = orders
         .iter()
         .map(|o| {
@@ -163,7 +167,6 @@ fn deserialize_result(
         })
         .collect::<Result<Vec<u128>, PriceFindingError>>()?;
     Ok(models::Solution {
-        objective_value,
         prices,
         executed_sell_amounts,
         executed_buy_amounts,
@@ -291,7 +294,6 @@ pub mod tests {
         });
 
         let expected_solution = models::Solution {
-            objective_value: U256::from_dec_str("15854632034944469292777429010439194350").ok(),
             prices: vec![14_024_052_566_155_238_000, 1_526_784_674_855_762_300],
             executed_sell_amounts: vec![0, 318_390_084_925_498_118_944],
             executed_buy_amounts: vec![0, 95_042_777_139_162_480_000],
@@ -299,6 +301,11 @@ pub mod tests {
 
         let solution = deserialize_result(&json, 2).expect("Should not fail to parse");
         assert_eq!(solution, expected_solution);
+
+        // TODO(nlordell): we need orders in order to calcaulate this utility
+        let expected_objective_value =
+            U256::from_dec_str("15854632034944469292777429010439194350").ok();
+        let _ = expected_objective_value;
     }
 
     #[test]

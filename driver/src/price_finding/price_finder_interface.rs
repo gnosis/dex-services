@@ -32,7 +32,6 @@ pub mod tests {
     use super::*;
     use dfusion_core::models::Serializable;
     use mock_it::Mock;
-    use web3::types::U256;
 
     pub struct PriceFindingMock {
         pub find_prices: Mock<
@@ -65,7 +64,6 @@ pub mod tests {
     #[test]
     fn test_serialize_solution() {
         let solution = models::Solution {
-            objective_value: Some(U256::zero()),
             prices: vec![1, 2],
             executed_sell_amounts: vec![3, 4],
             executed_buy_amounts: vec![5, 6],

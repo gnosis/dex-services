@@ -90,7 +90,6 @@ mod tests {
             .will_return(Ok(()));
 
         let solution = Solution {
-            objective_value: Some(U256::zero()),
             prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
@@ -128,7 +127,6 @@ mod tests {
             .will_return(Ok(()));
 
         let solution = Solution {
-            objective_value: Some(U256::zero()),
             prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],

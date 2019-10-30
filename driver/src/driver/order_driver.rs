@@ -155,13 +155,16 @@ impl<'a> OrderProcessor<'a> {
             new_state_root, solution
         );
 
+        // TODO(nlordell): maybe don't submit order here if we the computed
+        //   objective value is None
+
         self.contract.auction_solution_bid(
             auction_index,
             state_root,
             new_state_root,
             total_order_hash_from_contract,
             standing_order_indexes,
-            solution.objective_value.unwrap_or_else(U256::zero),
+            solution.objective_value(&orders).unwrap_or_else(U256::zero),
         )?;
 
         self.auction_bids.insert(
@@ -270,7 +273,6 @@ mod tests {
 
         let mut pf = PriceFindingMock::default();
         let expected_solution = Solution {
-            objective_value: Some(U256::zero()),
             prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
@@ -507,7 +509,6 @@ mod tests {
 
         let mut pf = PriceFindingMock::default();
         let expected_solution = Solution {
-            objective_value: Some(U256::zero()),
             prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
@@ -692,7 +693,6 @@ mod tests {
     fn test_update_balances() {
         let mut state = AccountState::new(H256::zero(), U256::one(), vec![100; 60], TOKENS);
         let solution = Solution {
-            objective_value: U256::from_dec_str("0").ok(),
             prices: vec![1, 2],
             executed_sell_amounts: vec![1, 1],
             executed_buy_amounts: vec![1, 1],

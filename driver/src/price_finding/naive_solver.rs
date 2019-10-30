@@ -84,6 +84,7 @@ impl Matchable for Order {
         exec_buy_amount: u128,
         exec_sell_amount: u128,
     ) -> U256 {
+        // TODO(nlordell): fix this as well
         let relative_buy = (u128_to_u256(self.buy_amount) * u128_to_u256(exec_sell_amount))
             .ceiled_div(u128_to_u256(self.sell_amount));
         (u128_to_u256(exec_buy_amount) - relative_buy) * u128_to_u256(buy_price)
@@ -188,8 +189,10 @@ impl PriceFinding for NaiveSolver {
             }
         }
 
+        // TODO(nlordell): deterimne what this value is.
+        let _ = total_objective_value;
+
         let solution = Solution {
-            objective_value: Some(total_objective_value),
             prices,
             executed_sell_amounts: exec_sell_amount,
             executed_buy_amounts: exec_buy_amount,
@@ -234,7 +237,10 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
-        assert_eq!(Some(u128_to_u256(16 * 10u128.pow(36))), res.objective_value);
+        assert_eq!(
+            Some(u128_to_u256(16 * 10u128.pow(36))),
+            res.objective_value(&orders)
+        );
         assert_eq!(
             vec![4 * 10u128.pow(18), 52 * 10u128.pow(18)],
             res.executed_buy_amounts
@@ -272,7 +278,10 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
-        assert_eq!(Some(u128_to_u256(16 * 10u128.pow(36))), res.objective_value);
+        assert_eq!(
+            Some(u128_to_u256(16 * 10u128.pow(36))),
+            res.objective_value(&orders)
+        );
         assert_eq!(
             vec![52 * 10u128.pow(18), 4 * 10u128.pow(18)],
             res.executed_buy_amounts
@@ -310,7 +319,10 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
-        assert_eq!(Some(u128_to_u256(92 * 10u128.pow(36))), res.objective_value);
+        assert_eq!(
+            Some(u128_to_u256(92 * 10u128.pow(36))),
+            res.objective_value(&orders)
+        );
         assert_eq!(
             vec![16 * 10u128.pow(18), 10 * 10u128.pow(18)],
             res.executed_buy_amounts
@@ -396,7 +408,7 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
-        assert_eq!(Some(U256::from(16)), res.objective_value);
+        assert_eq!(Some(U256::from(16)), res.objective_value(&orders));
         assert_eq!(vec![0, 0, 0, 52, 4, 0], res.executed_buy_amounts);
         assert_eq!(vec![0, 0, 0, 4, 52, 0], res.executed_sell_amounts);
         assert_eq!(4, res.prices[1]);
