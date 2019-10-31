@@ -15,7 +15,7 @@ use super::stablex_auction_element::StableXAuctionElement;
 
 type Result<T> = std::result::Result<T, DriverError>;
 
-const AUCTION_ELEMENT_WIDTH: usize = 113;
+pub const AUCTION_ELEMENT_WIDTH: usize = 112;
 
 pub struct StableXContractImpl {
     base: BaseContract,
@@ -317,7 +317,6 @@ pub mod tests {
             1, 1, // sellToken: 256+1, 56
             0, 0, 0, 2, // validFrom: 2
             0, 0, 1, 5, // validUntil: 256+5 64
-            1, // is_sell_order: true
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // remainingAmount: 2**8 + 1 = 257
@@ -329,7 +328,6 @@ pub mod tests {
             1, 1, // sellToken: 256+1
             0, 0, 0, 2, // validFrom: 2
             0, 0, 1, 5, // validUntil: 256+5
-            1, // is_sell_order: true
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258;
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, // remainingAmount: 2**8 = 256
