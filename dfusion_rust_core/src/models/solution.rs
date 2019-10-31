@@ -1,4 +1,5 @@
-use super::*;
+use crate::models::*;
+use crate::num::{I256, U256CheckedAddI256Ext};
 
 use log::info;
 
@@ -40,6 +41,11 @@ impl Solution {
     /// - The solution values lead to invalid utility or disregarded utility
     ///   results
     /// - The orders reference tokens that are not priced by the solution
+    ///
+    /// Note that just because this method returns some value does not mean that
+    /// the solution is actually valid WRT to the smart contract as it currently
+    /// does not verify that things like `execSellAmount * p[sellToken] * (1-phi)
+    /// == execBuyAmount * p[buyToken]` or token conservation hold.
     pub fn objective_value(&self, orders: &[Order]) -> Option<U256> {
         if orders.len() != self.executed_buy_amounts.len()
             || orders.len() != self.executed_sell_amounts.len()
@@ -53,6 +59,7 @@ impl Solution {
 
         let mut u = U256::zero();
         let mut du = U256::zero();
+        let mut fee = I256::zero();
 
         for (i, order) in orders.iter().enumerate() {
             let buy_price = self.price(order.buy_token)?;
@@ -65,15 +72,22 @@ impl Solution {
                 continue;
             }
 
-            u = u.checked_add(order.utility(buy_price, sell_price, exec_buy_amount)?)?;
+            u = u.checked_add(order.utility(buy_price, exec_buy_amount, exec_sell_amount)?)?;
             du = du.checked_add(order.disregarded_utility(
                 buy_price,
                 sell_price,
                 exec_sell_amount,
             )?)?;
+
+            if order.buy_token == 0 {
+                fee = fee.checked_sub(exec_buy_amount.into())?;
+            }
+            if order.sell_token == 0 {
+                fee = fee.checked_add(exec_sell_amount.into())?;
+            }
         }
 
-        u.checked_sub(du)
+        u.checked_sub(du)?.checked_add_i256(fee / 2)
     }
 }
 
