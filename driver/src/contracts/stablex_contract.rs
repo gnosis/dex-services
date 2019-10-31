@@ -15,7 +15,7 @@ use super::stablex_auction_element::StableXAuctionElement;
 
 type Result<T> = std::result::Result<T, DriverError>;
 
-const AUCTION_ELEMENT_WIDTH: usize = 112;
+pub const AUCTION_ELEMENT_WIDTH: usize = 112;
 
 pub struct StableXContractImpl {
     base: BaseContract,

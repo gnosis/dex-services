@@ -2,6 +2,7 @@ use byteorder::{BigEndian, ByteOrder};
 use dfusion_core::models::{BatchInformation, Order};
 use std::collections::HashMap;
 use web3::types::{H160, U256};
+use super::stablex_contract::AUCTION_ELEMENT_WIDTH;
 
 use crate::util::{u128_to_u256, u256_to_u128, CeiledDiv};
 
@@ -18,7 +19,10 @@ impl StableXAuctionElement {
         self.valid_from <= index && index <= self.valid_until
     }
 
-    pub fn from_bytes(order_count: &mut HashMap<H160, u16>, bytes: &[u8; 112]) -> Self {
+    pub fn from_bytes(
+        order_count: &mut HashMap<H160, u16>,
+        bytes: &[u8; AUCTION_ELEMENT_WIDTH],
+    ) -> Self {
         let account_id = H160::from(&bytes[0..20]);
 
         // these go together (since sell_token_balance is emitted as u256 and treated as u128
