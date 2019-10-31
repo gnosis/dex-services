@@ -1,6 +1,6 @@
+use super::stablex_contract::AUCTION_ELEMENT_WIDTH;
 use byteorder::{BigEndian, ByteOrder};
 use dfusion_core::models::{BatchInformation, Order};
-use log::error;
 use std::collections::HashMap;
 use web3::types::{H160, U256};
 
@@ -19,7 +19,10 @@ impl StableXAuctionElement {
         self.valid_from <= index && index <= self.valid_until
     }
 
-    pub fn from_bytes(order_count: &mut HashMap<H160, u16>, bytes: &[u8; 113]) -> Self {
+    pub fn from_bytes(
+        order_count: &mut HashMap<H160, u16>,
+        bytes: &[u8; AUCTION_ELEMENT_WIDTH],
+    ) -> Self {
         let account_id = H160::from(&bytes[0..20]);
 
         // these go together (since sell_token_balance is emitted as u256 and treated as u128
@@ -38,12 +41,10 @@ impl StableXAuctionElement {
         let valid_until = U256::from(u32::from_le_bytes([
             bytes[63], bytes[62], bytes[61], bytes[60],
         ]));
-        let is_sell_order = bytes[64] > 0;
-        let numerator = BigEndian::read_u128(&bytes[65..81]);
-        let denominator = BigEndian::read_u128(&bytes[81..97]);
-        let remaining = BigEndian::read_u128(&bytes[97..113]);
-        let (buy_amount, sell_amount) =
-            compute_buy_sell_amounts(numerator, denominator, remaining, is_sell_order);
+        let numerator = BigEndian::read_u128(&bytes[64..80]);
+        let denominator = BigEndian::read_u128(&bytes[80..96]);
+        let remaining = BigEndian::read_u128(&bytes[96..112]);
+        let (buy_amount, sell_amount) = compute_buy_sell_amounts(numerator, denominator, remaining);
         let order_counter = order_count.entry(account_id).or_insert(0);
         *order_counter += 1;
         StableXAuctionElement {
@@ -65,31 +66,21 @@ impl StableXAuctionElement {
     }
 }
 
-fn compute_buy_sell_amounts(
-    numerator: u128,
-    denominator: u128,
-    remaining: u128,
-    is_sell_order: bool,
-) -> (u128, u128) {
+fn compute_buy_sell_amounts(numerator: u128, denominator: u128, remaining: u128) -> (u128, u128) {
     assert!(
         remaining <= denominator,
         "Smart contract should never allow this inequality"
     );
-    if is_sell_order {
-        // 0 on sellAmount (remaining <= denominator) is nonsense, but solver can handle it.
-        // 0 on buyAmount (numerator) is a Market Sell Order.
-        let buy_amount = if denominator > 0 {
-            // up-casting to handle overflow
-            let top = u128_to_u256(remaining) * u128_to_u256(numerator);
-            u256_to_u128((top).ceiled_div(u128_to_u256(denominator)))
-        } else {
-            0
-        };
-        (buy_amount, remaining)
+    // 0 on sellAmount (remaining <= denominator) is nonsense, but solver can handle it.
+    // 0 on buyAmount (numerator) is a Market Sell Order.
+    let buy_amount = if denominator > 0 {
+        // up-casting to handle overflow
+        let top = u128_to_u256(remaining) * u128_to_u256(numerator);
+        u256_to_u128((top).ceiled_div(u128_to_u256(denominator)))
     } else {
-        error!("Unable to to handle buy orders, returning unfulfillable amounts");
-        (0u128, 0u128)
-    }
+        0
+    };
+    (buy_amount, remaining)
 }
 
 #[cfg(test)]
@@ -118,7 +109,7 @@ pub mod tests {
     #[test]
     fn null_auction_element_from_bytes() {
         let mut order_count = HashMap::new();
-        let res = StableXAuctionElement::from_bytes(&mut order_count, &[0u8; 113]);
+        let res = StableXAuctionElement::from_bytes(&mut order_count, &[0u8; 112]);
 
         assert_eq!(res, emptyish_auction_element());
     }
@@ -128,12 +119,12 @@ pub mod tests {
         let numerator = 19;
         let denominator = 14;
         let remaining = 5;
-        let result = compute_buy_sell_amounts(numerator, denominator, remaining, true);
+        let result = compute_buy_sell_amounts(numerator, denominator, remaining);
         assert_eq!(result, ((5 * 19 + 13) / 14, 5));
     }
     #[test]
     fn custom_auction_element_from_bytes() {
-        let bytes: [u8; 113] = [
+        let bytes: [u8; 112] = [
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // user: 20 elements
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 3, // sellTokenBalance: 3, 32 elements
@@ -141,7 +132,6 @@ pub mod tests {
             1, 1, // sellToken: 256+1,
             0, 0, 0, 2, // validFrom: 2
             0, 0, 1, 5, // validUntil: 256+5
-            1, // is_sell_order: true
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // remainingAmount: 2**8 + 1 = 257
@@ -168,7 +158,7 @@ pub mod tests {
     }
     #[test]
     fn custom_auction_element_from_bytes_with_higher_order_id() {
-        let bytes: [u8; 113] = [
+        let bytes: [u8; 112] = [
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // user: 20 elements
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 3, // sellTokenBalance: 3, 32 elements
@@ -176,7 +166,6 @@ pub mod tests {
             1, 1, // sellToken: 256+1, 56
             0, 0, 0, 2, // validFrom: 2
             0, 0, 1, 5, // validUntil: 256+5 64
-            1, // is_sell_order: true
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // remainingAmount: 2**8 + 1 = 257
@@ -184,7 +173,7 @@ pub mod tests {
         let mut order_count = HashMap::new();
         StableXAuctionElement::from_bytes(&mut order_count, &bytes);
         let mut bytes_modified = bytes;
-        bytes_modified[112] = 0; // setting remainingAmount: 2**8  = 256
+        bytes_modified[111] = 0; // setting remainingAmount: 2**8  = 256
         let res = StableXAuctionElement::from_bytes(&mut order_count, &bytes_modified);
         let auction_element = StableXAuctionElement {
             valid_from: U256::from(2),
@@ -209,7 +198,7 @@ pub mod tests {
     #[should_panic]
     fn test_from_bytes_fails_on_hopefully_null() {
         let mut order_count = HashMap::new();
-        StableXAuctionElement::from_bytes(&mut order_count, &[1u8; 113]);
+        StableXAuctionElement::from_bytes(&mut order_count, &[1u8; 112]);
     }
 
     // Testing in_auction
@@ -261,7 +250,7 @@ pub mod tests {
         let denominator = 3u128;
         let remaining = 2u128;
         // Note that contract does not allow remaining > denominator!
-        let (buy, sell) = compute_buy_sell_amounts(numerator, denominator, remaining, true);
+        let (buy, sell) = compute_buy_sell_amounts(numerator, denominator, remaining);
         // Sell at most 2 for at least 1 (i.e. as long as the price at least 1:3)
         assert_eq!((buy, sell), (1, remaining));
     }
@@ -273,7 +262,7 @@ pub mod tests {
         let remaining = u128::max_value();
 
         // Note that contract does not allow remaining > denominator!
-        let (buy, sell) = compute_buy_sell_amounts(numerator, denominator, remaining, true);
+        let (buy, sell) = compute_buy_sell_amounts(numerator, denominator, remaining);
         // Sell at most 3 for at least 2 (i.e. as long as the price at least 1:2)
         assert_eq!((buy, sell), (2, remaining));
     }
@@ -282,7 +271,7 @@ pub mod tests {
     fn generic_compute_buy_sell() {
         let (numerator, denominator) = (1_000u128, 1_500u128);
         let remaining = 1_486u128;
-        let (buy, sell) = compute_buy_sell_amounts(numerator, denominator, remaining, true);
+        let (buy, sell) = compute_buy_sell_amounts(numerator, denominator, remaining);
         assert_eq!((buy, sell), (991, remaining));
     }
 
@@ -290,7 +279,7 @@ pub mod tests {
     fn generic_compute_buy_sell_2() {
         let (numerator, denominator) = (1_000u128, 1_500u128);
         let remaining = 1_485u128;
-        let (buy, sell) = compute_buy_sell_amounts(numerator, denominator, remaining, true);
+        let (buy, sell) = compute_buy_sell_amounts(numerator, denominator, remaining);
         assert_eq!((buy, sell), (990, remaining));
     }
 
