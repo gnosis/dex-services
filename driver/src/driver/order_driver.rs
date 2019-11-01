@@ -155,8 +155,13 @@ impl<'a> OrderProcessor<'a> {
             new_state_root, solution
         );
 
-        // TODO(nlordell): maybe don't submit order here if we the computed
-        //   objective value is None
+        let objective_value = match solution.objective_value(&orders) {
+            Some(value) => value,
+            None => {
+                warn!("Failed to compute objective value which could indicate an invalid solution");
+                U256::zero()
+            }
+        };
 
         self.contract.auction_solution_bid(
             auction_index,
@@ -164,7 +169,7 @@ impl<'a> OrderProcessor<'a> {
             new_state_root,
             total_order_hash_from_contract,
             standing_order_indexes,
-            solution.objective_value(&orders).unwrap_or_else(U256::zero),
+            objective_value,
         )?;
 
         self.auction_bids.insert(
