@@ -1,5 +1,5 @@
 use dfusion_core::models::{AccountState, Order, Solution, TOKENS};
-use dfusion_core::num::I256;
+use web3::types::U256;
 
 use crate::price_finding::error::PriceFindingError;
 use crate::util::{u128_to_u256, CeiledDiv};
@@ -29,7 +29,7 @@ trait Matchable {
         sell_price: u128,
         exec_buy_amount: u128,
         exec_sell_amount: u128,
-    ) -> Option<I256>;
+    ) -> Option<(U256, U256)>;
 }
 
 impl Matchable for Order {
@@ -85,15 +85,11 @@ impl Matchable for Order {
         sell_price: u128,
         exec_buy_amount: u128,
         exec_sell_amount: u128,
-    ) -> Option<I256> {
-        let u: I256 = self
-            .utility(buy_price, exec_buy_amount, exec_sell_amount)
-            .and_then(I256::checked_from)?;
-        let du = self
-            .disregarded_utility(buy_price, sell_price, exec_sell_amount)
-            .and_then(I256::checked_from)?;
+    ) -> Option<(U256, U256)> {
+        let u = self.utility(buy_price, exec_buy_amount, exec_sell_amount)?;
+        let du = self.disregarded_utility(buy_price, sell_price, exec_sell_amount)?;
 
-        u.checked_sub(du)
+        Some((u, du))
     }
 }
 
@@ -158,7 +154,7 @@ impl PriceFinding for NaiveSolver {
                     }
                     None => continue,
                 }
-                let x_objective_value = x
+                let (x_u, x_du) = x
                     .objective_value(
                         prices[x.buy_token as usize],
                         prices[y.buy_token as usize],
@@ -166,7 +162,7 @@ impl PriceFinding for NaiveSolver {
                         exec_sell_amount[i],
                     )
                     .unwrap();
-                let y_objective_value = y
+                let (y_u, y_du) = y
                     .objective_value(
                         prices[y.buy_token as usize],
                         prices[x.buy_token as usize],
@@ -174,8 +170,9 @@ impl PriceFinding for NaiveSolver {
                         exec_sell_amount[j],
                     )
                     .unwrap();
-                let objective_value = x_objective_value.checked_add(y_objective_value).unwrap();
-                if objective_value.is_negative() {
+                let u = x_u + y_u;
+                let du = x_du + y_du;
+                if u < du {
                     continue;
                 }
 
@@ -250,10 +247,9 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
-        assert_eq!(
-            I256::from(-28_000_000_000_000_100_000_000_000_000_000_000_000i128).checked_into(),
-            res.objective_value(&orders)
-        );
+        // -28_000_000_000_000_100_000_000_000_000_000_000_000
+        assert_eq!(None, res.objective_value(&orders));
+
         assert_eq!(
             vec![4 * 10u128.pow(18), 52 * 10u128.pow(18)],
             res.executed_buy_amounts
@@ -291,10 +287,9 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
-        assert_eq!(
-            I256::from(-28_000_000_000_000_100_000_000_000_000_000_000_000i128).checked_into(),
-            res.objective_value(&orders)
-        );
+        // -28_000_000_000_000_100_000_000_000_000_000_000_000
+        assert_eq!(None, res.objective_value(&orders));
+
         assert_eq!(
             vec![52 * 10u128.pow(18), 4 * 10u128.pow(18)],
             res.executed_buy_amounts
@@ -421,7 +416,9 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
-        assert_eq!(I256::from(-28).checked_into(), res.objective_value(&orders));
+        // -28
+        assert_eq!(None, res.objective_value(&orders));
+
         assert_eq!(vec![0, 0, 0, 52, 4, 0], res.executed_buy_amounts);
         assert_eq!(vec![0, 0, 0, 4, 52, 0], res.executed_sell_amounts);
         assert_eq!(4, res.prices[1]);

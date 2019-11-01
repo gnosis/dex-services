@@ -1,5 +1,5 @@
 use crate::models::*;
-use crate::num::{I256, U256CheckedAddI256Ext};
+use crate::util::u128_to_u256;
 
 use log::info;
 
@@ -59,7 +59,9 @@ impl Solution {
 
         let mut u = U256::zero();
         let mut du = U256::zero();
-        let mut fee = I256::zero();
+
+        let mut fee_buy_amount = U256::zero();
+        let mut fee_sell_amount = U256::zero();
 
         for (i, order) in orders.iter().enumerate() {
             let buy_price = self.price(order.buy_token)?;
@@ -80,14 +82,15 @@ impl Solution {
             )?)?;
 
             if order.buy_token == 0 {
-                fee = fee.checked_sub(exec_buy_amount.into())?;
+                fee_buy_amount = fee_buy_amount.checked_add(u128_to_u256(exec_buy_amount))?;
             }
             if order.sell_token == 0 {
-                fee = fee.checked_add(exec_sell_amount.into())?;
+                fee_sell_amount = fee_buy_amount.checked_add(u128_to_u256(exec_buy_amount))?;
             }
         }
 
-        u.checked_sub(du)?.checked_add_i256(fee / 2)
+        u.checked_sub(du)?
+            .checked_add(fee_sell_amount.checked_sub(fee_buy_amount)? / 2)
     }
 }
 
