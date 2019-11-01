@@ -1,6 +1,6 @@
 pub mod database;
 pub mod models;
-mod num;
+pub mod num;
 pub mod util;
 
 use graph::prelude::SubgraphDeploymentId;

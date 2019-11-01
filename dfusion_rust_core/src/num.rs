@@ -15,6 +15,16 @@ impl I256 {
         I256(U256::zero())
     }
 
+    /// Creates a I256 from a U256 and checks for overflow
+    pub fn checked_from(from: U256) -> Option<I256> {
+        let value = I256(from);
+        if value.is_negative() {
+            None
+        } else {
+            Some(value)
+        }
+    }
+
     /// Returns the smallest value that can be represented by this integer type.
     pub fn min_value() -> I256 {
         I256(U256([u64::MIN, u64::MIN, u64::MIN, i64::MIN as _]))
@@ -68,6 +78,12 @@ impl I256 {
         } else {
             None
         }
+    }
+
+    /// Returns `true` if `self` is positive and `false` if the number is zero or
+    /// negative.
+    pub fn is_positive(self) -> bool {
+        self.signum64().is_positive()
     }
 
     /// Returns `true` if `self` is negative and `false` if the number is zero or
@@ -127,6 +143,12 @@ impl U256CheckedAddI256Ext for U256 {
     }
 }
 
+impl From<U256> for I256 {
+    fn from(from: U256) -> I256 {
+        I256(from)
+    }
+}
+
 impl From<i128> for I256 {
     fn from(from: i128) -> I256 {
         if from.is_negative() {
@@ -147,6 +169,12 @@ impl From<u128> for I256 {
 impl From<i32> for I256 {
     fn from(from: i32) -> I256 {
         I256::from(from as i128)
+    }
+}
+
+impl Into<U256> for I256 {
+    fn into(self) -> U256 {
+        self.0
     }
 }
 
@@ -183,6 +211,12 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_checked_from() {
+        assert_eq!(I256::checked_from(U256::from(10)), Some(I256::from(10)));
+        assert_eq!(I256::checked_from(U256::max_value()), None);
+    }
+
+    #[test]
     fn test_min_max_values() {
         // min is 0x800...0 and max is 0x7ff...f
         assert_eq!(I256::min_value(), I256(U256::one() << 255));
@@ -195,7 +229,10 @@ mod tests {
             I256::max_value().checked_add(I256::min_value()).unwrap(),
             I256::from(-1)
         );
-        assert_eq!(I256::from(1).checked_add(I256::from(1)).unwrap(), I256::from(2));
+        assert_eq!(
+            I256::from(1).checked_add(I256::from(1)).unwrap(),
+            I256::from(2)
+        );
         assert_eq!(
             I256::from(1).checked_add(I256::from(-1)).unwrap(),
             I256::zero()
@@ -224,7 +261,10 @@ mod tests {
             I256::min_value().checked_sub(I256::from(-1)).unwrap(),
             I256::max_value().checked_neg().unwrap(),
         );
-        assert_eq!(I256::from(1).checked_sub(I256::from(1)).unwrap(), I256::zero());
+        assert_eq!(
+            I256::from(1).checked_sub(I256::from(1)).unwrap(),
+            I256::zero()
+        );
         assert_eq!(
             I256::from(-1).checked_sub(I256::from(-1)).unwrap(),
             I256::zero()
@@ -254,8 +294,25 @@ mod tests {
     }
 
     #[test]
+    fn test_is_positive() {
+        assert_eq!(I256::from(1).is_positive(), true);
+        assert_eq!(I256::max_value().is_positive(), true);
+        assert_eq!(I256::from(-1).is_positive(), false);
+        assert_eq!(I256::min_value().is_positive(), false);
+        assert_eq!(I256::zero().is_positive(), false);
+    }
+
+    #[test]
+    fn test_is_negative() {
+        assert_eq!(I256::from(1).is_negative(), false);
+        assert_eq!(I256::max_value().is_negative(), false);
+        assert_eq!(I256::from(-1).is_negative(), true);
+        assert_eq!(I256::min_value().is_negative(), true);
+        assert_eq!(I256::zero().is_negative(), false);
+    }
+
+    #[test]
     fn test_signum() {
-        println!("{:?}", (I256::from(1).0).0);
         assert_eq!(I256::from(1).signum64(), 1);
         assert_eq!(I256::max_value().signum64(), 1);
         assert_eq!(I256::from(-1).signum64(), -1);
