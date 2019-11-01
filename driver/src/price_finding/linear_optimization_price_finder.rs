@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::process::Command;
-use web3::types::{H160, U256};
+use web3::types::H160;
 
 const RESULT_FOLDER: &str = "./results/tmp/";
 type Prices = HashMap<String, String>;
@@ -221,7 +221,7 @@ pub mod tests {
     use super::*;
     use dfusion_core::models::account_state::test_util::*;
     use std::error::Error;
-    use web3::types::H256;
+    use web3::types::{H256, U256};
 
     #[test]
     fn test_serialize_order() {
@@ -304,23 +304,6 @@ pub mod tests {
         });
         let err = deserialize_result(&json, 1).expect_err("Should fail to parse");
         assert_eq!(err.description(), "No 'orders' list in json");
-    }
-
-    #[test]
-    fn serialize_result_fails_if_order_suprlus_not_parseable() {
-        let json = json!({
-            "prices": {
-                "token0": "100",
-            },
-            "orders": [
-                {
-                    "execSellAmount": "0",
-                    "execBuyAmount": "0",
-                }
-            ]
-        });
-        let err = deserialize_result(&json, 1).expect_err("Should fail to parse");
-        assert_eq!(err.kind, ErrorKind::ParseIntError);
     }
 
     #[test]
