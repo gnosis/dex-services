@@ -1,6 +1,5 @@
-use web3::types::U256;
-
 use dfusion_core::models::{AccountState, Order, Solution, TOKENS};
+use dfusion_core::num::I256;
 
 use crate::price_finding::error::PriceFindingError;
 use crate::util::{u128_to_u256, CeiledDiv};
@@ -27,9 +26,10 @@ trait Matchable {
     fn objective_value(
         &self,
         buy_price: u128,
+        sell_price: u128,
         exec_buy_amount: u128,
         exec_sell_amount: u128,
-    ) -> U256;
+    ) -> Option<I256>;
 }
 
 impl Matchable for Order {
@@ -67,6 +67,7 @@ impl Matchable for Order {
         }
         None
     }
+
     fn opposite_tokens(&self, other: &Order) -> bool {
         self.buy_token == other.sell_token && self.sell_token == other.buy_token
     }
@@ -81,13 +82,18 @@ impl Matchable for Order {
     fn objective_value(
         &self,
         buy_price: u128,
+        sell_price: u128,
         exec_buy_amount: u128,
         exec_sell_amount: u128,
-    ) -> U256 {
-        // TODO(nlordell): fix this as well
-        let relative_buy = (u128_to_u256(self.buy_amount) * u128_to_u256(exec_sell_amount))
-            .ceiled_div(u128_to_u256(self.sell_amount));
-        (u128_to_u256(exec_buy_amount) - relative_buy) * u128_to_u256(buy_price)
+    ) -> Option<I256> {
+        let u: I256 = self
+            .utility(buy_price, exec_buy_amount, exec_sell_amount)
+            .and_then(I256::checked_from)?;
+        let du = self
+            .disregarded_utility(buy_price, sell_price, exec_sell_amount)
+            .and_then(I256::checked_from)?;
+
+        u.checked_sub(du)
     }
 }
 
@@ -111,19 +117,19 @@ impl PriceFinding for NaiveSolver {
         let mut prices: Vec<u128> = vec![0; TOKENS as usize];
         let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
         let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
-        let mut total_objective_value = U256::zero();
 
         let mut found_flag = false;
 
         for (i, x) in orders.iter().enumerate() {
             for j in i + 1..orders.len() {
                 // Preprocess order to leave "space" for fee to be taken
-                let x = order_with_buffer_for_fee(&x, &self.fee);
+                let x = order_with_buffer_for_fee(x, &self.fee);
                 let y = order_with_buffer_for_fee(&orders[j], &self.fee);
                 match x.match_compare(&y, &state, &self.fee) {
                     Some(OrderPairType::LhsFullyFilled) => {
                         prices[x.buy_token as usize] = x.sell_amount;
                         prices[y.buy_token as usize] = x.buy_amount;
+
                         exec_sell_amount[i] = x.sell_amount;
                         exec_sell_amount[j] = x.buy_amount;
 
@@ -152,18 +158,28 @@ impl PriceFinding for NaiveSolver {
                     }
                     None => continue,
                 }
+                let x_objective_value = x
+                    .objective_value(
+                        prices[x.buy_token as usize],
+                        prices[y.buy_token as usize],
+                        exec_buy_amount[i],
+                        exec_sell_amount[i],
+                    )
+                    .unwrap();
+                let y_objective_value = y
+                    .objective_value(
+                        prices[y.buy_token as usize],
+                        prices[x.buy_token as usize],
+                        exec_buy_amount[j],
+                        exec_sell_amount[j],
+                    )
+                    .unwrap();
+                let objective_value = x_objective_value.checked_add(y_objective_value).unwrap();
+                if objective_value.is_negative() {
+                    continue;
+                }
+
                 found_flag = true;
-                let x_objective_value = x.objective_value(
-                    prices[x.buy_token as usize],
-                    exec_buy_amount[i],
-                    exec_sell_amount[i],
-                );
-                let y_objective_value = y.objective_value(
-                    prices[y.buy_token as usize],
-                    exec_buy_amount[j],
-                    exec_sell_amount[j],
-                );
-                total_objective_value = x_objective_value.checked_add(y_objective_value).unwrap();
                 break;
             }
             if found_flag {
@@ -188,9 +204,6 @@ impl PriceFinding for NaiveSolver {
                 }
             }
         }
-
-        // TODO(nlordell): deterimne what this value is.
-        let _ = total_objective_value;
 
         let solution = Solution {
             prices,
@@ -227,7 +240,7 @@ pub mod tests {
     use crate::util::u256_to_u128;
     use dfusion_core::models::account_state::test_util::*;
     use std::collections::HashMap;
-    use web3::types::{H160, H256};
+    use web3::types::{H160, H256, U256};
 
     #[test]
     fn test_type_left_fully_matched_no_fee() {
@@ -238,7 +251,7 @@ pub mod tests {
         let res = solver.find_prices(&orders, &state).unwrap();
 
         assert_eq!(
-            Some(u128_to_u256(16 * 10u128.pow(36))),
+            I256::from(-28_000_000_000_000_100_000_000_000_000_000_000_000i128).checked_into(),
             res.objective_value(&orders)
         );
         assert_eq!(
@@ -279,7 +292,7 @@ pub mod tests {
         let res = solver.find_prices(&orders, &state).unwrap();
 
         assert_eq!(
-            Some(u128_to_u256(16 * 10u128.pow(36))),
+            I256::from(-28_000_000_000_000_100_000_000_000_000_000_000_000i128).checked_into(),
             res.objective_value(&orders)
         );
         assert_eq!(
@@ -408,7 +421,7 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
-        assert_eq!(Some(U256::from(16)), res.objective_value(&orders));
+        assert_eq!(I256::from(-28).checked_into(), res.objective_value(&orders));
         assert_eq!(vec![0, 0, 0, 52, 4, 0], res.executed_buy_amounts);
         assert_eq!(vec![0, 0, 0, 4, 52, 0], res.executed_sell_amounts);
         assert_eq!(4, res.prices[1]);

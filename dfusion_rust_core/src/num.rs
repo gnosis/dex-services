@@ -25,6 +25,15 @@ impl I256 {
         }
     }
 
+    /// Creates a U256 from a I256 if it is non-negative.
+    pub fn checked_into(self) -> Option<U256> {
+        if self.is_negative() {
+            None
+        } else {
+            Some(self.0)
+        }
+    }
+
     /// Returns the smallest value that can be represented by this integer type.
     pub fn min_value() -> I256 {
         I256(U256([u64::MIN, u64::MIN, u64::MIN, i64::MIN as _]))
@@ -214,6 +223,15 @@ mod tests {
     fn test_checked_from() {
         assert_eq!(I256::checked_from(U256::from(10)), Some(I256::from(10)));
         assert_eq!(I256::checked_from(U256::max_value()), None);
+    }
+
+    #[test]
+    fn test_checked_into() {
+        assert_eq!(I256::from(1).checked_into(), Some(U256::one()));
+        assert_eq!(I256::max_value().checked_into(), Some(U256::max_value() / 2));
+        assert_eq!(I256::zero().checked_into(), Some(U256::zero()));
+        assert_eq!(I256::from(-1).checked_into(), None);
+        assert_eq!(I256::min_value().checked_into(), None);
     }
 
     #[test]
