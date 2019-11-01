@@ -1,4 +1,4 @@
-// TODO(nlordell): The order in which these two crates get linked seems to
+// NOTE(nlordell): The order in which these two crates get linked seems to
 //   matter (usure why). And when we remove `extern crate` statements and let
 //   cargo decide the order it leads to a linking error. So for now, until we
 //   figure out exactly why this is happening lets keep this these two `extern
