@@ -128,7 +128,7 @@ impl Div<i32> for I256 {
 
     fn div(self, rhs: i32) -> Self::Output {
         let result = self.abs() / rhs.abs();
-        if self.signum64() * (rhs.signum() as i64) == -1 {
+        if self.signum64() * i64::from(rhs.signum()) == -1 {
             // don't use checked_neg here because that will panic when:
             // `I256::min_value() / 1` which should be valid
             I256(twos_complement(result))
@@ -164,6 +164,7 @@ impl From<i128> for I256 {
             let abs = from.wrapping_neg() as u128;
             I256::from(abs).checked_neg().expect("no overflow")
         } else {
+            #[allow(clippy::cast_lossless)]
             I256::from(from as u128)
         }
     }
@@ -177,7 +178,7 @@ impl From<u128> for I256 {
 
 impl From<i32> for I256 {
     fn from(from: i32) -> I256 {
-        I256::from(from as i128)
+        I256::from(i128::from(from))
     }
 }
 
@@ -228,7 +229,10 @@ mod tests {
     #[test]
     fn test_checked_into() {
         assert_eq!(I256::from(1).checked_into(), Some(U256::one()));
-        assert_eq!(I256::max_value().checked_into(), Some(U256::max_value() / 2));
+        assert_eq!(
+            I256::max_value().checked_into(),
+            Some(U256::max_value() / 2)
+        );
         assert_eq!(I256::zero().checked_into(), Some(U256::zero()));
         assert_eq!(I256::from(-1).checked_into(), None);
         assert_eq!(I256::min_value().checked_into(), None);
