@@ -110,33 +110,6 @@ fn deserialize_result(
     let orders = json["orders"]
         .as_array()
         .ok_or_else(|| "No 'orders' list in json")?;
-    let objective_value = Some(
-        orders
-            .iter()
-            .map(|o| {
-                o["execUtility"]
-                    .as_str()
-                    .ok_or_else(|| {
-                        PriceFindingError::new(
-                            "No 'execUtility' field on order",
-                            ErrorKind::JsonError,
-                        )
-                    })
-                    .and_then(|objective_value| {
-                        U256::from_dec_str(objective_value).map_err(|e| {
-                            PriceFindingError::new(&format!("{:?}", e), ErrorKind::ParseIntError)
-                        })
-                    })
-            })
-            .collect::<Result<Vec<U256>, PriceFindingError>>()?
-            .iter()
-            .fold(U256::zero(), |acc, objective_value| {
-                objective_value.saturating_add(acc)
-            }),
-    );
-
-    // TODO(nlordell): determine what this objective value is
-    let _ = objective_value;
 
     let executed_sell_amounts = orders
         .iter()
@@ -283,12 +256,10 @@ pub mod tests {
                 {
                     "execSellAmount": "0",
                     "execBuyAmount": "0",
-                    "execUtility": "0"
                 },
                 {
                     "execSellAmount": "318390084925498118944",
                     "execBuyAmount": "95042777139162480000",
-                    "execUtility": "15854632034944469292777429010439194350"
                 },
             ]
         });
@@ -301,11 +272,6 @@ pub mod tests {
 
         let solution = deserialize_result(&json, 2).expect("Should not fail to parse");
         assert_eq!(solution, expected_solution);
-
-        // TODO(nlordell): we need orders in order to calcaulate this utility
-        let expected_objective_value =
-            U256::from_dec_str("15854632034944469292777429010439194350").ok();
-        let _ = expected_objective_value;
     }
 
     #[test]
@@ -339,22 +305,6 @@ pub mod tests {
         let err = deserialize_result(&json, 1).expect_err("Should fail to parse");
         assert_eq!(err.description(), "No 'orders' list in json");
     }
-    #[test]
-    fn serialize_result_fails_if_order_does_not_have_objective_value() {
-        let json = json!({
-            "prices": {
-                "token0": "100",
-            },
-            "orders": [
-                {
-                    "execSellAmount": "0",
-                    "execBuyAmount": "0",
-                }
-            ]
-        });
-        let err = deserialize_result(&json, 1).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "No 'execUtility' field on order");
-    }
 
     #[test]
     fn serialize_result_fails_if_order_suprlus_not_parseable() {
@@ -366,7 +316,6 @@ pub mod tests {
                 {
                     "execSellAmount": "0",
                     "execBuyAmount": "0",
-                    "execUtility": "0a0b"
                 }
             ]
         });
@@ -383,7 +332,6 @@ pub mod tests {
             "orders": [
                 {
                     "execBuyAmount": "0",
-                    "execUtility": "0"
                 }
             ]
         });
@@ -401,7 +349,6 @@ pub mod tests {
                 {
                     "execSellAmount": "0a",
                     "execBuyAmount": "0",
-                    "execUtility": "0"
                 }
             ]
         });
@@ -418,7 +365,6 @@ pub mod tests {
             "orders": [
                 {
                     "execSellAmount": "0",
-                    "execUtility": "0"
                 }
             ]
         });
@@ -436,7 +382,6 @@ pub mod tests {
                 {
                     "execSellAmount": "0",
                     "execBuyAmount": "0a",
-                    "execUtility": "0"
                 }
             ]
         });
