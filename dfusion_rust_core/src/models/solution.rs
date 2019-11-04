@@ -76,16 +76,18 @@ impl Solution {
             )?;
 
             if order.buy_token == 0 {
-                fee_buy_amount = fee_buy_amount.checked_add(u128_to_u256(exec_buy_amount))?;
+                fee_buy_amount = fee_buy_amount.checked_sub(u128_to_u256(exec_buy_amount))?;
             }
             if order.sell_token == 0 {
-                fee_sell_amount = fee_buy_amount.checked_add(u128_to_u256(exec_buy_amount))?;
+                fee_sell_amount = fee_sell_amount.checked_add(u128_to_u256(exec_buy_amount))?;
             }
         }
 
+        let fee_token_conservation = fee_sell_amount.checked_sub(fee_buy_amount)?;
+
         total_utility
             .checked_sub(total_disregarded_utility)?
-            .checked_add(fee_sell_amount.checked_sub(fee_buy_amount)? / 2)
+            .checked_add(fee_token_conservation / 2)
     }
 }
 
