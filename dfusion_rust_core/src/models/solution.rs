@@ -17,7 +17,7 @@ pub struct Solution {
 impl Solution {
     pub fn trivial(num_orders: usize) -> Self {
         Solution {
-            prices: vec![0; TOKENS as usize],
+            prices: vec![1; TOKENS as usize],
             executed_buy_amounts: vec![0; num_orders],
             executed_sell_amounts: vec![0; num_orders],
         }
@@ -76,11 +76,16 @@ impl Solution {
             )?;
 
             if order.buy_token == 0 {
-                fee_buy_amount = fee_buy_amount.checked_sub(u128_to_u256(exec_buy_amount))?;
+                fee_buy_amount = fee_buy_amount.checked_add(u128_to_u256(exec_buy_amount))?;
             }
             if order.sell_token == 0 {
-                fee_sell_amount = fee_sell_amount.checked_add(u128_to_u256(exec_buy_amount))?;
+                fee_sell_amount = fee_sell_amount.checked_add(u128_to_u256(exec_sell_amount))?;
             }
+
+            println!(
+                "{}-{}+{}-{}",
+                total_utility, total_disregarded_utility, fee_sell_amount, fee_buy_amount,
+            );
         }
 
         let fee_token_conservation = fee_sell_amount.checked_sub(fee_buy_amount)?;
@@ -244,5 +249,56 @@ pub mod unit_test {
     }
 
     #[test]
-    fn test_objective_value_for_non_trivial_solution() {}
+    fn test_objective_value_without_fees() {
+        // this is using our used CD for a haircut example with $ fee token
+
+        let orders = vec![
+            Order {
+                // wants to buy 1 haircut for at most 11$
+                buy_token: 2,
+                sell_token: 0,
+                buy_amount: 1,
+                sell_amount: 11,
+                ..Order::default()
+            },
+            Order {
+                // wants to sell used Tool CD for at least 1$
+                buy_token: 0,
+                sell_token: 1,
+                buy_amount: 1,
+                sell_amount: 1,
+                ..Order::default()
+            },
+            Order {
+                // wants to trade a hair cut to a used Tool CD
+                buy_token: 1,
+                sell_token: 2,
+                buy_amount: 1,
+                sell_amount: 1,
+                ..Order::default()
+            },
+        ];
+
+        let solution = Solution {
+            prices: vec![
+                1, // $
+                6, // CD
+                6, // haircut
+            ],
+            executed_buy_amounts: vec![1, 6, 1],
+            executed_sell_amounts: vec![6, 1, 1],
+        };
+        assert_eq!(solution.objective_value(&orders), Some(6.into()));
+
+        let solution = Solution {
+            prices: vec![
+                1,  // $
+                11, // CD
+                11, // haircut
+            ],
+            executed_buy_amounts: vec![1, 11, 1],
+            executed_sell_amounts: vec![11, 1, 1],
+        };
+        assert_eq!(solution.objective_value(&orders), Some(10.into()));
+    }
 }
