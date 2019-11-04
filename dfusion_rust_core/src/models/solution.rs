@@ -31,21 +31,13 @@ impl Solution {
     /// Compute the result of the objective function for the solution. This is
     /// currently defined as *U - dUT* where *U* is the total utility of the
     /// trade and *dUT* is the total disreguarded utility of touched orders.
+    /// Note that this does not check the validity of the solution.
     ///
     /// # Returns
     ///
-    /// Returns `Some(U256)` for any solution that is positive valid solution.
-    /// Returns `None` for invalid solutions or orders. A solution might be
-    /// invalid if:
-    /// - The number of orders do not match the solution buy/sell amounts
-    /// - The solution values lead to invalid utility or disregarded utility
-    ///   results
-    /// - The orders reference tokens that are not priced by the solution
-    ///
-    /// Note that just because this method returns some value does not mean that
-    /// the solution is actually valid WRT to the smart contract as it currently
-    /// does not verify that things like `execSellAmount * p[sellToken] * (1-phi)
-    /// == execBuyAmount * p[buyToken]` or token conservation hold.
+    /// Returns the objective value for the solution or None if there the orders
+    /// do not match the solution or there was an error in the calculation such
+    /// as overflow or divide by 0.
     pub fn objective_value(&self, orders: &[Order]) -> Option<U256> {
         if orders.len() != self.executed_buy_amounts.len()
             || orders.len() != self.executed_sell_amounts.len()
@@ -57,8 +49,8 @@ impl Solution {
         // account balances and such) as we do in the smart contract - we only
         // care if the solution is valid given the provided orders
 
-        let mut u = U256::zero();
-        let mut du = U256::zero();
+        let mut total_utility = U256::zero();
+        let mut total_disregarded_utility = U256::zero();
 
         let mut fee_buy_amount = U256::zero();
         let mut fee_sell_amount = U256::zero();
@@ -74,12 +66,14 @@ impl Solution {
                 continue;
             }
 
-            u = u.checked_add(order.utility(buy_price, exec_buy_amount, exec_sell_amount)?)?;
-            du = du.checked_add(order.disregarded_utility(
+            total_utility = total_utility.checked_add(order.utility(
                 buy_price,
-                sell_price,
+                exec_buy_amount,
                 exec_sell_amount,
             )?)?;
+            total_disregarded_utility = total_disregarded_utility.checked_add(
+                order.disregarded_utility(buy_price, sell_price, exec_sell_amount)?,
+            )?;
 
             if order.buy_token == 0 {
                 fee_buy_amount = fee_buy_amount.checked_add(u128_to_u256(exec_buy_amount))?;
@@ -89,7 +83,8 @@ impl Solution {
             }
         }
 
-        u.checked_sub(du)?
+        total_utility
+            .checked_sub(total_disregarded_utility)?
             .checked_add(fee_sell_amount.checked_sub(fee_buy_amount)? / 2)
     }
 }
