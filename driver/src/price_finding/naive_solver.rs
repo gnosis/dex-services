@@ -1,5 +1,4 @@
 use dfusion_core::models::{AccountState, Order, Solution, TOKENS};
-use web3::types::U256;
 
 use crate::price_finding::error::PriceFindingError;
 use crate::util::{u128_to_u256, CeiledDiv};
@@ -23,13 +22,6 @@ trait Matchable {
     ) -> Option<OrderPairType>;
     fn opposite_tokens(&self, other: &Order) -> bool;
     fn have_price_overlap(&self, other: &Order) -> bool;
-    fn objective_value(
-        &self,
-        buy_price: u128,
-        sell_price: u128,
-        exec_buy_amount: u128,
-        exec_sell_amount: u128,
-    ) -> Option<(U256, U256)>;
 }
 
 impl Matchable for Order {
@@ -78,19 +70,6 @@ impl Matchable for Order {
             && u128_to_u256(self.buy_amount) * u128_to_u256(other.buy_amount)
                 <= u128_to_u256(other.sell_amount) * u128_to_u256(self.sell_amount)
     }
-
-    fn objective_value(
-        &self,
-        buy_price: u128,
-        sell_price: u128,
-        exec_buy_amount: u128,
-        exec_sell_amount: u128,
-    ) -> Option<(U256, U256)> {
-        let u = self.utility(buy_price, exec_buy_amount, exec_sell_amount)?;
-        let du = self.disregarded_utility(buy_price, sell_price, exec_sell_amount)?;
-
-        Some((u, du))
-    }
 }
 
 pub struct NaiveSolver {
@@ -119,7 +98,7 @@ impl PriceFinding for NaiveSolver {
         for (i, x) in orders.iter().enumerate() {
             for j in i + 1..orders.len() {
                 // Preprocess order to leave "space" for fee to be taken
-                let x = order_with_buffer_for_fee(x, &self.fee);
+                let x = order_with_buffer_for_fee(&x, &self.fee);
                 let y = order_with_buffer_for_fee(&orders[j], &self.fee);
                 match x.match_compare(&y, &state, &self.fee) {
                     Some(OrderPairType::LhsFullyFilled) => {
@@ -153,27 +132,6 @@ impl PriceFinding for NaiveSolver {
                         exec_buy_amount[j] = x.sell_amount;
                     }
                     None => continue,
-                }
-                let (x_u, x_du) = x
-                    .objective_value(
-                        prices[x.buy_token as usize],
-                        prices[y.buy_token as usize],
-                        exec_buy_amount[i],
-                        exec_sell_amount[i],
-                    )
-                    .unwrap();
-                let (y_u, y_du) = y
-                    .objective_value(
-                        prices[y.buy_token as usize],
-                        prices[x.buy_token as usize],
-                        exec_buy_amount[j],
-                        exec_sell_amount[j],
-                    )
-                    .unwrap();
-                let u = x_u + y_u;
-                let du = x_du + y_du;
-                if u < du {
-                    continue;
                 }
 
                 found_flag = true;
@@ -247,9 +205,6 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
-        // -28_000_000_000_000_100_000_000_000_000_000_000_000
-        assert_eq!(None, res.objective_value(&orders));
-
         assert_eq!(
             vec![4 * 10u128.pow(18), 52 * 10u128.pow(18)],
             res.executed_buy_amounts
@@ -286,9 +241,6 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
-
-        // -28_000_000_000_000_100_000_000_000_000_000_000_000
-        assert_eq!(None, res.objective_value(&orders));
 
         assert_eq!(
             vec![52 * 10u128.pow(18), 4 * 10u128.pow(18)],
@@ -415,9 +367,6 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
-
-        // -28
-        assert_eq!(None, res.objective_value(&orders));
 
         assert_eq!(vec![0, 0, 0, 52, 4, 0], res.executed_buy_amounts);
         assert_eq!(vec![0, 0, 0, 4, 52, 0], res.executed_sell_amounts);
