@@ -8,7 +8,6 @@ ssh-keyscan gitlab.gnosisdev.com > /root/.ssh/known_hosts
 
 # Copy SSH key
 cp .ssh/id_rsa /root/.ssh/id_rsa
-cp .ssh/id_rsa.pub /root/.ssh/id_rsa.pub
 
 # Clone and install dependencies
 git clone git@gitlab.gnosisdev.com:dfusion/batchauctions.git

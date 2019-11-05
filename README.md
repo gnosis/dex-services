@@ -118,7 +118,7 @@ cargo test --lib
 
 For this to work, you will need to have read access to the [solver's gitlab repo](https://gitlab.gnosisdev.com/dfusion/batchauctions). You will also need to have SSH Key authentication for your gitlab account enabled (see [tutorial](https://docs.gitlab.com/ee/ssh/))
 
-In your top-level git folder, create a `.ssh/` folder and move or copy the private and public ssh key (`id_rsa` & `id_rsa.pub`) registered with your gitlab account in there.
+In your top-level git folder, create a `.ssh/` folder and move or copy the private ssh key (`id_rsa`) registered with your gitlab account in there.
 Then, run
 
 ```sh
