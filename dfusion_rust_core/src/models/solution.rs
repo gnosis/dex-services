@@ -17,7 +17,7 @@ pub struct Solution {
 impl Solution {
     pub fn trivial(num_orders: usize) -> Self {
         Solution {
-            prices: vec![1; TOKENS as usize],
+            prices: vec![0; TOKENS as usize],
             executed_buy_amounts: vec![0; num_orders],
             executed_sell_amounts: vec![0; num_orders],
         }
@@ -249,7 +249,7 @@ pub mod unit_test {
     }
 
     #[test]
-    fn test_objective_value_without_fees() {
+    fn test_objective_value_for_cd_haircut_without_fees() {
         // this is using our used CD for a haircut example with $ fee token
 
         let orders = vec![
@@ -300,5 +300,46 @@ pub mod unit_test {
             executed_sell_amounts: vec![11, 1, 1],
         };
         assert_eq!(solution.objective_value(&orders), Some(10.into()));
+    }
+
+    #[test]
+    fn test_objective_value_for_simple_case_with_fees() {
+        // trading WETH for DAI with DAI as the price token
+        
+        let eth: u128 = 10u128.pow(18);
+        let orders = vec![
+            Order {
+                // wants to buy 1 WETH for 185 DAI
+                buy_token: 1,
+                sell_token: 0,
+                buy_amount: 1 * eth,
+                sell_amount: 185 * eth,
+                ..Order::default()
+            },
+            Order {
+                // large WETH seller selling 1 WETH for 184 DAI
+                buy_token: 0,
+                sell_token: 1,
+                buy_amount: 184_000 * eth,
+                sell_amount: 1_000 * eth,
+                ..Order::default()
+            },
+        ];
+
+        let solution = Solution {
+            prices: vec![
+                1 * eth,
+                184_184_184_184_184_185_000, // market maker's price adjusted for fees and fixed for rounding errors
+            ],
+            executed_buy_amounts: vec![1 * eth, 184 * eth],
+            executed_sell_amounts: vec![184_368_552_736_921_106_106, 1 * eth],
+        };
+
+        // TODO(nlordell): this solution is currently invalid as the disregarded
+        //   utility of the large market maker order is very large, and the price
+        //   cannot be any closer to the limit price without violating it; there
+        //   is a discussion started at:
+        //   https://github.com/gnosis/dex-contracts/issues/276
+        assert_eq!(solution.objective_value(&orders), None);
     }
 }
