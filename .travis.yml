@@ -35,11 +35,11 @@ matrix:
     #     - docker-compose logs
     - language: generic
       name: "StableX e2e Tests"
-      # cache: 
-      #   directories:
-      #     - dex-contracts/node_modules/
-      # install:
-      #   - ./test/setup_contracts.sh
+      cache: 
+        directories:
+          - dex-contracts/node_modules/
+      install:
+        - ./test/setup_contracts.sh
       # script:
       #   - docker-compose up -d stablex
       #   - ./test/e2e-tests-stablex.sh
