@@ -1,4 +1,5 @@
 #!/bin/sh
 
-node_modules/.bin/truffle migrate --reset --network developmentdocker
+export GANACHE_HOST='ganache-cli'
+npx truffle migrate --reset
 touch build/migration.flag
