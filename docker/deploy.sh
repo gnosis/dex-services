@@ -3,7 +3,7 @@
 set -euo pipefail
 
 #if [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_BRANCH" == "master" ]; then
-  sudo apt-get update && sudo apt-get install awscli
+  sudo apt-get update && sudo apt-get install awscli && sudo apt-get install python3-pip && sudo pip3 install --upgrade awscli
   # Get login token and execute login
   $(aws ecr get-login --no-include-email --region $AWS_REGION)
   mkdir .ssh
