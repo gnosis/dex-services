@@ -81,15 +81,11 @@ impl Solution {
             if order.sell_token == 0 {
                 fee_sell_amount = fee_sell_amount.checked_add(u128_to_u256(exec_sell_amount))?;
             }
-
-            println!(
-                "{}-{}+{}-{}",
-                total_utility, total_disregarded_utility, fee_sell_amount, fee_buy_amount,
-            );
         }
 
         let fee_token_conservation = fee_sell_amount.checked_sub(fee_buy_amount)?;
 
+        println!("{} -\n {}", total_utility, total_disregarded_utility);
         total_utility
             .checked_sub(total_disregarded_utility)?
             .checked_add(fee_token_conservation / 2)
@@ -304,8 +300,63 @@ pub mod unit_test {
 
     #[test]
     fn test_objective_value_for_simple_case_with_fees() {
+        // trading 2 tokens
+
+        let eth: u128 = 10u128.pow(18);
+        let orders = vec![
+            Order {
+                buy_token: 0,
+                sell_token: 1,
+                buy_amount: 2 * eth,
+                sell_amount: 1 * eth,
+                ..Order::default()
+            },
+            Order {
+                buy_token: 1,
+                sell_token: 0,
+                buy_amount: 1 * eth,
+                sell_amount: 3 * eth,
+                ..Order::default()
+            },
+        ];
+
+        let solution = Solution {
+            prices: vec![1 * eth, 2_500_000_000_000_000_000],
+            executed_buy_amounts: vec![2_497_500_000_000_000_000, 1 * eth],
+            executed_sell_amounts: vec![1 * eth, 2_502_502_502_502_502_502],
+        };
+
+        //  U0 = ((xb * os - xs * ob) * pb) / os
+        //     = ((2.497eth * 1eth - 1eth * 2eth) * 1eth) / 1eth
+        //     = 497500000000000000000000000000000000
+        // dU0 = ((ps * os - ob * pb) * (os - xs)) / os
+        //     = ((2.5eth * 1eth - 2eth * 1eth) * (1eth - 1eth)) / 1eth
+        //     = 0
+        //  U1 = ((xb * os - xs * ob) * pb) / os
+        //     = ((1eth * 3eth - 2.502eth * 1eth) * 2.5eth) / 3eth
+        //     = 414581247914581248333333333333333333
+        //     = 414581247914581248333333333333333334 -- with rounding error
+        // dU1 = ((ps * os - ob * pb) * (os - xs)) / os
+        //     = ((1eth * 3eth - 1eth * 2.5eth) * (3eth - 2.502eth)) / 3eth
+        //     =  82916249582916249666666666666666666
+        // fee = xs1 - xb0
+        //     = 2.502eth - 2.497eth
+        //     =                     5002502502502502
+        // O   = U0 + U1 - dU0 - dU1 + (fee / 2)
+        //     = 829164998331664998669167917917917919
+
+        assert_eq!(
+            solution.objective_value(&orders),
+            Some(U256::from_dec_str("829164998331664998669167917917917919").unwrap())
+        );
+
+        /* 497500000000000000000000000000000000-0+0-2497500000000000000 */
+    }
+
+    #[test]
+    fn test_objective_value_for_large_market_maker_with_buyer_case_with_fees() {
         // trading WETH for DAI with DAI as the price token
-        
+
         let eth: u128 = 10u128.pow(18);
         let orders = vec![
             Order {
@@ -331,7 +382,7 @@ pub mod unit_test {
                 1 * eth,
                 184_184_184_184_184_185_000, // market maker's price adjusted for fees and fixed for rounding errors
             ],
-            executed_buy_amounts: vec![1 * eth, 184 * eth],
+            executed_buy_amounts: vec![1 * eth, 184_000_000_000_000_000_815],
             executed_sell_amounts: vec![184_368_552_736_921_106_106, 1 * eth],
         };
 
