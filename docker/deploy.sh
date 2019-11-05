@@ -12,9 +12,10 @@ set -euo pipefail
 
   echo "Building latest image with solver...";
   docker-compose build --build-arg use_solver=1 stablex
+  docker tag stablex $REGISTRY_URI
 
   echo "Pushing image";
-  docker push $REGISTRY_URI/stablex:latest
+  docker push $REGISTRY_URI
 
   echo "The image has been pushed";
   rm -rf .ssh/*
