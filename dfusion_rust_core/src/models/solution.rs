@@ -219,20 +219,16 @@ pub mod unit_test {
         // assert that the trivial solution has an objective value of 0
         // regardless of number of orders.
 
-        let orders = {
-            let mut orders = Vec::with_capacity(5);
-            for i in 0..5 {
-                orders.push(Order {
-                    batch_information: None,
-                    account_id: 1.into(),
-                    buy_token: i,
-                    sell_token: 5 - i,
-                    buy_amount: 100,
-                    sell_amount: 100,
-                })
-            }
-            orders
-        };
+        let orders: Vec<_> = (0..5)
+            .map(|i| Order {
+                batch_information: None,
+                account_id: 1.into(),
+                buy_token: i,
+                sell_token: 5 - i,
+                buy_amount: 100,
+                sell_amount: 100,
+            })
+            .collect();
 
         assert_eq!(
             Solution::trivial(1).objective_value(&orders[..1]),
@@ -299,6 +295,7 @@ pub mod unit_test {
     }
 
     #[test]
+    #[allow(clippy::identity_op)]
     fn test_objective_value_for_simple_case_with_fees() {
         // trading 2 tokens
 
@@ -354,6 +351,7 @@ pub mod unit_test {
     }
 
     #[test]
+    #[allow(clippy::identity_op)]
     fn test_objective_value_for_large_market_maker_with_buyer_case_with_fees() {
         // trading WETH for DAI with DAI as the price token
 
