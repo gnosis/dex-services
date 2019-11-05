@@ -7,7 +7,7 @@ set -euo pipefail
 
   # Get login token and execute login
   $(aws ecr get-login --no-include-email --region $AWS_REGION)
-  echo $GITLAB_PRIVATE_KEY > .ssh/id_rsa
+  echo -e $GITLAB_PRIVATE_KEY > .ssh/id_rsa
   chmod 0500 .ssh/id_rsa
 
   echo "Building latest image with solver...";
