@@ -80,6 +80,7 @@ services:
 
   stablex:
     << : *rust-service-development
+    image: stablex:latest
     command: cargo run --bin stablex
     restart: always
     volumes:
