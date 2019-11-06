@@ -41,7 +41,7 @@ matrix:
       install:
         - ./test/setup_contracts.sh
       script:
-        - docker-compose run -e -d stablex
+        - docker-compose up -d stablex
         - ./test/e2e-tests-stablex.sh
       after_failure:
         - docker-compose logs
