@@ -346,8 +346,6 @@ pub mod unit_test {
             solution.objective_value(&orders),
             Some(U256::from_dec_str("829164998331664998669167917917917919").unwrap())
         );
-
-        /* 497500000000000000000000000000000000-0+0-2497500000000000000 */
     }
 
     #[test]
