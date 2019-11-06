@@ -48,5 +48,5 @@ matrix:
       deploy:
         provider: script
         script: ./docker/deploy.sh
-        # on:
-        #   branch: master
+        on:
+          branch: deploy_image
