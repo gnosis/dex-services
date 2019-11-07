@@ -5,9 +5,9 @@ use std::convert::TryInto;
 use std::sync::Arc;
 use web3::types::{Log, H160, H256, U256};
 
-use super::util::*;
-
+use crate::models::util::*;
 use crate::models::{iter_hash, RollingHashable, Serializable};
+use crate::util::*;
 
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
@@ -16,7 +16,7 @@ pub struct BatchInformation {
     pub slot_index: u16,
 }
 
-#[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct Order {
     pub batch_information: Option<BatchInformation>,
@@ -46,6 +46,73 @@ impl Order {
             buy_amount,
             sell_amount,
         }
+    }
+
+    /// Calculates the utility of an order based on a buy and sell price as well
+    /// as the executed buy amount.
+    ///
+    /// # Returns
+    ///
+    /// Returns utility of an order or None when there was an error in the
+    /// calculation such as overflow or divide by 0.
+    pub fn utility(
+        &self,
+        buy_price: u128,
+        exec_buy_amount: u128,
+        exec_sell_amount: u128,
+    ) -> Option<U256> {
+        let buy_price = u128_to_u256(buy_price);
+        let exec_buy_amount = u128_to_u256(exec_buy_amount);
+        let exec_sell_amount = u128_to_u256(exec_sell_amount);
+        let buy_amount = u128_to_u256(self.buy_amount);
+        let sell_amount = u128_to_u256(self.sell_amount);
+
+        // essential_utility = (exec_buy_amount - (exec_sell_amount * buy_amount)
+        //   / sell_amount) * buy_price
+        // essential_utility = (((exec_sell_amount * buy_amount) % sell_amount)
+        //   * buy_price) / sell_amount
+        // utility = essential_utility - essential_utility
+
+        let essential_utility = exec_buy_amount
+            .checked_sub((exec_sell_amount * buy_amount).checked_div(sell_amount)?)?
+            * buy_price;
+        let utility_error =
+            (((exec_sell_amount * buy_amount) % sell_amount) * buy_price) / sell_amount;
+        let utility = essential_utility.checked_sub(utility_error)?;
+
+        Some(utility)
+    }
+
+    /// Calculates the disregarded utility of an order based on a buy and sell
+    /// price as well as the executed sell amount.
+    ///
+    /// # Returns
+    ///
+    /// Returns disregarded utility of an order or None when there was an error
+    /// in the calculation such as overflow or divide by 0.
+    pub fn disregarded_utility(
+        &self,
+        buy_price: u128,
+        sell_price: u128,
+        exec_sell_amount: u128,
+    ) -> Option<U256> {
+        let buy_price = u128_to_u256(buy_price);
+        let sell_price = u128_to_u256(sell_price);
+        let exec_sell_amount = u128_to_u256(exec_sell_amount);
+        let buy_amount = u128_to_u256(self.buy_amount);
+        let sell_amount = u128_to_u256(self.sell_amount);
+
+        // limit_term = sell_price * sell_amount - buy_amount * buy_price
+        // leftover_sell_amount = sell_amount - exec_sell_amount
+        // disregarded_utility = (limit_term * leftover_sell_amount) / sell_amount
+
+        let limit_term = (sell_price * sell_amount).checked_sub(buy_amount * buy_price)?;
+        let leftover_sell_amount = sell_amount.checked_sub(exec_sell_amount)?;
+        let disregarded_utility = limit_term
+            .checked_mul(leftover_sell_amount)?
+            .checked_div(sell_amount)?;
+
+        Some(disregarded_utility)
     }
 }
 
@@ -301,6 +368,143 @@ pub mod tests {
         );
     }
 
+    #[test]
+    fn test_utility_calculation_for_small_order() {
+        let order = Order {
+            buy_amount: 10,
+            sell_amount: 100,
+            ..create_order_for_test()
+        };
+        let buy_price = 9;
+        let exec_buy_amount = 10;
+        let exec_sell_amount = 90;
+
+        assert_eq!(
+            order.utility(buy_price, exec_buy_amount, exec_sell_amount),
+            // u = ((xb * os - xs * ob) * bp) / os
+            //   = ((10 * 100 - 90 * 10) * 9) / 100
+            //   = 100
+            Some(9.into())
+        );
+    }
+
+    #[test]
+    fn test_utility_calculation_for_large_order() {
+        let order = create_order_for_test();
+        let buy_price = 20 * 10u128.pow(18);
+        let exec_buy_amount = 2 * 10u128.pow(18);
+        let exec_sell_amount = 10u128.pow(18);
+
+        assert_eq!(
+            order.utility(buy_price, exec_buy_amount, exec_sell_amount),
+            // u = ((2e18 * 2e18 - 1e18 * 1e18) * 20e18) / 2e18
+            //   = 3e37
+            Some(U256::from(3) * U256::from(10).pow(37.into()))
+        );
+    }
+
+    #[test]
+    fn test_utility_calculation_for_exact_match() {
+        let order = create_order_for_test();
+        assert_eq!(
+            order.utility(1, order.buy_amount, order.sell_amount),
+            Some(U256::zero())
+        );
+    }
+
+    #[test]
+    fn test_utility_overflow() {
+        // calculation errors happen when `exec_sell_amount * buy_amount >
+        // exec_buy_amount * sell_amount` or if sell_amount is 0
+
+        let order = create_order_for_test();
+        let exec_sell_amount = order.sell_amount * 2;
+        assert_eq!(order.utility(1, order.buy_amount, exec_sell_amount), None);
+
+        let order = Order {
+            sell_amount: 0,
+            ..create_order_for_test()
+        };
+        assert_eq!(order.utility(1, order.buy_amount, order.sell_amount), None);
+    }
+
+    #[test]
+    fn test_disregarded_utility_calculation_for_small_order() {
+        let order = Order {
+            buy_amount: 10,
+            sell_amount: 100,
+            ..create_order_for_test()
+        };
+        let buy_price = 9;
+        let sell_price = 1;
+        let exec_sell_amount = 90;
+
+        assert_eq!(
+            order.disregarded_utility(buy_price, sell_price, exec_sell_amount),
+            // du = ((ps * os - ob * pb) * (os - xs)) / os
+            //    = ((1 * 100 - 10 * 9) * (100 - 90)) / 100
+            //    = 1
+            Some(1.into())
+        );
+    }
+
+    #[test]
+    fn test_disregarded_utility_calculation_for_large_order() {
+        let order = create_order_for_test();
+        let buy_price = 20 * 10u128.pow(18);
+        let sell_price = 40 * 10u128.pow(18);
+        let exec_sell_amount = 10u128.pow(18);
+
+        assert_eq!(
+            order.disregarded_utility(buy_price, sell_price, exec_sell_amount),
+            // du = ((ps * os - ob * pb) * (os - xs)) / os
+            //    = ((40e18 * 2e18 - 1e18 * 20e18) * (2e18 - 1e18)) / 2e18
+            //    = 3e37
+            Some(U256::from(3) * U256::from(10).pow(37.into()))
+        );
+    }
+
+    #[test]
+    fn test_disregarded_utility_calculation_for_exact_match() {
+        let order = create_order_for_test();
+        assert_eq!(
+            order.disregarded_utility(2, 1, order.sell_amount),
+            Some(U256::zero())
+        );
+    }
+
+    #[test]
+    fn test_disregarded_utility_overflow() {
+        // disregarded utility calculation error happen on `exec_sell_amount >
+        // sell_amount`, `sell_price * sell_amount < buy_amount * buy_price`,
+        // `sell_amount = 0`, and `limit_term * leftover_sell_amount` overflow
+
+        let order = create_order_for_test();
+        let exec_sell_amount = order.sell_amount + 1;
+        assert_eq!(order.disregarded_utility(0, 1, exec_sell_amount), None);
+
+        assert_eq!(order.disregarded_utility(10, 1, order.sell_amount), None);
+
+        let order = Order {
+            sell_amount: 0,
+            ..create_order_for_test()
+        };
+        assert_eq!(order.disregarded_utility(0, 0, order.sell_amount), None);
+
+        let order = Order {
+            buy_amount: 1,
+            sell_amount: u128::max_value(),
+            ..create_order_for_test()
+        };
+        let buy_price = u128::max_value();
+        let sell_price = u128::max_value();
+        let exec_sell_amount = 1;
+        assert_eq!(
+            order.disregarded_utility(buy_price, sell_price, exec_sell_amount),
+            None
+        );
+    }
+
     fn create_order_for_test() -> Order {
         Order {
             batch_information: Some(BatchInformation {
@@ -310,8 +514,8 @@ pub mod tests {
             account_id: H160::from(1),
             buy_token: 1,
             sell_token: 2,
-            buy_amount: (10 as u128).pow(18),
-            sell_amount: 2 * (10 as u128).pow(18),
+            buy_amount: 10u128.pow(18),
+            sell_amount: 2 * 10u128.pow(18),
         }
     }
 
@@ -322,8 +526,8 @@ pub mod tests {
         entity.set("accountId", "0000000000000000000000000000000000000001");
         entity.set("buyToken", 1);
         entity.set("sellToken", 2);
-        entity.set("buyAmount", BigDecimal::from((10 as u64).pow(18)));
-        entity.set("sellAmount", BigDecimal::from(2 * (10 as u64).pow(18)));
+        entity.set("buyAmount", BigDecimal::from(10u64.pow(18)));
+        entity.set("sellAmount", BigDecimal::from(2 * 10u64.pow(18)));
 
         entity
     }
