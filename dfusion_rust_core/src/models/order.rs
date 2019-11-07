@@ -67,12 +67,6 @@ impl Order {
         let buy_amount = u128_to_u256(self.buy_amount);
         let sell_amount = u128_to_u256(self.sell_amount);
 
-        // essential_utility = (exec_buy_amount - (exec_sell_amount * buy_amount)
-        //   / sell_amount) * buy_price
-        // essential_utility = (((exec_sell_amount * buy_amount) % sell_amount)
-        //   * buy_price) / sell_amount
-        // utility = essential_utility - essential_utility
-
         let essential_utility = exec_buy_amount
             .checked_sub((exec_sell_amount * buy_amount).checked_div(sell_amount)?)?
             * buy_price;
@@ -101,10 +95,6 @@ impl Order {
         let exec_sell_amount = u128_to_u256(exec_sell_amount);
         let buy_amount = u128_to_u256(self.buy_amount);
         let sell_amount = u128_to_u256(self.sell_amount);
-
-        // limit_term = sell_price * sell_amount - buy_amount * buy_price
-        // leftover_sell_amount = sell_amount - exec_sell_amount
-        // disregarded_utility = (limit_term * leftover_sell_amount) / sell_amount
 
         let limit_term = (sell_price * sell_amount).checked_sub(buy_amount * buy_price)?;
         let leftover_sell_amount = sell_amount.checked_sub(exec_sell_amount)?;
@@ -383,7 +373,7 @@ pub mod tests {
             order.utility(buy_price, exec_buy_amount, exec_sell_amount),
             // u = ((xb * os - xs * ob) * bp) / os
             //   = ((10 * 100 - 90 * 10) * 9) / 100
-            //   = 100
+            //   = 9
             Some(9.into())
         );
     }
