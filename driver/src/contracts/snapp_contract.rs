@@ -299,7 +299,6 @@ impl SnappContract for SnappContractImpl {
                 (slot, merkle_root, prev_state, new_state, withdraw_hash),
                 Options::with(|mut opt| {
                     // usual gas estimate is not working
-                    opt.gas_price = Some(25.into());
                     opt.gas = Some(1_000_000.into());
                 }),
             )
