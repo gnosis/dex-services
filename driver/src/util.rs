@@ -1,7 +1,6 @@
 use log::info;
 
 use std::env;
-use std::str::FromStr;
 
 use web3::types::{H256, U256};
 
@@ -12,13 +11,7 @@ use crate::price_finding::{Fee, LinearOptimisationPriceFinder, NaiveSolver, Pric
 
 const BATCH_TIME_SECONDS: u32 = 3 * 60;
 
-pub fn u128_to_u256(x: u128) -> U256 {
-    U256::from_big_endian(&x.to_be_bytes())
-}
-
-pub fn u256_to_u128(x: U256) -> u128 {
-    u128::from_str(&x.to_string()).unwrap()
-}
+pub use dfusion_core::util::*;
 
 pub trait CeiledDiv {
     fn ceiled_div(&self, divisor: Self) -> Self;
@@ -112,33 +105,6 @@ pub fn create_price_finder(fee: Option<Fee>) -> Box<dyn PriceFinding> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-
-    #[test]
-    fn test_u128_to_u256() {
-        assert_eq!(
-            u128_to_u256(u128::max_value()),
-            U256::from_dec_str("340282366920938463463374607431768211455").unwrap(),
-            "failed on 128::max_value()"
-        );
-        assert_eq!(u128_to_u256(1u128), U256::from(1), "failed on 1u128");
-        assert_eq!(u128_to_u256(0u128), U256::from(0), "failed on 0u128");
-    }
-
-    #[test]
-    fn test_256_to_u128_works() {
-        assert_eq!(0u128, u256_to_u128(U256::from(0)));
-        assert_eq!(1u128, u256_to_u128(U256::from(1)));
-        assert_eq!(
-            u128::max_value(),
-            u256_to_u128(U256::from_dec_str("340282366920938463463374607431768211455").unwrap())
-        );
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_u256_to_u128_panics_on_overflow() {
-        u256_to_u128(U256::from_dec_str("340282366920938463463374607431768211456").unwrap());
-    }
 
     #[test]
     fn test_ceiled_div_u128() {
