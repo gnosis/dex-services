@@ -23,5 +23,4 @@ step "Request withdraw" \
 step "Advance time to finalize withdraw" \
 "npx truffle exec scripts/wait_seconds.js 300"
 
-step "Claim withdraw" \
-"npx truffle exec scripts/stablex/claim_withdraw.js --accountId=0 --tokenId=1"
+npx truffle exec scripts/stablex/claim_withdraw.js --accountId=0 --tokenId=1
