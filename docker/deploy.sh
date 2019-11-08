@@ -18,3 +18,12 @@ docker push $REGISTRY_URI:$TRAVIS_BRANCH
 
 echo "The image has been pushed";
 rm -rf .ssh/*
+
+if [ -n "$AUTODEPLOY_URL" ] && [ -n "$AUTODEPLOY_TOKEN" ]; then
+  # Notifying webhook
+  curl -s --output /dev/null --write-out "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -X POST \
+    -d '{"token": "'$AUTODEPLOY_TOKEN'", "push_data": {"tag": "'$TRAVIS_BRANCH'" }}' \
+    $AUTODEPLOY_URL
+fi
