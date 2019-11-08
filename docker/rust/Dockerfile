@@ -5,7 +5,7 @@ ARG use_solver
 WORKDIR /app
 COPY docker/rust/clone_solver.sh docker/rust/clone_solver.sh
 COPY .ssh/ .ssh/
-RUN if [ "$use_solver" = 1 ]; then docker/rust/clone_solver.sh; else echo "Not installing solver"; fi
+RUN if [ "$use_solver" = 1 ]; then docker/rust/clone_solver.sh; else echo "Not installing solver"; fi && rm -rf .ssh
 ENV LINEAR_OPTIMIZATION_SOLVER $use_solver
 ENV PYTHONPATH ${PYTHONPATH}:/app/batchauctions/
 

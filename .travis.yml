@@ -45,3 +45,8 @@ matrix:
         - ./test/e2e-tests-stablex.sh
       after_failure:
         - docker-compose logs
+      deploy:
+        provider: script
+        script: ./docker/deploy.sh
+        on:
+          branch: master
