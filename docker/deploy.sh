@@ -23,5 +23,5 @@ rm -rf .ssh/*
 curl -s --output /dev/null --write-out "%{http_code}" \
   -H "Content-Type: application/json" \
   -X POST \
-  -d '{"token": "$AUTODEPLOY_TOKEN", "push_data": {"tag": "'"$TRAVIS_BRANCH"'" }}' \
+  -d '{"token": "'$AUTODEPLOY_TOKEN'", "push_data": {"tag": "'$TRAVIS_BRANCH'" }}' \
   $AUTODEPLOY_URL
