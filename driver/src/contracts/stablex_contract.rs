@@ -35,11 +35,18 @@ impl StableXContractImpl {
 pub trait StableXContract {
     fn get_current_auction_index(&self) -> Result<U256>;
     fn get_auction_data(&self, _index: U256) -> Result<(AccountState, Vec<Order>)>;
+    fn get_solution_objective_value(
+        &self,
+        batch_index: U256,
+        orders: Vec<Order>,
+        solution: Solution,
+    ) -> Result<U256>;
     fn submit_solution(
         &self,
         batch_index: U256,
         orders: Vec<Order>,
         solution: Solution,
+        claimed_objective_value: U256,
     ) -> Result<()>;
 }
 
@@ -68,17 +75,18 @@ impl StableXContract for StableXContractImpl {
         Ok(parse_auction_data(packed_auction_bytes, index))
     }
 
-    fn submit_solution(
+    fn get_solution_objective_value(
         &self,
         batch_index: U256,
         orders: Vec<Order>,
         solution: Solution,
-    ) -> Result<()> {
+    ) -> Result<U256> {
         let (prices, token_ids_for_price) = encode_prices_for_contract(solution.prices);
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
 
-        let objective_value: U256 = self
+        Ok(
+            self
             .base
             .contract
             .query(
@@ -96,7 +104,20 @@ impl StableXContract for StableXContractImpl {
                 Options::default(),
                 None,
             )
-            .wait()?;
+            .wait()?
+        )
+    }
+
+    fn submit_solution(
+        &self,
+        batch_index: U256,
+        orders: Vec<Order>,
+        solution: Solution,
+        claimed_objective_value: U256,
+    ) -> Result<()> {
+        let (prices, token_ids_for_price) = encode_prices_for_contract(solution.prices);
+        let (owners, order_ids, volumes) =
+            encode_execution_for_contract(orders, solution.executed_buy_amounts);
 
         self.base
             .send_signed_transaction(
@@ -108,7 +129,7 @@ impl StableXContract for StableXContractImpl {
                     volumes,
                     prices,
                     token_ids_for_price,
-                    objective_value,
+                    claimed_objective_value,
                 ),
                 Options::with(|mut opt| {
                     // usual gas estimate is not working
@@ -205,12 +226,14 @@ pub mod tests {
 
     use super::*;
 
-    type SubmitSolutionArguments = (U256, Matcher<Vec<Order>>, Matcher<Solution>);
+    type GetSolutionObjectiveValueArguments = (U256, Matcher<Vec<Order>>, Matcher<Solution>);
+    type SubmitSolutionArguments = (U256, Matcher<Vec<Order>>, Matcher<Solution>, Matcher<U256>);
 
     #[derive(Clone)]
     pub struct StableXContractMock {
         pub get_current_auction_index: Mock<(), Result<U256>>,
         pub get_auction_data: Mock<U256, Result<(AccountState, Vec<Order>)>>,
+        pub get_solution_objective_value: Mock<GetSolutionObjectiveValueArguments, Result<U256>>,
         pub submit_solution: Mock<SubmitSolutionArguments, Result<()>>,
     }
 
@@ -223,6 +246,10 @@ pub mod tests {
                 ))),
                 get_auction_data: Mock::new(Err(DriverError::new(
                     "Unexpected call to get_auction_data",
+                    ErrorKind::Unknown,
+                ))),
+                get_solution_objective_value: Mock::new(Err(DriverError::new(
+                    "Unexpected call to get_solution_objective_value",
                     ErrorKind::Unknown,
                 ))),
                 submit_solution: Mock::new(Err(DriverError::new(
@@ -240,14 +267,24 @@ pub mod tests {
         fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
             self.get_auction_data.called(index)
         }
+        fn get_solution_objective_value(
+            &self,
+            batch_index: U256,
+            orders: Vec<Order>,
+            solution: Solution,
+        ) -> Result<U256> {
+            self.get_solution_objective_value
+                .called((batch_index, Val(orders), Val(solution)))
+        }
         fn submit_solution(
             &self,
             batch_index: U256,
             orders: Vec<Order>,
             solution: Solution,
+            claimed_objective_value: U256,
         ) -> Result<()> {
             self.submit_solution
-                .called((batch_index, Val(orders), Val(solution)))
+                .called((batch_index, Val(orders), Val(solution), Val(claimed_objective_value)))
         }
     }
 
