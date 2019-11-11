@@ -41,7 +41,7 @@ impl<'a> StableXDriver<'a> {
             solution
         };
 
-        let submitted = if solution.executed_sell_amounts.iter().sum::<u128>() > 0 {
+        let submitted = if solution.executed_sell_amounts.iter().any(|&amt| amt > 0) {
             self.contract.submit_solution(batch, orders, solution)?;
             info!("Successfully applied solution to batch {}", batch);
             true
