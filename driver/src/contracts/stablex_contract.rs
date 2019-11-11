@@ -78,6 +78,26 @@ impl StableXContract for StableXContractImpl {
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
 
+        let objective_value: U256 = self
+            .base
+            .contract
+            .query(
+                "submitSolution",
+                (
+                    batch_index,
+                    owners.clone(),
+                    order_ids.clone(),
+                    volumes.clone(),
+                    prices.clone(),
+                    token_ids_for_price.clone(),
+                    U256::zero(),
+                ),
+                None,
+                Options::default(),
+                None,
+            )
+            .wait()?;
+
         self.base
             .send_signed_transaction(
                 "submitSolution",
@@ -88,6 +108,7 @@ impl StableXContract for StableXContractImpl {
                     volumes,
                     prices,
                     token_ids_for_price,
+                    objective_value,
                 ),
                 Options::with(|mut opt| {
                     // usual gas estimate is not working
