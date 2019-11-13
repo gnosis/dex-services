@@ -85,8 +85,7 @@ impl StableXContract for StableXContractImpl {
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
 
-        Ok(
-            self
+        Ok(self
             .base
             .contract
             .query(
@@ -104,8 +103,7 @@ impl StableXContract for StableXContractImpl {
                 Options::default(),
                 None,
             )
-            .wait()?
-        )
+            .wait()?)
     }
 
     fn submit_solution(
@@ -283,8 +281,12 @@ pub mod tests {
             solution: Solution,
             claimed_objective_value: U256,
         ) -> Result<()> {
-            self.submit_solution
-                .called((batch_index, Val(orders), Val(solution), Val(claimed_objective_value)))
+            self.submit_solution.called((
+                batch_index,
+                Val(orders),
+                Val(solution),
+                Val(claimed_objective_value),
+            ))
         }
     }
 
