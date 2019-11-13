@@ -97,7 +97,7 @@ impl StableXContract for StableXContractImpl {
                     volumes.clone(),
                     prices.clone(),
                     token_ids_for_price.clone(),
-                    U256::zero(),
+                    U256::max_value(),
                 ),
                 None,
                 Options::default(),
