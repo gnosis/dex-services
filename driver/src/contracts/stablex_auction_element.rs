@@ -282,5 +282,4 @@ pub mod tests {
         let (buy, sell) = compute_buy_sell_amounts(numerator, denominator, remaining);
         assert_eq!((buy, sell), (990, remaining));
     }
-
 }

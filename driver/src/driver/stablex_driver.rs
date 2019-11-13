@@ -42,9 +42,17 @@ impl<'a> StableXDriver<'a> {
         };
 
         let submitted = if solution.is_non_trivial() {
-            let objective_value = self.contract.get_solution_objective_value(batch, orders.clone(), solution.clone())?;
-            info!("Verified solution with objective value: {}", objective_value);
-            self.contract.submit_solution(batch, orders, solution, objective_value)?;
+            let objective_value = self.contract.get_solution_objective_value(
+                batch,
+                orders.clone(),
+                solution.clone(),
+            )?;
+            info!(
+                "Verified solution with objective value: {}",
+                objective_value
+            );
+            self.contract
+                .submit_solution(batch, orders, solution, objective_value)?;
             info!("Successfully applied solution to batch {}", batch);
             true
         } else {
