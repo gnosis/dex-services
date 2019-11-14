@@ -42,6 +42,10 @@ impl<'a> StableXDriver<'a> {
         };
 
         let submitted = if solution.is_non_trivial() {
+            // NOTE: in retrieving the objective value from the contract the
+            //   solution gets validated, ensured that it is better than the
+            //   latest submitted solution, and that solutions are still being
+            //   accepted for this batch ID.
             let objective_value = self.contract.get_solution_objective_value(
                 batch,
                 orders.clone(),
