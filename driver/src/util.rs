@@ -8,7 +8,7 @@ use web3::types::{H256, U256};
 use crate::contracts::snapp_contract::SnappContract;
 use crate::error::DriverError;
 use crate::error::ErrorKind;
-use crate::price_finding::{Fee, LinearOptimisationPriceFinder, NaiveSolver, PriceFinding};
+use crate::price_finding::{Fee, LinearOptimisationPriceFinder, PriceFinding};
 
 const BATCH_TIME_SECONDS: u32 = 3 * 60;
 
@@ -111,14 +111,17 @@ pub fn batch_processing_state(
     Ok(ProcessingState::TooEarly)
 }
 
-pub fn create_price_finder(fee: Option<Fee>) -> Box<dyn PriceFinding> {
-    let solver_env_var = env::var("LINEAR_OPTIMIZATION_SOLVER").unwrap_or_else(|_| "0".to_string());
+pub fn create_price_finder<N>(fee: Option<Fee>, naive: N) -> Box<dyn PriceFinding>
+where
+    N: PriceFinding + 'static,
+{
+    let solver_env_var = env::var("LINEAR_OPTIMIZATION_SOLVER").unwrap_or_default();
     if solver_env_var == "1" {
         info!("Using linear optimisation price finder");
         Box::new(LinearOptimisationPriceFinder::new(fee))
     } else {
         info!("Using naive price finder");
-        Box::new(NaiveSolver::new(fee))
+        Box::new(naive)
     }
 }
 

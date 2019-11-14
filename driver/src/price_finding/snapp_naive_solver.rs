@@ -90,17 +90,17 @@ impl Matchable for Order {
     }
 }
 
-pub struct NaiveSolver {
+pub struct SnappNaiveSolver {
     fee: Option<Fee>,
 }
 
-impl NaiveSolver {
+impl SnappNaiveSolver {
     pub fn new(fee: Option<Fee>) -> Self {
-        NaiveSolver { fee }
+        SnappNaiveSolver { fee }
     }
 }
 
-impl PriceFinding for NaiveSolver {
+impl PriceFinding for SnappNaiveSolver {
     fn find_prices(
         &self,
         orders: &[Order],
@@ -231,7 +231,7 @@ pub mod tests {
         let orders = order_pair_first_fully_matching_second();
         let state = create_account_state_with_balance_for(&orders);
 
-        let solver = NaiveSolver::new(None);
+        let solver = SnappNaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
         assert_eq!(Some(u128_to_u256(16 * 10u128.pow(36))), res.objective_value);
@@ -258,7 +258,7 @@ pub mod tests {
             ratio: 0.001,
         });
 
-        let solver = NaiveSolver::new(fee.clone());
+        let solver = SnappNaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
         check_solution(&orders, res, &fee).unwrap();
     }
@@ -269,7 +269,7 @@ pub mod tests {
         orders.reverse();
         let state = create_account_state_with_balance_for(&orders);
 
-        let solver = NaiveSolver::new(None);
+        let solver = SnappNaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
         assert_eq!(Some(u128_to_u256(16 * 10u128.pow(36))), res.objective_value);
@@ -297,7 +297,7 @@ pub mod tests {
             ratio: 0.001,
         });
 
-        let solver = NaiveSolver::new(fee.clone());
+        let solver = SnappNaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
         check_solution(&orders, res, &fee).unwrap();
     }
@@ -307,7 +307,7 @@ pub mod tests {
         let orders = order_pair_both_fully_matched();
         let state = create_account_state_with_balance_for(&orders);
 
-        let solver = NaiveSolver::new(None);
+        let solver = SnappNaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
         assert_eq!(Some(u128_to_u256(92 * 10u128.pow(36))), res.objective_value);
@@ -333,7 +333,7 @@ pub mod tests {
             token: 2,
             ratio: 0.001,
         });
-        let solver = NaiveSolver::new(fee.clone());
+        let solver = SnappNaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
 
         check_solution(&orders, res, &fee).unwrap();
@@ -393,7 +393,7 @@ pub mod tests {
         ];
         let state = create_account_state_with_balance_for(&orders);
 
-        let solver = NaiveSolver::new(None);
+        let solver = SnappNaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
         assert_eq!(Some(U256::from(16)), res.objective_value);
@@ -432,7 +432,7 @@ pub mod tests {
             },
         ];
 
-        let solver = NaiveSolver::new(None);
+        let solver = SnappNaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
         assert_eq!(res, Solution::trivial(orders.len()));
     }
@@ -459,7 +459,7 @@ pub mod tests {
         ];
         let state = create_account_state_with_balance_for(&orders);
 
-        let solver = NaiveSolver::new(None);
+        let solver = SnappNaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
         assert_eq!(res, Solution::trivial(orders.len()));
     }
@@ -490,7 +490,7 @@ pub mod tests {
             token: 0,
             ratio: 0.001,
         });
-        let solver = NaiveSolver::new(fee.clone());
+        let solver = SnappNaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
 
         assert_eq!(res.executed_sell_amounts, [20000, 9990]);
@@ -527,7 +527,7 @@ pub mod tests {
             token: 2,
             ratio: 0.001,
         });
-        let solver = NaiveSolver::new(fee.clone());
+        let solver = SnappNaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
         assert_eq!(res, Solution::trivial(orders.len()));
     }
@@ -554,7 +554,7 @@ pub mod tests {
         ];
         let state = create_account_state_with_balance_for(&orders);
 
-        let solver = NaiveSolver::new(None);
+        let solver = SnappNaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
         assert_eq!(res, Solution::trivial(orders.len()));
     }
