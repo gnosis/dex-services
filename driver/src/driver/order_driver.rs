@@ -692,7 +692,7 @@ mod tests {
     fn test_update_balances() {
         let mut state = AccountState::new(H256::zero(), U256::one(), vec![100; 60], TOKENS);
         let solution = Solution {
-            objective_value: Some(U256::from(0)),
+            objective_value: U256::from_dec_str("0").ok(),
             prices: vec![1, 2],
             executed_sell_amounts: vec![1, 1],
             executed_buy_amounts: vec![1, 1],

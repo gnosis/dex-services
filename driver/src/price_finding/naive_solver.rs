@@ -1,3 +1,5 @@
+use web3::types::U256;
+
 use dfusion_core::models::{AccountState, Order, Solution, TOKENS};
 
 use crate::price_finding::error::PriceFindingError;
@@ -22,6 +24,12 @@ trait Matchable {
     ) -> Option<OrderPairType>;
     fn opposite_tokens(&self, other: &Order) -> bool;
     fn have_price_overlap(&self, other: &Order) -> bool;
+    fn objective_value(
+        &self,
+        buy_price: u128,
+        exec_buy_amount: u128,
+        exec_sell_amount: u128,
+    ) -> U256;
 }
 
 impl Matchable for Order {
@@ -69,6 +77,17 @@ impl Matchable for Order {
             && u128_to_u256(self.buy_amount) * u128_to_u256(other.buy_amount)
                 <= u128_to_u256(other.sell_amount) * u128_to_u256(self.sell_amount)
     }
+
+    fn objective_value(
+        &self,
+        buy_price: u128,
+        exec_buy_amount: u128,
+        exec_sell_amount: u128,
+    ) -> U256 {
+        let relative_buy = (u128_to_u256(self.buy_amount) * u128_to_u256(exec_sell_amount))
+            .ceiled_div(u128_to_u256(self.sell_amount));
+        (u128_to_u256(exec_buy_amount) - relative_buy) * u128_to_u256(buy_price)
+    }
 }
 
 pub struct NaiveSolver {
@@ -91,6 +110,7 @@ impl PriceFinding for NaiveSolver {
         let mut prices: Vec<u128> = vec![0; TOKENS as usize];
         let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
         let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
+        let mut total_objective_value = U256::zero();
 
         let mut found_flag = false;
 
@@ -132,6 +152,17 @@ impl PriceFinding for NaiveSolver {
                     None => continue,
                 }
                 found_flag = true;
+                let x_objective_value = x.objective_value(
+                    prices[x.buy_token as usize],
+                    exec_buy_amount[i],
+                    exec_sell_amount[i],
+                );
+                let y_objective_value = y.objective_value(
+                    prices[y.buy_token as usize],
+                    exec_buy_amount[j],
+                    exec_sell_amount[j],
+                );
+                total_objective_value = x_objective_value.checked_add(y_objective_value).unwrap();
                 break;
             }
             if found_flag {
@@ -157,12 +188,8 @@ impl PriceFinding for NaiveSolver {
             }
         }
 
-        // we don't correctly calculate this yet, just provide something
-        // non-zero for now for non-trivial solutions
-        let objective_value = if found_flag { 1} else {0};
-
         let solution = Solution {
-            objective_value: Some(objective_value.into()),
+            objective_value: Some(total_objective_value),
             prices,
             executed_sell_amounts: exec_sell_amount,
             executed_buy_amounts: exec_buy_amount,
@@ -197,7 +224,7 @@ pub mod tests {
     use crate::util::u256_to_u128;
     use dfusion_core::models::account_state::test_util::*;
     use std::collections::HashMap;
-    use web3::types::{H160, H256, U256};
+    use web3::types::{H160, H256};
 
     #[test]
     fn test_type_left_fully_matched_no_fee() {
@@ -207,6 +234,7 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
+        assert_eq!(Some(u128_to_u256(16 * 10u128.pow(36))), res.objective_value);
         assert_eq!(
             vec![4 * 10u128.pow(18), 52 * 10u128.pow(18)],
             res.executed_buy_amounts
@@ -244,6 +272,7 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
+        assert_eq!(Some(u128_to_u256(16 * 10u128.pow(36))), res.objective_value);
         assert_eq!(
             vec![52 * 10u128.pow(18), 4 * 10u128.pow(18)],
             res.executed_buy_amounts
@@ -281,6 +310,7 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
+        assert_eq!(Some(u128_to_u256(92 * 10u128.pow(36))), res.objective_value);
         assert_eq!(
             vec![16 * 10u128.pow(18), 10 * 10u128.pow(18)],
             res.executed_buy_amounts
@@ -366,6 +396,7 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
+        assert_eq!(Some(U256::from(16)), res.objective_value);
         assert_eq!(vec![0, 0, 0, 52, 4, 0], res.executed_buy_amounts);
         assert_eq!(vec![0, 0, 0, 4, 52, 0], res.executed_sell_amounts);
         assert_eq!(4, res.prices[1]);
@@ -570,17 +601,11 @@ pub mod tests {
         ]
     }
 
-    fn to_eth(value: u128) -> u128 {
-        value * 1_000_000_000_000_000_000
-    }
-
     fn check_solution(
         orders: &[Order],
         solution: Solution,
         fee: &Option<Fee>,
     ) -> Result<(), String> {
-        assert_eq!(solution.prices[0], to_eth(1));
-
         let mut token_conservation = HashMap::new();
         for (i, order) in orders.iter().enumerate() {
             let buy_token_price = solution.prices[order.buy_token as usize];
@@ -627,9 +652,9 @@ pub mod tests {
             *token_conservation.entry(order.sell_token).or_insert(0) -= exec_sell_amount as i128;
         }
 
-        for j in (0..solution.prices.len()).map(|x| x as u16) {
-            let balance = token_conservation.entry(j).or_insert(0);
-            if *balance != 0 && (fee.is_none() || j != fee.as_ref().unwrap().token) {
+        for j in 0..solution.prices.len() {
+            let balance = token_conservation.entry(j as u16).or_insert(0);
+            if *balance != 0 && (fee.is_none() || j as u16 != fee.as_ref().unwrap().token) {
                 return Err(format!(
                     "Token balance of token {} not 0 (was {})",
                     j, balance
