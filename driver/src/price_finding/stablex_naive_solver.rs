@@ -211,7 +211,7 @@ mod tests {
         ];
 
         let solution = StableXNaiveSolver.find_prices(&orders, &accounts).unwrap();
-        assert!(solution.prices[0] != 0, "solution is non-trivial");
+        assert!(solution.is_non_trivial());
     }
 
     #[test]
@@ -237,6 +237,6 @@ mod tests {
         let accounts = test_util::create_account_state_with_balance_for(&orders);
 
         let solution = StableXNaiveSolver.find_prices(&orders, &accounts).unwrap();
-        assert!(solution.prices[0] != 0, "solution is non-trivial");
+        assert!(solution.is_non_trivial());
     }
 }
