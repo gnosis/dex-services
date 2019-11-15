@@ -84,11 +84,36 @@ fn average(a: u128, b: u128) -> u128 {
 }
 
 /// Calculate the executed buy amount from the executed sell amount and the buy
-/// and sell prices of the traded tokens.
-fn executed_buy_amount(xs: u128, pb: u128, ps: u128) -> u128 {
+/// and sell prices of the traded tokens. This function returns a `None` if no
+/// value can be found such that `executed_sell_amount(result, pb, ps) == xs`.
+/// This function acts as an inverse to `executed_sell_amount`.
+fn executed_buy_amount(xs: u128, pb: u128, ps: u128) -> Option<u128> {
     use util::u128_to_u256 as u;
 
-    util::u256_to_u128((((u(xs) * u(ps)) / u(FEE_DENOM)) * u(FEE_DENOM - 1)) / u(pb))
+    let v = util::u256_to_u128((((u(xs) * u(ps)) / u(FEE_DENOM)) * u(FEE_DENOM - 1)) / u(pb));
+
+    // we need to account for rounding errors here, since this function is
+    // essentially an inverse of `executed_sell_amount`; so find the maximum
+    // error that `v` can have and find a value that works
+    // TODO(nlordell): verify the maths
+
+    macro_rules! return_if_correct {
+        ($v:expr) => {
+            if xs == executed_sell_amount($v, pb, ps) {
+                return Some($v);
+            }
+        };
+    }
+
+    return_if_correct!(v);
+
+    let delta = (ps / pb) + 1;
+    for d in 1..=delta {
+        return_if_correct!(v + d);
+        return_if_correct!(v - d);
+    }
+
+    return None;
 }
 
 /// Calculate the executed sell amount from the executed buy amount and the buy
@@ -100,7 +125,8 @@ fn executed_sell_amount(xb: u128, pb: u128, ps: u128) -> u128 {
 }
 
 /// Attempts to compute a solution from two orders. Returns `None` if the order
-/// limit prices cannot be satisfied.
+/// limit prices cannot be satisfied or the executed buy amount for the order
+/// buying the fee token cannot be calculated (due to rounding errors).
 fn compute_solution(orders: &[Order], i: usize, j: usize) -> Option<Solution> {
     // here the terms buy and sell are relative to the non-fee token
     let (buy, sell) = if orders[i].buy_token != 0 {
@@ -133,7 +159,7 @@ fn compute_solution(orders: &[Order], i: usize, j: usize) -> Option<Solution> {
     solution.prices[0] = ETH;
     solution.prices[orders[buy].buy_token as usize] = price;
     solution.executed_buy_amounts[buy] = exec_amt;
-    solution.executed_buy_amounts[sell] = executed_buy_amount(exec_amt, ETH, price);
+    solution.executed_buy_amounts[sell] = executed_buy_amount(exec_amt, ETH, price)?;
     solution.executed_sell_amounts[buy] = executed_sell_amount(exec_amt, price, ETH);
     solution.executed_sell_amounts[sell] = exec_amt;
 
@@ -177,7 +203,6 @@ mod tests {
         let accounts = test_util::create_account_state_with_balance_for(&orders);
 
         let solution = StableXNaiveSolver.find_prices(&orders, &accounts).unwrap();
-        println!("{:?}", solution);
-        assert!(false);
+        assert!(solution.prices[0] != 0, "solution is non-trivial");
     }
 }
