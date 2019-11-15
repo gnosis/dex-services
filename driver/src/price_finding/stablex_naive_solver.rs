@@ -221,7 +221,7 @@ mod tests {
                 account_id: Address::from(0),
                 sell_token: 0,
                 buy_token: 1,
-                sell_amount: 20020020020021019020,
+                sell_amount: 20_020_020_020_021_019_020,
                 buy_amount: ETH,
             },
             Order {
@@ -230,7 +230,7 @@ mod tests {
                 sell_token: 1,
                 buy_token: 0,
                 sell_amount: ETH,
-                buy_amount: 19979999999999001000,
+                buy_amount: 19_979_999_999_999_001_000,
             },
         ];
         let accounts = test_util::create_account_state_with_balance_for(&orders);
