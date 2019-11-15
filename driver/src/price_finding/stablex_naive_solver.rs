@@ -182,10 +182,18 @@ mod tests {
 
     #[test]
     fn stablex_e2e_auction() {
+        let users = [Address::from(0), Address::from(1)];
+        let accounts = {
+            let mut accounts = AccountState::default();
+            accounts.num_tokens = u16::max_value();
+            accounts.increment_balance(0, users[0], 3000 * ETH);
+            accounts.increment_balance(1, users[1], 3000 * ETH);
+            accounts
+        };
         let orders = vec![
             Order {
                 batch_information: None,
-                account_id: Address::from(0),
+                account_id: users[0],
                 sell_token: 0,
                 buy_token: 1,
                 sell_amount: 2000 * ETH,
@@ -193,11 +201,36 @@ mod tests {
             },
             Order {
                 batch_information: None,
-                account_id: Address::from(1),
+                account_id: users[1],
                 sell_token: 1,
                 buy_token: 0,
                 sell_amount: 999 * ETH,
                 buy_amount: 1996 * ETH,
+            },
+        ];
+
+        let solution = StableXNaiveSolver.find_prices(&orders, &accounts).unwrap();
+        assert!(solution.prices[0] != 0, "solution is non-trivial");
+    }
+
+    #[test]
+    fn basic_trade() {
+        let orders = vec![
+            Order {
+                batch_information: None,
+                account_id: Address::from(0),
+                sell_token: 0,
+                buy_token: 1,
+                sell_amount: 20020020020021019020,
+                buy_amount: ETH,
+            },
+            Order {
+                batch_information: None,
+                account_id: Address::from(1),
+                sell_token: 1,
+                buy_token: 0,
+                sell_amount: ETH,
+                buy_amount: 19979999999999001000,
             },
         ];
         let accounts = test_util::create_account_state_with_balance_for(&orders);
