@@ -2,6 +2,7 @@ use crate::price_finding::error::PriceFindingError;
 use crate::price_finding::PriceFinding;
 use crate::util;
 use dfusion_core::models::{AccountState, Order, Solution};
+use std::cmp;
 use web3::types::U256;
 
 /// A naive solver for the stableX contract. It works almost identically to the
@@ -23,10 +24,13 @@ impl PriceFinding for StableXNaiveSolver {
         orders: &[Order],
         accounts: &AccountState,
     ) -> Result<Solution, PriceFindingError> {
-        Ok(pairs(orders)
-            .filter(|(x, y)| x.buy_token == y.sell_token && x.sell_token == y.buy_token)
-            .filter(|(x, _)| x.buy_token == 0 || x.sell_token == 0)
-            .filter_map(|(x, y)| compute_solution(x, y, accounts))
+        Ok(ipairs(orders)
+            .filter(|&(i, j)| {
+                orders[i].buy_token == orders[j].sell_token
+                    && orders[i].sell_token == orders[j].buy_token
+            })
+            .filter(|&(i, _)| orders[i].buy_token == 0 || orders[i].sell_token == 0)
+            .filter_map(|(i, j)| compute_solution(orders, i, j, accounts))
             .nth(0)
             .unwrap_or_else(|| Solution::trivial(orders.len())))
     }
@@ -35,49 +39,50 @@ impl PriceFinding for StableXNaiveSolver {
 const ETH: u128 = 1_000_000_000_000_000_000u128;
 const FEE_DENOM: u128 = 1000;
 
-/// Returns an iterator over all unordered pairs in slice.
-fn pairs<'a, T>(slice: &'a [T]) -> impl Iterator<Item = (&'a T, &'a T)> + 'a {
-    (0..slice.len() - 1)
-        .map(move |i| (i + 1..slice.len()).map(move |j| (i, j)))
+/// Returns an iterator over all unordered pairs of indices in slice.
+fn ipairs<T>(slice: &[T]) -> impl Iterator<Item = (usize, usize)> {
+    let len = slice.len();
+    (0..len - 1)
+        .map(move |i| (i + 1..len).map(move |j| (i, j)))
         .flatten()
-        .map(move |(i, j)| (&slice[i], &slice[j]))
 }
 
-/// Orders and returns the orders in ascending order.
-fn ordered_orders<'a>(x: &'a Order, y: &'a Order) -> (&'a Order, &'a Order) {
-    let x_is_larger = if x.buy_token == 0 {
-        x.buy_amount > y.sell_amount
-    } else {
-        x.sell_amount > y.buy_amount
-    };
-    if x_is_larger {
-        (y, x)
-    } else {
-        (x, y)
-    }
-}
-
-/// Gets the limit price of the non-fee token for the given order
+/// Gets the limit price of the non-fee token for the given order considering
+/// fees.
 fn order_limit_price(order: &Order) -> u128 {
     use util::u128_to_u256 as u;
 
-    let (fee, other) = if order.buy_token == 0 {
-        (order.buy_amount, order.sell_amount)
+    let (fee, other, add_fees) = if order.buy_token == 0 {
+        (order.buy_amount, order.sell_amount, true)
     } else {
-        (order.sell_amount, order.buy_amount)
+        (order.sell_amount, order.buy_amount, false)
     };
 
     // upcast to 256 to avoid overflows
-    util::u256_to_u128((u(fee) * u(ETH)) / u(other))
+    let price = util::u256_to_u128((u(fee) * u(ETH)) / u(other));
+    // account for fees in price
+    if add_fees {
+        (price * FEE_DENOM) / (FEE_DENOM - 1)
+    } else {
+        (price * (FEE_DENOM - 1)) / FEE_DENOM
+    }
 }
 
 /// Attempts to compute a solution from two orders given the current accounts
 /// state.
-fn compute_solution(x: &Order, y: &Order, accounts: &AccountState) -> Option<Solution> {
-    let (small, large) = ordered_orders(x, y);
-    let price = order_limit_price(large);
+fn compute_solution(
+    orders: &[Order],
+    i: usize,
+    j: usize,
+    accounts: &AccountState,
+) -> Option<Solution> {
+    let price = cmp::min(
+        order_limit_price(&orders[i]),
+        order_limit_price(&orders[j]),
+    );
 
-    println!("price: {}", price);
+
+    println!("{}", price);
 
     None
 }
@@ -89,12 +94,10 @@ mod tests {
     use web3::types::Address;
 
     #[test]
-    fn int_pairs() {
+    fn ipairs_for_slice() {
         assert_eq!(
             vec![(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)],
-            pairs(&[0, 1, 2, 3])
-                .map(|(x, y)| (*x, *y))
-                .collect::<Vec<_>>()
+            ipairs(&[0; 4]).collect::<Vec<_>>()
         );
     }
 
