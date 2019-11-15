@@ -113,7 +113,7 @@ fn executed_buy_amount(xs: u128, pb: u128, ps: u128) -> Option<u128> {
         return_if_correct!(v - d);
     }
 
-    return None;
+    None
 }
 
 /// Calculate the executed sell amount from the executed buy amount and the buy
