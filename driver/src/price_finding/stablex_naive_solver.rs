@@ -2,20 +2,19 @@ use crate::price_finding::error::PriceFindingError;
 use crate::price_finding::PriceFinding;
 use crate::util;
 use dfusion_core::models::{AccountState, Order, Solution};
-use std::cmp;
-use web3::types::U256;
+use std::cmp::Ordering;
 
 /// A naive solver for the stableX contract. It works almost identically to the
 /// Snapp naive solver except it has a few extra requirements and it doesn't try
 /// to be as optimal.
 ///
 /// The solver works by finding the first pair of orders which matching sell and
-/// buy tokens, where one of the traded tokens is the fee token, that has a
-/// viable solution.
+/// buy tokens, where one of the traded tokens is the fee token, whose users have
+/// enough balance to fully fill, and that has a viable solution.
 ///
 /// The solution is computed by taking the price of the larger order and and
 /// completely filling the smaller order. A large order is defined by having
-/// more fee token volume.
+/// more non-fee token volume. Account balances are checked for each solution.
 pub struct StableXNaiveSolver;
 
 impl PriceFinding for StableXNaiveSolver {
@@ -30,7 +29,10 @@ impl PriceFinding for StableXNaiveSolver {
                     && orders[i].sell_token == orders[j].buy_token
             })
             .filter(|&(i, _)| orders[i].buy_token == 0 || orders[i].sell_token == 0)
-            .filter_map(|(i, j)| compute_solution(orders, i, j, accounts))
+            .filter(|&(i, j)| {
+                has_enough_balance(&orders[i], accounts) && has_enough_balance(&orders[j], accounts)
+            })
+            .filter_map(|(i, j)| compute_solution(orders, i, j))
             .nth(0)
             .unwrap_or_else(|| Solution::trivial(orders.len())))
     }
@@ -45,6 +47,12 @@ fn ipairs<T>(slice: &[T]) -> impl Iterator<Item = (usize, usize)> {
     (0..len - 1)
         .map(move |i| (i + 1..len).map(move |j| (i, j)))
         .flatten()
+}
+
+/// Returns true if the owner of an order has enough balance to fully fill the
+/// order; false otherwise.
+fn has_enough_balance(order: &Order, accounts: &AccountState) -> bool {
+    order.sell_amount <= accounts.read_balance(order.sell_token, order.account_id)
 }
 
 /// Gets the limit price of the non-fee token for the given order considering
@@ -68,23 +76,68 @@ fn order_limit_price(order: &Order) -> u128 {
     }
 }
 
-/// Attempts to compute a solution from two orders given the current accounts
-/// state.
-fn compute_solution(
-    orders: &[Order],
-    i: usize,
-    j: usize,
-    accounts: &AccountState,
-) -> Option<Solution> {
-    let price = cmp::min(
-        order_limit_price(&orders[i]),
-        order_limit_price(&orders[j]),
-    );
+/// Calculate the average of two values, note that this takes extra care not to
+/// overflow.
+fn average(a: u128, b: u128) -> u128 {
+    let (min, max) = if a < b { (a, b) } else { (b, a) };
+    min + ((max - min) / 2)
+}
 
+/// Calculate the executed buy amount from the executed sell amount and the buy
+/// and sell prices of the traded tokens.
+fn executed_buy_amount(xs: u128, pb: u128, ps: u128) -> u128 {
+    use util::u128_to_u256 as u;
 
-    println!("{}", price);
+    util::u256_to_u128((((u(xs) * u(ps)) / u(FEE_DENOM)) * u(FEE_DENOM - 1)) / u(pb))
+}
 
-    None
+/// Calculate the executed sell amount from the executed buy amount and the buy
+/// and sell prices of the traded tokens.
+fn executed_sell_amount(xb: u128, pb: u128, ps: u128) -> u128 {
+    use util::u128_to_u256 as u;
+
+    util::u256_to_u128((((u(xb) * u(pb)) / u(FEE_DENOM - 1)) * u(FEE_DENOM)) / u(ps))
+}
+
+/// Attempts to compute a solution from two orders. Returns `None` if the order
+/// limit prices cannot be satisfied.
+fn compute_solution(orders: &[Order], i: usize, j: usize) -> Option<Solution> {
+    // here the terms buy and sell are relative to the non-fee token
+    let (buy, sell) = if orders[i].buy_token != 0 {
+        (i, j)
+    } else {
+        (j, i)
+    };
+
+    let buy_price = order_limit_price(&orders[buy]);
+    let sell_price = order_limit_price(&orders[sell]);
+    if buy_price < sell_price {
+        // the order can't be filled since we are trying to buy at a lower price
+        // than is actually being sold
+        return None;
+    }
+
+    // let the larger order set the price
+    let (price, exec_amt) = match orders[buy].buy_amount.cmp(&orders[sell].sell_amount) {
+        Ordering::Greater => (buy_price, orders[sell].sell_amount),
+        Ordering::Equal => (average(buy_price, sell_price), orders[buy].buy_amount),
+        Ordering::Less => (sell_price, orders[buy].buy_amount),
+    };
+
+    // when considering only two orders, a solution has exactly two degrees of
+    // freedom, the amount being traded and the price of the non-fee token; we
+    // have chosen both values so now all we need to do is calculate the other
+    // values required for the solution
+    let mut solution = Solution::trivial(orders.len());
+
+    solution.prices[0] = ETH;
+    solution.prices[orders[buy].buy_token as usize] = price;
+    solution.executed_buy_amounts[buy] = exec_amt;
+    solution.executed_buy_amounts[sell] = executed_buy_amount(exec_amt, ETH, price);
+    solution.executed_sell_amounts[buy] = executed_sell_amount(exec_amt, price, ETH);
+    solution.executed_sell_amounts[sell] = exec_amt;
+
+    Some(solution)
 }
 
 #[cfg(test)]
@@ -124,6 +177,7 @@ mod tests {
         let accounts = test_util::create_account_state_with_balance_for(&orders);
 
         let solution = StableXNaiveSolver.find_prices(&orders, &accounts).unwrap();
+        println!("{:?}", solution);
         assert!(false);
     }
 }
