@@ -92,12 +92,12 @@ impl StableXContract for StableXContractImpl {
                 "submitSolution",
                 (
                     batch_index,
+                    U256::max_value(),
                     owners.clone(),
                     order_ids.clone(),
                     volumes.clone(),
                     prices.clone(),
                     token_ids_for_price.clone(),
-                    U256::max_value(),
                 ),
                 None,
                 Options::default(),
@@ -122,12 +122,12 @@ impl StableXContract for StableXContractImpl {
                 "submitSolution",
                 (
                     batch_index,
+                    claimed_objective_value,
                     owners,
                     order_ids,
                     volumes,
                     prices,
                     token_ids_for_price,
-                    claimed_objective_value,
                 ),
                 Options::with(|mut opt| {
                     // usual gas estimate is not working
