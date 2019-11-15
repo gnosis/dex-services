@@ -38,7 +38,8 @@ impl PriceFinding for StableXNaiveSolver {
     }
 }
 
-const ETH: u128 = 1_000_000_000_000_000_000u128;
+const BASE_UNIT: u128 = 1_000_000_000_000_000_000u128;
+const BASE_PRICE: u128 = BASE_UNIT;
 const FEE_DENOM: u128 = 1000;
 
 /// Returns an iterator over all unordered pairs of indices in slice.
@@ -67,7 +68,7 @@ fn order_limit_price(order: &Order) -> u128 {
     };
 
     // upcast to 256 to avoid overflows
-    let price = util::u256_to_u128((u(fee) * u(ETH)) / u(other));
+    let price = util::u256_to_u128((u(fee) * u(BASE_PRICE)) / u(other));
     // account for fees in price
     if add_fees {
         (price * FEE_DENOM) / (FEE_DENOM - 1)
@@ -156,11 +157,11 @@ fn compute_solution(orders: &[Order], i: usize, j: usize) -> Option<Solution> {
     // values required for the solution
     let mut solution = Solution::trivial(orders.len());
 
-    solution.prices[0] = ETH;
+    solution.prices[0] = BASE_PRICE;
     solution.prices[orders[buy].buy_token as usize] = price;
     solution.executed_buy_amounts[buy] = exec_amt;
-    solution.executed_buy_amounts[sell] = executed_buy_amount(exec_amt, ETH, price)?;
-    solution.executed_sell_amounts[buy] = executed_sell_amount(exec_amt, price, ETH);
+    solution.executed_buy_amounts[sell] = executed_buy_amount(exec_amt, BASE_PRICE, price)?;
+    solution.executed_sell_amounts[buy] = executed_sell_amount(exec_amt, price, BASE_PRICE);
     solution.executed_sell_amounts[sell] = exec_amt;
 
     Some(solution)
@@ -186,8 +187,8 @@ mod tests {
         let accounts = {
             let mut accounts = AccountState::default();
             accounts.num_tokens = u16::max_value();
-            accounts.increment_balance(0, users[0], 3000 * ETH);
-            accounts.increment_balance(1, users[1], 3000 * ETH);
+            accounts.increment_balance(0, users[0], 3000 * BASE_UNIT);
+            accounts.increment_balance(1, users[1], 3000 * BASE_UNIT);
             accounts
         };
         let orders = vec![
@@ -196,16 +197,16 @@ mod tests {
                 account_id: users[0],
                 sell_token: 0,
                 buy_token: 1,
-                sell_amount: 2000 * ETH,
-                buy_amount: 999 * ETH,
+                sell_amount: 2000 * BASE_UNIT,
+                buy_amount: 999 * BASE_UNIT,
             },
             Order {
                 batch_information: None,
                 account_id: users[1],
                 sell_token: 1,
                 buy_token: 0,
-                sell_amount: 999 * ETH,
-                buy_amount: 1996 * ETH,
+                sell_amount: 999 * BASE_UNIT,
+                buy_amount: 1996 * BASE_UNIT,
             },
         ];
 
@@ -222,14 +223,14 @@ mod tests {
                 sell_token: 0,
                 buy_token: 1,
                 sell_amount: 20_020_020_020_021_019_020,
-                buy_amount: ETH,
+                buy_amount: BASE_UNIT,
             },
             Order {
                 batch_information: None,
                 account_id: Address::from(1),
                 sell_token: 1,
                 buy_token: 0,
-                sell_amount: ETH,
+                sell_amount: BASE_UNIT,
                 buy_amount: 19_979_999_999_999_001_000,
             },
         ];
