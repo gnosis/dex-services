@@ -23,6 +23,12 @@ impl Solution {
             executed_sell_amounts: vec![0; num_orders],
         }
     }
+
+    /// Returns true if a solution is non-trivial and false if it is the trivial
+    /// solution
+    pub fn is_non_trivial(&self) -> bool {
+        self.executed_sell_amounts.iter().any(|&amt| amt > 0)
+    }
 }
 
 impl Serializable for Solution {
@@ -73,6 +79,20 @@ impl Deserializable for Solution {
 #[cfg(test)]
 pub mod unit_test {
     use super::*;
+
+    #[test]
+    fn test_is_non_trivial() {
+        let trivial = Solution::trivial(3);
+        assert!(!trivial.is_non_trivial());
+
+        let non_trivial = Solution {
+            objective_value: None,
+            prices: vec![42; TOKENS as usize],
+            executed_buy_amounts: vec![4, 5, 6],
+            executed_sell_amounts: vec![1, 2, 3],
+        };
+        assert!(non_trivial.is_non_trivial());
+    }
 
     #[test]
     fn test_serialize_deserialize() {

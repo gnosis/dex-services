@@ -41,8 +41,22 @@ impl<'a> StableXDriver<'a> {
             solution
         };
 
-        let submitted = if solution.executed_sell_amounts.iter().sum::<u128>() > 0 {
-            self.contract.submit_solution(batch, orders, solution)?;
+        let submitted = if solution.is_non_trivial() {
+            // NOTE: in retrieving the objective value from the contract the
+            //   solution gets validated, ensured that it is better than the
+            //   latest submitted solution, and that solutions are still being
+            //   accepted for this batch ID.
+            let objective_value = self.contract.get_solution_objective_value(
+                batch,
+                orders.clone(),
+                solution.clone(),
+            )?;
+            info!(
+                "Verified solution with objective value: {}",
+                objective_value
+            );
+            self.contract
+                .submit_solution(batch, orders, solution, objective_value)?;
             info!("Successfully applied solution to batch {}", batch);
             true
         } else {
@@ -85,8 +99,13 @@ mod tests {
             .will_return(Ok((state.clone(), orders.clone())));
 
         contract
-            .submit_solution
+            .get_solution_objective_value
             .given((batch - 1, Val(orders.clone()), Any))
+            .will_return(Ok(U256::from(1337)));
+
+        contract
+            .submit_solution
+            .given((batch - 1, Val(orders.clone()), Any, Val(U256::from(1337))))
             .will_return(Ok(()));
 
         let solution = Solution {
@@ -123,8 +142,13 @@ mod tests {
             .will_return(Ok((state.clone(), orders.clone())));
 
         contract
-            .submit_solution
+            .get_solution_objective_value
             .given((batch - 1, Val(orders.clone()), Any))
+            .will_return(Ok(U256::from(1337)));
+
+        contract
+            .submit_solution
+            .given((batch - 1, Val(orders.clone()), Any, Val(U256::from(1337))))
             .will_return(Ok(()));
 
         let solution = Solution {
@@ -176,8 +200,13 @@ mod tests {
             .will_return(Ok((state.clone(), orders.clone())));
 
         contract
-            .submit_solution
+            .get_solution_objective_value
             .given((batch - 1, Val(orders.clone()), Any))
+            .will_return(Ok(U256::from(1337)));
+
+        contract
+            .submit_solution
+            .given((batch - 1, Val(orders.clone()), Any, Val(U256::from(1337))))
             .will_return(Ok(()));
 
         let mut driver = StableXDriver::new(&contract, &mut pf);
@@ -241,7 +270,7 @@ mod tests {
         assert!(!mock_it::verify(
             contract
                 .submit_solution
-                .was_called_with((batch - 1, Any, Any))
+                .was_called_with((batch - 1, Any, Any, Any))
         ));
     }
 }

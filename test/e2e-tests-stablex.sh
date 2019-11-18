@@ -15,7 +15,7 @@ step "Place 2 orders in current auction" \
 npx truffle exec scripts/stablex/place_order.js --accountId=1 --buyToken=0 --sellToken=1 --minBuy=1996 --maxSell=999 --validFor=20 "
 
 step "Advance time to close auction" \
-"npx truffle exec scripts/wait_seconds.js 300"
+"npx truffle exec scripts/stablex/close_auction.js"
 
 step "Request withdraw" \
 "npx truffle exec scripts/stablex/request_withdraw.js --accountId=0 --tokenId=1 --amount=999"
