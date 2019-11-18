@@ -110,7 +110,6 @@ fn deserialize_result(
     let orders = json["orders"]
         .as_array()
         .ok_or_else(|| "No 'orders' list in json")?;
-    let objective_value = None;
     let executed_sell_amounts = orders
         .iter()
         .map(|o| {
@@ -140,7 +139,7 @@ fn deserialize_result(
         })
         .collect::<Result<Vec<u128>, PriceFindingError>>()?;
     Ok(models::Solution {
-        objective_value,
+        objective_value: None,
         prices,
         executed_sell_amounts,
         executed_buy_amounts,
@@ -222,7 +221,7 @@ pub mod tests {
     use super::*;
     use dfusion_core::models::account_state::test_util::*;
     use std::error::Error;
-    use web3::types::H256;
+    use web3::types::{H256, U256};
 
     #[test]
     fn test_serialize_order() {
