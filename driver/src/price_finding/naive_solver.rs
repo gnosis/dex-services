@@ -212,7 +212,8 @@ fn order_with_buffer_for_fee(order: &Order, fee: &Option<Fee>) -> Order {
 fn normalize_price(price: u128, pre_normalized_fee_price: u128) -> Option<u128> {
     // upcast to u256 to avoid overflows
     checked_u256_to_u128(
-        (u128_to_u256(price) * u128_to_u256(BASE_PRICE)).ceiled_div(u128_to_u256(pre_normalized_fee_price)),
+        (u128_to_u256(price) * u128_to_u256(BASE_PRICE))
+            .ceiled_div(u128_to_u256(pre_normalized_fee_price)),
     )
 }
 
