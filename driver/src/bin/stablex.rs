@@ -8,7 +8,7 @@ use std::thread;
 use std::time::Duration;
 
 fn main() {
-    simple_logger::init_with_level(log::Level::Info).unwrap();
+    slog_stdlog::init().unwrap();
 
     let contract = StableXContractImpl::new().unwrap();
     let fee = Some(Fee::default());

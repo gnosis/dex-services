@@ -22,7 +22,8 @@ hex = "0.3.2"
 log = "0.4.6"
 rustc-hex = "*"
 serde_json = "1.0"
-simple_logger = "1.2.0"
+slog-scope = "2"
+slog-stdlog = "2"
 web3 = { git = "https://github.com/tomusdrw/rust-web3", rev = "56ad08e" }
 
 [dev-dependencies]

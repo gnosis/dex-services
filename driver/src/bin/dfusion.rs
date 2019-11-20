@@ -13,10 +13,12 @@ use std::thread;
 use std::time::Duration;
 
 fn main() {
-    simple_logger::init_with_level(log::Level::Info).unwrap();
-    let graph_logger = logger(false);
+    let logger = logger(false);
+    let _guard = slog_scope::set_global_logger(logger);
+    slog_stdlog::init().unwrap();
+
     let postgres_url = env::var("POSTGRES_URL").expect("Specify POSTGRES_URL variable");
-    let store_reader = GraphNodeReader::new(postgres_url, &graph_logger);
+    let store_reader = GraphNodeReader::new(postgres_url, &slog_scope::logger());
     let db_instance = GraphReader::new(Box::new(store_reader));
 
     let snapp_contract = SnappContractImpl::new().unwrap();
