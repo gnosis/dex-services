@@ -217,7 +217,7 @@ pub mod tests {
     use crate::util::u256_to_u128;
     use dfusion_core::models::account_state::test_util::*;
     use std::collections::HashMap;
-    use web3::types::{H160, H256, U256};
+    use web3::types::{Address, H160, H256, U256};
 
     #[test]
     fn test_type_left_fully_matched_no_fee() {
@@ -487,6 +487,46 @@ pub mod tests {
         assert_eq!(res.prices[0], BASE_PRICE);
         assert_eq!(res.prices[1], BASE_PRICE * 2);
 
+        check_solution(&orders, res, &fee).unwrap();
+    }
+
+    #[test]
+    fn stablex_e2e_auction() {
+        let users = [Address::from(0), Address::from(1)];
+        let state = {
+            let mut state = AccountState::default();
+            state.num_tokens = u16::max_value();
+            state.increment_balance(0, users[0], 3000 * BASE_UNIT);
+            state.increment_balance(1, users[1], 3000 * BASE_UNIT);
+            state
+        };
+        let orders = vec![
+            Order {
+                batch_information: None,
+                account_id: users[0],
+                sell_token: 0,
+                buy_token: 1,
+                sell_amount: 2000 * BASE_UNIT,
+                buy_amount: 999 * BASE_UNIT,
+            },
+            Order {
+                batch_information: None,
+                account_id: users[1],
+                sell_token: 1,
+                buy_token: 0,
+                sell_amount: 999 * BASE_UNIT,
+                buy_amount: 1996 * BASE_UNIT,
+            },
+        ];
+
+        let fee = Some(Fee {
+            token: 0,
+            ratio: 0.001,
+        });
+        let solver = NaiveSolver::new(fee.clone());
+        let res = solver.find_prices(&orders, &state).unwrap();
+
+        assert!(res.is_non_trivial());
         check_solution(&orders, res, &fee).unwrap();
     }
 
