@@ -138,8 +138,8 @@ fn deserialize_result(
                 .and_then(|amount| amount.parse::<u128>().map_err(PriceFindingError::from))
         })
         .collect::<Result<Vec<u128>, PriceFindingError>>()?;
+
     Ok(models::Solution {
-        objective_value: None,
         prices,
         executed_sell_amounts,
         executed_buy_amounts,
@@ -265,7 +265,6 @@ pub mod tests {
         });
 
         let expected_solution = models::Solution {
-            objective_value: None,
             prices: vec![14_024_052_566_155_238_000, 1_526_784_674_855_762_300],
             executed_sell_amounts: vec![0, 318_390_084_925_498_118_944],
             executed_buy_amounts: vec![0, 95_042_777_139_162_480_000],

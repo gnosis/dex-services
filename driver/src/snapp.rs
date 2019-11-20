@@ -167,7 +167,6 @@ mod tests {
         ];
 
         let solution = Solution {
-            objective_value: None,
             prices: vec![10u128.pow(18), 2_500_000_000_000_000_000],
             executed_buy_amounts: vec![2_497_500_000_000_000_000, 10u128.pow(18)],
             executed_sell_amounts: vec![10u128.pow(18), 2_502_502_502_502_502_502],
@@ -222,7 +221,6 @@ mod tests {
         }];
 
         let solution = Solution {
-            objective_value: None,
             prices: vec![10u128.pow(18)],
             executed_buy_amounts: vec![10u128.pow(18)],
             executed_sell_amounts: vec![10u128.pow(18)],
@@ -254,7 +252,6 @@ mod tests {
         ];
 
         let solution = Solution {
-            objective_value: None,
             prices: vec![10u128.pow(18), 10u128.pow(18)],
             executed_buy_amounts: vec![10u128.pow(18)],
             executed_sell_amounts: vec![10u128.pow(18)],
@@ -277,7 +274,6 @@ mod tests {
         }];
 
         let solution = Solution {
-            objective_value: None,
             prices: vec![10u128.pow(18), 10u128.pow(18)],
             executed_buy_amounts: vec![10u128.pow(18)],
             executed_sell_amounts: vec![10u128.pow(18)],
@@ -309,7 +305,6 @@ mod tests {
         ];
 
         let solution = Solution {
-            objective_value: None,
             prices: vec![u128::max_value(), 10u128.pow(18)],
             executed_buy_amounts: vec![u128::max_value(), u128::max_value()],
             executed_sell_amounts: vec![0, 0],
