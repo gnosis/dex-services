@@ -91,11 +91,9 @@ impl From<Entity> for Order {
         let batch_information = entity
             .get("auctionId")
             .and(entity.get("slotIndex"))
-            .and_then(|_| {
-                Some(BatchInformation {
-                    slot: U256::from_entity(&entity, "auctionId"),
-                    slot_index: u16::from_entity(&entity, "slotIndex"),
-                })
+            .map(|_| BatchInformation {
+                slot: U256::from_entity(&entity, "auctionId"),
+                slot_index: u16::from_entity(&entity, "slotIndex"),
             });
 
         Order {
