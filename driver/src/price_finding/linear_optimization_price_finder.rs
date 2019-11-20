@@ -255,13 +255,11 @@ pub mod tests {
             "orders": [
                 {
                     "execSellAmount": "0",
-                    "execBuyAmount": "0",
-                    "execUtility": "0"
+                    "execBuyAmount": "0"
                 },
                 {
                     "execSellAmount": "318390084925498118944",
-                    "execBuyAmount": "95042777139162480000",
-                    "execUtility": "15854632034944469292777429010439194350"
+                    "execBuyAmount": "95042777139162480000"
                 },
             ]
         });
@@ -317,8 +315,7 @@ pub mod tests {
             },
             "orders": [
                 {
-                    "execBuyAmount": "0",
-                    "execUtility": "0"
+                    "execBuyAmount": "0"
                 }
             ]
         });
@@ -335,8 +332,7 @@ pub mod tests {
             "orders": [
                 {
                     "execSellAmount": "0a",
-                    "execBuyAmount": "0",
-                    "execUtility": "0"
+                    "execBuyAmount": "0"
                 }
             ]
         });
@@ -352,8 +348,7 @@ pub mod tests {
             },
             "orders": [
                 {
-                    "execSellAmount": "0",
-                    "execUtility": "0"
+                    "execSellAmount": "0"
                 }
             ]
         });
@@ -370,8 +365,7 @@ pub mod tests {
             "orders": [
                 {
                     "execSellAmount": "0",
-                    "execBuyAmount": "0a",
-                    "execUtility": "0"
+                    "execBuyAmount": "0a"
                 }
             ]
         });
