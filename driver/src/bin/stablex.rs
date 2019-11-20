@@ -1,5 +1,6 @@
 use driver::contracts::stablex_contract::StableXContractImpl;
 use driver::driver::stablex_driver::StableXDriver;
+use driver::logging;
 use driver::price_finding::{Fee, StableXNaiveSolver};
 
 use log::error;
@@ -8,7 +9,7 @@ use std::thread;
 use std::time::Duration;
 
 fn main() {
-    slog_stdlog::init().unwrap();
+    logging::init().unwrap();
 
     let contract = StableXContractImpl::new().unwrap();
     let fee = Some(Fee::default());

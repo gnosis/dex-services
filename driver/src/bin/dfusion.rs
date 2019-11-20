@@ -2,10 +2,10 @@ use dfusion_core::database::GraphReader;
 
 use driver::contracts::snapp_contract::SnappContractImpl;
 use driver::driver::order_driver::OrderProcessor;
+use driver::logging;
 use driver::price_finding::SnappNaiveSolver;
 use driver::run_driver_components;
 
-use graph::log::logger;
 use graph_node_reader::Store as GraphNodeReader;
 
 use std::env;
@@ -13,12 +13,10 @@ use std::thread;
 use std::time::Duration;
 
 fn main() {
-    let logger = logger(false);
-    let _guard = slog_scope::set_global_logger(logger);
-    slog_stdlog::init().unwrap();
+    let logger = logging::init().unwrap();
 
     let postgres_url = env::var("POSTGRES_URL").expect("Specify POSTGRES_URL variable");
-    let store_reader = GraphNodeReader::new(postgres_url, &slog_scope::logger());
+    let store_reader = GraphNodeReader::new(postgres_url, &logger);
     let db_instance = GraphReader::new(Box::new(store_reader));
 
     let snapp_contract = SnappContractImpl::new().unwrap();
