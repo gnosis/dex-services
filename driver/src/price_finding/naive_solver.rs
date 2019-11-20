@@ -184,7 +184,7 @@ impl PriceFinding for NaiveSolver {
             executed_sell_amounts: exec_sell_amount,
             executed_buy_amounts: exec_buy_amount,
         };
-        Ok(dbg!(solution))
+        Ok(solution)
     }
 }
 
