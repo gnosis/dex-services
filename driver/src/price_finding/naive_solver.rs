@@ -1,7 +1,7 @@
 use dfusion_core::models::{AccountState, Order, Solution, TOKENS};
 
 use crate::price_finding::error::PriceFindingError;
-use crate::util::{u128_to_u256, CeiledDiv};
+use crate::util::{checked_u256_to_u128, u128_to_u256, CeiledDiv};
 
 use super::price_finder_interface::{Fee, PriceFinding};
 
@@ -25,6 +25,7 @@ trait Matchable {
     ) -> Option<OrderPairType>;
     fn opposite_tokens(&self, other: &Order) -> bool;
     fn have_price_overlap(&self, other: &Order) -> bool;
+    fn trades_fee_token(&self, fee: &Fee) -> bool;
 }
 
 impl Matchable for Order {
@@ -48,20 +49,26 @@ impl Matchable for Order {
         state: &AccountState,
         fee: &Option<Fee>,
     ) -> Option<OrderPairType> {
-        if self.sufficient_seller_funds(&state)
-            && other.sufficient_seller_funds(&state)
-            && self.attracts(other, fee)
+        if !self.sufficient_seller_funds(&state)
+            || !other.sufficient_seller_funds(&state)
+            || !self.attracts(other, fee)
+            || !fee
+                .as_ref()
+                .map(|fee| self.trades_fee_token(fee))
+                .unwrap_or(true)
         {
-            if self.buy_amount <= other.sell_amount && self.sell_amount <= other.buy_amount {
-                return Some(OrderPairType::LhsFullyFilled);
-            } else if self.buy_amount >= other.sell_amount && self.sell_amount >= other.buy_amount {
-                return Some(OrderPairType::RhsFullyFilled);
-            } else {
-                return Some(OrderPairType::BothFullyFilled);
-            }
+            return None;
         }
-        None
+
+        if self.buy_amount <= other.sell_amount && self.sell_amount <= other.buy_amount {
+            return Some(OrderPairType::LhsFullyFilled);
+        } else if self.buy_amount >= other.sell_amount && self.sell_amount >= other.buy_amount {
+            return Some(OrderPairType::RhsFullyFilled);
+        } else {
+            return Some(OrderPairType::BothFullyFilled);
+        }
     }
+
     fn opposite_tokens(&self, other: &Order) -> bool {
         self.buy_token == other.sell_token && self.sell_token == other.buy_token
     }
@@ -71,6 +78,10 @@ impl Matchable for Order {
             && other.sell_amount > 0
             && u128_to_u256(self.buy_amount) * u128_to_u256(other.buy_amount)
                 <= u128_to_u256(other.sell_amount) * u128_to_u256(self.sell_amount)
+    }
+
+    fn trades_fee_token(&self, fee: &Fee) -> bool {
+        self.buy_token == fee.token || self.sell_token == fee.token
     }
 }
 
@@ -136,8 +147,8 @@ impl PriceFinding for NaiveSolver {
             }
         }
 
-        // Apply fee to volumes if necessary
         if let Some(fee) = &self.fee {
+            // Apply fee to volumes if necessary
             for (i, order) in orders.iter().enumerate() {
                 // To account for the fee we have to either
                 // a) give people less (reduce buyAmount)
@@ -151,6 +162,19 @@ impl PriceFinding for NaiveSolver {
                     exec_buy_amount[i] =
                         (exec_buy_amount[i] * (fee_denominator - 1)).ceiled_div(fee_denominator);
                 }
+            }
+
+            // normalize prices so fee token price is BASE_PRICE
+            let pre_adjusted_fee_price = prices[fee.token as usize];
+            for price in prices.iter_mut() {
+                println!(
+                    "==> ({} * {}) // {}",
+                    *price, BASE_PRICE, pre_adjusted_fee_price
+                );
+                *price = match normalize_price(*price, pre_adjusted_fee_price) {
+                    Some(price) => price,
+                    None => return Ok(Solution::trivial(orders.len())),
+                };
             }
         }
 
@@ -181,6 +205,14 @@ fn order_with_buffer_for_fee(order: &Order, fee: &Option<Fee>) -> Order {
         }
         None => order.clone(),
     }
+}
+
+fn normalize_price(price: u128, pre_adjusted_fee_price: u128) -> Option<u128> {
+    // upcast to u256 to avoid overflows
+    checked_u256_to_u128(
+        (u128_to_u256(price) * u128_to_u256(BASE_PRICE))
+            .checked_div(u128_to_u256(pre_adjusted_fee_price))?,
+    )
 }
 
 #[cfg(test)]
@@ -456,8 +488,8 @@ pub mod tests {
 
         assert_eq!(res.executed_sell_amounts, [20000, 9990]);
         assert_eq!(res.executed_buy_amounts, [9990, 19961]);
-        assert_eq!(res.prices[0], 9990);
-        assert_eq!(res.prices[1], 19980);
+        assert_eq!(res.prices[0], BASE_PRICE);
+        assert_eq!(res.prices[1], BASE_PRICE * 2);
 
         check_solution(&orders, res, &fee).unwrap();
     }
@@ -572,11 +604,13 @@ pub mod tests {
             return Ok(());
         }
 
-        if solution.prices[0] != BASE_PRICE {
-            return Err(format!(
-                "price of fee token does not match the base price: {} != {}",
-                solution.prices[0], BASE_PRICE
-            ));
+        if let Some(fee_token) = fee.as_ref().map(|fee| fee.token as usize) {
+            if solution.prices[fee_token] != BASE_PRICE {
+                return Err(format!(
+                    "price of fee token does not match the base price: {} != {}",
+                    solution.prices[fee_token], BASE_PRICE
+                ));
+            }
         }
 
         let mut token_conservation = HashMap::new();

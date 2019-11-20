@@ -17,20 +17,29 @@ pub fn u128_to_u256(x: u128) -> U256 {
     U256::from_big_endian(&x.to_be_bytes())
 }
 
-/// Convert a U256 to a u128.
-///
-/// # Panics
-///
-/// Panics if the U256 overflows a u128.
-pub fn u256_to_u128(x: U256) -> u128 {
+/// Convert a `U256` to a `u128`. Returns `None` if the value would overflow the
+/// `u128`.
+pub fn checked_u256_to_u128(x: U256) -> Option<u128> {
     let mut bytes = [0u8; 32];
     x.to_big_endian(&mut bytes[..]);
 
     let hi = u128::from_be_bytes(bytes[..16].try_into().expect("correct slice length"));
     let lo = u128::from_be_bytes(bytes[16..].try_into().expect("correct slice length"));
 
-    assert_eq!(hi, 0, "U256 to u128 overflow");
-    lo
+    if hi == 0 {
+        Some(lo)
+    } else {
+        None
+    }
+}
+
+/// Convert a U256 to a u128.
+///
+/// # Panics
+///
+/// Panics if the U256 overflows a u128.
+pub fn u256_to_u128(x: U256) -> u128 {
+    checked_u256_to_u128(x).expect("U256 to u128 overflow")
 }
 
 pub trait CeiledDiv {
