@@ -1,7 +1,7 @@
 use crate::contracts::snapp_contract::SnappContract;
 use crate::error::{DriverError, ErrorKind};
 use crate::price_finding::PriceFinding;
-use crate::snapp::{SnappSolution};
+use crate::snapp::SnappSolution;
 use crate::util::{
     batch_processing_state, find_first_unapplied_slot, hash_consistency_check, ProcessingState,
 };
