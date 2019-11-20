@@ -1,6 +1,7 @@
 use crate::contracts::snapp_contract::SnappContract;
 use crate::error::{DriverError, ErrorKind};
 use crate::price_finding::PriceFinding;
+use crate::snapp::{SnappSolution};
 use crate::util::{
     batch_processing_state, find_first_unapplied_slot, hash_consistency_check, ProcessingState,
 };
@@ -150,6 +151,17 @@ impl<'a> OrderProcessor<'a> {
         update_balances(&mut state, &orders, &solution);
         let new_state_root = state.rolling_hash(state.state_index.low_u32() + 1);
 
+        let objective_value = match solution.snapp_objective_value(&orders) {
+            Ok(objective_value) => objective_value,
+            Err(err) => {
+                warn!(
+                    "Error calculating objective value: {}. May indicate an invalid solution",
+                    err
+                );
+                U256::zero()
+            }
+        };
+
         info!(
             "New AccountState hash is {}, Solution: {:?}",
             new_state_root, solution
@@ -161,7 +173,7 @@ impl<'a> OrderProcessor<'a> {
             new_state_root,
             total_order_hash_from_contract,
             standing_order_indexes,
-            solution.objective_value.unwrap_or_else(U256::zero),
+            objective_value,
         )?;
 
         self.auction_bids.insert(
