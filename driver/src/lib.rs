@@ -19,6 +19,7 @@ pub mod contracts;
 pub mod driver;
 pub mod error;
 pub mod price_finding;
+pub mod snapp;
 pub mod util;
 
 pub fn run_driver_components(
