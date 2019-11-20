@@ -1,7 +1,7 @@
 use dfusion_core::models::{AccountState, Order, Solution, TOKENS};
 
 use crate::price_finding::error::PriceFindingError;
-use crate::util::{checked_u256_to_u128, u128_to_u256, CeiledDiv};
+use crate::util::{checked_u256_to_u128, u128_to_u256, u256_to_u128, CeiledDiv};
 
 use super::price_finder_interface::{Fee, PriceFinding};
 
@@ -148,29 +148,34 @@ impl PriceFinding for NaiveSolver {
         }
 
         if let Some(fee) = &self.fee {
-            // Apply fee to volumes if necessary
-            for (i, order) in orders.iter().enumerate() {
-                // To account for the fee we have to either
-                // a) give people less (reduce buyAmount)
-                // b) take more (increase sellAmount)
-                let fee_denominator = (1.0 / fee.ratio) as u128;
-                if order.sell_token == fee.token {
-                    exec_sell_amount[i] =
-                        exec_sell_amount[i] * fee_denominator / (fee_denominator - 1);
-                }
-                if order.buy_token == fee.token {
-                    exec_buy_amount[i] =
-                        (exec_buy_amount[i] * (fee_denominator - 1)).ceiled_div(fee_denominator);
-                }
-            }
-
             // normalize prices so fee token price is BASE_PRICE
-            let pre_adjusted_fee_price = prices[fee.token as usize];
+            let pre_normalized_fee_price = prices[fee.token as usize];
+            if pre_normalized_fee_price == 0 {
+                return Ok(Solution::trivial(orders.len()));
+            }
             for price in prices.iter_mut() {
-                *price = match normalize_price(*price, pre_adjusted_fee_price) {
+                *price = match normalize_price(*price, pre_normalized_fee_price) {
                     Some(price) => price,
                     None => return Ok(Solution::trivial(orders.len())),
                 };
+            }
+
+            // apply fee to volumes account for rounding errors, moving them to
+            // the fee token
+            for (i, order) in orders.iter().enumerate() {
+                if order.sell_token == fee.token {
+                    let price_buy = prices[order.buy_token as usize];
+                    exec_sell_amount[i] =
+                        executed_sell_amount(fee, exec_buy_amount[i], price_buy, BASE_PRICE);
+                } else {
+                    let price_sell = prices[order.sell_token as usize];
+                    exec_buy_amount[i] =
+                        match executed_buy_amount(fee, exec_sell_amount[i], BASE_PRICE, price_sell)
+                        {
+                            Some(exec_buy_amt) => exec_buy_amt,
+                            None => return Ok(Solution::trivial(orders.len())),
+                        };
+                }
             }
         }
 
@@ -179,7 +184,7 @@ impl PriceFinding for NaiveSolver {
             executed_sell_amounts: exec_sell_amount,
             executed_buy_amounts: exec_buy_amount,
         };
-        Ok(solution)
+        Ok(dbg!(solution))
     }
 }
 
@@ -203,12 +208,66 @@ fn order_with_buffer_for_fee(order: &Order, fee: &Option<Fee>) -> Order {
     }
 }
 
-fn normalize_price(price: u128, pre_adjusted_fee_price: u128) -> Option<u128> {
+/// Normalizes a price base on the pre-normalized fee price.
+fn normalize_price(price: u128, pre_normalized_fee_price: u128) -> Option<u128> {
     // upcast to u256 to avoid overflows
     checked_u256_to_u128(
-        (u128_to_u256(price) * u128_to_u256(BASE_PRICE))
-            .checked_div(u128_to_u256(pre_adjusted_fee_price))?,
+        (u128_to_u256(price) * u128_to_u256(BASE_PRICE)).ceiled_div(u128_to_u256(pre_normalized_fee_price)),
     )
+}
+
+/// Calculate the executed sell amount from the fee, executed buy amount, and
+/// the buy and sell prices of the traded tokens.
+fn executed_sell_amount(fee: &Fee, exec_buy_amt: u128, buy_price: u128, sell_price: u128) -> u128 {
+    let fee_denominator = (1.0 / fee.ratio) as u128;
+    u256_to_u128(
+        (((u128_to_u256(exec_buy_amt) * u128_to_u256(buy_price))
+            / u128_to_u256(fee_denominator - 1))
+            * u128_to_u256(fee_denominator))
+            / u128_to_u256(sell_price),
+    )
+}
+
+/// Calculate the executed buy amount from the fee, executed sell amount, and
+/// the buy and sell prices of the traded tokens. This function returns a `None`
+/// if no value can be found such that `executed_sell_amount(result, pb, ps) ==
+/// xs`. This function acts as an inverse to `executed_sell_amount`.
+fn executed_buy_amount(
+    fee: &Fee,
+    exec_sell_amt: u128,
+    buy_price: u128,
+    sell_price: u128,
+) -> Option<u128> {
+    let fee_denominator = (1.0 / fee.ratio) as u128;
+    let exec_buy_amt = u256_to_u128(
+        (((u128_to_u256(exec_sell_amt) * u128_to_u256(sell_price))
+            / u128_to_u256(fee_denominator))
+            * u128_to_u256(fee_denominator - 1))
+            / u128_to_u256(buy_price),
+    );
+
+    // we need to account for rounding errors here, since this function is
+    // essentially an inverse of `executed_sell_amount`; so find the maximum
+    // error that `v` can have and find a value that works
+    // TODO(nlordell): verify the maths
+
+    macro_rules! return_if_correct {
+        ($v:expr) => {
+            if exec_sell_amt == executed_sell_amount(fee, $v, buy_price, sell_price) {
+                return Some($v);
+            }
+        };
+    }
+
+    return_if_correct!(exec_buy_amt);
+
+    let maximum_error = (sell_price / buy_price) + 1;
+    for error in 1..=maximum_error {
+        return_if_correct!(exec_buy_amt + error);
+        return_if_correct!(exec_buy_amt - error);
+    }
+
+    None
 }
 
 #[cfg(test)]
