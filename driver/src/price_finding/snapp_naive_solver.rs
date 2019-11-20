@@ -186,7 +186,7 @@ pub mod tests {
     use crate::util::u256_to_u128;
     use dfusion_core::models::account_state::test_util::*;
     use std::collections::HashMap;
-    use web3::types::{U256, H160, H256};
+    use web3::types::{H160, H256, U256};
 
     #[test]
     fn test_type_left_fully_matched_no_fee() {
