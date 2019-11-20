@@ -61,11 +61,11 @@ impl Matchable for Order {
         }
 
         if self.buy_amount <= other.sell_amount && self.sell_amount <= other.buy_amount {
-            return Some(OrderPairType::LhsFullyFilled);
+            Some(OrderPairType::LhsFullyFilled)
         } else if self.buy_amount >= other.sell_amount && self.sell_amount >= other.buy_amount {
-            return Some(OrderPairType::RhsFullyFilled);
+            Some(OrderPairType::RhsFullyFilled)
         } else {
-            return Some(OrderPairType::BothFullyFilled);
+            Some(OrderPairType::BothFullyFilled)
         }
     }
 
