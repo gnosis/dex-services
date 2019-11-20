@@ -15,8 +15,8 @@ matrix:
         - rustup component add clippy rustfmt
       script:
         - cargo test --all
-        - cargo clippy --all -- -D warnings
-        - cargo fmt -- --check
+        - cargo clippy --all --all-targets -- -D warnings
+        - cargo fmt --all -- --check
     - language: generic
       name: "dƒusion e2e Tests"
       cache: 
