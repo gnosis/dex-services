@@ -321,7 +321,6 @@ pub mod tests {
         };
 
         let results = Solution {
-            objective_value: None,
             prices: vec![1, 1],
             executed_buy_amounts: vec![1, 1],
             executed_sell_amounts: vec![1, 1],
