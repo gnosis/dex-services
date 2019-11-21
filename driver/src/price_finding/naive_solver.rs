@@ -249,13 +249,14 @@ fn executed_buy_amount(
 
     // we need to account for rounding errors here, since this function is
     // essentially an inverse of `executed_sell_amount`; so find the maximum
-    // error that `v` can have and find a value that works
-    // TODO(nlordell): verify the maths
+    // error that `exec_buy_amt` can have and find a value that works
 
     macro_rules! return_if_correct {
-        ($v:expr) => {
-            if exec_sell_amt == executed_sell_amount(fee, $v, buy_price, sell_price) {
-                return Some($v);
+        ($proposed_exec_buy_amt:expr) => {
+            if exec_sell_amt
+                == executed_sell_amount(fee, $proposed_exec_buy_amt, buy_price, sell_price)
+            {
+                return Some($proposed_exec_buy_amt);
             }
         };
     }
