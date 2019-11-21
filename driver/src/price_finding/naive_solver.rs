@@ -251,7 +251,7 @@ fn executed_buy_amount(
     // essentially an inverse of `executed_sell_amount`; so find the maximum
     // error that `exec_buy_amt` can have and find a value that works
 
-    macro_rules! return_if_correct {
+    macro_rules! return_if_sell_amount_matches {
         ($proposed_exec_buy_amt:expr) => {
             if exec_sell_amt
                 == executed_sell_amount(fee, $proposed_exec_buy_amt, buy_price, sell_price)
@@ -261,12 +261,12 @@ fn executed_buy_amount(
         };
     }
 
-    return_if_correct!(exec_buy_amt);
+    return_if_sell_amount_matches!(exec_buy_amt);
 
     let maximum_error = (sell_price / buy_price) + 1;
     for error in 1..=maximum_error {
-        return_if_correct!(exec_buy_amt + error);
-        return_if_correct!(exec_buy_amt - error);
+        return_if_sell_amount_matches!(exec_buy_amt + error);
+        return_if_sell_amount_matches!(exec_buy_amt - error);
     }
 
     None
