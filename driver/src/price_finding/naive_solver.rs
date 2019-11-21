@@ -244,32 +244,19 @@ fn executed_buy_amount(
         (((u128_to_u256(exec_sell_amt) * u128_to_u256(sell_price))
             / u128_to_u256(fee_denominator))
             * u128_to_u256(fee_denominator - 1))
-            / u128_to_u256(buy_price),
+        .ceiled_div(u128_to_u256(buy_price)),
     );
 
     // we need to account for rounding errors here, since this function is
-    // essentially an inverse of `executed_sell_amount`; so find the maximum
-    // error that `exec_buy_amt` can have and find a value that works
-
-    macro_rules! return_if_sell_amount_matches {
-        ($proposed_exec_buy_amt:expr) => {
-            if exec_sell_amt
-                == executed_sell_amount(fee, $proposed_exec_buy_amt, buy_price, sell_price)
-            {
-                return Some($proposed_exec_buy_amt);
-            }
-        };
+    // essentially an inverse of `executed_sell_amount`; when the buy price is
+    // higher than the sell price, there are executed sell amounts that cannot
+    // be satisfied, check the executed buy amount correctly "round trips" to
+    // the specified exectued sell amount and return `None` if it doesn't
+    if exec_sell_amt == executed_sell_amount(fee, exec_buy_amt, buy_price, sell_price) {
+        Some(exec_buy_amt)
+    } else {
+        None
     }
-
-    return_if_sell_amount_matches!(exec_buy_amt);
-
-    let maximum_error = (sell_price / buy_price) + 1;
-    for error in 1..=maximum_error {
-        return_if_sell_amount_matches!(exec_buy_amt + error);
-        return_if_sell_amount_matches!(exec_buy_amt - error);
-    }
-
-    None
 }
 
 #[cfg(test)]
