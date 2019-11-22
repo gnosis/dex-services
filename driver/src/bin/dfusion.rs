@@ -2,7 +2,6 @@ use dfusion_core::database::GraphReader;
 
 use driver::contracts::snapp_contract::SnappContractImpl;
 use driver::driver::order_driver::OrderProcessor;
-use driver::price_finding::SnappNaiveSolver;
 use driver::run_driver_components;
 
 use graph::log::logger;
@@ -21,7 +20,7 @@ fn main() {
 
     let snapp_contract = SnappContractImpl::new().unwrap();
 
-    let mut price_finder = driver::util::create_price_finder(None, SnappNaiveSolver::new(None));
+    let mut price_finder = driver::util::create_price_finder(None);
     let mut order_processor =
         OrderProcessor::new(&db_instance, &snapp_contract, &mut *price_finder);
     loop {
