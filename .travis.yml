@@ -52,6 +52,7 @@ matrix:
           - dex-contracts/node_modules/
       install:
         - cd dex-contracts && npm ci && npx truffle compile && npm run networks-inject && cd ..
+        - echo -e $GITLAB_PRIVATE_KEY > .ssh/id_rsa && chmod 0500 .ssh/id_rsa
         - docker-compose build --build-arg use_solver=1 stablex-rinkeby
       script:
         - docker-compose up -d stablex-rinkeby
