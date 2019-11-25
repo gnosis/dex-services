@@ -51,7 +51,7 @@ matrix:
         directories:
           - dex-contracts/node_modules/
       install:
-        - cd dex-contracts && npm ci && npx truffle compile && cd ..
+        - cd dex-contracts && npm ci && npx truffle compile && npm run networks-inject && cd ..
         - docker-compose build --build-arg use_solver=1 stablex-rinkeby
       script:
         - docker-compose up -d stablex-rinkeby
