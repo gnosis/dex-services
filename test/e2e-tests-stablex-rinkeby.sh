@@ -4,10 +4,10 @@ cd dex-contracts
 source ../test/utils.sh
 
 step "Deposit Fee Token " \
-"npx truffle exec scripts/stablex/deposit.js --network=rinkeby --accountId=0 --tokenId=0 --amount=1"
+"npx truffle exec scripts/stablex/deposit.js --network=rinkeby --accountId=0 --tokenId=0 --amount=0.001"
 
 step "Deposit Stablecoin " \
-"npx truffle exec scripts/stablex/deposit.js --network=rinkeby --accountId=0 --tokenId=7 --amount=1"
+"npx truffle exec scripts/stablex/deposit.js --network=rinkeby --accountId=0 --tokenId=7 --amount=0.001"
 
 step "Create Market Order Fee Token => Stablecoin " \
 "npx truffle exec scripts/stablex/place_order.js --network=rinkeby --accountId=0 --buyToken=7 --sellToken=0 --minBuy=0.1 --maxSell=1 --validFor=2"
