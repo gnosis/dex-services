@@ -57,7 +57,7 @@ git clone git@github.com:gnosis/dex-services.git
 cd dex-services
 git submodule update --init
 cd dex-contracts 
-npm install && npx truffle compile
+npm ci && npx truffle compile
 cd ../
 docker-compose up
 ```
