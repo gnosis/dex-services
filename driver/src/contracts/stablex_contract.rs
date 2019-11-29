@@ -24,7 +24,7 @@ pub struct StableXContractImpl {
 impl StableXContractImpl {
     pub fn new() -> Result<Self> {
         let contract_json =
-            fs::read_to_string("dex-contracts/build/contracts/StablecoinConverter.json")?;
+            fs::read_to_string("dex-contracts/build/contracts/BatchExchange.json")?;
         let address = env::var("STABLEX_CONTRACT_ADDRESS")?;
         Ok(StableXContractImpl {
             base: BaseContract::new(address, contract_json)?,
