@@ -130,7 +130,7 @@ impl StableXContract for StableXContractImpl {
                     token_ids_for_price[1..],
                 ),
                 Options::with(|mut opt| {
-                    // usual gas estimate is not working
+                    // usual gas estimation isn't working
                     opt.gas_price = Some(20_000_000_000u64.into());
                     opt.gas = Some(5_000_000.into());
                 }),
