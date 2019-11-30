@@ -131,8 +131,8 @@ impl StableXContract for StableXContractImpl {
                     owners,
                     order_ids,
                     volumes,
-                    prices,
-                    token_ids_for_price,
+                    prices[1..],
+                    token_ids_for_price[1..],
                 ),
                 Options::with(|mut opt| {
                     // usual gas estimate is not working
