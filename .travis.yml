@@ -24,6 +24,7 @@ matrix:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - echo -e $GITLAB_PRIVATE_KEY > .ssh/id_rsa && chmod 0500 .ssh/id_rsa
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
+        - cd dex-contracts && npm ci && npx truffle compile && cd ..
       script:
         # First build base image
         - docker-compose build  --build-arg use_solver=1 stablex
