@@ -1,0 +1,8 @@
+version: '3.6'
+services:
+  stablex:
+    build:
+      context: .
+      dockerfile: docker/rust/stablex_binary/Dockerfile
+    image: stablex-binary
+    command: ./stablex

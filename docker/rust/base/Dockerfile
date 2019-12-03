@@ -1,4 +1,4 @@
-FROM gnosispm/dfusion-solver-base:v2
+FROM gnosispm/dfusion-solver-base:v3
 
 RUN apt-get update \ 
   &&  apt-get install -y --no-install-recommends curl ssh git libc-dev gcc openssl pkg-config libssl-dev \
