@@ -29,7 +29,7 @@ matrix:
         # First build base image
         - docker-compose build  --build-arg use_solver=1 stablex
         # Then build and publish compact multi-stage image
-        - docker-compose -f docker-compose.yml -f docker-compose.binary.yaml build stablex
+        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml build stablex
         - docker tag stablex-binary $REGISTRY_URI:$TRAVIS_COMMIT
         - docker push $REGISTRY_URI:$TRAVIS_COMMIT
     - stage: "E2E Tests"
@@ -61,7 +61,7 @@ matrix:
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
         - ./test/setup_contracts.sh
       script:
-        - docker-compose -f docker-compose.yml -f docker-compose.binary.yaml up -d stablex
+        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d stablex
         - ./test/e2e-tests-stablex-ganache.sh
       after_failure:
         - docker-compose logs
@@ -77,7 +77,7 @@ matrix:
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
         - cd dex-contracts && npm ci && npx truffle compile && npm run networks-inject && cd ..
       script:
-        - docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yaml -f docker-compose.binary.yml up -d stablex
+        - docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.yml up -d stablex
         - ./test/e2e-tests-stablex-rinkeby.sh
       after_failure:
         - docker-compose logs
