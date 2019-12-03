@@ -1,8 +1,30 @@
 if: (branch = master) OR (type = pull_request) OR (tag IS present)
 matrix:
   include:
-    - language: rust
+    - stage: WarmUp
+      name: "Build"
+      language: generic
+      install:
+        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
+        - echo -e $GITLAB_PRIVATE_KEY > .ssh/id_rsa && chmod 0500 .ssh/id_rsa
+        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
+      script:
+        # First build base image and run unit tests
+        - docker build --tag stablex --build-arg use_solver=1 -f docker/rust/Dockerfile .
+        # Then build and publish compact multi-stage image
+        - docker build --tag stablex-binary -f docker/rust/stablex_binary/Dockerfile .
+        - docker tag stablex-binary $REGISTRY_URI:$TRAVIS_COMMIT
+        - docker push $REGISTRY_URI:$TRAVIS_COMMIT
+    - name: "Node Cache"
+      language: generic
+      cache:
+        directories:
+          - dex-contracts/node_modules/
+          - $HOME/.npm
+      script: cd dex-contracts && npm ci
+    - stage: "Tests"
       name: "Unit Tests"
+      language: rust
       rust: 1.39.0
       cache: cargo
       before_cache:
@@ -19,13 +41,17 @@ matrix:
         - cargo fmt --all -- --check
     - language: generic
       name: "dƒusion e2e Tests"
-      cache: 
+      cache:
         directories:
-          - $HOME/.npm
+          - dex-contracts/node_modules/
       install:
+        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
+        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
+        - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
+        - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
         - ./test/setup_contracts.sh
       script:
-        - docker-compose up -d driver graph-listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
+        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d driver graph-listener
         - ./test/e2e-tests-deposit-withdraw.sh
         - ./test/restart-containers.sh
         - ./test/e2e-tests-auction.sh
@@ -35,29 +61,35 @@ matrix:
         - docker-compose logs
     - language: generic
       name: "StableX e2e Tests (Ganache)"
-      cache: 
+      cache:
         directories:
-          - $HOME/.npm
+          - dex-contracts/node_modules/
       install:
+        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
+        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
+        - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
+        - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
         - ./test/setup_contracts.sh
       script:
-        - docker-compose up -d stablex
+        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d stablex
         - ./test/e2e-tests-stablex-ganache.sh
       after_failure:
         - docker-compose logs
     - language: generic
       name: "StableX e2e Tests (Rinkeby)"
-      cache: 
+      cache:
         directories:
-          - $HOME/.npm
+          - dex-contracts/node_modules/
       install:
-        - cd dex-contracts && npm ci && npx truffle compile && npm run networks-inject && cd ..
-        - echo -e $GITLAB_PRIVATE_KEY > .ssh/id_rsa && chmod 0500 .ssh/id_rsa
-        - docker-compose build --build-arg use_solver=1 stablex
+        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
+        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
+        - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
+        - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
+        - cd dex-contracts && npx truffle compile && npm run networks-inject && cd ..
       script:
-        - docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yaml up -d stablex
+        - docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.yml up -d stablex
         - ./test/e2e-tests-stablex-rinkeby.sh
-      after_failure:
+      after_script:
         - docker-compose logs
       deploy:
         provider: script
