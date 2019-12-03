@@ -27,9 +27,13 @@ matrix:
         directories:
           - $HOME/.npm
       install:
+        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
+        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
+        - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
+        - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
         - ./test/setup_contracts.sh
       script:
-        - docker-compose up -d driver graph-listener | while read line ; do echo "$(date)| $line"; done; # prints timestamps for profiling
+        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d driver graph-listener
         - ./test/e2e-tests-deposit-withdraw.sh
         - ./test/restart-containers.sh
         - ./test/e2e-tests-auction.sh

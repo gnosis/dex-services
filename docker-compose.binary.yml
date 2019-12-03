@@ -6,3 +6,15 @@ services:
       dockerfile: docker/rust/stablex_binary/Dockerfile
     image: stablex-binary
     command: ./stablex
+  driver:
+    build:
+      context: .
+      dockerfile: docker/rust/stablex_binary/Dockerfile
+    image: stablex-binary
+    command: ./stablex
+  graph-listener:
+    build:
+      context: .
+      dockerfile: docker/rust/stablex_binary/Dockerfile
+    image: stablex-binary
+    command: ./stablex
