@@ -30,7 +30,7 @@ matrix:
         - docker-compose build  --build-arg use_solver=1 stablex
         # Then build and publish compact multi-stage image
         - docker-compose -f docker-compose.yml -f docker-compose.binary.yaml build stablex
-        - docker tag stablex $REGISTRY_URI:$TRAVIS_COMMIT
+        - docker tag stablex-binary $REGISTRY_URI:$TRAVIS_COMMIT
         - docker push $REGISTRY_URI:$TRAVIS_COMMIT
     - stage: "E2E Tests"
       language: generic
