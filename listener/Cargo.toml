@@ -11,7 +11,7 @@ path = "src/main.rs"
 [dependencies]
 graph-core = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
 graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
-graph-datasource-ethereum = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
+graph-datasource-ethereum = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
 graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", tag = "v0.13.2" }
 graph-store-postgres = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
 graph-server-http = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
