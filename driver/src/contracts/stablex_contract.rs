@@ -16,8 +16,8 @@ type Result<T> = std::result::Result<T, DriverError>;
 
 pub const AUCTION_ELEMENT_WIDTH: usize = 112;
 lazy_static! {
-    // In the smart contracts the objective value, an uint256, will be multiplied by
-    // 1 + IMPROVEMENT_DENOMINATOR = 101 hence, the maximal possible objective value is:
+    // In the BatchExchange smart contract, the objective value will be multiplied by
+    // 1 + IMPROVEMENT_DENOMINATOR = 101. Hence, the maximal possible objective value is:
     static ref MAX_OBJECTIVE_VALUE: U256 = U256::max_value() / (U256::from_dec_str("101").unwrap());
 }
 
