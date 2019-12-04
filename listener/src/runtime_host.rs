@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use dfusion_core::database::DbInterface;
 
-use graph::components::ethereum::{EthereumBlock, EthereumBlockTriggerType, EthereumCall};
+use graph::components::ethereum::{EthereumBlockTriggerType, EthereumCall};
 use graph::components::subgraph::{
     BlockState, RuntimeHost as RuntimeHostTrait, RuntimeHostBuilder,
 };
@@ -15,7 +15,7 @@ use graph::data::subgraph::{DataSource, SubgraphDeploymentId};
 
 use tiny_keccak::keccak256;
 
-use web3::types::{Log, Transaction, H256};
+use web3::types::{Block, Log, Transaction, H256};
 
 use crate::event_handler::{
     AuctionSettlementHandler, DepositHandler, EventHandler, FluxTransitionHandler,
@@ -40,7 +40,9 @@ impl RustRuntimeHostBuilder {
 }
 
 impl RuntimeHostBuilder for RustRuntimeHostBuilder {
+    type Req = ();
     type Host = RustRuntimeHost;
+
     fn build(
         &self,
         _logger: &Logger,
@@ -48,6 +50,15 @@ impl RuntimeHostBuilder for RustRuntimeHostBuilder {
         _data_source: DataSource,
     ) -> Result<Self::Host, Error> {
         Ok(RustRuntimeHost::new(self.store.clone()))
+    }
+
+    fn spawn_mapping(
+        _parsed_module: parity_wasm::elements::Module,
+        _logger: Logger,
+        _subgraph_id: SubgraphDeploymentId,
+        _metrics: Arc<HostMetrics>,
+    ) -> Result<Sender<Self::Req>, Error> {
+        unimplemented!();
     }
 }
 
@@ -108,7 +119,7 @@ impl RuntimeHostTrait for RustRuntimeHost {
     }
 
     /// Returns true if the RuntimeHost has a handler for an Ethereum block.
-    fn matches_block(&self, _call: EthereumBlockTriggerType) -> bool {
+    fn matches_block(&self, _block_trigger_type: EthereumBlockTriggerType, _block_number: u64) -> bool {
         unimplemented!();
     }
 
@@ -116,21 +127,21 @@ impl RuntimeHostTrait for RustRuntimeHost {
     fn process_log(
         &self,
         logger: Logger,
-        block: Arc<EthereumBlock>,
+        block: Arc<Block<Transaction>>,
         transaction: Arc<Transaction>,
         log: Arc<Log>,
         state: BlockState,
     ) -> Box<dyn Future<Item = BlockState, Error = Error> + Send> {
         info!(logger, "Received event");
-        let mut state = state;
-        if let Some(handler) = self.handlers.get(&log.topics[0]) {
-            match handler.process_event(logger, block, transaction, log) {
-                Ok(mut ops) => state.entity_operations.append(&mut ops),
-                Err(e) => return Box::new(err(e)),
-            }
-        } else {
-            warn!(logger, "Unhandled event with topic {}", &log.topics[0]);
-        };
+        // let mut state = state;
+        // if let Some(handler) = self.handlers.get(&log.topics[0]) {
+        //     match handler.process_event(logger, block, transaction, log) {
+        //         Ok(mut ops) => state.entity_operations.append(&mut ops),
+        //         Err(e) => return Box::new(err(e)),
+        //     }
+        // } else {
+        //     warn!(logger, "Unhandled event with topic {}", &log.topics[0]);
+        // };
         Box::new(ok(state))
     }
 
@@ -138,7 +149,7 @@ impl RuntimeHostTrait for RustRuntimeHost {
     fn process_call(
         &self,
         _logger: Logger,
-        _block: Arc<EthereumBlock>,
+        _block: Arc<Block<Transaction>>,
         _transaction: Arc<Transaction>,
         _call: Arc<EthereumCall>,
         _state: BlockState,
@@ -150,7 +161,7 @@ impl RuntimeHostTrait for RustRuntimeHost {
     fn process_block(
         &self,
         _logger: Logger,
-        _block: Arc<EthereumBlock>,
+        _block: Arc<Block<Transaction>>,
         _trigger_type: EthereumBlockTriggerType,
         _state: BlockState,
     ) -> Box<dyn Future<Item = BlockState, Error = Error> + Send> {

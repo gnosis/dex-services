@@ -28,7 +28,7 @@ parity-wasm = "0.31"
 serde_yaml = "0.8"
 slog = "2.2.3"
 tiny-keccak = "1.4.2"
-web3 = { git = "https://github.com/graphprotocol/rust-web3", branch = "trace-struct-pre-ethereum-types" }
+web3 = { git = "https://github.com/graphprotocol/rust-web3", branch = "graph-patches" }
 
 [dev-dependencies]
 graph-mock = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }

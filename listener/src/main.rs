@@ -10,13 +10,13 @@ use std::time::Duration;
 
 use graph::components::forward;
 use graph::log::logger;
+use graph::prelude::tokio_timer::timer::Timer;
 use graph::prelude::{
     future, EthereumAdapter, Future, GraphQLServer, LoggerFactory, NodeId, SubgraphDeploymentId,
     SubgraphName, SubgraphRegistrar as SubgraphRegistrarTrait, SubgraphVersionSwitchingMode,
     SubscriptionServer,
 };
 use graph::prelude::{tokio, tokio_executor, tokio_timer};
-use graph::prelude::tokio_timer::timer::Timer;
 
 use graph_core::{SubgraphAssignmentProvider, SubgraphInstanceManager, SubgraphRegistrar};
 
@@ -89,7 +89,7 @@ fn main() {
     tokio_executor::with_default(&mut executor, &mut enter, |enter| {
         tokio_timer::with_default(&timer_handle, enter, |enter| {
             enter
-                .block_on(future::lazy(async_main))
+                .block_on(future::lazy(|| async_main()))
                 .expect("Failed to run main function");
         })
     });
