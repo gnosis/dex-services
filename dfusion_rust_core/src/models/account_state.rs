@@ -35,7 +35,7 @@ impl AccountState {
                 .enumerate()
                 .map(|(account, token_balances)| {
                     (
-                        H160::from_low_u64_ne(account as u64), // TODO - these are not accurate addresses.
+                        H160::from_low_u64_be(account as u64), // TODO - these are not accurate addresses.
                         token_balances
                             .iter()
                             .enumerate()
@@ -56,7 +56,7 @@ impl AccountState {
     fn get_balance_vector(&self) -> Vec<u128> {
         let mut i = 0u64;
         let mut result = vec![];
-        while let Some(account) = self.balances.get(&H160::from_low_u64_ne(i)) {
+        while let Some(account) = self.balances.get(&H160::from_low_u64_be(i)) {
             let mut j = 0;
             while let Some(token_balance) = account.get(&j) {
                 result.push(*token_balance);
@@ -258,12 +258,12 @@ pub mod tests {
         ];
 
         let log = Arc::new(Log {
-            address: H160::from_low_u64_ne(1),
+            address: H160::from_low_u64_be(1),
             topics: vec![],
             data: Bytes(bytes.iter().flat_map(|i| i.iter()).cloned().collect()),
-            block_hash: Some(H256::from_low_u64_ne(2)),
+            block_hash: Some(H256::from_low_u64_be(2)),
             block_number: Some(1.into()),
-            transaction_hash: Some(H256::from_low_u64_ne(3)),
+            transaction_hash: Some(H256::from_low_u64_be(3)),
             transaction_index: Some(0.into()),
             log_index: Some(0.into()),
             transaction_log_index: Some(0.into()),
@@ -302,7 +302,7 @@ pub mod tests {
                 slot: U256::zero(),
                 slot_index: 0,
             }),
-            account_id: H160::from_low_u64_ne(0),
+            account_id: H160::from_low_u64_be(0),
             buy_token: 0,
             sell_token: 1,
             buy_amount: 1,
@@ -314,7 +314,7 @@ pub mod tests {
                 slot: U256::zero(),
                 slot_index: 0,
             }),
-            account_id: H160::from_low_u64_ne(1),
+            account_id: H160::from_low_u64_be(1),
             buy_token: 1,
             sell_token: 0,
             buy_amount: 1,
@@ -345,8 +345,8 @@ pub mod tests {
         account_1.insert(1, 1);
 
         let mut balances = HashMap::new();
-        balances.insert(H160::from_low_u64_ne(0), account_0);
-        balances.insert(H160::from_low_u64_ne(1), account_1);
+        balances.insert(H160::from_low_u64_be(0), account_0);
+        balances.insert(H160::from_low_u64_be(1), account_1);
         assert_eq!(state.balances, balances, "Incorrect balances!");
     }
 
@@ -360,8 +360,8 @@ pub mod tests {
         account_1.insert(1, 1);
 
         let mut balances = HashMap::new();
-        balances.insert(H160::from_low_u64_ne(0), account_0);
-        balances.insert(H160::from_low_u64_ne(1), account_1);
+        balances.insert(H160::from_low_u64_be(0), account_0);
+        balances.insert(H160::from_low_u64_be(1), account_1);
 
         let account_state = AccountState {
             state_hash: H256::zero(),
