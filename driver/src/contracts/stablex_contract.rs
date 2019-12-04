@@ -8,11 +8,9 @@ use web3::types::{H160, U128, U256};
 
 use dfusion_core::models::{AccountState, Order, Solution};
 
-use crate::error::DriverError;
-use crate::util::CeiledDiv;
-
 use super::base_contract::BaseContract;
 use super::stablex_auction_element::StableXAuctionElement;
+use crate::error::DriverError;
 
 type Result<T> = std::result::Result<T, DriverError>;
 
@@ -84,22 +82,20 @@ impl StableXContract for StableXContractImpl {
         let (prices, token_ids_for_price) = encode_prices_for_contract(solution.prices);
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
-        let max_utility_value = U256::max_value().ceiled_div(
-            U256::one()
-                .checked_add(
-                    self.base
-                        .contract
-                        .query(
-                            "IMPROVEMENT_DENOMINATOR",
-                            (),
-                            None,
-                            Options::default(),
-                            None,
-                        )
-                        .wait()?,
-                )
-                .unwrap(),
-        );
+        let improvement_denominator: U256 = self
+            .base
+            .contract
+            .query(
+                "IMPROVEMENT_DENOMINATOR",
+                (),
+                None,
+                Options::default(),
+                None,
+            )
+            .wait()?;
+        // In the smart contracts the utility value will be multiplied by 1 + IMPROVEMENT_DENOMINATOR
+        // hence, the following reduction of the maximal possible utility value is required:
+        let max_utility_value = U256::max_value() / (U256::one() + improvement_denominator);
         Ok(self
             .base
             .contract
