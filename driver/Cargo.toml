@@ -18,7 +18,7 @@ ethereum-tx-sign = { git = "https://github.com/synlestidae/ethereum-tx-sign.git"
 dfusion_core = { path = "../dfusion_rust_core" }
 graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
 graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", tag = "v0.13.2" }
-hex = "0.3.2"
+hex = "0.4.0"
 log = "0.4.8"
 rustc-hex = "*"
 serde_json = "1.0"
