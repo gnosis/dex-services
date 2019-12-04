@@ -35,7 +35,7 @@ impl AccountState {
                 .enumerate()
                 .map(|(account, token_balances)| {
                     (
-                        H160::from(account as u64), // TODO - these are not accurate addresses.
+                        H160::from_low_u64_ne(account as u64), // TODO - these are not accurate addresses.
                         token_balances
                             .iter()
                             .enumerate()
@@ -56,7 +56,7 @@ impl AccountState {
     fn get_balance_vector(&self) -> Vec<u128> {
         let mut i = 0u64;
         let mut result = vec![];
-        while let Some(account) = self.balances.get(&H160::from(i)) {
+        while let Some(account) = self.balances.get(&H160::from_low_u64_ne(i)) {
             let mut j = 0;
             while let Some(token_balance) = account.get(&j) {
                 result.push(*token_balance);
@@ -157,7 +157,7 @@ impl RollingHashable for AccountState {
             let result = hasher.result();
             hash = result.to_vec();
         }
-        H256::from(hash.as_slice())
+        H256::from_slice(hash.as_slice())
     }
 }
 
@@ -215,6 +215,7 @@ pub mod tests {
     use super::*;
     use crate::models::order::BatchInformation;
     use crate::models::TOKENS;
+    use std::str::FromStr;
     use web3::types::{Bytes, H256};
 
     #[test]
@@ -257,12 +258,12 @@ pub mod tests {
         ];
 
         let log = Arc::new(Log {
-            address: 1.into(),
+            address: H160::from_low_u64_ne(1),
             topics: vec![],
             data: Bytes(bytes.iter().flat_map(|i| i.iter()).cloned().collect()),
-            block_hash: Some(2.into()),
+            block_hash: Some(H256::from_low_u64_ne(2)),
             block_number: Some(1.into()),
-            transaction_hash: Some(3.into()),
+            transaction_hash: Some(H256::from_low_u64_ne(3)),
             transaction_index: Some(0.into()),
             log_index: Some(0.into()),
             transaction_log_index: Some(0.into()),
@@ -301,7 +302,7 @@ pub mod tests {
                 slot: U256::zero(),
                 slot_index: 0,
             }),
-            account_id: H160::from(0),
+            account_id: H160::from_low_u64_ne(0),
             buy_token: 0,
             sell_token: 1,
             buy_amount: 1,
@@ -313,7 +314,7 @@ pub mod tests {
                 slot: U256::zero(),
                 slot_index: 0,
             }),
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_ne(1),
             buy_token: 1,
             sell_token: 0,
             buy_amount: 1,
@@ -329,7 +330,8 @@ pub mod tests {
         state.apply_auction(&[order_1, order_2], results);
 
         assert_eq!(
-            H256::from("0x95d617036a54ec4e5081d096964aa6dc24dc33100c2f709b7df9917b3271de8d"),
+            H256::from_str("95d617036a54ec4e5081d096964aa6dc24dc33100c2f709b7df9917b3271de8d")
+                .unwrap(),
             state.state_hash,
             "Incorrect state hash!"
         );
@@ -343,8 +345,8 @@ pub mod tests {
         account_1.insert(1, 1);
 
         let mut balances = HashMap::new();
-        balances.insert(H160::from(0), account_0);
-        balances.insert(H160::from(1), account_1);
+        balances.insert(H160::from_low_u64_ne(0), account_0);
+        balances.insert(H160::from_low_u64_ne(1), account_1);
         assert_eq!(state.balances, balances, "Incorrect balances!");
     }
 
@@ -358,8 +360,8 @@ pub mod tests {
         account_1.insert(1, 1);
 
         let mut balances = HashMap::new();
-        balances.insert(H160::from(0), account_0);
-        balances.insert(H160::from(1), account_1);
+        balances.insert(H160::from_low_u64_ne(0), account_0);
+        balances.insert(H160::from_low_u64_ne(1), account_1);
 
         let account_state = AccountState {
             state_hash: H256::zero(),

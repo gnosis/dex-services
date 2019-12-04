@@ -86,7 +86,7 @@ pub mod tests {
         PendingFlux {
             slot_index,
             slot: U256::from(slot),
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_be(1),
             token_id: 1,
             amount: 10,
         }
@@ -105,7 +105,7 @@ pub mod unit_test {
         let deposit = PendingFlux {
             slot_index: 0,
             slot: U256::zero(),
-            account_id: H160::from(3),
+            account_id: H160::from_low_u64_be(3),
             token_id: 3,
             amount: 18,
         };
@@ -154,12 +154,12 @@ pub mod unit_test {
         ];
 
         let log = Arc::new(Log {
-            address: 1.into(),
+            address: H160::from_low_u64_be(1),
             topics: vec![],
             data: Bytes(bytes.iter().flat_map(|i| i.iter()).cloned().collect()),
-            block_hash: Some(2.into()),
+            block_hash: Some(H256::from_low_u64_be(2)),
             block_number: Some(1.into()),
-            transaction_hash: Some(3.into()),
+            transaction_hash: Some(H256::from_low_u64_be(3)),
             transaction_index: Some(0.into()),
             log_index: Some(0.into()),
             transaction_log_index: Some(0.into()),
@@ -168,7 +168,7 @@ pub mod unit_test {
         });
 
         let expected_flux = PendingFlux {
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_be(1),
             token_id: 1,
             amount: (10 as u128).pow(18),
             slot: U256::zero(),
@@ -181,7 +181,7 @@ pub mod unit_test {
     #[test]
     fn test_to_and_from_entity() {
         let flux = PendingFlux {
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_be(1),
             token_id: 1,
             amount: (10 as u128).pow(18),
             slot: U256::zero(),

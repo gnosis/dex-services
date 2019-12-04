@@ -1,6 +1,6 @@
 use byteorder::{BigEndian, ByteOrder};
-use graph::prelude::bigdecimal::BigDecimal;
 use graph::data::store::{Entity, Value};
+use graph::prelude::bigdecimal::BigDecimal;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::str::FromStr;
@@ -36,13 +36,13 @@ impl PopFromLogData for U256 {
 
 impl PopFromLogData for H160 {
     fn pop_from_log_data(bytes: &mut Vec<u8>) -> Self {
-        H256::from(bytes.drain(0..32).collect::<Vec<u8>>().as_slice()).into()
+        H256::from_slice(bytes.drain(0..32).collect::<Vec<u8>>().as_slice()).into()
     }
 }
 
 impl PopFromLogData for H256 {
     fn pop_from_log_data(bytes: &mut Vec<u8>) -> Self {
-        H256::from(bytes.drain(0..32).collect::<Vec<u8>>().as_slice())
+        H256::from_slice(bytes.drain(0..32).collect::<Vec<u8>>().as_slice())
     }
 }
 

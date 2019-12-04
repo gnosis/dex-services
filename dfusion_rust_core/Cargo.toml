@@ -15,4 +15,4 @@ mock-it = "0.2.0"
 serde_derive = "1.0"
 serde = "1.0"
 sha2 = "0.8.0"
-web3 = { git = "https://github.com/graphprotocol/rust-web3", branch = "trace-struct-pre-ethereum-types" }
+web3 = { git = "https://github.com/graphprotocol/rust-web3", branch = "graph-patches" }

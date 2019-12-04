@@ -126,7 +126,9 @@ impl Into<Entity> for Order {
 impl<T: Serializable> RollingHashable for Vec<T> {
     fn rolling_hash(&self, nonce: u32) -> H256 {
         self.iter()
-            .fold(H256::from(u64::from(nonce)), |acc, w| iter_hash(w, &acc))
+            .fold(H256::from_low_u64_be(u64::from(nonce)), |acc, w| {
+                iter_hash(w, &acc)
+            })
     }
 }
 
@@ -138,7 +140,7 @@ pub mod test_util {
                 slot: U256::zero(),
                 slot_index: 0,
             }),
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_be(1),
             buy_token: 3,
             sell_token: 2,
             buy_amount: 5,
@@ -161,7 +163,7 @@ pub mod tests {
                 slot: U256::zero(),
                 slot_index: 0,
             }),
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_be(1),
             buy_token: 3,
             sell_token: 2,
             buy_amount: 5,
@@ -216,12 +218,12 @@ pub mod tests {
         ];
 
         let log = Arc::new(Log {
-            address: 1.into(),
+            address: H160::from_low_u64_be(1),
             topics: vec![],
             data: Bytes(bytes.iter().flat_map(|i| i.iter()).cloned().collect()),
-            block_hash: Some(2.into()),
+            block_hash: Some(H256::from_low_u64_be(2)),
             block_number: Some(1.into()),
-            transaction_hash: Some(3.into()),
+            transaction_hash: Some(H256::from_low_u64_be(3)),
             transaction_index: Some(0.into()),
             log_index: Some(0.into()),
             transaction_log_index: Some(0.into()),
@@ -234,7 +236,7 @@ pub mod tests {
                 slot: U256::zero(),
                 slot_index: 0,
             }),
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_be(1),
             buy_token: 3,
             sell_token: 2,
             buy_amount: (10 as u128).pow(18),
@@ -304,7 +306,7 @@ pub mod tests {
                 slot: U256::zero(),
                 slot_index: 0,
             }),
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_be(1),
             buy_token: 1,
             sell_token: 2,
             buy_amount: 10u128.pow(18),
