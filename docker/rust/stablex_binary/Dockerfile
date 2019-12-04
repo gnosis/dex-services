@@ -12,5 +12,6 @@ COPY --from=stablex /app/batchauctions batchauctions/
 COPY --from=stablex /usr/local/bin/scipampl /usr/local/bin/
 
 COPY --from=stablex /app/target/debug/stablex stablex
-COPY --from=stablex /app/target/debug/listener listener
+
+COPY --from=stablex /app/target/debug/listener graph-listener
 COPY --from=stablex /app/target/debug/dfusion dfusion

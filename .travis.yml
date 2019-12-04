@@ -2,7 +2,7 @@ if: (branch = master) OR (type = pull_request) OR (tag IS present)
 language: rust
 matrix:
   include:
-    - stage: Unit Test & Build
+    - stage: "Build & Unit Test"
       language: generic
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli

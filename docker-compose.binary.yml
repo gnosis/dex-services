@@ -11,10 +11,10 @@ services:
       context: .
       dockerfile: docker/rust/stablex_binary/Dockerfile
     image: stablex-binary
-    command: ./stablex
+    command: ./dfusion
   graph-listener:
     build:
       context: .
       dockerfile: docker/rust/stablex_binary/Dockerfile
     image: stablex-binary
-    command: ./stablex
+    command: ./graph-listener
