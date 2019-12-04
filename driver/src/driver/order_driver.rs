@@ -202,7 +202,7 @@ fn update_balances(state: &mut AccountState, orders: &[Order], solution: &Soluti
 fn batch_index_from_standing_orders(standing_orders: &[StandingOrder]) -> Vec<U128> {
     standing_orders
         .iter()
-        .map(|o| U128::from(o.batch_index))
+        .map(|o| o.batch_index.as_u128().into())
         .collect()
 }
 
@@ -217,7 +217,7 @@ mod tests {
     use dfusion_core::models::order::test_util::create_order_for_test;
     use dfusion_core::models::{NUM_RESERVED_ACCOUNTS, TOKENS};
     use mock_it::Matcher::*;
-    use web3::types::{H160, H256, U128, U256};
+    use web3::types::{H160, H256, U256};
 
     #[test]
     fn bids_for_and_applies_auction_if_unapplied_and_enough_blocks_passed() {
@@ -690,8 +690,8 @@ mod tests {
         let empty_order = StandingOrder::new(H160::zero(), U256::zero(), U256::from(2), vec![]);
         let mut standing_orders = vec![empty_order; NUM_RESERVED_ACCOUNTS as usize];
         standing_orders[1] = standing_order.clone();
-        let mut standing_order_indexes = vec![U128::zero(); NUM_RESERVED_ACCOUNTS as usize];
-        standing_order_indexes[1] = U128::from(3);
+        let mut standing_order_indexes = vec![0; NUM_RESERVED_ACCOUNTS as usize];
+        standing_order_indexes[1] = 3;
         assert_eq!(
             batch_index_from_standing_orders(&standing_orders),
             standing_order_indexes

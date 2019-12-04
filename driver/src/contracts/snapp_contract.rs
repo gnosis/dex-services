@@ -101,11 +101,11 @@ impl SnappContract for SnappContractImpl {
                     .block(BlockId::from(block_number.as_u64()))
                     .wait()
             })
+            .map_err(DriverError::from)
             .and_then(|block_option| match block_option {
                 Some(block) => Ok(block.timestamp),
-                None => Err(web3::Error::from("Current block not found")),
+                None => Err(DriverError::from("Current block not found")),
             })
-            .map_err(DriverError::from)
     }
 
     fn get_current_state_root(&self) -> Result<H256> {
