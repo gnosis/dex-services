@@ -5,6 +5,8 @@
 //   we successfully link.
 extern crate ethereum_tx_sign;
 extern crate web3;
+#[macro_use]
+extern crate lazy_static;
 
 use dfusion_core::database::DbInterface;
 
