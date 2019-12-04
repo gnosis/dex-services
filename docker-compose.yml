@@ -91,6 +91,7 @@ services:
 
   stablex-rinkeby:
     << : *rust-service-rinkeby
+    image: stablex-rinkeby
     command: cargo run --bin stablex
     restart: always
     volumes:
