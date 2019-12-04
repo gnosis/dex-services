@@ -9,7 +9,7 @@ array-macro = "1.0.4"
 byteorder = "1.3.1"
 graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
 graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", tag = "v0.13.2" }
-lazy_static = "1.2.0"
+lazy_static = "1.4.0"
 log = "0.4.8"
 mock-it = "0.2.0"
 serde_derive = "1.0"
