@@ -182,7 +182,7 @@ impl Into<Entity> for StandingOrder {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use graph::bigdecimal::BigDecimal;
+    use graph::prelude::bigdecimal::BigDecimal;
     use graph::data::store::Value;
     use std::str::FromStr;
     use web3::types::{Bytes, H256};

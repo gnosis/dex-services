@@ -9,13 +9,13 @@ name = "listener"
 path = "src/main.rs"
 
 [dependencies]
-graph-core = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
-graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
+graph-core = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
+graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
 graph-datasource-ethereum = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
-graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", tag = "v0.13.2" }
-graph-store-postgres = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
-graph-server-http = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
-graph-server-websocket = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
+graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", rev = "f77b37c" }
+graph-store-postgres = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
+graph-server-http = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
+graph-server-websocket = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
 
 dfusion_core = { path = "../dfusion_rust_core" }
 
@@ -31,4 +31,4 @@ tiny-keccak = "1.4.2"
 web3 = { git = "https://github.com/graphprotocol/rust-web3", branch = "trace-struct-pre-ethereum-types" }
 
 [dev-dependencies]
-graph-mock = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
+graph-mock = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }

@@ -96,7 +96,7 @@ pub mod tests {
 #[cfg(test)]
 pub mod unit_test {
     use super::*;
-    use graph::bigdecimal::BigDecimal;
+    use graph::prelude::bigdecimal::BigDecimal;
     use std::str::FromStr;
     use web3::types::{Bytes, H256};
 

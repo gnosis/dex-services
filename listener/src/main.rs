@@ -15,10 +15,8 @@ use graph::prelude::{
     SubgraphName, SubgraphRegistrar as SubgraphRegistrarTrait, SubgraphVersionSwitchingMode,
     SubscriptionServer,
 };
-use graph::tokio;
-use graph::tokio_executor;
-use graph::tokio_timer;
-use graph::tokio_timer::timer::Timer;
+use graph::prelude::{tokio, tokio_executor, tokio_timer};
+use graph::prelude::tokio_timer::timer::Timer;
 
 use graph_core::{SubgraphAssignmentProvider, SubgraphInstanceManager, SubgraphRegistrar};
 

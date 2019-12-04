@@ -150,7 +150,7 @@ pub mod test_util {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use graph::bigdecimal::BigDecimal;
+    use graph::prelude::bigdecimal::BigDecimal;
     use std::str::FromStr;
     use web3::types::{Bytes, H256};
 

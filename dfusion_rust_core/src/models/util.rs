@@ -1,5 +1,5 @@
 use byteorder::{BigEndian, ByteOrder};
-use graph::bigdecimal::BigDecimal;
+use graph::prelude::bigdecimal::BigDecimal;
 use graph::data::store::{Entity, Value};
 use std::convert::TryFrom;
 use std::convert::TryInto;
