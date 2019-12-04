@@ -217,6 +217,7 @@ mod tests {
     use dfusion_core::models::order::test_util::create_order_for_test;
     use dfusion_core::models::{NUM_RESERVED_ACCOUNTS, TOKENS};
     use mock_it::Matcher::*;
+    use std::str::FromStr;
     use web3::types::{H160, H256, U256};
 
     #[test]
@@ -260,9 +261,10 @@ mod tests {
         contract
             .calculate_order_hash
             .given((slot, Any))
-            .will_return(Ok(H256::from(
-                "0x438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c",
-            )));
+            .will_return(Ok(H256::from_str(
+                "438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c",
+            )
+            .unwrap()));
 
         contract
             .auction_solution_bid
@@ -398,9 +400,10 @@ mod tests {
         contract
             .calculate_order_hash
             .given((slot, Any))
-            .will_return(Ok(H256::from(
-                "0x438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c",
-            )));
+            .will_return(Ok(H256::from_str(
+                "438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c",
+            )
+            .unwrap()));
 
         contract
             .auction_solution_bid
@@ -460,9 +463,10 @@ mod tests {
         contract
             .calculate_order_hash
             .given((slot - 1, Any))
-            .will_return(Ok(H256::from(
-                "0x438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c",
-            )));
+            .will_return(Ok(H256::from_str(
+                "438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c",
+            )
+            .unwrap()));
         contract
             .order_hash_for_slot
             .given(slot)
@@ -470,9 +474,10 @@ mod tests {
         contract
             .calculate_order_hash
             .given((slot, Any))
-            .will_return(Ok(H256::from(
-                "0x438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c",
-            )));
+            .will_return(Ok(H256::from_str(
+                "438d54b20a21fa0b2f8f176c86446d9db7067f6e68a1e58c22873544eb20d72c",
+            )
+            .unwrap()));
 
         contract
             .get_current_state_root
@@ -604,7 +609,7 @@ mod tests {
         let slot = U256::from(1);
         let state_hash = H256::zero();
         let standing_order = StandingOrder::new(
-            H160::from(1),
+            H160::from_low_u64_be(1),
             U256::zero(),
             U256::from(3),
             vec![create_order_for_test(), create_order_for_test()],
@@ -645,9 +650,10 @@ mod tests {
         contract
             .calculate_order_hash
             .given((slot, Any))
-            .will_return(Ok(H256::from(
-                "0x6bdda4f03645914c836a16ba8565f26dffb7bec640b31e1f23e0b3b22f0a64ae",
-            )));
+            .will_return(Ok(H256::from_str(
+                "6bdda4f03645914c836a16ba8565f26dffb7bec640b31e1f23e0b3b22f0a64ae",
+            )
+            .unwrap()));
         contract
             .get_current_state_root
             .given(())
@@ -682,7 +688,7 @@ mod tests {
     #[test]
     fn test_get_standing_orders_indexes() {
         let standing_order = StandingOrder::new(
-            H160::from(1),
+            H160::from_low_u64_be(1),
             U256::from(3),
             U256::from(2),
             vec![create_order_for_test(), create_order_for_test()],
@@ -690,8 +696,8 @@ mod tests {
         let empty_order = StandingOrder::new(H160::zero(), U256::zero(), U256::from(2), vec![]);
         let mut standing_orders = vec![empty_order; NUM_RESERVED_ACCOUNTS as usize];
         standing_orders[1] = standing_order.clone();
-        let mut standing_order_indexes = vec![0; NUM_RESERVED_ACCOUNTS as usize];
-        standing_order_indexes[1] = 3;
+        let mut standing_order_indexes = vec![U128::zero(); NUM_RESERVED_ACCOUNTS as usize];
+        standing_order_indexes[1] = 3.into();
         assert_eq!(
             batch_index_from_standing_orders(&standing_orders),
             standing_order_indexes
@@ -708,7 +714,7 @@ mod tests {
         };
         let order_1 = Order {
             batch_information: None,
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_be(1),
             sell_token: 0,
             buy_token: 1,
             sell_amount: 4,
@@ -716,7 +722,7 @@ mod tests {
         };
         let order_2 = Order {
             batch_information: None,
-            account_id: H160::from(0),
+            account_id: H160::from_low_u64_be(0),
             sell_token: 1,
             buy_token: 0,
             sell_amount: 5,
@@ -725,9 +731,9 @@ mod tests {
         let orders = vec![order_1, order_2];
 
         update_balances(&mut state, &orders, &solution);
-        assert_eq!(state.read_balance(0, H160::from(0)), 101);
-        assert_eq!(state.read_balance(1, H160::from(0)), 99);
-        assert_eq!(state.read_balance(0, H160::from(1)), 99);
-        assert_eq!(state.read_balance(1, H160::from(1)), 101);
+        assert_eq!(state.read_balance(0, H160::from_low_u64_be(0)), 101);
+        assert_eq!(state.read_balance(1, H160::from_low_u64_be(0)), 99);
+        assert_eq!(state.read_balance(0, H160::from_low_u64_be(1)), 99);
+        assert_eq!(state.read_balance(1, H160::from_low_u64_be(1)), 101);
     }
 }

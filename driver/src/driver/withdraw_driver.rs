@@ -305,7 +305,7 @@ mod tests {
             PendingFlux {
                 slot_index: 2,
                 slot: U256::one(),
-                account_id: H160::from(0),
+                account_id: H160::from_low_u64_be(0),
                 token_id: 1,
                 amount: 10,
             },
@@ -316,7 +316,7 @@ mod tests {
             vec![100; (TOKENS * 2) as usize],
             TOKENS,
         );
-        state.decrement_balance(1, H160::from(0), 100);
+        state.decrement_balance(1, H160::from_low_u64_be(0), 100);
 
         let merkle_root = withdraws.root_hash(&[true, false]);
 
