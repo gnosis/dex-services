@@ -9,6 +9,7 @@ use web3::types::{H160, U128, U256};
 use dfusion_core::models::{AccountState, Order, Solution};
 
 use crate::error::DriverError;
+use crate::util::CeiledDiv;
 
 use super::base_contract::BaseContract;
 use super::stablex_auction_element::StableXAuctionElement;
@@ -83,7 +84,22 @@ impl StableXContract for StableXContractImpl {
         let (prices, token_ids_for_price) = encode_prices_for_contract(solution.prices);
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
-
+        let max_utility_value = U256::max_value().ceiled_div(
+            U256::one()
+                .checked_add(
+                    self.base
+                        .contract
+                        .query(
+                            "IMPROVEMENT_DENOMINATOR",
+                            (),
+                            None,
+                            Options::default(),
+                            None,
+                        )
+                        .wait()?,
+                )
+                .unwrap(),
+        );
         Ok(self
             .base
             .contract
@@ -91,7 +107,7 @@ impl StableXContract for StableXContractImpl {
                 "submitSolution",
                 (
                     batch_index,
-                    U256::max_value(),
+                    max_utility_value,
                     owners.clone(),
                     order_ids.clone(),
                     volumes.clone(),
