@@ -11,14 +11,16 @@ use dfusion_core::models::{AccountState, Order, Solution};
 use super::base_contract::BaseContract;
 use super::stablex_auction_element::StableXAuctionElement;
 use crate::error::DriverError;
+use lazy_static::lazy_static;
 
 type Result<T> = std::result::Result<T, DriverError>;
 
 pub const AUCTION_ELEMENT_WIDTH: usize = 112;
+
 lazy_static! {
     // In the BatchExchange smart contract, the objective value will be multiplied by
     // 1 + IMPROVEMENT_DENOMINATOR = 101. Hence, the maximal possible objective value is:
-    static ref MAX_OBJECTIVE_VALUE: U256 = U256::max_value() / (U256::from_dec_str("101").unwrap());
+    static ref MAX_OBJECTIVE_VALUE: U256 = U256::max_value() / (U256::from(101));
 }
 
 pub struct StableXContractImpl {
