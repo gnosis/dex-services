@@ -8,7 +8,7 @@ use dfusion_core::database::DbInterface;
 
 use futures::sync::mpsc::Sender;
 
-use graph::components::ethereum::{LightEthereumBlock, EthereumBlockTriggerType, EthereumCall};
+use graph::components::ethereum::{EthereumBlockTriggerType, EthereumCall, LightEthereumBlock};
 use graph::components::subgraph::{
     BlockState, HostMetrics, RuntimeHost as RuntimeHostTrait, RuntimeHostBuilder,
 };

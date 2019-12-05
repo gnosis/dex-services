@@ -112,7 +112,5 @@ impl MetricsRegistry for SimpleMetricsRegistry {
         Ok(histogram)
     }
 
-    fn unregister(&self, _: Box<dyn Collector>) {
-        return;
-    }
+    fn unregister(&self, _: Box<dyn Collector>) {}
 }

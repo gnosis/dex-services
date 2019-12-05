@@ -84,7 +84,7 @@ fn main() {
     tokio_executor::with_default(&mut executor, &mut enter, |enter| {
         tokio_timer::with_default(&timer_handle, enter, |enter| {
             enter
-                .block_on(future::lazy(|| async_main()))
+                .block_on(future::lazy(async_main))
                 .expect("Failed to run main function");
         })
     });
@@ -249,18 +249,20 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         NODE_ID.clone(),
         SubgraphVersionSwitchingMode::Instant,
     ));
-    tokio::spawn(
-        subgraph_registrar
-            .start()
-            .then(|start_result| Ok(start_result.expect("failed to initialize subgraph provider"))),
-    );
+    tokio::spawn(subgraph_registrar.start().then(|start_result| {
+        start_result.expect("failed to initialize subgraph provider");
+        Ok(())
+    }));
 
     // Add the dfusion subgraph.
     let subgraph_name = SubgraphName::new(SUBGRAPH_NAME).unwrap();
     tokio::spawn(
         subgraph_registrar
             .create_subgraph(subgraph_name.clone())
-            .then(|result| Ok(result.expect("Failed to create subgraph")))
+            .then(|result| {
+                result.expect("Failed to create subgraph");
+                Ok(())
+            })
             .and_then(move |_| {
                 subgraph_registrar.create_subgraph_version(
                     subgraph_name,
@@ -268,7 +270,10 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
                     NODE_ID.clone(),
                 )
             })
-            .then(|result| Ok(result.expect("Failed to deploy subgraph"))),
+            .then(|result| {
+                result.expect("Failed to deploy subgraph");
+                Ok(())
+            }),
     );
 
     // Serve GraphQL queries over HTTP
@@ -325,11 +330,14 @@ where
     V: FromStr,
     V::Err: Debug,
 {
-    let value = env::var(name).expect(&format!("{} environment variable is required", name));
-    value.parse::<V>().expect(&format!(
-        "failed to parse environment variable {}='{}' as {}",
-        name,
-        value,
-        type_name::<V>()
-    ))
+    let value =
+        env::var(name).unwrap_or_else(|_| panic!("{} environment variable is required", name));
+    value.parse::<V>().unwrap_or_else(|_| {
+        panic!(
+            "failed to parse environment variable {}='{}' as {}",
+            name,
+            value,
+            type_name::<V>()
+        )
+    })
 }
