@@ -96,7 +96,6 @@ fn main() {
 fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     env_logger::init();
 
-    // just read from env instead of using command line arguments
     let postgres_url: String = env_arg("POSTGRES_URL");
     let ethereum_rpc: String = env_arg("ETHEREUM_NODE_URL");
     let network_name: String = env_arg("NETWORK_NAME");
@@ -104,17 +103,9 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     let http_port: u16 = env_arg("GRAPHQL_PORT");
     let ws_port: u16 = env_arg("WS_PORT");
 
-    // Set up logger
     let logger = logger(false);
-
-    info!(logger, "Starting up");
-
     let logger_factory = LoggerFactory::new(logger.clone(), None);
 
-    // Create a local link resolver (IPFS is not used)
-    let link_resolver = Arc::new(LocalLinkResolver);
-
-    // Set up simple metrics registry
     let metrics_registry = Arc::new(SimpleMetricsRegistry);
 
     // Ethereum client
@@ -143,7 +134,6 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         }
     };
 
-    // Set up Store
     info!(
         logger,
         "Connecting to Postgres";
@@ -151,7 +141,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     );
     let postgres_conn_pool =
         create_connection_pool(postgres_url.clone(), STORE_CONN_POOL_SIZE, &logger);
-    let generic_store = Arc::new(DieselStore::new(
+    let store = Arc::new(DieselStore::new(
         StoreConfig {
             postgres_url: postgres_url.clone(),
             network_name: network_name.clone(),
@@ -161,35 +151,9 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         postgres_conn_pool.clone(),
     ));
 
-    let eth_adapters: HashMap<String, Arc<dyn EthereumAdapter>> = {
-        let mut eth_adapters = HashMap::new();
-        eth_adapters.insert(network_name.clone(), eth_adapter.clone());
-        eth_adapters
-    };
-    let stores: HashMap<String, Arc<DieselStore>> = {
-        let mut stores = HashMap::new();
-        stores.insert(network_name.clone(), generic_store.clone());
-        stores
-    };
-
-    let graphql_runner = Arc::new(graph_core::GraphQlRunner::new(
-        &logger,
-        generic_store.clone(),
-    ));
-    let mut graphql_server = GraphQLQueryServer::new(
-        &logger_factory,
-        graphql_runner.clone(),
-        generic_store.clone(),
-        NODE_ID.clone(),
-    );
-    let mut subscription_server =
-        GraphQLSubscriptionServer::new(&logger, graphql_runner.clone(), generic_store.clone());
-
-    info!(logger, "Starting block ingestor");
-
-    // Create Ethereum block ingestor and spawn a thread to it
+    // Create Ethereum block ingestor
     let block_ingestor = graph_datasource_ethereum::BlockIngestor::new(
-        generic_store.clone(),
+        store.clone(),
         eth_adapter.clone(),
         ANCESTOR_COUNT,
         network_name.to_string(),
@@ -201,8 +165,20 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     // Run the Ethereum block ingestor in the background
     tokio::spawn(block_ingestor.into_polling_stream());
 
+    let eth_adapters: HashMap<String, Arc<dyn EthereumAdapter>> = {
+        let mut eth_adapters = HashMap::new();
+        eth_adapters.insert(network_name.clone(), eth_adapter.clone());
+        eth_adapters
+    };
+    let stores: HashMap<String, Arc<DieselStore>> = {
+        let mut stores = HashMap::new();
+        stores.insert(network_name.clone(), store.clone());
+        stores
+    };
+
+    // Prepare a block stream builder for subgraphs
     let block_stream_builder = BlockStreamBuilder::new(
-        generic_store.clone(),
+        store.clone(),
         stores.clone(),
         eth_adapters.clone(),
         NODE_ID.clone(),
@@ -225,11 +201,14 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         metrics_registry.clone(),
     );
 
+    let link_resolver = Arc::new(LocalLinkResolver);
+    let graphql_runner = Arc::new(graph_core::GraphQlRunner::new(&logger, store.clone()));
+
     // Create subgraph provider
     let mut subgraph_provider = SubgraphAssignmentProvider::new(
         &logger_factory,
         link_resolver.clone(),
-        generic_store.clone(),
+        store.clone(),
         graphql_runner.clone(),
     );
 
@@ -241,7 +220,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         &logger_factory,
         link_resolver,
         Arc::new(subgraph_provider),
-        generic_store.clone(),
+        store.clone(),
         stores,
         eth_adapters.clone(),
         NODE_ID.clone(),
@@ -273,6 +252,15 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
                 Ok(())
             }),
     );
+
+    let mut graphql_server = GraphQLQueryServer::new(
+        &logger_factory,
+        graphql_runner.clone(),
+        store.clone(),
+        NODE_ID.clone(),
+    );
+    let mut subscription_server =
+        GraphQLSubscriptionServer::new(&logger, graphql_runner.clone(), store.clone());
 
     // Serve GraphQL queries over HTTP
     tokio::spawn(
