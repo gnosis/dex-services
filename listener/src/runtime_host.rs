@@ -8,7 +8,7 @@ use dfusion_core::database::DbInterface;
 
 use futures::sync::mpsc::Sender;
 
-use graph::components::ethereum::{EthereumBlockTriggerType, EthereumCall};
+use graph::components::ethereum::{LightEthereumBlock, EthereumBlockTriggerType, EthereumCall};
 use graph::components::subgraph::{
     BlockState, HostMetrics, RuntimeHost as RuntimeHostTrait, RuntimeHostBuilder,
 };
@@ -16,7 +16,7 @@ use graph::data::subgraph::{DataSource, DataSourceTemplate, SubgraphDeploymentId
 
 use tiny_keccak::keccak256;
 
-use web3::types::{Block, Log, Transaction, H256};
+use web3::types::{Log, Transaction, H256};
 
 use crate::event_handler::{
     AuctionSettlementHandler, DepositHandler, EventHandler, FluxTransitionHandler,
@@ -135,7 +135,7 @@ impl RuntimeHostTrait for RustRuntimeHost {
     fn process_log(
         &self,
         logger: Logger,
-        block: Arc<Block<Transaction>>,
+        block: Arc<LightEthereumBlock>,
         transaction: Arc<Transaction>,
         log: Arc<Log>,
         state: BlockState,
@@ -158,7 +158,7 @@ impl RuntimeHostTrait for RustRuntimeHost {
     fn process_call(
         &self,
         _logger: Logger,
-        _block: Arc<Block<Transaction>>,
+        _block: Arc<LightEthereumBlock>,
         _transaction: Arc<Transaction>,
         _call: Arc<EthereumCall>,
         _state: BlockState,
@@ -170,7 +170,7 @@ impl RuntimeHostTrait for RustRuntimeHost {
     fn process_block(
         &self,
         _logger: Logger,
-        _block: Arc<Block<Transaction>>,
+        _block: Arc<LightEthereumBlock>,
         _trigger_type: EthereumBlockTriggerType,
         _state: BlockState,
     ) -> Box<dyn Future<Item = BlockState, Error = Error> + Send> {
