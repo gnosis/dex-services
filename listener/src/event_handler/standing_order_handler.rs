@@ -89,7 +89,7 @@ fn get_entities_from_log(logger: &Logger, log: &Arc<Log>) -> (Entity, Vec<Entity
 pub mod test {
     use super::*;
     use graph::components::store::EntityKey;
-    use web3::types::Bytes;
+    use web3::types::{Bytes, H160, H256};
 
     #[test]
     fn test_handle_standing_order() {
@@ -166,12 +166,12 @@ pub mod test {
         ];
 
         Arc::new(Log {
-            address: 0.into(),
+            address: H160::from_low_u64_be(0),
             topics: vec![],
             data: Bytes(bytes.iter().flat_map(|i| i.iter()).cloned().collect()),
-            block_hash: Some(2.into()),
+            block_hash: Some(H256::from_low_u64_be(2)),
             block_number: Some(1.into()),
-            transaction_hash: Some(3.into()),
+            transaction_hash: Some(H256::from_low_u64_be(3)),
             transaction_index: Some(0.into()),
             log_index: Some(0.into()),
             transaction_log_index: Some(0.into()),

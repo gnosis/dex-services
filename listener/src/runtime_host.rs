@@ -6,9 +6,11 @@ use std::sync::Arc;
 
 use dfusion_core::database::DbInterface;
 
+use futures::sync::mpsc::Sender;
+
 use graph::components::ethereum::{EthereumBlockTriggerType, EthereumCall};
 use graph::components::subgraph::{
-    BlockState, RuntimeHost as RuntimeHostTrait, RuntimeHostBuilder,
+    BlockState, RuntimeHost as RuntimeHostTrait, RuntimeHostBuilder, HostMetrics,
 };
 
 use graph::data::subgraph::{DataSource, SubgraphDeploymentId};
@@ -133,6 +135,7 @@ impl RuntimeHostTrait for RustRuntimeHost {
         state: BlockState,
     ) -> Box<dyn Future<Item = BlockState, Error = Error> + Send> {
         info!(logger, "Received event");
+        // TODO(nlordell): fix this
         // let mut state = state;
         // if let Some(handler) = self.handlers.get(&log.topics[0]) {
         //     match handler.process_event(logger, block, transaction, log) {

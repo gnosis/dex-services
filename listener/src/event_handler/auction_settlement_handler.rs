@@ -138,7 +138,7 @@ pub mod unit_test {
                 slot: U256::zero(),
                 slot_index: 0,
             }),
-            account_id: H160::from(0),
+            account_id: H160::from_low_u64_be(0),
             buy_token: 1,
             sell_token: 0,
             buy_amount: 1,
@@ -157,7 +157,7 @@ pub mod unit_test {
 
         // Process event
         let handler = AuctionSettlementHandler::new(store);
-        let log = create_auction_settlement_event(0, 1, H256::from(1));
+        let log = create_auction_settlement_event(0, 1, H256::from_low_u64_be(1));
 
         let result = handler.process_event(
             util::test::logger(),
@@ -168,7 +168,7 @@ pub mod unit_test {
 
         assert!(result.is_ok());
         let expected_new_state =
-            AccountState::new(H256::from(1), U256::from(1), vec![0, 1, 0, 0], 2);
+            AccountState::new(H256::from_low_u64_be(1), U256::from(1), vec![0, 1, 0, 0], 2);
         match result.unwrap().pop().unwrap() {
             EntityOperation::Set { data, .. } => {
                 assert_eq!(AccountState::from(data), expected_new_state)
@@ -191,7 +191,7 @@ pub mod unit_test {
             )));
 
         let handler = AuctionSettlementHandler::new(store);
-        let log = create_auction_settlement_event(0, 1, H256::from(1));
+        let log = create_auction_settlement_event(0, 1, H256::from_low_u64_be(1));
 
         let result = handler.process_event(
             util::test::logger(),
@@ -218,7 +218,7 @@ pub mod unit_test {
             .will_return(Ok(vec![]));
 
         let handler = AuctionSettlementHandler::new(store);
-        let log = create_auction_settlement_event(0, 1, H256::from(1));
+        let log = create_auction_settlement_event(0, 1, H256::from_low_u64_be(1));
 
         let result = handler.process_event(
             util::test::logger(),
@@ -249,7 +249,7 @@ pub mod unit_test {
             )));
 
         let handler = AuctionSettlementHandler::new(store);
-        let log = create_auction_settlement_event(0, 1, H256::from(1));
+        let log = create_auction_settlement_event(0, 1, H256::from_low_u64_be(1));
 
         let result = handler.process_event(
             util::test::logger(),
@@ -321,12 +321,12 @@ pub mod unit_test {
         );
 
         Arc::new(Log {
-            address: 1.into(),
+            address: H160::from_low_u64_be(1),
             topics: vec![],
             data: Bytes(bytes.iter().flat_map(|i| i.iter()).cloned().collect()),
-            block_hash: Some(2.into()),
+            block_hash: Some(H256::from_low_u64_be(2)),
             block_number: Some(1.into()),
-            transaction_hash: Some(3.into()),
+            transaction_hash: Some(H256::from_low_u64_be(3)),
             transaction_index: Some(0.into()),
             log_index: Some(0.into()),
             transaction_log_index: Some(0.into()),
