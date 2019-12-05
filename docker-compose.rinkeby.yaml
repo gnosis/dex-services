@@ -1,0 +1,4 @@
+version: '3.6'
+services:
+  stablex:
+    env_file: common-rinkeby.env
