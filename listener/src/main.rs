@@ -30,10 +30,13 @@ use dfusion_core::database::GraphReader;
 use dfusion_core::SUBGRAPH_NAME;
 use graph_node_reader::Store as GraphNodeReader;
 
+const REORG_THRESHOLD: u64 = 50;
+const ANCESTOR_COUNT: u64 = 50;
+const TOKIO_THREAD_COUNT: usize = 100;
+const STORE_CONN_POOL_SIZE: u32 = 10;
+const BLOCK_POLLING_INTERVAL: Duration = Duration::from_millis(1000);
+
 lazy_static! {
-    static ref REORG_THRESHOLD: u64 = 50;
-    static ref ANCESTOR_COUNT: u64 = 50;
-    static ref TOKIO_THREAD_COUNT: usize = 100;
     static ref SUBGRAPH_ID: SubgraphDeploymentId =
         SubgraphDeploymentId::new(SUBGRAPH_NAME).unwrap();
     static ref NODE_ID: NodeId = NodeId::new("default").unwrap();
@@ -51,7 +54,7 @@ fn main() {
     let handler_runtime = runtime.clone();
     *runtime.lock().unwrap() = Some(
         runtime::Builder::new()
-            .core_threads(*TOKIO_THREAD_COUNT)
+            .core_threads(TOKIO_THREAD_COUNT)
             .panic_handler(move |_| {
                 let runtime = handler_runtime.clone();
                 std::thread::spawn(move || {
@@ -104,10 +107,6 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     // Set up logger
     let logger = logger(false);
 
-    // Some hard-coded options
-    let block_polling_interval = Duration::from_millis(500);
-    let store_conn_pool_size = 10;
-
     info!(logger, "Starting up");
 
     let logger_factory = LoggerFactory::new(logger.clone(), None);
@@ -149,10 +148,9 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         logger,
         "Connecting to Postgres";
         "url" => SafeDisplay(postgres_url.as_str()),
-        "conn_pool_size" => store_conn_pool_size,
     );
     let postgres_conn_pool =
-        create_connection_pool(postgres_url.clone(), store_conn_pool_size, &logger);
+        create_connection_pool(postgres_url.clone(), STORE_CONN_POOL_SIZE, &logger);
     let generic_store = Arc::new(DieselStore::new(
         StoreConfig {
             postgres_url: postgres_url.clone(),
@@ -193,10 +191,10 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     let block_ingestor = graph_datasource_ethereum::BlockIngestor::new(
         generic_store.clone(),
         eth_adapter.clone(),
-        *ANCESTOR_COUNT,
+        ANCESTOR_COUNT,
         network_name.to_string(),
         &logger_factory,
-        block_polling_interval,
+        BLOCK_POLLING_INTERVAL,
     )
     .expect("failed to create Ethereum block ingestor");
 
@@ -208,7 +206,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         stores.clone(),
         eth_adapters.clone(),
         NODE_ID.clone(),
-        *REORG_THRESHOLD,
+        REORG_THRESHOLD,
         metrics_registry.clone(),
     );
 
