@@ -113,7 +113,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     let logger_factory = LoggerFactory::new(logger.clone(), None);
 
     // Create a local link resolver (IPFS is not used)
-    let link_resolver = Arc::new(LocalLinkResolver {});
+    let link_resolver = Arc::new(LocalLinkResolver);
 
     // Set up simple metrics registry
     let metrics_registry = Arc::new(SimpleMetricsRegistry);

@@ -25,7 +25,7 @@ fn read_file(file: &str) -> Result<Vec<u8>, failure::Error> {
 }
 
 #[derive(Clone)]
-pub struct LocalLinkResolver {}
+pub struct LocalLinkResolver;
 
 impl LinkResolverTrait for LocalLinkResolver {
     fn with_timeout(self, _timeout: Duration) -> Self {

@@ -3,7 +3,7 @@ use failure::Error;
 use slog::{info, Logger};
 use std::sync::Arc;
 
-use graph::components::ethereum::EthereumBlock;
+use graph::components::ethereum::LightEthereumBlock;
 use graph::components::store::EntityOperation;
 use graph::data::store::{Entity, Value};
 
@@ -20,7 +20,7 @@ impl EventHandler for StandingOrderHandler {
     fn process_event(
         &self,
         logger: Logger,
-        _block: Arc<EthereumBlock>,
+        _block: Arc<LightEthereumBlock>,
         _transaction: Arc<Transaction>,
         log: Arc<Log>,
     ) -> Result<Vec<EntityOperation>, Error> {

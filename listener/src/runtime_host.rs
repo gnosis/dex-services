@@ -141,16 +141,15 @@ impl RuntimeHostTrait for RustRuntimeHost {
         state: BlockState,
     ) -> Box<dyn Future<Item = BlockState, Error = Error> + Send> {
         info!(logger, "Received event");
-        // TODO(nlordell): fix this
-        // let mut state = state;
-        // if let Some(handler) = self.handlers.get(&log.topics[0]) {
-        //     match handler.process_event(logger, block, transaction, log) {
-        //         Ok(mut ops) => state.entity_operations.append(&mut ops),
-        //         Err(e) => return Box::new(err(e)),
-        //     }
-        // } else {
-        //     warn!(logger, "Unhandled event with topic {}", &log.topics[0]);
-        // };
+        let mut state = state;
+        if let Some(handler) = self.handlers.get(&log.topics[0]) {
+            match handler.process_event(logger, block, transaction, log) {
+                Ok(ops) => state.entity_cache.append(ops),
+                Err(e) => return Box::new(err(e)),
+            }
+        } else {
+            warn!(logger, "Unhandled event with topic {}", &log.topics[0]);
+        };
         Box::new(ok(state))
     }
 

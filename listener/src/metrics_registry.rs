@@ -15,6 +15,7 @@ impl MetricsRegistry for SimpleMetricsRegistry {
         help: String,
         const_labels: HashMap<String, String>,
     ) -> Result<Box<Gauge>, PrometheusError> {
+        eprintln!("new_gauge");
         let opts = Opts::new(name, help).const_labels(const_labels);
         let gauge = Box::new(Gauge::with_opts(opts)?);
         Ok(gauge)
@@ -27,6 +28,7 @@ impl MetricsRegistry for SimpleMetricsRegistry {
         const_labels: HashMap<String, String>,
         variable_labels: Vec<String>,
     ) -> Result<Box<GaugeVec>, PrometheusError> {
+        eprintln!("new_gauge_vec");
         let opts = Opts::new(name, help).const_labels(const_labels);
         let gauges = Box::new(GaugeVec::new(
             opts,
@@ -45,6 +47,7 @@ impl MetricsRegistry for SimpleMetricsRegistry {
         help: String,
         const_labels: HashMap<String, String>,
     ) -> Result<Box<Counter>, PrometheusError> {
+        eprintln!("new_counter");
         let opts = Opts::new(name, help).const_labels(const_labels);
         let counter = Box::new(Counter::with_opts(opts)?);
         Ok(counter)
@@ -57,6 +60,7 @@ impl MetricsRegistry for SimpleMetricsRegistry {
         const_labels: HashMap<String, String>,
         variable_labels: Vec<String>,
     ) -> Result<Box<CounterVec>, PrometheusError> {
+        eprintln!("new_counter_vec");
         let opts = Opts::new(name, help).const_labels(const_labels);
         let counters = Box::new(CounterVec::new(
             opts,
@@ -76,6 +80,7 @@ impl MetricsRegistry for SimpleMetricsRegistry {
         const_labels: HashMap<String, String>,
         buckets: Vec<f64>,
     ) -> Result<Box<Histogram>, PrometheusError> {
+        eprintln!("new_histogram");
         let opts = HistogramOpts::new(name, help)
             .const_labels(const_labels)
             .buckets(buckets);
@@ -91,6 +96,7 @@ impl MetricsRegistry for SimpleMetricsRegistry {
         variable_labels: Vec<String>,
         buckets: Vec<f64>,
     ) -> Result<Box<HistogramVec>, PrometheusError> {
+        eprintln!("new_histogram_vec");
         let opts = Opts::new(name, help).const_labels(const_labels);
         let histogram = Box::new(HistogramVec::new(
             HistogramOpts {

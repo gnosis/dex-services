@@ -22,7 +22,7 @@ pub fn entity_key(entity_type: &str, entity: &Entity) -> EntityKey {
 
 #[cfg(test)]
 pub mod test {
-    use graph::components::ethereum::EthereumBlock;
+    use graph::components::ethereum::LightEthereumBlock;
     use slog::{o, Discard, Logger};
     use web3::types::{Block, Bytes, Transaction, H160, H2048, H256, U256};
 
@@ -46,8 +46,8 @@ pub mod test {
         }
     }
 
-    pub fn fake_block() -> EthereumBlock {
-        EthereumBlock {
+    pub fn fake_block() -> LightEthereumBlock {
+        LightEthereumBlock {
             block: Block {
                 hash: None,
                 parent_hash: H256::zero(),
