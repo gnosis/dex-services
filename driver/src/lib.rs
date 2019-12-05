@@ -4,8 +4,8 @@
 //   why this is happening lets keep this these two `extern crate` statements so
 //   we successfully link.
 extern crate ethereum_tx_sign;
-extern crate web3;
 extern crate lazy_static;
+extern crate web3;
 
 use dfusion_core::database::DbInterface;
 
