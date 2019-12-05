@@ -122,7 +122,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     std::mem::forget(transport_event_loop);
 
     let eth_adapter = Arc::new(graph_datasource_ethereum::EthereumAdapter::new(
-        transport, 0,
+        transport, unimplemented!(),
     ));
     let eth_net_identifiers = match eth_adapter.net_identifiers(&logger).wait() {
         Ok(net) => {
