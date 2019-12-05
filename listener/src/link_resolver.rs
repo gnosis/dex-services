@@ -23,6 +23,7 @@ fn read_file(file: &str) -> Result<Vec<u8>, failure::Error> {
     Ok(buffer)
 }
 
+#[derive(Clone)]
 pub struct LocalLinkResolver {}
 
 impl LinkResolverTrait for LocalLinkResolver {

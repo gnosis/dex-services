@@ -143,7 +143,12 @@ pub mod test {
 
         // Process event
         let handler = FluxTransitionHandler::new(store);
-        let log = create_state_transition_event(FluxTransitionType::Deposit, 1, H256::from_low_u64_be(1), 0);
+        let log = create_state_transition_event(
+            FluxTransitionType::Deposit,
+            1,
+            H256::from_low_u64_be(1),
+            0,
+        );
         let result = handler.process_event(
             util::test::logger(),
             Arc::new(util::test::fake_block()),
@@ -176,7 +181,12 @@ pub mod test {
             )));
 
         let handler = FluxTransitionHandler::new(store);
-        let log = create_state_transition_event(FluxTransitionType::Deposit, 1, H256::from_low_u64_be(1), 0);
+        let log = create_state_transition_event(
+            FluxTransitionType::Deposit,
+            1,
+            H256::from_low_u64_be(1),
+            0,
+        );
         let result = handler.process_event(
             util::test::logger(),
             Arc::new(util::test::fake_block()),
@@ -226,7 +236,12 @@ pub mod test {
 
         // Process event
         let handler = FluxTransitionHandler::new(store);
-        let log = create_state_transition_event(FluxTransitionType::Withdraw, 1, H256::from_low_u64_be(1), 0);
+        let log = create_state_transition_event(
+            FluxTransitionType::Withdraw,
+            1,
+            H256::from_low_u64_be(1),
+            0,
+        );
         let result = handler.process_event(
             util::test::logger(),
             Arc::new(util::test::fake_block()),

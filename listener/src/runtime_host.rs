@@ -10,7 +10,7 @@ use futures::sync::mpsc::Sender;
 
 use graph::components::ethereum::{EthereumBlockTriggerType, EthereumCall};
 use graph::components::subgraph::{
-    BlockState, RuntimeHost as RuntimeHostTrait, RuntimeHostBuilder, HostMetrics,
+    BlockState, HostMetrics, RuntimeHost as RuntimeHostTrait, RuntimeHostBuilder,
 };
 
 use graph::data::subgraph::{DataSource, SubgraphDeploymentId};
@@ -121,7 +121,11 @@ impl RuntimeHostTrait for RustRuntimeHost {
     }
 
     /// Returns true if the RuntimeHost has a handler for an Ethereum block.
-    fn matches_block(&self, _block_trigger_type: EthereumBlockTriggerType, _block_number: u64) -> bool {
+    fn matches_block(
+        &self,
+        _block_trigger_type: EthereumBlockTriggerType,
+        _block_number: u64,
+    ) -> bool {
         unimplemented!();
     }
 

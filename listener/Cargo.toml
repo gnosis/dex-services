@@ -12,6 +12,7 @@ path = "src/main.rs"
 graph-core = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
 graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
 graph-datasource-ethereum = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
+graph-mock = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
 graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", rev = "f77b37c" }
 graph-store-postgres = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
 graph-server-http = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
@@ -29,6 +30,3 @@ serde_yaml = "0.8"
 slog = "2.2.3"
 tiny-keccak = "1.4.2"
 web3 = { git = "https://github.com/graphprotocol/rust-web3", branch = "graph-patches" }
-
-[dev-dependencies]
-graph-mock = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
