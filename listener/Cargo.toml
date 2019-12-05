@@ -19,7 +19,7 @@ graph-server-websocket = { git = "https://github.com/graphprotocol/graph-node", 
 
 dfusion_core = { path = "../dfusion_rust_core" }
 
-env_logger = "0.5.10"
+env_logger = "0.7.1"
 failure = "0.1.2"
 futures = "0.1.21"
 graphql-parser = "0.2.1"
