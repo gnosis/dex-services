@@ -1,5 +1,6 @@
 mod event_handler;
 mod link_resolver;
+mod metrics_registry;
 mod runtime_host;
 
 use lazy_static::lazy_static;
@@ -21,13 +22,13 @@ use graph_core::{
     SubgraphInstanceManager, SubgraphRegistrar,
 };
 use graph_datasource_ethereum::{BlockStreamBuilder, Transport};
-use graph_mock::MockMetricsRegistry;
 use graph_server_http::GraphQLServer as GraphQLQueryServer;
 use graph_server_websocket::SubscriptionServer as GraphQLSubscriptionServer;
 use graph_store_postgres::connection_pool::create_connection_pool;
 use graph_store_postgres::{Store as DieselStore, StoreConfig};
 
 use crate::link_resolver::LocalLinkResolver;
+use crate::metrics_registry::SimpleMetricsRegistry;
 use crate::runtime_host::RustRuntimeHostBuilder;
 
 use dfusion_core::database::GraphReader;
@@ -110,10 +111,6 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
 
     // Some hard-coded options
     let block_polling_interval = Duration::from_millis(500);
-    let json_rpc_port = 8020;
-    let index_node_port = 8030;
-    let metrics_port = 8040;
-    let disable_block_ingestor = false;
     let store_conn_pool_size = 10;
 
     info!(logger, "Starting up");
@@ -190,7 +187,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     // ));
     // let mut metrics_server =
     //     PrometheusMetricsServer::new(&logger_factory, prometheus_registry.clone());
-    let metrics_registry = Arc::new(MockMetricsRegistry::new());
+    let metrics_registry = Arc::new(SimpleMetricsRegistry);
 
     // Ethereum client
     let eth_adapter: Arc<dyn EthereumAdapter> = {
@@ -199,7 +196,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
 
         Arc::new(graph_datasource_ethereum::EthereumAdapter::new(
             transport,
-            Arc::new(ProviderEthRpcMetrics::new(metrics_registry)),
+            Arc::new(ProviderEthRpcMetrics::new(metrics_registry.clone())),
         ))
     };
     let eth_net_identifier = match eth_adapter.net_identifiers(&logger).wait() {

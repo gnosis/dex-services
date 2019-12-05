@@ -12,8 +12,7 @@ use graph::components::ethereum::{EthereumBlockTriggerType, EthereumCall};
 use graph::components::subgraph::{
     BlockState, HostMetrics, RuntimeHost as RuntimeHostTrait, RuntimeHostBuilder,
 };
-
-use graph::data::subgraph::{DataSource, SubgraphDeploymentId};
+use graph::data::subgraph::{DataSource, DataSourceTemplate, SubgraphDeploymentId};
 
 use tiny_keccak::keccak256;
 
@@ -47,9 +46,12 @@ impl RuntimeHostBuilder for RustRuntimeHostBuilder {
 
     fn build(
         &self,
-        _logger: &Logger,
+        _network_name: String,
         _subgraph_id: SubgraphDeploymentId,
         _data_source: DataSource,
+        _top_level_templates: Vec<DataSourceTemplate>,
+        _mapping_request_sender: Sender<Self::Req>,
+        _metrics: Arc<HostMetrics>,
     ) -> Result<Self::Host, Error> {
         Ok(RustRuntimeHost::new(self.store.clone()))
     }
