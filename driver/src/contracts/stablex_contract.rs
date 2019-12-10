@@ -76,13 +76,7 @@ impl StableXContract for StableXContractImpl {
         let packed_auction_bytes: Vec<u8> = self
             .base
             .contract
-            .query(
-                "getEncodedAuctionElements",
-                (),
-                None,
-                Options::default(),
-                None,
-            )
+            .query("getEncodedOrders", (), None, Options::default(), None)
             .wait()
             .map_err(DriverError::from)?;
         Ok(parse_auction_data(packed_auction_bytes, index))
@@ -143,7 +137,7 @@ impl StableXContract for StableXContractImpl {
                     token_ids_for_price,
                 ),
                 Options::with(|mut opt| {
-                    // usual gas estimate is not working
+                    // usual gas estimation isn't working
                     opt.gas_price = Some(20_000_000_000u64.into());
                     opt.gas = Some(5_000_000.into());
                 }),
@@ -188,7 +182,7 @@ fn encode_prices_for_contract(price_vector: Vec<u128>) -> (Vec<U128>, Vec<U128>)
     let mut ordered_token_ids: Vec<U128> = vec![];
     let mut prices: Vec<U128> = vec![];
     for (token_id, price) in price_vector.into_iter().enumerate() {
-        if price > 0 {
+        if token_id != 0 && price > 0 {
             ordered_token_ids.push(U128::from(token_id));
             prices.push(U128::from(price.to_be_bytes()));
         }
@@ -439,15 +433,11 @@ pub mod tests {
 
     #[test]
     fn generic_price_encoding() {
-        let price_vector = vec![u128::max_value(), 0, 1];
+        let price_vector = vec![u128::max_value(), 0, 1, 2];
 
-        let zero = U128::from(0);
-        let one = U128::from(1);
-        let two = U128::from(2);
-        let max = U128::max_value();
-
-        let expected_prices = vec![max, one];
-        let expected_token_ids = vec![zero, two];
+        // Only contain non fee-token and non 0 prices
+        let expected_prices = vec![1.into(), 2.into()];
+        let expected_token_ids = vec![2.into(), 3.into()];
 
         assert_eq!(
             encode_prices_for_contract(price_vector),
