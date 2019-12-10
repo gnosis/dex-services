@@ -8,14 +8,20 @@ use web3::types::{H160, U128, U256};
 
 use dfusion_core::models::{AccountState, Order, Solution};
 
-use crate::error::DriverError;
-
 use super::base_contract::BaseContract;
 use super::stablex_auction_element::StableXAuctionElement;
+use crate::error::DriverError;
+use lazy_static::lazy_static;
 
 type Result<T> = std::result::Result<T, DriverError>;
 
 pub const AUCTION_ELEMENT_WIDTH: usize = 112;
+
+lazy_static! {
+    // In the BatchExchange smart contract, the objective value will be multiplied by
+    // 1 + IMPROVEMENT_DENOMINATOR = 101. Hence, the maximal possible objective value is:
+    static ref MAX_OBJECTIVE_VALUE: U256 = U256::max_value() / (U256::from(101));
+}
 
 pub struct StableXContractImpl {
     base: BaseContract,
@@ -23,8 +29,7 @@ pub struct StableXContractImpl {
 
 impl StableXContractImpl {
     pub fn new() -> Result<Self> {
-        let contract_json =
-            fs::read_to_string("dex-contracts/build/contracts/StablecoinConverter.json")?;
+        let contract_json = fs::read_to_string("dex-contracts/build/contracts/BatchExchange.json")?;
         let address = env::var("STABLEX_CONTRACT_ADDRESS")?;
         Ok(StableXContractImpl {
             base: BaseContract::new(address, contract_json)?,
@@ -92,7 +97,7 @@ impl StableXContract for StableXContractImpl {
                 "submitSolution",
                 (
                     batch_index,
-                    U256::max_value(),
+                    *MAX_OBJECTIVE_VALUE,
                     owners.clone(),
                     order_ids.clone(),
                     volumes.clone(),

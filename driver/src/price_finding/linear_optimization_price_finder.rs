@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::process::Command;
-use web3::types::{H160, U256};
+use web3::types::H160;
 
 const RESULT_FOLDER: &str = "./results/tmp/";
 type Prices = HashMap<String, String>;
@@ -110,30 +110,6 @@ fn deserialize_result(
     let orders = json["orders"]
         .as_array()
         .ok_or_else(|| "No 'orders' list in json")?;
-    let objective_value = Some(
-        orders
-            .iter()
-            .map(|o| {
-                o["execUtility"]
-                    .as_str()
-                    .ok_or_else(|| {
-                        PriceFindingError::new(
-                            "No 'execUtility' field on order",
-                            ErrorKind::JsonError,
-                        )
-                    })
-                    .and_then(|objective_value| {
-                        U256::from_dec_str(objective_value).map_err(|e| {
-                            PriceFindingError::new(&format!("{:?}", e), ErrorKind::ParseIntError)
-                        })
-                    })
-            })
-            .collect::<Result<Vec<U256>, PriceFindingError>>()?
-            .iter()
-            .fold(U256::zero(), |acc, objective_value| {
-                objective_value.saturating_add(acc)
-            }),
-    );
     let executed_sell_amounts = orders
         .iter()
         .map(|o| {
@@ -162,8 +138,8 @@ fn deserialize_result(
                 .and_then(|amount| amount.parse::<u128>().map_err(PriceFindingError::from))
         })
         .collect::<Result<Vec<u128>, PriceFindingError>>()?;
+
     Ok(models::Solution {
-        objective_value,
         prices,
         executed_sell_amounts,
         executed_buy_amounts,
@@ -245,7 +221,7 @@ pub mod tests {
     use super::*;
     use dfusion_core::models::account_state::test_util::*;
     use std::error::Error;
-    use web3::types::H256;
+    use web3::types::{H256, U256};
 
     #[test]
     fn test_serialize_order() {
@@ -279,19 +255,16 @@ pub mod tests {
             "orders": [
                 {
                     "execSellAmount": "0",
-                    "execBuyAmount": "0",
-                    "execUtility": "0"
+                    "execBuyAmount": "0"
                 },
                 {
                     "execSellAmount": "318390084925498118944",
-                    "execBuyAmount": "95042777139162480000",
-                    "execUtility": "15854632034944469292777429010439194350"
+                    "execBuyAmount": "95042777139162480000"
                 },
             ]
         });
 
         let expected_solution = models::Solution {
-            objective_value: U256::from_dec_str("15854632034944469292777429010439194350").ok(),
             prices: vec![14_024_052_566_155_238_000, 1_526_784_674_855_762_300],
             executed_sell_amounts: vec![0, 318_390_084_925_498_118_944],
             executed_buy_amounts: vec![0, 95_042_777_139_162_480_000],
@@ -332,40 +305,6 @@ pub mod tests {
         let err = deserialize_result(&json, 1).expect_err("Should fail to parse");
         assert_eq!(err.description(), "No 'orders' list in json");
     }
-    #[test]
-    fn serialize_result_fails_if_order_does_not_have_objective_value() {
-        let json = json!({
-            "prices": {
-                "token0": "100",
-            },
-            "orders": [
-                {
-                    "execSellAmount": "0",
-                    "execBuyAmount": "0",
-                }
-            ]
-        });
-        let err = deserialize_result(&json, 1).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "No 'execUtility' field on order");
-    }
-
-    #[test]
-    fn serialize_result_fails_if_order_suprlus_not_parseable() {
-        let json = json!({
-            "prices": {
-                "token0": "100",
-            },
-            "orders": [
-                {
-                    "execSellAmount": "0",
-                    "execBuyAmount": "0",
-                    "execUtility": "0a0b"
-                }
-            ]
-        });
-        let err = deserialize_result(&json, 1).expect_err("Should fail to parse");
-        assert_eq!(err.kind, ErrorKind::ParseIntError);
-    }
 
     #[test]
     fn serialize_result_fails_if_order_does_not_have_sell_amount() {
@@ -375,8 +314,7 @@ pub mod tests {
             },
             "orders": [
                 {
-                    "execBuyAmount": "0",
-                    "execUtility": "0"
+                    "execBuyAmount": "0"
                 }
             ]
         });
@@ -393,8 +331,7 @@ pub mod tests {
             "orders": [
                 {
                     "execSellAmount": "0a",
-                    "execBuyAmount": "0",
-                    "execUtility": "0"
+                    "execBuyAmount": "0"
                 }
             ]
         });
@@ -410,8 +347,7 @@ pub mod tests {
             },
             "orders": [
                 {
-                    "execSellAmount": "0",
-                    "execUtility": "0"
+                    "execSellAmount": "0"
                 }
             ]
         });
@@ -428,8 +364,7 @@ pub mod tests {
             "orders": [
                 {
                     "execSellAmount": "0",
-                    "execBuyAmount": "0a",
-                    "execUtility": "0"
+                    "execBuyAmount": "0a"
                 }
             ]
         });

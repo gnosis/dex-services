@@ -1,6 +1,7 @@
 use crate::contracts::snapp_contract::SnappContract;
 use crate::error::{DriverError, ErrorKind};
 use crate::price_finding::PriceFinding;
+use crate::snapp::SnappSolution;
 use crate::util::{
     batch_processing_state, find_first_unapplied_slot, hash_consistency_check, ProcessingState,
 };
@@ -150,6 +151,17 @@ impl<'a> OrderProcessor<'a> {
         update_balances(&mut state, &orders, &solution);
         let new_state_root = state.rolling_hash(state.state_index.low_u32() + 1);
 
+        let objective_value = match solution.snapp_objective_value(&orders) {
+            Ok(objective_value) => objective_value,
+            Err(err) => {
+                warn!(
+                    "Error calculating objective value: {}. May indicate an invalid solution",
+                    err
+                );
+                U256::zero()
+            }
+        };
+
         info!(
             "New AccountState hash is {}, Solution: {:?}",
             new_state_root, solution
@@ -161,7 +173,7 @@ impl<'a> OrderProcessor<'a> {
             new_state_root,
             total_order_hash_from_contract,
             standing_order_indexes,
-            solution.objective_value.unwrap_or_else(U256::zero),
+            objective_value,
         )?;
 
         self.auction_bids.insert(
@@ -270,7 +282,6 @@ mod tests {
 
         let mut pf = PriceFindingMock::default();
         let expected_solution = Solution {
-            objective_value: Some(U256::zero()),
             prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
@@ -507,7 +518,6 @@ mod tests {
 
         let mut pf = PriceFindingMock::default();
         let expected_solution = Solution {
-            objective_value: Some(U256::zero()),
             prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
@@ -692,7 +702,6 @@ mod tests {
     fn test_update_balances() {
         let mut state = AccountState::new(H256::zero(), U256::one(), vec![100; 60], TOKENS);
         let solution = Solution {
-            objective_value: U256::from_dec_str("0").ok(),
             prices: vec![1, 2],
             executed_sell_amounts: vec![1, 1],
             executed_buy_amounts: vec![1, 1],

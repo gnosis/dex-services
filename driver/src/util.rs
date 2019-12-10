@@ -8,7 +8,7 @@ use web3::types::{H256, U256};
 use crate::contracts::snapp_contract::SnappContract;
 use crate::error::DriverError;
 use crate::error::ErrorKind;
-use crate::price_finding::{Fee, LinearOptimisationPriceFinder, PriceFinding};
+use crate::price_finding::{Fee, LinearOptimisationPriceFinder, NaiveSolver, PriceFinding};
 
 const BATCH_TIME_SECONDS: u32 = 3 * 60;
 
@@ -17,20 +17,29 @@ pub fn u128_to_u256(x: u128) -> U256 {
     U256::from_big_endian(&x.to_be_bytes())
 }
 
-/// Convert a U256 to a u128.
-///
-/// # Panics
-///
-/// Panics if the U256 overflows a u128.
-pub fn u256_to_u128(x: U256) -> u128 {
+/// Convert a `U256` to a `u128`. Returns `None` if the value would overflow the
+/// `u128`.
+pub fn checked_u256_to_u128(x: U256) -> Option<u128> {
     let mut bytes = [0u8; 32];
     x.to_big_endian(&mut bytes[..]);
 
     let hi = u128::from_be_bytes(bytes[..16].try_into().expect("correct slice length"));
     let lo = u128::from_be_bytes(bytes[16..].try_into().expect("correct slice length"));
 
-    assert_eq!(hi, 0, "U256 to u128 overflow");
-    lo
+    if hi == 0 {
+        Some(lo)
+    } else {
+        None
+    }
+}
+
+/// Convert a U256 to a u128.
+///
+/// # Panics
+///
+/// Panics if the U256 overflows a u128.
+pub fn u256_to_u128(x: U256) -> u128 {
+    checked_u256_to_u128(x).expect("U256 to u128 overflow")
 }
 
 pub trait CeiledDiv {
@@ -111,17 +120,14 @@ pub fn batch_processing_state(
     Ok(ProcessingState::TooEarly)
 }
 
-pub fn create_price_finder<N>(fee: Option<Fee>, naive: N) -> Box<dyn PriceFinding>
-where
-    N: PriceFinding + 'static,
-{
+pub fn create_price_finder(fee: Option<Fee>) -> Box<dyn PriceFinding> {
     let solver_env_var = env::var("LINEAR_OPTIMIZATION_SOLVER").unwrap_or_default();
     if solver_env_var == "1" {
         info!("Using linear optimisation price finder");
         Box::new(LinearOptimisationPriceFinder::new(fee))
     } else {
         info!("Using naive price finder");
-        Box::new(naive)
+        Box::new(NaiveSolver::new(fee))
     }
 }
 

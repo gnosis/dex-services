@@ -4,6 +4,7 @@
 //   why this is happening lets keep this these two `extern crate` statements so
 //   we successfully link.
 extern crate ethereum_tx_sign;
+extern crate lazy_static;
 extern crate web3;
 
 use dfusion_core::database::DbInterface;
@@ -19,6 +20,7 @@ pub mod contracts;
 pub mod driver;
 pub mod error;
 pub mod price_finding;
+pub mod snapp;
 pub mod util;
 
 pub fn run_driver_components(

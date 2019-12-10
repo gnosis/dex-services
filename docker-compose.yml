@@ -1,26 +1,11 @@
 version: '3.6'
-x-rust-service-basic:
-  &rust-service-basic
+x-rust-service:
+  &rust-service
   build:
     context: .
     dockerfile: docker/rust/Dockerfile
   restart: always
-
-x-rust-service-development:
-  &rust-service-development
-  << : *rust-service-basic
-  depends_on:
-    - ganache-cli
-  env_file:
-    - common.env
-  environment:
-    - RUST_BACKTRACE=1
-
-x-rust-service-rinkeby:
-  &rust-service-rinkeby
-  << : *rust-service-basic
-  env_file:
-    - common-rinkeby.env
+  env_file: common.env
   environment:
     - RUST_BACKTRACE=1
 
@@ -53,8 +38,10 @@ services:
       POSTGRES_DB: dfusion
 
   driver:
-    << : *rust-service-development
+    << : *rust-service
     command: cargo run --bin dfusion
+    depends_on:
+      - ganache-cli
     volumes:
       # Don't sync target, otherwise we rebuild on every deploy
       - ./dex-contracts:/app/dex-contracts
@@ -62,7 +49,7 @@ services:
       - ./driver/src:/app/driver/src
 
   graph-listener:
-    << : *rust-service-development
+    << : *rust-service
     command: /app/docker/rust/run_listener.sh
     depends_on:
       - ganache-cli
@@ -79,20 +66,11 @@ services:
       - ./listener/subgraph_definition:/app/listener/subgraph_definition
 
   stablex:
-    << : *rust-service-development
+    << : *rust-service
     image: stablex
+    depends_on:
+      - ganache-cli
     command: cargo run --bin stablex
-    restart: always
-    volumes:
-      # Don't sync target, otherwise we rebuild on every deploy
-      - ./dex-contracts:/app/dex-contracts
-      - ./dfusion_rust_core/src:/app/dfusion_rust_core/src
-      - ./driver/src:/app/driver/src
-
-  stablex-rinkeby:
-    << : *rust-service-rinkeby
-    command: cargo run --bin stablex
-    restart: always
     volumes:
       # Don't sync target, otherwise we rebuild on every deploy
       - ./dex-contracts:/app/dex-contracts

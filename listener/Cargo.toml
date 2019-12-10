@@ -19,13 +19,13 @@ graph-server-websocket = { git = "https://github.com/graphprotocol/graph-node", 
 
 dfusion_core = { path = "../dfusion_rust_core" }
 
-env_logger = "0.5.10"
+env_logger = "0.7.1"
 failure = "0.1.2"
 futures = "0.1.21"
 graphql-parser = "0.2.1"
-lazy_static = "1.2.0"
+lazy_static = "1.4.0"
 parity-wasm = "0.31"
-serde_yaml = "0.7"
+serde_yaml = "0.8"
 slog = "2.2.3"
 tiny-keccak = "1.4.2"
 web3 = { git = "https://github.com/graphprotocol/rust-web3", branch = "trace-struct-pre-ethereum-types" }
