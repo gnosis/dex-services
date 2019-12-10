@@ -221,7 +221,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         link_resolver,
         Arc::new(subgraph_provider),
         store.clone(),
-        stores,
+        stores.clone(),
         eth_adapters.clone(),
         NODE_ID.clone(),
         SubgraphVersionSwitchingMode::Instant,
@@ -240,18 +240,25 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
                 result.expect("Failed to create subgraph");
                 Ok(())
             })
-            .and_then(move |_| {
-                subgraph_registrar.create_subgraph_version(
-                    subgraph_name,
-                    SUBGRAPH_ID.clone(),
-                    NODE_ID.clone(),
-                )
+            .and_then({
+                let subgraph_registrar = subgraph_registrar.clone();
+                move |_| {
+                    subgraph_registrar.create_subgraph_version(
+                        subgraph_name,
+                        SUBGRAPH_ID.clone(),
+                        NODE_ID.clone(),
+                    )
+                }
             })
             .then(|result| {
                 result.expect("Failed to deploy subgraph");
                 Ok(())
             }),
     );
+
+    // keep a subgraph registrar alive, usually this is kept alive by a the JSON
+    // RPC admin server, but it isn't used here so just leak it instead
+    std::mem::forget(subgraph_registrar);
 
     let mut graphql_server = GraphQLQueryServer::new(
         &logger_factory,

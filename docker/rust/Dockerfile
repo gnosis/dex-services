@@ -1,4 +1,4 @@
-FROM gnosispm/dfusion-rust-base:v3
+FROM gnosispm/dfusion-rust-base:v4
 
 # Install solver if specified
 ARG use_solver

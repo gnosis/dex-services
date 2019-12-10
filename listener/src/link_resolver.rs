@@ -29,11 +29,11 @@ pub struct LocalLinkResolver;
 
 impl LinkResolverTrait for LocalLinkResolver {
     fn with_timeout(self, _timeout: Duration) -> Self {
-        unimplemented!();
+        self
     }
 
     fn with_retries(self) -> Self {
-        unimplemented!();
+        self
     }
 
     fn cat(

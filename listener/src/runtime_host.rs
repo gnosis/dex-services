@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use dfusion_core::database::DbInterface;
 
-use futures::sync::mpsc::Sender;
+use futures::sync::mpsc::{self, Sender};
 
 use graph::components::ethereum::{EthereumBlockTriggerType, EthereumCall, LightEthereumBlock};
 use graph::components::subgraph::{
@@ -62,7 +62,8 @@ impl RuntimeHostBuilder for RustRuntimeHostBuilder {
         _subgraph_id: SubgraphDeploymentId,
         _metrics: Arc<HostMetrics>,
     ) -> Result<Sender<Self::Req>, Error> {
-        unimplemented!();
+        let (sender, _) = mpsc::channel(1);
+        Ok(sender)
     }
 }
 
