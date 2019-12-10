@@ -76,13 +76,7 @@ impl StableXContract for StableXContractImpl {
         let packed_auction_bytes: Vec<u8> = self
             .base
             .contract
-            .query(
-                "getEncodedAuctionElements",
-                (),
-                None,
-                Options::default(),
-                None,
-            )
+            .query("getEncodedOrders", (), None, Options::default(), None)
             .wait()
             .map_err(DriverError::from)?;
         Ok(parse_auction_data(packed_auction_bytes, index))
