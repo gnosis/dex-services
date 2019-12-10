@@ -35,6 +35,14 @@ impl StableXContractImpl {
             base: BaseContract::new(address, contract_json)?,
         })
     }
+
+    pub fn address(&self) -> H160 {
+        self.base.contract.address()
+    }
+
+    pub fn account(&self) -> H160 {
+        self.base.public_key
+    }
 }
 
 pub trait StableXContract {
