@@ -24,9 +24,10 @@ rustc-hex = "*"
 serde_json = "1.0"
 simple_logger = "1.2.0"
 thiserror = "1.0"
-web3 = "0.8"
+web3 = { git = "https://github.com/graphprotocol/rust-web3", branch = "graph-patches" }
+
+jsonrpc-core-11 = { package = "jsonrpc-core", version = "11" }
+jsonrpc-core-13 = { package = "jsonrpc-core", version = "13" }
 
 [dev-dependencies]
 mock-it = "0.2.0"
-
-
