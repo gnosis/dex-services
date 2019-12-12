@@ -17,4 +17,4 @@ services:
       context: .
       dockerfile: docker/rust/stablex_binary/Dockerfile
     image: stablex-binary
-    command: bash -c "sleep 3 && ./graph-listener"
+    command: ./graph-listener
