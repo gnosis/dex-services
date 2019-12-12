@@ -6,7 +6,7 @@ mod runtime_host;
 use lazy_static::lazy_static;
 use std::any::type_name;
 use std::collections::HashMap;
-use std::env;
+use std::env::{self, VarError};
 use std::str::FromStr;
 use std::time::Duration;
 use tokio_timer::timer::Timer;
@@ -30,7 +30,6 @@ use dfusion_core::database::GraphReader;
 use dfusion_core::SUBGRAPH_NAME;
 use graph_node_reader::Store as GraphNodeReader;
 
-const REORG_THRESHOLD: u64 = 50;
 const ANCESTOR_COUNT: u64 = 50;
 const TOKIO_THREAD_COUNT: usize = 100;
 const STORE_CONN_POOL_SIZE: u32 = 10;
@@ -96,12 +95,14 @@ fn main() {
 fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     env_logger::init();
 
-    let postgres_url: String = env_arg("POSTGRES_URL");
-    let ethereum_rpc: String = env_arg("ETHEREUM_NODE_URL");
-    let network_name: String = env_arg("NETWORK_NAME");
+    let postgres_url: String = env_arg_required("POSTGRES_URL");
+    let ethereum_rpc: String = env_arg_required("ETHEREUM_NODE_URL");
+    let network_name: String = env_arg_required("NETWORK_NAME");
 
-    let http_port: u16 = env_arg("GRAPHQL_PORT");
-    let ws_port: u16 = env_arg("WS_PORT");
+    let http_port: u16 = env_arg_required("GRAPHQL_PORT");
+    let ws_port: u16 = env_arg_required("WS_PORT");
+
+    let reorg_threshhold: u64 = env_arg_optional("REORG_THRESHOLD", 50u64);
 
     let logger = logger(false);
     let logger_factory = LoggerFactory::new(logger.clone(), None);
@@ -151,6 +152,12 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         postgres_conn_pool.clone(),
     ));
 
+    // BlockIngestor must be configured to keep at least REORG_THRESHOLD ancestors,
+    // otherwise BlockStream will not work properly.
+    // BlockStream expects the blocks after the reorg threshold to be present in the
+    // database.
+    assert!(ANCESTOR_COUNT >= reorg_threshhold);
+
     // Create Ethereum block ingestor
     let block_ingestor = graph_datasource_ethereum::BlockIngestor::new(
         store.clone(),
@@ -182,7 +189,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         stores.clone(),
         eth_adapters.clone(),
         NODE_ID.clone(),
-        REORG_THRESHOLD,
+        reorg_threshhold,
         metrics_registry.clone(),
     );
 
@@ -318,13 +325,32 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     future::empty()
 }
 
-fn env_arg<V>(name: &str) -> V
+fn env_arg_required<V>(name: &str) -> V
 where
     V: FromStr,
     V::Err: Debug,
 {
-    let value =
-        env::var(name).unwrap_or_else(|_| panic!("{} environment variable is required", name));
+    env_arg(name, None)
+}
+
+fn env_arg_optional<V>(name: &str, default: V) -> V
+where
+    V: FromStr,
+    V::Err: Debug,
+{
+    env_arg(name, Some(default))
+}
+
+fn env_arg<V>(name: &str, default: Option<V>) -> V
+where
+    V: FromStr,
+    V::Err: Debug,
+{
+    let value = match (env::var(name), default) {
+        (Ok(value), _) => value,
+        (Err(VarError::NotPresent), Some(value)) => return value,
+        _ => panic!("{} environment variable is required", name),
+    };
     value.parse::<V>().unwrap_or_else(|_| {
         panic!(
             "failed to parse environment variable {}='{}' as {}",

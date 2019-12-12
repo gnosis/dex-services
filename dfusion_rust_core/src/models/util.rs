@@ -134,7 +134,7 @@ impl EntityParsing for u128 {
         u128::from_str(
             &entity
                 .get(field)
-                .and_then(|value| value.clone().as_big_decimal())
+                .and_then(|value| value.clone().as_bigint())
                 .map(|decimal| decimal.to_string())
                 .unwrap_or_else(|| panic!("Couldn't get field {} as big decimal", field)),
         )
@@ -147,7 +147,7 @@ impl EntityParsing for U256 {
         U256::from_dec_str(
             &entity
                 .get(field)
-                .and_then(|value| value.clone().as_big_decimal())
+                .and_then(|value| value.clone().as_bigint())
                 .map(|decimal| decimal.to_string())
                 .unwrap_or_else(|| panic!("Couldn't get field {} as big decimal", field)),
         )
@@ -190,7 +190,7 @@ impl EntityParsing for Vec<u128> {
                         u128::from_str(
                             &value
                                 .clone()
-                                .as_big_decimal()
+                                .as_bigint()
                                 .map(|decimal| decimal.to_string())
                                 .unwrap_or_else(|| {
                                     panic!("Couldn't convert value {} to big decimal", &value)
