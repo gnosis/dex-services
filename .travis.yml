@@ -3,9 +3,7 @@ language: rust
 matrix:
   include:
     - stage: "Build & Unit Test"
-    - language: rust
-      name: "Unit Tests"
-      rust: 1.37.0
+      language: generic
       cache: cargo
       before_cache:
         - find ./target/debug -type f -maxdepth 1 -delete
@@ -13,13 +11,14 @@ matrix:
         - rm -f  ./target/.rustc_info.json
       env:
         - CARGO_INCREMENTAL=0
-      before_script:
+      install:
+        - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
         - rustup component add clippy rustfmt
       script:
         - cargo test --all
         - cargo clippy --all --all-targets -- -D warnings
         - cargo fmt --all -- --check
-      dploy:
+      deploy:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - echo -e $GITLAB_PRIVATE_KEY > .ssh/id_rsa && chmod 0500 .ssh/id_rsa
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
