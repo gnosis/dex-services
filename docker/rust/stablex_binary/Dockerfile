@@ -1,4 +1,4 @@
-FROM python:3.6-slim-stretch as build-image
+FROM ubuntu:xenial
 RUN apt-get update \ 
   &&  apt-get install -y --no-install-recommends libpq5 libncurses5 \
   && rm -rf /var/lib/apt/lists/*

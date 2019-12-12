@@ -4,7 +4,10 @@ matrix:
   include:
     - stage: "Build & Unit Test"
       language: generic
-      cache: cargo
+      cache:
+        directories:
+          - $HOME/.cargo
+          - ./target
       before_cache:
         - find ./target/debug -type f -maxdepth 1 -delete
         - rm -fr ./target/debug/{deps,.fingerprint}/{*ra_*,*test*,*tools*,*gen_lsp*}
@@ -24,9 +27,15 @@ matrix:
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
         # Then build and publish compact multi-stage image
         - docker build --tag stablex-binary -f docker/rust/stablex_binary/Dockerfile .
-        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d stablex
+        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml run stablex
         - docker tag stablex-binary $REGISTRY_URI:$TRAVIS_COMMIT
         - docker push $REGISTRY_URI:$TRAVIS_COMMIT
+      language: node
+      name: "WarmUp Node Cache"
+      cache:
+        directories:
+          - dex-contracts/node_modules/
+      script: cd dex-contracts && npm ci 
     - stage: "E2E Tests"
       language: generic
       name: "dƒusion e2e Tests"
@@ -74,7 +83,7 @@ matrix:
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
-        - cd dex-contracts && npm ci && npx truffle compile && npm run networks-inject && cd ..
+        - cd dex-contracts && npx truffle compile && npm run networks-inject && cd ..
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.yml up -d stablex
         - ./test/e2e-tests-stablex-rinkeby.sh
