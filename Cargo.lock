@@ -491,7 +491,7 @@ dependencies = [
  "array-macro 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "graph 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)",
- "graph-node-reader 0.16.1 (git+https://github.com/gnosis/graph-node-reader?rev=f77b37c)",
+ "graph-node-reader 0.16.1 (git+https://github.com/gnosis/graph-node-reader?rev=534e046)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "mock-it 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -613,7 +613,7 @@ dependencies = [
  "ethabi 8.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "ethereum-tx-sign 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "graph 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)",
- "graph-node-reader 0.16.1 (git+https://github.com/gnosis/graph-node-reader?rev=f77b37c)",
+ "graph-node-reader 0.16.1 (git+https://github.com/gnosis/graph-node-reader?rev=534e046)",
  "hex 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core 11.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core 13.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -985,12 +985,15 @@ dependencies = [
 [[package]]
 name = "graph-node-reader"
 version = "0.16.1"
-source = "git+https://github.com/gnosis/graph-node-reader?rev=f77b37c#f77b37c99ee96d86edea4ae0ee2243ca4cdc5051"
+source = "git+https://github.com/gnosis/graph-node-reader?rev=534e046#534e0469168b1397457395285585c9292db63d72"
 dependencies = [
+ "Inflector 0.11.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "diesel 1.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "diesel-derive-enum 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "diesel-dynamic-schema 1.0.0 (git+https://github.com/diesel-rs/diesel-dynamic-schema?rev=a8ec4fb1)",
  "graph 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)",
+ "graph-graphql 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)",
+ "lru_time_cache 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1435,7 +1438,7 @@ dependencies = [
  "graph-core 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)",
  "graph-datasource-ethereum 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)",
  "graph-mock 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)",
- "graph-node-reader 0.16.1 (git+https://github.com/gnosis/graph-node-reader?rev=f77b37c)",
+ "graph-node-reader 0.16.1 (git+https://github.com/gnosis/graph-node-reader?rev=534e046)",
  "graph-server-http 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)",
  "graph-server-websocket 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)",
  "graph-store-postgres 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)",
@@ -3543,7 +3546,7 @@ dependencies = [
 "checksum graph-datasource-ethereum 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)" = "<none>"
 "checksum graph-graphql 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)" = "<none>"
 "checksum graph-mock 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)" = "<none>"
-"checksum graph-node-reader 0.16.1 (git+https://github.com/gnosis/graph-node-reader?rev=f77b37c)" = "<none>"
+"checksum graph-node-reader 0.16.1 (git+https://github.com/gnosis/graph-node-reader?rev=534e046)" = "<none>"
 "checksum graph-server-http 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)" = "<none>"
 "checksum graph-server-websocket 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)" = "<none>"
 "checksum graph-store-postgres 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)" = "<none>"

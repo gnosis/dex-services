@@ -17,7 +17,7 @@ ethabi = "8.0.1"
 ethereum-tx-sign = "3.0.0"
 dfusion_core = { path = "../dfusion_rust_core" }
 graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
-graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", rev = "f77b37c" }
+graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", rev = "534e046" }
 hex = "0.4.0"
 log = "0.4.8"
 rustc-hex = "*"
