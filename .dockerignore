@@ -1,5 +1,8 @@
 **/node_modules
 target
+!target/debug/stablex
+!target/debug/listener
+!target/debug/dfusion
 npm-debug.log
 Dockerfile*
 docker-compose*

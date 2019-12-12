@@ -3,21 +3,29 @@ language: rust
 matrix:
   include:
     - stage: "Build & Unit Test"
-      language: generic
-      install:
+    - language: rust
+      name: "Unit Tests"
+      rust: 1.37.0
+      cache: cargo
+      before_cache:
+        - find ./target/debug -type f -maxdepth 1 -delete
+        - rm -fr ./target/debug/{deps,.fingerprint}/{*ra_*,*test*,*tools*,*gen_lsp*}
+        - rm -f  ./target/.rustc_info.json
+      env:
+        - CARGO_INCREMENTAL=0
+      before_script:
+        - rustup component add clippy rustfmt
+      script:
+        - cargo test --all
+        - cargo clippy --all --all-targets -- -D warnings
+        - cargo fmt --all -- --check
+      dploy:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - echo -e $GITLAB_PRIVATE_KEY > .ssh/id_rsa && chmod 0500 .ssh/id_rsa
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
-        - cd dex-contracts && npm ci && npx truffle compile && cd ..
-      script:
-        # First build base image and run unit tests
-        - docker build --tag stablex --build-arg use_solver=1 -f docker/rust/Dockerfile .
-        - docker run stablex bash -c "
-          cargo test --all && 
-          cargo clippy --all --all-targets -- -D warnings &&
-          cargo fmt --all -- --check"
         # Then build and publish compact multi-stage image
         - docker build --tag stablex-binary -f docker/rust/stablex_binary/Dockerfile .
+        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d stablex
         - docker tag stablex-binary $REGISTRY_URI:$TRAVIS_COMMIT
         - docker push $REGISTRY_URI:$TRAVIS_COMMIT
     - stage: "E2E Tests"
@@ -43,7 +51,7 @@ matrix:
         - docker-compose logs
     - language: generic
       name: "StableX e2e Tests (Ganache)"
-      cache: 
+      cache:
         directories:
           - $HOME/.npm
       install:
@@ -59,7 +67,7 @@ matrix:
         - docker-compose logs
     - language: generic
       name: "StableX e2e Tests (Rinkeby)"
-      cache: 
+      cache:
         directories:
           - $HOME/.npm
       install:

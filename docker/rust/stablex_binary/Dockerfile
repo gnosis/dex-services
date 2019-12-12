@@ -7,11 +7,11 @@ WORKDIR /app
 ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONPATH ${PYTHONPATH}:/app/batchauctions/
 
-COPY --from=stablex /opt/venv /opt/venv
-COPY --from=stablex /app/batchauctions batchauctions/
-COPY --from=stablex /usr/local/bin/scipampl /usr/local/bin/
+# COPY --from=stablex /opt/venv /opt/venv
+# COPY --from=stablex /app/batchauctions batchauctions/
+# COPY --from=stablex /usr/local/bin/scipampl /usr/local/bin/
 
-COPY --from=stablex /app/target/debug/stablex stablex
+COPY target/debug/stablex stablex
 
-COPY --from=stablex /app/target/debug/listener graph-listener
-COPY --from=stablex /app/target/debug/dfusion dfusion
+COPY target/debug/listener graph-listener
+COPY target/debug/dfusion dfusion
