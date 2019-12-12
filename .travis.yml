@@ -30,12 +30,12 @@ matrix:
         - docker-compose -f docker-compose.yml -f docker-compose.binary.yml run stablex
         - docker tag stablex-binary $REGISTRY_URI:$TRAVIS_COMMIT
         - docker push $REGISTRY_URI:$TRAVIS_COMMIT
-      language: node
+    - language: node
       name: "WarmUp Node Cache"
       cache:
         directories:
           - dex-contracts/node_modules/
-      script: cd dex-contracts && npm ci 
+      script: cd dex-contracts && npm ci
     - stage: "E2E Tests"
       language: generic
       name: "dƒusion e2e Tests"
