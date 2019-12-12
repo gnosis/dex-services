@@ -18,20 +18,20 @@ matrix:
       install:
         - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
       script:
+        # First run unit test
         - cargo build --all
-        # - cargo test --all
-        # - cargo clippy --all --all-targets -- -D warnings
-        # - cargo fmt --all -- --check
+        - cargo test --all
+        - cargo clippy --all --all-targets -- -D warnings
+        - cargo fmt --all -- --check
+        # Then export binary and publish compact multi-stage image
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - echo -e $GITLAB_PRIVATE_KEY > .ssh/id_rsa && chmod 0500 .ssh/id_rsa
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
-        # Then build and publish compact multi-stage image
         - docker build --tag stablex-binary -f docker/rust/stablex_binary/Dockerfile .
-        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml run stablex
         - docker tag stablex-binary $REGISTRY_URI:$TRAVIS_COMMIT
         - docker push $REGISTRY_URI:$TRAVIS_COMMIT
-    - language: node
-      name: "WarmUp Node Cache"
+    - name: "WarmUp Node Cache"
+      language: node_js
       cache:
         directories:
           - dex-contracts/node_modules/
