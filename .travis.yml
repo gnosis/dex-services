@@ -2,7 +2,8 @@ if: (branch = master) OR (type = pull_request) OR (tag IS present)
 language: rust
 matrix:
   include:
-    - stage: "Build & Unit Test"
+    - stage: Cache
+      name: "Build & Unit Test"
       language: generic
       cache:
         directories:
@@ -20,9 +21,9 @@ matrix:
       script:
         # First run unit test
         - cargo build --all
-        - cargo test --all
-        - cargo clippy --all --all-targets -- -D warnings
-        - cargo fmt --all -- --check
+        # - cargo test --all
+        # - cargo clippy --all --all-targets -- -D warnings
+        # - cargo fmt --all -- --check
         # Then export binary and publish compact multi-stage image
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - echo -e $GITLAB_PRIVATE_KEY > .ssh/id_rsa && chmod 0500 .ssh/id_rsa
@@ -32,6 +33,7 @@ matrix:
         - docker push $REGISTRY_URI:$TRAVIS_COMMIT
     - name: "WarmUp Node Cache"
       language: node_js
+      node_js: 10
       cache:
         directories:
           - dex-contracts/node_modules/
