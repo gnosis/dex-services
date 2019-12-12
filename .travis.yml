@@ -13,7 +13,6 @@ matrix:
         - CARGO_INCREMENTAL=0
       install:
         - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        - rustup component add clippy rustfmt
       script:
         - cargo test --all
         - cargo clippy --all --all-targets -- -D warnings
