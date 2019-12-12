@@ -4,11 +4,9 @@ matrix:
   include:
     - stage: Cache
       name: "Build & Unit Test"
-      language: generic
-      cache:
-        directories:
-          - $HOME/.cargo
-          - ./target
+      language: rust
+      rust: 1.39.0
+      cache: cargo
       before_cache:
         - find ./target/debug -type f -maxdepth 1 -delete
         - rm -fr ./target/debug/{deps,.fingerprint}/{*ra_*,*test*,*tools*,*gen_lsp*}
@@ -16,8 +14,6 @@ matrix:
       env:
         - CARGO_INCREMENTAL=0
         - PATH="$HOME/.cargo/bin:$PATH"
-      install:
-        - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
       script:
         # First run unit test
         - cargo build --all
