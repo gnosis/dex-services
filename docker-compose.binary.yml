@@ -1,4 +1,4 @@
-version: '3.6'
+version: "3.6"
 services:
   stablex:
     build:
@@ -17,4 +17,4 @@ services:
       context: .
       dockerfile: docker/rust/stablex_binary/Dockerfile
     image: stablex-binary
-    command: ./graph-listener
+    command: bash -c "sleep 3 && ./graph-listener"
