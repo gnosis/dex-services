@@ -101,12 +101,6 @@ impl ToValue for Vec<u128> {
     }
 }
 
-impl ToValue for String {
-    fn to_value(&self) -> Value {
-        self.into()
-    }
-}
-
 pub trait EntityParsing {
     fn from_entity(entity: &Entity, field: &str) -> Self;
 }

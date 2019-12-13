@@ -1,10 +1,10 @@
+use graph::components::store::{EntityFilter, EntityOrder, EntityQuery, EntityRange};
+use graph::data::store::ValueType;
+use web3::types::H160;
+
 use super::*;
 use crate::models::util::ToValue;
 use crate::SUBGRAPH_ID;
-
-use graph::components::store::{EntityFilter, EntityOrder, EntityQuery, EntityRange};
-use graph::data::store::ValueType;
-
 use crate::models::StandingOrder;
 use graph_node_reader::StoreReader;
 
@@ -123,7 +123,7 @@ impl DbInterface for GraphReader {
                     ),
                     EntityFilter::Equal(
                         "accountId".to_string(),
-                        reserved_account_id.to_string().to_value(),
+                        H160::from_low_u64_be(reserved_account_id as _).to_value(),
                     ),
                 ])),
                 order_by: Some(("batchIndex".to_string(), ValueType::BigInt)),
