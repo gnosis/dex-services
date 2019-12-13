@@ -4,8 +4,8 @@ use web3::types::H160;
 
 use super::*;
 use crate::models::util::ToValue;
-use crate::SUBGRAPH_ID;
 use crate::models::StandingOrder;
+use crate::SUBGRAPH_ID;
 use graph_node_reader::StoreReader;
 
 pub struct GraphReader {
