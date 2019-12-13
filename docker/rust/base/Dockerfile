@@ -16,4 +16,4 @@ COPY driver ./driver
 COPY listener ./listener
 
 COPY Cargo.* ./
-RUN cargo build --release
+RUN cargo build
