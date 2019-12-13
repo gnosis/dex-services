@@ -3,7 +3,7 @@ matrix:
   include:
     - language: rust
       name: "Unit Tests"
-      rust: 1.37.0
+      rust: 1.39.0
       cache: cargo
       before_cache:
         - find ./target/debug -type f -maxdepth 1 -delete
