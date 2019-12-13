@@ -290,38 +290,6 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
             .expect("Failed to start GraphQL subscription server"),
     );
 
-    // // Periodically check for contention in the tokio threadpool. First spawn a
-    // // task that simply responds to "ping" requests. Then spawn a separate
-    // // thread to periodically ping it and check responsiveness.
-    // let (ping_send, ping_receive) = mpsc::channel::<crossbeam_channel::Sender<()>>(1);
-    // tokio::spawn(
-    //     ping_receive
-    //         .for_each(move |pong_send| pong_send.clone().send(()).map(|_| ()).map_err(|_| ())),
-    // );
-    // let contention_logger = logger.clone();
-    // std::thread::spawn(move || loop {
-    //     std::thread::sleep(Duration::from_secs(1));
-    //     let (pong_send, pong_receive) = crossbeam_channel::bounded(1);
-    //     if ping_send.clone().send(pong_send).wait().is_err() {
-    //         debug!(contention_logger, "Shutting down contention checker thread");
-    //         break;
-    //     }
-    //     let mut timeout = Duration::from_millis(10);
-    //     while pong_receive.recv_timeout(timeout)
-    //         == Err(crossbeam_channel::RecvTimeoutError::Timeout)
-    //     {
-    //         debug!(
-    //             contention_logger,
-    //             "Possible contention in tokio threadpool";
-    //             "timeout_ms" => timeout.as_millis(),
-    //             "code" => LogCode::TokioContention,
-    //         );
-    //         if timeout < Duration::from_secs(10) {
-    //             timeout *= 10;
-    //         }
-    //     }
-    // });
-
     future::empty()
 }
 
