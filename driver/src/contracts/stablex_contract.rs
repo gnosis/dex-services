@@ -8,14 +8,20 @@ use web3::types::{H160, U128, U256};
 
 use dfusion_core::models::{AccountState, Order, Solution};
 
-use crate::error::DriverError;
-
 use super::base_contract::BaseContract;
 use super::stablex_auction_element::StableXAuctionElement;
+use crate::error::DriverError;
+use lazy_static::lazy_static;
 
 type Result<T> = std::result::Result<T, DriverError>;
 
 pub const AUCTION_ELEMENT_WIDTH: usize = 112;
+
+lazy_static! {
+    // In the BatchExchange smart contract, the objective value will be multiplied by
+    // 1 + IMPROVEMENT_DENOMINATOR = 101. Hence, the maximal possible objective value is:
+    static ref MAX_OBJECTIVE_VALUE: U256 = U256::max_value() / (U256::from(101));
+}
 
 pub struct StableXContractImpl {
     base: BaseContract,
@@ -23,12 +29,19 @@ pub struct StableXContractImpl {
 
 impl StableXContractImpl {
     pub fn new() -> Result<Self> {
-        let contract_json =
-            fs::read_to_string("dex-contracts/build/contracts/StablecoinConverter.json")?;
+        let contract_json = fs::read_to_string("dex-contracts/build/contracts/BatchExchange.json")?;
         let address = env::var("STABLEX_CONTRACT_ADDRESS")?;
         Ok(StableXContractImpl {
             base: BaseContract::new(address, contract_json)?,
         })
+    }
+
+    pub fn address(&self) -> H160 {
+        self.base.contract.address()
+    }
+
+    pub fn account(&self) -> H160 {
+        self.base.public_key
     }
 }
 
@@ -63,13 +76,7 @@ impl StableXContract for StableXContractImpl {
         let packed_auction_bytes: Vec<u8> = self
             .base
             .contract
-            .query(
-                "getEncodedAuctionElements",
-                (),
-                None,
-                Options::default(),
-                None,
-            )
+            .query("getEncodedOrders", (), None, Options::default(), None)
             .wait()
             .map_err(DriverError::from)?;
         Ok(parse_auction_data(packed_auction_bytes, index))
@@ -92,7 +99,7 @@ impl StableXContract for StableXContractImpl {
                 "submitSolution",
                 (
                     batch_index,
-                    U256::max_value(),
+                    *MAX_OBJECTIVE_VALUE,
                     owners.clone(),
                     order_ids.clone(),
                     volumes.clone(),
@@ -130,7 +137,7 @@ impl StableXContract for StableXContractImpl {
                     token_ids_for_price,
                 ),
                 Options::with(|mut opt| {
-                    // usual gas estimate is not working
+                    // usual gas estimation isn't working
                     opt.gas_price = Some(20_000_000_000u64.into());
                     opt.gas = Some(5_000_000.into());
                 }),
@@ -175,7 +182,7 @@ fn encode_prices_for_contract(price_vector: Vec<u128>) -> (Vec<U128>, Vec<U128>)
     let mut ordered_token_ids: Vec<U128> = vec![];
     let mut prices: Vec<U128> = vec![];
     for (token_id, price) in price_vector.into_iter().enumerate() {
-        if price > 0 {
+        if token_id != 0 && price > 0 {
             ordered_token_ids.push(U128::from(token_id));
             prices.push(U128::from(price.to_be_bytes()));
         }
@@ -426,15 +433,11 @@ pub mod tests {
 
     #[test]
     fn generic_price_encoding() {
-        let price_vector = vec![u128::max_value(), 0, 1];
+        let price_vector = vec![u128::max_value(), 0, 1, 2];
 
-        let zero = U128::from(0);
-        let one = U128::from(1);
-        let two = U128::from(2);
-        let max = U128::max_value();
-
-        let expected_prices = vec![max, one];
-        let expected_token_ids = vec![zero, two];
+        // Only contain non fee-token and non 0 prices
+        let expected_prices = vec![1.into(), 2.into()];
+        let expected_token_ids = vec![2.into(), 3.into()];
 
         assert_eq!(
             encode_prices_for_contract(price_vector),

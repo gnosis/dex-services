@@ -21,7 +21,7 @@ matrix:
       name: "dƒusion e2e Tests"
       cache: 
         directories:
-          - dex-contracts/node_modules/
+          - $HOME/.npm
       install:
         - ./test/setup_contracts.sh
       script:
@@ -37,7 +37,7 @@ matrix:
       name: "StableX e2e Tests (Ganache)"
       cache: 
         directories:
-          - dex-contracts/node_modules/
+          - $HOME/.npm
       install:
         - ./test/setup_contracts.sh
       script:
@@ -49,13 +49,13 @@ matrix:
       name: "StableX e2e Tests (Rinkeby)"
       cache: 
         directories:
-          - dex-contracts/node_modules/
+          - $HOME/.npm
       install:
         - cd dex-contracts && npm ci && npx truffle compile && npm run networks-inject && cd ..
         - echo -e $GITLAB_PRIVATE_KEY > .ssh/id_rsa && chmod 0500 .ssh/id_rsa
-        - docker-compose build --build-arg use_solver=1 stablex-rinkeby
+        - docker-compose build --build-arg use_solver=1 stablex
       script:
-        - docker-compose up -d stablex-rinkeby
+        - docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yaml up -d stablex
         - ./test/e2e-tests-stablex-rinkeby.sh
       after_failure:
         - docker-compose logs

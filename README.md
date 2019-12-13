@@ -154,5 +154,5 @@ docker-compose build
 In order to start StableX for the Rinkeby network, make sure that the env variables in common-rinkeby.env are up to date and then start the specific docker:
 
 ```
-docker-compose up stablex-rinkeby
+docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yaml up stablex
 ```

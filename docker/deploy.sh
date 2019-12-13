@@ -8,7 +8,7 @@ sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install aw
 $(aws ecr get-login --no-include-email --region $AWS_REGION)
 
 echo "Tagging latest image with solver...";
-docker tag stablex-rinkeby $REGISTRY_URI:$TRAVIS_BRANCH
+docker tag stablex $REGISTRY_URI:$TRAVIS_BRANCH
 
 echo "Pushing image";
 docker push $REGISTRY_URI:$TRAVIS_BRANCH

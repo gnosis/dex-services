@@ -22,7 +22,7 @@ pub struct BaseContract {
     event_loop: web3::transports::EventLoopHandle,
     abi: ethabi::Contract,
     network_id: u8,
-    public_key: H160,
+    pub public_key: H160,
     private_key: H256,
 }
 
