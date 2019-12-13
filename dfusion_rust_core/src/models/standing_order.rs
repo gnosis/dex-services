@@ -183,7 +183,7 @@ impl Into<Entity> for StandingOrder {
 pub mod tests {
     use super::*;
     use graph::data::store::Value;
-    use graph::prelude::bigdecimal::BigDecimal;
+    use graph::prelude::BigInt;
     use std::str::FromStr;
     use web3::types::{Bytes, H256};
 
@@ -274,8 +274,8 @@ pub mod tests {
             )),
         );
         entity.set("accountId", "0000000000000000000000000000000000000001");
-        entity.set("batchIndex", BigDecimal::from(2));
-        entity.set("validFromAuctionId", BigDecimal::from(3));
+        entity.set("batchIndex", BigInt::from(2));
+        entity.set("validFromAuctionId", BigInt::from(3));
         entity.set(
             "orders",
             vec![Value::String(String::from(
@@ -297,8 +297,8 @@ pub mod tests {
         entity.set("accountId", "0000000000000000000000000000000000000001");
         entity.set("buyToken", 2);
         entity.set("sellToken", 1);
-        entity.set("buyAmount", BigDecimal::from((10 as u64).pow(18)));
-        entity.set("sellAmount", BigDecimal::from(2 * (10 as u64).pow(18)));
+        entity.set("buyAmount", BigInt::from((10 as u64).pow(18)));
+        entity.set("sellAmount", BigInt::from(2 * (10 as u64).pow(18)));
 
         entity
     }

@@ -152,7 +152,7 @@ pub mod test_util {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use graph::prelude::bigdecimal::BigDecimal;
+    use graph::prelude::BigInt;
     use std::str::FromStr;
     use web3::types::{Bytes, H256};
 
@@ -316,13 +316,13 @@ pub mod tests {
 
     fn create_entity_for_test() -> Entity {
         let mut entity = Entity::new();
-        entity.set("auctionId", BigDecimal::from(0));
+        entity.set("auctionId", BigInt::from(0));
         entity.set("slotIndex", 0);
         entity.set("accountId", "0000000000000000000000000000000000000001");
         entity.set("buyToken", 1);
         entity.set("sellToken", 2);
-        entity.set("buyAmount", BigDecimal::from(10u64.pow(18)));
-        entity.set("sellAmount", BigDecimal::from(2 * 10u64.pow(18)));
+        entity.set("buyAmount", BigInt::from(10u64.pow(18)));
+        entity.set("sellAmount", BigInt::from(2 * 10u64.pow(18)));
 
         entity
     }

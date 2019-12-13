@@ -1,6 +1,6 @@
 use byteorder::{BigEndian, ByteOrder};
 use graph::data::store::{Entity, Value};
-use graph::prelude::bigdecimal::BigDecimal;
+use graph::prelude::BigInt;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::str::FromStr;
@@ -70,13 +70,13 @@ impl ToValue for u32 {
 
 impl ToValue for u128 {
     fn to_value(&self) -> Value {
-        BigDecimal::from_str(&self.to_string()).unwrap().into()
+        BigInt::from_str(&self.to_string()).unwrap().into()
     }
 }
 
 impl ToValue for U256 {
     fn to_value(&self) -> Value {
-        BigDecimal::from_str(&self.to_string()).unwrap().into()
+        BigInt::from_str(&self.to_string()).unwrap().into()
     }
 }
 
@@ -136,7 +136,7 @@ impl EntityParsing for u128 {
                 .get(field)
                 .and_then(|value| value.clone().as_bigint())
                 .map(|decimal| decimal.to_string())
-                .unwrap_or_else(|| panic!("Couldn't get field {} as big decimal", field)),
+                .unwrap_or_else(|| panic!("Couldn't get field {} as bigint", field)),
         )
         .unwrap_or_else(|_| panic!("Couldn't cast {} from string to u128", field))
     }
@@ -149,7 +149,7 @@ impl EntityParsing for U256 {
                 .get(field)
                 .and_then(|value| value.clone().as_bigint())
                 .map(|decimal| decimal.to_string())
-                .unwrap_or_else(|| panic!("Couldn't get field {} as big decimal", field)),
+                .unwrap_or_else(|| panic!("Couldn't get field {} as bigint", field)),
         )
         .unwrap_or_else(|_| panic!("Couldn't cast {} from string to U256", field))
     }
@@ -193,7 +193,7 @@ impl EntityParsing for Vec<u128> {
                                 .as_bigint()
                                 .map(|decimal| decimal.to_string())
                                 .unwrap_or_else(|| {
-                                    panic!("Couldn't convert value {} to big decimal", &value)
+                                    panic!("Couldn't convert value {} to bigint", &value)
                                 }),
                         )
                         .unwrap_or_else(|_| panic!("Couldn't parse value {} to u128", &value))

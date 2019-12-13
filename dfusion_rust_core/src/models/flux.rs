@@ -96,7 +96,7 @@ pub mod tests {
 #[cfg(test)]
 pub mod unit_test {
     use super::*;
-    use graph::prelude::bigdecimal::BigDecimal;
+    use graph::prelude::BigInt;
     use std::str::FromStr;
     use web3::types::{Bytes, H256};
 
@@ -192,8 +192,8 @@ pub mod unit_test {
         entity.set("id", "0 - 0");
         entity.set("accountId", "0000000000000000000000000000000000000001");
         entity.set("tokenId", 1);
-        entity.set("amount", BigDecimal::from((10 as u64).pow(18)));
-        entity.set("slot", BigDecimal::from(0));
+        entity.set("amount", BigInt::from((10 as u64).pow(18)));
+        entity.set("slot", BigInt::from(0));
         entity.set("slotIndex", 0);
 
         assert_eq!(entity, flux.clone().into());
