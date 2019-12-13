@@ -123,7 +123,7 @@ impl DbInterface for GraphReader {
                     ),
                     EntityFilter::Equal(
                         "accountId".to_string(),
-                        (reserved_account_id as u16).to_value(),
+                        reserved_account_id.to_string().to_value(),
                     ),
                 ])),
                 order_by: Some(("batchIndex".to_string(), ValueType::BigInt)),

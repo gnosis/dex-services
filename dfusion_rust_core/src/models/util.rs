@@ -70,13 +70,13 @@ impl ToValue for u32 {
 
 impl ToValue for u128 {
     fn to_value(&self) -> Value {
-        BigInt::from_str(&self.to_string()).unwrap().into()
+        BigInt::from_unsigned_u256(&(*self).into()).into()
     }
 }
 
 impl ToValue for U256 {
     fn to_value(&self) -> Value {
-        BigInt::from_str(&self.to_string()).unwrap().into()
+        BigInt::from_unsigned_u256(&self).into()
     }
 }
 
@@ -98,6 +98,12 @@ impl ToValue for Vec<u128> {
             .map(|balance| balance.to_value())
             .collect::<Vec<Value>>()
             .into()
+    }
+}
+
+impl ToValue for String {
+    fn to_value(&self) -> Value {
+        self.into()
     }
 }
 
