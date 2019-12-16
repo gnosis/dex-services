@@ -31,4 +31,4 @@ tiny-keccak = "1.4.2"
 web3 = { git = "https://github.com/graphprotocol/rust-web3", branch = "trace-struct-pre-ethereum-types" }
 
 [dev-dependencies]
-graph-mock = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
+graph-mock = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
