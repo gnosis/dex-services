@@ -14,7 +14,7 @@ use graph::components::subgraph::{
 };
 use graph::data::subgraph::{DataSource, DataSourceTemplate, SubgraphDeploymentId};
 
-use tiny_keccak::keccak256;
+use tiny_keccak::{Hasher, Keccak};
 
 use web3::types::{Log, Transaction, H256};
 
@@ -26,7 +26,7 @@ use crate::event_handler::{
 type HandlerMap = HashMap<H256, Box<dyn EventHandler>>;
 
 fn register_event(handlers: &mut HandlerMap, name: &str, handler: Box<dyn EventHandler>) {
-    handlers.insert(H256::from(keccak256(name.as_bytes())), handler);
+    handlers.insert(keccak256(name), handler);
 }
 
 #[derive(Clone)]
@@ -176,4 +176,16 @@ impl RuntimeHostTrait for RustRuntimeHost {
     ) -> Box<dyn Future<Item = BlockState, Error = Error> + Send> {
         unimplemented!();
     }
+}
+
+fn keccak256<B>(bytes: B) -> H256
+where
+    B: AsRef<[u8]>,
+{
+    let mut output = [0u8; 32];
+    let mut hasher = Keccak::v256();
+    hasher.update(bytes.as_ref());
+    hasher.finalize(&mut output);
+
+    H256::from(output)
 }
