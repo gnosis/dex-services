@@ -16,7 +16,7 @@ clarity = "0.1.8"
 ethabi = "6.1.0"
 ethereum-tx-sign = { git = "https://github.com/synlestidae/ethereum-tx-sign.git", rev = "df9f03fd275337b3e7f63582861910fcc99d3c36" }
 dfusion_core = { path = "../dfusion_rust_core" }
-graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.13.2" }
+graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
 graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", tag = "v0.13.2" }
 hex = "0.4.0"
 log = "0.4.8"
