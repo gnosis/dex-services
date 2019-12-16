@@ -1,7 +1,9 @@
 [workspace]
-
 members = [
     "dfusion_rust_core",
     "driver",
     "listener",
 ]
+
+[patch.crates-io]
+web3 = { git = "https://github.com/graphprotocol/rust-web3", branch = "graph-patches" }

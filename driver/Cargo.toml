@@ -25,7 +25,7 @@ rustc-hex = "*"
 serde_json = "1.0"
 simple_logger = "1.2.0"
 thiserror = "1.0"
-web3 = { git = "https://github.com/graphprotocol/rust-web3", branch = "graph-patches" }
+web3 = "0.8.0"
 
 [dev-dependencies]
 mock-it = "0.3.0"
