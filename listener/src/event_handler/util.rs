@@ -22,9 +22,9 @@ pub fn entity_key(entity_type: &str, entity: &Entity) -> EntityKey {
 
 #[cfg(test)]
 pub mod test {
-    use graph::components::ethereum::EthereumBlock;
+    use graph::components::ethereum::LightEthereumBlock;
     use slog::{o, Discard, Logger};
-    use web3::types::{Block, Bytes, Transaction, H160, H2048, H256, U256};
+    use web3::types::{Bytes, Transaction, H160, H2048, H256, U256};
 
     pub fn logger() -> Logger {
         Logger::root(Discard, o!())
@@ -46,32 +46,29 @@ pub mod test {
         }
     }
 
-    pub fn fake_block() -> EthereumBlock {
-        EthereumBlock {
-            block: Block {
-                hash: None,
-                parent_hash: H256::zero(),
-                uncles_hash: H256::zero(),
-                author: H160::zero(),
-                state_root: H256::zero(),
-                transactions_root: H256::zero(),
-                receipts_root: H256::zero(),
-                number: None,
-                gas_used: U256::zero(),
-                gas_limit: U256::zero(),
-                extra_data: Bytes(vec![]),
-                logs_bloom: H2048::zero(),
-                timestamp: U256::zero(),
-                difficulty: U256::zero(),
-                total_difficulty: U256::zero(),
-                seal_fields: vec![],
-                uncles: vec![],
-                transactions: vec![],
-                size: None,
-                mix_hash: None,
-                nonce: None,
-            },
-            transaction_receipts: vec![],
+    pub fn fake_block() -> LightEthereumBlock {
+        LightEthereumBlock {
+            hash: None,
+            parent_hash: H256::zero(),
+            uncles_hash: H256::zero(),
+            author: H160::zero(),
+            state_root: H256::zero(),
+            transactions_root: H256::zero(),
+            receipts_root: H256::zero(),
+            number: None,
+            gas_used: U256::zero(),
+            gas_limit: U256::zero(),
+            extra_data: Bytes(vec![]),
+            logs_bloom: H2048::zero(),
+            timestamp: U256::zero(),
+            difficulty: U256::zero(),
+            total_difficulty: U256::zero(),
+            seal_fields: vec![],
+            uncles: vec![],
+            transactions: vec![],
+            size: None,
+            mix_hash: None,
+            nonce: None,
         }
     }
 }

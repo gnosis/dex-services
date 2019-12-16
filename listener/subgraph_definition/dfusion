@@ -5,6 +5,7 @@ schema:
       /: schema.graphql
 dataSources:
   - kind: ethereum/contract
+    network: dev
     name: SnappBaseEvents
     source:
       address: '0xe982E462b094850F12AF94d21D470e21bE9D0E9C'

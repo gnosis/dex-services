@@ -7,6 +7,7 @@ use slog::{info, Logger};
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
+use std::time::Duration;
 
 fn read_file(file: &str) -> Result<Vec<u8>, failure::Error> {
     let path = format!(
@@ -23,10 +24,18 @@ fn read_file(file: &str) -> Result<Vec<u8>, failure::Error> {
     Ok(buffer)
 }
 
-pub struct LocalLinkResolver {}
+#[derive(Clone)]
+pub struct LocalLinkResolver;
 
 impl LinkResolverTrait for LocalLinkResolver {
-    /// Fetches the link contents as bytes.
+    fn with_timeout(self, _timeout: Duration) -> Self {
+        self
+    }
+
+    fn with_retries(self) -> Self {
+        self
+    }
+
     fn cat(
         &self,
         logger: &Logger,

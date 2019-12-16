@@ -23,7 +23,7 @@ impl StableXAuctionElement {
         order_count: &mut HashMap<H160, u16>,
         bytes: &[u8; AUCTION_ELEMENT_WIDTH],
     ) -> Self {
-        let account_id = H160::from(&bytes[0..20]);
+        let account_id = H160::from_slice(&bytes[0..20]);
 
         // these go together (since sell_token_balance is emitted as u256 and treated as u128
         let sell_token_balance = BigEndian::read_u128(&bytes[36..52]);
@@ -97,7 +97,7 @@ pub mod tests {
                     slot_index: 0,
                     slot: U256::from(0),
                 }),
-                account_id: H160::from(0),
+                account_id: H160::from_low_u64_be(0),
                 buy_token: 0,
                 sell_token: 0,
                 buy_amount: 0,
@@ -147,7 +147,7 @@ pub mod tests {
                     slot_index: 0,
                     slot: U256::from(0),
                 }),
-                account_id: H160::from(1),
+                account_id: H160::from_low_u64_be(1),
                 buy_token: 258,
                 sell_token: 257,
                 buy_amount: (258 * 257 + 258) / 259,
@@ -184,7 +184,7 @@ pub mod tests {
                     slot_index: 1,
                     slot: U256::from(0),
                 }),
-                account_id: H160::from(1),
+                account_id: H160::from_low_u64_be(1),
                 buy_token: 258,
                 sell_token: 257,
                 buy_amount: (258 * 256 + 258) / 259,

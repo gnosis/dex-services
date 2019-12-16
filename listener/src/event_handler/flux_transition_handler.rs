@@ -44,7 +44,7 @@ impl EventHandler for FluxTransitionHandler {
     fn process_event(
         &self,
         logger: Logger,
-        _block: Arc<EthereumBlock>,
+        _block: Arc<LightEthereumBlock>,
         _transaction: Arc<Transaction>,
         log: Arc<Log>,
     ) -> Result<Vec<EntityOperation>, Error> {
@@ -124,7 +124,7 @@ pub mod test {
         let first_deposit = PendingFlux {
             slot_index: 0,
             slot: U256::zero(),
-            account_id: H160::from(0),
+            account_id: H160::from_low_u64_be(0),
             token_id: 0,
             amount: 10,
         };
@@ -132,7 +132,7 @@ pub mod test {
         let second_deposit = PendingFlux {
             slot_index: 1,
             slot: U256::zero(),
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_be(1),
             token_id: 0,
             amount: 10,
         };
@@ -143,7 +143,12 @@ pub mod test {
 
         // Process event
         let handler = FluxTransitionHandler::new(store);
-        let log = create_state_transition_event(FluxTransitionType::Deposit, 1, H256::from(1), 0);
+        let log = create_state_transition_event(
+            FluxTransitionType::Deposit,
+            1,
+            H256::from_low_u64_be(1),
+            0,
+        );
         let result = handler.process_event(
             util::test::logger(),
             Arc::new(util::test::fake_block()),
@@ -151,7 +156,7 @@ pub mod test {
             log,
         );
         let expected_new_state =
-            AccountState::new(H256::from(1), U256::one(), vec![10, 10, 0, 0], 1);
+            AccountState::new(H256::from_low_u64_be(1), U256::one(), vec![10, 10, 0, 0], 1);
 
         assert!(result.is_ok());
         match result.unwrap().pop().unwrap() {
@@ -176,7 +181,12 @@ pub mod test {
             )));
 
         let handler = FluxTransitionHandler::new(store);
-        let log = create_state_transition_event(FluxTransitionType::Deposit, 1, H256::from(1), 0);
+        let log = create_state_transition_event(
+            FluxTransitionType::Deposit,
+            1,
+            H256::from_low_u64_be(1),
+            0,
+        );
         let result = handler.process_event(
             util::test::logger(),
             Arc::new(util::test::fake_block()),
@@ -200,21 +210,21 @@ pub mod test {
         let first_withdraw = PendingFlux {
             slot_index: 0,
             slot: U256::zero(),
-            account_id: H160::from(0),
+            account_id: H160::from_low_u64_be(0),
             token_id: 0,
             amount: 10,
         };
         let second_withdraw = PendingFlux {
             slot_index: 1,
             slot: U256::zero(),
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_be(1),
             token_id: 0,
             amount: 10,
         };
         let invalid_withdraw = PendingFlux {
             slot_index: 1,
             slot: U256::zero(),
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_be(1),
             token_id: 1,
             amount: 10,
         };
@@ -226,7 +236,12 @@ pub mod test {
 
         // Process event
         let handler = FluxTransitionHandler::new(store);
-        let log = create_state_transition_event(FluxTransitionType::Withdraw, 1, H256::from(1), 0);
+        let log = create_state_transition_event(
+            FluxTransitionType::Withdraw,
+            1,
+            H256::from_low_u64_be(1),
+            0,
+        );
         let result = handler.process_event(
             util::test::logger(),
             Arc::new(util::test::fake_block()),
@@ -234,7 +249,7 @@ pub mod test {
             log,
         );
         let expected_new_state =
-            AccountState::new(H256::from(1), U256::one(), vec![0, 10, 0, 0], 1);
+            AccountState::new(H256::from_low_u64_be(1), U256::one(), vec![0, 10, 0, 0], 1);
 
         let mut result = result.expect("Unexpected Error");
         match result.pop().unwrap() {
@@ -374,12 +389,12 @@ pub mod test {
         ];
 
         Arc::new(Log {
-            address: 1.into(),
+            address: H160::from_low_u64_be(1),
             topics: vec![],
             data: Bytes(bytes.iter().flat_map(|i| i.iter()).cloned().collect()),
-            block_hash: Some(2.into()),
+            block_hash: Some(H256::from_low_u64_be(2)),
             block_number: Some(1.into()),
-            transaction_hash: Some(3.into()),
+            transaction_hash: Some(H256::from_low_u64_be(3)),
             transaction_index: Some(0.into()),
             log_index: Some(0.into()),
             transaction_log_index: Some(0.into()),

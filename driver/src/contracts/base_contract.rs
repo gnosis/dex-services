@@ -37,7 +37,7 @@ impl BaseContract {
         let abi = abi_string.as_bytes();
 
         let decoded_address = hex::decode(&address[2..])?;
-        let contract_address: Address = Address::from(&decoded_address[..]);
+        let contract_address = Address::from_slice(&decoded_address[..]);
         let contract = Contract::from_json(web3.eth(), contract_address, abi)?;
 
         let network_id = env::var("NETWORK_ID")?.parse()?;
@@ -101,7 +101,7 @@ impl BaseContract {
 }
 
 fn address_from_private_key(pk: &H256) -> Result<H160> {
-    let public_key = PrivateKey::from_slice(&pk.to_vec())
+    let public_key = PrivateKey::from_slice(pk.as_bytes())
         .and_then(|pk| pk.to_public_key())
         .map_err(|_| {
             DriverError::new(
@@ -109,5 +109,5 @@ fn address_from_private_key(pk: &H256) -> Result<H160> {
                 ErrorKind::EnvError,
             )
         })?;
-    Ok(H160::from(public_key.as_bytes()))
+    Ok(H160::from_slice(public_key.as_bytes()))
 }

@@ -6,12 +6,13 @@ use std::sync::Arc;
 
 use dfusion_core::database::DbInterface;
 
-use graph::components::ethereum::{EthereumBlock, EthereumBlockTriggerType, EthereumCall};
-use graph::components::subgraph::{
-    BlockState, RuntimeHost as RuntimeHostTrait, RuntimeHostBuilder,
-};
+use futures::sync::mpsc::{self, Sender};
 
-use graph::data::subgraph::{DataSource, SubgraphDeploymentId};
+use graph::components::ethereum::{EthereumBlockTriggerType, EthereumCall, LightEthereumBlock};
+use graph::components::subgraph::{
+    BlockState, HostMetrics, RuntimeHost as RuntimeHostTrait, RuntimeHostBuilder,
+};
+use graph::data::subgraph::{DataSource, DataSourceTemplate, SubgraphDeploymentId};
 
 use tiny_keccak::keccak256;
 
@@ -40,14 +41,29 @@ impl RustRuntimeHostBuilder {
 }
 
 impl RuntimeHostBuilder for RustRuntimeHostBuilder {
+    type Req = ();
     type Host = RustRuntimeHost;
+
     fn build(
         &self,
-        _logger: &Logger,
+        _network_name: String,
         _subgraph_id: SubgraphDeploymentId,
         _data_source: DataSource,
+        _top_level_templates: Vec<DataSourceTemplate>,
+        _mapping_request_sender: Sender<Self::Req>,
+        _metrics: Arc<HostMetrics>,
     ) -> Result<Self::Host, Error> {
         Ok(RustRuntimeHost::new(self.store.clone()))
+    }
+
+    fn spawn_mapping(
+        _parsed_module: parity_wasm::elements::Module,
+        _logger: Logger,
+        _subgraph_id: SubgraphDeploymentId,
+        _metrics: Arc<HostMetrics>,
+    ) -> Result<Sender<Self::Req>, Error> {
+        let (sender, _) = mpsc::channel(1);
+        Ok(sender)
     }
 }
 
@@ -108,7 +124,11 @@ impl RuntimeHostTrait for RustRuntimeHost {
     }
 
     /// Returns true if the RuntimeHost has a handler for an Ethereum block.
-    fn matches_block(&self, _call: EthereumBlockTriggerType) -> bool {
+    fn matches_block(
+        &self,
+        _block_trigger_type: EthereumBlockTriggerType,
+        _block_number: u64,
+    ) -> bool {
         unimplemented!();
     }
 
@@ -116,7 +136,7 @@ impl RuntimeHostTrait for RustRuntimeHost {
     fn process_log(
         &self,
         logger: Logger,
-        block: Arc<EthereumBlock>,
+        block: Arc<LightEthereumBlock>,
         transaction: Arc<Transaction>,
         log: Arc<Log>,
         state: BlockState,
@@ -125,7 +145,7 @@ impl RuntimeHostTrait for RustRuntimeHost {
         let mut state = state;
         if let Some(handler) = self.handlers.get(&log.topics[0]) {
             match handler.process_event(logger, block, transaction, log) {
-                Ok(mut ops) => state.entity_operations.append(&mut ops),
+                Ok(ops) => state.entity_cache.append(ops),
                 Err(e) => return Box::new(err(e)),
             }
         } else {
@@ -138,7 +158,7 @@ impl RuntimeHostTrait for RustRuntimeHost {
     fn process_call(
         &self,
         _logger: Logger,
-        _block: Arc<EthereumBlock>,
+        _block: Arc<LightEthereumBlock>,
         _transaction: Arc<Transaction>,
         _call: Arc<EthereumCall>,
         _state: BlockState,
@@ -150,7 +170,7 @@ impl RuntimeHostTrait for RustRuntimeHost {
     fn process_block(
         &self,
         _logger: Logger,
-        _block: Arc<EthereumBlock>,
+        _block: Arc<LightEthereumBlock>,
         _trigger_type: EthereumBlockTriggerType,
         _state: BlockState,
     ) -> Box<dyn Future<Item = BlockState, Error = Error> + Send> {

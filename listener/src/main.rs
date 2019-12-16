@@ -1,49 +1,44 @@
 mod event_handler;
 mod link_resolver;
+mod metrics_registry;
 mod runtime_host;
 
 use lazy_static::lazy_static;
-use slog::{error, info};
-use std::env;
-use std::sync::Arc;
+use std::any::type_name;
+use std::collections::HashMap;
+use std::env::{self, VarError};
+use std::str::FromStr;
 use std::time::Duration;
+use tokio_timer::timer::Timer;
 
 use graph::components::forward;
 use graph::log::logger;
-use graph::prelude::{
-    future, EthereumAdapter, Future, GraphQLServer, LoggerFactory, NodeId, SubgraphDeploymentId,
-    SubgraphName, SubgraphRegistrar as SubgraphRegistrarTrait, SubgraphVersionSwitchingMode,
-    SubscriptionServer,
-};
-use graph::tokio;
-use graph::tokio_executor;
-use graph::tokio_timer;
-use graph::tokio_timer::timer::Timer;
-
+use graph::prelude::{SubgraphRegistrar as _, *};
+use graph::util::security::SafeDisplay;
 use graph_core::{SubgraphAssignmentProvider, SubgraphInstanceManager, SubgraphRegistrar};
-
 use graph_datasource_ethereum::{BlockStreamBuilder, Transport};
-
 use graph_server_http::GraphQLServer as GraphQLQueryServer;
 use graph_server_websocket::SubscriptionServer as GraphQLSubscriptionServer;
-
+use graph_store_postgres::connection_pool::create_connection_pool;
 use graph_store_postgres::{Store as DieselStore, StoreConfig};
 
-use link_resolver::LocalLinkResolver;
-use runtime_host::RustRuntimeHostBuilder;
+use crate::link_resolver::LocalLinkResolver;
+use crate::metrics_registry::SimpleMetricsRegistry;
+use crate::runtime_host::RustRuntimeHostBuilder;
 
 use dfusion_core::database::GraphReader;
 use dfusion_core::SUBGRAPH_NAME;
-
 use graph_node_reader::Store as GraphNodeReader;
 
+const ANCESTOR_COUNT: u64 = 50;
+const TOKIO_THREAD_COUNT: usize = 100;
+const STORE_CONN_POOL_SIZE: u32 = 10;
+const BLOCK_POLLING_INTERVAL: Duration = Duration::from_millis(1000);
+
 lazy_static! {
-    static ref ANCESTOR_COUNT: u64 = 50;
-    static ref REORG_THRESHOLD: u64 = 50;
-    static ref BLOCK_POLLING_INTERVAL: Duration = Duration::from_millis(1000);
-    static ref NODE_ID: NodeId = NodeId::new("default").unwrap();
     static ref SUBGRAPH_ID: SubgraphDeploymentId =
         SubgraphDeploymentId::new(SUBGRAPH_NAME).unwrap();
+    static ref NODE_ID: NodeId = NodeId::new("default").unwrap();
 }
 
 fn main() {
@@ -58,7 +53,7 @@ fn main() {
     let handler_runtime = runtime.clone();
     *runtime.lock().unwrap() = Some(
         runtime::Builder::new()
-            .core_threads(100)
+            .core_threads(TOKIO_THREAD_COUNT)
             .panic_handler(move |_| {
                 let runtime = handler_runtime.clone();
                 std::thread::spawn(move || {
@@ -100,38 +95,39 @@ fn main() {
 fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     env_logger::init();
 
-    let postgres_url = env::var("POSTGRES_URL").expect("Specify POSTGRES_URL variable");
-    let ethereum_node_url = env::var("ETHEREUM_NODE_URL").expect("Specify ETHEREUM_RPC variable");
-    let network_name = env::var("NETWORK_NAME").expect("Specify NETWORK_NAME variable");
+    let postgres_url: String = env_arg_required("POSTGRES_URL");
+    let ethereum_rpc: String = env_arg_required("ETHEREUM_NODE_URL");
+    let network_name: String = env_arg_required("NETWORK_NAME");
 
-    let http_port = env::var("GRAPHQL_PORT")
-        .expect("Specify GRAPHQL_PORT variable")
-        .parse::<u16>()
-        .expect("Couldn't parse GRAPHQL_PORT variable as u16");
-    let ws_port = env::var("WS_PORT")
-        .expect("Specify WS_PORT variable")
-        .parse::<u16>()
-        .expect("Couldn't parse WS_PORT variable as u16");
+    let http_port: u16 = env_arg_required("GRAPHQL_PORT");
+    let ws_port: u16 = env_arg_required("WS_PORT");
+
+    let reorg_threshhold: u64 = env_arg_optional("REORG_THRESHOLD", 50u64);
 
     let logger = logger(false);
     let logger_factory = LoggerFactory::new(logger.clone(), None);
 
-    // Set up Ethereum transport
-    let (transport_event_loop, transport) = Transport::new_rpc(&ethereum_node_url);
+    let metrics_registry = Arc::new(SimpleMetricsRegistry);
 
-    // If we drop the event loop the transport will stop working.
-    // For now it's fine to just leak it.
-    std::mem::forget(transport_event_loop);
+    // Ethereum client
+    let eth_adapter: Arc<dyn EthereumAdapter> = {
+        let (event_loop, transport) = Transport::new_rpc(&ethereum_rpc);
+        event_loop.into_remote();
 
-    let eth_adapter = Arc::new(graph_datasource_ethereum::EthereumAdapter::new(
-        transport, 0,
-    ));
-    let eth_net_identifiers = match eth_adapter.net_identifiers(&logger).wait() {
-        Ok(net) => {
+        Arc::new(graph_datasource_ethereum::EthereumAdapter::new(
+            transport,
+            Arc::new(ProviderEthRpcMetrics::new(metrics_registry.clone())),
+        ))
+    };
+    let eth_net_identifier = match eth_adapter.net_identifiers(&logger).wait() {
+        Ok(network_identifier) => {
             info!(
-                logger, "Connected to Ethereum";
+                logger,
+                "Connected to Ethereum";
+                "network" => &network_name,
+                "network_version" => &network_identifier.net_version,
             );
-            net
+            network_identifier
         }
         Err(e) => {
             error!(logger, "Was a valid Ethereum node provided?");
@@ -139,50 +135,83 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         }
     };
 
+    info!(
+        logger,
+        "Connecting to Postgres";
+        "url" => SafeDisplay(postgres_url.as_str()),
+    );
+    let postgres_conn_pool =
+        create_connection_pool(postgres_url.clone(), STORE_CONN_POOL_SIZE, &logger);
     let store = Arc::new(DieselStore::new(
         StoreConfig {
             postgres_url: postgres_url.clone(),
             network_name: network_name.clone(),
-            start_block: 0,
         },
         &logger,
-        eth_net_identifiers,
+        eth_net_identifier,
+        postgres_conn_pool.clone(),
     ));
+
+    // BlockIngestor must be configured to keep at least REORG_THRESHOLD ancestors,
+    // otherwise BlockStream will not work properly.
+    // BlockStream expects the blocks after the reorg threshold to be present in the
+    // database.
+    assert!(ANCESTOR_COUNT >= reorg_threshhold);
 
     // Create Ethereum block ingestor
     let block_ingestor = graph_datasource_ethereum::BlockIngestor::new(
         store.clone(),
         eth_adapter.clone(),
-        *ANCESTOR_COUNT,
-        network_name,
+        ANCESTOR_COUNT,
+        network_name.to_string(),
         &logger_factory,
-        *BLOCK_POLLING_INTERVAL,
+        BLOCK_POLLING_INTERVAL,
     )
     .expect("failed to create Ethereum block ingestor");
 
     // Run the Ethereum block ingestor in the background
     tokio::spawn(block_ingestor.into_polling_stream());
 
+    let eth_adapters: HashMap<String, Arc<dyn EthereumAdapter>> = {
+        let mut eth_adapters = HashMap::new();
+        eth_adapters.insert(network_name.clone(), eth_adapter.clone());
+        eth_adapters
+    };
+    let stores: HashMap<String, Arc<DieselStore>> = {
+        let mut stores = HashMap::new();
+        stores.insert(network_name.clone(), store.clone());
+        stores
+    };
+
     // Prepare a block stream builder for subgraphs
     let block_stream_builder = BlockStreamBuilder::new(
         store.clone(),
-        store.clone(),
-        eth_adapter.clone(),
+        stores.clone(),
+        eth_adapters.clone(),
         NODE_ID.clone(),
-        *REORG_THRESHOLD,
+        reorg_threshhold,
+        metrics_registry.clone(),
     );
 
-    let store_reader = GraphNodeReader::new(postgres_url, &logger);
-    let database = Arc::new(GraphReader::new(Box::new(store_reader)));
+    let runtime_host_builder = {
+        let store_reader = Box::new(GraphNodeReader::new(postgres_url.clone(), &logger));
+        let database = Arc::new(GraphReader::new(store_reader));
+        RustRuntimeHostBuilder::new(database)
+    };
+
     let subgraph_instance_manager = SubgraphInstanceManager::new(
         &logger_factory,
-        store.clone(),
-        RustRuntimeHostBuilder::new(database),
+        stores.clone(),
+        eth_adapters.clone(),
+        runtime_host_builder,
         block_stream_builder,
+        metrics_registry.clone(),
     );
 
-    let link_resolver = Arc::new(LocalLinkResolver {});
+    let link_resolver = Arc::new(LocalLinkResolver);
     let graphql_runner = Arc::new(graph_core::GraphQlRunner::new(&logger, store.clone()));
+
+    // Create subgraph provider
     let mut subgraph_provider = SubgraphAssignmentProvider::new(
         &logger_factory,
         link_resolver.clone(),
@@ -192,37 +221,51 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
 
     // Forward subgraph events from the subgraph provider to the subgraph instance manager
     tokio::spawn(forward(&mut subgraph_provider, &subgraph_instance_manager).unwrap());
-    let subgraph_provider_arc = Arc::new(subgraph_provider);
 
     // Create named subgraph provider for resolving subgraph name->ID mappings
     let subgraph_registrar = Arc::new(SubgraphRegistrar::new(
         &logger_factory,
         link_resolver,
-        subgraph_provider_arc.clone(),
+        Arc::new(subgraph_provider),
         store.clone(),
-        store.clone(),
+        stores.clone(),
+        eth_adapters.clone(),
         NODE_ID.clone(),
         SubgraphVersionSwitchingMode::Instant,
     ));
+    tokio::spawn(subgraph_registrar.start().then(|start_result| {
+        start_result.expect("failed to initialize subgraph provider");
+        Ok(())
+    }));
 
+    // Add the dfusion subgraph.
     let subgraph_name = SubgraphName::new(SUBGRAPH_NAME).unwrap();
     tokio::spawn(
         subgraph_registrar
             .create_subgraph(subgraph_name.clone())
-            .then(move |_| {
-                subgraph_registrar
-                    .create_subgraph_version(subgraph_name, SUBGRAPH_ID.clone(), NODE_ID.clone())
-                    .then(|result| {
-                        result.expect("Failed to create subgraph");
-                        Ok(())
-                    })
-                    .and_then(move |_| subgraph_registrar.start())
+            .then(|result| {
+                result.expect("Failed to create subgraph");
+                Ok(())
             })
-            .then(|start_result| {
-                start_result.expect("failed to start subgraph");
+            .and_then({
+                let subgraph_registrar = subgraph_registrar.clone();
+                move |_| {
+                    subgraph_registrar.create_subgraph_version(
+                        subgraph_name,
+                        SUBGRAPH_ID.clone(),
+                        NODE_ID.clone(),
+                    )
+                }
+            })
+            .then(|result| {
+                result.expect("Failed to deploy subgraph");
                 Ok(())
             }),
     );
+
+    // keep a subgraph registrar alive, usually this is kept alive by a the JSON
+    // RPC admin server, but it isn't used here so just leak it instead
+    std::mem::forget(subgraph_registrar);
 
     let mut graphql_server = GraphQLQueryServer::new(
         &logger_factory,
@@ -248,4 +291,40 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     );
 
     future::empty()
+}
+
+fn env_arg_required<V>(name: &str) -> V
+where
+    V: FromStr,
+    V::Err: Debug,
+{
+    env_arg(name, None)
+}
+
+fn env_arg_optional<V>(name: &str, default: V) -> V
+where
+    V: FromStr,
+    V::Err: Debug,
+{
+    env_arg(name, Some(default))
+}
+
+fn env_arg<V>(name: &str, default: Option<V>) -> V
+where
+    V: FromStr,
+    V::Err: Debug,
+{
+    let value = match (env::var(name), default) {
+        (Ok(value), _) => value,
+        (Err(VarError::NotPresent), Some(value)) => return value,
+        _ => panic!("{} environment variable is required", name),
+    };
+    value.parse::<V>().unwrap_or_else(|_| {
+        panic!(
+            "failed to parse environment variable {}='{}' as {}",
+            name,
+            value,
+            type_name::<V>()
+        )
+    })
 }

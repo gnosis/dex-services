@@ -302,7 +302,7 @@ pub mod tests {
     fn encode_execution_fails_on_order_without_batch_info() {
         let insufficient_order = Order {
             batch_information: None,
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_be(1),
             sell_token: 0,
             buy_token: 1,
             sell_amount: 1,
@@ -319,7 +319,7 @@ pub mod tests {
                 slot_index: 0,
                 slot: U256::from(0),
             }),
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_be(1),
             sell_token: 0,
             buy_token: 1,
             sell_amount: 1,
@@ -332,8 +332,8 @@ pub mod tests {
     fn generic_encode_execution_test() {
         let executed_buy_amounts = vec![1, 0];
 
-        let address_1 = H160::from(1);
-        let address_2 = H160::from(2);
+        let address_1 = H160::from_low_u64_be(1);
+        let address_2 = H160::from_low_u64_be(2);
 
         let order_1 = Order {
             batch_information: Some(BatchInformation {
@@ -406,7 +406,7 @@ pub mod tests {
                 slot_index: 0,
                 slot: U256::from(0),
             }),
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_be(1),
             sell_token: 257,
             buy_token: 258,
             sell_amount: 257,
@@ -417,14 +417,14 @@ pub mod tests {
                 slot_index: 1,
                 slot: U256::from(0),
             }),
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_be(1),
             sell_token: 257,
             buy_token: 258,
             sell_amount: 256,
             buy_amount: 256,
         };
         let relevant_orders: Vec<Order> = vec![order_1, order_2];
-        account_state.modify_balance(H160::from(1), 257, |x| *x = 3);
+        account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 3);
         assert_eq!(
             (account_state, relevant_orders),
             parse_auction_data(bytes, U256::from(3))

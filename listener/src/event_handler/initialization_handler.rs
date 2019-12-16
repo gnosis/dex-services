@@ -13,7 +13,7 @@ impl EventHandler for InitializationHandler {
     fn process_event(
         &self,
         logger: Logger,
-        _block: Arc<EthereumBlock>,
+        _block: Arc<LightEthereumBlock>,
         _transaction: Arc<Transaction>,
         log: Arc<Log>,
     ) -> Result<Vec<EntityOperation>, Error> {

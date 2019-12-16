@@ -38,7 +38,7 @@ impl StandingOrder {
 
     pub fn empty_array() -> [models::StandingOrder; models::NUM_RESERVED_ACCOUNTS] {
         let mut i = 0u64;
-        array![models::StandingOrder::empty({i += 1; H160::from(i - 1)}); models::NUM_RESERVED_ACCOUNTS]
+        array![models::StandingOrder::empty({i += 1; H160::from_low_u64_be(i - 1)}); models::NUM_RESERVED_ACCOUNTS]
     }
     pub fn get_orders(&self) -> &Vec<super::Order> {
         &self.orders
@@ -59,7 +59,7 @@ impl ConcatenatingHashable for [models::StandingOrder; models::NUM_RESERVED_ACCO
             .for_each(|k| hasher.input(k.get_orders().rolling_hash(0)));
         let result = hasher.result();
         let b: Vec<u8> = result.to_vec();
-        H256::from(b.as_slice())
+        H256::from_slice(b.as_slice())
     }
 }
 
@@ -182,15 +182,15 @@ impl Into<Entity> for StandingOrder {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use graph::bigdecimal::BigDecimal;
     use graph::data::store::Value;
+    use graph::prelude::BigInt;
     use std::str::FromStr;
     use web3::types::{Bytes, H256};
 
     #[test]
     fn concatenating_hash() {
         let standing_order = models::StandingOrder::new(
-            H160::from(1),
+            H160::from_low_u64_be(1),
             U256::zero(),
             U256::zero(),
             vec![create_order_for_test(), create_order_for_test()],
@@ -198,7 +198,7 @@ pub mod tests {
         let mut standing_orders = models::StandingOrder::empty_array();
         standing_orders[1] = standing_order;
         assert_eq!(
-            standing_orders.concatenating_hash(H256::from(0)),
+            standing_orders.concatenating_hash(H256::zero()),
             H256::from_str("6bdda4f03645914c836a16ba8565f26dffb7bec640b31e1f23e0b3b22f0a64ae")
                 .unwrap()
         );
@@ -251,12 +251,12 @@ pub mod tests {
 
     pub fn create_standing_order_for_test() -> models::StandingOrder {
         StandingOrder {
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_be(1),
             batch_index: U256::from(2),
             valid_from_auction_id: U256::from(3),
             orders: vec![models::Order {
                 batch_information: None,
-                account_id: H160::from(1),
+                account_id: H160::from_low_u64_be(1),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 2 * (10 as u128).pow(18),
@@ -274,8 +274,8 @@ pub mod tests {
             )),
         );
         entity.set("accountId", "0000000000000000000000000000000000000001");
-        entity.set("batchIndex", BigDecimal::from(2));
-        entity.set("validFromAuctionId", BigDecimal::from(3));
+        entity.set("batchIndex", BigInt::from(2));
+        entity.set("validFromAuctionId", BigInt::from(3));
         entity.set(
             "orders",
             vec![Value::String(String::from(
@@ -297,8 +297,8 @@ pub mod tests {
         entity.set("accountId", "0000000000000000000000000000000000000001");
         entity.set("buyToken", 2);
         entity.set("sellToken", 1);
-        entity.set("buyAmount", BigDecimal::from((10 as u64).pow(18)));
-        entity.set("sellAmount", BigDecimal::from(2 * (10 as u64).pow(18)));
+        entity.set("buyAmount", BigInt::from((10 as u64).pow(18)));
+        entity.set("sellAmount", BigInt::from(2 * (10 as u64).pow(18)));
 
         entity
     }
@@ -306,7 +306,7 @@ pub mod tests {
     pub fn create_order_for_test() -> models::Order {
         models::Order {
             batch_information: None,
-            account_id: H160::from(1),
+            account_id: H160::from_low_u64_be(1),
             sell_token: 2,
             buy_token: 3,
             sell_amount: 4,
@@ -353,12 +353,12 @@ pub mod tests {
         ];
 
         Arc::new(Log {
-            address: 0.into(),
+            address: H160::from_low_u64_be(0),
             topics: vec![],
             data: Bytes(bytes.iter().flat_map(|i| i.iter()).cloned().collect()),
-            block_hash: Some(2.into()),
+            block_hash: Some(H256::from_low_u64_be(2)),
             block_number: Some(1.into()),
-            transaction_hash: Some(3.into()),
+            transaction_hash: Some(H256::from_low_u64_be(3)),
             transaction_index: Some(0.into()),
             log_index: Some(0.into()),
             transaction_log_index: Some(0.into()),

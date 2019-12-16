@@ -1,6 +1,6 @@
 use byteorder::{BigEndian, ByteOrder};
-use graph::bigdecimal::BigDecimal;
 use graph::data::store::{Entity, Value};
+use graph::prelude::BigInt;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::str::FromStr;
@@ -36,13 +36,13 @@ impl PopFromLogData for U256 {
 
 impl PopFromLogData for H160 {
     fn pop_from_log_data(bytes: &mut Vec<u8>) -> Self {
-        H256::from(bytes.drain(0..32).collect::<Vec<u8>>().as_slice()).into()
+        H256::from_slice(bytes.drain(0..32).collect::<Vec<u8>>().as_slice()).into()
     }
 }
 
 impl PopFromLogData for H256 {
     fn pop_from_log_data(bytes: &mut Vec<u8>) -> Self {
-        H256::from(bytes.drain(0..32).collect::<Vec<u8>>().as_slice())
+        H256::from_slice(bytes.drain(0..32).collect::<Vec<u8>>().as_slice())
     }
 }
 
@@ -70,13 +70,13 @@ impl ToValue for u32 {
 
 impl ToValue for u128 {
     fn to_value(&self) -> Value {
-        BigDecimal::from_str(&self.to_string()).unwrap().into()
+        BigInt::from_unsigned_u256(&(*self).into()).into()
     }
 }
 
 impl ToValue for U256 {
     fn to_value(&self) -> Value {
-        BigDecimal::from_str(&self.to_string()).unwrap().into()
+        BigInt::from_unsigned_u256(&self).into()
     }
 }
 
@@ -134,9 +134,9 @@ impl EntityParsing for u128 {
         u128::from_str(
             &entity
                 .get(field)
-                .and_then(|value| value.clone().as_big_decimal())
+                .and_then(|value| value.clone().as_bigint())
                 .map(|decimal| decimal.to_string())
-                .unwrap_or_else(|| panic!("Couldn't get field {} as big decimal", field)),
+                .unwrap_or_else(|| panic!("Couldn't get field {} as bigint", field)),
         )
         .unwrap_or_else(|_| panic!("Couldn't cast {} from string to u128", field))
     }
@@ -147,9 +147,9 @@ impl EntityParsing for U256 {
         U256::from_dec_str(
             &entity
                 .get(field)
-                .and_then(|value| value.clone().as_big_decimal())
+                .and_then(|value| value.clone().as_bigint())
                 .map(|decimal| decimal.to_string())
-                .unwrap_or_else(|| panic!("Couldn't get field {} as big decimal", field)),
+                .unwrap_or_else(|| panic!("Couldn't get field {} as bigint", field)),
         )
         .unwrap_or_else(|_| panic!("Couldn't cast {} from string to U256", field))
     }
@@ -190,10 +190,10 @@ impl EntityParsing for Vec<u128> {
                         u128::from_str(
                             &value
                                 .clone()
-                                .as_big_decimal()
+                                .as_bigint()
                                 .map(|decimal| decimal.to_string())
                                 .unwrap_or_else(|| {
-                                    panic!("Couldn't convert value {} to big decimal", &value)
+                                    panic!("Couldn't convert value {} to bigint", &value)
                                 }),
                         )
                         .unwrap_or_else(|_| panic!("Couldn't parse value {} to u128", &value))

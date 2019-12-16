@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use dfusion_core::models::PendingFlux;
 
-use graph::components::ethereum::EthereumBlock;
+use graph::components::ethereum::LightEthereumBlock;
 use graph::components::store::EntityOperation;
 use graph::data::store::Entity;
 
@@ -20,7 +20,7 @@ impl EventHandler for DepositHandler {
     fn process_event(
         &self,
         logger: Logger,
-        _block: Arc<EthereumBlock>,
+        _block: Arc<LightEthereumBlock>,
         _transaction: Arc<Transaction>,
         log: Arc<Log>,
     ) -> Result<Vec<EntityOperation>, Error> {
