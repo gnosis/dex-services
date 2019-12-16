@@ -103,13 +103,6 @@ impl<'a> OrderProcessor<'a> {
         let mut state = self.db.get_balances_for_state_root(&state_root)?;
 
         let mut orders = self.db.get_orders_of_slot(&auction_index)?;
-        orders.sort_by_key(|order| {
-            order
-                .batch_information
-                .as_ref()
-                .map(|b| b.slot_index)
-                .unwrap_or(0)
-        });
         let non_reserved_orders_hash = orders.rolling_hash(0);
         hash_consistency_check(
             non_reserved_orders_hash,

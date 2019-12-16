@@ -22,13 +22,13 @@ impl GraphReader {
         slot: &U256,
         flux: &str,
     ) -> Result<Vec<models::PendingFlux>, DatabaseError> {
-        let deposit_query = entity_query(
+        let flux_query = sorted_slot_entity_query(
             flux,
             EntityFilter::Equal("slot".to_string(), slot.to_value()),
         );
         Ok(self
             .reader
-            .find(deposit_query)
+            .find(flux_query)
             .map_err(|e| {
                 DatabaseError::chain(ErrorKind::ConnectionError, "Could not execute query", e)
             })?
@@ -92,7 +92,7 @@ impl DbInterface for GraphReader {
     }
 
     fn get_orders_of_slot(&self, auction_id: &U256) -> Result<Vec<models::Order>, DatabaseError> {
-        let order_query = entity_query(
+        let order_query = sorted_slot_entity_query(
             "SellOrder",
             EntityFilter::Equal("auctionId".to_string(), auction_id.to_value()),
         );
@@ -160,7 +160,15 @@ impl DbInterface for GraphReader {
     }
 }
 
-pub fn entity_query(entity_type: &str, filter: EntityFilter) -> EntityQuery {
+fn sorted_slot_entity_query(entity_type: &str, filter: EntityFilter) -> EntityQuery {
+    EntityQuery {
+        order_by: Some(("slotIndex".to_string(), ValueType::Int)),
+        order_direction: Some(EntityOrder::Ascending),
+        ..entity_query(entity_type, filter)
+    }
+}
+
+fn entity_query(entity_type: &str, filter: EntityFilter) -> EntityQuery {
     EntityQuery {
         subgraph_id: SUBGRAPH_ID.clone(),
         entity_types: vec![entity_type.to_string()],
