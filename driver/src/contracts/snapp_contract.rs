@@ -13,6 +13,8 @@ use std::fs;
 
 type Result<T> = std::result::Result<T, DriverError>;
 
+include!(concat!(env!("OUT_DIR"), "/snapp_auction.rs"));
+
 pub struct SnappContractImpl {
     base: BaseContract,
 }
