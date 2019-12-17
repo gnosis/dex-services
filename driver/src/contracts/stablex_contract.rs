@@ -4,13 +4,16 @@ use std::fs;
 
 use web3::contract::Options;
 use web3::futures::Future;
+use web3::transports::EventLoopHandle;
 use web3::types::{H160, U128, U256};
 
 use dfusion_core::models::{AccountState, Order, Solution};
 
-use super::base_contract::BaseContract;
-use super::stablex_auction_element::StableXAuctionElement;
+use crate::contracts;
+use crate::contracts::base_contract::BaseContract;
+use crate::contracts::stablex_auction_element::StableXAuctionElement;
 use crate::error::DriverError;
+use crate::util::FutureWaitExt;
 use lazy_static::lazy_static;
 
 type Result<T> = std::result::Result<T, DriverError>;
@@ -42,6 +45,20 @@ impl StableXContractImpl {
 
     pub fn account(&self) -> H160 {
         self.base.public_key
+    }
+}
+
+include!(concat!(env!("OUT_DIR"), "/batch_exchange.rs"));
+
+impl BatchExchange {
+    pub fn new() -> Result<(Self, EventLoopHandle)> {
+        let (web3, event_loop) = contracts::web3_provider()?;
+        let _account = contracts::default_account()?;
+
+        let instance = BatchExchange::deployed(&web3).wait()?;
+        //instance.defaults_mut().from = account;
+
+        Ok((instance, event_loop))
     }
 }
 

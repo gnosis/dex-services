@@ -694,6 +694,7 @@ dependencies = [
  "ethcontract 0.1.0",
  "ethcontract-generate 0.1.0",
  "ethereum-tx-sign 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "graph 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)",
  "graph-node-reader 0.16.1 (git+https://github.com/gnosis/graph-node-reader?tag=v0.16.1)",
  "hex 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
