@@ -1,20 +1,20 @@
 version: "3.6"
+x-rust-binary-service: &rust-binary-service
+  build:
+    context: .
+    dockerfile: docker/rust/Dockerfile
+    args:
+      - RUST_BASE=rust-binary
+  image: stablex-binary
+  environment:
+    - RUST_BACKTRACE=1
 services:
   stablex:
-    build:
-      context: .
-      dockerfile: docker/rust/stablex_binary/Dockerfile
-    image: stablex-binary
+    <<: *rust-binary-service
     command: ./stablex
   driver:
-    build:
-      context: .
-      dockerfile: docker/rust/stablex_binary/Dockerfile
-    image: stablex-binary
+    <<: *rust-binary-service
     command: ./dfusion
   graph-listener:
-    build:
-      context: .
-      dockerfile: docker/rust/stablex_binary/Dockerfile
-    image: stablex-binary
+    <<: *rust-binary-service
     command: ./graph-listener
