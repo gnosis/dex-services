@@ -9,9 +9,6 @@ RUN if [ "$use_solver" = 1 ]; then docker/rust/clone_solver.sh; else echo "Not i
 ENV LINEAR_OPTIMIZATION_SOLVER $use_solver
 ENV PYTHONPATH ${PYTHONPATH}:/app/batchauctions/
 
-# Copy smart contract build artifacts
-COPY dex-contracts/build dex-contracts/build
-
 # Copy and build code
 COPY dfusion_rust_core ./dfusion_rust_core
 COPY driver ./driver
