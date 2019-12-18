@@ -2,7 +2,6 @@
 //! Snapp objective value calculation as the driver is expected to provide this
 //! value on solution submission.
 
-use crate::util::u128_to_u256;
 use dfusion_core::models::{Order, Solution};
 use thiserror::Error;
 use web3::types::U256;
@@ -93,11 +92,11 @@ impl SnappOrder for Order {
         exec_buy_amt: u128,
         exec_sell_amt: u128,
     ) -> Result<U256, SnappObjectiveError> {
-        let buy_price = u128_to_u256(buy_price);
-        let exec_buy_amt = u128_to_u256(exec_buy_amt);
-        let exec_sell_amt = u128_to_u256(exec_sell_amt);
-        let buy_amt = u128_to_u256(self.buy_amount);
-        let sell_amt = u128_to_u256(self.sell_amount);
+        let buy_price = U256::from(buy_price);
+        let exec_buy_amt = U256::from(exec_buy_amt);
+        let exec_sell_amt = U256::from(exec_sell_amt);
+        let buy_amt = U256::from(self.buy_amount);
+        let sell_amt = U256::from(self.sell_amount);
 
         // the utility is caculated in two parts, this is done to avoid overflows
         let utility_with_error = exec_buy_amt

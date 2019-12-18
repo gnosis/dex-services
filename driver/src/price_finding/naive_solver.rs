@@ -1,9 +1,9 @@
 use dfusion_core::models::{AccountState, Order, Solution, TOKENS};
+use web3::types::U256;
 
 use crate::price_finding::error::PriceFindingError;
-use crate::util::{checked_u256_to_u128, u128_to_u256, u256_to_u128, CeiledDiv};
-
-use super::price_finder_interface::{Fee, PriceFinding};
+use crate::price_finding::price_finder_interface::{Fee, PriceFinding};
+use crate::util::{CeiledDiv, CheckedConvertU128};
 
 const BASE_UNIT: u128 = 1_000_000_000_000_000_000u128;
 const BASE_PRICE: u128 = BASE_UNIT;
@@ -76,8 +76,8 @@ impl Matchable for Order {
     fn have_price_overlap(&self, other: &Order) -> bool {
         self.sell_amount > 0
             && other.sell_amount > 0
-            && u128_to_u256(self.buy_amount) * u128_to_u256(other.buy_amount)
-                <= u128_to_u256(other.sell_amount) * u128_to_u256(self.sell_amount)
+            && U256::from(self.buy_amount) * U256::from(other.buy_amount)
+                <= U256::from(other.sell_amount) * U256::from(self.sell_amount)
     }
 
     fn trades_fee_token(&self, fee: &Fee) -> bool {
@@ -211,22 +211,19 @@ fn order_with_buffer_for_fee(order: &Order, fee: &Option<Fee>) -> Order {
 /// Normalizes a price base on the pre-normalized fee price.
 fn normalize_price(price: u128, pre_normalized_fee_price: u128) -> Option<u128> {
     // upcast to u256 to avoid overflows
-    checked_u256_to_u128(
-        (u128_to_u256(price) * u128_to_u256(BASE_PRICE))
-            .ceiled_div(u128_to_u256(pre_normalized_fee_price)),
-    )
+    (U256::from(price) * U256::from(BASE_PRICE))
+        .ceiled_div(U256::from(pre_normalized_fee_price))
+        .as_u128_checked()
 }
 
 /// Calculate the executed sell amount from the fee, executed buy amount, and
 /// the buy and sell prices of the traded tokens.
 fn executed_sell_amount(fee: &Fee, exec_buy_amt: u128, buy_price: u128, sell_price: u128) -> u128 {
     let fee_denominator = (1.0 / fee.ratio) as u128;
-    u256_to_u128(
-        (((u128_to_u256(exec_buy_amt) * u128_to_u256(buy_price))
-            / u128_to_u256(fee_denominator - 1))
-            * u128_to_u256(fee_denominator))
-            / u128_to_u256(sell_price),
-    )
+    ((((U256::from(exec_buy_amt) * U256::from(buy_price)) / U256::from(fee_denominator - 1))
+        * U256::from(fee_denominator))
+        / U256::from(sell_price))
+    .as_u128()
 }
 
 /// Calculate the executed buy amount from the fee, executed sell amount, and
@@ -240,12 +237,11 @@ fn executed_buy_amount(
     sell_price: u128,
 ) -> Option<u128> {
     let fee_denominator = (1.0 / fee.ratio) as u128;
-    let exec_buy_amt = u256_to_u128(
-        (((u128_to_u256(exec_sell_amt) * u128_to_u256(sell_price))
-            / u128_to_u256(fee_denominator))
-            * u128_to_u256(fee_denominator - 1))
-        .ceiled_div(u128_to_u256(buy_price)),
-    );
+    let exec_buy_amt = (((U256::from(exec_sell_amt) * U256::from(sell_price))
+        / U256::from(fee_denominator))
+        * U256::from(fee_denominator - 1))
+    .ceiled_div(U256::from(buy_price))
+    .as_u128();
 
     // we need to account for rounding errors here, since this function is
     // essentially an inverse of `executed_sell_amount`; when the buy price is
@@ -262,7 +258,6 @@ fn executed_buy_amount(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::util::u256_to_u128;
     use dfusion_core::models::account_state::test_util::*;
     use std::collections::HashMap;
     use web3::types::{H160, H256, U256};
@@ -710,12 +705,11 @@ pub mod tests {
                     // sell_amount_wo_fee = buy_amount * buy_token_price / sell_token_price
                     // sell_amount_w_fee = sell_amount_wo_fee * fee_denominator / (fee_denominator - 1)
                     // Rearranged to avoid 256 bit overflow and still have minimal rounding error.
-                    u256_to_u128(
-                        (u128_to_u256(exec_buy_amount) * u128_to_u256(buy_token_price))
-                            / u128_to_u256(fee_denominator - 1)
-                            * u128_to_u256(fee_denominator)
-                            / u128_to_u256(sell_token_price),
-                    )
+                    ((U256::from(exec_buy_amount) * U256::from(buy_token_price))
+                        / U256::from(fee_denominator - 1)
+                        * U256::from(fee_denominator)
+                        / U256::from(sell_token_price))
+                    .as_u128()
                 } else {
                     (exec_buy_amount * buy_token_price) / sell_token_price
                 }
@@ -730,8 +724,8 @@ pub mod tests {
                 ));
             }
 
-            let limit_lhs = u128_to_u256(exec_sell_amount) * u128_to_u256(order.buy_amount);
-            let limit_rhs = u128_to_u256(exec_buy_amount) * u128_to_u256(order.sell_amount);
+            let limit_lhs = U256::from(exec_sell_amount) * U256::from(order.buy_amount);
+            let limit_rhs = U256::from(exec_buy_amount) * U256::from(order.sell_amount);
             if limit_lhs > limit_rhs {
                 return Err(format!(
                     "LimitPrice for order {} not satisifed ({} > {})",

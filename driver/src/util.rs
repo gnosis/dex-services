@@ -1,8 +1,5 @@
 use log::info;
-
-use std::convert::TryInto;
 use std::env;
-
 use web3::types::{H256, U256};
 
 use crate::contracts::snapp_contract::SnappContract;
@@ -11,36 +8,6 @@ use crate::error::ErrorKind;
 use crate::price_finding::{Fee, LinearOptimisationPriceFinder, NaiveSolver, PriceFinding};
 
 const BATCH_TIME_SECONDS: u32 = 3 * 60;
-
-/// Convert a u128 to a U256.
-pub fn u128_to_u256(x: u128) -> U256 {
-    U256::from_big_endian(&x.to_be_bytes())
-}
-
-/// Convert a `U256` to a `u128`. Returns `None` if the value would overflow the
-/// `u128`.
-pub fn checked_u256_to_u128(x: U256) -> Option<u128> {
-    let mut bytes = [0u8; 32];
-    x.to_big_endian(&mut bytes[..]);
-
-    let hi = u128::from_be_bytes(bytes[..16].try_into().expect("correct slice length"));
-    let lo = u128::from_be_bytes(bytes[16..].try_into().expect("correct slice length"));
-
-    if hi == 0 {
-        Some(lo)
-    } else {
-        None
-    }
-}
-
-/// Convert a U256 to a u128.
-///
-/// # Panics
-///
-/// Panics if the U256 overflows a u128.
-pub fn u256_to_u128(x: U256) -> u128 {
-    checked_u256_to_u128(x).expect("U256 to u128 overflow")
-}
 
 pub trait CeiledDiv {
     fn ceiled_div(&self, divisor: Self) -> Self;
@@ -57,6 +24,20 @@ impl CeiledDiv for U256 {
     fn ceiled_div(&self, divisor: U256) -> U256 {
         //ceil(p / float(q)) == (p + q - 1) / q
         (self + divisor - 1) / divisor
+    }
+}
+
+pub trait CheckedConvertU128 {
+    fn as_u128_checked(&self) -> Option<u128>;
+}
+
+impl CheckedConvertU128 for U256 {
+    fn as_u128_checked(&self) -> Option<u128> {
+        if *self <= U256::from(u128::max_value()) {
+            Some(self.low_u128())
+        } else {
+            None
+        }
     }
 }
 
@@ -136,30 +117,17 @@ pub mod tests {
     use super::*;
 
     #[test]
-    fn test_u128_to_u256() {
+    fn test_checked_u256_to_u128() {
+        assert_eq!(Some(42u128), U256::from(42).as_u128_checked());
         assert_eq!(
-            u128_to_u256(u128::max_value()),
-            U256::from_dec_str("340282366920938463463374607431768211455").unwrap(),
-            "failed on 128::max_value()"
+            Some(u128::max_value()),
+            U256::from(u128::max_value()).as_u128_checked(),
         );
-        assert_eq!(u128_to_u256(1u128), U256::from(1), "failed on 1u128");
-        assert_eq!(u128_to_u256(0u128), U256::from(0), "failed on 0u128");
-    }
-
-    #[test]
-    fn test_256_to_u128_works() {
-        assert_eq!(0u128, u256_to_u128(U256::from(0)));
-        assert_eq!(1u128, u256_to_u128(U256::from(1)));
         assert_eq!(
-            u128::max_value(),
-            u256_to_u128(U256::from_dec_str("340282366920938463463374607431768211455").unwrap())
+            None,
+            (U256::from(u128::max_value()) + U256::one()).as_u128_checked(),
         );
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_u256_to_u128_panics_on_overflow() {
-        u256_to_u128(U256::from_dec_str("340282366920938463463374607431768211456").unwrap());
+        assert_eq!(None, U256::max_value().as_u128_checked(),);
     }
 
     #[test]
