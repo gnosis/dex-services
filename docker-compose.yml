@@ -14,7 +14,7 @@ services:
     ports:
       - '8545:8545'
     image: 'trufflesuite/ganache-cli:latest'
-    command: ["-d"]
+    command: ["-d", "-i", "5777"]
     logging:
       driver: "none"
 

@@ -16,7 +16,6 @@ matrix:
         - (cd dex-contracts && npm ci)
       script:
         # First build and setup the contracts (for their ABI and networks)
-        - (cd dex-contracts && npm run prepack)
         - ./test/setup_contracts.sh
         # Then build base image and run unit tests
         - docker build --tag stablex --build-arg use_solver=1 -f docker/rust/Dockerfile .
@@ -35,6 +34,8 @@ matrix:
         - rm -f  ./target/.rustc_info.json
       env:
         - CARGO_INCREMENTAL=0
+      install:
+        - ./test/setup_contracts.sh
       before_script:
         - rustup component add clippy rustfmt
       script:
