@@ -1,17 +1,13 @@
 use std::collections::HashMap;
 use std::env;
-use std::fs;
 
 use dfusion_core::models::{AccountState, Order, Solution};
 use ethcontract::contract::MethodDefaults;
 use lazy_static::lazy_static;
-use web3::contract::Options;
-use web3::futures::Future;
 use web3::transports::EventLoopHandle;
 use web3::types::{H160, U128, U256};
 
 use crate::contracts;
-use crate::contracts::base_contract::BaseContract;
 use crate::contracts::stablex_auction_element::StableXAuctionElement;
 use crate::error::DriverError;
 use crate::util::FutureWaitExt;
@@ -24,28 +20,6 @@ lazy_static! {
     // In the BatchExchange smart contract, the objective value will be multiplied by
     // 1 + IMPROVEMENT_DENOMINATOR = 101. Hence, the maximal possible objective value is:
     static ref MAX_OBJECTIVE_VALUE: U256 = U256::max_value() / (U256::from(101));
-}
-
-pub struct StableXContractImpl {
-    base: BaseContract,
-}
-
-impl StableXContractImpl {
-    pub fn new() -> Result<Self> {
-        let contract_json = fs::read_to_string("dex-contracts/build/contracts/BatchExchange.json")?;
-        let address = env::var("STABLEX_CONTRACT_ADDRESS")?;
-        Ok(StableXContractImpl {
-            base: BaseContract::new(address, contract_json)?,
-        })
-    }
-
-    pub fn address(&self) -> H160 {
-        self.base.contract.address()
-    }
-
-    pub fn account(&self) -> H160 {
-        self.base.public_key
-    }
 }
 
 include!(concat!(env!("OUT_DIR"), "/batch_exchange.rs"));
@@ -156,89 +130,6 @@ impl StableXContract for BatchExchange {
         .wait()?;
 
         Ok(())
-    }
-}
-
-impl StableXContract for StableXContractImpl {
-    fn get_current_auction_index(&self) -> Result<U256> {
-        self.base
-            .contract
-            .query("getCurrentBatchId", (), None, Options::default(), None)
-            .wait()
-            .map_err(DriverError::from)
-    }
-
-    fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
-        let packed_auction_bytes: Vec<u8> = self
-            .base
-            .contract
-            .query("getEncodedOrders", (), None, Options::default(), None)
-            .wait()
-            .map_err(DriverError::from)?;
-        Ok(parse_auction_data(packed_auction_bytes, index))
-    }
-
-    fn get_solution_objective_value(
-        &self,
-        batch_index: U256,
-        orders: Vec<Order>,
-        solution: Solution,
-    ) -> Result<U256> {
-        let (prices, token_ids_for_price) = encode_prices_for_contract(solution.prices);
-        let (owners, order_ids, volumes) =
-            encode_execution_for_contract(orders, solution.executed_buy_amounts);
-
-        Ok(self
-            .base
-            .contract
-            .query(
-                "submitSolution",
-                (
-                    batch_index,
-                    *MAX_OBJECTIVE_VALUE,
-                    owners.clone(),
-                    order_ids.clone(),
-                    volumes.clone(),
-                    prices.clone(),
-                    token_ids_for_price.clone(),
-                ),
-                None,
-                Options::default(),
-                None,
-            )
-            .wait()?)
-    }
-
-    fn submit_solution(
-        &self,
-        batch_index: U256,
-        orders: Vec<Order>,
-        solution: Solution,
-        claimed_objective_value: U256,
-    ) -> Result<()> {
-        let (prices, token_ids_for_price) = encode_prices_for_contract(solution.prices);
-        let (owners, order_ids, volumes) =
-            encode_execution_for_contract(orders, solution.executed_buy_amounts);
-
-        self.base
-            .send_signed_transaction(
-                "submitSolution",
-                (
-                    batch_index,
-                    claimed_objective_value,
-                    owners,
-                    order_ids,
-                    volumes,
-                    prices,
-                    token_ids_for_price,
-                ),
-                Options::with(|mut opt| {
-                    // usual gas estimation isn't working
-                    opt.gas_price = Some(20_000_000_000u64.into());
-                    opt.gas = Some(5_000_000.into());
-                }),
-            )
-            .map(|_| ())
     }
 }
 
