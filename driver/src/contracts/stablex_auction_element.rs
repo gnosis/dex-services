@@ -4,7 +4,7 @@ use dfusion_core::models::{BatchInformation, Order};
 use std::collections::HashMap;
 use web3::types::{H160, U256};
 
-use crate::util::{u128_to_u256, u256_to_u128, CeiledDiv};
+use crate::util::CeiledDiv;
 
 #[derive(Debug, PartialEq)]
 pub struct StableXAuctionElement {
@@ -75,8 +75,8 @@ fn compute_buy_sell_amounts(numerator: u128, denominator: u128, remaining: u128)
     // 0 on buyAmount (numerator) is a Market Sell Order.
     let buy_amount = if denominator > 0 {
         // up-casting to handle overflow
-        let top = u128_to_u256(remaining) * u128_to_u256(numerator);
-        u256_to_u128((top).ceiled_div(u128_to_u256(denominator)))
+        let top = U256::from(remaining) * U256::from(numerator);
+        (top).ceiled_div(U256::from(denominator)).as_u128()
     } else {
         0
     };
