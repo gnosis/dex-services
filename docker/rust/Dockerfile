@@ -10,6 +10,7 @@ ENV LINEAR_OPTIMIZATION_SOLVER $use_solver
 ENV PYTHONPATH ${PYTHONPATH}:/app/batchauctions/
 
 # Copy and build code
+COPY dex-contracts/build ./dex-contracts/build
 COPY dfusion_rust_core ./dfusion_rust_core
 COPY driver ./driver
 COPY listener ./listener

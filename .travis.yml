@@ -1,27 +1,28 @@
 if: (branch = master) OR (type = pull_request) OR (tag IS present)
 matrix:
   include:
-    - stage: WarmUp
+    - stage: "Warm Up"
       name: "Build"
-      language: generic
-      install:
-        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
-        - echo -e $GITLAB_PRIVATE_KEY > .ssh/id_rsa && chmod 0500 .ssh/id_rsa
-        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
-      script:
-        # First build base image and run unit tests
-        - docker build --tag stablex --build-arg use_solver=1 -f docker/rust/Dockerfile .
-        # Then build and publish compact multi-stage image
-        - docker build --tag stablex-binary -f docker/rust/stablex_binary/Dockerfile .
-        - docker tag stablex-binary $REGISTRY_URI:$TRAVIS_COMMIT
-        - docker push $REGISTRY_URI:$TRAVIS_COMMIT
-    - name: "Node Cache"
       language: generic
       cache:
         directories:
           - dex-contracts/node_modules/
           - $HOME/.npm
-      script: cd dex-contracts && npm ci
+      before_install:
+        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
+        - echo -e $GITLAB_PRIVATE_KEY > .ssh/id_rsa && chmod 0500 .ssh/id_rsa
+        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
+      install:
+        - (cd dex-contracts && npm ci)
+      script:
+        # First build the truffle project as it is needed for the base image
+        - (cd dex-contracts && npm run prepack)
+        # Then build base image and run unit tests
+        - docker build --tag stablex --build-arg use_solver=1 -f docker/rust/Dockerfile .
+        # Finally build and publish compact multi-stage image
+        - docker build --tag stablex-binary -f docker/rust/stablex_binary/Dockerfile .
+        - docker tag stablex-binary $REGISTRY_URI:$TRAVIS_COMMIT
+        - docker push $REGISTRY_URI:$TRAVIS_COMMIT
     - stage: "Tests"
       name: "Unit Tests"
       language: rust
@@ -85,7 +86,7 @@ matrix:
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
-        - cd dex-contracts && npx truffle compile && npm run networks-inject && cd ..
+        - (cd dex-contracts && npm prepack)
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.yml up -d stablex
         - ./test/e2e-tests-stablex-rinkeby.sh
