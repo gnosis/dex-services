@@ -15,8 +15,9 @@ matrix:
       install:
         - (cd dex-contracts && npm ci)
       script:
-        # First build the truffle project as it is needed for the base image
+        # First build and setup the contracts (for their ABI and networks)
         - (cd dex-contracts && npm run prepack)
+        - ./test/setup_contracts.sh
         # Then build base image and run unit tests
         - docker build --tag stablex --build-arg use_solver=1 -f docker/rust/Dockerfile .
         # Finally build and publish compact multi-stage image
