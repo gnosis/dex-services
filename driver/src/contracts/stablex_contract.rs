@@ -453,12 +453,9 @@ pub mod tests {
             buy_amount: 4,
         };
 
-        let zero = U128::from(0);
-        let one = U128::from(1);
-
         let expected_owners = vec![address_1];
-        let expected_order_ids = vec![zero];
-        let expected_volumes = vec![one];
+        let expected_order_ids = vec![0];
+        let expected_volumes = vec![U128::from(1)];
 
         let expected_results = (expected_owners, expected_order_ids, expected_volumes);
 
@@ -532,7 +529,7 @@ pub mod tests {
 
         // Only contain non fee-token and non 0 prices
         let expected_prices = vec![1.into(), 2.into()];
-        let expected_token_ids = vec![2.into(), 3.into()];
+        let expected_token_ids = vec![2, 3];
 
         assert_eq!(
             encode_prices_for_contract(price_vector),
