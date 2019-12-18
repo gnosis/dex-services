@@ -1,4 +1,4 @@
-use driver::contracts::stablex_contract::StableXContractImpl;
+use driver::contracts::stablex_contract::BatchExchange;
 use driver::driver::stablex_driver::StableXDriver;
 use driver::price_finding::Fee;
 
@@ -10,7 +10,7 @@ use std::time::Duration;
 fn main() {
     simple_logger::init_with_level(log::Level::Info).unwrap();
 
-    let contract = StableXContractImpl::new().unwrap();
+    let (contract, _event_loop) = BatchExchange::new().unwrap();
     info!("Using contract at {}", contract.address());
     info!("Using account {}", contract.account());
 

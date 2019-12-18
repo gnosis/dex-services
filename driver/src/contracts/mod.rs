@@ -4,10 +4,10 @@ pub mod stablex_auction_element;
 pub mod stablex_contract;
 
 use crate::error::DriverError;
-use ethcontract::{ethsign, Account, H256, SecretKey};
+use ethcontract::{ethsign, Account, SecretKey, H256};
 use std::env;
 use web3::api::Web3;
-use web3::transports::{Http, EventLoopHandle};
+use web3::transports::{EventLoopHandle, Http};
 
 fn web3_provider() -> Result<(Web3<Http>, EventLoopHandle), DriverError> {
     let url = env::var("ETHEREUM_NODE_URL")?;

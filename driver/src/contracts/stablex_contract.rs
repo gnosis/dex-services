@@ -2,19 +2,19 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 
+use dfusion_core::models::{AccountState, Order, Solution};
+use ethcontract::contract::MethodDefaults;
+use lazy_static::lazy_static;
 use web3::contract::Options;
 use web3::futures::Future;
 use web3::transports::EventLoopHandle;
 use web3::types::{H160, U128, U256};
-
-use dfusion_core::models::{AccountState, Order, Solution};
 
 use crate::contracts;
 use crate::contracts::base_contract::BaseContract;
 use crate::contracts::stablex_auction_element::StableXAuctionElement;
 use crate::error::DriverError;
 use crate::util::FutureWaitExt;
-use lazy_static::lazy_static;
 
 type Result<T> = std::result::Result<T, DriverError>;
 
@@ -53,18 +53,30 @@ include!(concat!(env!("OUT_DIR"), "/batch_exchange.rs"));
 impl BatchExchange {
     pub fn new() -> Result<(Self, EventLoopHandle)> {
         let (web3, event_loop) = contracts::web3_provider()?;
-        let _account = contracts::default_account()?;
+        let account = contracts::default_account()?;
 
-        let instance = BatchExchange::deployed(&web3).wait()?;
-        //instance.defaults_mut().from = account;
+        let mut instance = BatchExchange::deployed(&web3).wait()?;
+        *instance.defaults_mut() = MethodDefaults {
+            from: Some(account),
+            gas: Some(100_000.into()),
+            gas_price: Some(1_000_000_000.into()),
+        };
 
         Ok((instance, event_loop))
+    }
+
+    pub fn account(&self) -> H160 {
+        self.defaults()
+            .from
+            .as_ref()
+            .map(|from| from.address())
+            .unwrap_or_default()
     }
 }
 
 pub trait StableXContract {
     fn get_current_auction_index(&self) -> Result<U256>;
-    fn get_auction_data(&self, _index: U256) -> Result<(AccountState, Vec<Order>)>;
+    fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)>;
     fn get_solution_objective_value(
         &self,
         batch_index: U256,
@@ -78,6 +90,73 @@ pub trait StableXContract {
         solution: Solution,
         claimed_objective_value: U256,
     ) -> Result<()>;
+}
+
+impl StableXContract for BatchExchange {
+    fn get_current_auction_index(&self) -> Result<U256> {
+        let auction_index = self.get_current_batch_id().call().wait()?;
+
+        Ok(auction_index.into())
+    }
+
+    fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
+        let packed_auction_bytes = self.get_encoded_orders().call().wait()?;
+        let auction_data = parse_auction_data(packed_auction_bytes, index);
+
+        Ok(auction_data)
+    }
+
+    fn get_solution_objective_value(
+        &self,
+        batch_index: U256,
+        orders: Vec<Order>,
+        solution: Solution,
+    ) -> Result<U256> {
+        let (prices, token_ids_for_price) = encode_prices_for_contract(solution.prices);
+        let (owners, order_ids, volumes) =
+            encode_execution_for_contract(orders, solution.executed_buy_amounts);
+        let objective_value = self
+            .submit_solution(
+                batch_index.low_u64(),
+                *MAX_OBJECTIVE_VALUE,
+                owners,
+                order_ids,
+                volumes,
+                prices,
+                token_ids_for_price,
+            )
+            .call()
+            .wait()?;
+
+        Ok(objective_value)
+    }
+
+    fn submit_solution(
+        &self,
+        batch_index: U256,
+        orders: Vec<Order>,
+        solution: Solution,
+        claimed_objective_value: U256,
+    ) -> Result<()> {
+        let (prices, token_ids_for_price) = encode_prices_for_contract(solution.prices);
+        let (owners, order_ids, volumes) =
+            encode_execution_for_contract(orders, solution.executed_buy_amounts);
+        self.submit_solution(
+            batch_index.low_u64(),
+            claimed_objective_value,
+            owners,
+            order_ids,
+            volumes,
+            prices,
+            token_ids_for_price,
+        )
+        .gas(5_000_000.into())
+        .gas_price(20_000_000_000u64.into())
+        .send()
+        .wait()?;
+
+        Ok(())
+    }
 }
 
 impl StableXContract for StableXContractImpl {
@@ -192,16 +271,16 @@ fn parse_auction_data(packed_auction_bytes: Vec<u8>, index: U256) -> (AccountSta
     (account_state, relevant_orders)
 }
 
-fn encode_prices_for_contract(price_vector: Vec<u128>) -> (Vec<U128>, Vec<U128>) {
+fn encode_prices_for_contract(price_vector: Vec<u128>) -> (Vec<U128>, Vec<u64>) {
     // Representing the solution's price vector more compactly as:
     // sorted_touched_token_ids, non_zero_prices which are logically bound by index.
     // Example solution.prices = [3, 0, 1] will be transformed into [0, 2], [3, 1]
-    let mut ordered_token_ids: Vec<U128> = vec![];
-    let mut prices: Vec<U128> = vec![];
-    for (token_id, price) in price_vector.into_iter().enumerate() {
-        if token_id != 0 && price > 0 {
-            ordered_token_ids.push(U128::from(token_id));
-            prices.push(U128::from(price.to_be_bytes()));
+    let mut prices = vec![];
+    let mut ordered_token_ids = vec![];
+    for (token_id, price) in price_vector.into_iter().enumerate().skip(1) {
+        if price > 0 {
+            prices.push(U128::from(price));
+            ordered_token_ids.push(token_id as u64);
         }
     }
     (prices, ordered_token_ids)
@@ -210,15 +289,15 @@ fn encode_prices_for_contract(price_vector: Vec<u128>) -> (Vec<U128>, Vec<U128>)
 fn encode_execution_for_contract(
     orders: Vec<Order>,
     executed_buy_amounts: Vec<u128>,
-) -> (Vec<H160>, Vec<U128>, Vec<U128>) {
+) -> (Vec<H160>, Vec<u64>, Vec<U128>) {
     assert_eq!(
         orders.len(),
         executed_buy_amounts.len(),
         "Received inconsistent auction result data."
     );
-    let mut owners: Vec<H160> = vec![];
-    let mut order_ids: Vec<U128> = vec![];
-    let mut volumes: Vec<U128> = vec![];
+    let mut owners = vec![];
+    let mut order_ids = vec![];
+    let mut volumes = vec![];
     for (order_index, buy_amount) in executed_buy_amounts.into_iter().enumerate() {
         if buy_amount > 0 {
             // order was touched!
@@ -228,8 +307,7 @@ fn encode_execution_for_contract(
                 .batch_information
                 .as_ref()
                 .expect("StableX Orders must have Batch Information");
-            // TODO - using slot_index (u16) for order_id (U128) is temporary and not sustainable.
-            order_ids.push(U128::from(order_batch_info.slot_index));
+            order_ids.push(order_batch_info.slot_index as u64);
             volumes.push(U128::from(buy_amount.to_be_bytes()));
         }
     }
