@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::env;
 
 use dfusion_core::models::{AccountState, Order, Solution};
-use ethcontract::contract::MethodDefaults;
 use lazy_static::lazy_static;
 use web3::transports::EventLoopHandle;
 use web3::types::{H160, U128, U256};
@@ -27,14 +26,10 @@ include!(concat!(env!("OUT_DIR"), "/batch_exchange.rs"));
 impl BatchExchange {
     pub fn new() -> Result<(Self, EventLoopHandle)> {
         let (web3, event_loop) = contracts::web3_provider()?;
-        let account = contracts::default_account()?;
+        let defaults = contracts::method_defaults()?;
 
         let mut instance = BatchExchange::deployed(&web3).wait()?;
-        *instance.defaults_mut() = MethodDefaults {
-            from: Some(account),
-            gas: Some(100_000.into()),
-            gas_price: Some(1_000_000_000.into()),
-        };
+        *instance.defaults_mut() = defaults;
 
         Ok((instance, event_loop))
     }
@@ -69,14 +64,12 @@ pub trait StableXContract {
 impl StableXContract for BatchExchange {
     fn get_current_auction_index(&self) -> Result<U256> {
         let auction_index = self.get_current_batch_id().call().wait()?;
-
         Ok(auction_index.into())
     }
 
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
         let packed_auction_bytes = self.get_encoded_orders().call().wait()?;
         let auction_data = parse_auction_data(packed_auction_bytes, index);
-
         Ok(auction_data)
     }
 
