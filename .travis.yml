@@ -27,7 +27,10 @@ matrix:
       name: "Unit Tests"
       language: rust
       rust: 1.39.0
-      cache: cargo
+      cache:
+        cargo: true
+        directories:
+          - dex-contracts/node_modules/
       before_cache:
         - find ./target/debug -type f -maxdepth 1 -delete
         - rm -fr ./target/debug/{deps,.fingerprint}/{*ra_*,*test*,*tools*,*gen_lsp*}
