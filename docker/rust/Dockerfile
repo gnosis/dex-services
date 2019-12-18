@@ -24,6 +24,12 @@ ONBUILD RUN cargo build
 
 # Build Option 1: Copy already compiled binary from host (used e.g. in travis)
 FROM ${SOLVER_BASE} as rust-binary
+
+# Required for listener
+ONBUILD RUN apt-get update \
+  && apt-get install -y --no-install-recommends libpq-dev \ 
+  && rm -rf /var/lib/apt/lists/*
+
 ONBUILD COPY target/debug/stablex stablex
 ONBUILD COPY target/debug/listener graph-listener
 ONBUILD COPY target/debug/dfusion dfusion
