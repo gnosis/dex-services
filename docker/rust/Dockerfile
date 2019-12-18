@@ -27,7 +27,7 @@ FROM ${SOLVER_BASE} as rust-binary
 
 # Required for listener
 ONBUILD RUN apt-get update \
-  && apt-get install -y --no-install-recommends libpq-dev \ 
+  && apt-get install -y --no-install-recommends libpq-dev libssl-dev \ 
   && rm -rf /var/lib/apt/lists/*
 
 ONBUILD COPY target/debug/stablex stablex
