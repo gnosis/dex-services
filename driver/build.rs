@@ -10,7 +10,7 @@ fn main() {
 fn generate_contract(name: &str, out: &str) {
     let artifact = format!("../dex-contracts/build/contracts/{}.json", name);
     let dest = env::var("OUT_DIR").unwrap();
-    println!("rerun-if-changed={}", artifact);
+    println!("cargo:rerun-if-changed={}", artifact);
     Builder::new(artifact)
         .generate()
         .unwrap()
