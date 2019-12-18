@@ -16,7 +16,7 @@ clarity = "0.1.23"
 dfusion_core = { path = "../dfusion_rust_core" }
 futures = { version = "0.3.1", features = ["compat"] }
 ethabi = "8.0.1"
-ethcontract = { path = "../../ethcontract-rs" }
+ethcontract = { git = "https://github.com/gnosis/ethcontract-rs", branch = "graph-patches" }
 ethereum-tx-sign = "3.0.0"
 graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
 graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", tag = "v0.16.1" }
@@ -33,4 +33,4 @@ web3 = "0.8.0"
 mock-it = "0.3.0"
 
 [build-dependencies]
-ethcontract-generate = { path = "../../ethcontract-rs/generate" }
+ethcontract-generate = { git = "https://github.com/gnosis/ethcontract-rs", branch = "graph-patches" }

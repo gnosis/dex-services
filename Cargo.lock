@@ -691,8 +691,8 @@ dependencies = [
  "clarity 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
  "dfusion_core 0.1.0",
  "ethabi 8.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "ethcontract 0.1.0",
- "ethcontract-generate 0.1.0",
+ "ethcontract 0.1.0 (git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches)",
+ "ethcontract-generate 0.1.0 (git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches)",
  "ethereum-tx-sign 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "graph 0.16.1 (git+https://github.com/graphprotocol/graph-node?tag=v0.16.1)",
@@ -798,9 +798,10 @@ dependencies = [
 [[package]]
 name = "ethcontract"
 version = "0.1.0"
+source = "git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches#02c2487fabaab52c7f960ebd6aaf4d5e29f9d855"
 dependencies = [
- "ethcontract-common 0.1.0",
- "ethcontract-derive 0.1.0",
+ "ethcontract-common 0.1.0 (git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches)",
+ "ethcontract-derive 0.1.0 (git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches)",
  "ethsign 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core 13.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -815,6 +816,7 @@ dependencies = [
 [[package]]
 name = "ethcontract-common"
 version = "0.1.0"
+source = "git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches#02c2487fabaab52c7f960ebd6aaf4d5e29f9d855"
 dependencies = [
  "ethabi 8.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -828,18 +830,20 @@ dependencies = [
 [[package]]
 name = "ethcontract-derive"
 version = "0.1.0"
+source = "git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches#02c2487fabaab52c7f960ebd6aaf4d5e29f9d855"
 dependencies = [
- "ethcontract-generate 0.1.0",
+ "ethcontract-generate 0.1.0 (git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches)",
  "syn 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "ethcontract-generate"
 version = "0.1.0"
+source = "git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches#02c2487fabaab52c7f960ebd6aaf4d5e29f9d855"
 dependencies = [
  "Inflector 0.11.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "anyhow 1.0.25 (registry+https://github.com/rust-lang/crates.io-index)",
- "ethcontract-common 0.1.0",
+ "ethcontract-common 0.1.0 (git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches)",
  "proc-macro2 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "syn 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3859,6 +3863,10 @@ dependencies = [
 "checksum ethabi 8.0.0 (git+https://github.com/graphprotocol/ethabi.git?branch=graph-patches)" = "<none>"
 "checksum ethabi 8.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "ebdeeea85a6d217b9fcc862906d7e283c047e04114165c433756baf5dce00a6c"
 "checksum ethbloom 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)" = "3932e82d64d347a045208924002930dc105a138995ccdc1479d0f05f0359f17c"
+"checksum ethcontract 0.1.0 (git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches)" = "<none>"
+"checksum ethcontract-common 0.1.0 (git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches)" = "<none>"
+"checksum ethcontract-derive 0.1.0 (git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches)" = "<none>"
+"checksum ethcontract-generate 0.1.0 (git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches)" = "<none>"
 "checksum ethereum-tx-sign 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3e0bcf29eae71e6ad1fd54d79933a8854f7e07b473ae763464000cf07fff3cd6"
 "checksum ethereum-types 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "62d1bc682337e2c5ec98930853674dd2b4bd5d0d246933a9e98e5280f7c76c5f"
 "checksum ethsign 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)" = "b656fefa0b59f41b39000532c69359e927c0f1850186808ccf1586734ac3365f"
