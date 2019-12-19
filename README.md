@@ -116,22 +116,25 @@ cargo test --lib
 
 ## Running with linear optimization solver
 
-For this to work, you will need to have read access to the [solver's gitlab repo](https://gitlab.gnosisdev.com/dfusion/batchauctions). You will also need to have SSH Key authentication for your gitlab account enabled (see [tutorial](https://docs.gitlab.com/ee/ssh/)). **Make sure your SSH Key is not password protected, as this will interfere with the build script**
-
-In your top-level git folder, create a `.ssh/` folder and move or copy the private ssh key (`id_rsa`) registered with your gitlab account in there.
-Then, run
+For this to work, you will need to have read access to our AWS docker registry and have [awscli](https://aws.amazon.com/cli/) installed. Use this command to login:
 
 ```sh
-docker-compose build --build-arg use_solver=1 driver
+$(aws ecr get-login --no-include-email)
 ```
 
-for Snapp and for StableX:
+Then specify the solver image you want to use as a build argument, e.g.: 
 
 ```sh
-docker-compose build --build-arg use_solver=1 stablex
+docker-compose build --build-arg SOLVER_BASE=163030813197.dkr.ecr.us-east-1.amazonaws.com/dex-solver:latest stablex
 ```
 
-Afterwards, when you run your environment with `docker-compose up` the linear optimizer should be automatically used. Note that the e2e might no longer work, as their resolution depends on the naive and not the optimal solving strategy.
+and add the following line to you `common.env` file:
+
+```
+LINEAR_OPTIMIZATION_SOLVER=1
+```
+
+Afterwards, when you run your environment with `docker-compose up stablex` the linear optimizer should be automatically used. Note that the e2e tests might no longer work, as their resolution depends on the naive and not the optimal solving strategy.
 
 ## Troubleshooting
 

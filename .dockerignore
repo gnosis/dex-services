@@ -9,3 +9,6 @@ docker-compose*
 README.md
 LICENSE
 .vscode
+!target/debug/stablex
+!target/debug/dfusion
+!target/debug/listener
