@@ -1,4 +1,13 @@
 if: (branch = master) OR (type = pull_request) OR (tag IS present)
+language: rust
+rust: 1.39.0
+cache: cargo
+before_cache:
+  - find ./target/debug -type f -maxdepth 1 -delete
+  - rm -fr ./target/debug/{deps,.fingerprint}/{*ra_*,*test*,*tools*,*gen_lsp*}
+  - rm -f  ./target/.rustc_info.json
+env:
+  - CARGO_INCREMENTAL=0
 matrix:
   include:
     - stage: "Warm Up"
@@ -10,16 +19,14 @@ matrix:
           - $HOME/.npm
       before_install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
-        - echo -e $GITLAB_PRIVATE_KEY > .ssh/id_rsa && chmod 0500 .ssh/id_rsa
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
       install:
         - (cd dex-contracts && npm ci && npm run prepack)
         - ./test/setup_contracts.sh
       script:
-        # First build base image and run unit tests
-        - docker build --tag stablex --build-arg use_solver=1 -f docker/rust/Dockerfile .
-        # Then build and publish compact multi-stage image
-        - docker build --tag stablex-binary -f docker/rust/stablex_binary/Dockerfile .
+        - cargo build
+        # Build and publish compact image with compiled binary
+        - docker build --tag stablex-binary --build-arg SOLVER_BASE=163030813197.dkr.ecr.us-east-1.amazonaws.com/dex-solver --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
         - docker tag stablex-binary $REGISTRY_URI:$TRAVIS_COMMIT
         - docker push $REGISTRY_URI:$TRAVIS_COMMIT
     - stage: "Tests"
@@ -37,7 +44,7 @@ matrix:
       env:
         - CARGO_INCREMENTAL=0
       install:
-        - (cd dex-contracts && npm ci)
+        - (cd dex-contracts && npm ci && npm run prepack)
         - ./test/setup_contracts.sh
       before_script:
         - rustup component add clippy rustfmt
@@ -98,7 +105,11 @@ matrix:
       after_script:
         - docker-compose logs
       deploy:
-        provider: script
-        script: ./docker/deploy.sh
-        on:
-          branch: master
+        - provider: script
+          script: ./docker/deploy.sh $TRAVIS_BRANCH
+          on:
+            branch: master
+        - provider: script
+          script: ./docker/deploy.sh $TRAVIS_TAG
+          on:
+            tags: true
