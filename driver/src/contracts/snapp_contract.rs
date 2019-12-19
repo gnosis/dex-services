@@ -134,6 +134,7 @@ impl SnappContract for SnappContractImpl {
         Ok(self
             .instance
             .calculate_order_hash(slot, standing_order_index)
+            .gas(5_000_000.into())
             .call()
             .wait()?
             .into())
