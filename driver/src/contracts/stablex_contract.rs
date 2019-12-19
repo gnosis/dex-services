@@ -68,7 +68,11 @@ impl StableXContract for BatchExchange {
     }
 
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
-        let packed_auction_bytes = self.get_encoded_orders().call().wait()?;
+        let packed_auction_bytes = self
+            .get_encoded_orders()
+            .gas(10_000_000.into())
+            .call()
+            .wait()?;
         let auction_data = parse_auction_data(packed_auction_bytes, index);
         Ok(auction_data)
     }
