@@ -14,12 +14,11 @@ matrix:
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
       install:
         - (cd dex-contracts && npm ci)
-      script:
-        # First build and setup the contracts (for their ABI and networks)
         - ./test/setup_contracts.sh
-        # Then build base image and run unit tests
+      script:
+        # First build base image and run unit tests
         - docker build --tag stablex --build-arg use_solver=1 -f docker/rust/Dockerfile .
-        # Finally build and publish compact multi-stage image
+        # Then build and publish compact multi-stage image
         - docker build --tag stablex-binary -f docker/rust/stablex_binary/Dockerfile .
         - docker tag stablex-binary $REGISTRY_URI:$TRAVIS_COMMIT
         - docker push $REGISTRY_URI:$TRAVIS_COMMIT
@@ -27,17 +26,18 @@ matrix:
       name: "Unit Tests"
       language: rust
       rust: 1.39.0
-      cache:
-        cargo: true
-        directories:
-          - dex-contracts/node_modules/
       before_cache:
         - find ./target/debug -type f -maxdepth 1 -delete
         - rm -fr ./target/debug/{deps,.fingerprint}/{*ra_*,*test*,*tools*,*gen_lsp*}
         - rm -f  ./target/.rustc_info.json
+      cache:
+        cargo: true
+        directories:
+          - dex-contracts/node_modules/
       env:
         - CARGO_INCREMENTAL=0
       install:
+        - (cd dex-contracts && npm ci)
         - ./test/setup_contracts.sh
       before_script:
         - rustup component add clippy rustfmt
