@@ -1,4 +1,6 @@
+# With this image, only the naive solver will work
 ARG SOLVER_BASE=ubuntu:bionic
+
 ARG RUST_BASE=rust-compile
 
 # Build Option 1: Download rust and compile sources
@@ -22,7 +24,7 @@ ONBUILD COPY listener ./listener
 ONBUILD COPY Cargo.* ./
 ONBUILD RUN cargo build
 
-# Build Option 1: Copy already compiled binary from host (used e.g. in travis)
+# Build Option 2: Copy already compiled binary from host (used e.g. in travis)
 FROM ${SOLVER_BASE} as rust-binary
 
 # Required for listener
