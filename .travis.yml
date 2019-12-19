@@ -6,6 +6,8 @@ cache:
     - $HOME/.cache/sccache
     - $HOME/.cargo
     - $HOME/.rustup
+before_cache:
+  - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
 env:
   global:
     - CARGO_INCREMENTAL=0
