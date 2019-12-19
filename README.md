@@ -43,11 +43,11 @@ More components, e.g. a watchtower to challenge invalid state transitions, will 
 
 ### Requirements
 
-- Rust (stable)
-- NodeJS 11.0, starting with version 12 some deprecated APIs were removed that cause `scrypt`, `keccak`, `secp256k1`, and `sha3` packages to fail to build
-- Docker and Docker-compose (stable)
+- Rust ^1.37
+- NodeJS ^11.0, starting with version 12 some deprecated APIs were removed that cause `scrypt`, `keccak`, `secp256k1`, and `sha3` packages to fail to build
+- Docker ^19.03 and Docker-compose ^1.24
 
-The project may work with other versions of these tools but they are not tested.
+The project may work with older versions of these tools but they are not tested.
 
 ### Installation
 
