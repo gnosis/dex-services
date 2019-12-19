@@ -3,7 +3,7 @@ use std::env;
 use web3::api::Web3;
 use web3::futures::Future;
 use web3::transports::{EventLoopHandle, Http};
-use web3::types::{BlockId, H256, U128, U256};
+use web3::types::{BlockId, H160, H256, U128, U256};
 
 use crate::contracts;
 use crate::error::DriverError;
@@ -32,6 +32,19 @@ impl SnappContractImpl {
             _event_loop: event_loop,
             instance,
         })
+    }
+
+    pub fn address(&self) -> H160 {
+        self.instance.address()
+    }
+
+    pub fn account(&self) -> H160 {
+        self.instance
+            .defaults()
+            .from
+            .as_ref()
+            .map(|from| from.address())
+            .unwrap_or_default()
     }
 }
 
