@@ -92,6 +92,7 @@ impl StableXContract for BatchExchange {
                 prices,
                 token_ids_for_price,
             )
+            .gas(5_000_000.into())
             .call()
             .wait()?;
 
