@@ -27,7 +27,7 @@ lazy_static = "1.4.0"
 parity-wasm = "0.40"
 serde_yaml = "0.8"
 slog = "2.5.2"
-tiny-keccak = "1.4.2"
+tiny-keccak = { version = "2.0.1", features = ["keccak"] }
 web3 = { git = "https://github.com/graphprotocol/rust-web3", branch = "graph-patches" }
 
 [dev-dependencies]
