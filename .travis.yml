@@ -13,7 +13,7 @@ matrix:
         - echo -e $GITLAB_PRIVATE_KEY > .ssh/id_rsa && chmod 0500 .ssh/id_rsa
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
       install:
-        - (cd dex-contracts && npm ci)
+        - (cd dex-contracts && npm ci && npm run prepack)
         - ./test/setup_contracts.sh
       script:
         # First build base image and run unit tests
