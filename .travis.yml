@@ -42,7 +42,9 @@ matrix:
       script: cd dex-contracts && npm ci
     - stage: "Tests"
       name: "Unit Tests"
-      language: rust
+      script:
+        - cargo test --all
+    - name: "Lint"
       before_script:
         - |
           mkdir -p $HOME/.sccache/bin
@@ -52,11 +54,10 @@ matrix:
           popd
         - rustup component add clippy rustfmt
       script:
-        - cargo test --all
         - cargo clippy --all --all-targets -- -D warnings
         - cargo fmt --all -- --check
     - language: generic
-      name: "dƒusion e2e Tests"
+      name: "dƒusion e2e Tests (Deposit & Withdraw)"
       cache:
         directories:
           - dex-contracts/node_modules/
@@ -69,9 +70,37 @@ matrix:
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d driver graph-listener
         - ./test/e2e-tests-deposit-withdraw.sh
-        - ./test/restart-containers.sh
+      after_failure:
+        - docker-compose logs
+    - language: generic
+      name: "dƒusion e2e Tests (Auction)"
+      cache:
+        directories:
+          - dex-contracts/node_modules/
+      install:
+        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
+        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
+        - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
+        - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
+        - ./test/setup_contracts.sh
+      script:
+        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d driver graph-listener
         - ./test/e2e-tests-auction.sh
-        - ./test/restart-containers.sh
+      after_failure:
+        - docker-compose logs
+    - language: generic
+      name: "dƒusion e2e Tests (Standing Orders)"
+      cache:
+        directories:
+          - dex-contracts/node_modules/
+      install:
+        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
+        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
+        - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
+        - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
+        - ./test/setup_contracts.sh
+      script:
+        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d driver graph-listener
         - ./test/e2e-tests-standing-order.sh
       after_failure:
         - docker-compose logs
