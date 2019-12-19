@@ -12,7 +12,6 @@ matrix:
   include:
     - stage: "Warm Up"
       name: "Build"
-      language: generic
       cache:
         directories:
           - dex-contracts/node_modules/
@@ -32,17 +31,6 @@ matrix:
     - stage: "Tests"
       name: "Unit Tests"
       language: rust
-      rust: 1.39.0
-      before_cache:
-        - find ./target/debug -type f -maxdepth 1 -delete
-        - rm -fr ./target/debug/{deps,.fingerprint}/{*ra_*,*test*,*tools*,*gen_lsp*}
-        - rm -f  ./target/.rustc_info.json
-      cache:
-        cargo: true
-        directories:
-          - dex-contracts/node_modules/
-      env:
-        - CARGO_INCREMENTAL=0
       install:
         - (cd dex-contracts && npm ci && npm run prepack)
         - ./test/setup_contracts.sh
