@@ -90,7 +90,11 @@ matrix:
       after_script:
         - docker-compose logs
       deploy:
-        provider: script
-        script: ./docker/deploy.sh
-        on:
-          branch: master
+        - provider: script
+          script: ./docker/deploy.sh $TRAVIS_BRANCH
+          on:
+            branch: master
+        - provider: script
+          script: ./docker/deploy.sh $TRAVIS_TAG
+          on:
+            tags: true
