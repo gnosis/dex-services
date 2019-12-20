@@ -39,7 +39,7 @@ matrix:
         directories:
           - dex-contracts/node_modules/
           - $HOME/.npm
-      script: cd dex-contracts && npm ci
+      script: cd dex-contracts && yarn install --frozen-lockfile
     - stage: "Tests"
       name: "Unit Tests"
       language: rust
