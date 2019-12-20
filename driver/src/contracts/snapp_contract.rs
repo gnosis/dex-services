@@ -393,7 +393,7 @@ pub mod tests {
         pub get_current_deposit_slot: Mock<(), Result<U256>>,
         pub get_current_withdraw_slot: Mock<(), Result<U256>>,
         pub get_current_auction_slot: Mock<(), Result<U256>>,
-        pub creation_timestamp_for_deposit_slot: Mock<(U256), Result<U256>>,
+        pub creation_timestamp_for_deposit_slot: Mock<U256, Result<U256>>,
         pub deposit_hash_for_slot: Mock<U256, Result<H256>>,
         pub has_deposit_slot_been_applied: Mock<U256, Result<bool>>,
         pub creation_timestamp_for_withdraw_slot: Mock<U256, Result<U256>>,

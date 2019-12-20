@@ -11,7 +11,7 @@ use log::info;
 pub fn run_deposit_listener(
     db: &dyn DbInterface,
     contract: &dyn SnappContract,
-) -> Result<(bool), DriverError> {
+) -> Result<bool, DriverError> {
     let deposit_slot = contract.get_current_deposit_slot()?;
 
     info!("Current top deposit_slot is {:?}", deposit_slot);
