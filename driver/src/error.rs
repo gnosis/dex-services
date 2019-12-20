@@ -1,6 +1,7 @@
 use crate::price_finding::error::PriceFindingError;
 
 use ethabi;
+use ethcontract::ethsign;
 use std::error::Error;
 use std::fmt;
 
@@ -20,6 +21,9 @@ pub enum ErrorKind {
     ParseIntError,
     StateError,
     PriceFindingError,
+    SigningError,
+    ContractDeployedError,
+    ContractExecutionError,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -97,6 +101,24 @@ impl From<DatabaseError> for DriverError {
 impl From<PriceFindingError> for DriverError {
     fn from(error: PriceFindingError) -> Self {
         DriverError::new(&format!("{}", error), ErrorKind::PriceFindingError)
+    }
+}
+
+impl From<ethsign::Error> for DriverError {
+    fn from(error: ethsign::Error) -> Self {
+        DriverError::new(&error.to_string(), ErrorKind::SigningError)
+    }
+}
+
+impl From<ethcontract::errors::DeployError> for DriverError {
+    fn from(error: ethcontract::errors::DeployError) -> Self {
+        DriverError::new(&error.to_string(), ErrorKind::ContractDeployedError)
+    }
+}
+
+impl From<ethcontract::errors::ExecutionError> for DriverError {
+    fn from(error: ethcontract::errors::ExecutionError) -> Self {
+        DriverError::new(&error.to_string(), ErrorKind::ContractExecutionError)
     }
 }
 

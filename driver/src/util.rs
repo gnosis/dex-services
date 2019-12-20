@@ -1,5 +1,6 @@
 use log::info;
 use std::env;
+use std::future::Future;
 use web3::types::{H256, U256};
 
 use crate::contracts::snapp_contract::SnappContract;
@@ -109,6 +110,19 @@ pub fn create_price_finder(fee: Option<Fee>) -> Box<dyn PriceFinding> {
     } else {
         info!("Using naive price finder");
         Box::new(NaiveSolver::new(fee))
+    }
+}
+
+pub trait FutureWaitExt: Future {
+    fn wait(self) -> Self::Output;
+}
+
+impl<F> FutureWaitExt for F
+where
+    F: Future,
+{
+    fn wait(self) -> Self::Output {
+        futures::executor::block_on(self)
     }
 }
 

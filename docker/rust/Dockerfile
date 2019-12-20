@@ -17,6 +17,7 @@ ONBUILD RUN apt-get update \
   && curl https://sh.rustup.rs -sSf | sh -s -- -y \
   && ln -s $HOME/.cargo/bin/* /usr/bin/
 
+ONBUILD COPY dex-contracts/build ./dex-contracts/build
 ONBUILD COPY dfusion_rust_core ./dfusion_rust_core
 ONBUILD COPY driver ./driver
 ONBUILD COPY listener ./listener

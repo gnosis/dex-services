@@ -7,6 +7,8 @@ use driver::run_driver_components;
 use graph::log::logger;
 use graph_node_reader::Store as GraphNodeReader;
 
+use log::info;
+
 use std::env;
 use std::thread;
 use std::time::Duration;
@@ -19,6 +21,8 @@ fn main() {
     let db_instance = GraphReader::new(Box::new(store_reader));
 
     let snapp_contract = SnappContractImpl::new().unwrap();
+    info!("Using contract at {}", snapp_contract.address());
+    info!("Using account {}", snapp_contract.account());
 
     let mut price_finder = driver::util::create_price_finder(None);
     let mut order_processor =
