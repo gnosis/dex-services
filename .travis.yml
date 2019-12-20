@@ -1,13 +1,19 @@
 if: (branch = master) OR (type = pull_request) OR (tag IS present)
 language: rust
 rust: 1.39.0
-cache: cargo
+cache:
+  directories:
+    - $HOME/.cache/sccache
+    - $HOME/.cargo
+    - $HOME/.rustup
 before_cache:
-  - find ./target/debug -type f -maxdepth 1 -delete
-  - rm -fr ./target/debug/{deps,.fingerprint}/{*ra_*,*test*,*tools*,*gen_lsp*}
-  - rm -f  ./target/.rustc_info.json
+  - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
 env:
-  - CARGO_INCREMENTAL=0
+  global:
+    - CARGO_INCREMENTAL=0
+    - SCCACHE_VERSION=0.2.12
+    - SCCACHE=$HOME/.sccache/bin/sccache
+    - RUSTC_WRAPPER=$SCCACHE
 matrix:
   include:
     - stage: WarmUp
@@ -15,6 +21,12 @@ matrix:
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
+        - |
+          mkdir -p $HOME/.sccache/bin
+          pushd $HOME/.sccache
+          curl -LO https://github.com/mozilla/sccache/releases/download/$SCCACHE_VERSION/sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz
+          tar -C bin -xvf sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz --wildcards '*/sccache' --strip 1
+          popd
       script:
         - cargo build
         # Build and publish compact image with compiled binary
@@ -32,6 +44,12 @@ matrix:
       name: "Unit Tests"
       language: rust
       before_script:
+        - |
+          mkdir -p $HOME/.sccache/bin
+          pushd $HOME/.sccache
+          curl -LO https://github.com/mozilla/sccache/releases/download/$SCCACHE_VERSION/sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz
+          tar -C bin -xvf sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz --wildcards '*/sccache' --strip 1
+          popd
         - rustup component add clippy rustfmt
       script:
         - cargo test --all
