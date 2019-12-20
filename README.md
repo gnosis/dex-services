@@ -10,14 +10,14 @@ This repository contains the backend logic for the dfusion exchange based on the
   <img src="documentation/architecture.png" alt="dex-services architecture" width="500">
 </p>
 
-The *Event Listener* registers for certain EVM events via the [Gnosis Trading DB](https://github.com/gnosis/pm-trading-db).
+The _Event Listener_ registers for certain EVM events via the [Gnosis Trading DB](https://github.com/gnosis/pm-trading-db).
 The [dex smart contract](https://github.com/gnosis/dex-contracts) emits these events on user interaction (deposit, withdraw, order) as well as when the saved state root hash is updated (state transitions).
 
-Upon receiving a relevant event from the contract, the event listener computes the implied changes to the underlying state. 
-E.g. if a *deposit* event is received, the list of pending deposits is updated.
-Similarly, if a *deposit state transition* event is received it updates the account balances based on the pending deposits that were included in the state transition.
+Upon receiving a relevant event from the contract, the event listener computes the implied changes to the underlying state.
+E.g. if a _deposit_ event is received, the list of pending deposits is updated.
+Similarly, if a _deposit state transition_ event is received it updates the account balances based on the pending deposits that were included in the state transition.
 
-The *Driver* watches state updates to the database and reads relevant data from the smart contract to decide when a state transition can be applied.
+The _Driver_ watches state updates to the database and reads relevant data from the smart contract to decide when a state transition can be applied.
 There are four types of state transitions:
 
 - apply deposit
@@ -25,17 +25,18 @@ There are four types of state transitions:
 - find solution for optimization problem
 - apply trade execution (according to the winning solution)
 
-The *Driver* computes the updated root state according to the data it reads from the database and submits a state transition to the smart contract.
+The _Driver_ computes the updated root state according to the data it reads from the database and submits a state transition to the smart contract.
 
-The *Driver* does not write into the database.
-Instead, the smart contract emits an event, which the *Event Listener* receives. The *Event Listener* then applies the state transition based on the data emitted in the event and the existing state in the database.
+The _Driver_ does not write into the database.
+Instead, the smart contract emits an event, which the _Event Listener_ receives. The _Event Listener_ then applies the state transition based on the data emitted in the event and the existing state in the database.
 It also updates the state in the database.
 
-Note that the *Event Listener* is the only component writing into the database.
+Note that the _Event Listener_ is the only component writing into the database.
 There are two main reasons for that:
-1. **Scalability:** By using the *Single Writer Principle* we can scale access to the database layer much better and thus provide a data availability provider that can also be used by external participants of the system.
-2. **Driver Competition:** We assume, there will be multiple systems (or at least multiple instances of this system) competing in optimization and driving the state machine forward. 
-Thus, our data layer has to rely only on the data emitted by the EVM. It cannot assume that the *Driver* is aware of updating all available data stores.
+
+1. **Scalability:** By using the _Single Writer Principle_ we can scale access to the database layer much better and thus provide a data availability provider that can also be used by external participants of the system.
+2. **Driver Competition:** We assume, there will be multiple systems (or at least multiple instances of this system) competing in optimization and driving the state machine forward.
+   Thus, our data layer has to rely only on the data emitted by the EVM. It cannot assume that the _Driver_ is aware of updating all available data stores.
 
 More components, e.g. a watchtower to challenge invalid state transitions, will be added in the future.
 
@@ -51,12 +52,13 @@ The project may work with other versions of these tools but they are not tested.
 
 ### Installation
 
-Clone the repository, its submodule, and run the container
+Clone the repository, its submodule, and run the container:
+
 ```bash
 git clone git@github.com:gnosis/dex-services.git
 cd dex-services
 git submodule update --init
-cd dex-contracts 
+cd dex-contracts
 npm ci && npx truffle compile
 cd ../
 docker-compose up
@@ -69,7 +71,7 @@ graph-listener, a listener pulling data from the ganache-cli and inserting it in
 driver, a service calculating the new states and push these into the smart contract
 
 You can see the current state of the theGraph DB by opening [localhost:8000](http://localhost:8000) and connecting to the default database (top right).
-On the left side bar, under *Collections* select the collection you want to inspect, e.g. *accounts*.
+On the left side bar, under _Collections_ select the collection you want to inspect, e.g. _accounts_.
 
 In order to setup some testing accounts and make the first deposits (from account 3, of the third registered token with an amount of 18), run in the same repo the following scripts:
 
@@ -96,6 +98,7 @@ npx truffle exec scripts/{snapp,stablex}/claim_withdraw.js --slot=0 --accountId=
 ## Tests
 
 You need the following dependencies installed locally in order to run the e2e tests:
+
 - [jq](https://stedolan.github.io/jq/)
 
 For end-to-end tests, run from the project root:
@@ -108,7 +111,8 @@ docker-compose down && docker-compose up
 
 If end-to-end tests are failing, check the `docker-compose logs` and consider inspecting the DB state using the web interface.
 
-To run unit tests for the *Driver*:
+To run unit tests for the _Driver_:
+
 ```bash
 cd driver
 cargo test --lib
@@ -122,7 +126,7 @@ For this to work, you will need to have read access to our AWS docker registry a
 $(aws ecr get-login --no-include-email)
 ```
 
-Then specify the solver image you want to use as a build argument, e.g.: 
+Then specify the solver image you want to use as a build argument, e.g.:
 
 ```sh
 docker-compose build --build-arg SOLVER_BASE=163030813197.dkr.ecr.us-east-1.amazonaws.com/dex-solver:latest stablex
@@ -139,7 +143,8 @@ Afterwards, when you run your environment with `docker-compose up stablex` the l
 ## Troubleshooting
 
 #### docker-compose build
-If you have built the docker landscape before, and there are updates to the smart contracts submodule (*dex-contracts/*), you have to rebuild your docker environment, for them to be picked up:
+
+If you have built the docker landscape before, and there are updates to the smart contracts submodule (_dex-contracts/_), you have to rebuild your docker environment, for them to be picked up:
 
 ```bash
 cd dex-contracts && rm -rf build && npx truffle compile && cd ..
