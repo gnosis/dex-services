@@ -19,7 +19,7 @@ matrix:
     - stage: WarmUp
       name: "Build"
       install:
-        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
+        - sudo apt-get update && sudo apt-get install -y awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
         - |
           mkdir -p $HOME/.sccache/bin
@@ -61,7 +61,7 @@ matrix:
         directories:
           - dex-contracts/node_modules/
       install:
-        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
+        - sudo apt-get update && sudo apt-get install -y awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
@@ -81,7 +81,7 @@ matrix:
         directories:
           - dex-contracts/node_modules/
       install:
-        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
+        - sudo apt-get update && sudo apt-get install -y awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
@@ -97,7 +97,7 @@ matrix:
         directories:
           - dex-contracts/node_modules/
       install:
-        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
+        - sudo apt-get update && sudo apt-get install -y awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
