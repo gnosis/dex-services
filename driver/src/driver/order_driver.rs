@@ -181,7 +181,7 @@ impl<'a> OrderProcessor<'a> {
             AuctionBid {
                 previous_state: state_root,
                 new_state: new_state_root,
-                solution: solution.clone(),
+                solution,
             },
         );
 
@@ -413,13 +413,13 @@ mod tests {
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot
             .given(U256::one())
-            .will_return(Ok(orders.clone()));
+            .will_return(Ok(orders));
         db.get_standing_orders_of_slot
             .given(U256::one())
             .will_return(Ok(standing_orders));
         db.get_balances_for_state_root
             .given(state_hash)
-            .will_return(Ok(state.clone()));
+            .will_return(Ok(state));
 
         let mut pf = PriceFindingMock::default();
         let mut processor = OrderProcessor::new(&db, &contract, &mut pf);
@@ -592,10 +592,10 @@ mod tests {
         let db = DbInterfaceMock::new();
         db.get_orders_of_slot
             .given(U256::one())
-            .will_return(Ok(orders.clone()));
+            .will_return(Ok(orders));
         db.get_balances_for_state_root
             .given(state_hash)
-            .will_return(Ok(state.clone()));
+            .will_return(Ok(state));
 
         let mut pf = PriceFindingMock::default();
 
@@ -671,7 +671,7 @@ mod tests {
             .will_return(Ok(vec![]));
         db.get_standing_orders_of_slot
             .given(U256::one())
-            .will_return(Ok(standing_orders.clone()));
+            .will_return(Ok(standing_orders));
         db.get_balances_for_state_root
             .given(state_hash)
             .will_return(Ok(state.clone()));
@@ -695,7 +695,7 @@ mod tests {
         );
         let empty_order = StandingOrder::new(H160::zero(), U256::zero(), U256::from(2), vec![]);
         let mut standing_orders = vec![empty_order; NUM_RESERVED_ACCOUNTS as usize];
-        standing_orders[1] = standing_order.clone();
+        standing_orders[1] = standing_order;
         let mut standing_order_indexes = vec![U128::zero(); NUM_RESERVED_ACCOUNTS as usize];
         standing_order_indexes[1] = 3.into();
         assert_eq!(

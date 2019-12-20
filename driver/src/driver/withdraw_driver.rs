@@ -12,7 +12,7 @@ use log::info;
 pub fn run_withdraw_listener(
     db: &dyn DbInterface,
     contract: &dyn SnappContract,
-) -> Result<(bool), DriverError> {
+) -> Result<bool, DriverError> {
     let withdraw_slot = contract.get_current_withdraw_slot()?;
 
     info!("Current top withdraw_slot is {:?}", withdraw_slot);

@@ -220,7 +220,7 @@ pub mod tests {
         expected_entity.remove("id");
         expected_entity.set("orders", vec![]);
 
-        let actual_entity: Entity = standing_order.clone().into();
+        let actual_entity: Entity = standing_order.into();
 
         assert_eq!(actual_entity, expected_entity);
     }

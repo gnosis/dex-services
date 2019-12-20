@@ -195,7 +195,7 @@ mod tests {
         contract
             .get_auction_data
             .given(batch - 1)
-            .will_return(Ok((state.clone(), orders.clone())));
+            .will_return(Ok((state, orders.clone())));
 
         contract
             .get_solution_objective_value
@@ -204,7 +204,7 @@ mod tests {
 
         contract
             .submit_solution
-            .given((batch - 1, Val(orders.clone()), Any, Val(U256::from(1337))))
+            .given((batch - 1, Val(orders), Any, Val(U256::from(1337))))
             .will_return(Ok(()));
 
         let mut driver = StableXDriver::new(&contract, &mut pf);

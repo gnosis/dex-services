@@ -149,7 +149,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         },
         &logger,
         eth_net_identifier,
-        postgres_conn_pool.clone(),
+        postgres_conn_pool,
     ));
 
     // BlockIngestor must be configured to keep at least REORG_THRESHOLD ancestors,
@@ -179,7 +179,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     };
     let stores: HashMap<String, Arc<DieselStore>> = {
         let mut stores = HashMap::new();
-        stores.insert(network_name.clone(), store.clone());
+        stores.insert(network_name, store.clone());
         stores
     };
 
@@ -194,7 +194,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
     );
 
     let runtime_host_builder = {
-        let store_reader = Box::new(GraphNodeReader::new(postgres_url.clone(), &logger));
+        let store_reader = Box::new(GraphNodeReader::new(postgres_url, &logger));
         let database = Arc::new(GraphReader::new(store_reader));
         RustRuntimeHostBuilder::new(database)
     };
@@ -205,7 +205,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         eth_adapters.clone(),
         runtime_host_builder,
         block_stream_builder,
-        metrics_registry.clone(),
+        metrics_registry,
     );
 
     let link_resolver = Arc::new(LocalLinkResolver);
@@ -228,7 +228,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         link_resolver,
         Arc::new(subgraph_provider),
         store.clone(),
-        stores.clone(),
+        stores,
         eth_adapters.clone(),
         NODE_ID.clone(),
         SubgraphVersionSwitchingMode::Instant,
@@ -273,8 +273,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
         store.clone(),
         NODE_ID.clone(),
     );
-    let mut subscription_server =
-        GraphQLSubscriptionServer::new(&logger, graphql_runner.clone(), store.clone());
+    let mut subscription_server = GraphQLSubscriptionServer::new(&logger, graphql_runner, store);
 
     // Serve GraphQL queries over HTTP
     tokio::spawn(
