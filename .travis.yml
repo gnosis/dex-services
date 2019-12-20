@@ -21,7 +21,7 @@ matrix:
       cache:
         directories:
           - dex-contracts/node_modules/
-          - $HOME/.npm
+          - $HOME/.cache/yarn
       before_install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
@@ -32,7 +32,7 @@ matrix:
           tar -C bin -xvf sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz --wildcards '*/sccache' --strip 1
           popd
       install:
-        - (cd dex-contracts && npm ci && npm run prepack)
+        - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
         - ./test/setup_contracts.sh
       script:
         - cargo build
@@ -45,9 +45,10 @@ matrix:
       language: rust
       cache:
         directories:
-          - $HOME/.npm
+          - dex-contracts/node_modules/
+          - $HOME/.cache/yarn
       install:
-        - (cd dex-contracts && npm ci && npm run prepack)
+        - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
         - ./test/setup_contracts.sh
       before_script:
         - |
@@ -66,6 +67,7 @@ matrix:
       cache:
         directories:
           - dex-contracts/node_modules/
+          - $HOME/.cache/yarn
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
@@ -86,6 +88,7 @@ matrix:
       cache:
         directories:
           - dex-contracts/node_modules/
+          - $HOME/.cache/yarn
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
@@ -102,12 +105,13 @@ matrix:
       cache:
         directories:
           - dex-contracts/node_modules/
+          - $HOME/.cache/yarn
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
-        - (cd dex-contracts && npm run prepack)
+        - (cd dex-contracts && yarn run prepack)
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.yml up -d stablex
         - ./test/e2e-tests-stablex-rinkeby.sh
