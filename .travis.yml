@@ -42,6 +42,13 @@ matrix:
       script: cd dex-contracts && npm ci
     - stage: "Tests"
       name: "Unit Tests"
+      before_script:
+        - |
+          mkdir -p $HOME/.sccache/bin
+          pushd $HOME/.sccache
+          curl -LO https://github.com/mozilla/sccache/releases/download/$SCCACHE_VERSION/sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz
+          tar -C bin -xvf sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz --wildcards '*/sccache' --strip 1
+          popd
       script:
         - cargo test --all
     - name: "Lint"
