@@ -290,7 +290,7 @@ pub mod tests {
             "No batch info if there's no auctionId"
         );
 
-        let mut actual_entity = entity.clone();
+        let mut actual_entity = entity;
         actual_entity.remove("slotIndex");
         actual_entity.remove("auctionId");
         assert_eq!(

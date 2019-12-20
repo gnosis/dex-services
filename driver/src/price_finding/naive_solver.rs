@@ -599,7 +599,7 @@ pub mod tests {
             token: 2,
             ratio: 0.001,
         });
-        let solver = NaiveSolver::new(fee.clone());
+        let solver = NaiveSolver::new(fee);
         let res = solver.find_prices(&orders, &state).unwrap();
         assert_eq!(res, Solution::trivial(orders.len()));
     }

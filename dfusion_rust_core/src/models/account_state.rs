@@ -233,7 +233,7 @@ pub mod tests {
         let state_hash = "a0cde336d10dbaf3df98ba662bacf25d95062db7b3e0083bd4bad4a6c7a1cd41"
             .parse::<H256>()
             .unwrap();
-        let state = AccountState::new(state_hash, U256::one(), balances.clone(), TOKENS);
+        let state = AccountState::new(state_hash, U256::one(), balances, TOKENS);
         assert_eq!(state.rolling_hash(0), state_hash);
     }
 
@@ -295,7 +295,7 @@ pub mod tests {
     fn test_apply_auction() {
         let balances = vec![0, 1, 1, 0];
 
-        let mut state = AccountState::new(H256::zero(), U256::one(), balances.clone(), 2);
+        let mut state = AccountState::new(H256::zero(), U256::one(), balances, 2);
 
         let order_1 = Order {
             batch_information: Some(BatchInformation {
