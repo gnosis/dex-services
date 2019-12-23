@@ -138,7 +138,19 @@ Afterwards, when you run your environment with `docker-compose up stablex` the l
 
 ## Troubleshooting
 
-#### docker-compose build
+### Logging
+
+The driver uses `slog-envlogger` as a `slog` drain which means that logging filters can be controlled by the environment. To modify the logging filter, use the `DFUSION_LOG` environment variable:
+
+```bash
+# only log warnings except for 'driver::transport' module
+DFUSION_LOG=warn,driver::transport=debug cargo run --bin stablex
+```
+
+More information on the logging filter syntax can be found in the `slog-envlogger` [documentation](https://docs.rs/slog-envlogger/2.2.0/slog_envlogger/).
+
+### docker-compose build
+
 If you have built the docker landscape before, and there are updates to the smart contracts submodule (*dex-contracts/*), you have to rebuild your docker environment, for them to be picked up:
 
 ```bash
@@ -152,7 +164,7 @@ or rebuild everything if you are desperate (will take longer, but might solve ot
 docker-compose build
 ```
 
-#### Different networks:
+### Different networks:
 
 In order to start StableX for the Rinkeby network, make sure that the env variables in common-rinkeby.env are up to date and then start the specific docker:
 
