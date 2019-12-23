@@ -1,5 +1,6 @@
 use driver::contracts::stablex_contract::BatchExchange;
 use driver::driver::stablex_driver::StableXDriver;
+use driver::logging;
 use driver::price_finding::Fee;
 
 use log::{error, info};
@@ -8,7 +9,7 @@ use std::thread;
 use std::time::Duration;
 
 fn main() {
-    simple_logger::init_with_level(log::Level::Info).unwrap();
+    let (_, _guard) = logging::init();
 
     let (contract, _event_loop) = BatchExchange::new().unwrap();
     info!("Using contract at {}", contract.address());

@@ -19,6 +19,7 @@ use crate::driver::withdraw_driver::run_withdraw_listener;
 pub mod contracts;
 pub mod driver;
 pub mod error;
+pub mod logging;
 pub mod price_finding;
 pub mod snapp;
 pub mod transport;
