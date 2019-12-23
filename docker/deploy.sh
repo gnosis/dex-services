@@ -4,11 +4,13 @@ set -euo pipefail
 
 function autodeploy {
     # Notifying webhook
-    curl -s --output /dev/null --write-out "%{http_code}" \
-    -H "Content-Type: application/json" \
-    -X POST \
-    -d '{"token": "'$AUTODEPLOY_TOKEN'", "push_data": {"tag": "'$AUTODEPLOY_TAG'" }}' \
-    $1
+    curl -s \
+      --output /dev/null \
+      --write-out "%{http_code}" \
+      -H "Content-Type: application/json" \
+      -X POST \
+      -d '{"token": "'$AUTODEPLOY_TOKEN'", "push_data": {"tag": "'$AUTODEPLOY_TAG'" }}' \
+      $1
 }
 
 image_name=$1
