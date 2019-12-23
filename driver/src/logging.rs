@@ -10,7 +10,7 @@ const FILTER_KEY: &str = "DFUSION_LOG";
 
 /// The default log message filter to pass into the `env_logger` when none is
 /// supplied by the environment.
-const DEFAULT_FILTER: &str = "info,driver=debug";
+const DEFAULT_FILTER: &str = "info";
 
 /// Initialize driver logging.
 pub fn init() -> (Logger, GlobalLoggerGuard) {
