@@ -5,7 +5,6 @@ use driver::driver::order_driver::OrderProcessor;
 use driver::logging;
 use driver::run_driver_components;
 
-use graph::log::logger;
 use graph_node_reader::Store as GraphNodeReader;
 
 use log::info;
@@ -15,11 +14,10 @@ use std::thread;
 use std::time::Duration;
 
 fn main() {
-    logging::init();
+    let (logger, _guard) = logging::init();
 
-    let graph_logger = logger(false);
     let postgres_url = env::var("POSTGRES_URL").expect("Specify POSTGRES_URL variable");
-    let store_reader = GraphNodeReader::new(postgres_url, &graph_logger);
+    let store_reader = GraphNodeReader::new(postgres_url, &logger);
     let db_instance = GraphReader::new(Box::new(store_reader));
 
     let snapp_contract = SnappContractImpl::new().unwrap();

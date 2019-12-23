@@ -9,7 +9,7 @@ use std::thread;
 use std::time::Duration;
 
 fn main() {
-    logging::init();
+    let (_, _guard) = logging::init();
 
     let (contract, _event_loop) = BatchExchange::new().unwrap();
     info!("Using contract at {}", contract.address());
