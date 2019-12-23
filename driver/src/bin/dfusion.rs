@@ -2,6 +2,7 @@ use dfusion_core::database::GraphReader;
 
 use driver::contracts::snapp_contract::SnappContractImpl;
 use driver::driver::order_driver::OrderProcessor;
+use driver::logging;
 use driver::run_driver_components;
 
 use graph::log::logger;
@@ -14,7 +15,8 @@ use std::thread;
 use std::time::Duration;
 
 fn main() {
-    simple_logger::init_with_level(log::Level::Info).unwrap();
+    logging::init();
+
     let graph_logger = logger(false);
     let postgres_url = env::var("POSTGRES_URL").expect("Specify POSTGRES_URL variable");
     let store_reader = GraphNodeReader::new(postgres_url, &graph_logger);
