@@ -4,6 +4,7 @@ use web3::api::Web3;
 use web3::futures::Future;
 use web3::transports::{EventLoopHandle, Http};
 use web3::types::{BlockId, H160, H256, U128, U256};
+use web3::Transport;
 
 use crate::contracts;
 use crate::error::DriverError;
@@ -14,13 +15,16 @@ type Result<T> = std::result::Result<T, DriverError>;
 
 include!(concat!(env!("OUT_DIR"), "/snapp_auction.rs"));
 
-pub struct SnappContractImpl {
-    web3: Web3<LoggingTransport<Http>>,
+pub struct SnappContractImpl<T>
+where
+    T: Transport,
+{
+    web3: Web3<T>,
     _event_loop: EventLoopHandle,
     instance: SnappAuction,
 }
 
-impl SnappContractImpl {
+impl SnappContractImpl<LoggingTransport<Http>> {
     pub fn new() -> Result<Self> {
         let (web3, event_loop) = contracts::web3_provider()?;
         let defaults = contracts::method_defaults()?;
@@ -34,7 +38,12 @@ impl SnappContractImpl {
             instance,
         })
     }
+}
 
+impl<T> SnappContractImpl<T>
+where
+    T: Transport,
+{
     pub fn address(&self) -> H160 {
         self.instance.address()
     }
@@ -109,7 +118,10 @@ pub trait SnappContract {
     ) -> Result<()>;
 }
 
-impl SnappContract for SnappContractImpl {
+impl<T> SnappContract for SnappContractImpl<T>
+where
+    T: Transport,
+{
     fn get_current_block_timestamp(&self) -> Result<U256> {
         self.web3
             .eth()
