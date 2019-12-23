@@ -34,7 +34,12 @@ where
     }
 
     fn send(&self, id: RequestId, request: Call) -> Self::Out {
-        log!(self.level, "sending request ID {}: {:?}", id, request);
+        log!(
+            self.level,
+            "sending request ID {}: {}",
+            id,
+            serde_json::to_string(&request).expect("request is invalid JSON")
+        );
         LoggingFuture {
             inner: self.inner.send(id, request),
             id,
@@ -58,17 +63,17 @@ where
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        match self.inner.poll() {
-            Ok(Async::NotReady) => Ok(Async::NotReady),
-            result => {
-                log!(
-                    self.level,
-                    "request ID {} completed with result: {:?}",
-                    self.id,
-                    result
-                );
-                result
-            }
+        let result = self.inner.poll();
+        match &result {
+            Ok(Async::Ready(ref value)) => log!(
+                self.level,
+                "request ID {} completed with result: {}",
+                self.id,
+                value
+            ),
+            Err(ref err) => log!(self.level, "request ID {} error: {:?}", self.id, err),
+            _ => {}
         }
+        result
     }
 }
