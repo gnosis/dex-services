@@ -7,6 +7,7 @@ use web3::types::{BlockId, H160, H256, U128, U256};
 
 use crate::contracts;
 use crate::error::DriverError;
+use crate::transport::LoggingTransport;
 use crate::util::FutureWaitExt;
 
 type Result<T> = std::result::Result<T, DriverError>;
@@ -14,7 +15,7 @@ type Result<T> = std::result::Result<T, DriverError>;
 include!(concat!(env!("OUT_DIR"), "/snapp_auction.rs"));
 
 pub struct SnappContractImpl {
-    web3: Web3<Http>,
+    web3: Web3<LoggingTransport<Http>>,
     _event_loop: EventLoopHandle,
     instance: SnappAuction,
 }

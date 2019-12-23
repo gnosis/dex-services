@@ -21,6 +21,7 @@ pub mod driver;
 pub mod error;
 pub mod price_finding;
 pub mod snapp;
+pub mod transport;
 pub mod util;
 
 pub fn run_driver_components(
