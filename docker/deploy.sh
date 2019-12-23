@@ -20,9 +20,11 @@ rm -rf .ssh/*
 
 if [ "$image_name" == "master" ] && [ -n "$AUTODEPLOY_URL" ] && [ -n "$AUTODEPLOY_TOKEN" ]; then
     # Notifying webhook
-    curl -s --output /dev/null --write-out "%{http_code}" \
-    -H "Content-Type: application/json" \
-    -X POST \
-    -d '{"token": "'$AUTODEPLOY_TOKEN'", "push_data": {"tag": "'$AUTODEPLOY_TAG'" }}' \
-    $AUTODEPLOY_URL
+    curl -s  \
+      --output /dev/null \
+      --write-out "%{http_code}" \
+      -H "Content-Type: application/json" \
+      -X POST \
+      -d '{"token": "'$AUTODEPLOY_TOKEN'", "push_data": {"tag": "'$AUTODEPLOY_TAG'" }}' \
+      $AUTODEPLOY_URL
 fi
