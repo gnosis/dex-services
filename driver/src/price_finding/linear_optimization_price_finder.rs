@@ -115,13 +115,9 @@ fn deserialize_result(
         .map(|o| {
             o["execSellAmount"]
                 .as_str()
-                .ok_or_else(|| {
-                    PriceFindingError::new(
-                        "No 'execSellAmount' field on order",
-                        ErrorKind::JsonError,
-                    )
-                })
-                .and_then(|amount| amount.parse::<u128>().map_err(PriceFindingError::from))
+                .unwrap_or("0")
+                .parse::<u128>()
+                .map_err(PriceFindingError::from)
         })
         .collect::<Result<Vec<u128>, PriceFindingError>>()?;
     let executed_buy_amounts = orders
@@ -129,13 +125,9 @@ fn deserialize_result(
         .map(|o| {
             o["execBuyAmount"]
                 .as_str()
-                .ok_or_else(|| {
-                    PriceFindingError::new(
-                        "No 'execBuyAmount' field on order",
-                        ErrorKind::JsonError,
-                    )
-                })
-                .and_then(|amount| amount.parse::<u128>().map_err(PriceFindingError::from))
+                .unwrap_or("0")
+                .parse::<u128>()
+                .map_err(PriceFindingError::from)
         })
         .collect::<Result<Vec<u128>, PriceFindingError>>()?;
 
@@ -307,7 +299,7 @@ pub mod tests {
     }
 
     #[test]
-    fn serialize_result_fails_if_order_does_not_have_sell_amount() {
+    fn serialize_result_assumes_zero_if_order_does_not_have_sell_amount() {
         let json = json!({
             "prices": {
                 "token0": "100",
@@ -318,8 +310,8 @@ pub mod tests {
                 }
             ]
         });
-        let err = deserialize_result(&json, 1).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "No 'execSellAmount' field on order");
+        let result = deserialize_result(&json, 1).expect("Should not fail to parse");
+        assert_eq!(result.executed_sell_amounts[0], 0);
     }
 
     #[test]
@@ -340,7 +332,7 @@ pub mod tests {
     }
 
     #[test]
-    fn serialize_result_fails_if_order_does_not_have_buy_amount() {
+    fn serialize_result_assumes_zero_if_order_does_not_have_buy_amount() {
         let json = json!({
             "prices": {
                 "token0": "100",
@@ -351,8 +343,8 @@ pub mod tests {
                 }
             ]
         });
-        let err = deserialize_result(&json, 1).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "No 'execBuyAmount' field on order");
+        let result = deserialize_result(&json, 1).expect("Should not fail to parse");
+        assert_eq!(result.executed_buy_amounts[0], 0);
     }
 
     #[test]
