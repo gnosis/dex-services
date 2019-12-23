@@ -71,7 +71,7 @@ where
                 self.id,
                 value
             ),
-            Err(ref err) => log!(self.level, "request ID {} error: {:?}", self.id, err),
+            Err(ref err) => log!(self.level, "request ID {} failed: {:?}", self.id, err),
             _ => {}
         }
         result
