@@ -21,6 +21,7 @@ ethereum-tx-sign = "3.0.0"
 graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
 graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", tag = "v0.16.1" }
 hex = "0.4.0"
+jsonrpc-core = "13.2.0"
 lazy_static = "1.4.0"
 log = "0.4.8"
 rustc-hex = "*"
