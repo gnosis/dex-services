@@ -115,7 +115,7 @@ matrix:
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.yml up -d stablex
         - ./test/e2e-tests-stablex-rinkeby.sh
-      after_failure:
+      after_script:
         - docker-compose logs
       deploy:
         - provider: script
