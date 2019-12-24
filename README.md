@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/gnosis/dex-services.svg?branch=master)](https://travis-ci.org/gnosis/dex-services)
+[![Build Status](https://travis-ci.com/gnosis/dex-services.svg?branch=master)](https://travis-ci.com/gnosis/dex-services)
 
 ## Intro
 
