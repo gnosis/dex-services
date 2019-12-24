@@ -73,6 +73,7 @@ matrix:
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
+        - (cd dex-contracts && yarn --frozen-lockfile)
         - ./test/setup_contracts.sh
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d driver graph-listener
@@ -94,6 +95,7 @@ matrix:
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
+        - (cd dex-contracts && yarn --frozen-lockfile)
         - ./test/setup_contracts.sh
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d stablex
@@ -111,7 +113,7 @@ matrix:
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
-        - (cd dex-contracts && yarn run prepack)
+        - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.yml up -d stablex
         - ./test/e2e-tests-stablex-rinkeby.sh
