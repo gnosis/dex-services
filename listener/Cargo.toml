@@ -31,4 +31,4 @@ tiny-keccak = { version = "2.0.1", features = ["keccak"] }
 web3 = "0.8.0"
 
 [dev-dependencies]
-graph-mock = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.16.1" }
+graph-mock = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.17.0" }
