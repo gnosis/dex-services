@@ -13,7 +13,6 @@ matrix:
       name: "Build"
       cache:
         directories:
-          - dex-contracts/node_modules/
           - $HOME/.cache/yarn
           - $HOME/.cache/sccache
           - $HOME/.cargo
@@ -43,7 +42,6 @@ matrix:
       language: rust
       cache:
         directories:
-          - dex-contracts/node_modules/
           - $HOME/.cache/yarn
           - $HOME/.cache/sccache
           - $HOME/.cargo
@@ -69,7 +67,6 @@ matrix:
       name: "dƒusion e2e Tests"
       cache:
         directories:
-          - dex-contracts/node_modules/
           - $HOME/.cache/yarn
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
@@ -91,7 +88,6 @@ matrix:
       name: "StableX e2e Tests (Ganache)"
       cache:
         directories:
-          - dex-contracts/node_modules/
           - $HOME/.cache/yarn
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
@@ -109,7 +105,6 @@ matrix:
       name: "StableX e2e Tests (Rinkeby)"
       cache:
         directories:
-          - dex-contracts/node_modules/
           - $HOME/.cache/yarn
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
