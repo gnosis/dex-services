@@ -17,7 +17,7 @@ matrix:
         pip: true
         cargo: true
       before_cache:
-        - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
+        - rm -rf "$TRAVIS_HOME/.cargo/registry"
       before_install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
@@ -43,9 +43,8 @@ matrix:
         yarn: true
         ccache: true
         pip: true
-        cargo: true
       before_cache:
-        - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
+        - rm -rf "$TRAVIS_HOME/.cargo/registry"
       install:
         - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
         - ./test/setup_contracts.sh
@@ -66,7 +65,6 @@ matrix:
       cache:
         yarn: true
         pip: true
-        cargo: true
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
@@ -88,7 +86,6 @@ matrix:
       cache:
         yarn: true
         pip: true
-        cargo: true
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
@@ -106,7 +103,6 @@ matrix:
       cache:
         yarn: true
         pip: true
-        cargo: true
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
