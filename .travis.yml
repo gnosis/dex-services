@@ -1,13 +1,6 @@
 if: (branch = master) OR (type = pull_request) OR (tag IS present)
 language: rust
 rust: stable
-cache:
-  directories:
-    - $HOME/.cache/sccache
-    - $HOME/.cargo
-    - $HOME/.rustup
-before_cache:
-  - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
 env:
   global:
     - CARGO_INCREMENTAL=0
@@ -20,8 +13,12 @@ matrix:
       name: "Build"
       cache:
         directories:
-          - dex-contracts/node_modules/
           - $HOME/.cache/yarn
+          - $HOME/.cache/sccache
+          - $HOME/.cargo
+          - $HOME/.rustup
+      before_cache:
+        - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
       before_install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
@@ -45,8 +42,12 @@ matrix:
       language: rust
       cache:
         directories:
-          - dex-contracts/node_modules/
           - $HOME/.cache/yarn
+          - $HOME/.cache/sccache
+          - $HOME/.cargo
+          - $HOME/.rustup
+      before_cache:
+        - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
       install:
         - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
         - ./test/setup_contracts.sh
@@ -66,7 +67,6 @@ matrix:
       name: "dƒusion e2e Tests"
       cache:
         directories:
-          - dex-contracts/node_modules/
           - $HOME/.cache/yarn
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
@@ -88,7 +88,6 @@ matrix:
       name: "StableX e2e Tests (Ganache)"
       cache:
         directories:
-          - dex-contracts/node_modules/
           - $HOME/.cache/yarn
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
@@ -106,7 +105,6 @@ matrix:
       name: "StableX e2e Tests (Rinkeby)"
       cache:
         directories:
-          - dex-contracts/node_modules/
           - $HOME/.cache/yarn
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
