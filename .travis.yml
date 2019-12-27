@@ -106,6 +106,7 @@ matrix:
       name: "StableX e2e Tests (Rinkeby)"
       cache:
         yarn: true
+        pip: true
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
