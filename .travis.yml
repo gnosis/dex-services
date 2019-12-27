@@ -15,6 +15,10 @@ matrix:
         yarn: true
         ccache: true
         pip: true
+        directories:
+          - $HOME/.cache/sccache
+          - $HOME/.cargo # not using cargo cache directly so target is not loaded too
+          - $HOME/.rustup
       before_install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
@@ -40,6 +44,10 @@ matrix:
         yarn: true
         ccache: true
         pip: true
+        directories:
+          - $HOME/.cache/sccache
+          - $HOME/.cargo # not using cargo cache directly so target is not loaded too
+          - $HOME/.rustup
       install:
         - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
         - ./test/setup_contracts.sh
