@@ -1,7 +1,6 @@
 if: (branch = master) OR (type = pull_request) OR (tag IS present)
 language: rust
 rust: stable
-dist: bionic
 env:
   global:
     - CARGO_INCREMENTAL=0
@@ -14,6 +13,7 @@ matrix:
       name: "Build"
       cache:
         yarn: true
+        pip: true
         directories:
           - $HOME/.cache/sccache
           - $HOME/.cargo # not using cargo cache directly so target is not loaded too
@@ -21,7 +21,7 @@ matrix:
       before_cache: # this line it's necessary because we are not using default cargo cache
         - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
       before_install:
-        - sudo apt-get update && sudo apt-get install -y awscli
+        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli # using pip version instead of apt-get because we need last versions
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
         - |
           mkdir -p $HOME/.sccache/bin
@@ -68,8 +68,9 @@ matrix:
       name: "dƒusion e2e Tests"
       cache:
         yarn: true
+        pip: true
       install:
-        - sudo apt-get update && sudo apt-get install -y awscli
+        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
@@ -88,8 +89,9 @@ matrix:
       name: "StableX e2e Tests (Ganache)"
       cache:
         yarn: true
+        pip: true
       install:
-        - sudo apt-get update && sudo apt-get install -y awscli
+        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
@@ -105,7 +107,7 @@ matrix:
       cache:
         yarn: true
       install:
-        - sudo apt-get update && sudo apt-get install -y awscli
+        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
