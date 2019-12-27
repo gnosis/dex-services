@@ -15,11 +15,7 @@ matrix:
         yarn: true
         ccache: true
         pip: true
-        directories:
-          - $HOME/.cache/yarn
-          - $HOME/.cache/sccache
-          - $HOME/.cargo
-          - $HOME/.rustup
+        cargo: true
       before_cache:
         - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
       before_install:
@@ -47,11 +43,7 @@ matrix:
         yarn: true
         ccache: true
         pip: true
-        directories:
-          - $HOME/.cache/yarn
-          - $HOME/.cache/sccache
-          - $HOME/.cargo
-          - $HOME/.rustup
+        cargo: true
       before_cache:
         - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
       install:
@@ -74,8 +66,7 @@ matrix:
       cache:
         yarn: true
         pip: true
-        directories:
-          - $HOME/.cache/yarn
+        cargo: true
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
@@ -95,8 +86,9 @@ matrix:
     - language: generic
       name: "StableX e2e Tests (Ganache)"
       cache:
-        directories:
-          - $HOME/.cache/yarn
+        yarn: true
+        pip: true
+        cargo: true
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
@@ -112,8 +104,9 @@ matrix:
     - language: generic
       name: "StableX e2e Tests (Rinkeby)"
       cache:
-        directories:
-          - $HOME/.cache/yarn
+        yarn: true
+        pip: true
+        cargo: true
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
