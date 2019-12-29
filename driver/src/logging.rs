@@ -62,9 +62,7 @@ impl<D: Decorator> Drain for CustomFormatter<D> {
             write!(decorator, " ")?;
 
             decorator.start_msg()?;
-            write!(decorator, "{}", record.msg())?;
-
-            write!(decorator, "\n")?;
+            writeln!(decorator, "{}", record.msg())?;
             decorator.flush()?;
 
             Ok(())
