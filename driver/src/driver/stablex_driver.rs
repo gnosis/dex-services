@@ -4,7 +4,7 @@ use crate::price_finding::PriceFinding;
 
 use dfusion_core::models::Solution;
 
-use log::{debug, info};
+use log::info;
 
 use std::collections::HashSet;
 
