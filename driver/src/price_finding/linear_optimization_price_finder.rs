@@ -4,7 +4,7 @@ use crate::price_finding::price_finder_interface::{Fee, PriceFinding};
 use dfusion_core::models;
 
 use chrono::Utc;
-use log::error;
+use log::{debug, error};
 use serde_json::json;
 use std::collections::HashMap;
 use std::fs::File;
@@ -176,6 +176,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
 fn write_input(input_file: &str, input: &serde_json::Value) -> std::io::Result<()> {
     let file = File::create(&input_file)?;
     serde_json::to_writer(file, input)?;
+    debug!("Solver input: {}", input);
     Ok(())
 }
 
@@ -204,6 +205,7 @@ fn read_output() -> std::io::Result<serde_json::Value> {
     let file = File::open(format!("{}{}", RESULT_FOLDER, "06_solution_int_valid.json"))?;
     let reader = BufReader::new(file);
     let value = serde_json::from_reader(reader)?;
+    debug!("Solver result: {}", &value);
     Ok(value)
 }
 
