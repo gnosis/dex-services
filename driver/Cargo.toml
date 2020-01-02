@@ -20,7 +20,7 @@ ethereum-tx-sign = "3.0.0"
 futures = { version = "0.3.1", features = ["compat"] }
 graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.17.0" }
 #graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", tag = "v0.17.0" }
-graph-node-reader = { path = "../../graph-node-reader" }
+graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", rev = "3ed038a" }
 hex = "0.4.0"
 jsonrpc-core = "13.2.0"
 lazy_static = "1.4.0"
