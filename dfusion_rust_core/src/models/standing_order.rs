@@ -2,7 +2,7 @@ use crate::models;
 use crate::models::{ConcatenatingHashable, RollingHashable};
 
 use array_macro::array;
-use graph::data::store::Entity;
+use graph::data::store::{Entity, Value};
 use log::info;
 use serde_derive::Deserialize;
 use sha2::{Digest, Sha256};
@@ -173,7 +173,7 @@ impl Into<Entity> for StandingOrder {
         entity.set("accountId", self.account_id.to_value());
         entity.set("batchIndex", self.batch_index.to_value());
         entity.set("validFromAuctionId", self.valid_from_auction_id.to_value());
-        entity.set("orders", vec![]);
+        entity.set("orders", Vec::<Value>::new());
 
         entity
     }

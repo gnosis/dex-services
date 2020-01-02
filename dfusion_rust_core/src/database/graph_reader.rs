@@ -1,5 +1,8 @@
-use graph::components::store::{EntityFilter, EntityOrder, EntityQuery, EntityRange};
+use graph::components::store::{
+    EntityCollection, EntityFilter, EntityOrder, EntityQuery, EntityRange,
+};
 use graph::data::store::ValueType;
+use graph::prelude::BLOCK_NUMBER_MAX;
 use web3::types::H160;
 
 use super::*;
@@ -62,7 +65,7 @@ impl DbInterface for GraphReader {
         &self,
         state_root: &H256,
     ) -> Result<models::AccountState, DatabaseError> {
-        let account_query = entity_query(
+        let account_query = simple_entity_query(
             "AccountState",
             EntityFilter::Equal("id".to_string(), state_root.to_value()),
         );
@@ -73,7 +76,7 @@ impl DbInterface for GraphReader {
         &self,
         state_index: &U256,
     ) -> Result<models::AccountState, DatabaseError> {
-        let account_query = entity_query(
+        let account_query = simple_entity_query(
             "AccountState",
             EntityFilter::Equal("stateIndex".to_string(), state_index.to_value()),
         );
@@ -113,10 +116,8 @@ impl DbInterface for GraphReader {
     ) -> Result<[models::StandingOrder; models::NUM_RESERVED_ACCOUNTS], DatabaseError> {
         let mut result = StandingOrder::empty_array();
         for (reserved_account_id, item) in result.iter_mut().enumerate() {
-            let standing_order_query = EntityQuery {
-                subgraph_id: SUBGRAPH_ID.clone(),
-                entity_types: vec!["StandingSellOrderBatch".to_string()],
-                filter: Some(EntityFilter::And(vec![
+            let standing_order_query = entity_query("StandingSellOrderBatch")
+                .filter(EntityFilter::And(vec![
                     EntityFilter::LessOrEqual(
                         "validFromAuctionId".to_string(),
                         auction_id.to_value(),
@@ -125,14 +126,9 @@ impl DbInterface for GraphReader {
                         "accountId".to_string(),
                         H160::from_low_u64_be(reserved_account_id as _).to_value(),
                     ),
-                ])),
-                order_by: Some(("batchIndex".to_string(), ValueType::BigInt)),
-                order_direction: Some(EntityOrder::Descending),
-                range: EntityRange {
-                    first: None,
-                    skip: 0,
-                },
-            };
+                ]))
+                .order_by("batchIndex", ValueType::BigInt, EntityOrder::Descending);
+
             let standing_order_option =
                 self.reader.find_one(standing_order_query).map_err(|e| {
                     DatabaseError::chain(ErrorKind::ConnectionError, "Could not execute query", e)
@@ -149,7 +145,7 @@ impl DbInterface for GraphReader {
                         )
                     })?;
                 let relevant_order_query =
-                    entity_query("SellOrder", EntityFilter::In("id".to_string(), order_ids));
+                    simple_entity_query("SellOrder", EntityFilter::In("id".to_string(), order_ids));
                 let order_entities = self.reader.find(relevant_order_query).map_err(|e| {
                     DatabaseError::chain(ErrorKind::ConnectionError, "Could not execute query", e)
                 })?;
@@ -161,23 +157,25 @@ impl DbInterface for GraphReader {
 }
 
 fn sorted_slot_entity_query(entity_type: &str, filter: EntityFilter) -> EntityQuery {
-    EntityQuery {
-        order_by: Some(("slotIndex".to_string(), ValueType::Int)),
-        order_direction: Some(EntityOrder::Ascending),
-        ..entity_query(entity_type, filter)
-    }
+    entity_query(entity_type).filter(filter).order_by(
+        "slotIndex",
+        ValueType::Int,
+        EntityOrder::Ascending,
+    )
 }
 
-fn entity_query(entity_type: &str, filter: EntityFilter) -> EntityQuery {
-    EntityQuery {
-        subgraph_id: SUBGRAPH_ID.clone(),
-        entity_types: vec![entity_type.to_string()],
-        filter: Some(filter),
-        order_by: None,
-        order_direction: None,
-        range: EntityRange {
-            first: None,
-            skip: 0,
-        },
-    }
+fn simple_entity_query(entity_type: &str, filter: EntityFilter) -> EntityQuery {
+    entity_query(entity_type).filter(filter)
+}
+
+fn entity_query(entity_type: &str) -> EntityQuery {
+    EntityQuery::new(
+        SUBGRAPH_ID.clone(),
+        BLOCK_NUMBER_MAX,
+        EntityCollection::All(vec![entity_type.to_string()]),
+    )
+    .range(EntityRange {
+        first: None,
+        skip: 0,
+    })
 }
