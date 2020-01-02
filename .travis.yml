@@ -60,7 +60,7 @@ matrix:
           popd
         - rustup component add clippy rustfmt
       script:
-        - cargo test --all
+        - cargo test --workspace --exclude e2e
         - cargo clippy --all --all-targets -- -D warnings
         - cargo fmt --all -- --check
     - language: generic
