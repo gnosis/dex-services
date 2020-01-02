@@ -218,7 +218,7 @@ pub mod tests {
         let standing_order = create_standing_order_for_test();
         let mut expected_entity = create_entity_for_test();
         expected_entity.remove("id");
-        expected_entity.set("orders", vec![]);
+        expected_entity.set("orders", Vec::<Value>::new());
 
         let actual_entity: Entity = standing_order.into();
 

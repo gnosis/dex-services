@@ -170,7 +170,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
                 Arc::new(DieselStore::new(
                     StoreConfig {
                         postgres_url: stores_postgres_url.clone(),
-                        network_name: network_name.to_string(),
+                        network_name,
                     },
                     &stores_logger,
                     network_identifier,
@@ -219,7 +219,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
                 generic_store.clone(),
                 eth_adapter.clone(),
                 ANCESTOR_COUNT,
-                network_name.to_string(),
+                network_name,
                 &logger_factory,
                 BLOCK_POLLING_INTERVAL,
             )
@@ -258,7 +258,7 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
                 &logger_factory,
                 link_resolver.clone(),
                 generic_store.clone(),
-                graphql_runner.clone(),
+                graphql_runner,
             );
 
             // Forward subgraph events from the subgraph provider to the subgraph instance manager
@@ -276,7 +276,8 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
                 SubgraphVersionSwitchingMode::Instant,
             ));
             tokio::spawn(subgraph_registrar.start().then(|start_result| {
-                Ok(start_result.expect("failed to initialize subgraph provider"))
+                start_result.expect("failed to initialize subgraph provider");
+                Ok(())
             }));
 
             let name = SubgraphName::new(SUBGRAPH_NAME)
