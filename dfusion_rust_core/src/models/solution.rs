@@ -3,6 +3,7 @@ use super::*;
 use log::info;
 
 use std::iter::once;
+use web3::types::U128;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Solution {
@@ -36,7 +37,8 @@ impl Serializable for Solution {
             .flat_map(|tup| once(tup.0).chain(once(tup.1)))
             .cloned()
             .collect();
-        [&self.prices, &alternating_buy_sell_amounts]
+
+        [&vec![self.prices.len() as u128], &self.prices, &alternating_buy_sell_amounts]
             .iter()
             .flat_map(|list| list.iter())
             .flat_map(Serializable::bytes)
@@ -46,7 +48,10 @@ impl Serializable for Solution {
 
 impl Deserializable for Solution {
     fn from_bytes(mut bytes: Vec<u8>) -> Self {
-        let volumes = bytes.split_off(TOKENS as usize * 12);
+        // First 12 bytes encode the length of price vector (i.e. num_tokens)
+        let len_prices = U128::from_big_endian(bytes.drain(0..12).collect::<Vec<u8>>().as_slice());
+
+        let volumes = bytes.split_off(len_prices.as_usize() * 12);
         let prices = bytes
             .chunks_exact(12)
             .map(|chunk| util::read_amount(&util::get_amount_from_slice(chunk)))
@@ -88,6 +93,29 @@ pub mod unit_test {
         assert!(non_trivial.is_non_trivial());
     }
 
+
+    #[test]
+    fn test_to_bytes() {
+        let solution = Solution {
+            prices: vec![5, 2],
+            executed_buy_amounts: vec![1],
+            executed_sell_amounts: vec![3],
+        };
+
+        let bytes = solution.bytes();
+
+        assert_eq!(
+            bytes,
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3
+            ]
+
+        );
+    }
     #[test]
     fn test_serialize_deserialize() {
         let solution = Solution {
