@@ -38,11 +38,15 @@ impl Serializable for Solution {
             .cloned()
             .collect();
 
-        [&vec![self.prices.len() as u128], &self.prices, &alternating_buy_sell_amounts]
-            .iter()
-            .flat_map(|list| list.iter())
-            .flat_map(Serializable::bytes)
-            .collect()
+        [
+            &vec![self.prices.len() as u128],
+            &self.prices,
+            &alternating_buy_sell_amounts,
+        ]
+        .iter()
+        .flat_map(|list| list.iter())
+        .flat_map(Serializable::bytes)
+        .collect()
     }
 }
 
@@ -92,7 +96,6 @@ pub mod unit_test {
         assert!(non_trivial.is_non_trivial());
     }
 
-
     #[test]
     fn test_to_bytes() {
         let solution = Solution {
@@ -106,13 +109,10 @@ pub mod unit_test {
         assert_eq!(
             bytes,
             vec![
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 3
             ]
-
         );
     }
     #[test]
@@ -132,26 +132,15 @@ pub mod unit_test {
     #[test]
     fn test_deserialize_e2e_example() {
         let bytes = vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0,
-            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
-            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 1,
-            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 2,
-            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 3,
-            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 4,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 13,
+            224, 182, 179, 167, 100, 0, 0, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 13, 224,
+            182, 179, 167, 100, 0, 1, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 2, 0, 0, 0, 0,
+            13, 224, 182, 179, 167, 100, 0, 3, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 4,
         ];
         let parsed_solution = Solution::from_bytes(bytes);
         let expected = Solution {
-            prices: vec![
-                1,
-                10u128.pow(18),
-                10u128.pow(18),
-                256,
-                257,
-            ],
+            prices: vec![1, 10u128.pow(18), 10u128.pow(18), 256, 257],
             executed_buy_amounts: vec![10u128.pow(18) + 1, 10u128.pow(18) + 3],
             executed_sell_amounts: vec![10u128.pow(18) + 2, 10u128.pow(18) + 4],
         };
