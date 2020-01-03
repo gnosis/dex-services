@@ -143,8 +143,10 @@ impl PriceFinding for LinearOptimisationPriceFinder {
         &self,
         orders: &[models::Order],
         state: &models::AccountState,
+        num_tokens: usize
     ) -> Result<models::Solution, PriceFindingError> {
-        let token_ids: Vec<String> = (0..models::TOKENS).map(token_id).collect();
+        // TODO - fetch tokens from valid orders or read `numTokens` from EVM.
+        let token_ids: Vec<String> = (0..num_tokens).map(token_id).collect();
         let accounts = serialize_balances(&state, &orders);
         let orders: Vec<serde_json::Value> = orders
             .iter()
@@ -168,7 +170,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
         (self.write_input)(&input_file, &input)?;
         (self.run_solver)(&input_file)?;
         let result = (self.read_output)()?;
-        let solution = deserialize_result(&result, models::TOKENS)?;
+        let solution = deserialize_result(&result, num_tokens)?;
         Ok(solution)
     }
 }

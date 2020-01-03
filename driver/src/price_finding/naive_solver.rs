@@ -1,4 +1,4 @@
-use dfusion_core::models::{AccountState, Order, Solution, TOKENS};
+use dfusion_core::models::{AccountState, Order, Solution};
 use web3::types::U256;
 
 use crate::price_finding::error::PriceFindingError;
@@ -100,9 +100,10 @@ impl PriceFinding for NaiveSolver {
         &self,
         orders: &[Order],
         state: &AccountState,
+        num_tokens: usize
     ) -> Result<Solution, PriceFindingError> {
         // Initialize trivial solution (default of zero indicates untouched token).
-        let mut prices: Vec<u128> = vec![0; TOKENS as usize];
+        let mut prices: Vec<u128> = vec![0; num_tokens];
         let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
         let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
 
@@ -439,11 +440,12 @@ pub mod tests {
 
     #[test]
     fn test_insufficient_balance() {
+        const NUM_TOKENS: u16 = 10;
         let state = AccountState::new(
             H256::zero(),
             U256::zero(),
-            vec![0; (TOKENS * 2) as usize],
-            TOKENS,
+            vec![0; (NUM_TOKENS * 2) as usize],
+            NUM_TOKENS,
         );
         let orders = vec![
             Order {
