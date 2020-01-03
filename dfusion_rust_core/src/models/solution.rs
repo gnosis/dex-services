@@ -45,7 +45,9 @@ impl Serializable for Solution {
 }
 
 impl Deserializable for Solution {
-    fn from_bytes(mut bytes: Vec<u8>, num_tokens: usize) -> Self {
+    fn from_bytes(mut bytes: Vec<u8>) -> Self {
+        let num_tokens = 30;
+        // TODO - ASAP! read num tokens from bytes here!
         let volumes = bytes.split_off(num_tokens * 12);
         let prices = bytes
             .chunks_exact(12)

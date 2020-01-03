@@ -37,6 +37,7 @@ pub trait Serializable {
 }
 
 pub trait Deserializable {
+    // TODO: encode num_tokens in the first byte(s)
     fn from_bytes(bytes: Vec<u8>) -> Self;
 }
 
