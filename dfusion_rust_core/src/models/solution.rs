@@ -14,7 +14,7 @@ pub struct Solution {
 impl Solution {
     pub fn trivial(num_orders: usize) -> Self {
         Solution {
-            prices: vec![0; TOKENS as usize],
+            prices: vec![],
             executed_buy_amounts: vec![0; num_orders],
             executed_sell_amounts: vec![0; num_orders],
         }
@@ -45,8 +45,8 @@ impl Serializable for Solution {
 }
 
 impl Deserializable for Solution {
-    fn from_bytes(mut bytes: Vec<u8>) -> Self {
-        let volumes = bytes.split_off(TOKENS as usize * 12);
+    fn from_bytes(mut bytes: Vec<u8>, num_tokens: usize) -> Self {
+        let volumes = bytes.split_off(num_tokens * 12);
         let prices = bytes
             .chunks_exact(12)
             .map(|chunk| util::read_amount(&util::get_amount_from_slice(chunk)))
@@ -75,13 +75,15 @@ impl Deserializable for Solution {
 pub mod unit_test {
     use super::*;
 
+    const NUM_TOKENS: usize = 30;
+
     #[test]
     fn test_is_non_trivial() {
         let trivial = Solution::trivial(3);
         assert!(!trivial.is_non_trivial());
 
         let non_trivial = Solution {
-            prices: vec![42; TOKENS as usize],
+            prices: vec![42; 10],
             executed_buy_amounts: vec![4, 5, 6],
             executed_sell_amounts: vec![1, 2, 3],
         };
@@ -90,14 +92,15 @@ pub mod unit_test {
 
     #[test]
     fn test_serialize_deserialize() {
+
         let solution = Solution {
-            prices: vec![42; TOKENS as usize],
+            prices: vec![42; NUM_TOKENS],
             executed_buy_amounts: vec![4, 5, 6],
             executed_sell_amounts: vec![1, 2, 3],
         };
 
         let bytes = solution.bytes();
-        let parsed_solution = Solution::from_bytes(bytes);
+        let parsed_solution = Solution::from_bytes(bytes, NUM_TOKENS);
 
         assert_eq!(solution, parsed_solution);
     }
@@ -122,7 +125,7 @@ pub mod unit_test {
             224, 182, 179, 167, 100, 0, 0, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0,
         ];
-        let parsed_solution = Solution::from_bytes(bytes);
+        let parsed_solution = Solution::from_bytes(bytes, NUM_TOKENS);
         let expected = Solution {
             prices: vec![
                 1,
