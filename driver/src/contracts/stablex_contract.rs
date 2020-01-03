@@ -69,6 +69,9 @@ impl StableXContract for BatchExchange {
 
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
         let mut orders_builder = self.get_encoded_orders();
+        // NOTE: we need to override the gas limit which was set by the method
+        //   defaults - large number of orders was causing this `eth_call`
+        //   request to run into the gas limit
         orders_builder.m.tx.gas = None;
         let packed_auction_bytes = orders_builder.call().wait()?;
         let auction_data = parse_auction_data(packed_auction_bytes, index);
