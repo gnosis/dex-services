@@ -119,7 +119,7 @@ pub mod unit_test {
     use super::*;
     use dfusion_core::database::tests::DbInterfaceMock;
     use dfusion_core::database::{DatabaseError, ErrorKind};
-    use dfusion_core::models::{AccountState, BatchInformation, Order, StandingOrder, TOKENS};
+    use dfusion_core::models::{AccountState, BatchInformation, Order, StandingOrder};
     use web3::types::{Bytes, H160, H256, U256};
 
     #[test]
@@ -264,6 +264,7 @@ pub mod unit_test {
         new_state_index: u8,
         new_state_root: H256,
     ) -> Arc<Log> {
+        const NUM_TOKENS: u16 = 30;
         let mut bytes: Vec<Vec<u8>> = vec![
             /* auction_id */
             vec![
@@ -310,7 +311,7 @@ pub mod unit_test {
             /* byte_length */ vec![0; 32],
         ];
 
-        for _i in 0..TOKENS {
+        for _i in 0..NUM_TOKENS {
             bytes.push(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
         }
         bytes.push(
