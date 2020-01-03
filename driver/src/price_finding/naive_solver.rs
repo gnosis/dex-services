@@ -1,4 +1,5 @@
 use dfusion_core::models::{AccountState, Order, Solution};
+use std::cmp;
 use web3::types::U256;
 
 use crate::price_finding::error::PriceFindingError;
@@ -99,11 +100,11 @@ impl PriceFinding for NaiveSolver {
     fn find_prices(
         &self,
         orders: &[Order],
-        state: &AccountState,
-        num_tokens: usize
+        state: &AccountState
     ) -> Result<Solution, PriceFindingError> {
         // Initialize trivial solution (default of zero indicates untouched token).
-        let mut prices: Vec<u128> = vec![0; num_tokens];
+        let max_token_id = orders.iter().map(|o| cmp::max(o.buy_token, o.sell_token)).max().unwrap();
+        let mut prices: Vec<u128> = vec![0; max_token_id];
         let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
         let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
 

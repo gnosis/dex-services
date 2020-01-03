@@ -7,6 +7,7 @@ use chrono::Utc;
 use log::{debug, error};
 use serde_json::json;
 use std::collections::HashMap;
+use std::cmp;
 use std::fs::File;
 use std::io::BufReader;
 use std::process::Command;
@@ -142,11 +143,10 @@ impl PriceFinding for LinearOptimisationPriceFinder {
     fn find_prices(
         &self,
         orders: &[models::Order],
-        state: &models::AccountState,
-        num_tokens: usize
+        state: &models::AccountState
     ) -> Result<models::Solution, PriceFindingError> {
-        // TODO - fetch tokens from valid orders or read `numTokens` from EVM.
-        let token_ids: Vec<String> = (0..num_tokens).map(token_id).collect();
+        let max_token_id = orders.iter().map(|o| cmp::max(o.buy_token, o.sell_token)).max().unwrap();
+        let token_ids: Vec<String> = (0..max_token_id).map(token_id).collect();
         let accounts = serialize_balances(&state, &orders);
         let orders: Vec<serde_json::Value> = orders
             .iter()
