@@ -214,9 +214,10 @@ pub mod test_util {
 pub mod tests {
     use super::*;
     use crate::models::order::BatchInformation;
-    use crate::models::TOKENS;
     use std::str::FromStr;
     use web3::types::{Bytes, H256};
+
+    const NUM_TOKENS: u16 = 10;
 
     #[test]
     fn test_state_rolling_hash() {
@@ -225,7 +226,7 @@ pub mod tests {
         let state_hash = "77b01abfbad57cb7a1344b12709603ea3b9ad803ef5ea09814ca212748f54733"
             .parse::<H256>()
             .unwrap();
-        let state = AccountState::new(state_hash, U256::one(), balances.clone(), TOKENS);
+        let state = AccountState::new(state_hash, U256::one(), balances.clone(), NUM_TOKENS);
         assert_eq!(state.rolling_hash(0), state_hash);
 
         // AccountState with single deposit
@@ -233,7 +234,7 @@ pub mod tests {
         let state_hash = "a0cde336d10dbaf3df98ba662bacf25d95062db7b3e0083bd4bad4a6c7a1cd41"
             .parse::<H256>()
             .unwrap();
-        let state = AccountState::new(state_hash, U256::one(), balances, TOKENS);
+        let state = AccountState::new(state_hash, U256::one(), balances, NUM_TOKENS);
         assert_eq!(state.rolling_hash(0), state_hash);
     }
 
@@ -271,7 +272,7 @@ pub mod tests {
             removed: None,
         });
 
-        let expected_state = AccountState::new(H256::zero(), U256::zero(), vec![0; 3000], TOKENS);
+        let expected_state = AccountState::new(H256::zero(), U256::zero(), vec![0; 3000], NUM_TOKENS);
         assert_eq!(expected_state, AccountState::from(log));
     }
 

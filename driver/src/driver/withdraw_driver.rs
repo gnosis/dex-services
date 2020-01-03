@@ -66,9 +66,12 @@ mod tests {
     use crate::error::ErrorKind;
     use dfusion_core::database::tests::DbInterfaceMock;
     use dfusion_core::models::flux::tests::create_flux_for_test;
-    use dfusion_core::models::{AccountState, PendingFlux, TOKENS};
+    use dfusion_core::models::{AccountState, PendingFlux};
     use mock_it::Matcher::*;
     use web3::types::{H160, H256, U256};
+
+    const NUM_TOKENS: u16 = 10;
+    const BALANCES: Vec<u128> = vec![100; (NUM_TOKENS * 2) as usize];
 
     #[test]
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
@@ -78,8 +81,8 @@ mod tests {
         let state = AccountState::new(
             state_hash,
             U256::one(),
-            vec![100; (TOKENS * 2) as usize],
-            TOKENS,
+            BALANCES,
+            NUM_TOKENS,
         );
 
         let contract = SnappContractMock::default();
@@ -222,8 +225,8 @@ mod tests {
         let state = AccountState::new(
             state_hash,
             U256::one(),
-            vec![100; (TOKENS * 2) as usize],
-            TOKENS,
+            BALANCES,
+            NUM_TOKENS,
         );
 
         let db = DbInterfaceMock::new();
@@ -248,8 +251,8 @@ mod tests {
         let state = AccountState::new(
             state_hash,
             U256::one(),
-            vec![100; (TOKENS * 2) as usize],
-            TOKENS,
+            BALANCES,
+            NUM_TOKENS,
         );
 
         let contract = SnappContractMock::default();
@@ -313,8 +316,8 @@ mod tests {
         let mut state = AccountState::new(
             state_hash,
             U256::one(),
-            vec![100; (TOKENS * 2) as usize],
-            TOKENS,
+            BALANCES,
+            NUM_TOKENS,
         );
         state.decrement_balance(1, H160::from_low_u64_be(0), 100);
 
