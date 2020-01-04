@@ -71,7 +71,6 @@ mod tests {
     use web3::types::{H160, H256, U256};
 
     const NUM_TOKENS: u16 = 10;
-    const BALANCES: Vec<u128> = vec![100; (NUM_TOKENS * 2) as usize];
 
     #[test]
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
@@ -81,7 +80,7 @@ mod tests {
         let state = AccountState::new(
             state_hash,
             U256::one(),
-            BALANCES,
+            vec![100; (NUM_TOKENS * 2) as usize],
             NUM_TOKENS,
         );
 
@@ -225,7 +224,7 @@ mod tests {
         let state = AccountState::new(
             state_hash,
             U256::one(),
-            BALANCES,
+            vec![100; (NUM_TOKENS * 2) as usize],
             NUM_TOKENS,
         );
 
@@ -251,7 +250,7 @@ mod tests {
         let state = AccountState::new(
             state_hash,
             U256::one(),
-            BALANCES,
+            vec![100; (NUM_TOKENS * 2) as usize],
             NUM_TOKENS,
         );
 
@@ -316,7 +315,7 @@ mod tests {
         let mut state = AccountState::new(
             state_hash,
             U256::one(),
-            BALANCES,
+            vec![100; (NUM_TOKENS * 2) as usize],
             NUM_TOKENS,
         );
         state.decrement_balance(1, H160::from_low_u64_be(0), 100);
