@@ -14,6 +14,7 @@ matrix:
       cache:
         directories:
           - $HOME/.cache/yarn
+          - $HOME/.cache/node-gyp
           - $HOME/.cache/sccache
           - $HOME/.cargo
           - $HOME/.rustup
@@ -44,6 +45,7 @@ matrix:
       cache:
         directories:
           - $HOME/.cache/yarn
+          - $HOME/.cache/node-gyp
           - $HOME/.cache/sccache
           - $HOME/.cargo
           - $HOME/.rustup
@@ -71,6 +73,7 @@ matrix:
       cache:
         directories:
           - $HOME/.cache/yarn
+          - $HOME/.cache/node-gyp
       before_install:
         - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
       install:
@@ -94,6 +97,7 @@ matrix:
       cache:
         directories:
           - $HOME/.cache/yarn
+          - $HOME/.cache/node-gyp
       before_install:
         - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
       install:
@@ -113,6 +117,7 @@ matrix:
       cache:
         directories:
           - $HOME/.cache/yarn
+          - $HOME/.cache/node-gyp
       before_install:
         - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
       install:
