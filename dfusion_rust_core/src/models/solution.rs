@@ -45,7 +45,7 @@ impl Serializable for Solution {
             .flat_map(Serializable::bytes)
             .collect();
         res.extend(prices_and_volumes);
-        return res;
+        res
     }
 }
 
