@@ -104,7 +104,7 @@ impl PriceFinding for NaiveSolver {
     ) -> Result<Solution, PriceFindingError> {
         // Initialize trivial solution (default of zero indicates untouched token).
         let max_token_id = orders.iter().map(|o| cmp::max(o.buy_token, o.sell_token)).max().unwrap();
-        let mut prices: Vec<u128> = vec![0; max_token_id];
+        let mut prices: Vec<u128> = vec![0; max_token_id as usize];
         let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
         let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
 
