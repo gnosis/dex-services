@@ -312,7 +312,7 @@ pub mod unit_test {
             /* byte_length */ vec![0; 32],
         ];
         // encode num tokens in solution bytes!
-        bytes.push((TOKENS as u128).to_be_bytes()[4..].to_vec());
+        bytes.push(NUM_TOKENS.to_be_bytes().to_vec());
 
         for _i in 0..NUM_TOKENS {
             bytes.push(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
