@@ -2,7 +2,7 @@ use super::*;
 
 use log::info;
 
-use std::convert::TryInto;
+use byteorder::{BigEndian, ByteOrder};
 use std::iter::once;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -52,20 +52,14 @@ impl Serializable for Solution {
 impl Deserializable for Solution {
     fn from_bytes(mut bytes: Vec<u8>) -> Self {
         // First 2 bytes encode the length of price vector (i.e. num_tokens)
-        let len_prices = u16::from_be_bytes(
-            bytes
-                .drain(0..2)
-                .collect::<Vec<u8>>()
-                .as_slice()
-                .try_into()
-                .unwrap(),
-        );
-        let volumes = bytes.split_off(len_prices as usize * 12);
+        let len_prices = BigEndian::read_u16(&bytes[0..2]);
+        let volumes = bytes.split_off(2 + len_prices as usize * 12);
         let prices = bytes
+            .split_off(2)
             .chunks_exact(12)
             .map(|chunk| util::read_amount(&util::get_amount_from_slice(chunk)))
             .collect();
-        info!("Recovered prices as: {:?}", prices);
+        info!("Parsed prices as: {:?}", prices);
 
         let mut executed_buy_amounts: Vec<u128> = vec![];
         let mut executed_sell_amounts: Vec<u128> = vec![];
