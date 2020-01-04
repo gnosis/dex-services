@@ -2,8 +2,8 @@ use super::*;
 
 use log::info;
 
+use byteorder::{BigEndian, ByteOrder};
 use std::iter::once;
-use web3::types::U128;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Solution {
@@ -30,6 +30,7 @@ impl Solution {
 
 impl Serializable for Solution {
     fn bytes(&self) -> Vec<u8> {
+        let mut res = (self.prices.len() as u16).to_be_bytes().to_vec();
         let alternating_buy_sell_amounts: Vec<u128> = self
             .executed_buy_amounts
             .iter()
@@ -38,28 +39,27 @@ impl Serializable for Solution {
             .cloned()
             .collect();
 
-        [
-            &vec![self.prices.len() as u128],
-            &self.prices,
-            &alternating_buy_sell_amounts,
-        ]
-        .iter()
-        .flat_map(|list| list.iter())
-        .flat_map(Serializable::bytes)
-        .collect()
+        let prices_and_volumes: Vec<u8> = [&self.prices, &alternating_buy_sell_amounts]
+            .iter()
+            .flat_map(|list| list.iter())
+            .flat_map(Serializable::bytes)
+            .collect();
+        res.extend(prices_and_volumes);
+        res
     }
 }
 
 impl Deserializable for Solution {
     fn from_bytes(mut bytes: Vec<u8>) -> Self {
-        // First 12 bytes encode the length of price vector (i.e. num_tokens)
-        let len_prices = U128::from_big_endian(bytes.drain(0..12).collect::<Vec<u8>>().as_slice());
-        let volumes = bytes.split_off(len_prices.as_usize() * 12);
+        // First 2 bytes encode the length of price vector (i.e. num_tokens)
+        let len_prices = BigEndian::read_u16(&bytes[0..2]);
+        let volumes = bytes.split_off(2 + len_prices as usize * 12);
         let prices = bytes
+            .split_off(2)
             .chunks_exact(12)
             .map(|chunk| util::read_amount(&util::get_amount_from_slice(chunk)))
             .collect();
-        info!("Recovered prices as: {:?}", prices);
+        info!("Parsed prices as: {:?}", prices);
 
         let mut executed_buy_amounts: Vec<u128> = vec![];
         let mut executed_sell_amounts: Vec<u128> = vec![];
@@ -102,8 +102,8 @@ pub mod unit_test {
     fn test_to_bytes() {
         let solution = Solution {
             prices: vec![5, 2],
-            executed_buy_amounts: vec![1],
-            executed_sell_amounts: vec![3],
+            executed_buy_amounts: vec![2u128.pow(8) + 1],
+            executed_sell_amounts: vec![2u128.pow(16) + 2],
         };
 
         let bytes = solution.bytes();
@@ -111,9 +111,11 @@ pub mod unit_test {
         assert_eq!(
             bytes,
             vec![
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 3
+                0, 2, // len(prices)
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, // price0
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, // price1
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // buyAmount0
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2, // sellAmount0
             ]
         );
     }
@@ -135,11 +137,16 @@ pub mod unit_test {
     #[test]
     fn test_deserialize_e2e_example() {
         let bytes = vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 13,
-            224, 182, 179, 167, 100, 0, 0, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 13, 224,
-            182, 179, 167, 100, 0, 1, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 2, 0, 0, 0, 0,
-            13, 224, 182, 179, 167, 100, 0, 3, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 4,
+            0, 5, // num_tokens
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // price0
+            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, // price1
+            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, // price2
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, // price3
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // price4
+            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 1, // buyAmount0
+            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 2, // sellAmount0
+            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 3, // buyAmount1
+            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 4, // sellAmount1
         ];
         let parsed_solution = Solution::from_bytes(bytes, NUM_TOKENS);
         let expected = Solution {
