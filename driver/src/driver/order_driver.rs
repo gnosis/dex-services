@@ -215,7 +215,7 @@ mod tests {
     use crate::price_finding::price_finder_interface::tests::PriceFindingMock;
     use dfusion_core::database::tests::DbInterfaceMock;
     use dfusion_core::models::order::test_util::create_order_for_test;
-    use dfusion_core::models::{NUM_RESERVED_ACCOUNTS};
+    use dfusion_core::models::NUM_RESERVED_ACCOUNTS;
     use mock_it::Matcher::*;
     use std::str::FromStr;
     use web3::types::{H160, H256, U256};
