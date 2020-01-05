@@ -249,12 +249,12 @@ pub mod tests {
             /* num_tokens */
             vec![
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 30,
+                0, 0, 0, 5,
             ],
             /* num_accounts */
             vec![
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 100,
+                0, 0, 0, 7,
             ],
         ];
 
@@ -272,7 +272,7 @@ pub mod tests {
             removed: None,
         });
 
-        let expected_state = AccountState::new(H256::zero(), U256::zero(), vec![0; 3000], NUM_TOKENS);
+        let expected_state = AccountState::new(H256::zero(), U256::zero(), vec![0; 5 * 7], 5);
         assert_eq!(expected_state, AccountState::from(log));
     }
 
