@@ -121,7 +121,6 @@ pub mod unit_test {
     }
     #[test]
     fn test_serialize_deserialize() {
-
         let solution = Solution {
             prices: vec![42; NUM_TOKENS],
             executed_buy_amounts: vec![4, 5, 6],
@@ -129,7 +128,7 @@ pub mod unit_test {
         };
 
         let bytes = solution.bytes();
-        let parsed_solution = Solution::from_bytes(bytes, NUM_TOKENS);
+        let parsed_solution = Solution::from_bytes(bytes);
 
         assert_eq!(solution, parsed_solution);
     }
@@ -148,7 +147,7 @@ pub mod unit_test {
             0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 3, // buyAmount1
             0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 4, // sellAmount1
         ];
-        let parsed_solution = Solution::from_bytes(bytes, NUM_TOKENS);
+        let parsed_solution = Solution::from_bytes(bytes);
         let expected = Solution {
             prices: vec![1, 10u128.pow(18), 10u128.pow(18), 256, 257],
             executed_buy_amounts: vec![10u128.pow(18) + 1, 10u128.pow(18) + 3],

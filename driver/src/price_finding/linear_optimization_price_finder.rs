@@ -6,8 +6,9 @@ use dfusion_core::models;
 use chrono::Utc;
 use log::{debug, error};
 use serde_json::json;
-use std::collections::HashMap;
 use std::cmp;
+use std::collections::HashMap;
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::BufReader;
 use std::process::Command;
@@ -80,10 +81,7 @@ fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
     })
 }
 
-fn deserialize_result(
-    json: &serde_json::Value,
-    num_tokens: u16,
-) -> Result<models::Solution, PriceFindingError> {
+fn deserialize_result(json: &serde_json::Value) -> Result<models::Solution, PriceFindingError> {
     let price_map = json["prices"]
         .as_object()
         .ok_or_else(|| "No 'price' object in json")?
@@ -95,10 +93,10 @@ fn deserialize_result(
                 .unwrap_or_else(|| (token.to_owned(), "0".to_string()))
         })
         .collect::<Prices>();
-    let prices = (0..num_tokens)
+    let prices = (0..price_map.len())
         .map(|t| {
             price_map
-                .get(&token_id(t))
+                .get(&token_id(t.try_into().unwrap()))
                 .ok_or_else(|| {
                     PriceFindingError::new(
                         &format!("Token {} not found in price map", t),
@@ -143,9 +141,13 @@ impl PriceFinding for LinearOptimisationPriceFinder {
     fn find_prices(
         &self,
         orders: &[models::Order],
-        state: &models::AccountState
+        state: &models::AccountState,
     ) -> Result<models::Solution, PriceFindingError> {
-        let max_token_id = orders.iter().map(|o| cmp::max(o.buy_token, o.sell_token)).max().unwrap();
+        let max_token_id = orders
+            .iter()
+            .map(|o| cmp::max(o.buy_token, o.sell_token))
+            .max()
+            .unwrap();
         let token_ids: Vec<String> = (0..max_token_id).map(token_id).collect();
         let accounts = serialize_balances(&state, &orders);
         let orders: Vec<serde_json::Value> = orders
@@ -170,7 +172,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
         (self.write_input)(&input_file, &input)?;
         (self.run_solver)(&input_file)?;
         let result = (self.read_output)()?;
-        let solution = deserialize_result(&result, num_tokens)?;
+        let solution = deserialize_result(&result)?;
         Ok(solution)
     }
 }
@@ -266,7 +268,7 @@ pub mod tests {
             executed_buy_amounts: vec![0, 95_042_777_139_162_480_000],
         };
 
-        let solution = deserialize_result(&json, 2).expect("Should not fail to parse");
+        let solution = deserialize_result(&json).expect("Should not fail to parse");
         assert_eq!(solution, expected_solution);
     }
 
@@ -275,7 +277,7 @@ pub mod tests {
         let json = json!({
             "orders": []
         });
-        let err = deserialize_result(&json, 2).expect_err("Should fail to parse");
+        let err = deserialize_result(&json).expect_err("Should fail to parse");
         assert_eq!(err.description(), "No 'price' object in json");
     }
 
@@ -287,7 +289,7 @@ pub mod tests {
             },
             "orders": []
         });
-        let err = deserialize_result(&json, 2).expect_err("Should fail to parse");
+        let err = deserialize_result(&json).expect_err("Should fail to parse");
         assert_eq!(err.description(), "Token 1 not found in price map");
     }
 
@@ -298,7 +300,7 @@ pub mod tests {
                 "token0": "100",
             },
         });
-        let err = deserialize_result(&json, 1).expect_err("Should fail to parse");
+        let err = deserialize_result(&json).expect_err("Should fail to parse");
         assert_eq!(err.description(), "No 'orders' list in json");
     }
 
@@ -314,7 +316,7 @@ pub mod tests {
                 }
             ]
         });
-        let result = deserialize_result(&json, 1).expect("Should not fail to parse");
+        let result = deserialize_result(&json).expect("Should not fail to parse");
         assert_eq!(result.executed_sell_amounts[0], 0);
     }
 
@@ -331,7 +333,7 @@ pub mod tests {
                 }
             ]
         });
-        let err = deserialize_result(&json, 1).expect_err("Should fail to parse");
+        let err = deserialize_result(&json).expect_err("Should fail to parse");
         assert_eq!(err.kind, ErrorKind::ParseIntError);
     }
 
@@ -347,7 +349,7 @@ pub mod tests {
                 }
             ]
         });
-        let result = deserialize_result(&json, 1).expect("Should not fail to parse");
+        let result = deserialize_result(&json).expect("Should not fail to parse");
         assert_eq!(result.executed_buy_amounts[0], 0);
     }
 
@@ -364,7 +366,7 @@ pub mod tests {
                 }
             ]
         });
-        let err = deserialize_result(&json, 1).expect_err("Should fail to parse");
+        let err = deserialize_result(&json).expect_err("Should fail to parse");
         assert_eq!(err.kind, ErrorKind::ParseIntError);
     }
 
