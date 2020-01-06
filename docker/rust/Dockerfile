@@ -21,6 +21,7 @@ ONBUILD COPY dex-contracts/build ./dex-contracts/build
 ONBUILD COPY dfusion_rust_core ./dfusion_rust_core
 ONBUILD COPY driver ./driver
 ONBUILD COPY listener ./listener
+ONBUILD COPY e2e ./e2e
 
 ONBUILD COPY Cargo.* ./
 ONBUILD RUN cargo build
