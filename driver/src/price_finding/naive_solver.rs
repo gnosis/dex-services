@@ -260,7 +260,7 @@ fn executed_buy_amount(
     // essentially an inverse of `executed_sell_amount`; when the buy price is
     // higher than the sell price, there are executed sell amounts that cannot
     // be satisfied, check the executed buy amount correctly "round trips" to
-    // the specified exectued sell amount and return `None` if it doesn't
+    // the specified executed sell amount and return `None` if it doesn't
     if exec_sell_amt == executed_sell_amount(fee, exec_buy_amt, buy_price, sell_price) {
         Some(exec_buy_amt)
     } else {
