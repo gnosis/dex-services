@@ -262,7 +262,7 @@ pub mod unit_test {
     }
 
     fn bytes32(value: u8) -> Vec<u8> {
-        let mut res = vec![0u8;32];
+        let mut res = vec![0u8; 32];
         res[31] = value;
         res
     }
