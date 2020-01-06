@@ -200,11 +200,11 @@ mod tests {
             .collect();
 
         assert_eq!(
-            Solution::trivial(1).snapp_objective_value(&orders[..1]),
+            Solution::trivial(1, 5).snapp_objective_value(&orders[..1]),
             Ok(U256::zero())
         );
         assert_eq!(
-            Solution::trivial(5).snapp_objective_value(&orders),
+            Solution::trivial(5, 5).snapp_objective_value(&orders),
             Ok(U256::zero())
         );
     }

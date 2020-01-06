@@ -102,13 +102,20 @@ impl PriceFinding for NaiveSolver {
         orders: &[Order],
         state: &AccountState,
     ) -> Result<Solution, PriceFindingError> {
-        // Initialize trivial solution (default of zero indicates untouched token).
+        /// Fetch max_token_id to determine num_tokens
         let max_token_id = orders
             .iter()
             .map(|o| cmp::max(o.buy_token, o.sell_token))
             .max()
             .unwrap();
-        let mut prices: Vec<u128> = vec![0; max_token_id as usize];
+        let num_tokens = if let Some(fee) = &self.fee {
+            cmp::max(fee.token, max_token_id) + 1
+        } else {
+            max_token_id + 1
+        };
+
+        // Initialize trivial solution (default of zero indicates untouched token).
+        let mut prices: Vec<u128> = vec![0; num_tokens as usize];
         let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
         let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
 
@@ -157,12 +164,12 @@ impl PriceFinding for NaiveSolver {
             // normalize prices so fee token price is BASE_PRICE
             let pre_normalized_fee_price = prices[fee.token as usize];
             if pre_normalized_fee_price == 0 {
-                return Ok(Solution::trivial(orders.len()));
+                return Ok(Solution::trivial(orders.len(), num_tokens as usize));
             }
             for price in prices.iter_mut() {
                 *price = match normalize_price(*price, pre_normalized_fee_price) {
                     Some(price) => price,
-                    None => return Ok(Solution::trivial(orders.len())),
+                    None => return Ok(Solution::trivial(orders.len(), num_tokens as usize)),
                 };
             }
 
@@ -179,7 +186,7 @@ impl PriceFinding for NaiveSolver {
                         match executed_buy_amount(fee, exec_sell_amount[i], BASE_PRICE, price_sell)
                         {
                             Some(exec_buy_amt) => exec_buy_amt,
-                            None => return Ok(Solution::trivial(orders.len())),
+                            None => return Ok(Solution::trivial(orders.len(), num_tokens as usize)),
                         };
                 }
             }
@@ -274,6 +281,7 @@ pub mod tests {
         let state = create_account_state_with_balance_for(&orders);
 
         let solver = NaiveSolver::new(None);
+        println!("{:?}", orders);
         let res = solver.find_prices(&orders, &state).unwrap();
 
         assert_eq!(
@@ -473,7 +481,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
-        assert_eq!(res, Solution::trivial(orders.len()));
+        assert!(!res.is_non_trivial());
     }
 
     #[test]
@@ -500,7 +508,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
-        assert_eq!(res, Solution::trivial(orders.len()));
+        assert!(!res.is_non_trivial());
     }
 
     #[test]
@@ -608,7 +616,7 @@ pub mod tests {
         });
         let solver = NaiveSolver::new(fee);
         let res = solver.find_prices(&orders, &state).unwrap();
-        assert_eq!(res, Solution::trivial(orders.len()));
+        assert!(!res.is_non_trivial());
     }
 
     #[test]
@@ -635,7 +643,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
-        assert_eq!(res, Solution::trivial(orders.len()));
+        assert!(!res.is_non_trivial());
     }
 
     fn order_pair_first_fully_matching_second() -> Vec<Order> {

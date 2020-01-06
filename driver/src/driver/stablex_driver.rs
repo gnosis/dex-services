@@ -34,7 +34,7 @@ impl<'a> StableXDriver<'a> {
         let (account_state, orders) = self.contract.get_auction_data(batch)?;
         let solution = if orders.is_empty() {
             info!("No orders in batch {}", batch);
-            Solution::trivial(0)
+            Solution::trivial(0, 0)
         } else {
             let solution = self.price_finder.find_prices(&orders, &account_state)?;
             info!("Computed solution: {:?}", &solution);
@@ -258,7 +258,7 @@ mod tests {
             .given(batch - 1)
             .will_return(Ok((state.clone(), orders.clone())));
 
-        let solution = Solution::trivial(orders.len());
+        let solution = Solution::trivial(orders.len(), 0);
         pf.find_prices
             .given((orders, state))
             .will_return(Ok(solution));
