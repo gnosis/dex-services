@@ -69,6 +69,11 @@ impl MetricsRegistry for SimpleMetricsRegistry {
         Ok(counters)
     }
 
+    fn global_counter(&self, name: String) -> Result<Counter, PrometheusError> {
+        let opts = Opts::new(name, "global_counter".to_owned());
+        Counter::with_opts(opts)
+    }
+
     fn new_histogram(
         &self,
         name: String,
