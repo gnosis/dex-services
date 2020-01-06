@@ -220,7 +220,7 @@ mod tests {
     use std::str::FromStr;
     use web3::types::{H160, H256, U256};
 
-    const NUM_TOKENS: u16 = 10;
+    const NUM_TOKENS: u16 = 30;
 
     #[test]
     fn bids_for_and_applies_auction_if_unapplied_and_enough_blocks_passed() {

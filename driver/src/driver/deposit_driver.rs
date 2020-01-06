@@ -62,7 +62,7 @@ mod tests {
     use mock_it::Matcher::*;
     use web3::types::{H256, U256};
 
-    const NUM_TOKENS: u16 = 10;
+    const NUM_TOKENS: u16 = 30;
 
     #[test]
     fn applies_current_state_if_unapplied_and_enough_blocks_passed() {
