@@ -102,7 +102,7 @@ impl PriceFinding for NaiveSolver {
         orders: &[Order],
         state: &AccountState,
     ) -> Result<Solution, PriceFindingError> {
-        /// Fetch max_token_id to determine num_tokens
+        // Fetch max_token_id to determine num_tokens
         let max_token_id = orders
             .iter()
             .map(|o| cmp::max(o.buy_token, o.sell_token))
