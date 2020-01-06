@@ -147,7 +147,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
             .iter()
             .map(|o| cmp::max(o.buy_token, o.sell_token))
             .max()
-            .unwrap();
+            .unwrap_or(0);
         let token_ids: Vec<String> = (0..max_token_id).map(token_id).collect();
         let accounts = serialize_balances(&state, &orders);
         let orders: Vec<serde_json::Value> = orders
@@ -282,18 +282,6 @@ pub mod tests {
     }
 
     #[test]
-    fn serialize_result_fails_if_single_price_missing() {
-        let json = json!({
-            "prices": {
-                "token0": "100",
-            },
-            "orders": []
-        });
-        let err = deserialize_result(&json).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "Token 1 not found in price map");
-    }
-
-    #[test]
     fn serialize_result_fails_if_orders_missing() {
         let json = json!({
             "prices": {
@@ -321,7 +309,7 @@ pub mod tests {
     }
 
     #[test]
-    fn serialize_result_fails_if_order_sell_volume_not_parseable() {
+    fn serialize_result_fails_if_order_sell_volume_not_parsable() {
         let json = json!({
             "prices": {
                 "token0": "100",
@@ -378,7 +366,6 @@ pub mod tests {
             vec![100, 200, 300, 400, 500, 600],
             3,
         );
-        println!("{:?}", state);
         let orders = [
             models::Order {
                 batch_information: None,
