@@ -82,15 +82,13 @@ impl Deserializable for Solution {
 pub mod unit_test {
     use super::*;
 
-    const NUM_TOKENS: usize = 30;
-
     #[test]
     fn test_is_non_trivial() {
-        let trivial = Solution::trivial(3, NUM_TOKENS);
+        let trivial = Solution::trivial(3, 2);
         assert!(!trivial.is_non_trivial());
 
         let non_trivial = Solution {
-            prices: vec![42; NUM_TOKENS],
+            prices: vec![42; 2],
             executed_buy_amounts: vec![4, 5, 6],
             executed_sell_amounts: vec![1, 2, 3],
         };
@@ -121,7 +119,7 @@ pub mod unit_test {
     #[test]
     fn test_serialize_deserialize() {
         let solution = Solution {
-            prices: vec![42; NUM_TOKENS],
+            prices: vec![42; 2],
             executed_buy_amounts: vec![4, 5, 6],
             executed_sell_amounts: vec![1, 2, 3],
         };
