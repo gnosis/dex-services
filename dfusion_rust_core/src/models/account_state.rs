@@ -241,11 +241,7 @@ pub mod tests {
     #[test]
     fn test_from_log() {
         let bytes: Vec<Vec<u8>> = vec![
-            /* state_hash */
-            vec![
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0,
-            ],
+            vec![0; 32], // Zero State Hash
             /* num_tokens */
             vec![
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
