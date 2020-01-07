@@ -56,9 +56,8 @@ Clone the repository, its submodule, and run the container
 git clone git@github.com:gnosis/dex-services.git
 cd dex-services
 git submodule update --init
-cd dex-contracts 
-yarn && npx truffle compile
-cd ../
+docker-compose up -d ganache-cli
+(cd dex-contracts && yarn && npx truffle migrate && npm run networks-inject)
 docker-compose up
 ```
 
