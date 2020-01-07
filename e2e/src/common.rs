@@ -92,7 +92,7 @@ pub fn setup(
         }
     }
 
-    // token[0] is already addfed in constructor
+    // token[0] is already added in constructor
     for token in &tokens[1..] {
         instance
             .add_token(token.address())
@@ -116,7 +116,7 @@ pub fn close_auction(web3: &Web3<Http>, instance: &BatchExchange) {
         .call()
         .wait()
         .expect("Cannot get seconds remaining in batch");
-    wait_for(web3, seconds_remaining.low_u32());
+    wait_for(web3, seconds_remaining.as_u32());
 }
 
 pub fn wait_for_condition<C>(condition: C) -> Result<(), Error>

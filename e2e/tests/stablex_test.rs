@@ -3,16 +3,28 @@ use ethcontract::web3::transports::Http;
 use ethcontract::web3::types::U256;
 use ethcontract::Account;
 
-use common::FutureWaitExt;
-
-mod common;
+use e2e::common::{close_auction, setup, wait_for_condition, FutureWaitExt};
 
 #[test]
 fn test_stablex() {
     let (eloop, http) = Http::new("http://localhost:8545").expect("transport failed");
     eloop.into_remote();
     let web3 = Web3::new(http);
-    let (instance, accounts, tokens) = common::setup(&web3, 3, 3);
+    let (instance, accounts, tokens) = setup(&web3, 3, 3);
+
+    // Dynamically fetching the id allows the test to be run multiple times,
+    // even if other tokens have already been added
+    let first_token_id = instance
+        .token_address_to_id_map(tokens[0].address())
+        .call()
+        .wait()
+        .expect("Cannot get first token id");
+
+    let second_token_id = instance
+        .token_address_to_id_map(tokens[1].address())
+        .call()
+        .wait()
+        .expect("Cannot get second token id");
 
     instance
         .deposit(tokens[0].address(), 3_000_000.into())
@@ -35,22 +47,34 @@ fn test_stablex() {
         .expect("Cannot get batchId");
 
     instance
-        .place_order(1, 0, batch + 20, 999_000.into(), 2_000_000.into())
+        .place_order(
+            second_token_id,
+            first_token_id,
+            batch + 20,
+            999_000.into(),
+            2_000_000.into(),
+        )
         .from(Account::Local(accounts[0], None))
         .send()
         .wait()
         .expect("Cannot place first order");
 
     instance
-        .place_order(0, 1, batch + 20, 1_996_000.into(), 999_000.into())
+        .place_order(
+            first_token_id,
+            second_token_id,
+            batch + 20,
+            1_996_000.into(),
+            999_000.into(),
+        )
         .from(Account::Local(accounts[1], None))
         .send()
         .wait()
         .expect("Cannot place first order");
-    common::close_auction(&web3, &instance);
+    close_auction(&web3, &instance);
 
     // wait for solver to submit solution
-    common::wait_for_condition(|| {
+    wait_for_condition(|| {
         instance
             .get_current_objective_value()
             .call()
@@ -66,7 +90,7 @@ fn test_stablex() {
         .send()
         .wait()
         .expect("Cannot place request withdraw");
-    common::close_auction(&web3, &instance);
+    close_auction(&web3, &instance);
 
     let balance_before = tokens[1]
         .balance_of(accounts[0])
