@@ -164,12 +164,12 @@ impl PriceFinding for NaiveSolver {
             // normalize prices so fee token price is BASE_PRICE
             let pre_normalized_fee_price = prices[fee.token as usize];
             if pre_normalized_fee_price == 0 {
-                return Ok(Solution::trivial(orders.len(), num_tokens as usize));
+                return Ok(Solution::trivial(orders.len()));
             }
             for price in prices.iter_mut() {
                 *price = match normalize_price(*price, pre_normalized_fee_price) {
                     Some(price) => price,
-                    None => return Ok(Solution::trivial(orders.len(), num_tokens as usize)),
+                    None => return Ok(Solution::trivial(orders.len())),
                 };
             }
 
@@ -187,7 +187,7 @@ impl PriceFinding for NaiveSolver {
                         {
                             Some(exec_buy_amt) => exec_buy_amt,
                             None => {
-                                return Ok(Solution::trivial(orders.len(), num_tokens as usize))
+                                return Ok(Solution::trivial(orders.len()))
                             }
                         };
                 }

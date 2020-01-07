@@ -13,9 +13,9 @@ pub struct Solution {
 }
 
 impl Solution {
-    pub fn trivial(num_orders: usize, num_tokens: usize) -> Self {
+    pub fn trivial(num_orders: usize) -> Self {
         Solution {
-            prices: vec![0; num_tokens],
+            prices: vec![],
             executed_buy_amounts: vec![0; num_orders],
             executed_sell_amounts: vec![0; num_orders],
         }
@@ -83,7 +83,7 @@ pub mod unit_test {
 
     #[test]
     fn test_is_non_trivial() {
-        let trivial = Solution::trivial(3, 2);
+        let trivial = Solution::trivial(3);
         assert!(!trivial.is_non_trivial());
 
         let non_trivial = Solution {

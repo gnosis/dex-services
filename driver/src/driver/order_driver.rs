@@ -140,11 +140,11 @@ impl<'a> OrderProcessor<'a> {
                         "Error computing result: {}\n Falling back to trivial solution",
                         e
                     );
-                    Solution::trivial(orders.len(), 0)
+                    Solution::trivial(orders.len())
                 })
         } else {
             warn!("No orders in batch. Falling back to trivial solution");
-            Solution::trivial(orders.len(), 0)
+            Solution::trivial(orders.len())
         };
 
         // Compute updated balances
