@@ -106,11 +106,11 @@ docker-compose down && docker-compose up driver graph-listener truffle
 ```
 
 This will start:
-ganache-cli, the local ethereum chain
-a truffle image compiling and deploying your smart contracts to the local chain
-postgres, the database storing the data of the snapp
-graph-listener, a listener pulling data from the ganache-cli and inserting it into postgres
-driver, a service calculating the new states and push these into the smart contract
+- ganache-cli, the local ethereum chain
+- a truffle image compiling and deploying your smart contracts to the local chain
+- postgres, the database storing the data of the snapp
+- graph-listener, a listener pulling data from the ganache-cli and inserting it into postgres
+- driver, a service calculating the new states and push these into the smart contract
 
 You can see the current state of the theGraph DB by opening [localhost:8000](http://localhost:8000) and connecting to the default database (top right).
 On the left side bar, under *Collections* select the collection you want to inspect, e.g. *accounts*.
