@@ -14,6 +14,7 @@ matrix:
       cache:
         directories:
           - $HOME/.cache/yarn
+          - $HOME/.cache/node-gyp
           - $HOME/.cache/sccache
           - $HOME/.cargo
           - $HOME/.rustup
@@ -28,6 +29,7 @@ matrix:
           curl -LO https://github.com/mozilla/sccache/releases/download/$SCCACHE_VERSION/sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz
           tar -C bin -xvf sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz --wildcards '*/sccache' --strip 1
           popd
+        - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
       install:
         - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
         - ./test/setup_contracts.sh
@@ -43,11 +45,14 @@ matrix:
       cache:
         directories:
           - $HOME/.cache/yarn
+          - $HOME/.cache/node-gyp
           - $HOME/.cache/sccache
           - $HOME/.cargo
           - $HOME/.rustup
       before_cache:
         - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
+      before_install:
+        - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
       install:
         - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
         - ./test/setup_contracts.sh
@@ -68,6 +73,9 @@ matrix:
       cache:
         directories:
           - $HOME/.cache/yarn
+          - $HOME/.cache/node-gyp
+      before_install:
+        - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
@@ -89,6 +97,9 @@ matrix:
       cache:
         directories:
           - $HOME/.cache/yarn
+          - $HOME/.cache/node-gyp
+      before_install:
+        - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
@@ -106,6 +117,9 @@ matrix:
       cache:
         directories:
           - $HOME/.cache/yarn
+          - $HOME/.cache/node-gyp
+      before_install:
+        - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
