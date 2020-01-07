@@ -201,13 +201,6 @@ fn async_main() -> impl Future<Item = (), Error = ()> + Send + 'static {
                 generic_store.clone(),
             );
 
-            // let mut index_node_server = IndexNodeServer::new(
-            //     &logger_factory,
-            //     graphql_runner.clone(),
-            //     generic_store.clone(),
-            //     node_id.clone(),
-            // );
-
             // BlockIngestor must be configured to keep at least REORG_THRESHOLD ancestors,
             // otherwise BlockStream will not work properly.
             // BlockStream expects the blocks after the reorg threshold to be present in the
