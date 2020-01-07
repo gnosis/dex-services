@@ -4,7 +4,7 @@
 
 This repository contains the backend logic for the dfusion exchange based on [this specification](github.com/gnosis/dex-research).
 
-It contains two sub-projects that both implement the market mechanism described above in different ways. An fully on-chain solution with instant finality but limited scalability (referred to as "StableX") and a prelimary version that intends to achieves scalability by offloading computation and data-storage off-chain using an [optimistic roll-up](https://medium.com/plasma-group/ethereum-smart-contracts-in-l2-optimistic-rollup-2c1cef2ec537) approach. The latter is in early development stage and not yet ready for use.
+It contains two sub-projects that both implement the market mechanism described above in different ways. An fully on-chain solution with instant finality but limited scalability (referred to as "StableX") and a preliminary version that intends to achieves scalability by offloading computation and data-storage off-chain using an [optimistic roll-up](https://medium.com/plasma-group/ethereum-smart-contracts-in-l2-optimistic-rollup-2c1cef2ec537) approach. The latter is in early development stage and not yet ready for use.
 
 ## Getting Started
 
@@ -29,7 +29,7 @@ docker-compose up -d ganache-cli
 
 ## StableX
 
-The StableX system only consists of a simple service that queries the relevant auction information (orders and balances) directly from the blockchai. It then tries to find and submit a valid solution as soon as the order collection phase for a given auction ended.
+The StableX system only consists of a simple service that queries the relevant auction information (orders and balances) directly from the blockchain. It then tries to find and submit a valid solution as soon as the order collection phase for a given auction ends.
 
 The repo ships with a very naive solver, that can at the moment only match two orders between the fee token (*token0*) and another token if those orders overlap. A more sophisticated solver using a linear programming approach is not open sourced at the moment.
 
@@ -56,7 +56,7 @@ It will then take up to 5 minutes (auctions close every 00, 05, 10 ... of the ho
 npx truffle exec scripts/stablex/close_auction.js
 ```
 
-You should then see the docker container computing and applaying a solution to the most recent auction. In order to withdraw your proceeds you can request a withdraw, wait for one auction for it to become claimable and claim it:
+You should then see the docker container computing and applying a solution to the most recent auction. In order to withdraw your proceeds you can request a withdraw, wait for one auction for it to become claimable and claim it:
 
 ```
 npx truffle exec scripts/stablex/request_withdraw.js --accountId=0 --tokenId=1 --amount=999
