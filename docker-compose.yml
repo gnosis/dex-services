@@ -13,7 +13,7 @@ services:
   ganache-cli:
     ports:
       - '8545:8545'
-    image: 'trufflesuite/ganache-cli:latest'
+    image: 'trufflesuite/ganache-cli:v6.7.0'
     command: ["-d", "-i", "5777"]
     logging:
       driver: "none"
