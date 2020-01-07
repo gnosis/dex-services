@@ -53,8 +53,7 @@ impl Deserializable for Solution {
         // First 2 bytes encode the length of price vector (i.e. num_tokens)
         let len_prices = BigEndian::read_u16(&bytes[0..2]);
         let volumes = bytes.split_off(2 + len_prices as usize * 12);
-        let prices = bytes
-            .split_off(2)
+        let prices = bytes[2..]
             .chunks_exact(12)
             .map(|chunk| util::read_amount(&util::get_amount_from_slice(chunk)))
             .collect();
