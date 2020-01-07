@@ -186,9 +186,7 @@ impl PriceFinding for NaiveSolver {
                         match executed_buy_amount(fee, exec_sell_amount[i], BASE_PRICE, price_sell)
                         {
                             Some(exec_buy_amt) => exec_buy_amt,
-                            None => {
-                                return Ok(Solution::trivial(orders.len()))
-                            }
+                            None => return Ok(Solution::trivial(orders.len())),
                         };
                 }
             }
