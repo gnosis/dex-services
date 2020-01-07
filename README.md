@@ -2,15 +2,75 @@
 
 ## Intro
 
-This repository contains the backend logic for the dfusion exchange based on the specification, see [here](github.com/gnosis/dex-research)
+This repository contains the backend logic for the dfusion exchange based on [this specification](github.com/gnosis/dex-research).
 
-## Architecture
+It contains two sub-projects that both implement the market mechanism described above in different ways. An fully on-chain solution with instant finality but limited scalability (referred to as "StableX") and a prelimary version that intends to achieves scalability by offloading computation and data-storage off-chain using an [optimistic roll-up](https://medium.com/plasma-group/ethereum-smart-contracts-in-l2-optimistic-rollup-2c1cef2ec537) approach. The latter is in early development stage and not yet ready for use.
 
-<p align="center">
-  <img src="documentation/architecture.png" alt="dex-services architecture" width="500">
-</p>
+## Getting Started
 
-The *Event Listener* registers for certain EVM events via the [Gnosis Trading DB](https://github.com/gnosis/pm-trading-db).
+### Requirements
+
+- Rust (stable)
+- NodeJS 11.0, starting with version 12 some deprecated APIs were removed that cause `scrypt`, `keccak`, `secp256k1`, and `sha3` packages to fail to build
+- Docker and Docker-compose (stable)
+
+The project may work with other versions of these tools but they are not tested.
+
+### Installation
+
+Clone the repository, its submodule, and run the container
+```bash
+git clone git@github.com:gnosis/dex-services.git
+cd dex-services
+git submodule update --init
+docker-compose up -d ganache-cli
+(cd dex-contracts && yarn && npx truffle compile && npm run networks-inject && npx truffle migrate)
+```
+
+## StableX
+
+The StableX system only consists of a simple service that queries the relevant auction information (orders and balances) directly from the blockchai. It then tries to find and submit a valid solution as soon as the order collection phase for a given auction ended.
+
+The repo ships with a very naive solver, that can at the moment only match two orders between the fee token (*token0*) and another token if those orders overlap. A more sophisticated solver using a linear programming approach is not open sourced at the moment.
+
+### Running StableX
+
+```bash
+docker-compose up stablex
+```
+
+In order to setup the environment and make a first deposit/order you can run:
+
+```
+cd dex-contracts
+npx truffle exec scripts/stablex/setup_environment.js
+npx truffle exec scripts/stablex/deposit.js --accountId=0 --tokenId=0 --amount=3000
+npx truffle exec scripts/stablex/deposit.js --accountId=1 --tokenId=1 --amount=3000
+npx truffle exec scripts/stablex/place_order.js --accountId=0 --buyToken=1 --sellToken=0 --minBuy=999 --maxSell=2000 --validFor=20
+npx truffle exec scripts/stablex/place_order.js --accountId=1 --buyToken=0 --sellToken=1 --minBuy=1996 --maxSell=999 --validFor=20
+```
+
+It will then take up to 5 minutes (auctions close every 00, 05, 10 ... of the hour). On ganache you can expedite this process by running:
+
+```
+npx truffle exec scripts/stablex/close_auction.js
+```
+
+You should then see the docker container computing and applaying a solution to the most recent auction. In order to withdraw your proceeds you can request a withdraw, wait for one auction for it to become claimable and claim it:
+
+```
+npx truffle exec scripts/stablex/request_withdraw.js --accountId=0 --tokenId=1 --amount=999
+npx truffle exec scripts/stablex/close_auction.js
+npx truffle exec scripts/stablex/claim_withdraw.js --accountId=0 --tokenId=1 
+```
+
+**Note:** Whenever stopping the `ganache-cli` service (e.g. by running `docker-compose down` you have to re-migrate the dex-contract before restarting `stablex`)
+
+## dƒusion Snapp
+
+The Snapp system consists of two main components: The *Graph Listener* which indexes and processes calldata that is emitted via EVM events into the off-chain data store, and the *Driver* who interacts with the smart contract based on the data it finds in storage (e.g. applying pending deposits/withdraws or settling an auction).
+
+The *Graph Listener* registers for certain EVM events via a slightly trimmed down version of [The Graph](https://thegraph.com/).
 The [dex smart contract](https://github.com/gnosis/dex-contracts) emits these events on user interaction (deposit, withdraw, order) as well as when the saved state root hash is updated (state transitions).
 
 Upon receiving a relevant event from the contract, the event listener computes the implied changes to the underlying state. 
@@ -39,30 +99,15 @@ Thus, our data layer has to rely only on the data emitted by the EVM. It cannot 
 
 More components, e.g. a watchtower to challenge invalid state transitions, will be added in the future.
 
-## Getting Started
+### Running the driver/listener
 
-### Requirements
-
-- Rust (stable)
-- NodeJS 11.0, starting with version 12 some deprecated APIs were removed that cause `scrypt`, `keccak`, `secp256k1`, and `sha3` packages to fail to build
-- Docker and Docker-compose (stable)
-
-The project may work with other versions of these tools but they are not tested.
-
-### Installation
-
-Clone the repository, its submodule, and run the container
-```bash
-git clone git@github.com:gnosis/dex-services.git
-cd dex-services
-git submodule update --init
-docker-compose up -d ganache-cli
-(cd dex-contracts && yarn && npx truffle migrate && npm run networks-inject)
-docker-compose up
+```
+docker-compose down && docker-compose up driver graph-listener truffle
 ```
 
 This will start:
 ganache-cli, the local ethereum chain
+a truffle image compiling and deploying your smart contracts to the local chain
 postgres, the database storing the data of the snapp
 graph-listener, a listener pulling data from the ganache-cli and inserting it into postgres
 driver, a service calculating the new states and push these into the smart contract
@@ -74,22 +119,22 @@ In order to setup some testing accounts and make the first deposits (from accoun
 
 ```bash
 cd dex-contracts
-npx truffle exec scripts/{snapp,stablex}/setup_environment.js
-npx truffle exec scripts/{snapp,stablex}/deposit.js --accountId=1 --tokenId=1 --amount=18
+npx truffle exec scripts/snapp/setup_environment.js
+npx truffle exec scripts/snapp/deposit.js --accountId=1 --tokenId=1 --amount=18
 npx truffle exec scripts/wait_seconds.js 181
 ```
 
 To claim back the deposit, submit a withdraw request:
 
 ```bash
-npx truffle exec scripts/{snapp,stablex}/request_withdraw.js --accountId=1 --tokenId=1 --amount=18
+npx truffle exec scripts/snapp/request_withdraw.js --accountId=1 --tokenId=1 --amount=18
 ```
 
 After 20 blocks have passed, the driver will apply the state transition and you should be able to claim back your funds:
 
 ```bash
 npx truffle exec scripts/wait_seconds.js 181
-npx truffle exec scripts/{snapp,stablex}/claim_withdraw.js --slot=0 --accountId=1 --tokenId=1
+npx truffle exec scripts/snapp/claim_withdraw.js --slot=0 --accountId=1 --tokenId=1
 ```
 
 ## Tests
@@ -99,19 +144,39 @@ You need the following dependencies installed locally in order to run the e2e te
 
 For end-to-end tests, run from the project root:
 
+For StableX:
+
+```bash
+docker-compose down && docker-compose up stablex
+e2e-tests-stablex-ganache.sh
+
+export PK=... # Some private key with Rinkeby OWL, DAI and ETH (for gas)
+docker-compose down && docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml up stablex
+e2e-tests-stablex-rinkeby.sh
+```
+
+For dƒusion Snapp:
+
 ```bash
 docker-compose down && docker-compose up
 ./test/e2e-tests-deposit-withdraw.sh
+
+docker-compose down && docker-compose up
 ./test/e2e-tests-auction.sh
+
+docker-compose down && docker-compose up
+./test/e2e-tests-standing-order.sh
 ```
 
 If end-to-end tests are failing, check the `docker-compose logs` and consider inspecting the DB state using the web interface.
 
-To run unit tests for the *Driver*:
+To run unit tests:
+
 ```bash
-cd driver
-cargo test --lib
+cargo test
 ```
+
+We also require `cargo clippy` and `cargo fmt` to pass for any PR to be merged.
 
 ## Running with linear optimization solver
 
@@ -133,7 +198,7 @@ and add the following line to you `common.env` file:
 LINEAR_OPTIMIZATION_SOLVER=1
 ```
 
-Afterwards, when you run your environment with `docker-compose up stablex` the linear optimizer should be automatically used. Note that the e2e tests might no longer work, as their resolution depends on the naive and not the optimal solving strategy.
+Afterwards, when you run your environment e.g. with `docker-compose up stablex` the linear optimizer should be automatically used. Note that the e2e tests might no longer work, as their resolution depends on the naive and not the optimal solving strategy.
 
 ## Troubleshooting
 
@@ -150,14 +215,7 @@ More information on the logging filter syntax can be found in the `slog-envlogge
 
 ### docker-compose build
 
-If you have built the docker landscape before, and there are updates to the smart contracts submodule (*dex-contracts/*), you have to rebuild your docker environment, for them to be picked up:
-
-```bash
-cd dex-contracts && rm -rf build && npx truffle compile && cd ..
-docker-compose build truffle
-```
-
-or rebuild everything if you are desperate (will take longer, but might solve other problems as well)
+If you have built the docker landscape before, and there are updates to the rust dependencies or other implementation details, you might have to rebuild your docker images (in particular if there is a new version of the linear optimization solver).
 
 ```bash
 docker-compose build
