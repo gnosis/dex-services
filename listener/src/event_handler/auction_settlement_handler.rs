@@ -169,6 +169,7 @@ pub mod unit_test {
         assert!(result.is_ok());
         let expected_new_state =
             AccountState::new(H256::from_low_u64_be(1), U256::from(1), vec![0, 1, 0, 0], 2);
+
         match result.unwrap().pop().unwrap() {
             EntityOperation::Set { data, .. } => {
                 assert_eq!(AccountState::from(data), expected_new_state)
@@ -309,6 +310,9 @@ pub mod unit_test {
             /* byte_init */ vec![0; 32],
             /* byte_length */ vec![0; 32],
         ];
+        // encode num tokens in solution bytes!
+        // TODO - remove TOKENS in next PR.
+        bytes.push(TOKENS.to_be_bytes().to_vec());
 
         for _i in 0..TOKENS {
             bytes.push(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
