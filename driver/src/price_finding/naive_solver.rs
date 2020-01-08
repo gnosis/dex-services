@@ -612,6 +612,23 @@ pub mod tests {
     }
 
     #[test]
+    fn test_empty_orders() {
+        let orders: Vec<Order> = vec![];
+        let state = create_account_state_with_balance_for(&orders);
+
+        let solver = NaiveSolver::new(None);
+        let res = solver.find_prices(&orders, &state).unwrap();
+        assert_eq!(
+            res,
+            Solution {
+                prices: vec![0],
+                executed_buy_amounts: vec![],
+                executed_sell_amounts: vec![]
+            }
+        );
+    }
+
+    #[test]
     fn test_empty_sell_volume() {
         let orders = vec![
             Order {

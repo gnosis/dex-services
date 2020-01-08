@@ -8,7 +8,6 @@ use log::{debug, error};
 use serde_json::json;
 use std::cmp;
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::fs::File;
 use std::io::BufReader;
 use std::process::Command;
@@ -73,8 +72,8 @@ fn serialize_balances(state: &models::AccountState, orders: &[models::Order]) ->
 fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
     json!({
         "accountID": account_id(order.account_id),
-        "sellToken": token_id(order.sell_token),
-        "buyToken": token_id(order.buy_token),
+        "sellToken": token_id(order.sell_token as usize),
+        "buyToken": token_id(order.buy_token as usize),
         "sellAmount": order.sell_amount.to_string(),
         "buyAmount": order.buy_amount.to_string(),
         "ID": id //TODO this should not be needed
@@ -148,7 +147,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
             .map(|o| cmp::max(o.buy_token, o.sell_token))
             .max()
             .unwrap_or(0);
-        let token_ids: Vec<String> = (0..=max_token_id).map(token_id).collect();
+        let token_ids: Vec<String> = (0..=max_token_id as usize).map(token_id).collect();
         let accounts = serialize_balances(&state, &orders);
         let orders: Vec<serde_json::Value> = orders
             .iter()
@@ -164,7 +163,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
         });
         if let Some(fee) = &self.fee {
             input["fee"] = json!({
-                "token": token_id(fee.token),
+                "token": token_id(fee.token as usize),
                 "ratio": fee.ratio,
             });
         }
