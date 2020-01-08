@@ -37,7 +37,7 @@ impl LinearOptimisationPriceFinder {
     }
 }
 
-fn token_id(token: u16) -> String {
+fn token_id(token: usize) -> String {
     format!("token{}", token)
 }
 
@@ -55,8 +55,8 @@ fn serialize_balances(state: &models::AccountState, orders: &[models::Order]) ->
             let buy_balance = state
                 .read_balance(order.buy_token, order.account_id)
                 .to_string();
-            token_balance.insert(token_id(order.sell_token), sell_balance);
-            token_balance.insert(token_id(order.buy_token), buy_balance);
+            token_balance.insert(token_id(order.sell_token as usize), sell_balance);
+            token_balance.insert(token_id(order.buy_token as usize), buy_balance);
         };
         accounts
             .entry(account_id(order.account_id))
@@ -96,7 +96,7 @@ fn deserialize_result(json: &serde_json::Value) -> Result<models::Solution, Pric
     let prices = (0..price_map.len())
         .map(|t| {
             price_map
-                .get(&token_id(t.try_into().unwrap()))
+                .get(&token_id(t))
                 .ok_or_else(|| {
                     PriceFindingError::new(
                         &format!("Token {} not found in price map", t),

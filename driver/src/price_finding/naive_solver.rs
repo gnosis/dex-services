@@ -107,7 +107,7 @@ impl PriceFinding for NaiveSolver {
             .iter()
             .map(|o| cmp::max(o.buy_token, o.sell_token))
             .max()
-            .unwrap();
+            .unwrap_or(0);
         // Initialize trivial solution (default of zero indicates untouched token).
         let mut prices: Vec<u128> = vec![0; max_token_id as usize + 1];
         let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
@@ -275,7 +275,6 @@ pub mod tests {
         let state = create_account_state_with_balance_for(&orders);
 
         let solver = NaiveSolver::new(None);
-        println!("{:?}", orders);
         let res = solver.find_prices(&orders, &state).unwrap();
 
         assert_eq!(
