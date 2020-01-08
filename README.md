@@ -39,6 +39,16 @@ The repo ships with a very naive solver, that can at the moment only match two o
 docker-compose up stablex
 ```
 
+You can also run the rust binary locally (without docker). For that you will have to export the following environment variables:
+- ETHEREUM_NODE_URL (for testnets this is usually http://localhost:8545. You can use an infura node for rinkeby/mainnet)
+- NETWORK_ID (chainId, e.g. 5777 for ganache, 4 for rinkeby, 1 for mainnet)
+- PRIVATE_KEY (the hex key without leading 0x that should be used to sign transactiosn. Needs to be funded with eth for gas)
+
+```bash
+cargo run --bin stablex
+```
+
+The following commands will help you interact with a testnet instance.
 In order to setup the environment (fund test users with tokens and list those on the exchange) as well as to make a first deposit/order you can run:
 
 ```
