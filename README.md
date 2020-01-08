@@ -31,7 +31,7 @@ docker-compose up -d ganache-cli
 
 The BatchExchange system only consists of a simple service that queries the relevant auction information (orders and balances) directly from the blockchain. It then tries to find and submit a valid solution as soon as the order collection phase for a given auction ends.
 
-The repo ships with a very naive solver, that can at the moment only match two orders between the fee token (*token0*) and another token if those orders overlap. A more sophisticated solver using a linear programming approach is not open sourced at the moment.
+The repo ships with a very naive solver, that can at the moment only match two orders between the fee token (*token0*) and another token if those orders overlap. A more sophisticated solver using a linear programming approach is not open sourced at the moment. In order to implement a custom solver, check the smart contract for the required constraints in the `submitSolution` method.
 
 ### Running BatchExchange
 
@@ -39,7 +39,7 @@ The repo ships with a very naive solver, that can at the moment only match two o
 docker-compose up stablex
 ```
 
-In order to setup the environment and make a first deposit/order you can run:
+In order to setup the environment (fund test users with tokens and list those on the exchange) as well as to make a first deposit/order you can run:
 
 ```
 cd dex-contracts
