@@ -148,7 +148,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
             .map(|o| cmp::max(o.buy_token, o.sell_token))
             .max()
             .unwrap_or(0);
-        let token_ids: Vec<String> = (0..max_token_id).map(token_id).collect();
+        let token_ids: Vec<String> = (0..=max_token_id).map(token_id).collect();
         let accounts = serialize_balances(&state, &orders);
         let orders: Vec<serde_json::Value> = orders
             .iter()
