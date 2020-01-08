@@ -108,14 +108,8 @@ impl PriceFinding for NaiveSolver {
             .map(|o| cmp::max(o.buy_token, o.sell_token))
             .max()
             .unwrap();
-        let num_tokens = if let Some(fee) = &self.fee {
-            cmp::max(fee.token, max_token_id) + 1
-        } else {
-            max_token_id + 1
-        };
-
         // Initialize trivial solution (default of zero indicates untouched token).
-        let mut prices: Vec<u128> = vec![0; num_tokens as usize];
+        let mut prices: Vec<u128> = vec![0; max_token_id as usize + 1];
         let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
         let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
 
@@ -162,7 +156,7 @@ impl PriceFinding for NaiveSolver {
 
         if let Some(fee) = &self.fee {
             // normalize prices so fee token price is BASE_PRICE
-            let pre_normalized_fee_price = prices[fee.token as usize];
+            let pre_normalized_fee_price = prices.get(fee.token as usize).copied().unwrap_or(0);
             if pre_normalized_fee_price == 0 {
                 return Ok(Solution::trivial(orders.len()));
             }
@@ -341,7 +335,7 @@ pub mod tests {
         orders.reverse();
         let state = create_account_state_with_balance_for(&orders);
         let fee = Some(Fee {
-            token: 2,
+            token: 0,
             ratio: 0.001,
         });
 
@@ -382,7 +376,6 @@ pub mod tests {
         });
         let solver = NaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
-
         check_solution(&orders, res, &fee).unwrap();
     }
 
