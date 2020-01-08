@@ -24,7 +24,7 @@ git clone git@github.com:gnosis/dex-services.git
 cd dex-services
 git submodule update --init
 docker-compose up -d ganache-cli
-(cd dex-contracts && yarn && npx truffle compile && npm run networks-inject && npx truffle migrate)
+(cd dex-contracts && yarn && yarn prepack && npx truffle migrate)
 ```
 
 ## BatchExchange
