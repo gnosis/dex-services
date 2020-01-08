@@ -4,7 +4,7 @@
 
 This repository contains the backend logic for the dfusion exchange based on [this specification](github.com/gnosis/dex-research).
 
-It contains two sub-projects that both implement the market mechanism described above in different ways. An fully on-chain solution with instant finality but limited scalability (referred to as "StableX") and a preliminary version that intends to achieves scalability by offloading computation and data-storage off-chain using an [optimistic roll-up](https://medium.com/plasma-group/ethereum-smart-contracts-in-l2-optimistic-rollup-2c1cef2ec537) approach. The latter is in early development stage and not yet ready for use.
+It contains two sub-projects that both implement the market mechanism described above in different ways. An fully on-chain solution with instant finality but limited scalability (referred to as "BatchExchange") and a preliminary version that intends to achieves scalability by offloading computation and data-storage off-chain using an [optimistic roll-up](https://medium.com/plasma-group/ethereum-smart-contracts-in-l2-optimistic-rollup-2c1cef2ec537) approach. The latter is in early development stage and not yet ready for use.
 
 ## Getting Started
 
@@ -27,13 +27,13 @@ docker-compose up -d ganache-cli
 (cd dex-contracts && yarn && npx truffle compile && npm run networks-inject && npx truffle migrate)
 ```
 
-## StableX
+## BatchExchange
 
-The StableX system only consists of a simple service that queries the relevant auction information (orders and balances) directly from the blockchain. It then tries to find and submit a valid solution as soon as the order collection phase for a given auction ends.
+The BatchExchange system only consists of a simple service that queries the relevant auction information (orders and balances) directly from the blockchain. It then tries to find and submit a valid solution as soon as the order collection phase for a given auction ends.
 
 The repo ships with a very naive solver, that can at the moment only match two orders between the fee token (*token0*) and another token if those orders overlap. A more sophisticated solver using a linear programming approach is not open sourced at the moment.
 
-### Running StableX
+### Running BatchExchange
 
 ```bash
 docker-compose up stablex
@@ -66,7 +66,7 @@ npx truffle exec scripts/stablex/claim_withdraw.js --accountId=0 --tokenId=1
 
 **Note:** Whenever stopping the `ganache-cli` service (e.g. by running `docker-compose down` you have to re-migrate the dex-contract before restarting `stablex`)
 
-## dƒusion Snapp
+## SnappAuction
 
 The Snapp system consists of two main components: The *Graph Listener* which indexes and processes calldata that is emitted via EVM events into the off-chain data store, and the *Driver* who interacts with the smart contract based on the data it finds in storage (e.g. applying pending deposits/withdraws or settling an auction).
 
@@ -144,7 +144,7 @@ You need the following dependencies installed locally in order to run the e2e te
 
 For end-to-end tests, run from the project root:
 
-For StableX:
+For BatchExchange:
 
 ```bash
 docker-compose down && docker-compose up stablex
@@ -155,7 +155,7 @@ docker-compose down && docker-compose -f docker-compose.yml -f docker-compose.ri
 e2e-tests-stablex-rinkeby.sh
 ```
 
-For dƒusion Snapp:
+For SnappAuction:
 
 ```bash
 docker-compose down && docker-compose up
@@ -223,7 +223,7 @@ docker-compose build
 
 ### Different networks:
 
-In order to start StableX for the Rinkeby network, make sure that the env variables in common-rinkeby.env are up to date and then start the specific docker:
+In order to start BatchExchange for the Rinkeby network, make sure that the env variables in common-rinkeby.env are up to date and then start the specific docker:
 
 ```
 docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml up stablex
