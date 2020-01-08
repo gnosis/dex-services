@@ -68,6 +68,7 @@ matrix:
         - cargo test --all
         - cargo clippy --all --all-targets -- -D warnings
         - cargo fmt --all -- --check
+        - ! git diff --name-only | grep -q Cargo.lock # Make sure Cargo.lock is up to date
     - language: generic
       name: "dƒusion e2e Tests"
       cache:
