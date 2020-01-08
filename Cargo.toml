@@ -3,6 +3,12 @@ members = [
     "dfusion_rust_core",
     "driver",
     "listener",
+    "e2e",
+]
+default-members = [
+    "dfusion_rust_core",
+    "driver",
+    "listener",
 ]
 
 [patch.crates-io]

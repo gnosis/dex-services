@@ -1,0 +1,8 @@
+[package]
+name = "e2e"
+version = "1.0.0"
+edition = "2018"
+
+[dependencies]
+ethcontract = { git = "https://github.com/gnosis/ethcontract-rs", branch = "graph-patches" }
+futures = { version = "0.3.1", features = ["compat"] }
