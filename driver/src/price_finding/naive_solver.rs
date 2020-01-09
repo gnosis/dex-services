@@ -1,10 +1,10 @@
 use dfusion_core::models::{AccountState, Order, Solution};
-use std::cmp;
 use web3::types::U256;
 
 use crate::price_finding::error::PriceFindingError;
 use crate::price_finding::price_finder_interface::{Fee, PriceFinding};
 use crate::util::{CeiledDiv, CheckedConvertU128};
+use std::collections::HashMap;
 
 const BASE_UNIT: u128 = 1_000_000_000_000_000_000u128;
 const BASE_PRICE: u128 = BASE_UNIT;
@@ -102,14 +102,8 @@ impl PriceFinding for NaiveSolver {
         orders: &[Order],
         state: &AccountState,
     ) -> Result<Solution, PriceFindingError> {
-        // Fetch max_token_id to determine num_tokens
-        let max_token_id = orders
-            .iter()
-            .map(|o| cmp::max(o.buy_token, o.sell_token))
-            .max()
-            .unwrap_or(0);
         // Initialize trivial solution (default of zero indicates untouched token).
-        let mut prices: Vec<u128> = vec![0; max_token_id as usize + 1];
+        let mut prices = HashMap::new();
         let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
         let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
 
@@ -120,8 +114,8 @@ impl PriceFinding for NaiveSolver {
                 let y = order_with_buffer_for_fee(&orders[j], &self.fee);
                 match x.match_compare(&y, &state, &self.fee) {
                     Some(OrderPairType::LhsFullyFilled) => {
-                        prices[x.buy_token as usize] = x.sell_amount;
-                        prices[y.buy_token as usize] = x.buy_amount;
+                        prices.insert(x.buy_token, x.sell_amount);
+                        prices.insert(y.buy_token, x.buy_amount);
                         exec_sell_amount[i] = x.sell_amount;
                         exec_sell_amount[j] = x.buy_amount;
 
@@ -129,8 +123,8 @@ impl PriceFinding for NaiveSolver {
                         exec_buy_amount[j] = x.sell_amount;
                     }
                     Some(OrderPairType::RhsFullyFilled) => {
-                        prices[x.sell_token as usize] = y.sell_amount;
-                        prices[y.sell_token as usize] = y.buy_amount;
+                        prices.insert(x.sell_token, y.sell_amount);
+                        prices.insert(y.sell_token, y.buy_amount);
 
                         exec_sell_amount[i] = y.buy_amount;
                         exec_sell_amount[j] = y.sell_amount;
@@ -139,8 +133,8 @@ impl PriceFinding for NaiveSolver {
                         exec_buy_amount[j] = y.buy_amount;
                     }
                     Some(OrderPairType::BothFullyFilled) => {
-                        prices[y.buy_token as usize] = y.sell_amount;
-                        prices[x.buy_token as usize] = x.sell_amount;
+                        prices.insert(y.buy_token, y.sell_amount);
+                        prices.insert(x.buy_token, x.sell_amount);
 
                         exec_sell_amount[i] = x.sell_amount;
                         exec_sell_amount[j] = y.sell_amount;
@@ -156,11 +150,11 @@ impl PriceFinding for NaiveSolver {
 
         if let Some(fee) = &self.fee {
             // normalize prices so fee token price is BASE_PRICE
-            let pre_normalized_fee_price = prices.get(fee.token as usize).copied().unwrap_or(0);
+            let pre_normalized_fee_price = prices.get(&fee.token).copied().unwrap_or(0);
             if pre_normalized_fee_price == 0 {
                 return Ok(Solution::trivial(orders.len()));
             }
-            for price in prices.iter_mut() {
+            for price in prices.values_mut() {
                 *price = match normalize_price(*price, pre_normalized_fee_price) {
                     Some(price) => price,
                     None => return Ok(Solution::trivial(orders.len())),
@@ -171,11 +165,11 @@ impl PriceFinding for NaiveSolver {
             // the fee token
             for (i, order) in orders.iter().enumerate() {
                 if order.sell_token == fee.token {
-                    let price_buy = prices[order.buy_token as usize];
+                    let price_buy = prices[&order.buy_token];
                     exec_sell_amount[i] =
                         executed_sell_amount(fee, exec_buy_amount[i], price_buy, BASE_PRICE);
                 } else {
-                    let price_sell = prices[order.sell_token as usize];
+                    let price_sell = prices[&order.sell_token];
                     exec_buy_amount[i] =
                         match executed_buy_amount(fee, exec_sell_amount[i], BASE_PRICE, price_sell)
                         {
@@ -285,8 +279,8 @@ pub mod tests {
             vec![52 * BASE_UNIT, 4 * BASE_UNIT],
             res.executed_sell_amounts
         );
-        assert_eq!(4 * BASE_UNIT, res.prices[0]);
-        assert_eq!(52 * BASE_UNIT, res.prices[1]);
+        assert_eq!(4 * BASE_UNIT, res.prices[&0]);
+        assert_eq!(52 * BASE_UNIT, res.prices[&1]);
 
         check_solution(&orders, res, &None).unwrap();
     }
@@ -322,8 +316,8 @@ pub mod tests {
             vec![4 * BASE_UNIT, 52 * BASE_UNIT],
             res.executed_sell_amounts
         );
-        assert_eq!(4 * BASE_UNIT, res.prices[0]);
-        assert_eq!(52 * BASE_UNIT, res.prices[1]);
+        assert_eq!(4 * BASE_UNIT, res.prices[&0]);
+        assert_eq!(52 * BASE_UNIT, res.prices[&1]);
 
         check_solution(&orders, res, &None).unwrap();
     }
@@ -359,8 +353,8 @@ pub mod tests {
             vec![10 * BASE_UNIT, 16 * BASE_UNIT],
             res.executed_sell_amounts
         );
-        assert_eq!(10 * BASE_UNIT, res.prices[1]);
-        assert_eq!(16 * BASE_UNIT, res.prices[2]);
+        assert_eq!(10 * BASE_UNIT, res.prices[&1]);
+        assert_eq!(16 * BASE_UNIT, res.prices[&2]);
 
         check_solution(&orders, res, &None).unwrap();
     }
@@ -437,8 +431,8 @@ pub mod tests {
 
         assert_eq!(vec![0, 0, 0, 52, 4, 0], res.executed_buy_amounts);
         assert_eq!(vec![0, 0, 0, 4, 52, 0], res.executed_sell_amounts);
-        assert_eq!(4, res.prices[1]);
-        assert_eq!(52, res.prices[2]);
+        assert_eq!(4, res.prices[&1]);
+        assert_eq!(52, res.prices[&2]);
 
         check_solution(&orders, res, &None).unwrap();
     }
@@ -534,8 +528,8 @@ pub mod tests {
 
         assert_eq!(res.executed_sell_amounts, [20000, 9990]);
         assert_eq!(res.executed_buy_amounts, [9990, 19961]);
-        assert_eq!(res.prices[0], BASE_PRICE);
-        assert_eq!(res.prices[1], BASE_PRICE * 2);
+        assert_eq!(res.prices[&0], BASE_PRICE);
+        assert_eq!(res.prices[&1], BASE_PRICE * 2);
 
         check_solution(&orders, res, &fee).unwrap();
     }
@@ -618,14 +612,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
-        assert_eq!(
-            res,
-            Solution {
-                prices: vec![0],
-                executed_buy_amounts: vec![],
-                executed_sell_amounts: vec![]
-            }
-        );
+        assert_eq!(res, Solution::trivial(0));
     }
 
     #[test]
@@ -707,19 +694,19 @@ pub mod tests {
             return Ok(());
         }
 
-        if let Some(fee_token) = fee.as_ref().map(|fee| fee.token as usize) {
-            if solution.prices[fee_token] != BASE_PRICE {
+        if let Some(fee_token) = fee.as_ref().map(|fee| fee.token) {
+            if solution.prices[&fee_token] != BASE_PRICE {
                 return Err(format!(
                     "price of fee token does not match the base price: {} != {}",
-                    solution.prices[fee_token], BASE_PRICE
+                    solution.prices[&fee_token], BASE_PRICE
                 ));
             }
         }
 
         let mut token_conservation = HashMap::new();
         for (i, order) in orders.iter().enumerate() {
-            let buy_token_price = solution.prices[order.buy_token as usize];
-            let sell_token_price = solution.prices[order.sell_token as usize];
+            let buy_token_price = solution.prices[&order.buy_token];
+            let sell_token_price = solution.prices[&order.sell_token];
 
             let exec_buy_amount = solution.executed_buy_amounts[i];
             let exec_sell_amount = if sell_token_price > 0 {
