@@ -6,20 +6,20 @@ use ethcontract::{ethsign, Account, SecretKey, H256};
 
 use futures::future::join_all;
 
-use e2e::common::{close_auction, setup, wait_for_condition, FutureWaitExt};
+use e2e::common::{wait_for_condition, FutureWaitExt};
+use e2e::stablex::{close_auction, setup_stablex};
+use e2e::IERC20;
 
 use std::env;
 use std::process::Command;
 use std::time::Duration;
-
-ethcontract::contract!("dex-contracts/build/contracts/IERC20.json");
 
 #[test]
 fn test_with_ganache() {
     let (eloop, http) = Http::new("http://localhost:8545").expect("transport failed");
     eloop.into_remote();
     let web3 = Web3::new(http);
-    let (instance, accounts, tokens) = setup(&web3, 3, 3);
+    let (instance, accounts, tokens) = setup_stablex(&web3, 3, 3);
 
     // Dynamically fetching the id allows the test to be run multiple times,
     // even if other tokens have already been added
