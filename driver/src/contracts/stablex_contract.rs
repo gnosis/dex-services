@@ -161,18 +161,18 @@ fn parse_auction_data(packed_auction_bytes: Vec<u8>, index: U256) -> (AccountSta
     (account_state, relevant_orders)
 }
 
-fn encode_prices_for_contract(price_vector: Vec<u128>) -> (Vec<U128>, Vec<u64>) {
+fn encode_prices_for_contract(price_map: HashMap<u16, u128>) -> (Vec<U128>, Vec<u64>) {
     // Representing the solution's price vector more compactly as:
     // sorted_touched_token_ids, non_zero_prices which are logically bound by index.
     // Example solution.prices = [3, 0, 1] will be transformed into [0, 2], [3, 1]
-    let mut prices = vec![];
     let mut ordered_token_ids = vec![];
-    for (token_id, price) in price_vector.into_iter().enumerate().skip(1) {
-        if price > 0 {
-            prices.push(U128::from(price));
-            ordered_token_ids.push(token_id as u64);
-        }
-    }
+    let prices = price_map
+        .iter()
+        .map(|(token_id, price)| {
+            ordered_token_ids.push(*token_id as u64);
+            U128::from(*price)
+        })
+        .collect();
     (prices, ordered_token_ids)
 }
 
@@ -415,7 +415,10 @@ pub mod tests {
 
     #[test]
     fn generic_price_encoding() {
-        let price_vector = vec![u128::max_value(), 0, 1, 2];
+        let price_vector = [(0, u128::max_value()), (1, 0), (2, 1), (3, 2)]
+            .iter()
+            .copied()
+            .collect();
 
         // Only contain non fee-token and non 0 prices
         let expected_prices = vec![1.into(), 2.into()];
