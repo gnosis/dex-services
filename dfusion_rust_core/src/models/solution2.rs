@@ -102,9 +102,13 @@ impl Deserializable for Solution2 {
 pub mod unit_test {
     use super::*;
 
+    fn map_from_list(arr: &[(u16, u128)]) -> HashMap<u16, u128> {
+        arr.into_iter().copied().collect()
+    }
+
     fn generic_non_trivial_solution() -> Solution2 {
         Solution2 {
-            prices: [(0, 42), (2, 42)].into_iter().copied().collect(),
+            prices: map_from_list(&[(0, 42), (2, 42)]),
             executed_buy_amounts: vec![4, 5, 6],
             executed_sell_amounts: vec![1, 2, 3],
         }
@@ -167,5 +171,28 @@ pub mod unit_test {
         let parsed_solution = Solution2::from_bytes(solution_bytes);
 
         assert_eq!(solution, parsed_solution);
+    }
+
+    #[test]
+    fn test_deserialize_e2e_example() {
+        let bytes = vec![
+            0, 5, // num_tokens
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // price0
+            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, // price1
+            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, // price2
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, // price3
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // price4
+            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 1, // buyAmount0
+            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 2, // sellAmount0
+            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 3, // buyAmount1
+            0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 4, // sellAmount1
+        ];
+        let parsed_solution = Solution2::from_bytes(bytes);
+        let expected = Solution2 {
+            prices: map_from_list(&[(0, 1), (1, 10u128.pow(18)), (2, 10u128.pow(18)), (3, 256), (4, 257)]),
+            executed_buy_amounts: vec![10u128.pow(18) + 1, 10u128.pow(18) + 3],
+            executed_sell_amounts: vec![10u128.pow(18) + 2, 10u128.pow(18) + 4],
+        };
+        assert_eq!(parsed_solution, expected);
     }
 }
