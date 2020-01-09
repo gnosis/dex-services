@@ -2,7 +2,6 @@ pub mod account_state;
 pub mod flux;
 pub mod order;
 pub mod solution;
-pub mod solution2;
 pub mod standing_order;
 pub mod util;
 

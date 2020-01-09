@@ -215,6 +215,7 @@ mod tests {
     use crate::price_finding::price_finder_interface::tests::PriceFindingMock;
     use dfusion_core::database::tests::DbInterfaceMock;
     use dfusion_core::models::order::test_util::create_order_for_test;
+    use dfusion_core::models::util::map_from_list;
     use dfusion_core::models::NUM_RESERVED_ACCOUNTS;
     use mock_it::Matcher::*;
     use std::str::FromStr;
@@ -286,7 +287,7 @@ mod tests {
 
         let mut pf = PriceFindingMock::default();
         let expected_solution = Solution {
-            prices: vec![1, 2],
+            prices: map_from_list(&[(0, 1), (1, 2)]),
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
         };
@@ -525,7 +526,7 @@ mod tests {
 
         let mut pf = PriceFindingMock::default();
         let expected_solution = Solution {
-            prices: vec![1, 2],
+            prices: map_from_list(&[(0, 1), (1, 2)]),
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
         };
@@ -710,7 +711,7 @@ mod tests {
     fn test_update_balances() {
         let mut state = AccountState::new(H256::zero(), U256::one(), vec![100; 60], NUM_TOKENS);
         let solution = Solution {
-            prices: vec![1, 2],
+            prices: map_from_list(&[(0, 1), (1, 2)]),
             executed_sell_amounts: vec![1, 1],
             executed_buy_amounts: vec![1, 1],
         };
