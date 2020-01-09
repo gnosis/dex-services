@@ -75,9 +75,8 @@ impl Deserializable for Solution2 {
             .enumerate()
             .filter(|t| *t.1 > 0)
             .map(|(i, v)| (i as u16, *v))
-            .into_iter()
             .collect();
-        info!("Parsed price vector as: {:?}", price_vector);
+        info!("Parsed prices as: {:?}", prices);
 
         let mut executed_buy_amounts: Vec<u128> = vec![];
         let mut executed_sell_amounts: Vec<u128> = vec![];
@@ -102,7 +101,7 @@ pub mod unit_test {
     use super::*;
 
     fn map_from_list(arr: &[(u16, u128)]) -> HashMap<u16, u128> {
-        arr.into_iter().copied().collect()
+        arr.iter().copied().collect()
     }
 
     fn generic_non_trivial_solution() -> Solution2 {
