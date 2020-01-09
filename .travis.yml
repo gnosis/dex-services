@@ -34,7 +34,7 @@ matrix:
         - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
         - ./test/setup_contracts.sh
       script:
-        - cargo build
+        - cargo build --locked
         # Build and publish compact image with compiled binary
         - docker build --tag stablex-binary --build-arg SOLVER_BASE=163030813197.dkr.ecr.us-east-1.amazonaws.com/dex-solver:v0.5.3 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
         - docker tag stablex-binary $REGISTRY_URI:$TRAVIS_COMMIT
@@ -68,7 +68,6 @@ matrix:
         - cargo test --all
         - cargo clippy --all --all-targets -- -D warnings
         - cargo fmt --all -- --check
-        - ! git diff --name-only | grep -q Cargo.lock # Make sure Cargo.lock is up to date
     - language: generic
       name: "dƒusion e2e Tests"
       cache:
