@@ -1,6 +1,6 @@
 use ethcontract::web3::api::Web3;
 use ethcontract::web3::futures::Future as F;
-use ethcontract::web3::transports::{Http, WebSocket};
+use ethcontract::web3::transports::Http;
 use ethcontract::web3::types::U256;
 use ethcontract::{ethsign, Account, SecretKey, H256};
 
