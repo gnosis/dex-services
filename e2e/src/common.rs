@@ -78,7 +78,7 @@ pub fn create_accounts_with_funded_tokens(
     (accounts, tokens)
 }
 
-pub fn approve(tokens: &Vec<IERC20>, address: H160, accounts: &Vec<H160>) {
+pub fn approve(tokens: &[IERC20], address: H160, accounts: &[H160]) {
     for account in accounts {
         for token in tokens {
             token
@@ -86,7 +86,7 @@ pub fn approve(tokens: &Vec<IERC20>, address: H160, accounts: &Vec<H160>) {
                 .from(Account::Local(*account, None))
                 .send()
                 .wait()
-                .expect(&format!("Cannot approve token {:x}", token.address()));
+                .unwrap_or_else(|_| panic!("Cannot approve token {:x}", token.address()));
         }
     }
 }
