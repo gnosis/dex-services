@@ -15,14 +15,13 @@ pub struct Solution {
 impl Solution {
     pub fn trivial(num_orders: usize) -> Self {
         Solution {
-            prices: vec![0; TOKENS as usize],
+            prices: vec![],
             executed_buy_amounts: vec![0; num_orders],
             executed_sell_amounts: vec![0; num_orders],
         }
     }
 
-    /// Returns true if a solution is non-trivial and false if it is the trivial
-    /// solution
+    /// Returns true if a solution is non-trivial and false otherwise
     pub fn is_non_trivial(&self) -> bool {
         self.executed_sell_amounts.iter().any(|&amt| amt > 0)
     }
@@ -54,8 +53,7 @@ impl Deserializable for Solution {
         // First 2 bytes encode the length of price vector (i.e. num_tokens)
         let len_prices = BigEndian::read_u16(&bytes[0..2]);
         let volumes = bytes.split_off(2 + len_prices as usize * 12);
-        let prices = bytes
-            .split_off(2)
+        let prices = bytes[2..]
             .chunks_exact(12)
             .map(|chunk| util::read_amount(&util::get_amount_from_slice(chunk)))
             .collect();
@@ -89,7 +87,7 @@ pub mod unit_test {
         assert!(!trivial.is_non_trivial());
 
         let non_trivial = Solution {
-            prices: vec![42; TOKENS as usize],
+            prices: vec![42; 2],
             executed_buy_amounts: vec![4, 5, 6],
             executed_sell_amounts: vec![1, 2, 3],
         };
@@ -120,7 +118,7 @@ pub mod unit_test {
     #[test]
     fn test_serialize_deserialize() {
         let solution = Solution {
-            prices: vec![42; TOKENS as usize],
+            prices: vec![42; 2],
             executed_buy_amounts: vec![4, 5, 6],
             executed_sell_amounts: vec![1, 2, 3],
         };

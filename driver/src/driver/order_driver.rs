@@ -215,10 +215,12 @@ mod tests {
     use crate::price_finding::price_finder_interface::tests::PriceFindingMock;
     use dfusion_core::database::tests::DbInterfaceMock;
     use dfusion_core::models::order::test_util::create_order_for_test;
-    use dfusion_core::models::{NUM_RESERVED_ACCOUNTS, TOKENS};
+    use dfusion_core::models::NUM_RESERVED_ACCOUNTS;
     use mock_it::Matcher::*;
     use std::str::FromStr;
     use web3::types::{H160, H256, U256};
+
+    const NUM_TOKENS: u16 = 30;
 
     #[test]
     fn bids_for_and_applies_auction_if_unapplied_and_enough_blocks_passed() {
@@ -228,8 +230,8 @@ mod tests {
         let state = AccountState::new(
             state_hash,
             U256::one(),
-            vec![100; (TOKENS * 2) as usize],
-            TOKENS,
+            vec![100; (NUM_TOKENS * 2) as usize],
+            NUM_TOKENS,
         );
         let contract = SnappContractMock::default();
         contract
@@ -365,8 +367,8 @@ mod tests {
         let state = AccountState::new(
             state_hash,
             U256::one(),
-            vec![100; (TOKENS * 2) as usize],
-            TOKENS,
+            vec![100; (NUM_TOKENS * 2) as usize],
+            NUM_TOKENS,
         );
         let contract = SnappContractMock::default();
         contract
@@ -499,8 +501,8 @@ mod tests {
         let state = AccountState::new(
             state_hash,
             U256::one(),
-            vec![100; (TOKENS * 2) as usize],
-            TOKENS,
+            vec![100; (NUM_TOKENS * 2) as usize],
+            NUM_TOKENS,
         );
         let standing_orders = StandingOrder::empty_array();
         let db = DbInterfaceMock::new();
@@ -554,8 +556,8 @@ mod tests {
         let state = AccountState::new(
             state_hash,
             U256::one(),
-            vec![100; (TOKENS * 2) as usize],
-            TOKENS,
+            vec![100; (NUM_TOKENS * 2) as usize],
+            NUM_TOKENS,
         );
 
         let contract = SnappContractMock::default();
@@ -618,8 +620,8 @@ mod tests {
         let state = AccountState::new(
             state_hash,
             U256::one(),
-            vec![100; (TOKENS * 2) as usize],
-            TOKENS,
+            vec![100; (NUM_TOKENS * 2) as usize],
+            NUM_TOKENS,
         );
 
         let contract = SnappContractMock::default();
@@ -706,7 +708,7 @@ mod tests {
 
     #[test]
     fn test_update_balances() {
-        let mut state = AccountState::new(H256::zero(), U256::one(), vec![100; 60], TOKENS);
+        let mut state = AccountState::new(H256::zero(), U256::one(), vec![100; 60], NUM_TOKENS);
         let solution = Solution {
             prices: vec![1, 2],
             executed_sell_amounts: vec![1, 1],

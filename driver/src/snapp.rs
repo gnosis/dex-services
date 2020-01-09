@@ -198,14 +198,17 @@ mod tests {
                 ..Default::default()
             })
             .collect();
-
         assert_eq!(
-            Solution::trivial(1).snapp_objective_value(&orders[..1]),
+            Solution::trivial(0).snapp_objective_value(&[]),
             Ok(U256::zero())
         );
         assert_eq!(
+            Solution::trivial(1).snapp_objective_value(&orders[..1]),
+            Result::Err(SnappObjectiveError::TokenNotFound)
+        );
+        assert_eq!(
             Solution::trivial(5).snapp_objective_value(&orders),
-            Ok(U256::zero())
+            Result::Err(SnappObjectiveError::TokenNotFound)
         );
     }
 

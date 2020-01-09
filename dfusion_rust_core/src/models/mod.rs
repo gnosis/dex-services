@@ -15,11 +15,10 @@ pub use crate::models::standing_order::StandingOrder;
 use sha2::{Digest, Sha256};
 use web3::types::H256;
 
-//ToDo: get variables from database
-pub const TOKENS: u16 = 30;
+// TODO: get variables from database
 pub const NUM_RESERVED_ACCOUNTS: usize = 50;
 pub const NUM_SLOTS_REGULAR_ORDERS: u16 = 500;
-pub const NUM_SLOTS_PER_STANING_ORDER_ACCOUNT: u16 = 10;
+pub const NUM_SLOTS_PER_STANDING_ORDER_ACCOUNT: u16 = 10;
 
 pub trait RollingHashable {
     fn rolling_hash(&self, nonce: u32) -> H256;

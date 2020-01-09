@@ -1,4 +1,5 @@
-use dfusion_core::models::{AccountState, Order, Solution, TOKENS};
+use dfusion_core::models::{AccountState, Order, Solution};
+use std::cmp;
 use web3::types::U256;
 
 use crate::price_finding::error::PriceFindingError;
@@ -101,8 +102,14 @@ impl PriceFinding for NaiveSolver {
         orders: &[Order],
         state: &AccountState,
     ) -> Result<Solution, PriceFindingError> {
+        // Fetch max_token_id to determine num_tokens
+        let max_token_id = orders
+            .iter()
+            .map(|o| cmp::max(o.buy_token, o.sell_token))
+            .max()
+            .unwrap_or(0);
         // Initialize trivial solution (default of zero indicates untouched token).
-        let mut prices: Vec<u128> = vec![0; TOKENS as usize];
+        let mut prices: Vec<u128> = vec![0; max_token_id as usize + 1];
         let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
         let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
 
@@ -149,7 +156,7 @@ impl PriceFinding for NaiveSolver {
 
         if let Some(fee) = &self.fee {
             // normalize prices so fee token price is BASE_PRICE
-            let pre_normalized_fee_price = prices[fee.token as usize];
+            let pre_normalized_fee_price = prices.get(fee.token as usize).copied().unwrap_or(0);
             if pre_normalized_fee_price == 0 {
                 return Ok(Solution::trivial(orders.len()));
             }
@@ -247,7 +254,7 @@ fn executed_buy_amount(
     // essentially an inverse of `executed_sell_amount`; when the buy price is
     // higher than the sell price, there are executed sell amounts that cannot
     // be satisfied, check the executed buy amount correctly "round trips" to
-    // the specified exectued sell amount and return `None` if it doesn't
+    // the specified executed sell amount and return `None` if it doesn't
     if exec_sell_amt == executed_sell_amount(fee, exec_buy_amt, buy_price, sell_price) {
         Some(exec_buy_amt)
     } else {
@@ -327,7 +334,7 @@ pub mod tests {
         orders.reverse();
         let state = create_account_state_with_balance_for(&orders);
         let fee = Some(Fee {
-            token: 2,
+            token: 0,
             ratio: 0.001,
         });
 
@@ -368,7 +375,6 @@ pub mod tests {
         });
         let solver = NaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
-
         check_solution(&orders, res, &fee).unwrap();
     }
 
@@ -439,11 +445,12 @@ pub mod tests {
 
     #[test]
     fn test_insufficient_balance() {
+        const NUM_TOKENS: u16 = 10;
         let state = AccountState::new(
             H256::zero(),
             U256::zero(),
-            vec![0; (TOKENS * 2) as usize],
-            TOKENS,
+            vec![0; (NUM_TOKENS * 2) as usize],
+            NUM_TOKENS,
         );
         let orders = vec![
             Order {
@@ -466,7 +473,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
-        assert_eq!(res, Solution::trivial(orders.len()));
+        assert!(!res.is_non_trivial());
     }
 
     #[test]
@@ -493,7 +500,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
-        assert_eq!(res, Solution::trivial(orders.len()));
+        assert!(!res.is_non_trivial());
     }
 
     #[test]
@@ -601,7 +608,24 @@ pub mod tests {
         });
         let solver = NaiveSolver::new(fee);
         let res = solver.find_prices(&orders, &state).unwrap();
-        assert_eq!(res, Solution::trivial(orders.len()));
+        assert!(!res.is_non_trivial());
+    }
+
+    #[test]
+    fn test_empty_orders() {
+        let orders: Vec<Order> = vec![];
+        let state = create_account_state_with_balance_for(&orders);
+
+        let solver = NaiveSolver::new(None);
+        let res = solver.find_prices(&orders, &state).unwrap();
+        assert_eq!(
+            res,
+            Solution {
+                prices: vec![0],
+                executed_buy_amounts: vec![],
+                executed_sell_amounts: vec![]
+            }
+        );
     }
 
     #[test]
@@ -628,7 +652,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
-        assert_eq!(res, Solution::trivial(orders.len()));
+        assert!(!res.is_non_trivial());
     }
 
     fn order_pair_first_fully_matching_second() -> Vec<Order> {
