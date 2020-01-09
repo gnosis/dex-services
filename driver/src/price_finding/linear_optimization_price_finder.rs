@@ -14,7 +14,7 @@ use std::process::Command;
 use web3::types::H160;
 
 const RESULT_FOLDER: &str = "./results/tmp/";
-type Prices = HashMap<String, String>;
+type PriceMap = HashMap<u16, u128>;
 
 pub struct LinearOptimisationPriceFinder {
     // default IO methods can be replaced for unit testing
@@ -81,30 +81,23 @@ fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
 }
 
 fn deserialize_result(json: &serde_json::Value) -> Result<models::Solution, PriceFindingError> {
-    let price_map = json["prices"]
+    let prices = json["prices"]
         .as_object()
         .ok_or_else(|| "No 'price' object in json")?
         .iter()
         .map(|(token, price)| {
             price
                 .as_str()
-                .map(|p| (token.to_owned(), p.to_owned()))
-                .unwrap_or_else(|| (token.to_owned(), "0".to_string()))
-        })
-        .collect::<Prices>();
-    let prices = (0..price_map.len())
-        .map(|t| {
-            price_map
-                .get(&token_id(t))
-                .ok_or_else(|| {
-                    PriceFindingError::new(
-                        &format!("Token {} not found in price map", t),
-                        ErrorKind::JsonError,
+                .map(|p| {
+                    (
+                        token[5..].parse::<u16>().unwrap(),
+                        p.parse::<u128>().unwrap(),
                     )
                 })
-                .and_then(|price| price.parse::<u128>().map_err(PriceFindingError::from))
+                .unwrap()
         })
-        .collect::<Result<Vec<u128>, PriceFindingError>>()?;
+        .collect::<PriceMap>();
+
     let orders = json["orders"]
         .as_array()
         .ok_or_else(|| "No 'orders' list in json")?;
@@ -217,6 +210,7 @@ pub mod tests {
 
     use super::*;
     use dfusion_core::models::account_state::test_util::*;
+    use dfusion_core::models::util::map_from_list;
     use std::error::Error;
     use web3::types::{H256, U256};
 
@@ -262,7 +256,10 @@ pub mod tests {
         });
 
         let expected_solution = models::Solution {
-            prices: vec![14_024_052_566_155_238_000, 1_526_784_674_855_762_300],
+            prices: map_from_list(&[
+                (0, 14_024_052_566_155_238_000),
+                (1, 1_526_784_674_855_762_300),
+            ]),
             executed_sell_amounts: vec![0, 318_390_084_925_498_118_944],
             executed_buy_amounts: vec![0, 95_042_777_139_162_480_000],
         };
