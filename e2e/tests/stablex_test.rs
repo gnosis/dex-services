@@ -183,7 +183,7 @@ fn test_rinkeby() {
         .nonce(nonce + 1)
         .gas(1_000_000.into())
         .gas_price(8_000_000_000u64.into())
-        .from(account.clone())
+        .from(account)
         .send_and_confirm(Duration::from_secs(1), 1);
 
     // Deposit Funds
