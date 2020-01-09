@@ -8,8 +8,8 @@ use std::iter::once;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Solution2 {
-    pub prices: HashMap<u16, u128>,
     // token_id => price
+    pub prices: HashMap<u16, u128>,
     pub executed_buy_amounts: Vec<u128>,
     pub executed_sell_amounts: Vec<u128>,
 }
@@ -189,7 +189,13 @@ pub mod unit_test {
         ];
         let parsed_solution = Solution2::from_bytes(bytes);
         let expected = Solution2 {
-            prices: map_from_list(&[(0, 1), (1, 10u128.pow(18)), (2, 10u128.pow(18)), (3, 256), (4, 257)]),
+            prices: map_from_list(&[
+                (0, 1),
+                (1, 10u128.pow(18)),
+                (2, 10u128.pow(18)),
+                (3, 256),
+                (4, 257),
+            ]),
             executed_buy_amounts: vec![10u128.pow(18) + 1, 10u128.pow(18) + 3],
             executed_sell_amounts: vec![10u128.pow(18) + 2, 10u128.pow(18) + 4],
         };
