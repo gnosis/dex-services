@@ -143,7 +143,7 @@ pub mod unit_test {
         );
 
         let solution = Solution2 {
-            prices: [(0, 5), (1, 2)].into_iter().copied().collect(),
+            prices: map_from_list(&[(0, 5), (1, 2)]),
             executed_buy_amounts: vec![2u128.pow(8) + 1, 2u128.pow(24) + 3],
             executed_sell_amounts: vec![2u128.pow(16) + 2, 2u128.pow(32) + 4],
         };
