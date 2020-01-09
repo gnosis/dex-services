@@ -23,9 +23,8 @@ impl Solution2 {
         }
     }
 
-    // TODO - Why does this have to be a reference?
-    pub fn max_token(&self) -> Option<&u16> {
-        self.prices.keys().max()
+    pub fn max_token(&self) -> Option<u16> {
+        self.prices.keys().max().copied()
     }
 
     /// Returns true if a solution is non-trivial and false otherwise
@@ -36,7 +35,7 @@ impl Solution2 {
 
 impl Serializable for Solution2 {
     fn bytes(&self) -> Vec<u8> {
-        let max_token = *self.max_token().unwrap_or(&0u16);
+        let max_token = self.max_token().unwrap_or(0u16);
         let mut res = (max_token + 1).to_be_bytes().to_vec();
 
         // Convert HashMap of prices to a price vector.
@@ -122,7 +121,7 @@ pub mod unit_test {
 
     #[test]
     fn test_max_token() {
-        assert_eq!(generic_non_trivial_solution().max_token().unwrap(), &2);
+        assert_eq!(generic_non_trivial_solution().max_token().unwrap(), 2);
         assert_eq!(Solution2::trivial(1).max_token(), None);
     }
 
