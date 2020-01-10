@@ -9,6 +9,7 @@ use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::BufReader;
+use std::iter::FromIterator;
 use std::process::Command;
 use web3::types::H160;
 
@@ -44,22 +45,19 @@ fn account_id(account: H160) -> String {
     format!("{:x}", account)
 }
 
-fn serialize_tokens(orders: &[models::Order]) -> Vec<&String> {
-    // TODO - Finish this!
-    let buy_tokens = orders
-        .iter()
-        .map(|o| token_id(o.buy_token))
-        .collect::<HashSet<String>>();
-    let sell_tokens = orders
-        .iter()
-        .map(|o| token_id(o.sell_token))
-        .collect::<HashSet<String>>();
-    println!("{:?}", orders);
-    println!("buy tokens {:?}", buy_tokens);
-    println!("sell tokens {:?}", sell_tokens);
+fn serialize_tokens(orders: &[models::Order]) -> Vec<String> {
+    // Get collection of all token ids appearing in orders
+    let mut token_ids = orders.iter().map(|o| o.buy_token).collect::<Vec<u16>>();
+    token_ids.extend(orders.iter().map(|o| o.sell_token).collect::<Vec<u16>>());
 
-    //    buy_tokens.union(&sell_tokens).collect::<Vec<&String>>()
-    vec![]
+    // Remove duplicate tokens by casting to HashSet and convert back to Vec
+    let unique_token_ids: HashSet<u16> = HashSet::from_iter(token_ids.iter().cloned());
+    let mut token_vec = unique_token_ids.into_iter().collect::<Vec<u16>>();
+
+    // unstable sort has no performance loss since elements are unique
+    token_vec.sort_unstable();
+
+    token_vec.iter().map(|t| token_id(*t)).collect()
 }
 
 fn serialize_balances(state: &models::AccountState, orders: &[models::Order]) -> serde_json::Value {
