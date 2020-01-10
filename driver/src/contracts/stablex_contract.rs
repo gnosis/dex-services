@@ -165,15 +165,19 @@ fn encode_prices_for_contract(price_map: HashMap<u16, u128>) -> (Vec<U128>, Vec<
     // Representing the solution's price vector more compactly as:
     // sorted_touched_token_ids, non_zero_prices which are logically bound by index.
     // Example solution.prices = [3, 0, 1] will be transformed into [0, 2], [3, 1]
-    let mut ordered_token_ids = vec![];
-    let prices = price_map
-        .iter()
-        .map(|(token_id, price)| {
-            ordered_token_ids.push(*token_id as u64);
-            U128::from(*price)
-        })
+
+    let mut token_ids: Vec<u16> = price_map
+        .keys()
+        .copied()
+        .filter(|t| *t > 0 && price_map[t] > 0)
         .collect();
-    (prices, ordered_token_ids)
+    token_ids.sort();
+    let prices = token_ids
+        .iter()
+        .filter(|token_id| price_map[*token_id] > 0)
+        .map(|token_id| U128::from(price_map[token_id]))
+        .collect();
+    (prices, token_ids.iter().map(|t| *t as u64).collect())
 }
 
 fn encode_execution_for_contract(
@@ -215,6 +219,7 @@ pub mod tests {
     use crate::error::ErrorKind;
 
     use super::*;
+    use dfusion_core::models::util::map_from_list;
 
     type GetSolutionObjectiveValueArguments = (U256, Matcher<Vec<Order>>, Matcher<Solution>);
     type SubmitSolutionArguments = (U256, Matcher<Vec<Order>>, Matcher<Solution>, Matcher<U256>);
@@ -415,17 +420,28 @@ pub mod tests {
 
     #[test]
     fn generic_price_encoding() {
-        let price_vector = [(0, u128::max_value()), (1, 0), (2, 1), (3, 2)]
-            .iter()
-            .copied()
-            .collect();
+        let price_map = map_from_list(&[(0, u128::max_value()), (1, 0), (2, 1), (3, 2)]);
 
-        // Only contain non fee-token and non 0 prices
+        // Only contain non fee-token and non zero prices
         let expected_prices = vec![1.into(), 2.into()];
         let expected_token_ids = vec![2, 3];
 
         assert_eq!(
-            encode_prices_for_contract(price_vector),
+            encode_prices_for_contract(price_map),
+            (expected_prices, expected_token_ids)
+        );
+    }
+
+    #[test]
+    fn unsorted_price_encoding() {
+        let unordered_price_map = map_from_list(&[(4, 2), (1, 3), (5, 0), (0, 2), (3, 1)]);
+
+        // Only contain non fee-token and non zero prices
+        let expected_prices = vec![3.into(), 1.into(), 2.into()];
+        let expected_token_ids = vec![1u64, 3u64, 4u64];
+
+        assert_eq!(
+            encode_prices_for_contract(unordered_price_map),
             (expected_prices, expected_token_ids)
         );
     }

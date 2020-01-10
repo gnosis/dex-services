@@ -6,14 +6,14 @@ use dfusion_core::models;
 use chrono::Utc;
 use log::{debug, error};
 use serde_json::json;
-use std::cmp;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::BufReader;
 use std::process::Command;
 use web3::types::H160;
 
 const RESULT_FOLDER: &str = "./results/tmp/";
+
 type PriceMap = HashMap<u16, u128>;
 
 pub struct LinearOptimisationPriceFinder {
@@ -36,12 +36,30 @@ impl LinearOptimisationPriceFinder {
     }
 }
 
-fn token_id(token: usize) -> String {
+fn token_id(token: u16) -> String {
     format!("token{}", token)
 }
 
 fn account_id(account: H160) -> String {
     format!("{:x}", account)
+}
+
+fn serialize_tokens(orders: &[models::Order]) -> Vec<&String> {
+    // TODO - Finish this!
+    let buy_tokens = orders
+        .iter()
+        .map(|o| token_id(o.buy_token))
+        .collect::<HashSet<String>>();
+    let sell_tokens = orders
+        .iter()
+        .map(|o| token_id(o.sell_token))
+        .collect::<HashSet<String>>();
+    println!("{:?}", orders);
+    println!("buy tokens {:?}", buy_tokens);
+    println!("sell tokens {:?}", sell_tokens);
+
+    //    buy_tokens.union(&sell_tokens).collect::<Vec<&String>>()
+    vec![]
 }
 
 fn serialize_balances(state: &models::AccountState, orders: &[models::Order]) -> serde_json::Value {
@@ -54,8 +72,8 @@ fn serialize_balances(state: &models::AccountState, orders: &[models::Order]) ->
             let buy_balance = state
                 .read_balance(order.buy_token, order.account_id)
                 .to_string();
-            token_balance.insert(token_id(order.sell_token as usize), sell_balance);
-            token_balance.insert(token_id(order.buy_token as usize), buy_balance);
+            token_balance.insert(token_id(order.sell_token), sell_balance);
+            token_balance.insert(token_id(order.buy_token), buy_balance);
         };
         accounts
             .entry(account_id(order.account_id))
@@ -72,8 +90,8 @@ fn serialize_balances(state: &models::AccountState, orders: &[models::Order]) ->
 fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
     json!({
         "accountID": account_id(order.account_id),
-        "sellToken": token_id(order.sell_token as usize),
-        "buyToken": token_id(order.buy_token as usize),
+        "sellToken": token_id(order.sell_token),
+        "buyToken": token_id(order.buy_token),
         "sellAmount": order.sell_amount.to_string(),
         "buyAmount": order.buy_amount.to_string(),
         "ID": id //TODO this should not be needed
@@ -90,6 +108,7 @@ fn deserialize_result(json: &serde_json::Value) -> Result<models::Solution, Pric
                 .as_str()
                 .map(|p| {
                     (
+                        // TODO - handle parse errors here.
                         token[5..].parse::<u16>().unwrap(),
                         p.parse::<u128>().unwrap(),
                     )
@@ -135,12 +154,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
         orders: &[models::Order],
         state: &models::AccountState,
     ) -> Result<models::Solution, PriceFindingError> {
-        let max_token_id = orders
-            .iter()
-            .map(|o| cmp::max(o.buy_token, o.sell_token))
-            .max()
-            .unwrap_or(0);
-        let token_ids: Vec<String> = (0..=max_token_id as usize).map(token_id).collect();
+        let token_ids = serialize_tokens(&orders);
         let accounts = serialize_balances(&state, &orders);
         let orders: Vec<serde_json::Value> = orders
             .iter()
@@ -156,7 +170,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
         });
         if let Some(fee) = &self.fee {
             input["fee"] = json!({
-                "token": token_id(fee.token as usize),
+                "token": token_id(fee.token),
                 "ratio": fee.ratio,
             });
         }
@@ -207,7 +221,6 @@ fn read_output() -> std::io::Result<serde_json::Value> {
 
 #[cfg(test)]
 pub mod tests {
-
     use super::*;
     use dfusion_core::models::account_state::test_util::*;
     use dfusion_core::models::util::map_from_list;
@@ -233,6 +246,25 @@ pub mod tests {
             "accountID": "0000000000000000000000000000000000000000",
             "ID": "1"
         });
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_serialize_tokens() {
+        let orders = [
+            models::Order {
+                sell_token: 0,
+                buy_token: 2,
+                ..models::Order::default()
+            },
+            models::Order {
+                sell_token: 2,
+                buy_token: 4,
+                ..models::Order::default()
+            },
+        ];
+        let result = serialize_tokens(&orders);
+        let expected = vec!["token0", "token2", "token4"];
         assert_eq!(result, expected);
     }
 
@@ -338,7 +370,7 @@ pub mod tests {
     }
 
     #[test]
-    fn serialize_result_fails_if_order_buy_volume_not_parseable() {
+    fn serialize_result_fails_if_order_buy_volume_not_parsable() {
         let json = json!({
             "prices": {
                 "token0": "100",
