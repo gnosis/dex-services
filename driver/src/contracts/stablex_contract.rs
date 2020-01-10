@@ -439,7 +439,6 @@ pub mod tests {
         // Only contain non fee-token and non zero prices
         let expected_prices = vec![3.into(), 1.into(), 2.into()];
         let expected_token_ids = vec![1u64, 3u64, 4u64];
-
         assert_eq!(
             encode_prices_for_contract(unordered_price_map),
             (expected_prices, expected_token_ids)
