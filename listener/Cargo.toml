@@ -15,7 +15,7 @@ graph-chain-ethereum = { git = "https://github.com/graphprotocol/graph-node", ta
 graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", tag = "v0.17.0" }
 graph-store-postgres = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.17.0" }
 graph-server-http = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.17.0" }
-graph-server-websocket = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.17.0" }
+graph-server-websocket = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.17.1" }
 
 dfusion_core = { path = "../dfusion_rust_core" }
 
