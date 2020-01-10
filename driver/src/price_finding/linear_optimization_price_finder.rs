@@ -185,8 +185,7 @@ fn write_input(input_file: &str, input: &serde_json::Value) -> std::io::Result<(
 
 fn run_solver(input_file: &str) -> Result<(), PriceFindingError> {
     let output = Command::new("python")
-        .arg("-m")
-        .arg("batchauctions.scripts.e2e._run")
+        .arg(&["-m", "batchauctions.scripts.e2e._run"])
         .arg(RESULT_FOLDER)
         .args(&["--jsonFile", input_file])
         .output()?;
