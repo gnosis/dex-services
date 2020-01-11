@@ -169,7 +169,7 @@ fn encode_prices_for_contract(price_map: HashMap<u16, u128>) -> (Vec<U128>, Vec<
         .copied()
         .filter(|t| *t > 0 && price_map[t] > 0)
         .collect();
-    token_ids.sort();
+    token_ids.sort_unstable();
     let prices = token_ids
         .iter()
         .filter(|token_id| price_map[*token_id] > 0)
