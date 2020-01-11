@@ -272,4 +272,5 @@ mod tests {
                 .was_called_with((batch - 1, Any, Any, Any))
         ));
     }
+
 }
