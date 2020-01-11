@@ -695,7 +695,7 @@ pub mod tests {
         }
 
         if let Some(fee_token) = fee.as_ref().map(|fee| fee.token) {
-            if solution.prices[&fee_token] != BASE_PRICE {
+            if *solution.prices.get(&fee_token).unwrap_or(&BASE_PRICE) != BASE_PRICE {
                 return Err(format!(
                     "price of fee token does not match the base price: {} != {}",
                     solution.prices[&fee_token], BASE_PRICE
@@ -705,8 +705,8 @@ pub mod tests {
 
         let mut token_conservation = HashMap::new();
         for (i, order) in orders.iter().enumerate() {
-            let buy_token_price = solution.prices[&order.buy_token];
-            let sell_token_price = solution.prices[&order.sell_token];
+            let buy_token_price = *solution.prices.get(&order.buy_token).unwrap_or(&0u128);
+            let sell_token_price = *solution.prices.get(&order.sell_token).unwrap_or(&0u128);
 
             let exec_buy_amount = solution.executed_buy_amounts[i];
             let exec_sell_amount = if sell_token_price > 0 {
@@ -748,12 +748,12 @@ pub mod tests {
             *token_conservation.entry(order.sell_token).or_insert(0) -= exec_sell_amount as i128;
         }
 
-        for j in 0..solution.prices.len() {
-            let balance = token_conservation.entry(j as u16).or_insert(0);
-            if *balance != 0 && (fee.is_none() || j as u16 != fee.as_ref().unwrap().token) {
+        for t in solution.prices.keys() {
+            let balance = token_conservation.entry(*t).or_insert(0);
+            if *balance != 0 && (fee.is_none() || *t != fee.as_ref().unwrap().token) {
                 return Err(format!(
                     "Token balance of token {} not 0 (was {})",
-                    j, balance
+                    t, balance
                 ));
             }
         }
