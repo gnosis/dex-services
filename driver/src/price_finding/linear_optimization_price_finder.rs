@@ -103,11 +103,15 @@ fn deserialize_result(json: &serde_json::Value) -> Result<models::Solution, Pric
         .iter()
         .map(|(token, price)| {
             (
-                token[5..].parse::<u16>().map_err(PriceFindingError::from),
+                token[5..].parse::<u16>().map_err(|_| {
+                    PriceFindingError::new("Failed to parse token id", ErrorKind::JsonError)
+                }),
                 match price.as_str() {
-                    Some(p) => p.parse::<u128>().map_err(PriceFindingError::from),
-                    None => Err(PriceFindingError::from("Price value not a string"))
-                }
+                    Some(p) => p.parse::<u128>().map_err(|_| {
+                        PriceFindingError::new("Failed to parse price string", ErrorKind::JsonError)
+                    }),
+                    None => Err(PriceFindingError::from("Price value not a string")),
+                },
             )
         });
     let mut prices = PriceMap::new();
@@ -301,13 +305,37 @@ pub mod tests {
     #[test]
     fn test_failed_deserialize_result() {
         let json = json!({
-            "prices": {
+            "The Prices": {
                 "tokenA": 1,
                 "tokenB": "2",
             },
         });
         let err = deserialize_result(&json).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "invalid digit found in string");
+        assert_eq!(err.description(), "No 'price' object in json");
+
+        let json = json!({
+            "prices": {
+                "token1": 1,
+            },
+        });
+        let err = deserialize_result(&json).expect_err("Should fail to parse");
+        assert_eq!(err.description(), "Price value not a string");
+
+        let json = json!({
+            "prices": {
+                "tokenX": "1",
+            },
+        });
+        let err = deserialize_result(&json).expect_err("Should fail to parse");
+        assert_eq!(err.description(), "Failed to parse token id");
+
+        let json = json!({
+            "prices": {
+                "token9999999999": "1",
+            },
+        });
+        let err = deserialize_result(&json).expect_err("Should fail to parse");
+        assert_eq!(err.description(), "Failed to parse token id");
     }
 
     #[test]
