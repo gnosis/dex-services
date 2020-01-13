@@ -13,6 +13,7 @@ It contains two sub-projects that both implement the market mechanism described 
 - Rust (stable)
 - NodeJS <=11.0, starting with version 12 some deprecated APIs were removed that cause `scrypt`, `keccak`, `secp256k1`, and `sha3` packages to fail to build
 - Docker and Docker-compose (stable)
+- libpq - the PostgreSQL library
 
 The project may work with other versions of these tools but they are not tested.
 
