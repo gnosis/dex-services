@@ -24,7 +24,7 @@ impl Solution {
     }
 
     pub fn price(&self, token_id: u16) -> u128 {
-        self.prices.get(&token_id).unwrap_or(*0u128)
+        *self.prices.get(&token_id).unwrap_or(&0u128)
     }
 
     pub fn max_token(&self) -> Option<u16> {
@@ -44,7 +44,7 @@ impl Serializable for Solution {
 
         // Convert HashMap of prices to a price vector.
         let prices: Vec<u128> = (0..=max_token)
-            .map(|x| *self.price(x)
+            .map(|x| self.price(x))
             .collect();
 
         let alternating_buy_sell_amounts: Vec<u128> = self
@@ -74,8 +74,8 @@ impl Deserializable for Solution {
             .chunks_exact(12)
             .map(|chunk| util::read_amount(&util::get_amount_from_slice(chunk)))
             .enumerate()
-            .filter(|t| *t.1 > 0)
-            .map(|(i, v)| (i as u16, *v))
+            .filter(|t| t.1 > 0)
+            .map(|(i, v)| (i as u16, v))
             .collect();
         info!("Parsed prices as: {:?}", prices);
 
