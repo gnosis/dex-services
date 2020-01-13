@@ -217,7 +217,7 @@ pub mod tests {
     use crate::error::ErrorKind;
 
     use super::*;
-    use dfusion_core::models::util::map_from_list;
+    use dfusion_core::models::util::map_from_slice;
 
     type GetSolutionObjectiveValueArguments = (U256, Matcher<Vec<Order>>, Matcher<Solution>);
     type SubmitSolutionArguments = (U256, Matcher<Vec<Order>>, Matcher<Solution>, Matcher<U256>);
@@ -418,7 +418,7 @@ pub mod tests {
 
     #[test]
     fn generic_price_encoding() {
-        let price_map = map_from_list(&[(0, u128::max_value()), (1, 0), (2, 1), (3, 2)]);
+        let price_map = map_from_slice(&[(0, u128::max_value()), (1, 0), (2, 1), (3, 2)]);
         // Only contain non fee-tokens and non zero prices
         let expected_prices = vec![1.into(), 2.into()];
         let expected_token_ids = vec![2, 3];
@@ -431,7 +431,7 @@ pub mod tests {
 
     #[test]
     fn unsorted_price_encoding() {
-        let unordered_price_map = map_from_list(&[(4, 2), (1, 3), (5, 0), (0, 2), (3, 1)]);
+        let unordered_price_map = map_from_slice(&[(4, 2), (1, 3), (5, 0), (0, 2), (3, 1)]);
 
         // Only contain non fee-token and non zero prices
         let expected_prices = vec![3.into(), 1.into(), 2.into()];

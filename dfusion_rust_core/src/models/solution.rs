@@ -98,11 +98,11 @@ impl Deserializable for Solution {
 #[cfg(test)]
 pub mod unit_test {
     use super::*;
-    use crate::models::util::map_from_list;
+    use crate::models::util::map_from_slice;
 
     fn generic_non_trivial_solution() -> Solution {
         Solution {
-            prices: map_from_list(&[(0, 42), (2, 42)]),
+            prices: map_from_slice(&[(0, 42), (2, 42)]),
             executed_buy_amounts: vec![4, 5, 6],
             executed_sell_amounts: vec![1, 2, 3],
         }
@@ -139,7 +139,7 @@ pub mod unit_test {
         );
 
         let solution = Solution {
-            prices: map_from_list(&[(0, 5), (1, 2)]),
+            prices: map_from_slice(&[(0, 5), (1, 2)]),
             executed_buy_amounts: vec![2u128.pow(8) + 1, 2u128.pow(24) + 3],
             executed_sell_amounts: vec![2u128.pow(16) + 2, 2u128.pow(32) + 4],
         };
@@ -183,7 +183,7 @@ pub mod unit_test {
         ];
         let parsed_solution = Solution::from_bytes(bytes);
         let expected = Solution {
-            prices: map_from_list(&[
+            prices: map_from_slice(&[
                 (0, 1),
                 (1, 10u128.pow(18)),
                 (2, 10u128.pow(18)),

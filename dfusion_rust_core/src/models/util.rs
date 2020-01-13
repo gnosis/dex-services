@@ -222,6 +222,6 @@ pub fn read_amount(bytes: &[u8; 12]) -> u128 {
     BigEndian::read_u128(bytes.as_slice())
 }
 
-pub fn map_from_list(arr: &[(u16, u128)]) -> HashMap<u16, u128> {
+pub fn map_from_slice(arr: &[(u16, u128)]) -> HashMap<u16, u128> {
     arr.iter().copied().collect()
 }

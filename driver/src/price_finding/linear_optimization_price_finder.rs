@@ -115,7 +115,7 @@ fn parse_token(key: &str) -> Result<u16, PriceFindingError> {
 fn parse_price_value(value: &serde_json::Value) -> Result<u128, PriceFindingError> {
     value
         .as_str()
-        .ok_or_else(PriceFindingError::from("Price value not a string"))?
+        .ok_or_else( || PriceFindingError::from("Price value not a string"))?
         .parse::<u128>()
         .map_err(|_| {
             PriceFindingError::new("Failed to parse price string", ErrorKind::ParseIntError)
@@ -243,7 +243,7 @@ fn read_output() -> std::io::Result<serde_json::Value> {
 pub mod tests {
     use super::*;
     use dfusion_core::models::account_state::test_util::*;
-    use dfusion_core::models::util::map_from_list;
+    use dfusion_core::models::util::map_from_slice;
     use std::error::Error;
     use web3::types::{H256, U256};
 
@@ -308,7 +308,7 @@ pub mod tests {
         });
 
         let expected_solution = models::Solution {
-            prices: map_from_list(&[
+            prices: map_from_slice(&[
                 (0, 14_024_052_566_155_238_000),
                 (1, 1_526_784_674_855_762_300),
             ]),

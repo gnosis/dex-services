@@ -84,7 +84,7 @@ mod tests {
 
     use dfusion_core::models::account_state::test_util::*;
     use dfusion_core::models::order::test_util::create_order_for_test;
-    use dfusion_core::models::util::map_from_list;
+    use dfusion_core::models::util::map_from_slice;
 
     use mock_it::Matcher::{Any, Val};
 
@@ -118,7 +118,7 @@ mod tests {
             .will_return(Ok(()));
 
         let solution = Solution {
-            prices: map_from_list(&[(0, 1), (1, 2)]),
+            prices: map_from_slice(&[(0, 1), (1, 2)]),
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
         };
@@ -160,7 +160,7 @@ mod tests {
             .will_return(Ok(()));
 
         let solution = Solution {
-            prices: map_from_list(&[(0, 1), (1, 2)]),
+            prices: map_from_slice(&[(0, 1), (1, 2)]),
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
         };
@@ -339,7 +339,7 @@ mod tests {
             )));
 
         let solution = Solution {
-            prices: map_from_list(&[(0, 1), (1, 2)]),
+            prices: map_from_slice(&[(0, 1), (1, 2)]),
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
         };
