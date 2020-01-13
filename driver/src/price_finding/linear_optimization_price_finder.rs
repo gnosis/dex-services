@@ -255,13 +255,13 @@ pub mod tests {
     fn test_serialize_tokens() {
         let orders = [
             models::Order {
-                sell_token: 0,
+                sell_token: 4,
                 buy_token: 2,
                 ..models::Order::default()
             },
             models::Order {
                 sell_token: 2,
-                buy_token: 4,
+                buy_token: 0,
                 ..models::Order::default()
             },
         ];
