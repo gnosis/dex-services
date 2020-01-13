@@ -43,9 +43,7 @@ impl Serializable for Solution {
         let mut res = (max_token + 1).to_be_bytes().to_vec();
 
         // Convert HashMap of prices to a price vector.
-        let prices: Vec<u128> = (0..=max_token)
-            .map(|x| self.price(x))
-            .collect();
+        let prices: Vec<u128> = (0..=max_token).map(|x| self.price(x)).collect();
 
         let alternating_buy_sell_amounts: Vec<u128> = self
             .executed_buy_amounts
