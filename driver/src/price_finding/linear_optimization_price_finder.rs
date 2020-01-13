@@ -115,7 +115,7 @@ fn parse_token(key: &str) -> Result<u16, PriceFindingError> {
 fn parse_price_value(value: &serde_json::Value) -> Result<u128, PriceFindingError> {
     value
         .as_str()
-        .ok_or_else( || PriceFindingError::from("Price value not a string"))?
+        .ok_or_else(|| PriceFindingError::from("Price value not a string"))?
         .parse::<u128>()
         .map_err(|_| {
             PriceFindingError::new("Failed to parse price string", ErrorKind::ParseIntError)
@@ -337,7 +337,10 @@ pub mod tests {
             },
         });
         let err = deserialize_result(&json).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "Insufficient key length 4 (expected at least 6)");
+        assert_eq!(
+            err.description(),
+            "Insufficient key length 4 (expected at least 6)"
+        );
 
         let json = json!({
             "prices": {
