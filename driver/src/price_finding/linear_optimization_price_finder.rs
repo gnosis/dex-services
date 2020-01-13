@@ -96,28 +96,35 @@ fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
     })
 }
 
+fn parse_token(key: &str) -> Result<u16, PriceFindingError> {
+    // TODO: Check that key is long enough or key[5..] wil panic.
+    key[5..]
+        .parse::<u16>()
+        .map_err(|_| PriceFindingError::new("Failed to parse token id", ErrorKind::JsonError))
+}
+
+fn parse_price_value(value: &serde_json::Value) -> Result<u128, PriceFindingError> {
+    value
+        .as_str()
+        .ok_or(PriceFindingError::from("Price value not a string"))?
+        .parse::<u128>()
+        .map_err(|_| PriceFindingError::new("Failed to parse price string", ErrorKind::JsonError))
+}
+
+fn parse_price(
+    key: &str,
+    value: &serde_json::value::Value,
+) -> Result<(u16, u128), PriceFindingError> {
+    Ok((parse_token(key)?, parse_price_value(value)?))
+}
+
 fn deserialize_result(json: &serde_json::Value) -> Result<models::Solution, PriceFindingError> {
-    let price_map = json["prices"]
+    let prices = json["prices"]
         .as_object()
         .ok_or_else(|| "No 'price' object in json")?
         .iter()
-        .map(|(token, price)| {
-            (
-                token[5..].parse::<u16>().map_err(|_| {
-                    PriceFindingError::new("Failed to parse token id", ErrorKind::JsonError)
-                }),
-                match price.as_str() {
-                    Some(p) => p.parse::<u128>().map_err(|_| {
-                        PriceFindingError::new("Failed to parse price string", ErrorKind::JsonError)
-                    }),
-                    None => Err(PriceFindingError::from("Price value not a string")),
-                },
-            )
-        });
-    let mut prices = PriceMap::new();
-    for (token, price) in price_map {
-        prices.insert(token?, price?);
-    }
+        .map(|(token, price)| parse_price(token, price))
+        .collect::<Result<PriceMap, PriceFindingError>>()?;
 
     let orders = json["orders"]
         .as_array()
