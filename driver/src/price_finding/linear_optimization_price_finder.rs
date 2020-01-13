@@ -97,23 +97,23 @@ fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
 }
 
 fn deserialize_result(json: &serde_json::Value) -> Result<models::Solution, PriceFindingError> {
-    let prices = json["prices"]
+    let price_map = json["prices"]
         .as_object()
         .ok_or_else(|| "No 'price' object in json")?
         .iter()
         .map(|(token, price)| {
-            price
-                .as_str()
-                .map(|p| {
-                    (
-                        // TODO - handle parse errors here.
-                        token[5..].parse::<u16>().unwrap(),
-                        p.parse::<u128>().unwrap(),
-                    )
-                })
-                .unwrap()
-        })
-        .collect::<PriceMap>();
+            (
+                token[5..].parse::<u16>().map_err(PriceFindingError::from),
+                match price.as_str() {
+                    Some(p) => p.parse::<u128>().map_err(PriceFindingError::from),
+                    None => Err(PriceFindingError::from("Price value not a string"))
+                }
+            )
+        });
+    let mut prices = PriceMap::new();
+    for (token, price) in price_map {
+        prices.insert(token?, price?);
+    }
 
     let orders = json["orders"]
         .as_array()
@@ -296,6 +296,18 @@ pub mod tests {
 
         let solution = deserialize_result(&json).expect("Should not fail to parse");
         assert_eq!(solution, expected_solution);
+    }
+
+    #[test]
+    fn test_failed_deserialize_result() {
+        let json = json!({
+            "prices": {
+                "tokenA": 1,
+                "tokenB": "2",
+            },
+        });
+        let err = deserialize_result(&json).expect_err("Should fail to parse");
+        assert_eq!(err.description(), "invalid digit found in string");
     }
 
     #[test]
