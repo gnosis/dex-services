@@ -8,7 +8,7 @@ use std::iter::once;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Solution {
-    // token_id => price
+    /// token_id => price
     pub prices: HashMap<u16, u128>,
     pub executed_buy_amounts: Vec<u128>,
     pub executed_sell_amounts: Vec<u128>,
@@ -21,6 +21,10 @@ impl Solution {
             executed_buy_amounts: vec![0; num_orders],
             executed_sell_amounts: vec![0; num_orders],
         }
+    }
+
+    pub fn price(&self, token_id: u16) -> u128 {
+        self.prices.get(&token_id).unwrap_or(*0u128)
     }
 
     pub fn max_token(&self) -> Option<u16> {
@@ -40,7 +44,7 @@ impl Serializable for Solution {
 
         // Convert HashMap of prices to a price vector.
         let prices: Vec<u128> = (0..=max_token)
-            .map(|x| *self.prices.get(&x).unwrap_or(&0u128))
+            .map(|x| *self.price(x)
             .collect();
 
         let alternating_buy_sell_amounts: Vec<u128> = self
@@ -66,12 +70,9 @@ impl Deserializable for Solution {
         // First 2 bytes encode the length of price vector (i.e. num_tokens)
         let len_prices = BigEndian::read_u16(&bytes[0..2]);
         let volumes = bytes.split_off(2 + len_prices as usize * 12);
-        let price_vector: Vec<u128> = bytes[2..]
+        let prices = bytes[2..]
             .chunks_exact(12)
             .map(|chunk| util::read_amount(&util::get_amount_from_slice(chunk)))
-            .collect();
-        let prices = price_vector
-            .iter()
             .enumerate()
             .filter(|t| *t.1 > 0)
             .map(|(i, v)| (i as u16, *v))

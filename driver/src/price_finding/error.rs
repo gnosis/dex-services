@@ -37,11 +37,6 @@ impl From<&str> for PriceFindingError {
     }
 }
 
-impl From<(u16, u128)> for PriceFindingError {
-    fn from(_x: (u16, u128)) -> Self {
-        PriceFindingError::new("Some shit.", ErrorKind::Unknown)
-    }
-}
 impl PriceFindingError {
     pub fn new(msg: &str, kind: ErrorKind) -> PriceFindingError {
         PriceFindingError {
