@@ -748,12 +748,12 @@ pub mod tests {
             *token_conservation.entry(order.sell_token).or_insert(0) -= exec_sell_amount as i128;
         }
 
-        for t in solution.prices.keys() {
-            let balance = token_conservation.entry(*t).or_insert(0);
-            if *balance != 0 && (fee.is_none() || *t != fee.as_ref().unwrap().token) {
+        for token_id in solution.prices.keys() {
+            let balance = token_conservation.entry(*token_id).or_insert(0);
+            if *balance != 0 && (fee.is_none() || *token_id != fee.as_ref().unwrap().token) {
                 return Err(format!(
                     "Token balance of token {} not 0 (was {})",
-                    t, balance
+                    token_id, balance
                 ));
             }
         }
