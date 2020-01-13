@@ -695,7 +695,7 @@ pub mod tests {
         }
 
         if let Some(fee_token) = fee.as_ref().map(|fee| fee.token) {
-            if *solution.prices.get(&fee_token).unwrap_or(&BASE_PRICE) != BASE_PRICE {
+            if solution.price(fee_token) != BASE_PRICE {
                 return Err(format!(
                     "price of fee token does not match the base price: {} != {}",
                     solution.prices[&fee_token], BASE_PRICE
