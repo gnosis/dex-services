@@ -333,7 +333,7 @@ pub mod tests {
         let err = deserialize_result(&json).expect_err("Should fail to parse");
         assert_eq!(
             err.description(),
-            "Insufficient key length 4 (expected at least 6)"
+            "Token keys expected to start with \"token\""
         );
 
         let json = json!({
