@@ -6,15 +6,15 @@ use dfusion_core::models;
 use chrono::Utc;
 use log::{debug, error};
 use serde_json::json;
-use std::collections::{HashMap, HashSet};
+use std::cmp;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::process::Command;
 use web3::types::H160;
 
 const RESULT_FOLDER: &str = "./results/tmp/";
-
-type PriceMap = HashMap<u16, u128>;
+type Prices = HashMap<String, String>;
 
 pub struct LinearOptimisationPriceFinder {
     // default IO methods can be replaced for unit testing
@@ -36,20 +36,12 @@ impl LinearOptimisationPriceFinder {
     }
 }
 
-fn token_id(token: u16) -> String {
+fn token_id(token: usize) -> String {
     format!("token{}", token)
 }
 
 fn account_id(account: H160) -> String {
     format!("{:x}", account)
-}
-
-fn serialize_tokens(orders: &[models::Order]) -> Vec<String> {
-    // Get collection of all token ids appearing in orders
-    let mut token_ids = orders.iter().map(|o| o.buy_token).collect::<HashSet<u16>>();
-    token_ids.extend(orders.iter().map(|o| o.sell_token));
-
-    token_ids.into_iter().map(token_id).collect::<Vec<String>>()
 }
 
 fn serialize_balances(state: &models::AccountState, orders: &[models::Order]) -> serde_json::Value {
@@ -62,8 +54,8 @@ fn serialize_balances(state: &models::AccountState, orders: &[models::Order]) ->
             let buy_balance = state
                 .read_balance(order.buy_token, order.account_id)
                 .to_string();
-            token_balance.insert(token_id(order.sell_token), sell_balance);
-            token_balance.insert(token_id(order.buy_token), buy_balance);
+            token_balance.insert(token_id(order.sell_token as usize), sell_balance);
+            token_balance.insert(token_id(order.buy_token as usize), buy_balance);
         };
         accounts
             .entry(account_id(order.account_id))
@@ -80,57 +72,39 @@ fn serialize_balances(state: &models::AccountState, orders: &[models::Order]) ->
 fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
     json!({
         "accountID": account_id(order.account_id),
-        "sellToken": token_id(order.sell_token),
-        "buyToken": token_id(order.buy_token),
+        "sellToken": token_id(order.sell_token as usize),
+        "buyToken": token_id(order.buy_token as usize),
         "sellAmount": order.sell_amount.to_string(),
         "buyAmount": order.buy_amount.to_string(),
         "ID": id //TODO this should not be needed
     })
 }
 
-fn parse_token(key: &str) -> Result<u16, PriceFindingError> {
-    if key.starts_with("token") {
-        return key[5..].parse::<u16>().map_err(|err| {
-            PriceFindingError::new(
-                format!("Failed to parse token id: {}", err).as_ref(),
-                ErrorKind::ParseIntError,
-            )
-        });
-    }
-    Err(PriceFindingError::new(
-        "Token keys expected to start with \"token\"",
-        ErrorKind::JsonError,
-    ))
-}
-
-fn parse_price_value(value: &serde_json::Value) -> Result<u128, PriceFindingError> {
-    value
-        .as_str()
-        .ok_or_else(|| PriceFindingError::from("Price value not a string"))?
-        .parse::<u128>()
-        .map_err(|err| {
-            PriceFindingError::new(
-                format!("Failed to parse price string: {}", err).as_ref(),
-                ErrorKind::ParseIntError,
-            )
-        })
-}
-
-fn parse_price(
-    key: &str,
-    value: &serde_json::value::Value,
-) -> Result<(u16, u128), PriceFindingError> {
-    Ok((parse_token(key)?, parse_price_value(value)?))
-}
-
 fn deserialize_result(json: &serde_json::Value) -> Result<models::Solution, PriceFindingError> {
-    let prices = json["prices"]
+    let price_map = json["prices"]
         .as_object()
         .ok_or_else(|| "No 'price' object in json")?
         .iter()
-        .map(|(token, price)| parse_price(token, price))
-        .collect::<Result<PriceMap, PriceFindingError>>()?;
-
+        .map(|(token, price)| {
+            price
+                .as_str()
+                .map(|p| (token.to_owned(), p.to_owned()))
+                .unwrap_or_else(|| (token.to_owned(), "0".to_string()))
+        })
+        .collect::<Prices>();
+    let prices = (0..price_map.len())
+        .map(|t| {
+            price_map
+                .get(&token_id(t))
+                .ok_or_else(|| {
+                    PriceFindingError::new(
+                        &format!("Token {} not found in price map", t),
+                        ErrorKind::JsonError,
+                    )
+                })
+                .and_then(|price| price.parse::<u128>().map_err(PriceFindingError::from))
+        })
+        .collect::<Result<Vec<u128>, PriceFindingError>>()?;
     let orders = json["orders"]
         .as_array()
         .ok_or_else(|| "No 'orders' list in json")?;
@@ -168,7 +142,12 @@ impl PriceFinding for LinearOptimisationPriceFinder {
         orders: &[models::Order],
         state: &models::AccountState,
     ) -> Result<models::Solution, PriceFindingError> {
-        let token_ids = serialize_tokens(&orders);
+        let max_token_id = orders
+            .iter()
+            .map(|o| cmp::max(o.buy_token, o.sell_token))
+            .max()
+            .unwrap_or(0);
+        let token_ids: Vec<String> = (0..=max_token_id as usize).map(token_id).collect();
         let accounts = serialize_balances(&state, &orders);
         let orders: Vec<serde_json::Value> = orders
             .iter()
@@ -184,7 +163,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
         });
         if let Some(fee) = &self.fee {
             input["fee"] = json!({
-                "token": token_id(fee.token),
+                "token": token_id(fee.token as usize),
                 "ratio": fee.ratio,
             });
         }
@@ -235,9 +214,9 @@ fn read_output() -> std::io::Result<serde_json::Value> {
 
 #[cfg(test)]
 pub mod tests {
+
     use super::*;
     use dfusion_core::models::account_state::test_util::*;
-    use dfusion_core::models::util::map_from_slice;
     use std::error::Error;
     use web3::types::{H256, U256};
 
@@ -264,26 +243,6 @@ pub mod tests {
     }
 
     #[test]
-    fn test_serialize_tokens() {
-        let orders = [
-            models::Order {
-                sell_token: 4,
-                buy_token: 2,
-                ..models::Order::default()
-            },
-            models::Order {
-                sell_token: 2,
-                buy_token: 0,
-                ..models::Order::default()
-            },
-        ];
-        let mut result = serialize_tokens(&orders);
-        result.sort_unstable();
-        let expected = vec!["token0", "token2", "token4"];
-        assert_eq!(result, expected);
-    }
-
-    #[test]
     fn test_deserialize_result() {
         let json = json!({
             "prices": {
@@ -303,69 +262,13 @@ pub mod tests {
         });
 
         let expected_solution = models::Solution {
-            prices: map_from_slice(&[
-                (0, 14_024_052_566_155_238_000),
-                (1, 1_526_784_674_855_762_300),
-            ]),
+            prices: vec![14_024_052_566_155_238_000, 1_526_784_674_855_762_300],
             executed_sell_amounts: vec![0, 318_390_084_925_498_118_944],
             executed_buy_amounts: vec![0, 95_042_777_139_162_480_000],
         };
 
         let solution = deserialize_result(&json).expect("Should not fail to parse");
         assert_eq!(solution, expected_solution);
-    }
-
-    #[test]
-    fn test_failed_deserialize_result() {
-        let json = json!({
-            "The Prices": {
-                "tokenA": 1,
-                "tokenB": "2",
-            },
-        });
-        let err = deserialize_result(&json).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "No 'price' object in json");
-
-        let json = json!({
-            "prices": {
-                "tkn1": 1,
-            },
-        });
-        let err = deserialize_result(&json).expect_err("Should fail to parse");
-        assert_eq!(
-            err.description(),
-            "Token keys expected to start with \"token\""
-        );
-
-        let json = json!({
-            "prices": {
-                "token1": 1,
-            },
-        });
-        let err = deserialize_result(&json).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "Price value not a string");
-
-        let json = json!({
-            "prices": {
-                "tokenX": "1",
-            },
-        });
-        let err = deserialize_result(&json).expect_err("Should fail to parse");
-        assert_eq!(
-            err.description(),
-            "Failed to parse token id: invalid digit found in string"
-        );
-
-        let json = json!({
-            "prices": {
-                "token9999999999": "1",
-            },
-        });
-        let err = deserialize_result(&json).expect_err("Should fail to parse");
-        assert_eq!(
-            err.description(),
-            "Failed to parse token id: number too large to fit in target type"
-        );
     }
 
     #[test]
@@ -438,7 +341,7 @@ pub mod tests {
     }
 
     #[test]
-    fn serialize_result_fails_if_order_buy_volume_not_parsable() {
+    fn serialize_result_fails_if_order_buy_volume_not_parseable() {
         let json = json!({
             "prices": {
                 "token0": "100",

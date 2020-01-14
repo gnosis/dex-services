@@ -136,7 +136,7 @@ fn test_rinkeby() {
         let private_key: H256 = env::var("PK")
             .expect("PK env var not set")
             .parse()
-            .expect("PK not parsable");
+            .expect("PK not parseable");
         SecretKey::from_raw(&private_key[..])
             .map_err(ethsign::Error::from)
             .expect("Cannot derive key")

@@ -84,7 +84,7 @@ impl StableXContract for BatchExchange {
         orders: Vec<Order>,
         solution: Solution,
     ) -> Result<U256> {
-        let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
+        let (prices, token_ids_for_price) = encode_prices_for_contract(solution.prices);
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
         let objective_value = self
@@ -111,7 +111,7 @@ impl StableXContract for BatchExchange {
         solution: Solution,
         claimed_objective_value: U256,
     ) -> Result<()> {
-        let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
+        let (prices, token_ids_for_price) = encode_prices_for_contract(solution.prices);
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
         self.submit_solution(
@@ -161,20 +161,19 @@ fn parse_auction_data(packed_auction_bytes: Vec<u8>, index: U256) -> (AccountSta
     (account_state, relevant_orders)
 }
 
-fn encode_prices_for_contract(price_map: &HashMap<u16, u128>) -> (Vec<U128>, Vec<u64>) {
-    // Representing the solution's price vector as:
-    // sorted_touched_token_ids, non_zero_prices (excluding price at token with id 0)
-    let mut token_ids: Vec<u16> = price_map
-        .keys()
-        .copied()
-        .filter(|t| *t > 0 && price_map[t] > 0)
-        .collect();
-    token_ids.sort_unstable();
-    let prices = token_ids
-        .iter()
-        .map(|token_id| U128::from(price_map[token_id]))
-        .collect();
-    (prices, token_ids.iter().map(|t| *t as u64).collect())
+fn encode_prices_for_contract(price_vector: Vec<u128>) -> (Vec<U128>, Vec<u64>) {
+    // Representing the solution's price vector more compactly as:
+    // sorted_touched_token_ids, non_zero_prices which are logically bound by index.
+    // Example solution.prices = [3, 0, 1] will be transformed into [0, 2], [3, 1]
+    let mut prices = vec![];
+    let mut ordered_token_ids = vec![];
+    for (token_id, price) in price_vector.into_iter().enumerate().skip(1) {
+        if price > 0 {
+            prices.push(U128::from(price));
+            ordered_token_ids.push(token_id as u64);
+        }
+    }
+    (prices, ordered_token_ids)
 }
 
 fn encode_execution_for_contract(
@@ -216,7 +215,6 @@ pub mod tests {
     use crate::error::ErrorKind;
 
     use super::*;
-    use dfusion_core::models::util::map_from_slice;
 
     type GetSolutionObjectiveValueArguments = (U256, Matcher<Vec<Order>>, Matcher<Solution>);
     type SubmitSolutionArguments = (U256, Matcher<Vec<Order>>, Matcher<Solution>, Matcher<U256>);
@@ -417,26 +415,14 @@ pub mod tests {
 
     #[test]
     fn generic_price_encoding() {
-        let price_map = map_from_slice(&[(0, u128::max_value()), (1, 0), (2, 1), (3, 2)]);
-        // Only contain non fee-tokens and non zero prices
+        let price_vector = vec![u128::max_value(), 0, 1, 2];
+
+        // Only contain non fee-token and non 0 prices
         let expected_prices = vec![1.into(), 2.into()];
         let expected_token_ids = vec![2, 3];
 
         assert_eq!(
-            encode_prices_for_contract(&price_map),
-            (expected_prices, expected_token_ids)
-        );
-    }
-
-    #[test]
-    fn unsorted_price_encoding() {
-        let unordered_price_map = map_from_slice(&[(4, 2), (1, 3), (5, 0), (0, 2), (3, 1)]);
-
-        // Only contain non fee-token and non zero prices
-        let expected_prices = vec![3.into(), 1.into(), 2.into()];
-        let expected_token_ids = vec![1u64, 3u64, 4u64];
-        assert_eq!(
-            encode_prices_for_contract(&unordered_price_map),
+            encode_prices_for_contract(price_vector),
             (expected_prices, expected_token_ids)
         );
     }
