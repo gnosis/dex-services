@@ -24,8 +24,8 @@ impl Solution {
     }
 
     /// Returns the price for a token by ID or 0 if the token was not found.
-    pub fn price(&self, token_id: u16) -> u128 {
-        *self.prices.get(&token_id).unwrap_or(&0u128)
+    pub fn price(&self, token_id: u16) -> Option<u128> {
+        self.prices.get(&token_id).cloned()
     }
 
     pub fn max_token(&self) -> Option<u16> {
@@ -44,7 +44,9 @@ impl Serializable for Solution {
         let mut res = (max_token + 1).to_be_bytes().to_vec();
 
         // Convert HashMap of prices to a price vector.
-        let prices: Vec<u128> = (0..=max_token).map(|x| self.price(x)).collect();
+        let prices: Vec<u128> = (0..=max_token)
+            .map(|x| self.price(x).unwrap_or_default())
+            .collect();
 
         let alternating_buy_sell_amounts: Vec<u128> = self
             .executed_buy_amounts
