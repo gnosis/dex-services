@@ -84,7 +84,7 @@ impl StableXContract for BatchExchange {
         orders: Vec<Order>,
         solution: Solution,
     ) -> Result<U256> {
-        let (prices, token_ids_for_price) = encode_prices_for_contract(solution.prices);
+        let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
         let objective_value = self
@@ -111,7 +111,7 @@ impl StableXContract for BatchExchange {
         solution: Solution,
         claimed_objective_value: U256,
     ) -> Result<()> {
-        let (prices, token_ids_for_price) = encode_prices_for_contract(solution.prices);
+        let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
         self.submit_solution(
@@ -161,7 +161,7 @@ fn parse_auction_data(packed_auction_bytes: Vec<u8>, index: U256) -> (AccountSta
     (account_state, relevant_orders)
 }
 
-fn encode_prices_for_contract(price_map: HashMap<u16, u128>) -> (Vec<U128>, Vec<u64>) {
+fn encode_prices_for_contract(price_map: &HashMap<u16, u128>) -> (Vec<U128>, Vec<u64>) {
     // Representing the solution's price vector as:
     // sorted_touched_token_ids, non_zero_prices (excluding price at token with id 0)
     let mut token_ids: Vec<u16> = price_map
@@ -424,7 +424,7 @@ pub mod tests {
         let expected_token_ids = vec![2, 3];
 
         assert_eq!(
-            encode_prices_for_contract(price_map),
+            encode_prices_for_contract(&price_map),
             (expected_prices, expected_token_ids)
         );
     }
@@ -437,7 +437,7 @@ pub mod tests {
         let expected_prices = vec![3.into(), 1.into(), 2.into()];
         let expected_token_ids = vec![1u64, 3u64, 4u64];
         assert_eq!(
-            encode_prices_for_contract(unordered_price_map),
+            encode_prices_for_contract(&unordered_price_map),
             (expected_prices, expected_token_ids)
         );
     }
