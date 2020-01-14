@@ -47,11 +47,7 @@ fn account_id(account: H160) -> String {
 fn serialize_tokens(orders: &[models::Order]) -> Vec<String> {
     // Get collection of all token ids appearing in orders
     let mut token_ids = orders.iter().map(|o| o.buy_token).collect::<HashSet<u16>>();
-    token_ids.extend(
-        orders
-            .iter()
-            .map(|o| o.sell_token),
-    );
+    token_ids.extend(orders.iter().map(|o| o.sell_token));
 
     token_ids.into_iter().map(token_id).collect::<Vec<String>>()
 }
