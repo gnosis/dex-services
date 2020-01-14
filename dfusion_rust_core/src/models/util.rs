@@ -4,6 +4,7 @@ use graph::prelude::BigInt;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::convert::TryInto;
+use std::hash::Hash;
 use std::str::FromStr;
 use web3::types::{H160, H256, U256};
 
@@ -222,6 +223,19 @@ pub fn read_amount(bytes: &[u8; 12]) -> u128 {
     BigEndian::read_u128(bytes.as_slice())
 }
 
-pub fn map_from_slice(arr: &[(u16, u128)]) -> HashMap<u16, u128> {
+pub fn map_from_slice<T: Copy + Eq + Hash, U: Copy>(arr: &[(T, U)]) -> HashMap<T, U> {
     arr.iter().copied().collect()
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    fn test_map_from_slice() {
+        let mut expected = HashMap::new();
+        expected.insert(0u16, 1u128);
+        expected.insert(1u16, 2u128);
+        assert_eq!(map_from_slice(&[(0, 1), (1, 2)]), expected);
+    }
 }
