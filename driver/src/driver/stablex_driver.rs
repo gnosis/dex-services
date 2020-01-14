@@ -84,7 +84,6 @@ mod tests {
 
     use dfusion_core::models::account_state::test_util::*;
     use dfusion_core::models::order::test_util::create_order_for_test;
-    use dfusion_core::models::util::map_from_slice;
 
     use mock_it::Matcher::{Any, Val};
 
@@ -118,7 +117,7 @@ mod tests {
             .will_return(Ok(()));
 
         let solution = Solution {
-            prices: map_from_slice(&[(0, 1), (1, 2)]),
+            prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
         };
@@ -160,7 +159,7 @@ mod tests {
             .will_return(Ok(()));
 
         let solution = Solution {
-            prices: map_from_slice(&[(0, 1), (1, 2)]),
+            prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
         };
@@ -311,6 +310,7 @@ mod tests {
                 .was_called_with((batch - 1, Any, Any, Any))
         ));
     }
+
     #[test]
     fn test_does_not_submit_solution_for_which_validation_failed() {
         let contract = StableXContractMock::default();
@@ -339,7 +339,7 @@ mod tests {
             )));
 
         let solution = Solution {
-            prices: map_from_slice(&[(0, 1), (1, 2)]),
+            prices: vec![1, 2],
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
         };

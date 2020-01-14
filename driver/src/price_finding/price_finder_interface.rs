@@ -30,7 +30,6 @@ pub trait PriceFinding {
 pub mod tests {
     use super::super::error::ErrorKind;
     use super::*;
-    use dfusion_core::models::util::map_from_slice;
     use dfusion_core::models::Serializable;
     use mock_it::Mock;
 
@@ -65,7 +64,7 @@ pub mod tests {
     #[test]
     fn test_serialize_solution() {
         let solution = models::Solution {
-            prices: map_from_slice(&[(0, 1), (1, 2)]),
+            prices: vec![1, 2],
             executed_sell_amounts: vec![3, 4],
             executed_buy_amounts: vec![5, 6],
         };

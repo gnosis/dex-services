@@ -319,7 +319,7 @@ pub mod tests {
         };
 
         let results = Solution {
-            prices: map_from_slice(&[(0, 1), (1, 1)]),
+            prices: vec![1, 1],
             executed_buy_amounts: vec![1, 1],
             executed_sell_amounts: vec![1, 1],
         };

@@ -3,13 +3,11 @@ use super::*;
 use log::info;
 
 use byteorder::{BigEndian, ByteOrder};
-use std::collections::HashMap;
 use std::iter::once;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Solution {
-    /// token_id => price
-    pub prices: HashMap<u16, u128>,
+    pub prices: Vec<u128>,
     pub executed_buy_amounts: Vec<u128>,
     pub executed_sell_amounts: Vec<u128>,
 }
@@ -17,20 +15,10 @@ pub struct Solution {
 impl Solution {
     pub fn trivial(num_orders: usize) -> Self {
         Solution {
-            prices: HashMap::new(),
+            prices: vec![],
             executed_buy_amounts: vec![0; num_orders],
             executed_sell_amounts: vec![0; num_orders],
         }
-    }
-
-    /// Returns the price for a token by ID or 0 if the token was not found.
-    pub fn price(&self, token_id: u16) -> Option<u128> {
-        self.prices.get(&token_id).copied()
-    }
-
-    /// Returns the maximum token id included in the solution's non-zero prices.
-    pub fn max_token(&self) -> Option<u16> {
-        self.prices.keys().max().copied()
     }
 
     /// Returns true if a solution is non-trivial and false otherwise
@@ -41,14 +29,7 @@ impl Solution {
 
 impl Serializable for Solution {
     fn bytes(&self) -> Vec<u8> {
-        let max_token = self.max_token().unwrap_or(0u16);
-        let mut res = (max_token + 1).to_be_bytes().to_vec();
-
-        // Convert HashMap of prices to a price vector.
-        let prices: Vec<u128> = (0..=max_token)
-            .map(|x| self.price(x).unwrap_or_default())
-            .collect();
-
+        let mut res = (self.prices.len() as u16).to_be_bytes().to_vec();
         let alternating_buy_sell_amounts: Vec<u128> = self
             .executed_buy_amounts
             .iter()
@@ -57,7 +38,7 @@ impl Serializable for Solution {
             .cloned()
             .collect();
 
-        let prices_and_volumes: Vec<u8> = [prices, alternating_buy_sell_amounts]
+        let prices_and_volumes: Vec<u8> = [&self.prices, &alternating_buy_sell_amounts]
             .iter()
             .flat_map(|list| list.iter())
             .flat_map(Serializable::bytes)
@@ -75,9 +56,6 @@ impl Deserializable for Solution {
         let prices = bytes[2..]
             .chunks_exact(12)
             .map(|chunk| util::read_amount(&util::get_amount_from_slice(chunk)))
-            .enumerate()
-            .filter(|t| t.1 > 0)
-            .map(|(i, v)| (i as u16, v))
             .collect();
         info!("Parsed prices as: {:?}", prices);
 
@@ -102,71 +80,51 @@ impl Deserializable for Solution {
 #[cfg(test)]
 pub mod unit_test {
     use super::*;
-    use crate::models::util::map_from_slice;
-
-    fn generic_non_trivial_solution() -> Solution {
-        Solution {
-            prices: map_from_slice(&[(0, 42), (2, 42)]),
-            executed_buy_amounts: vec![4, 5, 6],
-            executed_sell_amounts: vec![1, 2, 3],
-        }
-    }
 
     #[test]
     fn test_is_non_trivial() {
-        assert!(generic_non_trivial_solution().is_non_trivial());
-        assert!(!Solution::trivial(1).is_non_trivial());
+        let trivial = Solution::trivial(3);
+        assert!(!trivial.is_non_trivial());
+
+        let non_trivial = Solution {
+            prices: vec![42; 2],
+            executed_buy_amounts: vec![4, 5, 6],
+            executed_sell_amounts: vec![1, 2, 3],
+        };
+        assert!(non_trivial.is_non_trivial());
     }
 
     #[test]
-    fn test_max_token() {
-        assert_eq!(generic_non_trivial_solution().max_token().unwrap(), 2);
-        assert_eq!(Solution::trivial(1).max_token(), None);
-    }
-
-    #[test]
-    fn test_serialize() {
-        assert_eq!(
-            generic_non_trivial_solution().bytes(),
-            vec![
-                0, 3, // len(prices)
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, // price0
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // price1
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, // price2
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, // buyAmount0
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // sellAmount0
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, // buyAmount1
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, // sellAmount1
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, // buyAmount2
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, // sellAmount2
-            ]
-        );
-
+    fn test_to_bytes() {
         let solution = Solution {
-            prices: map_from_slice(&[(0, 5), (1, 2)]),
-            executed_buy_amounts: vec![2u128.pow(8) + 1, 2u128.pow(24) + 3],
-            executed_sell_amounts: vec![2u128.pow(16) + 2, 2u128.pow(32) + 4],
+            prices: vec![5, 2],
+            executed_buy_amounts: vec![2u128.pow(8) + 1],
+            executed_sell_amounts: vec![2u128.pow(16) + 2],
         };
 
+        let bytes = solution.bytes();
+
         assert_eq!(
-            solution.bytes(),
+            bytes,
             vec![
                 0, 2, // len(prices)
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, // price0
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, // price1
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // buyAmount0
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2, // sellAmount0
-                0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, // buyAmount1
-                0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 4, // sellAmount1
             ]
         );
     }
-
     #[test]
     fn test_serialize_deserialize() {
-        let solution = generic_non_trivial_solution();
-        let solution_bytes = solution.bytes();
-        let parsed_solution = Solution::from_bytes(solution_bytes);
+        let solution = Solution {
+            prices: vec![42; 2],
+            executed_buy_amounts: vec![4, 5, 6],
+            executed_sell_amounts: vec![1, 2, 3],
+        };
+
+        let bytes = solution.bytes();
+        let parsed_solution = Solution::from_bytes(bytes);
 
         assert_eq!(solution, parsed_solution);
     }
@@ -187,13 +145,7 @@ pub mod unit_test {
         ];
         let parsed_solution = Solution::from_bytes(bytes);
         let expected = Solution {
-            prices: map_from_slice(&[
-                (0, 1),
-                (1, 10u128.pow(18)),
-                (2, 10u128.pow(18)),
-                (3, 256),
-                (4, 257),
-            ]),
+            prices: vec![1, 10u128.pow(18), 10u128.pow(18), 256, 257],
             executed_buy_amounts: vec![10u128.pow(18) + 1, 10u128.pow(18) + 3],
             executed_sell_amounts: vec![10u128.pow(18) + 2, 10u128.pow(18) + 4],
         };
