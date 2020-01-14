@@ -25,9 +25,10 @@ impl Solution {
 
     /// Returns the price for a token by ID or 0 if the token was not found.
     pub fn price(&self, token_id: u16) -> Option<u128> {
-        self.prices.get(&token_id).cloned()
+        self.prices.get(&token_id).copied()
     }
 
+    /// Returns the maximum token id included in the solution's non-zero prices.
     pub fn max_token(&self) -> Option<u16> {
         self.prices.keys().max().copied()
     }

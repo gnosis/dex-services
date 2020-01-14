@@ -50,8 +50,7 @@ fn serialize_tokens(orders: &[models::Order]) -> Vec<String> {
     token_ids.extend(
         orders
             .iter()
-            .map(|o| o.sell_token)
-            .collect::<HashSet<u16>>(),
+            .map(|o| o.sell_token),
     );
 
     token_ids.into_iter().map(token_id).collect::<Vec<String>>()
