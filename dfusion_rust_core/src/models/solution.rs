@@ -23,6 +23,7 @@ impl Solution {
         }
     }
 
+    /// Returns the price for a token by ID or 0 if the token was not found.
     pub fn price(&self, token_id: u16) -> u128 {
         *self.prices.get(&token_id).unwrap_or(&0u128)
     }

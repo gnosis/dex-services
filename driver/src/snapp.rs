@@ -10,9 +10,6 @@ use web3::types::U256;
 /// an implementation to calculating the Snapp objective value which must be
 /// submitted with the solution.
 pub trait SnappSolution {
-    /// Returns the price for a token by ID or None if the token was not found.
-    fn get_token_price(&self, token_id: u16) -> Option<u128>;
-
     /// Returns the objective value for submitting a solution to the Snapp smart
     /// contract. The objective value is calculated as the total executed
     /// utility of all orders.
@@ -33,17 +30,13 @@ pub trait SnappSolution {
 }
 
 impl SnappSolution for Solution {
-    fn get_token_price(&self, token_id: u16) -> Option<u128> {
-        self.prices.get(&token_id).cloned()
-    }
-
     fn snapp_objective_value(&self, orders: &[Order]) -> Result<U256, SnappObjectiveError> {
         let mut total_executed_utility = U256::zero();
         for (i, order) in orders.iter().enumerate() {
             total_executed_utility = total_executed_utility
                 .checked_add(
                     order.executed_utility(
-                        self.get_token_price(order.buy_token)
+                        self.price(order.buy_token)
                             .ok_or(SnappObjectiveError::TokenNotFound)?,
                         *self
                             .executed_buy_amounts
