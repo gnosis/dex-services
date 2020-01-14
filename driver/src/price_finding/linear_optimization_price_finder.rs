@@ -356,7 +356,10 @@ pub mod tests {
             },
         });
         let err = deserialize_result(&json).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "Failed to parse token id: invalid digit found in string");
+        assert_eq!(
+            err.description(),
+            "Failed to parse token id: invalid digit found in string"
+        );
 
         let json = json!({
             "prices": {
@@ -364,7 +367,10 @@ pub mod tests {
             },
         });
         let err = deserialize_result(&json).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "Failed to parse token id: number too large to fit in target type");
+        assert_eq!(
+            err.description(),
+            "Failed to parse token id: number too large to fit in target type"
+        );
     }
 
     #[test]
