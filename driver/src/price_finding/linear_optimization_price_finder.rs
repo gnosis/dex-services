@@ -94,19 +94,15 @@ fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
 }
 
 fn parse_token(key: &str) -> Result<u16, PriceFindingError> {
-    if key.len() < 6 {
-        return Err(PriceFindingError::new(
-            format!(
-                "Insufficient key length {} (expected at least 6)",
-                key.len()
-            )
-            .as_ref(),
-            ErrorKind::JsonError,
-        ));
+    if key.starts_with("token") {
+        return key[5..].parse::<u16>().map_err(|_| {
+            PriceFindingError::new("Failed to parse token id", ErrorKind::ParseIntError)
+        });
     }
-    key[5..]
-        .parse::<u16>()
-        .map_err(|_| PriceFindingError::new("Failed to parse token id", ErrorKind::ParseIntError))
+    Err(PriceFindingError::new(
+        "Token keys expected to start with \"token\"",
+        ErrorKind::JsonError,
+    ))
 }
 
 fn parse_price_value(value: &serde_json::Value) -> Result<u128, PriceFindingError> {
