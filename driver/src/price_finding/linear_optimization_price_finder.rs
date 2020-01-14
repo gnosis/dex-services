@@ -95,8 +95,11 @@ fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
 
 fn parse_token(key: &str) -> Result<u16, PriceFindingError> {
     if key.starts_with("token") {
-        return key[5..].parse::<u16>().map_err(|_| {
-            PriceFindingError::new("Failed to parse token id", ErrorKind::ParseIntError)
+        return key[5..].parse::<u16>().map_err(|err| {
+            PriceFindingError::new(
+                format!("Failed to parse token id: {}", err).as_ref(),
+                ErrorKind::ParseIntError,
+            )
         });
     }
     Err(PriceFindingError::new(
@@ -110,8 +113,11 @@ fn parse_price_value(value: &serde_json::Value) -> Result<u128, PriceFindingErro
         .as_str()
         .ok_or_else(|| PriceFindingError::from("Price value not a string"))?
         .parse::<u128>()
-        .map_err(|_| {
-            PriceFindingError::new("Failed to parse price string", ErrorKind::ParseIntError)
+        .map_err(|err| {
+            PriceFindingError::new(
+                format!("Failed to parse price string: {}", err).as_ref(),
+                ErrorKind::ParseIntError,
+            )
         })
 }
 
@@ -350,7 +356,7 @@ pub mod tests {
             },
         });
         let err = deserialize_result(&json).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "Failed to parse token id");
+        assert_eq!(err.description(), "Failed to parse token id: invalid digit found in string");
 
         let json = json!({
             "prices": {
@@ -358,7 +364,7 @@ pub mod tests {
             },
         });
         let err = deserialize_result(&json).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "Failed to parse token id");
+        assert_eq!(err.description(), "Failed to parse token id: number too large to fit in target type");
     }
 
     #[test]
