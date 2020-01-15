@@ -5,7 +5,8 @@ use dfusion_core::models;
 
 use chrono::Utc;
 use log::{debug, error};
-use serde_json::json;
+use serde::Deserialize;
+use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::BufReader;
@@ -18,9 +19,9 @@ type PriceMap = HashMap<u16, u128>;
 
 pub struct LinearOptimisationPriceFinder {
     // default IO methods can be replaced for unit testing
-    write_input: fn(&str, &serde_json::Value) -> std::io::Result<()>,
+    write_input: fn(&str, &Value) -> std::io::Result<()>,
     run_solver: fn(&str) -> Result<(), PriceFindingError>,
-    read_output: fn() -> std::io::Result<serde_json::Value>,
+    read_output: fn() -> std::io::Result<Value>,
     fee: Option<Fee>,
 }
 
@@ -52,7 +53,7 @@ fn serialize_tokens(orders: &[models::Order]) -> Vec<String> {
     token_ids.into_iter().map(token_id).collect::<Vec<String>>()
 }
 
-fn serialize_balances(state: &models::AccountState, orders: &[models::Order]) -> serde_json::Value {
+fn serialize_balances(state: &models::AccountState, orders: &[models::Order]) -> Value {
     let mut accounts: HashMap<String, HashMap<String, String>> = HashMap::new();
     for order in orders {
         let modify_token_balance = |token_balance: &mut HashMap<String, String>| {
@@ -77,7 +78,7 @@ fn serialize_balances(state: &models::AccountState, orders: &[models::Order]) ->
     json!(accounts)
 }
 
-fn serialize_order(order: &models::Order, id: &str) -> serde_json::Value {
+fn serialize_order(order: &models::Order, id: &str) -> Value {
     json!({
         "accountID": account_id(order.account_id),
         "sellToken": token_id(order.sell_token),
@@ -103,17 +104,24 @@ fn parse_token(key: &str) -> Result<u16, PriceFindingError> {
     ))
 }
 
-fn parse_price_value(value: &serde_json::Value) -> Result<u128, PriceFindingError> {
-    value
-        .as_str()
-        .unwrap_or("0")
-        .parse::<u128>()
-        .map_err(|err| {
+fn parse_price_value(value: &Value) -> Result<u128, PriceFindingError> {
+    match value {
+        Value::String(value) => value.parse::<u128>().map_err(|err| {
             PriceFindingError::new(
                 format!("Failed to parse price string: {}", err).as_ref(),
                 ErrorKind::ParseIntError,
             )
-        })
+        }),
+        Value::Number(value) => {
+            // Note there is no direct conversion from Number to u128
+            u128::deserialize(value).map_err(PriceFindingError::from)
+        }
+        Value::Null => Ok(0u128),
+        other => Err(PriceFindingError::new(
+            format!("Expected numerical string but got '{}'", other).as_ref(),
+            ErrorKind::JsonError,
+        )),
+    }
 }
 
 fn parse_price(
@@ -123,7 +131,7 @@ fn parse_price(
     Ok((parse_token(key)?, parse_price_value(value)?))
 }
 
-fn deserialize_result(json: &serde_json::Value) -> Result<models::Solution, PriceFindingError> {
+fn deserialize_result(json: &Value) -> Result<models::Solution, PriceFindingError> {
     let prices = json["prices"]
         .as_object()
         .ok_or_else(|| "No 'price' object in json")?
@@ -170,7 +178,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
     ) -> Result<models::Solution, PriceFindingError> {
         let token_ids = serialize_tokens(&orders);
         let accounts = serialize_balances(&state, &orders);
-        let orders: Vec<serde_json::Value> = orders
+        let orders: Vec<Value> = orders
             .iter()
             .enumerate()
             .map(|(index, order)| serialize_order(&order, &index.to_string()))
@@ -197,7 +205,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
     }
 }
 
-fn write_input(input_file: &str, input: &serde_json::Value) -> std::io::Result<()> {
+fn write_input(input_file: &str, input: &Value) -> std::io::Result<()> {
     let file = File::create(&input_file)?;
     serde_json::to_writer(file, input)?;
     debug!("Solver input: {}", input);
@@ -225,7 +233,7 @@ fn run_solver(input_file: &str) -> Result<(), PriceFindingError> {
     Ok(())
 }
 
-fn read_output() -> std::io::Result<serde_json::Value> {
+fn read_output() -> std::io::Result<Value> {
     let file = File::open(format!("{}{}", RESULT_FOLDER, "06_solution_int_valid.json"))?;
     let reader = BufReader::new(file);
     let value = serde_json::from_reader(reader)?;
@@ -495,7 +503,7 @@ pub mod tests {
             ratio: 0.001,
         };
         let solver = LinearOptimisationPriceFinder {
-            write_input: |_, json: &serde_json::Value| {
+            write_input: |_, json: &Value| {
                 assert_eq!(
                     json["fee"],
                     json!({
