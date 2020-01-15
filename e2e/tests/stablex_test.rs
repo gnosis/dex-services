@@ -99,7 +99,7 @@ fn test_with_ganache() {
         .from(Account::Local(accounts[1], None))
         .send()
         .wait()
-        .expect("Cannot place first order");
+        .expect("Cannot place third order");
 
     close_auction(&web3, &instance);
 
