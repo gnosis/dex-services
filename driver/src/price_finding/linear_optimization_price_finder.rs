@@ -341,14 +341,6 @@ pub mod tests {
 
         let json = json!({
             "prices": {
-                "token1": 1,
-            },
-        });
-        let err = deserialize_result(&json).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "Price value not a string");
-
-        let json = json!({
-            "prices": {
                 "tokenX": "1",
             },
         });
