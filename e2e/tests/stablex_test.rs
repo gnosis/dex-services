@@ -34,7 +34,6 @@ fn test_with_ganache() {
         .call()
         .wait()
         .expect("Cannot get second token id");
-
     instance
         .deposit(tokens[0].address(), 3_000_000.into())
         .from(Account::Local(accounts[0], None))
