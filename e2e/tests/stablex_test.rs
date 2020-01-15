@@ -39,7 +39,7 @@ fn test_with_ganache() {
         .token_address_to_id_map(tokens[1].address())
         .call()
         .wait()
-        .expect("Cannot get second token id");
+        .expect("Cannot get third token id");
 
     instance
         .deposit(tokens[0].address(), 3_000_000.into())
