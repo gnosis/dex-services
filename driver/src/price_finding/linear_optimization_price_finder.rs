@@ -313,7 +313,7 @@ pub mod tests {
         let json = json!({
             "prices": {
                 "token0": "14024052566155238000",
-                "token1": 1526784674855762300u128,
+                "token1": 1_526_784_674_855_762_300u128,
                 "token2": null,
             },
             "orders": [
