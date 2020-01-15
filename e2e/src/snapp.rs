@@ -9,7 +9,7 @@ use crate::common::{
     approve, create_accounts_with_funded_tokens, wait_for, FutureWaitExt, MAX_GAS, TOKEN_MINTED,
 };
 
-pub fn setup_stablex(
+pub fn setup_snapp(
     web3: &Web3<Http>,
     num_tokens: usize,
     num_users: usize,
