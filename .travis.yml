@@ -112,12 +112,15 @@ matrix:
         - ./test/e2e-tests-stablex-ganache.sh
       after_failure:
         - docker-compose logs
-    - language: generic
-      name: "StableX e2e Tests (Rinkeby)"
+    - name: "StableX e2e Tests (Rinkeby)"
+      language: rust
       cache:
         directories:
           - $HOME/.cache/yarn
           - $HOME/.cache/node-gyp
+          - $HOME/.cache/sccache
+          - $HOME/.cargo
+          - $HOME/.rustup
       before_install:
         - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
       install:
@@ -128,7 +131,7 @@ matrix:
         - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.yml up -d stablex
-        - ./test/e2e-tests-stablex-rinkeby.sh
+        - cargo test -p e2e rinkeby -- --nocapture
       after_script:
         - docker-compose logs
       deploy:

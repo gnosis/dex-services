@@ -239,5 +239,5 @@ fn test_rinkeby() {
         .output()
         .expect("failed to execute process");
     let logs = String::from_utf8(output.stdout).expect("failed to read logs");
-    assert!(!logs.to_lowercase().contains("error"));
+    assert!(!logs.to_lowercase().contains("erro"));
 }
