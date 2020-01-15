@@ -8,8 +8,7 @@ PASS=true
 if [[ ("$STAGED_RS_FILES" != "") ]]; then
     printf "\nValidating Rust:\n"
 
-    cd driver
-    cargo clippy -- -D warnings
+    cargo clippy --all --all-targets -- -D warnings
 
     if [[ "$?" == 0 ]]; then
       printf "\t\033[32mcargo clippy Passed: $FILE\033[0m"
@@ -17,12 +16,24 @@ if [[ ("$STAGED_RS_FILES" != "") ]]; then
       printf "\t\033[41mcargo clippy Failed: $FILE\033[0m"
       PASS=false
     fi
-    cd ..
+
+    cargo fmt --all -- --check
+
+    if [[ "$?" == 0 ]]; then
+      printf "\t\033[32mcargo fmt Passed: $FILE\033[0m"
+    else
+      printf "\t\033[41mcargo fmt Failed: $FILE\033[0m"
+      PASS=false
+    fi
+
 
     printf "\nRust validation completed!\n"
 else
     printf "\nNo rust files touched, skipping validation\n"
 fi
+
+
+
 
 if ! $PASS; then
   printf "\033[41mCOMMIT FAILED:\033[0m Your commit contains files that should pass Linting but do not. Please fix the errors and try again.\n"
