@@ -35,6 +35,12 @@ fn test_with_ganache() {
         .wait()
         .expect("Cannot get second token id");
 
+    let third_token_id = instance
+        .token_address_to_id_map(tokens[1].address())
+        .call()
+        .wait()
+        .expect("Cannot get second token id");
+
     instance
         .deposit(tokens[0].address(), 3_000_000.into())
         .from(Account::Local(accounts[0], None))
@@ -80,6 +86,21 @@ fn test_with_ganache() {
         .send()
         .wait()
         .expect("Cannot place first order");
+
+    // This order will not be matched
+    instance
+        .place_order(
+            first_token_id,
+            third_token_id,
+            batch + 20,
+            0.into(),
+            0.into(),
+        )
+        .from(Account::Local(accounts[1], None))
+        .send()
+        .wait()
+        .expect("Cannot place first order");
+
     close_auction(&web3, &instance);
 
     // wait for solver to submit solution
@@ -164,6 +185,13 @@ fn test_rinkeby() {
         .call()
         .wait()
         .expect("Cannot get second Token address");
+
+    let token_c = instance
+        .token_id_to_address_map(3)
+        .call()
+        .wait()
+        .expect("Cannot get second Token address");
+
     let batch = instance
         .get_current_batch_id()
         .call()
@@ -205,6 +233,10 @@ fn test_rinkeby() {
         .place_order(7, 0, batch + 1, 1_000_000.into(), 10_000_000.into())
         .nonce(nonce + 5)
         .send_and_confirm(Duration::from_secs(1), 1);
+    let third_order = instance
+        .place_order(3, 7, batch + 1, 0.into(), 0.into())
+        .nonce(nonce + 6)
+        .send_and_confirm(Duration::from_secs(1), 1);
 
     // Wait for all transactions to be confirmed
     println!("Waiting for transactions to be confirmed");
@@ -215,6 +247,7 @@ fn test_rinkeby() {
         second_deposit,
         first_order,
         second_order,
+        third_order,
     ])
     .wait();
     for (index, result) in results.into_iter().enumerate() {
