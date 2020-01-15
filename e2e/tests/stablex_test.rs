@@ -214,7 +214,6 @@ fn test_rinkeby() {
         second_deposit,
         first_order,
         second_order,
-        third_order,
     ])
     .wait();
     for (index, result) in results.into_iter().enumerate() {
