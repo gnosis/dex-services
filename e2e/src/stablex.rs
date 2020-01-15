@@ -50,7 +50,7 @@ pub fn setup_stablex(
     for token in &tokens {
         instance
             .add_token(token.address())
-            .gas(MAX_GAS.into())
+            .gas(MAX_GAS.into())  // Why do we specify gas here and nowhere else?
             .send()
             .wait()
             .expect("Cannot add token");
