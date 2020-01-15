@@ -114,7 +114,12 @@ fn parse_price_value(value: &Value) -> Result<u128, PriceFindingError> {
         }),
         Value::Number(value) => {
             // Note there is no direct conversion from Number to u128
-            u128::deserialize(value).map_err(PriceFindingError::from)
+            u128::deserialize(value).map_err(|err| {
+                PriceFindingError::new(
+                    format!("Failed to deserialize JSON Number: {}", err).as_ref(),
+                    ErrorKind::JsonError,
+                )
+            })
         }
         Value::Null => Ok(0u128),
         other => Err(PriceFindingError::new(
@@ -250,6 +255,14 @@ pub mod tests {
     use web3::types::{H256, U256};
 
     #[test]
+
+    fn test_parse_prices() {
+        let large_number: Value = serde_json::from_str("340282366920938463463374607431768211457").unwrap();
+        let err = parse_price_value(&large_number).expect_err("Should fail");
+        assert_eq!(err.description(), "Failed to deserialize JSON Number: invalid number");
+    }
+
+    #[test]
     fn test_serialize_order() {
         let order = models::Order {
             batch_information: None,
@@ -296,7 +309,7 @@ pub mod tests {
         let json = json!({
             "prices": {
                 "token0": "14024052566155238000",
-                "token1": "1526784674855762300",
+                "token1": 1526784674855762300u128,
                 "token2": null,
             },
             "orders": [
