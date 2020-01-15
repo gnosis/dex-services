@@ -36,6 +36,7 @@ impl From<&str> for PriceFindingError {
         PriceFindingError::new(error, ErrorKind::Unknown)
     }
 }
+
 impl PriceFindingError {
     pub fn new(msg: &str, kind: ErrorKind) -> PriceFindingError {
         PriceFindingError {

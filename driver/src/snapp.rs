@@ -10,9 +10,6 @@ use web3::types::U256;
 /// an implementation to calculating the Snapp objective value which must be
 /// submitted with the solution.
 pub trait SnappSolution {
-    /// Returns the price for a token by ID or None if the token was not found.
-    fn get_token_price(&self, token_id: u16) -> Option<u128>;
-
     /// Returns the objective value for submitting a solution to the Snapp smart
     /// contract. The objective value is calculated as the total executed
     /// utility of all orders.
@@ -33,17 +30,13 @@ pub trait SnappSolution {
 }
 
 impl SnappSolution for Solution {
-    fn get_token_price(&self, token_id: u16) -> Option<u128> {
-        self.prices.get(token_id as usize).cloned()
-    }
-
     fn snapp_objective_value(&self, orders: &[Order]) -> Result<U256, SnappObjectiveError> {
         let mut total_executed_utility = U256::zero();
         for (i, order) in orders.iter().enumerate() {
             total_executed_utility = total_executed_utility
                 .checked_add(
                     order.executed_utility(
-                        self.get_token_price(order.buy_token)
+                        self.price(order.buy_token)
                             .ok_or(SnappObjectiveError::TokenNotFound)?,
                         *self
                             .executed_buy_amounts
@@ -145,6 +138,7 @@ pub enum SnappObjectiveError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dfusion_core::models::util::map_from_slice;
 
     #[test]
     fn solution_objective_value() {
@@ -166,7 +160,7 @@ mod tests {
         ];
 
         let solution = Solution {
-            prices: vec![10u128.pow(18), 2_500_000_000_000_000_000],
+            prices: map_from_slice(&[(0, 10u128.pow(18)), (1, 2_500_000_000_000_000_000)]),
             executed_buy_amounts: vec![2_497_500_000_000_000_000, 10u128.pow(18)],
             executed_sell_amounts: vec![10u128.pow(18), 2_502_502_502_502_502_502],
         };
@@ -223,7 +217,7 @@ mod tests {
         }];
 
         let solution = Solution {
-            prices: vec![10u128.pow(18)],
+            prices: map_from_slice(&[(0, 10u128.pow(18))]),
             executed_buy_amounts: vec![10u128.pow(18)],
             executed_sell_amounts: vec![10u128.pow(18)],
         };
@@ -254,7 +248,7 @@ mod tests {
         ];
 
         let solution = Solution {
-            prices: vec![10u128.pow(18), 10u128.pow(18)],
+            prices: map_from_slice(&[(0, 10u128.pow(18)), (1, 10u128.pow(18))]),
             executed_buy_amounts: vec![10u128.pow(18)],
             executed_sell_amounts: vec![10u128.pow(18)],
         };
@@ -276,7 +270,7 @@ mod tests {
         }];
 
         let solution = Solution {
-            prices: vec![10u128.pow(18), 10u128.pow(18)],
+            prices: map_from_slice(&[(0, 10u128.pow(18)), (1, 10u128.pow(18))]),
             executed_buy_amounts: vec![10u128.pow(18)],
             executed_sell_amounts: vec![10u128.pow(18)],
         };
@@ -307,7 +301,7 @@ mod tests {
         ];
 
         let solution = Solution {
-            prices: vec![u128::max_value(), 10u128.pow(18)],
+            prices: map_from_slice(&[(0, u128::max_value()), (1, 10u128.pow(18))]),
             executed_buy_amounts: vec![u128::max_value(), u128::max_value()],
             executed_sell_amounts: vec![0, 0],
         };
