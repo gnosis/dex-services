@@ -190,7 +190,7 @@ fn test_rinkeby() {
         .token_id_to_address_map(3)
         .call()
         .wait()
-        .expect("Cannot get second Token address");
+        .expect("Cannot get third Token address");
 
     let batch = instance
         .get_current_batch_id()
