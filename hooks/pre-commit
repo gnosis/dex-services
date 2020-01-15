@@ -11,18 +11,18 @@ if [[ ("$STAGED_RS_FILES" != "") ]]; then
     cargo clippy --all --all-targets -- -D warnings
 
     if [[ "$?" == 0 ]]; then
-      printf "\t\033[32mcargo clippy Passed: $FILE\033[0m"
+      printf "\t\033[32mcargo clippy Passed:\033[0m"
     else
-      printf "\t\033[41mcargo clippy Failed: $FILE\033[0m"
+      printf "\t\033[41mcargo clippy Failed: $FILE\033[0m Try running cargo clippy"
       PASS=false
     fi
 
     cargo fmt --all -- --check
 
     if [[ "$?" == 0 ]]; then
-      printf "\t\033[32mcargo fmt Passed: $FILE\033[0m"
+      printf "\t\033[32mcargo fmt Passed:\033[0m"
     else
-      printf "\t\033[41mcargo fmt Failed: $FILE\033[0m"
+      printf "\t\033[41mcargo fmt Failed: $FILE\033[0m Try running cargo fmt"
       PASS=false
     fi
 
