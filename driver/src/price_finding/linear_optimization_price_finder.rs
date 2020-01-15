@@ -257,9 +257,13 @@ pub mod tests {
     #[test]
 
     fn test_parse_prices() {
-        let large_number: Value = serde_json::from_str("340282366920938463463374607431768211457").unwrap();
+        let large_number: Value =
+            serde_json::from_str("340282366920938463463374607431768211457").unwrap();
         let err = parse_price_value(&large_number).expect_err("Should fail");
-        assert_eq!(err.description(), "Failed to deserialize JSON Number: invalid number");
+        assert_eq!(
+            err.description(),
+            "Failed to deserialize JSON Number: invalid number"
+        );
     }
 
     #[test]
