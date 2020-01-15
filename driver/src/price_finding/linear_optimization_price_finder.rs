@@ -106,7 +106,7 @@ fn parse_token(key: &str) -> Result<u16, PriceFindingError> {
 fn parse_price_value(value: &serde_json::Value) -> Result<u128, PriceFindingError> {
     value
         .as_str()
-        .ok_or_else(|| PriceFindingError::from("Price value not a string"))?
+        .unwrap_or("0")
         .parse::<u128>()
         .map_err(|err| {
             PriceFindingError::new(
@@ -289,6 +289,7 @@ pub mod tests {
             "prices": {
                 "token0": "14024052566155238000",
                 "token1": "1526784674855762300",
+                "token2": null,
             },
             "orders": [
                 {
@@ -306,6 +307,7 @@ pub mod tests {
             prices: map_from_slice(&[
                 (0, 14_024_052_566_155_238_000),
                 (1, 1_526_784_674_855_762_300),
+                (2, 0),
             ]),
             executed_sell_amounts: vec![0, 318_390_084_925_498_118_944],
             executed_buy_amounts: vec![0, 95_042_777_139_162_480_000],
