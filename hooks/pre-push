@@ -6,7 +6,6 @@ PASS=true
 
 if [[ ("$CHANGED_RS_FILES" != "") ]]; then
     echo 'Running cargo test'
-    cd driver
     cargo test
 
     if [[ "$?" == 0 ]]; then
@@ -16,7 +15,6 @@ if [[ ("$CHANGED_RS_FILES" != "") ]]; then
       PASS=false
     fi
 
-    cd ..
 else
     echo 'Skipping cargo test; Branch does not differ from master in a rusty way!'
 fi
