@@ -10,5 +10,5 @@ ethcontract::contract!("dex-contracts/build/contracts/ERC20Mintable.json");
 ethcontract::contract!("dex-contracts/build/contracts/SnappAuction.json");
 
 pub mod common;
-pub mod stablex;
 pub mod snapp;
+pub mod stablex;

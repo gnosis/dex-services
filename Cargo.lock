@@ -713,7 +713,6 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "mock-it 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog 2.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -735,8 +734,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "e2e"
 version = "1.0.0"
 dependencies = [
+ "dfusion_core 0.1.0",
  "ethcontract 0.2.0 (git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "graph-node-reader 0.17.0 (git+https://github.com/gnosis/graph-node-reader?tag=v0.17.0)",
 ]
 
 [[package]]

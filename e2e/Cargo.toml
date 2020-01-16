@@ -4,5 +4,7 @@ version = "1.0.0"
 edition = "2018"
 
 [dependencies]
+dfusion_core = { path = "../dfusion_rust_core" }
 ethcontract = { git = "https://github.com/gnosis/ethcontract-rs", branch = "graph-patches" }
 futures = { version = "0.3.1", features = ["compat"] }
+graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", tag = "v0.17.0" }

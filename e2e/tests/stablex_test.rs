@@ -120,7 +120,7 @@ fn test_with_ganache() {
     assert_eq!(balance_after - balance_before, 999_000.into())
 }
 
-ethcontract::contract!("dex-contracts/build/contracts/BatchExchange.json");  // Isn't this already available in lib.rs?
+ethcontract::contract!("dex-contracts/build/contracts/BatchExchange.json"); // Isn't this already available in lib.rs?
 
 #[test]
 fn test_rinkeby() {
