@@ -20,6 +20,7 @@ pub mod contracts;
 pub mod driver;
 pub mod error;
 pub mod logging;
+pub mod metrics;
 pub mod price_finding;
 pub mod snapp;
 pub mod transport;

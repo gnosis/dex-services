@@ -21,9 +21,11 @@ futures = { version = "0.3.1", features = ["compat"] }
 graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.17.0" }
 graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", tag = "v0.17.0" }
 hex = "0.4.0"
+hyper = "0.13.1"
 jsonrpc-core = "13.2.0"
 lazy_static = "1.4.0"
 log = "0.4.8"
+prometheus = "0.7.0"
 rustc-hex = "*"
 serde = "1.0"
 serde_json = "1.0"
@@ -34,6 +36,7 @@ slog-scope = "4.3.0"
 slog-stdlog = "4.0.0"
 slog-term = "2.4.2"
 thiserror = "1.0"
+tokio = "0.2.9"
 web3 = "0.8.0"
 
 [dev-dependencies]
