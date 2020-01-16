@@ -1,7 +1,7 @@
 use driver::contracts::stablex_contract::BatchExchange;
 use driver::driver::stablex_driver::StableXDriver;
 use driver::logging;
-use driver::metrics::MetricsServer;
+use driver::metrics::{MetricsServer, StableXMetrics};
 use driver::price_finding::Fee;
 
 use log::{error, info};
@@ -21,6 +21,7 @@ fn main() {
 
     // Set up metrics and serve in separate thread
     let prometheus_registry = Arc::new(Registry::new());
+    let stablex_metrics = StableXMetrics::new(prometheus_registry.clone());
     let metric_server = MetricsServer::new(prometheus_registry);
     thread::spawn(move || {
         metric_server.serve(9586);
@@ -28,7 +29,7 @@ fn main() {
 
     let fee = Some(Fee::default());
     let mut price_finder = driver::util::create_price_finder(fee);
-    let mut driver = StableXDriver::new(&contract, &mut *price_finder);
+    let mut driver = StableXDriver::new(&contract, &mut *price_finder, stablex_metrics);
     loop {
         if let Err(e) = driver.run() {
             error!("StableXDriver error: {}", e);
