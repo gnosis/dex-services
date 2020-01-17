@@ -10,7 +10,7 @@ use std::sync::Arc;
 use web3::types::U256;
 
 pub struct StableXMetrics {
-    processing_time: HistogramVec,
+    processing_times: HistogramVec,
     failures: IntCounterVec,
     successes: IntCounterVec,
     orders: IntCounterVec,
@@ -21,11 +21,14 @@ pub struct StableXMetrics {
 impl StableXMetrics {
     pub fn new(registry: Arc<Registry>) -> Self {
         let processing_time_opts = HistogramOpts::new(
-            "processing_time",
+            "processing_times",
             "timings between different processing stages",
         )
         .buckets(linear_buckets(0.0, 10.0, 30).unwrap()); // 5 minutes split into 10 seconds
-        let processing_time = HistogramVec::new(processing_time_opts, &["stage"]).unwrap();
+        let processing_times = HistogramVec::new(processing_time_opts, &["stage"]).unwrap();
+        registry
+            .register(Box::new(processing_times.clone()))
+            .unwrap();
 
         let failure_opts = Opts::new("failures", "number of auctions failed");
         let failures = IntCounterVec::new(failure_opts, &["stage"]).unwrap();
@@ -48,7 +51,7 @@ impl StableXMetrics {
         registry.register(Box::new(users.clone())).unwrap();
 
         Self {
-            processing_time,
+            processing_times,
             failures,
             successes,
             orders,
@@ -61,7 +64,7 @@ impl StableXMetrics {
         let label = &["start"];
         match res {
             Ok(batch) => {
-                self.processing_time
+                self.processing_times
                     .with_label_values(label)
                     .observe(time_elapsed_since_batch_start(*batch));
             }
@@ -75,7 +78,7 @@ impl StableXMetrics {
         res: &Result<(AccountState, Vec<Order>), DriverError>,
     ) {
         let label = &["orders"];
-        self.processing_time
+        self.processing_times
             .with_label_values(label)
             .observe(time_elapsed_since_batch_start(batch));
         match res {
@@ -101,7 +104,7 @@ impl StableXMetrics {
         res: &Result<Solution, PriceFindingError>,
     ) {
         let label = &["solution"];
-        self.processing_time
+        self.processing_times
             .with_label_values(label)
             .observe(time_elapsed_since_batch_start(batch));
         match res {
@@ -128,7 +131,7 @@ impl StableXMetrics {
 
     pub fn auction_solution_verified(&self, batch: U256, res: &Result<U256, DriverError>) {
         let label = &["verification"];
-        self.processing_time
+        self.processing_times
             .with_label_values(label)
             .observe(time_elapsed_since_batch_start(batch));
         match res {
@@ -139,7 +142,7 @@ impl StableXMetrics {
 
     pub fn auction_solution_submitted(&self, batch: U256, res: &Result<(), DriverError>) {
         let label = &["submission"];
-        self.processing_time
+        self.processing_times
             .with_label_values(label)
             .observe(time_elapsed_since_batch_start(batch));
         match res {
@@ -150,7 +153,7 @@ impl StableXMetrics {
 
     pub fn auction_skipped(&self, batch: U256) {
         let label = &["skipped"];
-        self.processing_time
+        self.processing_times
             .with_label_values(label)
             .observe(time_elapsed_since_batch_start(batch));
         self.successes.with_label_values(label).inc();
@@ -159,7 +162,8 @@ impl StableXMetrics {
 
 fn time_elapsed_since_batch_start(batch: U256) -> f64 {
     let now = Utc::now().timestamp() as u64;
-    let batch_start = batch.low_u64() * 300;
+    // A new batch is created every 5 minutes and becomes solvable one batch later
+    let batch_start = (batch.low_u64() + 1) * 300;
     (now - batch_start) as f64
 }
 
