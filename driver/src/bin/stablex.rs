@@ -23,13 +23,7 @@ fn main() {
     let prometheus_registry = Arc::new(Registry::new());
     let metric_server = MetricsServer::new(prometheus_registry);
     thread::spawn(move || {
-        let mut rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async move {
-            // Run forever-ish...
-            if let Err(err) = metric_server.serve(9586).await {
-                eprintln!("MetricsServer error: {}", err);
-            }
-        })
+        metric_server.serve(9586);
     });
 
     let fee = Some(Fee::default());
