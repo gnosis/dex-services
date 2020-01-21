@@ -100,7 +100,7 @@ impl StableXMetrics {
     pub fn auction_solution_computed(
         &self,
         batch: U256,
-        orders: &Vec<Order>,
+        orders: &[Order],
         res: &Result<Solution, PriceFindingError>,
     ) {
         let label = &["solution"];
@@ -112,7 +112,7 @@ impl StableXMetrics {
                 let touched_orders = orders
                     .iter()
                     .zip(&solution.executed_buy_amounts)
-                    .filter(|(_, amount)| amount > &&0)
+                    .filter(|(_, &amount)| amount > 0u128)
                     .map(|(o, _)| o.clone())
                     .collect::<Vec<Order>>();
                 self.orders
@@ -167,7 +167,7 @@ fn time_elapsed_since_batch_start(batch: U256) -> f64 {
     (now - batch_start) as f64
 }
 
-fn tokens_from_orders(orders: &Vec<Order>) -> i64 {
+fn tokens_from_orders(orders: &[Order]) -> i64 {
     orders
         .iter()
         .flat_map(|order| vec![order.buy_token, order.sell_token].into_iter())
@@ -177,7 +177,7 @@ fn tokens_from_orders(orders: &Vec<Order>) -> i64 {
         .unwrap_or(std::i64::MAX)
 }
 
-fn users_from_orders(orders: &Vec<Order>) -> i64 {
+fn users_from_orders(orders: &[Order]) -> i64 {
     orders
         .iter()
         .map(|order| order.account_id)
