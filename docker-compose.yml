@@ -68,6 +68,8 @@ services:
   stablex:
     << : *rust-service
     image: stablex
+    ports:
+      - '9586:9586'
     depends_on:
       - ganache-cli
     command: cargo run --bin stablex
