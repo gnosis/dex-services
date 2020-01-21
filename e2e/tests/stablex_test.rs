@@ -239,5 +239,6 @@ fn test_rinkeby() {
         .output()
         .expect("failed to execute process");
     let logs = String::from_utf8(output.stdout).expect("failed to read logs");
+    // Our logger prints log level with four characters, thus searching for ERRO
     assert!(!logs.to_lowercase().contains("erro"));
 }
