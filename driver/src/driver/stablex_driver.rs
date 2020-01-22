@@ -38,13 +38,18 @@ impl<'a> StableXDriver<'a> {
             .contract
             .get_current_auction_index()
             .map(|batch_collecting_orders| batch_collecting_orders - 1);
+
+        if batch_to_solve_result
+            .as_ref()
+            .map(|batch| self.past_auctions.contains(batch))
+            .unwrap_or(false)
+        {
+            return Ok(false);
+        }
+
         self.metrics
             .auction_processing_started(&batch_to_solve_result);
         let batch_to_solve = batch_to_solve_result?;
-
-        if self.past_auctions.contains(&batch_to_solve) {
-            return Ok(false);
-        }
 
         let get_auction_data_result = self.contract.get_auction_data(batch_to_solve);
         self.metrics
