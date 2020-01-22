@@ -164,7 +164,7 @@ fn time_elapsed_since_batch_start(batch: U256) -> f64 {
     let now = Utc::now().timestamp() as u64;
     // A new batch is created every 5 minutes and becomes solvable one batch later
     let batch_start = (batch.low_u64() + 1) * 300;
-    (now - batch_start) as f64
+    now.saturating_sub(batch_start) as f64
 }
 
 fn tokens_from_orders(orders: &[Order]) -> i64 {
