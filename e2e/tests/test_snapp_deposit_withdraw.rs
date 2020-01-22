@@ -43,7 +43,13 @@ fn test_deposit_and_withdraw() {
         H256::from_slice(&after_deposit_state)
     );
 
-    // TODO - Check that the graph DB was updated
+    // TODO - Check that DB was updated
+    //    curl \
+    //    -X POST \
+    //    -H "Content-Type: application/json" \
+    //    --data '{ "query": "{ accountStates(where: {id: \"73815c173218e6025f7cb12d0add44354c4671e261a34a360943007ff6ac7af5\"}) { balances } }" }' \
+    //    http://localhost:8000/subgraphs/name/dfusion
+
     // Query DB for expected hash - accountStates(where: {id: expected_state_hash}).balances[62] == deposit_amount
     // assert_eq!(graph_account_balance, deposit_amount);
 
@@ -54,13 +60,19 @@ fn test_deposit_and_withdraw() {
         .wait()
         .expect("Failed to request withdraw");
 
-    // Query DB to see that Withdraw Request was recorded
-    // TODO - Check that DB updated.
-    // withdraws where accountId = 0x0....2
-
     wait_for(&web3, 181);
     let expected_withdraw_hash =
         H256::from_str("7b738197bfe79b6d394499b0cac0186cdc2f65ae2239f2e9e3c698709c80cb67").unwrap();
+
+    // Query DB to see that Withdraw was recorded
+    // TODO - Check that DB updated.
+    //    curl \
+    //    -X POST \
+    //    -H "Content-Type: application/json" \
+    //    --data '{ "query": "{ accountStates(where: {id: \"7b738197bfe79b6d394499b0cac0186cdc2f65ae2239f2e9e3c698709c80cb67\"}) { balances } }" }' \
+    //    http://localhost:8000/subgraphs/name/dfusion
+    // Expect that .data.accountStates[0].balances[62 = 2 * 30 + 2] == 0
+    // withdraws where accountId = 0x0....2
 
     // Wait for state transition and get new state
     let after_withdraw_state = await_state_transition(&instance, &after_deposit_state);
