@@ -3,29 +3,28 @@ use crate::price_finding::error::PriceFindingError;
 
 use chrono::Utc;
 use dfusion_core::models::{AccountState, Order, Solution};
-use prometheus::{linear_buckets, HistogramOpts, HistogramVec, IntCounterVec, Opts, Registry};
+use prometheus::{IntCounterVec, IntGaugeVec, Opts, Registry};
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::sync::Arc;
 use web3::types::U256;
 
 pub struct StableXMetrics {
-    processing_times: HistogramVec,
+    processing_times: IntGaugeVec,
     failures: IntCounterVec,
     successes: IntCounterVec,
-    orders: IntCounterVec,
-    tokens: IntCounterVec,
-    users: IntCounterVec,
+    orders: IntGaugeVec,
+    tokens: IntGaugeVec,
+    users: IntGaugeVec,
 }
 
 impl StableXMetrics {
     pub fn new(registry: Arc<Registry>) -> Self {
-        let processing_time_opts = HistogramOpts::new(
+        let processing_time_opts = Opts::new(
             "processing_times",
             "timings between different processing stages",
-        )
-        .buckets(linear_buckets(0.0, 10.0, 30).unwrap()); // 5 minutes split into 10 seconds
-        let processing_times = HistogramVec::new(processing_time_opts, &["stage"]).unwrap();
+        );
+        let processing_times = IntGaugeVec::new(processing_time_opts, &["stage"]).unwrap();
         registry
             .register(Box::new(processing_times.clone()))
             .unwrap();
@@ -39,15 +38,15 @@ impl StableXMetrics {
         registry.register(Box::new(successes.clone())).unwrap();
 
         let order_opts = Opts::new("orders", "number of orders in a batch");
-        let orders = IntCounterVec::new(order_opts, &["type"]).unwrap();
+        let orders = IntGaugeVec::new(order_opts, &["type"]).unwrap();
         registry.register(Box::new(orders.clone())).unwrap();
 
         let token_opts = Opts::new("tokens", "number of distinct tokens in a batch");
-        let tokens = IntCounterVec::new(token_opts, &["type"]).unwrap();
+        let tokens = IntGaugeVec::new(token_opts, &["type"]).unwrap();
         registry.register(Box::new(tokens.clone())).unwrap();
 
         let users_opts = Opts::new("users", "number of distinct users in a batch");
-        let users = IntCounterVec::new(users_opts, &["type"]).unwrap();
+        let users = IntGaugeVec::new(users_opts, &["type"]).unwrap();
         registry.register(Box::new(users.clone())).unwrap();
 
         Self {
@@ -66,7 +65,7 @@ impl StableXMetrics {
             Ok(batch) => {
                 self.processing_times
                     .with_label_values(label)
-                    .observe(time_elapsed_since_batch_start(*batch));
+                    .set(time_elapsed_since_batch_start(*batch));
             }
             Err(_) => self.failures.with_label_values(label).inc(),
         };
@@ -80,18 +79,18 @@ impl StableXMetrics {
         let label = &["orders"];
         self.processing_times
             .with_label_values(label)
-            .observe(time_elapsed_since_batch_start(batch));
+            .set(time_elapsed_since_batch_start(batch));
         match res {
             Ok((_, orders)) => {
                 self.orders
                     .with_label_values(label)
-                    .inc_by(orders.len().try_into().unwrap_or(std::i64::MAX));
+                    .set(orders.len().try_into().unwrap_or(std::i64::MAX));
                 self.tokens
                     .with_label_values(label)
-                    .inc_by(tokens_from_orders(&orders));
+                    .set(tokens_from_orders(&orders));
                 self.users
                     .with_label_values(label)
-                    .inc_by(users_from_orders(&orders));
+                    .set(users_from_orders(&orders));
             }
             Err(_) => self.failures.with_label_values(label).inc(),
         }
@@ -106,7 +105,7 @@ impl StableXMetrics {
         let label = &["solution"];
         self.processing_times
             .with_label_values(label)
-            .observe(time_elapsed_since_batch_start(batch));
+            .set(time_elapsed_since_batch_start(batch));
         match res {
             Ok(solution) => {
                 let touched_orders = orders
@@ -117,13 +116,13 @@ impl StableXMetrics {
                     .collect::<Vec<Order>>();
                 self.orders
                     .with_label_values(label)
-                    .inc_by(touched_orders.len().try_into().unwrap_or(std::i64::MAX));
+                    .set(touched_orders.len().try_into().unwrap_or(std::i64::MAX));
                 self.tokens
                     .with_label_values(label)
-                    .inc_by(tokens_from_orders(&touched_orders));
+                    .set(tokens_from_orders(&touched_orders));
                 self.users
                     .with_label_values(label)
-                    .inc_by(users_from_orders(&touched_orders));
+                    .set(users_from_orders(&touched_orders));
             }
             Err(_) => self.failures.with_label_values(label).inc(),
         }
@@ -133,7 +132,7 @@ impl StableXMetrics {
         let label = &["verification"];
         self.processing_times
             .with_label_values(label)
-            .observe(time_elapsed_since_batch_start(batch));
+            .set(time_elapsed_since_batch_start(batch));
         match res {
             Ok(_) => (),
             Err(_) => self.failures.with_label_values(label).inc(),
@@ -144,7 +143,7 @@ impl StableXMetrics {
         let label = &["submission"];
         self.processing_times
             .with_label_values(label)
-            .observe(time_elapsed_since_batch_start(batch));
+            .set(time_elapsed_since_batch_start(batch));
         match res {
             Ok(_) => self.successes.with_label_values(label).inc(),
             Err(_) => self.failures.with_label_values(label).inc(),
@@ -155,16 +154,16 @@ impl StableXMetrics {
         let label = &["skipped"];
         self.processing_times
             .with_label_values(label)
-            .observe(time_elapsed_since_batch_start(batch));
+            .set(time_elapsed_since_batch_start(batch));
         self.successes.with_label_values(label).inc();
     }
 }
 
-fn time_elapsed_since_batch_start(batch: U256) -> f64 {
-    let now = Utc::now().timestamp() as u64;
+fn time_elapsed_since_batch_start(batch: U256) -> i64 {
+    let now = Utc::now().timestamp();
     // A new batch is created every 5 minutes and becomes solvable one batch later
-    let batch_start = (batch.low_u64() + 1) * 300;
-    now.saturating_sub(batch_start) as f64
+    let batch_start = (batch.low_u64() as i64 + 1) * 300;
+    now - batch_start
 }
 
 fn tokens_from_orders(orders: &[Order]) -> i64 {
