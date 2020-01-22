@@ -35,7 +35,7 @@ fn test_deposit_and_withdraw() {
 
     // Check that contract was updated
     let expected_deposit_hash =
-        H256::from_str("77b01abfbad57cb7a1344b12709603ea3b9ad803ef5ea09814ca212748f54733").unwrap();
+        H256::from_str("781cff80f5808a37f4c9009218c46af3d90920f82110129f6d925fafb3b23f2d").unwrap();
 
     let after_deposit_state = await_state_transition(&instance, &previous_state_hash);
     assert_eq!(

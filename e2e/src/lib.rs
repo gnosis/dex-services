@@ -6,9 +6,6 @@ ethcontract::contract!("dex-contracts/build/contracts/IterableAppendOnlySet.json
 ethcontract::contract!("dex-contracts/build/contracts/TokenOWL.json");
 ethcontract::contract!("dex-contracts/build/contracts/ERC20Mintable.json");
 
-// Snapp contract artifacts
-ethcontract::contract!("dex-contracts/build/contracts/SnappAuction.json");
-
 pub mod common;
 pub mod snapp;
 pub mod stablex;

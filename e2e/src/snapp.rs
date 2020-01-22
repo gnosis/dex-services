@@ -8,6 +8,9 @@ use ethcontract::web3::transports::Http;
 use ethcontract::web3::types::H160;
 use ethcontract::Account;
 
+// Snapp contract artifacts
+ethcontract::contract!("dex-contracts/build/contracts/SnappAuction.json");
+
 pub fn setup_snapp(
     web3: &Web3<Http>,
     num_tokens: usize,
