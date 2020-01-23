@@ -68,8 +68,6 @@ mod solver_input {
         pub ref_token: String,
         pub accounts: Accounts,
         pub orders: Vec<Order>,
-        // TODO vk: is this needed even though its never set to anything?
-        pub prices_prev: HashMap<String, String>,
         pub fee: Option<Fee>,
     }
 }
@@ -222,7 +220,6 @@ impl PriceFinding for LinearOptimisationPriceFinder {
                 .enumerate()
                 .map(|(index, order)| serialize_order(&order, &index.to_string()))
                 .collect(),
-            prices_prev: HashMap::new(),
             fee: serialize_fee(&self.fee),
         };
         let input_file = format!("instance_{}.json", Utc::now().to_rfc3339());
