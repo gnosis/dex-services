@@ -1,6 +1,5 @@
 use crate::price_finding::error::PriceFindingError;
 
-use ethabi;
 use ethcontract::ethsign;
 use std::error::Error;
 use std::fmt;
@@ -15,7 +14,6 @@ pub enum ErrorKind {
     ContractError,
     JsonError,
     HexError,
-    AbiError,
     EnvError,
     DbError,
     ParseIntError,
@@ -65,12 +63,6 @@ impl From<hex::FromHexError> for DriverError {
 impl From<rustc_hex::FromHexError> for DriverError {
     fn from(error: rustc_hex::FromHexError) -> Self {
         DriverError::new(error.description(), ErrorKind::HexError)
-    }
-}
-
-impl From<ethabi::Error> for DriverError {
-    fn from(error: ethabi::Error) -> Self {
-        DriverError::new(error.description(), ErrorKind::AbiError)
     }
 }
 
