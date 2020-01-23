@@ -49,8 +49,6 @@ mod solver_input {
         pub buy_token: String,
         pub sell_amount: String,
         pub buy_amount: String,
-        #[serde(rename = "ID")]
-        pub id: String,
     }
 
     #[derive(Serialize)]
@@ -136,14 +134,13 @@ fn serialize_balances(
     accounts
 }
 
-fn serialize_order(order: &models::Order, id: &str) -> solver_input::Order {
+fn serialize_order(order: &models::Order) -> solver_input::Order {
     solver_input::Order {
         account_id: account_id(order.account_id),
         sell_token: token_id(order.sell_token),
         buy_token: token_id(order.buy_token),
         sell_amount: order.sell_amount.to_string(),
         buy_amount: order.buy_amount.to_string(),
-        id: id.to_owned(), //TODO this should not be needed
     }
 }
 
@@ -215,11 +212,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
             tokens: serialize_tokens(&orders),
             ref_token: token_id(0),
             accounts: serialize_balances(&state, &orders),
-            orders: orders
-                .iter()
-                .enumerate()
-                .map(|(index, order)| serialize_order(&order, &index.to_string()))
-                .collect(),
+            orders: orders.iter().map(serialize_order).collect(),
             fee: serialize_fee(&self.fee),
         };
         let input_file = format!("instance_{}.json", Utc::now().to_rfc3339());
@@ -296,7 +289,7 @@ pub mod tests {
             sell_amount: 100,
             buy_amount: 200,
         };
-        let result = serialize_order(&order, "1");
+        let result = serialize_order(&order);
         assert_eq!(result.sell_token, "token1");
         assert_eq!(result.buy_token, "token2");
         assert_eq!(result.sell_amount, "100");
@@ -305,7 +298,6 @@ pub mod tests {
             result.account_id,
             "0000000000000000000000000000000000000000"
         );
-        assert_eq!(result.id, "1");
     }
 
     #[test]
