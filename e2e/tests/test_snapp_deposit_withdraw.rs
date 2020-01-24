@@ -2,7 +2,7 @@ use e2e::common::{wait_for, wait_for_condition, FutureWaitExt};
 use e2e::snapp::{await_state_transition, setup_snapp};
 use ethcontract::web3::api::Web3;
 use ethcontract::web3::transports::Http;
-use ethcontract::web3::types::{H160, H256, U128};
+use ethcontract::web3::types::{H160, H256, U128, U256};
 use ethcontract::Account;
 use std::str::FromStr;
 
@@ -13,16 +13,27 @@ fn test_deposit_and_withdraw() {
     let web3 = Web3::new(http);
     let (instance, accounts, _tokens, db) = setup_snapp(&web3, 3, 3);
 
+    // Test environment values
+    let deposit_amount = 18_000_000_000_000_000_000u128;
+
+    let user_address = &accounts[2];
+    let user_id = instance
+        .public_key_to_account_map(*user_address)
+        .call()
+        .wait()
+        .expect("Could not recover account id");
+    let db_account_id = H160::from_low_u64_be(user_id);
+    let token_id = 2u16;
+
     let previous_state_hash = instance
         .get_current_state_root()
         .call()
         .wait()
         .expect("Could not recover previous state hash");
 
-    let deposit_amount = 18_000_000_000_000_000_000u128;
     instance
-        .deposit(2, U128::from(deposit_amount))
-        .from(Account::Local(accounts[2], None))
+        .deposit(token_id.into(), U128::from(deposit_amount))
+        .from(Account::Local(*user_address, None))
         .send()
         .wait()
         .expect("Failed to send first deposit");
@@ -51,14 +62,11 @@ fn test_deposit_and_withdraw() {
 
     // TODO - Our storage for AccountState should use account_id properly and NOT H160!
     // The account id here is counter intuitive. (since we have to increment by 1)
-    assert_eq!(
-        state.read_balance(2, H160::from_low_u64_be(2 + 1)),
-        deposit_amount
-    );
+    assert_eq!(state.read_balance(token_id, db_account_id), deposit_amount);
 
     instance
-        .request_withdrawal(2, U128::from(deposit_amount))
-        .from(Account::Local(accounts[2], None))
+        .request_withdrawal(token_id.into(), U128::from(deposit_amount))
+        .from(Account::Local(*user_address, None))
         .send()
         .wait()
         .expect("Failed to request withdraw");
@@ -84,10 +92,10 @@ fn test_deposit_and_withdraw() {
         .get_balances_for_state_root(&expected_withdraw_hash)
         .unwrap();
 
-    assert_eq!(state.read_balance(2, H160::from_low_u64_be(2 + 1)), 0);
+    assert_eq!(state.read_balance(token_id, db_account_id), 0);
 
     // TODO - Construct Merkle proof from state of accounts.
-    let _merkle_proof = [
+    let merkle_proof = [
         0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
         0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
         0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0xf5u8,
@@ -111,13 +119,21 @@ fn test_deposit_and_withdraw() {
         0x76u8, 0x04u8, 0x1fu8, 0xa1u8,
     ];
 
-    // Claim Withdraw
-    //    instance
-    //        .claim_withdrawal(U256::zero(), 0, 2, 2, deposit_amount, merkle_proof.to_vec())
-    //        .from(Account::Local(accounts[2], None))
-    //        .send()
-    //        .wait()
-    //        .expect("Failed to claim withdraw");
+    println!("Claiming withdraw");
+    //     Claim Withdraw
+    instance
+        .claim_withdrawal(
+            U256::from(0),
+            0,
+            user_id,
+            token_id.into(),
+            U128::from(deposit_amount),
+            merkle_proof.to_vec(),
+        )
+        .from(Account::Local(accounts[2], None))
+        .send()
+        .wait()
+        .expect("Failed to claim withdraw");
 
     // TODO - (maybe) check the external balance of users tokens after the claim.
     // ERC20.balanceOf(accounts[2]) == expected.
