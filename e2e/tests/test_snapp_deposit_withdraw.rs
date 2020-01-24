@@ -13,8 +13,6 @@ fn test_deposit_and_withdraw() {
     let web3 = Web3::new(http);
     let (instance, accounts, _tokens, db) = setup_snapp(&web3, 3, 3);
 
-    println!("Acquired instance data");
-
     let previous_state_hash = instance
         .get_current_state_root()
         .call()
@@ -51,7 +49,7 @@ fn test_deposit_and_withdraw() {
         .get_balances_for_state_root(&expected_deposit_hash)
         .unwrap();
 
-    // TODO - Our storage for AccountState should use account_id properly and NOT H160.
+    // TODO - Our storage for AccountState should use account_id properly and NOT H160!
     // The account id here is counter intuitive. (since we have to increment by 1)
     assert_eq!(
         state.read_balance(2, H160::from_low_u64_be(2 + 1)),
@@ -88,7 +86,7 @@ fn test_deposit_and_withdraw() {
 
     assert_eq!(state.read_balance(2, H160::from_low_u64_be(2 + 1)), 0);
 
-    // TODO - Construct merkle proof from state of accounts.
+    // TODO - Construct Merkle proof from state of accounts.
     let _merkle_proof = [
         0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
         0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
