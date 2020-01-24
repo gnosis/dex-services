@@ -8,7 +8,7 @@ dataSources:
     network: dev
     name: SnappBaseEvents
     source:
-      address: '0xe982E462b094850F12AF94d21D470e21bE9D0E9C'
+      address: '0x9561C133DD8580860B6b7E504bC5Aa500f0f06a7'
       abi: EmptyAbi.json
     mapping:
       kind: Mapping
