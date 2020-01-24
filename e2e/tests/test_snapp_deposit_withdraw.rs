@@ -29,8 +29,6 @@ fn test_deposit_and_withdraw() {
         .wait()
         .expect("Failed to send first deposit");
 
-    // TODO - Query the graph for Event emission.
-
     wait_for(&web3, 181);
 
     // Check that contract was updated
@@ -52,13 +50,6 @@ fn test_deposit_and_withdraw() {
     let state = db
         .get_balances_for_state_root(&expected_deposit_hash)
         .unwrap();
-
-    // Could (alternatively) make HTTP Request
-    //    curl \
-    //    -X POST \
-    //    -H "Content-Type: application/json" \
-    //    --data '{ "query": "{ accountStates(where: {id: \"73815c173218e6025f7cb12d0add44354c4671e261a34a360943007ff6ac7af5\"}) { balances } }" }' \
-    //    http://localhost:8000/subgraphs/name/dfusion
 
     // TODO - Our storage for AccountState should use account_id properly and NOT H160.
     // The account id here is counter intuitive. (since we have to increment by 1)
@@ -95,10 +86,7 @@ fn test_deposit_and_withdraw() {
         .get_balances_for_state_root(&expected_withdraw_hash)
         .unwrap();
 
-    assert_eq!(
-        state.read_balance(2, H160::from_low_u64_be(2 + 1)),
-        deposit_amount
-    );
+    assert_eq!(state.read_balance(2, H160::from_low_u64_be(2 + 1)), 0);
 
     // TODO - Construct merkle proof from state of accounts.
     let _merkle_proof = [
