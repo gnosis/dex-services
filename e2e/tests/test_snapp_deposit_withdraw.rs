@@ -23,6 +23,7 @@ fn test_deposit_and_withdraw() {
         .wait()
         .expect("Could not recover account id");
     let db_account_id = H160::from_low_u64_be(user_id);
+    // read_balance expects u16, while ethcontracts only accepts u64.
     let token_id = 2u16;
 
     let previous_state_hash = instance
