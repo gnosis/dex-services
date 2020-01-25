@@ -11,7 +11,7 @@ fn test_deposit_and_withdraw() {
     let (eloop, http) = Http::new("http://localhost:8545").expect("transport failed");
     eloop.into_remote();
     let web3 = Web3::new(http);
-    let (instance, accounts, _tokens, db) = setup_snapp(&web3, 3, 3);
+    let (instance, accounts, tokens, db) = setup_snapp(&web3, 3, 3);
 
     // Test environment values
     let deposit_amount = 18_000_000_000_000_000_000u128;
@@ -25,12 +25,18 @@ fn test_deposit_and_withdraw() {
     let db_account_id = H160::from_low_u64_be(user_id);
     // read_balance expects u16, while ethcontracts only accepts u64.
     let token_id = 2u16;
+    let initial_balance = tokens[token_id as usize]
+        .balance_of(*user_address)
+        .call()
+        .wait()
+        .expect("Could not retrieve token balance");
+    println!("Initial Balance: {:?}", initial_balance);
 
-    let previous_state_hash = instance
+    let initial_state_hash = instance
         .get_current_state_root()
         .call()
         .wait()
-        .expect("Could not recover previous state hash");
+        .expect("Could not recover initial state hash");
 
     instance
         .deposit(token_id.into(), U128::from(deposit_amount))
@@ -42,10 +48,11 @@ fn test_deposit_and_withdraw() {
     wait_for(&web3, 181);
 
     // Check that contract was updated
+    println!("Waiting for deposit state transition");
     let expected_deposit_hash =
         H256::from_str("781cff80f5808a37f4c9009218c46af3d90920f82110129f6d925fafb3b23f2d").unwrap();
 
-    let after_deposit_state = await_state_transition(&instance, &previous_state_hash);
+    let after_deposit_state = await_state_transition(&instance, &initial_state_hash);
     assert_eq!(
         expected_deposit_hash,
         H256::from_slice(&after_deposit_state)
@@ -76,7 +83,7 @@ fn test_deposit_and_withdraw() {
     let expected_withdraw_hash =
         H256::from_str("7b738197bfe79b6d394499b0cac0186cdc2f65ae2239f2e9e3c698709c80cb67").unwrap();
 
-    // Wait for state transition and get new state
+    println!("Waiting for withdraw state transition.");
     let after_withdraw_state = await_state_transition(&instance, &after_deposit_state);
     assert_eq!(
         expected_withdraw_hash,
@@ -120,22 +127,26 @@ fn test_deposit_and_withdraw() {
         0x76u8, 0x04u8, 0x1fu8, 0xa1u8,
     ];
 
-    println!("Claiming withdraw");
-    //     Claim Withdraw
+    println!("Claiming Withdraw");
     instance
         .claim_withdrawal(
-            U256::from(0),
+            U256::zero(),
             0,
             user_id,
             token_id.into(),
             U128::from(deposit_amount),
             merkle_proof.to_vec(),
         )
-        .from(Account::Local(accounts[2], None))
+        .from(Account::Local(*user_address, None))
         .send()
         .wait()
         .expect("Failed to claim withdraw");
 
-    // TODO - (maybe) check the external balance of users tokens after the claim.
-    // ERC20.balanceOf(accounts[2]) == expected.
+    let final_balance = tokens[token_id as usize]
+        .balance_of(*user_address)
+        .call()
+        .wait()
+        .expect("Could not retrieve token balance");
+
+    assert_eq!(final_balance, initial_balance);
 }
