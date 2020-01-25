@@ -72,7 +72,7 @@ matrix:
         - cargo test
         - cargo clippy --all --all-targets -- -D warnings
         - cargo fmt --all -- --check
-    - name: "dƒusion e2e Tests (NATIVE)"
+    - name: "dƒusion e2e tests"
       language: rust
       cache:
         directories:
@@ -110,7 +110,7 @@ matrix:
           on:
             tags: true
     - language: generic
-      name: "dƒusion e2e Tests"
+      name: "dƒusion e2e tests (Legacy - Bash Scripts)"
       cache:
         directories:
           - $HOME/.cache/yarn
@@ -126,8 +126,6 @@ matrix:
         - ./test/setup_contracts.sh
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d driver graph-listener
-        - ./test/e2e-tests-deposit-withdraw.sh
-        - ./test/restart-containers.sh
         - ./test/e2e-tests-auction.sh
         - ./test/restart-containers.sh
         - ./test/e2e-tests-standing-order.sh
