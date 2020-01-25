@@ -174,7 +174,7 @@ matrix:
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
         - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
-        - ./test/setup_contracts.sh
+        - ./test/setup_contracts.sh # TODO - remove once https://github.com/gnosis/ethcontract-rs/pull/127 is merged
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.yml up -d stablex
         - cargo test -p e2e rinkeby -- --nocapture
