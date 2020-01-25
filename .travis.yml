@@ -131,13 +131,22 @@ matrix:
         - ./test/e2e-tests-standing-order.sh
       after_failure:
         - docker-compose logs
-    - language: generic
+    - language: rust
       name: "StableX e2e Tests (Ganache)"
       cache:
         directories:
           - $HOME/.cache/yarn
           - $HOME/.cache/node-gyp
+          - $HOME/.cache/sccache
+          - $HOME/.cargo
+          - $HOME/.rustup
       before_install:
+        - |
+          mkdir -p $HOME/.sccache/bin
+          pushd $HOME/.sccache
+          curl -LO https://github.com/mozilla/sccache/releases/download/$SCCACHE_VERSION/sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz
+          tar -C bin -xvf sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz --wildcards '*/sccache' --strip 1
+          popd
         - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
       install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
@@ -148,7 +157,7 @@ matrix:
         - ./test/setup_contracts.sh
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d stablex
-        - ./test/e2e-tests-stablex-ganache.sh
+        - cargo test -p e2e ganache -- --nocapture
       after_failure:
         - docker-compose logs
     - name: "StableX e2e Tests (Rinkeby)"
@@ -174,7 +183,8 @@ matrix:
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
         - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
-        - ./test/setup_contracts.sh # TODO - remove once https://github.com/gnosis/ethcontract-rs/pull/127 is merged
+        # TODO - remove once https://github.com/gnosis/ethcontract-rs/pull/127 is merged
+        - ./test/setup_contracts.sh
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.yml up -d stablex
         - cargo test -p e2e rinkeby -- --nocapture

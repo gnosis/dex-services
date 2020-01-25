@@ -71,9 +71,3 @@ pub fn await_state_transition(instance: &SnappAuction, current_state: &[u8]) -> 
         .wait()
         .expect("Could not recover current state root")
 }
-
-//pub fn await_db_update(db: &dyn DbInterface, current_state: &H256) {
-//    wait_for_condition(|| {
-//        db.get_balances_for_state_root(current_state).is_ok()
-//    }).expect("No state change detected");
-//}

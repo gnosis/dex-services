@@ -16,17 +16,19 @@ fn test_deposit_and_withdraw() {
     // Test environment values
     let deposit_amount = 18_000_000_000_000_000_000u128;
 
-    let user_address = &accounts[2];
+    let user_address = accounts[2];
     let user_id = instance
-        .public_key_to_account_map(*user_address)
+        .public_key_to_account_map(user_address)
         .call()
         .wait()
         .expect("Could not recover account id");
+    // TODO - Our storage for AccountState should use account_id and NOT H160!
+    // This is because AccountState model is shared by StableX and dƒusion
     let db_account_id = H160::from_low_u64_be(user_id);
-    // read_balance expects u16, while ethcontracts only accepts u64.
+    // read_balance expects u16, while ethcontract-rs only accepts u64.
     let token_id = 2u16;
     let initial_balance = tokens[token_id as usize]
-        .balance_of(*user_address)
+        .balance_of(user_address)
         .call()
         .wait()
         .expect("Could not retrieve token balance");
@@ -40,7 +42,7 @@ fn test_deposit_and_withdraw() {
 
     instance
         .deposit(token_id.into(), U128::from(deposit_amount))
-        .from(Account::Local(*user_address, None))
+        .from(Account::Local(user_address, None))
         .send()
         .wait()
         .expect("Failed to send first deposit");
@@ -67,14 +69,11 @@ fn test_deposit_and_withdraw() {
     let state = db
         .get_balances_for_state_root(&expected_deposit_hash)
         .unwrap();
-
-    // TODO - Our storage for AccountState should use account_id properly and NOT H160!
-    // The account id here is counter intuitive. (since we have to increment by 1)
     assert_eq!(state.read_balance(token_id, db_account_id), deposit_amount);
 
     instance
         .request_withdrawal(token_id.into(), U128::from(deposit_amount))
-        .from(Account::Local(*user_address, None))
+        .from(Account::Local(user_address, None))
         .send()
         .wait()
         .expect("Failed to request withdraw");
@@ -137,13 +136,13 @@ fn test_deposit_and_withdraw() {
             U128::from(deposit_amount),
             merkle_proof.to_vec(),
         )
-        .from(Account::Local(*user_address, None))
+        .from(Account::Local(user_address, None))
         .send()
         .wait()
         .expect("Failed to claim withdraw");
 
     let final_balance = tokens[token_id as usize]
-        .balance_of(*user_address)
+        .balance_of(user_address)
         .call()
         .wait()
         .expect("Could not retrieve token balance");
