@@ -95,8 +95,9 @@ matrix:
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
         - (cd dex-contracts && yarn --frozen-lockfile)
+        - ./test/setup_contracts.sh
       script:
-        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d driver graph-listener truffle
+        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d driver graph-listener
         - cargo test -p e2e --test test_snapp_deposit_withdraw -- --nocapture
       after_script:
         - docker-compose logs
