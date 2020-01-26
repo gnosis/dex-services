@@ -30,6 +30,7 @@ pub fn setup_snapp(
     let mut instance = SnappAuction::deployed(&web3)
         .wait()
         .expect("Cannot get deployed SnappAuction");
+    println!("Acquired contract instance {}", instance.address());
     instance.defaults_mut().gas = Some(MAX_GAS.into());
     approve(&tokens, instance.address(), &accounts);
 
