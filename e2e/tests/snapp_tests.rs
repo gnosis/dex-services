@@ -7,7 +7,7 @@ use ethcontract::Account;
 use std::str::FromStr;
 
 #[test]
-fn test_deposit_and_withdraw() {
+fn snapp_deposit_withdraw() {
     let (eloop, http) = Http::new("http://localhost:8545").expect("transport failed");
     eloop.into_remote();
     let web3 = Web3::new(http);
@@ -143,6 +143,5 @@ fn test_deposit_and_withdraw() {
         .call()
         .wait()
         .expect("Could not retrieve token balance");
-
     assert_eq!(final_balance, initial_balance);
 }
