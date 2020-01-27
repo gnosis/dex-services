@@ -10,7 +10,7 @@ use ethcontract::Account;
 use std::future::Future;
 use std::io::{Error, ErrorKind};
 
-pub const TOKEN_MINTED: u32 = 100;
+pub const TOKEN_MINTED: u32 = 300;
 pub const MAX_GAS: u32 = 6_000_000;
 
 pub trait FutureWaitExt: Future {

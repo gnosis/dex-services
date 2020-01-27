@@ -145,3 +145,116 @@ fn snapp_deposit_withdraw() {
         .expect("Could not retrieve token balance");
     assert_eq!(final_balance, initial_balance);
 }
+
+#[test]
+fn snapp_auction() {
+    let (eloop, http) = Http::new("http://localhost:8545").expect("transport failed");
+    eloop.into_remote();
+    let web3 = Web3::new(http);
+    let (instance, accounts, _tokens, db) = setup_snapp(&web3, 3, 6);
+
+    // Test environment values
+    let deposit_amount = 300_000_000_000_000_000_000u128;
+
+    let initial_state_hash = instance
+        .get_current_state_root()
+        .call()
+        .wait()
+        .expect("Could not recover initial state hash");
+
+    println!("Depositing sufficient funds for trades");
+    let deposit_tokens = [2u64, 1, 2, 1, 0, 0];
+    for (account, token_id) in accounts.iter().zip(deposit_tokens.iter()) {
+        println!(
+            "    deposit(tokenId={}, amount={}, {{ from: {} }})",
+            token_id, deposit_amount, account
+        );
+        instance
+            .deposit(*token_id, U128::from(deposit_amount))
+            .from(Account::Local(*account, None))
+            .send()
+            .wait()
+            .expect("Failed to send deposit");
+    }
+
+    wait_for(&web3, 181);
+
+    println!("Placing 6 orders in current auction");
+    let buy_tokens = [1u64, 2, 0, 0, 1, 2];
+    let buy_sell_tokens = buy_tokens.iter().zip(deposit_tokens.iter());
+    let buy_sell_amounts = [
+        (
+            12_000_000_000_000_000_000u128,
+            12_000_000_000_000_000_000u128,
+        ),
+        (2_200_000_000_000_000_000u128, 2_000_000_000_000_000_000u128),
+        (
+            150_000_000_000_000_000_000u128,
+            10_000_000_000_000_000_000u128,
+        ),
+        (
+            180_000_000_000_000_000_000u128,
+            15_000_000_000_000_000_000u128,
+        ),
+        (
+            4_000_000_000_000_000_000u128,
+            52_000_000_000_000_000_000u128,
+        ),
+        (
+            20_000_000_000_000_000_000u128,
+            280_000_000_000_000_000_000u128,
+        ),
+    ];
+    for (account, ((buy_token, sell_token), (buy_amount, sell_amount))) in accounts
+        .iter()
+        .zip(buy_sell_tokens.zip(buy_sell_amounts.iter()))
+    {
+        println!(
+            "    placeOrder(buyToken={}, sellToken={}, buyAmount{}, sellAmount={}, {{ from: {} }})",
+            buy_token, sell_token, buy_amount, sell_amount, account
+        );
+        instance
+            .place_sell_order(
+                *buy_token,
+                *sell_token,
+                U128::from(*buy_amount),
+                U128::from(*sell_amount),
+            )
+            .from(Account::Local(*account, None))
+            .send()
+            .wait()
+            .expect("Could not place order");
+    }
+
+    println!("Awaiting order inclusion in DB");
+    wait_for_condition(|| db.get_orders_of_slot(&U256::zero()).is_ok())
+        .expect("Did not detect order inclusion in DB");
+    wait_for_condition(|| db.get_orders_of_slot(&U256::zero()).unwrap().len() == 6)
+        .expect("Could not fetch all orders");
+    let orders = db.get_orders_of_slot(&U256::zero()).unwrap();
+    assert_eq!(orders[5].sell_amount, buy_sell_amounts[5].1);
+
+    // Advance time to close auction
+    wait_for(&web3, 181);
+
+    // Wait for solution submission
+    let expected_state_hash =
+        H256::from_str("2b87dc830d051be72f4adcc3677daadab2f3f2253e9da51d803faeb0daa1532f").unwrap();
+    let updated_state = await_state_transition(&instance, &initial_state_hash);
+    assert_eq!(expected_state_hash, H256::from_slice(&updated_state));
+
+    let state = db
+        .get_balances_for_state_root(&expected_state_hash)
+        .unwrap();
+
+    assert_eq!(
+        state.read_balance(1, H160::from_low_u64_be(4 + 1)),
+        4_000_000_000_000_000_000u128,
+        "Account 4 should now have 4 of token 1"
+    );
+    assert_eq!(
+        state.read_balance(0, H160::from_low_u64_be(3 + 1)),
+        52_000_000_000_000_000_000u128,
+        "Account 3 should now have 52 of token 0"
+    );
+}
