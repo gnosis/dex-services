@@ -98,7 +98,9 @@ matrix:
         - ./test/setup_contracts.sh
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d driver graph-listener
-        - cargo test -p e2e snapp -- --nocapture
+        - cargo test -p e2e snapp_deposit -- --nocapture
+        - ./test/restart-containers.sh
+        - cargo test -p e2e snapp_auction -- --nocapture
       after_script:
         - docker-compose logs
     - language: generic
