@@ -50,7 +50,6 @@ pub fn setup_stablex(
     for token in &tokens {
         instance
             .add_token(token.address())
-            .gas(MAX_GAS.into())
             .send()
             .wait()
             .expect("Cannot add token");

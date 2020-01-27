@@ -57,7 +57,7 @@ pub fn create_accounts_with_funded_tokens(
     let accounts: Vec<H160> =
         web3.eth().accounts().wait().expect("get accounts failed")[..num_users].to_vec();
 
-    let tokens: Vec<IERC20> = (1..num_tokens)
+    let tokens: Vec<IERC20> = (0..num_tokens)
         .map(|_| {
             let token = ERC20Mintable::builder(web3)
                 .gas(MAX_GAS.into())

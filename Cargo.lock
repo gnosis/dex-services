@@ -772,8 +772,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "e2e"
 version = "1.0.0"
 dependencies = [
+ "dfusion_core 0.1.0",
  "ethcontract 0.2.0 (git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "graph 0.17.0 (git+https://github.com/graphprotocol/graph-node?tag=v0.17.0)",
+ "graph-node-reader 0.17.0 (git+https://github.com/gnosis/graph-node-reader?tag=v0.17.0)",
 ]
 
 [[package]]
