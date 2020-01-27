@@ -1,4 +1,4 @@
-use e2e::common::{wait_for, wait_for_condition, FutureWaitExt};
+use e2e::common::{wait_for, wait_for_condition, FutureBuilderExt};
 use e2e::snapp::{await_state_transition, setup_snapp};
 use ethcontract::web3::api::Web3;
 use ethcontract::web3::transports::Http;
@@ -19,9 +19,7 @@ fn snapp_deposit_withdraw() {
     let user_address = accounts[2];
     let user_id = instance
         .public_key_to_account_map(user_address)
-        .call()
-        .wait()
-        .expect("Could not recover account id");
+        .wait_and_expect("Could not recover account id");
     // TODO - Our storage for AccountState should use account_id and NOT H160!
     // This is because AccountState model is shared by StableX and dƒusion
     let db_account_id = H160::from_low_u64_be(user_id);
@@ -29,22 +27,16 @@ fn snapp_deposit_withdraw() {
     let token_id = 2u16;
     let initial_balance = tokens[token_id as usize]
         .balance_of(user_address)
-        .call()
-        .wait()
-        .expect("Could not retrieve token balance");
+        .wait_and_expect("Could not retrieve token balance");
 
     let initial_state_hash = instance
         .get_current_state_root()
-        .call()
-        .wait()
-        .expect("Could not recover initial state hash");
+        .wait_and_expect("Could not recover initial state hash");
 
     instance
         .deposit(token_id.into(), U128::from(deposit_amount))
         .from(Account::Local(user_address, None))
-        .send()
-        .wait()
-        .expect("Failed to send first deposit");
+        .wait_and_expect("Failed to send first deposit");
 
     wait_for(&web3, 181);
 
@@ -72,9 +64,7 @@ fn snapp_deposit_withdraw() {
     instance
         .request_withdrawal(token_id.into(), U128::from(deposit_amount))
         .from(Account::Local(user_address, None))
-        .send()
-        .wait()
-        .expect("Failed to request withdraw");
+        .wait_and_expect("Failed to request withdraw");
 
     wait_for(&web3, 181);
     let expected_withdraw_hash =
@@ -134,14 +124,10 @@ fn snapp_deposit_withdraw() {
             merkle_proof.to_vec(),
         )
         .from(Account::Local(user_address, None))
-        .send()
-        .wait()
-        .expect("Failed to claim withdraw");
+        .wait_and_expect("Failed to claim withdraw");
 
     let final_balance = tokens[token_id as usize]
         .balance_of(user_address)
-        .call()
-        .wait()
-        .expect("Could not retrieve token balance");
+        .wait_and_expect("Could not retrieve token balance");
     assert_eq!(final_balance, initial_balance);
 }

@@ -142,7 +142,6 @@ pub fn approve(tokens: &[IERC20], address: H160, accounts: &[H160]) {
             token
                 .approve(address, U256::exp10(18) * TOKEN_MINTED)
                 .from(Account::Local(*account, None))
-                .send()
                 .wait()
                 .unwrap_or_else(|_| panic!("Cannot approve token {:x}", token.address()));
         }

@@ -6,7 +6,7 @@ use ethcontract::{ethsign, Account, SecretKey, H256};
 
 use futures::future::join_all;
 
-use e2e::common::{wait_for_condition, FutureWaitExt, FutureBuilderExt};
+use e2e::common::{wait_for_condition, FutureBuilderExt, FutureWaitExt};
 use e2e::stablex::{close_auction, setup_stablex};
 use e2e::{BatchExchange, IERC20};
 
@@ -102,8 +102,8 @@ fn test_rinkeby() {
     let (eloop, http) = Http::new("https://node.rinkeby.gnosisdev.com/").expect("transport failed");
     eloop.into_remote();
     let web3 = Web3::new(http);
-    let mut instance = BatchExchange::deployed(&web3)
-        .wait_and_expect("Cannot get deployed Batch Exchange");
+    let mut instance =
+        BatchExchange::deployed(&web3).wait_and_expect("Cannot get deployed Batch Exchange");
     let secret = {
         let private_key: H256 = env::var("PK")
             .expect("PK env var not set")

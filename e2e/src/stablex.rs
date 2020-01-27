@@ -28,7 +28,8 @@ pub fn setup_stablex(
         .token_id_to_address_map(0)
         .wait_and_expect("Cannot get address of OWL Token");
     let owl = TokenOWL::at(web3, owl_address);
-    owl.set_minter(accounts[0]).wait_and_expect("Cannot set minter");
+    owl.set_minter(accounts[0])
+        .wait_and_expect("Cannot set minter");
     for account in &accounts {
         owl.mint_owl(*account, U256::exp10(18) * TOKEN_MINTED)
             .wait_and_expect("Cannot mint OWl");
