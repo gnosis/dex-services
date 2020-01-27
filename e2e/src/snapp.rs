@@ -1,7 +1,8 @@
 use crate::*;
 
 use crate::common::{
-    approve, create_accounts_with_funded_tokens, wait_for_condition, FutureWaitExt, MAX_GAS,
+    approve, create_accounts_with_funded_tokens, wait_for_condition, FutureBuilderExt,
+    FutureWaitExt, MAX_GAS,
 };
 use ethcontract::web3::api::Web3;
 use ethcontract::web3::transports::Http;
@@ -27,9 +28,8 @@ pub fn setup_snapp(
     let db_instance = GraphReader::new(Box::new(store_reader));
 
     let (accounts, tokens) = create_accounts_with_funded_tokens(&web3, num_tokens, num_users);
-    let mut instance = SnappAuction::deployed(&web3)
-        .wait()
-        .expect("Cannot get deployed SnappAuction");
+    let mut instance =
+        SnappAuction::deployed(&web3).wait_and_expect("Cannot get deployed SnappAuction");
     println!("Acquired contract instance {}", instance.address());
     instance.defaults_mut().gas = Some(MAX_GAS.into());
     approve(&tokens, instance.address(), &accounts);
@@ -39,18 +39,14 @@ pub fn setup_snapp(
         instance
             .open_account(1 + i as u64)
             .from(Account::Local(*account, None))
-            .send()
-            .wait()
-            .expect("Cannot open account");
+            .wait_and_expect("Cannot open account");
     }
 
     // Register Tokens
     for token in &tokens {
         instance
             .add_token(token.address())
-            .send()
-            .wait()
-            .expect("Cannot register token");
+            .wait_and_expect("Cannot register token");
     }
     (instance, accounts, tokens, Box::new(db_instance))
 }
@@ -59,16 +55,12 @@ pub fn await_state_transition(instance: &SnappAuction, current_state: &[u8]) -> 
     wait_for_condition(|| {
         instance
             .get_current_state_root()
-            .call()
-            .wait()
-            .expect("Could not recover current state root")
+            .wait_and_expect("Could not recover current state root")
             != current_state
     })
     .expect("No state change detected");
 
     instance
         .get_current_state_root()
-        .call()
-        .wait()
-        .expect("Could not recover current state root")
+        .wait_and_expect("Could not recover current state root")
 }

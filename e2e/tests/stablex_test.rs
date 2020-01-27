@@ -6,7 +6,7 @@ use ethcontract::{ethsign, Account, SecretKey, H256};
 
 use futures::future::join_all;
 
-use e2e::common::{wait_for_condition, FutureWaitExt};
+use e2e::common::{wait_for_condition, FutureBuilderExt, FutureWaitExt};
 use e2e::stablex::{close_auction, setup_stablex};
 use e2e::{BatchExchange, IERC20};
 
@@ -25,34 +25,24 @@ fn test_with_ganache() {
     // even if other tokens have already been added
     let first_token_id = instance
         .token_address_to_id_map(tokens[0].address())
-        .call()
-        .wait()
-        .expect("Cannot get first token id");
+        .wait_and_expect("Cannot get first token id");
 
     let second_token_id = instance
         .token_address_to_id_map(tokens[1].address())
-        .call()
-        .wait()
-        .expect("Cannot get second token id");
+        .wait_and_expect("Cannot get second token id");
     instance
         .deposit(tokens[0].address(), 3_000_000.into())
         .from(Account::Local(accounts[0], None))
-        .send()
-        .wait()
-        .expect("Failed to send first deposit");
+        .wait_and_expect("Failed to send first deposit");
 
     instance
         .deposit(tokens[1].address(), 3_000_000.into())
         .from(Account::Local(accounts[1], None))
-        .send()
-        .wait()
-        .expect("Failed to send second deposit");
+        .wait_and_expect("Failed to send second deposit");
 
     let batch = instance
         .get_current_batch_id()
-        .call()
-        .wait()
-        .expect("Cannot get batchId");
+        .wait_and_expect("Cannot get batchId");
 
     instance
         .place_order(
@@ -63,9 +53,7 @@ fn test_with_ganache() {
             2_000_000.into(),
         )
         .from(Account::Local(accounts[0], None))
-        .send()
-        .wait()
-        .expect("Cannot place first order");
+        .wait_and_expect("Cannot place first order");
 
     instance
         .place_order(
@@ -76,18 +64,14 @@ fn test_with_ganache() {
             999_000.into(),
         )
         .from(Account::Local(accounts[1], None))
-        .send()
-        .wait()
-        .expect("Cannot place first order");
+        .wait_and_expect("Cannot place first order");
     close_auction(&web3, &instance);
 
     // wait for solver to submit solution
     wait_for_condition(|| {
         instance
             .get_current_objective_value()
-            .call()
-            .wait()
-            .expect("Cannot get objective value")
+            .wait_and_expect("Cannot get objective value")
             > U256::zero()
     })
     .expect("No non-trivial solution submitted");
@@ -95,28 +79,20 @@ fn test_with_ganache() {
     instance
         .request_withdraw(tokens[1].address(), 999_000.into())
         .from(Account::Local(accounts[0], None))
-        .send()
-        .wait()
-        .expect("Cannot place request withdraw");
+        .wait_and_expect("Cannot place request withdraw");
     close_auction(&web3, &instance);
 
     let balance_before = tokens[1]
         .balance_of(accounts[0])
-        .call()
-        .wait()
-        .expect("Cannot get balance before");
+        .wait_and_expect("Cannot get balance before");
 
     instance
         .withdraw(accounts[0], tokens[1].address())
-        .send()
-        .wait()
-        .expect("Cannot withdraw");
+        .wait_and_expect("Cannot withdraw");
 
     let balance_after = tokens[1]
         .balance_of(accounts[0])
-        .call()
-        .wait()
-        .expect("Cannot get balance after");
+        .wait_and_expect("Cannot get balance after");
     assert_eq!(balance_after - balance_before, 999_000.into())
 }
 
@@ -126,9 +102,8 @@ fn test_rinkeby() {
     let (eloop, http) = Http::new("https://node.rinkeby.gnosisdev.com/").expect("transport failed");
     eloop.into_remote();
     let web3 = Web3::new(http);
-    let mut instance = BatchExchange::deployed(&web3)
-        .wait()
-        .expect("Cannot get deployed Batch Exchange");
+    let mut instance =
+        BatchExchange::deployed(&web3).wait_and_expect("Cannot get deployed Batch Exchange");
     let secret = {
         let private_key: H256 = env::var("PK")
             .expect("PK env var not set")
@@ -153,19 +128,13 @@ fn test_rinkeby() {
     // Gather token and batch info
     let token_a = instance
         .token_id_to_address_map(0)
-        .call()
-        .wait()
-        .expect("Cannot get first Token address");
+        .wait_and_expect("Cannot get first Token address");
     let token_b = instance
         .token_id_to_address_map(7)
-        .call()
-        .wait()
-        .expect("Cannot get second Token address");
+        .wait_and_expect("Cannot get second Token address");
     let batch = instance
         .get_current_batch_id()
-        .call()
-        .wait()
-        .expect("Cannot get batchId");
+        .wait_and_expect("Cannot get batchId");
 
     // Approve Funds
     let first_approve = IERC20::at(&web3, token_a)
@@ -221,9 +190,7 @@ fn test_rinkeby() {
     // Wait for solution to be applied
     let sleep_time = instance
         .get_seconds_remaining_in_batch()
-        .call()
-        .wait()
-        .expect("Cannot get seconds remaining in batch")
+        .wait_and_expect("Cannot get seconds remaining in batch")
         .low_u64()
         + 30;
 
