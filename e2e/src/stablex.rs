@@ -41,7 +41,6 @@ pub fn setup_stablex(
     for token in &tokens {
         instance
             .add_token(token.address())
-            .gas(MAX_GAS.into())
             .wait_and_expect("Cannot add token");
     }
     tokens.insert(0, IERC20::at(&web3, owl_address));

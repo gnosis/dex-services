@@ -8,7 +8,7 @@ use futures::future::join_all;
 
 use e2e::common::{wait_for_condition, FutureWaitExt, FutureBuilderExt};
 use e2e::stablex::{close_auction, setup_stablex};
-use e2e::IERC20;
+use e2e::{BatchExchange, IERC20};
 
 use std::env;
 use std::process::Command;
@@ -95,8 +95,6 @@ fn test_with_ganache() {
         .wait_and_expect("Cannot get balance after");
     assert_eq!(balance_after - balance_before, 999_000.into())
 }
-
-ethcontract::contract!("dex-contracts/build/contracts/BatchExchange.json");
 
 #[test]
 fn test_rinkeby() {
