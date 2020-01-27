@@ -37,7 +37,7 @@ pub fn setup_snapp(
     // Open Accounts
     for (i, account) in accounts.iter().enumerate() {
         instance
-            .open_account(1 + i as u64)
+            .open_account(i as u64)
             .from(Account::Local(*account, None))
             .wait_and_expect("Cannot open account");
     }

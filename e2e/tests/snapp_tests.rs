@@ -144,9 +144,7 @@ fn snapp_auction() {
 
     let initial_state_hash = instance
         .get_current_state_root()
-        .call()
-        .wait()
-        .expect("Could not recover initial state hash");
+        .wait_and_expect("Could not recover initial state hash");
 
     println!("Depositing sufficient funds for trades");
     let deposit_tokens = [2u64, 1, 2, 1, 0, 0];
@@ -158,9 +156,7 @@ fn snapp_auction() {
         instance
             .deposit(*token_id, U128::from(deposit_amount))
             .from(Account::Local(*account, None))
-            .send()
-            .wait()
-            .expect("Failed to send deposit");
+            .wait_and_expect("Failed to send deposit");
     }
 
     wait_for(&web3, 181);
@@ -207,9 +203,7 @@ fn snapp_auction() {
                 U128::from(*sell_amount),
             )
             .from(Account::Local(*account, None))
-            .send()
-            .wait()
-            .expect("Could not place order");
+            .wait_and_expect("Could not place order");
     }
 
     println!("Awaiting order inclusion in DB");
