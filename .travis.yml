@@ -40,7 +40,7 @@ matrix:
       script:
         - cargo build --locked
         # Build and publish compact image with compiled binary
-        - docker build --tag stablex-binary --build-arg SOLVER_BASE=163030813197.dkr.ecr.us-east-1.amazonaws.com/dex-solver:v0.5.7 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
+        - docker build --tag stablex-binary --build-arg SOLVER_BASE=163030813197.dkr.ecr.us-east-1.amazonaws.com/dex-solver:v0.5.6 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
         - docker tag stablex-binary $REGISTRY_URI:$TRAVIS_COMMIT
         - docker push $REGISTRY_URI:$TRAVIS_COMMIT
     - stage: "Tests"
