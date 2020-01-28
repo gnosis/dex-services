@@ -160,6 +160,11 @@ fn snapp_auction() {
     }
 
     wait_for(&web3, 181);
+    let post_deposit_state = await_state_transition(&instance, &initial_state_hash);
+    println!(
+        "After Deposit State {:?}",
+        H256::from_slice(&post_deposit_state)
+    );
 
     println!("Placing 6 orders in current auction");
     let buy_tokens = [1u64, 2, 0, 0, 1, 2];
@@ -192,7 +197,7 @@ fn snapp_auction() {
         .zip(buy_sell_tokens.zip(buy_sell_amounts.iter()))
     {
         println!(
-            "    placeOrder(buyToken={}, sellToken={}, buyAmount{}, sellAmount={}, {{ from: {} }})",
+            "    placeOrder(buyToken={}, sellToken={}, buyAmount={}, sellAmount={}, {{ from: {} }})",
             buy_token, sell_token, buy_amount, sell_amount, account
         );
         instance
@@ -214,14 +219,18 @@ fn snapp_auction() {
     let orders = db.get_orders_of_slot(&U256::zero()).unwrap();
     assert_eq!(orders[5].sell_amount, buy_sell_amounts[5].1);
 
-    // Advance time to close auction
+    // Advance time to bid on auction
     wait_for(&web3, 181);
 
-    // Wait for solution submission
     let expected_state_hash =
         H256::from_str("2b87dc830d051be72f4adcc3677daadab2f3f2253e9da51d803faeb0daa1532f").unwrap();
-    let updated_state = await_state_transition(&instance, &initial_state_hash);
-    assert_eq!(expected_state_hash, H256::from_slice(&updated_state));
+    // TODO - check auction state on contract
+    // instance.auctions(0).
+
+    // Advance time for state transition
+    wait_for(&web3, 181);
+    let post_auction_state = await_state_transition(&instance, &post_deposit_state);
+    assert_eq!(expected_state_hash, H256::from_slice(&post_auction_state));
 
     let state = db
         .get_balances_for_state_root(&expected_state_hash)

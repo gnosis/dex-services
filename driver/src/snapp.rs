@@ -36,8 +36,7 @@ impl SnappSolution for Solution {
             total_executed_utility = total_executed_utility
                 .checked_add(
                     order.executed_utility(
-                        self.price(order.buy_token)
-                            .ok_or(SnappObjectiveError::TokenNotFound)?,
+                        self.price(order.buy_token).unwrap_or_default(),
                         *self
                             .executed_buy_amounts
                             .get(i)
