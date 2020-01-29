@@ -162,7 +162,7 @@ fn snapp_auction() {
     wait_for(&web3, 181);
     let post_deposit_state = await_state_transition(&instance, &initial_state_hash);
     println!(
-        "After Deposit State {:?}",
+        "Post Deposit State {:?}",
         H256::from_slice(&post_deposit_state)
     );
 
@@ -219,34 +219,50 @@ fn snapp_auction() {
     let orders = db.get_orders_of_slot(&U256::zero()).unwrap();
     assert_eq!(orders[5].sell_amount, buy_sell_amounts[5].1);
 
-    println!("Advance time to bid for auction");
+    println!("Advancing time and waiting for bid in auction");
     wait_for(&web3, 181);
+    wait_for_condition(|| {
+        instance
+            .auctions(U256::zero())
+            .wait_and_expect("No auction bid detected on smart contract")
+            .5
+            != [0u8; 32]
+    })
+    .expect("Did not detect bid placement in auction");
 
-    //    let expected_state_hash =
-    //        H256::from_str("572dd059c22fe72a966510cba30961215c9e60b96359ccb79996ad3f9c1668f8").unwrap();
-    // TODO - check auction state on contract
-    let bid_hash = instance
+    let expected_state_hash =
+        H256::from_str("572dd059c22fe72a966510cba30961215c9e60b96359ccb79996ad3f9c1668f8").unwrap();
+    let auction_bid = instance
         .auctions(U256::zero())
         .wait_and_expect("No auction bid detected on smart contract");
-    println!("Pending Auction Bid {:#?}", bid_hash);
+    let tentative_state_hash = H256::from_slice(&auction_bid.5);
+    assert_eq!(expected_state_hash, tentative_state_hash);
 
-    println!("Advance time for auction settlement");
+    println!("Advancing time for auction settlement and awaiting state transition");
     wait_for(&web3, 181);
-    //    let post_auction_state = await_state_transition(&instance, &post_deposit_state);
-    //    assert_eq!(expected_state_hash, H256::from_slice(&post_auction_state));
+    let post_auction_state = await_state_transition(&instance, &post_deposit_state);
+    println!(
+        "Post Auction State: {:?}",
+        H256::from_slice(&post_auction_state)
+    );
+    assert_eq!(expected_state_hash, H256::from_slice(&post_auction_state));
 
-    //    let state = db
-    //        .get_balances_for_state_root(&H256::from_slice(&bid_hash))
-    //        .unwrap();
-    //
-    //    assert_eq!(
-    //        state.read_balance(1, H160::from_low_u64_be(4 + 1)),
-    //        4_000_000_000_000_000_000u128,
-    //        "Account 4 should now have 4 of token 1"
-    //    );
-    //    assert_eq!(
-    //        state.read_balance(0, H160::from_low_u64_be(3 + 1)),
-    //        52_000_000_000_000_000_000u128,
-    //        "Account 3 should now have 52 of token 0"
-    //    );
+    println!("Querying for updated state of accounts");
+    wait_for_condition(|| db.get_balances_for_state_root(&expected_state_hash).is_ok())
+        .expect("Did not detect account update in DB");
+    let state = db
+        .get_balances_for_state_root(&expected_state_hash)
+        .unwrap();
+
+    assert_eq!(
+        state.read_balance(1, H160::from_low_u64_be(4)),
+        4_000_000_000_000_000_000u128,
+        "Account 4 should now have 4 of token 1"
+    );
+    assert_eq!(
+        state.read_balance(0, H160::from_low_u64_be(3)),
+        52_000_000_000_000_000_000u128,
+        "Account 3 should now have 52 of token 0"
+    );
+    println!("Expected trade settlement applied!")
 }
