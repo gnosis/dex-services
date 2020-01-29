@@ -2,7 +2,9 @@ use driver::contracts::stablex_contract::BatchExchange;
 use driver::driver::stablex_driver::StableXDriver;
 use driver::logging;
 use driver::metrics::{MetricsServer, StableXMetrics};
+use driver::orderbook::StableXOrderBookReader;
 use driver::price_finding::Fee;
+use driver::solution_submission::StableXSolutionSubmitter;
 
 use log::{error, info};
 
@@ -29,7 +31,14 @@ fn main() {
 
     let fee = Some(Fee::default());
     let mut price_finder = driver::util::create_price_finder(fee);
-    let mut driver = StableXDriver::new(&contract, &mut *price_finder, stablex_metrics);
+    let orderbook = StableXOrderBookReader::new(&contract);
+    let solution_submitter = StableXSolutionSubmitter::new(&contract);
+    let mut driver = StableXDriver::new(
+        &mut *price_finder,
+        &orderbook,
+        &solution_submitter,
+        stablex_metrics,
+    );
     loop {
         if let Err(e) = driver.run() {
             error!("StableXDriver error: {}", e);
