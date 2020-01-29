@@ -9,7 +9,7 @@ name = "listener"
 path = "src/main.rs"
 
 [dependencies]
-graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.17.0" }
+graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.17.1" }
 graph-core = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.17.0" }
 graph-chain-ethereum = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.17.0" }
 graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", tag = "v0.17.0" }
