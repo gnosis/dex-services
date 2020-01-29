@@ -12,7 +12,7 @@ use dfusion_core::models::{
     StandingOrder,
 };
 
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 
 use web3::types::{H256, U128, U256};
 
@@ -55,12 +55,12 @@ impl<'a> OrderProcessor<'a> {
     pub fn run(&mut self) -> Result<ProcessResult, DriverError> {
         let auction_slot = self.contract.get_current_auction_slot()?;
 
-        info!("Current top auction slot is {:?}", auction_slot);
+        debug!("Current top auction slot is {:?}", auction_slot);
         let slot = find_first_unapplied_slot(auction_slot, &|i| {
             self.contract.has_auction_slot_been_applied(i)
         })?;
         if slot <= auction_slot {
-            info!("Highest unprocessed auction slot is {:?}", slot);
+            debug!("Highest unprocessed auction slot is {:?}", slot);
             let processing_state = batch_processing_state(slot, self.contract, &|i| {
                 self.contract.creation_timestamp_for_auction_slot(i)
             })?;
