@@ -120,8 +120,6 @@ matrix:
         - ./test/setup_contracts.sh
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d driver graph-listener
-        - ./test/e2e-tests-auction.sh
-        - ./test/restart-containers.sh
         - ./test/e2e-tests-standing-order.sh
       after_failure:
         - docker-compose logs
