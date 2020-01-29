@@ -11,7 +11,7 @@ fn snapp_deposit_withdraw() {
     let (eloop, http) = Http::new("http://localhost:8545").expect("transport failed");
     eloop.into_remote();
     let web3 = Web3::new(http);
-    let (instance, accounts, tokens, db) = setup_snapp(&web3, 3, 3);
+    let (instance, accounts, tokens, db) = setup_snapp(&web3, 3, 3, 100);
 
     // Test environment values
     let deposit_amount = 18_000_000_000_000_000_000u128;
@@ -42,7 +42,7 @@ fn snapp_deposit_withdraw() {
 
     // Check that contract was updated
     let expected_deposit_hash =
-        H256::from_str("781cff80f5808a37f4c9009218c46af3d90920f82110129f6d925fafb3b23f2d").unwrap();
+        H256::from_str("73815c173218e6025f7cb12d0add44354c4671e261a34a360943007ff6ac7af5").unwrap();
 
     let after_deposit_state = await_state_transition(&instance, &initial_state_hash);
     assert_eq!(
@@ -130,4 +130,139 @@ fn snapp_deposit_withdraw() {
         .balance_of(user_address)
         .wait_and_expect("Could not retrieve token balance");
     assert_eq!(final_balance, initial_balance);
+}
+
+#[test]
+fn snapp_auction() {
+    let (eloop, http) = Http::new("http://localhost:8545").expect("transport failed");
+    eloop.into_remote();
+    let web3 = Web3::new(http);
+    let (instance, accounts, _tokens, db) = setup_snapp(&web3, 3, 6, 300);
+
+    // Test environment values
+    let deposit_amount = 300_000_000_000_000_000_000u128;
+
+    let initial_state_hash = instance
+        .get_current_state_root()
+        .wait_and_expect("Could not recover initial state hash");
+
+    println!("Depositing sufficient funds for trades");
+    let deposit_tokens = [2u64, 1, 2, 1, 0, 0];
+    for (account, token_id) in accounts.iter().zip(deposit_tokens.iter()) {
+        println!(
+            "    deposit(tokenId={}, amount={}, {{ from: {} }})",
+            token_id, deposit_amount, account
+        );
+        instance
+            .deposit(*token_id, U128::from(deposit_amount))
+            .from(Account::Local(*account, None))
+            .wait_and_expect("Failed to send deposit");
+    }
+
+    wait_for(&web3, 181);
+    let post_deposit_state = await_state_transition(&instance, &initial_state_hash);
+    println!(
+        "Post Deposit State {:?}",
+        H256::from_slice(&post_deposit_state)
+    );
+
+    println!("Placing 6 orders in current auction");
+    let buy_tokens = [1u64, 2, 0, 0, 1, 2];
+    let buy_sell_tokens = buy_tokens.iter().zip(deposit_tokens.iter());
+    let buy_sell_amounts = [
+        (
+            12_000_000_000_000_000_000u128,
+            12_000_000_000_000_000_000u128,
+        ),
+        (2_200_000_000_000_000_000u128, 2_000_000_000_000_000_000u128),
+        (
+            150_000_000_000_000_000_000u128,
+            10_000_000_000_000_000_000u128,
+        ),
+        (
+            180_000_000_000_000_000_000u128,
+            15_000_000_000_000_000_000u128,
+        ),
+        (
+            4_000_000_000_000_000_000u128,
+            52_000_000_000_000_000_000u128,
+        ),
+        (
+            20_000_000_000_000_000_000u128,
+            280_000_000_000_000_000_000u128,
+        ),
+    ];
+    for (account, ((buy_token, sell_token), (buy_amount, sell_amount))) in accounts
+        .iter()
+        .zip(buy_sell_tokens.zip(buy_sell_amounts.iter()))
+    {
+        println!(
+            "    placeOrder(buyToken={}, sellToken={}, buyAmount={}, sellAmount={}, {{ from: {} }})",
+            buy_token, sell_token, buy_amount, sell_amount, account
+        );
+        instance
+            .place_sell_order(
+                *buy_token,
+                *sell_token,
+                U128::from(*buy_amount),
+                U128::from(*sell_amount),
+            )
+            .from(Account::Local(*account, None))
+            .wait_and_expect("Could not place order");
+    }
+
+    println!("Awaiting order inclusion in DB");
+    wait_for_condition(|| db.get_orders_of_slot(&U256::zero()).is_ok())
+        .expect("Did not detect order inclusion in DB");
+    wait_for_condition(|| db.get_orders_of_slot(&U256::zero()).unwrap().len() == 6)
+        .expect("Could not fetch all orders");
+    let orders = db.get_orders_of_slot(&U256::zero()).unwrap();
+    assert_eq!(orders[5].sell_amount, buy_sell_amounts[5].1);
+
+    println!("Advancing time and waiting for bid in auction");
+    wait_for(&web3, 181);
+    wait_for_condition(|| {
+        instance
+            .auctions(U256::zero())
+            .wait_and_expect("No auction bid detected on smart contract")
+            .5
+            != [0u8; 32]
+    })
+    .expect("Did not detect bid placement in auction");
+
+    let expected_state_hash =
+        H256::from_str("572dd059c22fe72a966510cba30961215c9e60b96359ccb79996ad3f9c1668f8").unwrap();
+    let auction_bid = instance
+        .auctions(U256::zero())
+        .wait_and_expect("No auction bid detected on smart contract");
+    let tentative_state_hash = H256::from_slice(&auction_bid.5);
+    assert_eq!(expected_state_hash, tentative_state_hash);
+
+    println!("Advancing time for auction settlement and awaiting state transition");
+    wait_for(&web3, 181);
+    let post_auction_state = await_state_transition(&instance, &post_deposit_state);
+    println!(
+        "Post Auction State: {:?}",
+        H256::from_slice(&post_auction_state)
+    );
+    assert_eq!(expected_state_hash, H256::from_slice(&post_auction_state));
+
+    println!("Querying for updated state of accounts");
+    wait_for_condition(|| db.get_balances_for_state_root(&expected_state_hash).is_ok())
+        .expect("Did not detect account update in DB");
+    let state = db
+        .get_balances_for_state_root(&expected_state_hash)
+        .unwrap();
+
+    assert_eq!(
+        state.read_balance(1, H160::from_low_u64_be(4)),
+        4_000_000_000_000_000_000u128,
+        "Account 4 should now have 4 of token 1"
+    );
+    assert_eq!(
+        state.read_balance(0, H160::from_low_u64_be(3)),
+        52_000_000_000_000_000_000u128,
+        "Account 3 should now have 52 of token 0"
+    );
+    println!("Expected trade settlement applied!")
 }

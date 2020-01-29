@@ -19,7 +19,7 @@ fn test_with_ganache() {
     let (eloop, http) = Http::new("http://localhost:8545").expect("transport failed");
     eloop.into_remote();
     let web3 = Web3::new(http);
-    let (instance, accounts, tokens) = setup_stablex(&web3, 3, 3);
+    let (instance, accounts, tokens) = setup_stablex(&web3, 3, 3, 100);
 
     // Dynamically fetching the id allows the test to be run multiple times,
     // even if other tokens have already been added

@@ -6,22 +6,22 @@ use ethcontract::web3::types::{H160, U256};
 use ethcontract::Account;
 
 use crate::common::{
-    approve, create_accounts_with_funded_tokens, wait_for, FutureBuilderExt, FutureWaitExt,
-    MAX_GAS, TOKEN_MINTED,
+    approve, create_accounts_with_funded_tokens, wait_for, FutureBuilderExt, FutureWaitExt, MAX_GAS,
 };
 
 pub fn setup_stablex(
     web3: &Web3<Http>,
     num_tokens: usize,
     num_users: usize,
+    token_minted: u32,
 ) -> (BatchExchange, Vec<H160>, Vec<IERC20>) {
     // Get all tokens but OWL in a generic way
     let (accounts, mut tokens) =
-        create_accounts_with_funded_tokens(&web3, num_tokens - 1, num_users);
+        create_accounts_with_funded_tokens(&web3, num_tokens - 1, num_users, token_minted);
     let mut instance =
         BatchExchange::deployed(&web3).wait_and_expect("Cannot get deployed BatchExchange");
     instance.defaults_mut().gas = Some(MAX_GAS.into());
-    approve(&tokens, instance.address(), &accounts);
+    approve(&tokens, instance.address(), &accounts, token_minted);
 
     // Set up OWL manually
     let owl_address = instance
@@ -31,9 +31,9 @@ pub fn setup_stablex(
     owl.set_minter(accounts[0])
         .wait_and_expect("Cannot set minter");
     for account in &accounts {
-        owl.mint_owl(*account, U256::exp10(18) * TOKEN_MINTED)
+        owl.mint_owl(*account, U256::exp10(18) * token_minted)
             .wait_and_expect("Cannot mint OWl");
-        owl.approve(instance.address(), U256::exp10(18) * TOKEN_MINTED)
+        owl.approve(instance.address(), U256::exp10(18) * token_minted)
             .from(Account::Local(*account, None))
             .wait_and_expect("Cannot approve OWL for burning");
     }
