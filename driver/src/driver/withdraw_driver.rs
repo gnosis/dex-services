@@ -7,7 +7,7 @@ use crate::util::{
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::{RollingHashable, RootHashable};
 
-use log::info;
+use log::{debug, info};
 
 pub fn run_withdraw_listener(
     db: &dyn DbInterface,
@@ -15,18 +15,18 @@ pub fn run_withdraw_listener(
 ) -> Result<bool, DriverError> {
     let withdraw_slot = contract.get_current_withdraw_slot()?;
 
-    info!("Current top withdraw_slot is {:?}", withdraw_slot);
+    debug!("Current top withdraw_slot is {:?}", withdraw_slot);
     let slot = find_first_unapplied_slot(withdraw_slot, &|i| {
         contract.has_withdraw_slot_been_applied(i)
     })?;
     if slot <= withdraw_slot {
-        info!("Highest unprocessed withdraw_slot is {:?}", slot);
+        debug!("Highest unprocessed withdraw_slot is {:?}", slot);
         let processing_state = batch_processing_state(slot, contract, &|i| {
             contract.creation_timestamp_for_withdraw_slot(i)
         })?;
         match processing_state {
             ProcessingState::TooEarly => {
-                info!("Need to wait before processing withdraw_slot {:?}", slot)
+                debug!("Need to wait before processing withdraw_slot {:?}", slot)
             }
             ProcessingState::AcceptsBids | ProcessingState::AcceptsSolution => {
                 info!("Processing withdraw_slot {:?}", slot);

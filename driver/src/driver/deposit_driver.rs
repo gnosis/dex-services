@@ -6,7 +6,7 @@ use crate::util::{
 
 use dfusion_core::database::DbInterface;
 use dfusion_core::models::RollingHashable;
-use log::info;
+use log::{debug, info};
 
 pub fn run_deposit_listener(
     db: &dyn DbInterface,
@@ -14,16 +14,16 @@ pub fn run_deposit_listener(
 ) -> Result<bool, DriverError> {
     let deposit_slot = contract.get_current_deposit_slot()?;
 
-    info!("Current top deposit_slot is {:?}", deposit_slot);
+    debug!("Current top deposit_slot is {:?}", deposit_slot);
     let slot =
         find_first_unapplied_slot(deposit_slot, &|i| contract.has_deposit_slot_been_applied(i))?;
     if slot <= deposit_slot {
-        info!("Highest unprocessed deposit_slot is {:?}", slot);
+        debug!("Highest unprocessed deposit_slot is {:?}", slot);
         let processing_state = batch_processing_state(slot, contract, &|i| {
             contract.creation_timestamp_for_deposit_slot(i)
         })?;
         match processing_state {
-            ProcessingState::TooEarly => info!("All deposits are already processed"),
+            ProcessingState::TooEarly => debug!("All deposits are already processed"),
             ProcessingState::AcceptsBids | ProcessingState::AcceptsSolution => {
                 info!("Processing deposit_slot {:?}", slot);
                 let state_root = contract.get_current_state_root()?;
@@ -46,7 +46,7 @@ pub fn run_deposit_listener(
             }
         }
     } else {
-        info!("No pending deposit batches.");
+        debug!("No pending deposit batches.");
     }
     Ok(false)
 }
