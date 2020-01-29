@@ -1,5 +1,5 @@
 use e2e::common::{wait_for, wait_for_condition, FutureBuilderExt};
-use e2e::snapp::{await_state_transition, setup_snapp};
+use e2e::snapp::{await_and_fetch_auction_bid, await_state_transition, setup_snapp};
 use ethcontract::web3::api::Web3;
 use ethcontract::web3::transports::Http;
 use ethcontract::web3::types::{H160, H256, U128, U256};
@@ -221,22 +221,11 @@ fn snapp_auction() {
 
     println!("Advancing time and waiting for bid in auction");
     wait_for(&web3, 181);
-    wait_for_condition(|| {
-        instance
-            .auctions(U256::zero())
-            .wait_and_expect("No auction bid detected on smart contract")
-            .5
-            != [0u8; 32]
-    })
-    .expect("Did not detect bid placement in auction");
 
     let expected_state_hash =
         H256::from_str("572dd059c22fe72a966510cba30961215c9e60b96359ccb79996ad3f9c1668f8").unwrap();
-    let auction_bid = instance
-        .auctions(U256::zero())
-        .wait_and_expect("No auction bid detected on smart contract");
-    let tentative_state_hash = H256::from_slice(&auction_bid.5);
-    assert_eq!(expected_state_hash, tentative_state_hash);
+    let auction_bid = await_and_fetch_auction_bid(&instance, U256::zero());
+    assert_eq!(expected_state_hash, auction_bid.tentative_state);
 
     println!("Advancing time for auction settlement and awaiting state transition");
     wait_for(&web3, 181);
@@ -265,4 +254,151 @@ fn snapp_auction() {
         "Account 3 should now have 52 of token 0"
     );
     println!("Expected trade settlement applied!")
+}
+
+#[test]
+fn snapp_standing_order() {
+    let (eloop, http) = Http::new("http://localhost:8545").expect("transport failed");
+    eloop.into_remote();
+    let web3 = Web3::new(http);
+    let (instance, accounts, _tokens, db) = setup_snapp(&web3, 3, 2, 300);
+
+    let deposit_amount = 300_000_000_000_000_000_000u128;
+    let one_eth = U128::from(1_000_000_000_000_000_000u128);
+
+    let initial_state_hash = instance
+        .get_current_state_root()
+        .wait_and_expect("Could not recover initial state hash");
+
+    println!("Depositing balances for test");
+    instance
+        .deposit(2, U128::from(deposit_amount))
+        .from(Account::Local(accounts[0], None))
+        .wait_and_expect("Failed to send first deposit");
+    instance
+        .deposit(1, U128::from(deposit_amount))
+        .from(Account::Local(accounts[1], None))
+        .wait_and_expect("Failed to send second deposit");
+    wait_for(&web3, 181);
+    let post_deposit_state = await_state_transition(&instance, &initial_state_hash);
+
+    println!("Placing (matching) sell and standing sell orders");
+    instance
+        .place_sell_order(2, 1, one_eth, one_eth)
+        .from(Account::Local(accounts[1], None))
+        .wait_and_expect("Could not place sell order");
+    // buyToken=1 sellToken=2 minBuy=1 maxSell=1
+    let standing_order_bytes = vec![
+        0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x0du8, 0xe0u8, 0xb6u8, 0xb3u8, 0xa7u8, 0x64u8, 0x00u8,
+        0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x0du8, 0xe0u8, 0xb6u8, 0xb3u8, 0xa7u8, 0x64u8,
+        0x00u8, 0x00u8, 0x02u8, 0x01u8,
+    ];
+
+    instance
+        .place_standing_sell_order(standing_order_bytes)
+        .from(Account::Local(accounts[0], None))
+        .wait_and_expect("Could not place standing order");
+
+    println!("Ensure standing order recorded in DB");
+    wait_for_condition(|| db.get_standing_orders_of_slot(&U256::zero()).is_ok())
+        .expect("Couldn't recover standing order from DB");
+    let _standing_orders = db.get_standing_orders_of_slot(&U256::zero()).unwrap();
+    // TODO: assert buyAmount=1000000000000000000 buyToken=1 sellAmount=1000000000000000000 sellToken=2
+
+    // TODO - redundant code.
+    wait_for(&web3, 181);
+    let _first_auction_bid = await_and_fetch_auction_bid(&instance, U256::zero());
+    wait_for(&web3, 181);
+    let post_auction_state = await_state_transition(&instance, &post_deposit_state);
+    let post_auction_state_hash = H256::from_slice(&post_auction_state);
+    println!("Post Auction State: {:?}", post_auction_state_hash);
+
+    println!("Ensure standing order account traded");
+    wait_for_condition(|| {
+        db.get_balances_for_state_root(&post_auction_state_hash)
+            .is_ok()
+    })
+    .expect("Did not detect account update in DB");
+    let state = db
+        .get_balances_for_state_root(&post_auction_state_hash)
+        .unwrap();
+    assert_eq!(
+        state.read_balance(1, H160::from_low_u64_be(0)),
+        1_000_000_000_000_000_000u128,
+        "Account 0 should now have 1e18 of token 1"
+    );
+
+    println!("Placing another matching sell order for standing order");
+    instance
+        .place_sell_order(1, 2, one_eth, one_eth)
+        .from(Account::Local(accounts[1], None))
+        .wait_and_expect("Could not place sell order");
+
+    // TODO - clean this up.
+    wait_for(&web3, 181);
+    let _second_auction_bid = await_and_fetch_auction_bid(&instance, U256::from(1));
+    wait_for(&web3, 181);
+    let _second_auction_state = await_state_transition(&instance, &post_auction_state);
+
+    println!("Ensure standing order is still traded");
+    //    \"query { \
+    //        accountStates(where: {stateIndex: \\\"3\\\"}) {\
+    //            balances \
+    //        } \
+    //    }\" | jq .data.accountStates[0].balances[1] | grep -w -2 2000000000000000000"
+
+    println!("Update standing order");
+    // standing_order --accountId=0 --buyToken=1 --sellToken=2 --minBuy=1 --maxSell=2
+
+    println!("Check graph standing order batch has been updated");
+    //    \"query { \
+    //        standingSellOrderBatches(where: { \
+    //          accountId: \\\"0000000000000000000000000000000000000000\\\" , \
+    //          batchIndex: 1, \
+    //          validFromAuctionId: 2 \
+    //        }) { \
+    //        orders { \
+    //            buyToken \
+    //            sellToken \
+    //            buyAmount \
+    //            sellAmount \
+    //        } \
+    //      } \
+    //    }\" | grep \"buyAmount.:.1000000000000000000.,.buyToken.:1,.sellAmount.:.2000000000000000000.,.sellToken.:2\""
+
+    println!("Canceling standing order in same batch (only cancellation is processed)");
+    // standing_order.js --accountId=0 --buyToken=0 --sellToken=0 --minBuy=0 --maxSell=0
+
+    println!("See that graph standing order batch has been deleted");
+    //    \"query { \
+    //        standingSellOrderBatches(where: { \
+    //          accountId: \\\"0000000000000000000000000000000000000000\\\" , \
+    //          batchIndex: 1, \
+    //          validFromAuctionId: 2 \
+    //        }) { \
+    //        orders { \
+    //            buyToken \
+    //            sellToken \
+    //            buyAmount \
+    //            sellAmount \
+    //        } \
+    //      } \
+    //    }\" | grep \"buyAmount.:.0.,.buyToken.:0,.sellAmount.:.0.,.sellToken.:0\""
+
+    println!("Place, yet, another matching sell order for standing order");
+    // sell_order.js --accountId=1 --buyToken=2 --sellToken=1 --minBuy=1 --maxSell=1
+
+    // TODO - redundant code.
+    println!("Waiting for Auction 2 to clear");
+    //    wait_for(&web3, 181);
+    //    let third_auction_bid = await_and_fetch_auction_bid(&instance, U256::from(2));
+    //    wait_for(&web3, 181);
+    //    let third_auction_state = await_state_transition(&instance, &second_auction_state);
+
+    println!("Ensure standing order was no longer traded");
+    //    \"query { \
+    //        accountStates(where: {stateIndex: \\\"4\\\"}) {\
+    //            balances \
+    //        } \
+    //    }\" | jq .data.accountStates[0].balances[1] | grep -w -2 2000000000000000000"
 }

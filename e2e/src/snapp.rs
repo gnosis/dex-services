@@ -7,12 +7,14 @@ use crate::common::{
 use ethcontract::web3::api::Web3;
 use ethcontract::web3::transports::Http;
 use ethcontract::web3::types::H160;
-use ethcontract::Account;
+use ethcontract::{Account, U256};
 
 use dfusion_core::database::{DbInterface, GraphReader};
 
+use crate::auction_bid::AuctionBid;
 use graph::log::logger;
 use graph_node_reader::Store as GraphNodeReader;
+use std::str::FromStr;
 
 // Snapp contract artifacts
 ethcontract::contract!("dex-contracts/build/contracts/SnappAuction.json");
@@ -65,4 +67,21 @@ pub fn await_state_transition(instance: &SnappAuction, current_state: &[u8]) -> 
     instance
         .get_current_state_root()
         .wait_and_expect("Could not recover current state root")
+}
+
+pub fn await_and_fetch_auction_bid(instance: &SnappAuction, auction_index: U256) -> AuctionBid {
+    wait_for_condition(|| {
+        instance
+            .auctions(auction_index)
+            .wait_and_expect("No auction bid detected on smart contract")
+            .3
+            != H160::from_str("0000000000000000000000000000000000000000").unwrap()
+    })
+    .expect("Did not detect bid placement in auction");
+
+    AuctionBid::from(
+        &instance
+            .auctions(auction_index)
+            .wait_and_expect("No auction bid detected on smart contract"),
+    )
 }
