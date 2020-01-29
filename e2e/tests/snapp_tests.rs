@@ -42,7 +42,7 @@ fn snapp_deposit_withdraw() {
 
     // Check that contract was updated
     let expected_deposit_hash =
-        H256::from_str("781cff80f5808a37f4c9009218c46af3d90920f82110129f6d925fafb3b23f2d").unwrap();
+        H256::from_str("73815c173218e6025f7cb12d0add44354c4671e261a34a360943007ff6ac7af5").unwrap();
 
     let after_deposit_state = await_state_transition(&instance, &initial_state_hash);
     assert_eq!(
