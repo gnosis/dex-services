@@ -16,7 +16,6 @@ use std::fmt::Debug;
 use std::future::Future;
 use std::io::{Error, ErrorKind};
 
-pub const TOKEN_MINTED: u32 = 300;
 pub const MAX_GAS: u32 = 6_000_000;
 
 pub trait FutureWaitExt: Future + Sized {
@@ -115,6 +114,7 @@ pub fn create_accounts_with_funded_tokens(
     web3: &Web3<Http>,
     num_tokens: usize,
     num_users: usize,
+    token_minted: u32,
 ) -> (Vec<H160>, Vec<IERC20>) {
     let accounts: Vec<H160> =
         web3.eth().accounts().wait().expect("get accounts failed")[..num_users].to_vec();
@@ -127,7 +127,7 @@ pub fn create_accounts_with_funded_tokens(
                 .wait_and_expect("Cannot deploy Mintable Token");
             for account in &accounts {
                 token
-                    .mint(*account, U256::exp10(18) * TOKEN_MINTED)
+                    .mint(*account, U256::exp10(18) * token_minted)
                     .wait_and_expect("Cannot mint token");
             }
             IERC20::at(&web3, token.address())
@@ -136,11 +136,11 @@ pub fn create_accounts_with_funded_tokens(
     (accounts, tokens)
 }
 
-pub fn approve(tokens: &[IERC20], address: H160, accounts: &[H160]) {
+pub fn approve(tokens: &[IERC20], address: H160, accounts: &[H160], approval_amount: u32) {
     for account in accounts {
         for token in tokens {
             token
-                .approve(address, U256::exp10(18) * TOKEN_MINTED)
+                .approve(address, U256::exp10(18) * approval_amount)
                 .from(Account::Local(*account, None))
                 .wait()
                 .unwrap_or_else(|_| panic!("Cannot approve token {:x}", token.address()));

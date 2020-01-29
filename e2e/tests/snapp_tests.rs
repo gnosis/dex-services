@@ -11,7 +11,7 @@ fn snapp_deposit_withdraw() {
     let (eloop, http) = Http::new("http://localhost:8545").expect("transport failed");
     eloop.into_remote();
     let web3 = Web3::new(http);
-    let (instance, accounts, tokens, db) = setup_snapp(&web3, 3, 3);
+    let (instance, accounts, tokens, db) = setup_snapp(&web3, 3, 3, 100);
 
     // Test environment values
     let deposit_amount = 18_000_000_000_000_000_000u128;
@@ -137,7 +137,7 @@ fn snapp_auction() {
     let (eloop, http) = Http::new("http://localhost:8545").expect("transport failed");
     eloop.into_remote();
     let web3 = Web3::new(http);
-    let (instance, accounts, _tokens, db) = setup_snapp(&web3, 3, 6);
+    let (instance, accounts, _tokens, db) = setup_snapp(&web3, 3, 6, 300);
 
     // Test environment values
     let deposit_amount = 300_000_000_000_000_000_000u128;
@@ -228,7 +228,8 @@ fn snapp_auction() {
     let bid_hash = instance
         .auctions(U256::zero())
         .wait_and_expect("No auction bid detected on smart contract");
-    println!("Pending Auction Bid {:?}", bid_hash);
+    println!("Pending Auction Bid {:#?}", bid_hash);
+
     println!("Advance time for auction settlement");
     wait_for(&web3, 181);
     //    let post_auction_state = await_state_transition(&instance, &post_deposit_state);

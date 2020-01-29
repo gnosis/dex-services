@@ -21,18 +21,20 @@ pub fn setup_snapp(
     web3: &Web3<Http>,
     num_tokens: usize,
     num_users: usize,
+    deposit_amount: u32,
 ) -> (SnappAuction, Vec<H160>, Vec<IERC20>, Box<dyn DbInterface>) {
     let graph_logger = logger(false);
     let postgres_url = "postgresql://dfusion:let-me-in@localhost/dfusion";
     let store_reader = GraphNodeReader::new(postgres_url.parse().unwrap(), &graph_logger);
     let db_instance = GraphReader::new(Box::new(store_reader));
 
-    let (accounts, tokens) = create_accounts_with_funded_tokens(&web3, num_tokens, num_users);
+    let (accounts, tokens) =
+        create_accounts_with_funded_tokens(&web3, num_tokens, num_users, deposit_amount);
     let mut instance =
         SnappAuction::deployed(&web3).wait_and_expect("Cannot get deployed SnappAuction");
     println!("Acquired contract instance {}", instance.address());
     instance.defaults_mut().gas = Some(MAX_GAS.into());
-    approve(&tokens, instance.address(), &accounts);
+    approve(&tokens, instance.address(), &accounts, deposit_amount);
 
     // Open Accounts
     for (i, account) in accounts.iter().enumerate() {
