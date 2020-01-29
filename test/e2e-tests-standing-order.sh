@@ -37,7 +37,6 @@ step_with_retry "Check graph standing order batch has been recorded" \
 step "Advance time to bid for auction" \
 "npx truffle exec scripts/wait_seconds.js 181"
 
-EXPECTED_HASH="2b87dc830d051be72f4adcc3677daadab2f3f2253e9da51d803faeb0daa1532f"
 step_with_retry "Wait for bid to be placed" \
 "npx truffle exec scripts/snapp/invokeViewFunction.js auctions 0 | grep \"solver: '0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1'\" "
 
@@ -58,7 +57,6 @@ step "Place matching sell order for standing order" \
 step "Advance time to bid for auction" \
 "npx truffle exec scripts/wait_seconds.js 181"
 
-EXPECTED_HASH="2b87dc830d051be72f4adcc3677daadab2f3f2253e9da51d803faeb0daa1532f"
 step_with_retry "Wait for bid to be placed" \
 "npx truffle exec scripts/snapp/invokeViewFunction.js auctions 1 | grep \"solver: '0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1'\" "
 
