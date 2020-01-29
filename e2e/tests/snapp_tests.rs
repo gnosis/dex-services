@@ -223,7 +223,7 @@ fn snapp_auction() {
     wait_for(&web3, 181);
 
     //    let expected_state_hash =
-    //        H256::from_str("2b87dc830d051be72f4adcc3677daadab2f3f2253e9da51d803faeb0daa1532f").unwrap();
+    //        H256::from_str("572dd059c22fe72a966510cba30961215c9e60b96359ccb79996ad3f9c1668f8").unwrap();
     // TODO - check auction state on contract
     let bid_hash = instance
         .auctions(U256::zero())
