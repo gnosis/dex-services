@@ -11,7 +11,7 @@ EXPECTED_AUCTION=0
 step "Make sure we have enough balances for the trades" \
 "npx truffle exec scripts/snapp/deposit.js --accountId=0 --tokenId=2 --amount=300 && \
  npx truffle exec scripts/snapp/deposit.js --accountId=1 --tokenId=1 --amount=300 && \
- npx truffle exec scripts/snapp/deposit.js --accountId=2 --tokenId=2 --amount=200 && \
+ npx truffle exec scripts/snapp/deposit.js --accountId=2 --tokenId=2 --amount=300 && \
  npx truffle exec scripts/snapp/deposit.js --accountId=3 --tokenId=1 --amount=300 && \
  npx truffle exec scripts/snapp/deposit.js --accountId=4 --tokenId=0 --amount=300 && \
  npx truffle exec scripts/snapp/deposit.js --accountId=5 --tokenId=0 --amount=300"
@@ -38,7 +38,7 @@ step_with_retry "[theGraph] SellOrder was added to graph db - accountId 5's sell
 step "Advance time to bid for auction" \
 "npx truffle exec scripts/wait_seconds.js 181"
 
-EXPECTED_HASH="2b87dc830d051be72f4adcc3677daadab2f3f2253e9da51d803faeb0daa1532f"
+EXPECTED_HASH="572dd059c22fe72a966510cba30961215c9e60b96359ccb79996ad3f9c1668f8"
 step_with_retry "Wait for bid to be placed" \
 "npx truffle exec scripts/snapp/invokeViewFunction.js auctions 0 | grep ${EXPECTED_HASH} "
 
