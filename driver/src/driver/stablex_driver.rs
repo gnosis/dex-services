@@ -122,17 +122,10 @@ impl<'a> StableXDriver<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-<<<<<<< HEAD
     use crate::error::ErrorKind;
     use crate::orderbook::tests::StableXOrderBookReadingMock;
     use crate::price_finding::price_finder_interface::tests::PriceFindingMock;
     use crate::solution_submission::tests::StableXSolutionSubmittingMock;
-=======
-    use crate::contracts::stablex_contract::MockStableXContract;
-    use crate::error::ErrorKind;
-    use crate::price_finding::error::{ErrorKind as PriceFindingErrorKind, PriceFindingError};
-    use crate::price_finding::price_finder_interface::MockPriceFinding;
->>>>>>> Replacing mock-it with mockall
 
     use dfusion_core::models::account_state::test_util::*;
     use dfusion_core::models::order::test_util::create_order_for_test;
@@ -285,10 +278,17 @@ mod tests {
         let batch = U256::from(42);
         reader.get_auction_index.given(()).will_return(Ok(batch));
 
+<<<<<<< HEAD
         reader
             .get_auction_data
             .given(batch)
             .will_return(Ok((state.clone(), orders.clone())));
+=======
+        contract
+            .expect_get_auction_data()
+            .with(eq(batch - 1))
+            .return_const(Ok((state, orders)));
+>>>>>>> clippy warnings
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 

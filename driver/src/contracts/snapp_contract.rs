@@ -1,3 +1,5 @@
+#![allow(clippy::ptr_arg)] // required for automock
+
 use log::{debug, info};
 #[cfg(test)]
 use mockall::automock;

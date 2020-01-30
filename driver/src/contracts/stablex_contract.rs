@@ -1,3 +1,5 @@
+#![allow(clippy::ptr_arg)] // required for automock
+
 use std::collections::HashMap;
 use std::env;
 
