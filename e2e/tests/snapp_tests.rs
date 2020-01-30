@@ -299,20 +299,30 @@ fn snapp_standing_order() {
         .wait_and_expect("Could not place standing order");
 
     println!("Ensure standing order recorded in DB");
-    wait_for_condition(|| db.get_standing_orders_of_slot(&U256::zero()).is_ok())
-        .expect("Couldn't recover standing order from DB");
-    let _standing_orders = db.get_standing_orders_of_slot(&U256::zero()).unwrap();
-    // TODO: assert buyAmount=1000000000000000000 buyToken=1 sellAmount=1000000000000000000 sellToken=2
+    wait_for_condition(|| {
+        !db.get_standing_orders_of_slot(&U256::zero()).unwrap()[0]
+            .get_orders()
+            .is_empty()
+    })
+    .expect("Couldn't recover standing order from DB");
+    let standing_orders = db.get_standing_orders_of_slot(&U256::zero()).unwrap();
+    let orders = standing_orders[0].get_orders();
+    println!("    Standing Order: {:#?}", orders[0]);
 
-    // TODO - redundant code.
+    assert_eq!(orders[0].sell_amount, 1_000_000_000_000_000_000u128);
+    assert_eq!(orders[0].buy_amount, 1_000_000_000_000_000_000u128);
+    assert_eq!(orders[0].buy_token, 1);
+    assert_eq!(orders[0].sell_token, 2);
+
     wait_for(&web3, 181);
-    let _first_auction_bid = await_and_fetch_auction_bid(&instance, U256::zero());
+    await_and_fetch_auction_bid(&instance, U256::zero());
     wait_for(&web3, 181);
     let post_auction_state = await_state_transition(&instance, &post_deposit_state);
     let post_auction_state_hash = H256::from_slice(&post_auction_state);
-    println!("Post Auction State: {:?}", post_auction_state_hash);
+    println!("Auction 0 settled - {:?}", post_auction_state_hash);
 
     println!("Ensure standing order account traded");
+    // TODO - let state = await_and_fetch_new_account_state(&db, &post_auction_state_hash);
     wait_for_condition(|| {
         db.get_balances_for_state_root(&post_auction_state_hash)
             .is_ok()
@@ -321,6 +331,7 @@ fn snapp_standing_order() {
     let state = db
         .get_balances_for_state_root(&post_auction_state_hash)
         .unwrap();
+
     assert_eq!(
         state.read_balance(1, H160::from_low_u64_be(0)),
         1_000_000_000_000_000_000u128,
@@ -335,14 +346,14 @@ fn snapp_standing_order() {
     wait_for_condition(|| db.get_orders_of_slot(&U256::from(1)).is_ok())
         .expect("Did not detect order inclusion in DB");
 
-    // TODO - clean this up. Probably don't need both bid and state.
     wait_for(&web3, 181);
     let second_auction_bid = await_and_fetch_auction_bid(&instance, U256::from(1));
-    println!("Auction Bid{:?}", second_auction_bid);
     wait_for(&web3, 181);
     let second_auction_state = await_state_transition(&instance, &post_auction_state);
+    println!("Auction 1 settled - {:?}", post_auction_state_hash);
 
     println!("Ensure standing order is still traded");
+    // TODO - use: let state = await_and_fetch_new_account_state(&db, &post_auction_state_hash);
     wait_for_condition(|| {
         db.get_balances_for_state_root(&second_auction_bid.tentative_state)
             .is_ok()
@@ -351,6 +362,7 @@ fn snapp_standing_order() {
     let state = db
         .get_balances_for_state_root(&second_auction_bid.tentative_state)
         .unwrap();
+
     assert_eq!(
         state.read_balance(1, H160::from_low_u64_be(0)),
         2_000_000_000_000_000_000u128,
@@ -368,24 +380,18 @@ fn snapp_standing_order() {
         .from(Account::Local(accounts[0], None))
         .wait_and_expect("Could not place standing order");
 
-    wait_for_condition(|| db.get_standing_orders_of_slot(&U256::from(1)).is_ok())
-        .expect("Couldn't recover standing order from DB");
-    let _standing_orders = db.get_standing_orders_of_slot(&U256::from(1)).unwrap();
-    // TODO: assert buyAmount=1000000000000000000 buyToken=1 sellAmount=1000000000000000000 sellToken=2
-    //    \"query { \
-    //        standingSellOrderBatches(where: { \
-    //          accountId: \\\"0000000000000000000000000000000000000000\\\" , \
-    //          batchIndex: 1, \
-    //          validFromAuctionId: 2 \
-    //        }) { \
-    //        orders { \
-    //            buyToken \
-    //            sellToken \
-    //            buyAmount \
-    //            sellAmount \
-    //        } \
-    //      } \
-    //    }\" | grep \"buyAmount.:.1000000000000000000.,.buyToken.:1,.sellAmount.:.2000000000000000000.,.sellToken.:2\""
+    wait_for_condition(|| {
+        db.get_standing_orders_of_slot(&U256::from(2)).unwrap()[0].get_orders()[0].sell_amount
+            == 2_000_000_000_000_000_000u128
+    })
+    .expect("Couldn't recover standing order from DB");
+    let standing_orders = db.get_standing_orders_of_slot(&U256::from(2)).unwrap();
+    let orders = standing_orders[0].get_orders();
+    println!("    Updated Standing Order - {:#?}", orders[0]);
+    assert_eq!(orders[0].sell_amount, 2_000_000_000_000_000_000u128);
+    assert_eq!(orders[0].buy_amount, 1_000_000_000_000_000_000u128);
+    assert_eq!(orders[0].buy_token, 1);
+    assert_eq!(orders[0].sell_token, 2);
 
     println!("Canceling standing order in same batch (only cancellation is processed)");
     let standing_order_bytes: Vec<u8> = vec![
@@ -397,19 +403,19 @@ fn snapp_standing_order() {
         .place_standing_sell_order(standing_order_bytes)
         .from(Account::Local(accounts[0], None))
         .wait_and_expect("Could not place standing order");
-    // standing_order.js --accountId=0 --buyToken=0 --sellToken=0 --minBuy=0 --maxSell=0
 
-    println!("See that graph standing order batch has been deleted");
+    println!("Verify with DB that standing order has been deleted");
     wait_for_condition(|| {
         // This slot already contains something.
         let standing_orders = db.get_standing_orders_of_slot(&U256::from(2)).unwrap();
-        // TODO - this seems incorrect.
         standing_orders[0].get_orders()[0].buy_token == 0
     })
     .expect("Didn't detect order deletion");
+    let standing_orders = db.get_standing_orders_of_slot(&U256::from(2)).unwrap();
+    let orders = standing_orders[0].get_orders();
+    println!("    Deleted Standing Order - {:#?}", orders[0]);
 
     println!("Place, yet, another matching sell order for standing order");
-    // TODO - is order placing and waiting redundant?
     instance
         .place_sell_order(2, 1, one_eth, one_eth)
         .from(Account::Local(accounts[1], None))
@@ -421,7 +427,7 @@ fn snapp_standing_order() {
     wait_for(&web3, 181);
     let third_auction_bid = await_and_fetch_auction_bid(&instance, U256::from(2));
     wait_for(&web3, 181);
-    let _third_auction_state = await_state_transition(&instance, &second_auction_state);
+    await_state_transition(&instance, &second_auction_state);
 
     println!("Ensure standing order was no longer traded");
     wait_for_condition(|| {
