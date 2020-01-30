@@ -8,11 +8,11 @@ use web3::types::U256;
 type Result<T> = std::result::Result<T, DriverError>;
 
 pub trait StableXOrderBookReading {
-    /// Retunrs the index of the auction that is currently being solved
+    /// Returns the index of the auction that is currently being solved
     /// or an error in case it cannot get this information.
     fn get_auction_index(&self) -> Result<U256>;
 
-    /// Returns the current state of the order book, inclducing account balances
+    /// Returns the current state of the order book, including account balances
     /// and open orders or an error in case it cannot get this information.
     ///
     /// # Arguments

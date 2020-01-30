@@ -12,9 +12,9 @@ pub trait StableXSolutionSubmitting {
     /// batch or an error.
     ///
     /// # Arguments
-    /// - `batch_index` - the auction for which this solutions should be evaluated
-    /// - `orders` - the list of orders for which this solution is applicable
-    /// - `solution` - the solution to be evaluated
+    /// * `batch_index` - the auction for which this solutions should be evaluated
+    /// * `orders` - the list of orders for which this solution is applicable
+    /// * `solution` - the solution to be evaluated
     fn get_solution_objective_value(
         &self,
         batch_index: U256,
@@ -25,10 +25,10 @@ pub trait StableXSolutionSubmitting {
     /// Submits the provided solution and returns the result of the submission
     ///
     /// # Arguments
-    /// - `batch_index` - the auction for which this solutions should be evaluated
-    /// - `orders` - the list of orders for which this solution is applicable
-    /// - `solution` - the solution to be evaluated
-    /// - `claimed_objective_value` - the objective value of the provided solution.
+    /// * `batch_index` - the auction for which this solutions should be evaluated
+    /// * `orders` - the list of orders for which this solution is applicable
+    /// * `solution` - the solution to be evaluated
+    /// * `claimed_objective_value` - the objective value of the provided solution.
     fn submit_solution(
         &self,
         batch_index: U256,
