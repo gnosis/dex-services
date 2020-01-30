@@ -95,13 +95,13 @@ matrix:
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
         - (cd dex-contracts && yarn --frozen-lockfile)
-        - ./test/setup_contracts.sh
+        - ./e2e/tests/utils/setup_contracts.sh
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d driver graph-listener
         - cargo test -p e2e snapp_deposit -- --nocapture
-        - ./test/restart-containers.sh
+        - ./e2e/tests/utils/restart-containers.sh
         - cargo test -p e2e snapp_auction -- --nocapture
-        - ./test/restart-containers.sh
+        - ./e2e/tests/utils/restart-containers.sh
         - cargo test -p e2e snapp_standing -- --nocapture
       after_script:
         - docker-compose logs
