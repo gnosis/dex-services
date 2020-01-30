@@ -90,7 +90,9 @@ where
 pub fn wait_for(web3: &Web3<Http>, seconds: u32) {
     web3.transport()
         .execute("evm_increaseTime", vec![seconds.into()]);
-    web3.transport().execute("evm_mine", vec![]);
+        .wait()
+        .expect();
+    web3.transport().execute("evm_mine", vec![]).wait().expect();
 }
 
 pub fn wait_for_condition<C>(condition: C) -> Result<(), Error>
