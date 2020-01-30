@@ -122,16 +122,23 @@ impl<'a> StableXDriver<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+<<<<<<< HEAD
     use crate::error::ErrorKind;
     use crate::orderbook::tests::StableXOrderBookReadingMock;
     use crate::price_finding::price_finder_interface::tests::PriceFindingMock;
     use crate::solution_submission::tests::StableXSolutionSubmittingMock;
+=======
+    use crate::contracts::stablex_contract::MockStableXContract;
+    use crate::error::ErrorKind;
+    use crate::price_finding::error::{ErrorKind as PriceFindingErrorKind, PriceFindingError};
+    use crate::price_finding::price_finder_interface::MockPriceFinding;
+>>>>>>> Replacing mock-it with mockall
 
     use dfusion_core::models::account_state::test_util::*;
     use dfusion_core::models::order::test_util::create_order_for_test;
     use dfusion_core::models::util::map_from_slice;
 
-    use mock_it::Matcher::{Any, Val};
+    use mockall::predicate::*;
 
     #[test]
     fn invokes_solver_with_reader_data_for_unprocessed_auction() {
@@ -166,9 +173,9 @@ mod tests {
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
         };
-        pf.find_prices
-            .given((orders, state))
-            .will_return(Ok(solution));
+        pf.expect_find_prices()
+            .withf(move |o, s| o == orders.as_slice() && *s == state)
+            .return_const(Ok(solution));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
         assert!(driver.run().unwrap());
@@ -207,9 +214,9 @@ mod tests {
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
         };
-        pf.find_prices
-            .given((orders, state))
-            .will_return(Ok(solution));
+        pf.expect_find_prices()
+            .withf(move |o, s| o == orders.as_slice() && *s == state)
+            .return_const(Ok(solution));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
@@ -262,7 +269,7 @@ mod tests {
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
-        assert!(driver.run().is_err())
+        assert!(driver.run().is_err());
     }
 
     #[test]
@@ -285,10 +292,8 @@ mod tests {
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
+        let mut driver = StableXDriver::new(&contract, &mut pf, metrics);
         assert!(driver.run().is_ok());
-        assert!(!mock_it::verify(
-            pf.find_prices.was_called_with((orders, state))
-        ));
     }
 
     #[test]
@@ -316,9 +321,6 @@ mod tests {
 
         // Second run is skipped
         assert_eq!(driver.run().expect("should have succeeded"), false);
-        assert!(mock_it::verify(
-            pf.find_prices.was_called_with((orders, state)).times(1)
-        ));
     }
 
     #[test]
@@ -340,9 +342,9 @@ mod tests {
             .will_return(Ok((state.clone(), orders.clone())));
 
         let solution = Solution::trivial(orders.len());
-        pf.find_prices
-            .given((orders, state))
-            .will_return(Ok(solution));
+        pf.expect_find_prices()
+            .withf(move |o, s| o == orders.as_slice() && *s == state)
+            .return_const(Ok(solution));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
         assert!(driver.run().is_ok());
@@ -378,14 +380,16 @@ mod tests {
                 ErrorKind::Unknown,
             )));
 
+        contract.expect_submit_solution().times(0);
+
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
         };
-        pf.find_prices
-            .given((orders, state))
-            .will_return(Ok(solution));
+        pf.expect_find_prices()
+            .withf(move |o, s| o == orders.as_slice() && *s == state)
+            .return_const(Ok(solution));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
         assert!(driver.run().is_err());

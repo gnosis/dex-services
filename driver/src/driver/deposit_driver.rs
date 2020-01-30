@@ -54,12 +54,12 @@ pub fn run_deposit_listener(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contracts::snapp_contract::tests::SnappContractMock;
+    use crate::contracts::snapp_contract::MockSnappContract;
     use crate::error::ErrorKind;
-    use dfusion_core::database::tests::DbInterfaceMock;
+    use dfusion_core::database::MockDbInterface;
     use dfusion_core::models;
     use dfusion_core::models::flux::tests::create_flux_for_test;
-    use mock_it::Matcher::*;
+    use mockall::predicate::*;
     use web3::types::{H256, U256};
 
     const NUM_TOKENS: u16 = 30;
@@ -76,47 +76,44 @@ mod tests {
             NUM_TOKENS,
         );
 
-        let contract = SnappContractMock::default();
+        let mut contract = MockSnappContract::default();
         contract
-            .get_current_deposit_slot
-            .given(())
-            .will_return(Ok(slot));
+            .expect_get_current_deposit_slot()
+            .return_const(Ok(slot));
         contract
-            .has_deposit_slot_been_applied
-            .given(slot)
-            .will_return(Ok(false));
+            .expect_has_deposit_slot_been_applied()
+            .with(eq(slot))
+            .return_const(Ok(false));
         contract
-            .has_deposit_slot_been_applied
-            .given(slot - 1)
-            .will_return(Ok(true));
+            .expect_has_deposit_slot_been_applied()
+            .with(eq(slot - 1))
+            .return_const(Ok(true));
         contract
-            .creation_timestamp_for_deposit_slot
-            .given(slot)
-            .will_return(Ok(U256::from(10)));
+            .expect_creation_timestamp_for_deposit_slot()
+            .with(eq(slot))
+            .return_const(Ok(U256::from(10)));
         contract
-            .get_current_block_timestamp
-            .given(())
-            .will_return(Ok(U256::from(200)));
+            .expect_get_current_block_timestamp()
+            .return_const(Ok(U256::from(200)));
         contract
-            .deposit_hash_for_slot
-            .given(slot)
-            .will_return(Ok(deposits.rolling_hash(0)));
+            .expect_deposit_hash_for_slot()
+            .with(eq(slot))
+            .return_const(Ok(deposits.rolling_hash(0)));
         contract
-            .get_current_state_root
-            .given(())
-            .will_return(Ok(state_hash));
+            .expect_get_current_state_root()
+            .return_const(Ok(state_hash));
         contract
-            .apply_deposits
-            .given((slot, Any, Any, Any))
-            .will_return(Ok(()));
+            .expect_apply_deposits()
+            .with(eq(slot), always(), always(), always())
+            .return_const(Ok(()));
 
-        let db = DbInterfaceMock::new();
-        db.get_deposits_of_slot
-            .given(U256::one())
-            .will_return(Ok(deposits));
-        db.get_balances_for_state_root
-            .given(state_hash)
-            .will_return(Ok(state));
+        let mut db = MockDbInterface::new();
+        db.expect_get_deposits_of_slot()
+            .with(eq(U256::one()))
+            .return_const(Ok(deposits));
+        db.expect_get_balances_for_state_root()
+            .with(eq(state_hash))
+            .return_const(Ok(state));
 
         assert_eq!(run_deposit_listener(&db, &contract), Ok(true));
     }
@@ -133,37 +130,34 @@ mod tests {
             NUM_TOKENS,
         );
 
-        let contract = SnappContractMock::default();
+        let mut contract = MockSnappContract::default();
         contract
-            .get_current_state_root
-            .given(())
-            .will_return(Ok(state_hash));
+            .expect_get_current_state_root()
+            .return_const(Ok(state_hash));
         contract
-            .get_current_deposit_slot
-            .given(())
-            .will_return(Ok(slot));
+            .expect_get_current_deposit_slot()
+            .return_const(Ok(slot));
         contract
-            .has_deposit_slot_been_applied
-            .given(slot)
-            .will_return(Ok(true));
+            .expect_has_deposit_slot_been_applied()
+            .with(eq(slot))
+            .return_const(Ok(true));
 
         contract
-            .get_current_block_timestamp
-            .given(())
-            .will_return(Ok(U256::from(11)));
+            .expect_get_current_block_timestamp()
+            .return_const(Ok(U256::from(11)));
         contract
-            .creation_timestamp_for_deposit_slot
-            .given(slot + 1)
-            .will_return(Ok(U256::from(10)));
+            .expect_creation_timestamp_for_deposit_slot()
+            .with(eq(slot + 1))
+            .return_const(Ok(U256::from(10)));
         contract
-            .deposit_hash_for_slot
-            .given(slot + 1)
-            .will_return(Ok(H256::zero()));
+            .expect_deposit_hash_for_slot()
+            .with(eq(slot + 1))
+            .return_const(Ok(H256::zero()));
 
-        let db = DbInterfaceMock::new();
-        db.get_balances_for_state_root
-            .given(state_hash)
-            .will_return(Ok(state));
+        let mut db = MockDbInterface::new();
+        db.expect_get_balances_for_state_root()
+            .with(eq(state_hash))
+            .return_const(Ok(state));
 
         assert_eq!(run_deposit_listener(&db, &contract), Ok(false));
     }
@@ -181,41 +175,38 @@ mod tests {
             NUM_TOKENS,
         );
 
-        let contract = SnappContractMock::default();
+        let mut contract = MockSnappContract::default();
         contract
-            .get_current_state_root
-            .given(())
-            .will_return(Ok(state_hash));
+            .expect_get_current_state_root()
+            .return_const(Ok(state_hash));
         contract
-            .get_current_deposit_slot
-            .given(())
-            .will_return(Ok(slot));
+            .expect_get_current_deposit_slot()
+            .return_const(Ok(slot));
         contract
-            .has_deposit_slot_been_applied
-            .given(slot)
-            .will_return(Ok(false));
+            .expect_has_deposit_slot_been_applied()
+            .with(eq(slot))
+            .return_const(Ok(false));
         contract
-            .has_deposit_slot_been_applied
-            .given(slot - 1)
-            .will_return(Ok(true));
+            .expect_has_deposit_slot_been_applied()
+            .with(eq(slot - 1))
+            .return_const(Ok(true));
 
         contract
-            .creation_timestamp_for_deposit_slot
-            .given(slot)
-            .will_return(Ok(U256::from(10)));
+            .expect_creation_timestamp_for_deposit_slot()
+            .with(eq(slot))
+            .return_const(Ok(U256::from(10)));
         contract
-            .get_current_block_timestamp
-            .given(())
-            .will_return(Ok(U256::from(11)));
+            .expect_get_current_block_timestamp()
+            .return_const(Ok(U256::from(11)));
         contract
-            .deposit_hash_for_slot
-            .given(slot)
-            .will_return(Ok(deposits.rolling_hash(0)));
+            .expect_deposit_hash_for_slot()
+            .with(eq(slot))
+            .return_const(Ok(deposits.rolling_hash(0)));
 
-        let db = DbInterfaceMock::new();
-        db.get_balances_for_state_root
-            .given(state_hash)
-            .will_return(Ok(state));
+        let mut db = MockDbInterface::new();
+        db.expect_get_balances_for_state_root()
+            .with(eq(state_hash))
+            .return_const(Ok(state));
 
         assert_eq!(run_deposit_listener(&db, &contract), Ok(false));
     }
@@ -227,42 +218,39 @@ mod tests {
         let first_deposits = vec![create_flux_for_test(0, 1), create_flux_for_test(0, 2)];
         let second_deposits = vec![create_flux_for_test(1, 1), create_flux_for_test(1, 2)];
 
-        let contract = SnappContractMock::default();
+        let mut contract = MockSnappContract::default();
         contract
-            .get_current_deposit_slot
-            .given(())
-            .will_return(Ok(slot));
+            .expect_get_current_deposit_slot()
+            .return_const(Ok(slot));
 
         contract
-            .has_deposit_slot_been_applied
-            .given(slot)
-            .will_return(Ok(false));
+            .expect_has_deposit_slot_been_applied()
+            .with(eq(slot))
+            .return_const(Ok(false));
         contract
-            .has_deposit_slot_been_applied
-            .given(slot - 1)
-            .will_return(Ok(false));
+            .expect_has_deposit_slot_been_applied()
+            .with(eq(slot - 1))
+            .return_const(Ok(false));
 
         contract
-            .creation_timestamp_for_deposit_slot
-            .given(slot - 1)
-            .will_return(Ok(U256::from(10)));
+            .expect_creation_timestamp_for_deposit_slot()
+            .with(eq(slot - 1))
+            .return_const(Ok(U256::from(10)));
         contract
-            .get_current_block_timestamp
-            .given(())
-            .will_return(Ok(U256::from(200)));
+            .expect_get_current_block_timestamp()
+            .return_const(Ok(U256::from(200)));
         contract
-            .deposit_hash_for_slot
-            .given(slot - 1)
-            .will_return(Ok(second_deposits.rolling_hash(0)));
+            .expect_deposit_hash_for_slot()
+            .with(eq(slot - 1))
+            .return_const(Ok(second_deposits.rolling_hash(0)));
 
         contract
-            .get_current_state_root
-            .given(())
-            .will_return(Ok(state_hash));
+            .expect_get_current_state_root()
+            .return_const(Ok(state_hash));
         contract
-            .apply_deposits
-            .given((slot - 1, Any, Any, Any))
-            .will_return(Ok(()));
+            .expect_apply_deposits()
+            .with(eq(slot - 1), always(), always(), always())
+            .return_const(Ok(()));
 
         let state = models::AccountState::new(
             state_hash,
@@ -271,13 +259,13 @@ mod tests {
             NUM_TOKENS,
         );
 
-        let db = DbInterfaceMock::new();
-        db.get_deposits_of_slot
-            .given(U256::zero())
-            .will_return(Ok(first_deposits));
-        db.get_balances_for_state_root
-            .given(state_hash)
-            .will_return(Ok(state));
+        let mut db = MockDbInterface::new();
+        db.expect_get_deposits_of_slot()
+            .with(eq(U256::zero()))
+            .return_const(Ok(first_deposits));
+        db.expect_get_balances_for_state_root()
+            .with(eq(state_hash))
+            .return_const(Ok(state));
 
         assert_eq!(run_deposit_listener(&db, &contract), Ok(true));
     }
@@ -296,45 +284,42 @@ mod tests {
             NUM_TOKENS,
         );
 
-        let contract = SnappContractMock::default();
+        let mut contract = MockSnappContract::default();
         contract
-            .get_current_deposit_slot
-            .given(())
-            .will_return(Ok(slot));
+            .expect_get_current_deposit_slot()
+            .return_const(Ok(slot));
         contract
-            .has_deposit_slot_been_applied
-            .given(slot)
-            .will_return(Ok(false));
+            .expect_has_deposit_slot_been_applied()
+            .with(eq(slot))
+            .return_const(Ok(false));
         contract
-            .has_deposit_slot_been_applied
-            .given(slot - 1)
-            .will_return(Ok(true));
+            .expect_has_deposit_slot_been_applied()
+            .with(eq(slot - 1))
+            .return_const(Ok(true));
 
         contract
-            .creation_timestamp_for_deposit_slot
-            .given(slot)
-            .will_return(Ok(U256::from(10)));
+            .expect_creation_timestamp_for_deposit_slot()
+            .with(eq(slot))
+            .return_const(Ok(U256::from(10)));
         contract
-            .get_current_block_timestamp
-            .given(())
-            .will_return(Ok(U256::from(200)));
+            .expect_get_current_block_timestamp()
+            .return_const(Ok(U256::from(200)));
 
         contract
-            .deposit_hash_for_slot
-            .given(slot)
-            .will_return(Ok(H256::zero()));
+            .expect_deposit_hash_for_slot()
+            .with(eq(slot))
+            .return_const(Ok(H256::zero()));
         contract
-            .get_current_state_root
-            .given(())
-            .will_return(Ok(state_hash));
+            .expect_get_current_state_root()
+            .return_const(Ok(state_hash));
 
-        let db = DbInterfaceMock::new();
-        db.get_deposits_of_slot
-            .given(U256::one())
-            .will_return(Ok(deposits));
-        db.get_balances_for_state_root
-            .given(state_hash)
-            .will_return(Ok(state));
+        let mut db = MockDbInterface::new();
+        db.expect_get_deposits_of_slot()
+            .with(eq(U256::one()))
+            .return_const(Ok(deposits));
+        db.expect_get_balances_for_state_root()
+            .with(eq(state_hash))
+            .return_const(Ok(state));
 
         let error = run_deposit_listener(&db, &contract).expect_err("Expected Error");
         assert_eq!(error.kind, ErrorKind::StateError);

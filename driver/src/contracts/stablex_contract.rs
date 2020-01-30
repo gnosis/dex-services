@@ -3,6 +3,7 @@ use std::env;
 
 use dfusion_core::models::{AccountState, Order, Solution};
 use lazy_static::lazy_static;
+use mockall::*;
 use web3::transports::EventLoopHandle;
 use web3::types::{H160, U128, U256};
 
@@ -43,6 +44,7 @@ impl BatchExchange {
     }
 }
 
+#[automock]
 pub trait StableXContract {
     fn get_current_auction_index(&self) -> Result<U256>;
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)>;
@@ -207,82 +209,9 @@ fn encode_execution_for_contract(
 
 #[cfg(test)]
 pub mod tests {
-    use mock_it::Matcher;
-    use mock_it::Matcher::*;
-    use mock_it::Mock;
-
-    use dfusion_core::models::BatchInformation;
-
-    use crate::error::ErrorKind;
-
     use super::*;
     use dfusion_core::models::util::map_from_slice;
-
-    type GetSolutionObjectiveValueArguments = (U256, Matcher<Vec<Order>>, Matcher<Solution>);
-    type SubmitSolutionArguments = (U256, Matcher<Vec<Order>>, Matcher<Solution>, Matcher<U256>);
-
-    #[derive(Clone)]
-    pub struct StableXContractMock {
-        pub get_current_auction_index: Mock<(), Result<U256>>,
-        pub get_auction_data: Mock<U256, Result<(AccountState, Vec<Order>)>>,
-        pub get_solution_objective_value: Mock<GetSolutionObjectiveValueArguments, Result<U256>>,
-        pub submit_solution: Mock<SubmitSolutionArguments, Result<()>>,
-    }
-
-    impl Default for StableXContractMock {
-        fn default() -> StableXContractMock {
-            StableXContractMock {
-                get_current_auction_index: Mock::new(Err(DriverError::new(
-                    "Unexpected call to get_current_auction_index",
-                    ErrorKind::Unknown,
-                ))),
-                get_auction_data: Mock::new(Err(DriverError::new(
-                    "Unexpected call to get_auction_data",
-                    ErrorKind::Unknown,
-                ))),
-                get_solution_objective_value: Mock::new(Err(DriverError::new(
-                    "Unexpected call to get_solution_objective_value",
-                    ErrorKind::Unknown,
-                ))),
-                submit_solution: Mock::new(Err(DriverError::new(
-                    "Unexpected call to submit_solution",
-                    ErrorKind::Unknown,
-                ))),
-            }
-        }
-    }
-
-    impl StableXContract for StableXContractMock {
-        fn get_current_auction_index(&self) -> Result<U256> {
-            self.get_current_auction_index.called(())
-        }
-        fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
-            self.get_auction_data.called(index)
-        }
-        fn get_solution_objective_value(
-            &self,
-            batch_index: U256,
-            orders: Vec<Order>,
-            solution: Solution,
-        ) -> Result<U256> {
-            self.get_solution_objective_value
-                .called((batch_index, Val(orders), Val(solution)))
-        }
-        fn submit_solution(
-            &self,
-            batch_index: U256,
-            orders: Vec<Order>,
-            solution: Solution,
-            claimed_objective_value: U256,
-        ) -> Result<()> {
-            self.submit_solution.called((
-                batch_index,
-                Val(orders),
-                Val(solution),
-                Val(claimed_objective_value),
-            ))
-        }
-    }
+    use dfusion_core::models::BatchInformation;
 
     #[test]
     #[should_panic]

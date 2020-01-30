@@ -1,4 +1,5 @@
 use dfusion_core::models;
+use mockall::automock;
 
 use super::error::PriceFindingError;
 
@@ -18,6 +19,7 @@ impl Default for Fee {
     }
 }
 
+#[automock]
 pub trait PriceFinding {
     fn find_prices(
         &self,
@@ -28,39 +30,9 @@ pub trait PriceFinding {
 
 #[cfg(test)]
 pub mod tests {
-    use super::super::error::ErrorKind;
     use super::*;
     use dfusion_core::models::util::map_from_slice;
     use dfusion_core::models::Serializable;
-    use mock_it::Mock;
-
-    pub struct PriceFindingMock {
-        pub find_prices: Mock<
-            (Vec<models::Order>, models::AccountState),
-            Result<models::Solution, PriceFindingError>,
-        >,
-    }
-
-    impl Default for PriceFindingMock {
-        fn default() -> PriceFindingMock {
-            PriceFindingMock {
-                find_prices: Mock::new(Err(PriceFindingError::new(
-                    "Unexpected call to find_prices",
-                    ErrorKind::Unknown,
-                ))),
-            }
-        }
-    }
-
-    impl PriceFinding for PriceFindingMock {
-        fn find_prices(
-            &self,
-            orders: &[models::Order],
-            state: &models::AccountState,
-        ) -> Result<models::Solution, PriceFindingError> {
-            self.find_prices.called((orders.to_vec(), state.to_owned()))
-        }
-    }
 
     #[test]
     fn test_serialize_solution() {

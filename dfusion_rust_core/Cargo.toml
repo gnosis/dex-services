@@ -11,7 +11,7 @@ graph = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.17.0" }
 graph-node-reader = { git = "https://github.com/gnosis/graph-node-reader", tag = "v0.17.0" }
 lazy_static = "1.4.0"
 log = "0.4.8"
-mock-it = "0.3.0"
+mockall = "0.6.0"
 serde_derive = "1.0"
 serde = "1.0"
 sha2 = "0.8.1"
