@@ -403,8 +403,7 @@ fn snapp_standing_order() {
     wait_for_condition(|| {
         // This slot already contains something.
         let standing_orders = db.get_standing_orders_of_slot(&U256::from(2)).unwrap();
-        println!("Orders at 0 {:?}", standing_orders[0]);
-        println!("Orders at 0 {:?}", standing_orders[1]);
+        // TODO - this seems incorrect.
         standing_orders[0].get_orders()[0].buy_token == 0
     })
     .expect("Didn't detect order deletion");
