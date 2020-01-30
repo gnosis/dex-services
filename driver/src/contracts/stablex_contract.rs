@@ -3,7 +3,8 @@ use std::env;
 
 use dfusion_core::models::{AccountState, Order, Solution};
 use lazy_static::lazy_static;
-use mockall::*;
+#[cfg(test)]
+use mockall::automock;
 use web3::transports::EventLoopHandle;
 use web3::types::{H160, U128, U256};
 
@@ -44,7 +45,7 @@ impl BatchExchange {
     }
 }
 
-#[automock]
+#[cfg_attr(test, automock)]
 pub trait StableXContract {
     fn get_current_auction_index(&self) -> Result<U256>;
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)>;

@@ -1,4 +1,5 @@
 use log::{debug, info};
+#[cfg(test)]
 use mockall::automock;
 use std::env;
 use web3::api::Web3;
@@ -59,7 +60,7 @@ where
     }
 }
 
-#[automock]
+#[cfg_attr(test, automock)]
 pub trait SnappContract {
     // General Blockchain interface
     fn get_current_block_timestamp(&self) -> Result<U256>;

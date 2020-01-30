@@ -1,4 +1,5 @@
 use dfusion_core::models;
+#[cfg(test)]
 use mockall::automock;
 
 use super::error::PriceFindingError;
@@ -19,7 +20,7 @@ impl Default for Fee {
     }
 }
 
-#[automock]
+#[cfg_attr(test, automock)]
 pub trait PriceFinding {
     fn find_prices(
         &self,

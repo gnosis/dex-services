@@ -36,6 +36,8 @@ slog-stdlog = "4.0.0"
 slog-term = "2.5.0"
 thiserror = "1.0"
 web3 = "0.8.0"
+
+[dev-dependencies]
 mockall = "0.6.0"
 
 [build-dependencies]
