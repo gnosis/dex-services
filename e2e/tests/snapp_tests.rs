@@ -307,7 +307,7 @@ fn snapp_standing_order() {
     .expect("Couldn't recover standing order from DB");
     let standing_orders = db.get_standing_orders_of_slot(&U256::zero()).unwrap();
     let orders = standing_orders[0].get_orders();
-    println!("    Standing Order: {:#?}", orders[0]);
+    println!("Standing Order:\n{:#?}", orders[0]);
 
     assert_eq!(orders[0].sell_amount, 1_000_000_000_000_000_000u128);
     assert_eq!(orders[0].buy_amount, 1_000_000_000_000_000_000u128);
@@ -387,7 +387,7 @@ fn snapp_standing_order() {
     .expect("Couldn't recover standing order from DB");
     let standing_orders = db.get_standing_orders_of_slot(&U256::from(2)).unwrap();
     let orders = standing_orders[0].get_orders();
-    println!("    Updated Standing Order - {:#?}", orders[0]);
+    println!("Updated Standing Order:\n{:#?}", orders[0]);
     assert_eq!(orders[0].sell_amount, 2_000_000_000_000_000_000u128);
     assert_eq!(orders[0].buy_amount, 1_000_000_000_000_000_000u128);
     assert_eq!(orders[0].buy_token, 1);
@@ -413,7 +413,7 @@ fn snapp_standing_order() {
     .expect("Didn't detect order deletion");
     let standing_orders = db.get_standing_orders_of_slot(&U256::from(2)).unwrap();
     let orders = standing_orders[0].get_orders();
-    println!("    Deleted Standing Order - {:#?}", orders[0]);
+    println!("Deleted Standing Order:\n{:#?}", orders[0]);
 
     println!("Place, yet, another matching sell order for standing order");
     instance
