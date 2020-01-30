@@ -101,27 +101,9 @@ matrix:
         - cargo test -p e2e snapp_deposit -- --nocapture
         - ./test/restart-containers.sh
         - cargo test -p e2e snapp_auction -- --nocapture
+        - ./test/restart-containers.sh
+        - cargo test -p e2e snapp_standing -- --nocapture
       after_script:
-        - docker-compose logs
-    - language: generic
-      name: "dƒusion e2e tests (Legacy - Bash Scripts)"
-      cache:
-        directories:
-          - $HOME/.cache/yarn
-          - $HOME/.cache/node-gyp
-      before_install:
-        - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
-      install:
-        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
-        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
-        - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
-        - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
-        - (cd dex-contracts && yarn --frozen-lockfile)
-        - ./test/setup_contracts.sh
-      script:
-        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d driver graph-listener
-        - ./test/e2e-tests-standing-order.sh
-      after_failure:
         - docker-compose logs
     - language: rust
       name: "StableX e2e Tests (Ganache)"
