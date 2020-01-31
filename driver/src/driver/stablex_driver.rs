@@ -432,7 +432,60 @@ mod tests {
                 "get_solution_objective_value failed",
                 ErrorKind::Unknown,
             )));
-        submitter.expect_submit_solution().times(0);
+
+        let solution = Solution {
+            prices: map_from_slice(&[(0, 1), (1, 2)]),
+            executed_sell_amounts: vec![0, 2],
+            executed_buy_amounts: vec![0, 2],
+        };
+        pf.expect_find_prices()
+            .withf(move |o, s| o == orders.as_slice() && *s == state)
+            .return_const(Ok(solution));
+
+        let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
+
+        // First run fails
+        assert!(driver.run().is_err());
+
+        // Second run is skipped
+        assert_eq!(driver.run().expect("should have succeeded"), false);
+    }
+
+    #[test]
+    fn test_do_not_invoke_solver_when_submission_previously_failed() {
+        let mut reader = MockStableXOrderBookReading::default();
+        let mut submitter = MockStableXSolutionSubmitting::default();
+        let mut pf = MockPriceFinding::default();
+        let metrics = StableXMetrics::default();
+
+        let orders = vec![create_order_for_test(), create_order_for_test()];
+        let state = create_account_state_with_balance_for(&orders);
+
+        let batch = U256::from(42);
+        reader.expect_get_auction_index().return_const(Ok(batch));
+
+        reader
+            .expect_get_auction_data()
+            .with(eq(batch))
+            .return_const(Ok((state.clone(), orders.clone())));
+
+        submitter
+            .expect_get_solution_objective_value()
+            .with(eq(batch), eq(orders.clone()), always())
+            .return_const(Ok(U256::from(1337)));
+
+        submitter
+            .expect_submit_solution()
+            .with(
+                eq(batch),
+                eq(orders.clone()),
+                always(),
+                eq(U256::from(1337)),
+            )
+            .return_const(Err(DriverError::new(
+                "submit_solution failed",
+                ErrorKind::Unknown,
+            )));
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
