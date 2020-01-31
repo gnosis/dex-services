@@ -57,6 +57,8 @@ impl<'a> StableXDriver<'a> {
             .auction_orders_fetched(batch_to_solve, &get_auction_data_result);
         let (account_state, orders) = get_auction_data_result?;
 
+        self.past_auctions.insert(batch_to_solve);
+
         let solution = if orders.is_empty() {
             info!("No orders in batch {}", batch_to_solve);
             Solution::trivial(0)
@@ -64,16 +66,11 @@ impl<'a> StableXDriver<'a> {
             let price_finder_result = self.price_finder.find_prices(&orders, &account_state);
             self.metrics
                 .auction_solution_computed(batch_to_solve, &orders, &price_finder_result);
-            match price_finder_result {
-                Ok(solution) => {
-                    info!("Computed solution: {:?}", &solution);
-                    solution
-                }
-                Err(err) => {
-                    self.past_auctions.insert(batch_to_solve);
-                    return Err(err.into());
-                }
-            }
+
+            let solution = price_finder_result?;
+            info!("Computed solution: {:?}", &solution);
+
+            solution
         };
 
         let submitted = if solution.is_non_trivial() {
