@@ -4,13 +4,13 @@ use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use web3::types::{H160, U256};
 
-/// Data structure to specify what type orders to filter
+/// Data structure to specify what type of orders to filter
 #[derive(Debug, Default, Deserialize, PartialEq, Eq)]
 pub struct OrderbookFilter {
     /// The token ids that should be filtered/
     tokens: HashSet<u16>,
 
-    /// User addresses and which of their orders to filter
+    /// User addresses mapped to which of their orders to filter
     users: HashMap<H160, UserOrderFilter>,
 }
 
