@@ -71,13 +71,13 @@ mod test {
 
     #[test]
     fn test_filter_deserialization() {
-        let json = "{
-            \"tokens\": [1,2], 
-            \"users\": {
-                \"0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A\": {\"OrderIds\": [0,1]}
-                \"0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B\": \"All\",
+        let json = r#"{
+            "tokens": [1,2], 
+            "users": {
+                "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A": {"OrderIds": [0,1]},
+                "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B": "All"
             }
-        }";
+        }"#;
         let filter = OrderbookFilter {
             tokens: [1, 2].iter().copied().collect(),
             users: [
