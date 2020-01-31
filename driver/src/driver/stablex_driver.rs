@@ -111,7 +111,6 @@ impl<'a> StableXDriver<'a> {
             self.metrics.auction_skipped(batch_to_solve);
             false
         };
-        self.past_auctions.insert(batch_to_solve);
         Ok(submitted)
     }
 }
