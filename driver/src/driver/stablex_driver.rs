@@ -1,7 +1,8 @@
-use crate::contracts::stablex_contract::StableXContract;
 use crate::error::DriverError;
 use crate::metrics::StableXMetrics;
+use crate::orderbook::StableXOrderBookReading;
 use crate::price_finding::PriceFinding;
+use crate::solution_submission::StableXSolutionSubmitting;
 
 use dfusion_core::models::Solution;
 
@@ -13,31 +14,31 @@ use web3::types::U256;
 
 pub struct StableXDriver<'a> {
     past_auctions: HashSet<U256>,
-    contract: &'a dyn StableXContract,
     price_finder: &'a mut dyn PriceFinding,
+    orderbook_reader: &'a dyn StableXOrderBookReading,
+    solution_submitter: &'a dyn StableXSolutionSubmitting,
     metrics: StableXMetrics,
 }
 
 impl<'a> StableXDriver<'a> {
     pub fn new(
-        contract: &'a dyn StableXContract,
         price_finder: &'a mut dyn PriceFinding,
+        orderbook_reader: &'a dyn StableXOrderBookReading,
+        solution_submitter: &'a dyn StableXSolutionSubmitting,
         metrics: StableXMetrics,
     ) -> Self {
         StableXDriver {
             past_auctions: HashSet::new(),
-            contract,
             price_finder,
+            orderbook_reader,
+            solution_submitter,
             metrics,
         }
     }
 
     pub fn run(&mut self) -> Result<bool, DriverError> {
         // Try to process previous batch auction
-        let batch_to_solve_result = self
-            .contract
-            .get_current_auction_index()
-            .map(|batch_collecting_orders| batch_collecting_orders - 1);
+        let batch_to_solve_result = self.orderbook_reader.get_auction_index();
 
         if batch_to_solve_result
             .as_ref()
@@ -51,7 +52,7 @@ impl<'a> StableXDriver<'a> {
             .auction_processing_started(&batch_to_solve_result);
         let batch_to_solve = batch_to_solve_result?;
 
-        let get_auction_data_result = self.contract.get_auction_data(batch_to_solve);
+        let get_auction_data_result = self.orderbook_reader.get_auction_data(batch_to_solve);
         self.metrics
             .auction_orders_fetched(batch_to_solve, &get_auction_data_result);
         let (account_state, orders) = get_auction_data_result?;
@@ -76,11 +77,11 @@ impl<'a> StableXDriver<'a> {
         };
 
         let submitted = if solution.is_non_trivial() {
-            // NOTE: in retrieving the objective value from the contract the
+            // NOTE: in retrieving the objective value from the reader the
             //   solution gets validated, ensured that it is better than the
             //   latest submitted solution, and that solutions are still being
             //   accepted for this batch ID.
-            let verification_result = self.contract.get_solution_objective_value(
+            let verification_result = self.solution_submitter.get_solution_objective_value(
                 batch_to_solve,
                 orders.clone(),
                 solution.clone(),
@@ -93,9 +94,12 @@ impl<'a> StableXDriver<'a> {
                 "Verified solution with objective value: {}",
                 objective_value
             );
-            let submission_result =
-                self.contract
-                    .submit_solution(batch_to_solve, orders, solution, objective_value);
+            let submission_result = self.solution_submitter.submit_solution(
+                batch_to_solve,
+                orders,
+                solution,
+                objective_value,
+            );
             self.metrics
                 .auction_solution_submitted(batch_to_solve, &submission_result);
             submission_result?;
@@ -118,9 +122,10 @@ impl<'a> StableXDriver<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contracts::stablex_contract::tests::StableXContractMock;
     use crate::error::ErrorKind;
+    use crate::orderbook::tests::StableXOrderBookReadingMock;
     use crate::price_finding::price_finder_interface::tests::PriceFindingMock;
+    use crate::solution_submission::tests::StableXSolutionSubmittingMock;
 
     use dfusion_core::models::account_state::test_util::*;
     use dfusion_core::models::order::test_util::create_order_for_test;
@@ -129,8 +134,9 @@ mod tests {
     use mock_it::Matcher::{Any, Val};
 
     #[test]
-    fn invokes_solver_with_contract_data_for_unprocessed_auction() {
-        let contract = StableXContractMock::default();
+    fn invokes_solver_with_reader_data_for_unprocessed_auction() {
+        let reader = StableXOrderBookReadingMock::default();
+        let submitter = StableXSolutionSubmittingMock::default();
         let mut pf = PriceFindingMock::default();
         let metrics = StableXMetrics::default();
 
@@ -138,24 +144,21 @@ mod tests {
         let state = create_account_state_with_balance_for(&orders);
 
         let batch = U256::from(42);
-        contract
-            .get_current_auction_index
-            .given(())
-            .will_return(Ok(batch));
+        reader.get_auction_index.given(()).will_return(Ok(batch));
 
-        contract
+        reader
             .get_auction_data
-            .given(batch - 1)
+            .given(batch)
             .will_return(Ok((state.clone(), orders.clone())));
 
-        contract
+        submitter
             .get_solution_objective_value
-            .given((batch - 1, Val(orders.clone()), Any))
+            .given((batch, Val(orders.clone()), Any))
             .will_return(Ok(U256::from(1337)));
 
-        contract
+        submitter
             .submit_solution
-            .given((batch - 1, Val(orders.clone()), Any, Val(U256::from(1337))))
+            .given((batch, Val(orders.clone()), Any, Val(U256::from(1337))))
             .will_return(Ok(()));
 
         let solution = Solution {
@@ -167,13 +170,14 @@ mod tests {
             .given((orders, state))
             .will_return(Ok(solution));
 
-        let mut driver = StableXDriver::new(&contract, &mut pf, metrics);
+        let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
         assert!(driver.run().unwrap());
     }
 
     #[test]
     fn does_not_process_previously_processed_auction_again() {
-        let contract = StableXContractMock::default();
+        let reader = StableXOrderBookReadingMock::default();
+        let submitter = StableXSolutionSubmittingMock::default();
         let mut pf = PriceFindingMock::default();
         let metrics = StableXMetrics::default();
 
@@ -181,24 +185,21 @@ mod tests {
         let state = create_account_state_with_balance_for(&orders);
 
         let batch = U256::from(42);
-        contract
-            .get_current_auction_index
-            .given(())
-            .will_return(Ok(batch));
+        reader.get_auction_index.given(()).will_return(Ok(batch));
 
-        contract
+        reader
             .get_auction_data
-            .given(batch - 1)
+            .given(batch)
             .will_return(Ok((state.clone(), orders.clone())));
 
-        contract
+        submitter
             .get_solution_objective_value
-            .given((batch - 1, Val(orders.clone()), Any))
+            .given((batch, Val(orders.clone()), Any))
             .will_return(Ok(U256::from(1337)));
 
-        contract
+        submitter
             .submit_solution
-            .given((batch - 1, Val(orders.clone()), Any, Val(U256::from(1337))))
+            .given((batch, Val(orders.clone()), Any, Val(U256::from(1337))))
             .will_return(Ok(()));
 
         let solution = Solution {
@@ -210,7 +211,7 @@ mod tests {
             .given((orders, state))
             .will_return(Ok(solution));
 
-        let mut driver = StableXDriver::new(&contract, &mut pf, metrics);
+        let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
         // First auction
         assert_eq!(driver.run().unwrap(), true);
@@ -220,19 +221,21 @@ mod tests {
     }
 
     #[test]
-    fn test_errors_on_failing_contract() {
-        let contract = StableXContractMock::default();
+    fn test_errors_on_failing_reader() {
+        let reader = StableXOrderBookReadingMock::default();
+        let submitter = StableXSolutionSubmittingMock::default();
         let mut pf = PriceFindingMock::default();
         let metrics = StableXMetrics::default();
 
-        let mut driver = StableXDriver::new(&contract, &mut pf, metrics);
+        let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
         assert!(driver.run().is_err())
     }
 
     #[test]
     fn test_errors_on_failing_price_finder() {
-        let contract = StableXContractMock::default();
+        let reader = StableXOrderBookReadingMock::default();
+        let submitter = StableXSolutionSubmittingMock::default();
         let mut pf = PriceFindingMock::default();
         let metrics = StableXMetrics::default();
 
@@ -240,34 +243,32 @@ mod tests {
         let state = create_account_state_with_balance_for(&orders);
 
         let batch = U256::from(42);
-        contract
-            .get_current_auction_index
-            .given(())
-            .will_return(Ok(batch));
+        reader.get_auction_index.given(()).will_return(Ok(batch));
 
-        contract
+        reader
             .get_auction_data
-            .given(batch - 1)
+            .given(batch)
             .will_return(Ok((state, orders.clone())));
 
-        contract
+        submitter
             .get_solution_objective_value
-            .given((batch - 1, Val(orders.clone()), Any))
+            .given((batch, Val(orders.clone()), Any))
             .will_return(Ok(U256::from(1337)));
 
-        contract
+        submitter
             .submit_solution
-            .given((batch - 1, Val(orders), Any, Val(U256::from(1337))))
+            .given((batch, Val(orders), Any, Val(U256::from(1337))))
             .will_return(Ok(()));
 
-        let mut driver = StableXDriver::new(&contract, &mut pf, metrics);
+        let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
         assert!(driver.run().is_err())
     }
 
     #[test]
     fn test_do_not_invoke_solver_when_no_orders() {
-        let contract = StableXContractMock::default();
+        let reader = StableXOrderBookReadingMock::default();
+        let submitter = StableXSolutionSubmittingMock::default();
         let mut pf = PriceFindingMock::default();
         let metrics = StableXMetrics::default();
 
@@ -275,17 +276,14 @@ mod tests {
         let state = create_account_state_with_balance_for(&orders);
 
         let batch = U256::from(42);
-        contract
-            .get_current_auction_index
-            .given(())
-            .will_return(Ok(batch));
+        reader.get_auction_index.given(()).will_return(Ok(batch));
 
-        contract
+        reader
             .get_auction_data
-            .given(batch - 1)
+            .given(batch)
             .will_return(Ok((state.clone(), orders.clone())));
 
-        let mut driver = StableXDriver::new(&contract, &mut pf, metrics);
+        let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
         assert!(driver.run().is_ok());
         assert!(!mock_it::verify(
@@ -295,7 +293,8 @@ mod tests {
 
     #[test]
     fn test_do_not_invoke_solver_when_previously_failed() {
-        let contract = StableXContractMock::default();
+        let reader = StableXOrderBookReadingMock::default();
+        let submitter = StableXSolutionSubmittingMock::default();
         let mut pf = PriceFindingMock::default();
         let metrics = StableXMetrics::default();
 
@@ -303,17 +302,14 @@ mod tests {
         let state = create_account_state_with_balance_for(&orders);
 
         let batch = U256::from(42);
-        contract
-            .get_current_auction_index
-            .given(())
-            .will_return(Ok(batch));
+        reader.get_auction_index.given(()).will_return(Ok(batch));
 
-        contract
+        reader
             .get_auction_data
-            .given(batch - 1)
+            .given(batch)
             .will_return(Ok((state.clone(), orders.clone())));
 
-        let mut driver = StableXDriver::new(&contract, &mut pf, metrics);
+        let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
         // First run fails
         assert!(driver.run().is_err());
@@ -327,7 +323,8 @@ mod tests {
 
     #[test]
     fn test_does_not_submit_empty_solution() {
-        let contract = StableXContractMock::default();
+        let reader = StableXOrderBookReadingMock::default();
+        let submitter = StableXSolutionSubmittingMock::default();
         let mut pf = PriceFindingMock::default();
         let metrics = StableXMetrics::default();
 
@@ -335,14 +332,11 @@ mod tests {
         let state = create_account_state_with_balance_for(&orders);
 
         let batch = U256::from(42);
-        contract
-            .get_current_auction_index
-            .given(())
-            .will_return(Ok(batch));
+        reader.get_auction_index.given(()).will_return(Ok(batch));
 
-        contract
+        reader
             .get_auction_data
-            .given(batch - 1)
+            .given(batch)
             .will_return(Ok((state.clone(), orders.clone())));
 
         let solution = Solution::trivial(orders.len());
@@ -350,17 +344,18 @@ mod tests {
             .given((orders, state))
             .will_return(Ok(solution));
 
-        let mut driver = StableXDriver::new(&contract, &mut pf, metrics);
+        let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
         assert!(driver.run().is_ok());
         assert!(!mock_it::verify(
-            contract
+            submitter
                 .submit_solution
-                .was_called_with((batch - 1, Any, Any, Any))
+                .was_called_with((batch, Any, Any, Any))
         ));
     }
     #[test]
     fn test_does_not_submit_solution_for_which_validation_failed() {
-        let contract = StableXContractMock::default();
+        let reader = StableXOrderBookReadingMock::default();
+        let submitter = StableXSolutionSubmittingMock::default();
         let mut pf = PriceFindingMock::default();
         let metrics = StableXMetrics::default();
 
@@ -368,19 +363,16 @@ mod tests {
         let state = create_account_state_with_balance_for(&orders);
 
         let batch = U256::from(42);
-        contract
-            .get_current_auction_index
-            .given(())
-            .will_return(Ok(batch));
+        reader.get_auction_index.given(()).will_return(Ok(batch));
 
-        contract
+        reader
             .get_auction_data
-            .given(batch - 1)
+            .given(batch)
             .will_return(Ok((state.clone(), orders.clone())));
 
-        contract
+        submitter
             .get_solution_objective_value
-            .given((batch - 1, Val(orders.clone()), Any))
+            .given((batch, Val(orders.clone()), Any))
             .will_return(Err(DriverError::new(
                 "get_solution_objective_value failed",
                 ErrorKind::Unknown,
@@ -395,12 +387,12 @@ mod tests {
             .given((orders, state))
             .will_return(Ok(solution));
 
-        let mut driver = StableXDriver::new(&contract, &mut pf, metrics);
+        let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
         assert!(driver.run().is_err());
         assert!(!mock_it::verify(
-            contract
+            submitter
                 .submit_solution
-                .was_called_with((batch - 1, Any, Any, Any))
+                .was_called_with((batch, Any, Any, Any))
         ));
     }
 }

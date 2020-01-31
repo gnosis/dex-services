@@ -21,8 +21,10 @@ pub mod driver;
 pub mod error;
 pub mod logging;
 pub mod metrics;
+pub mod orderbook;
 pub mod price_finding;
 pub mod snapp;
+pub mod solution_submission;
 pub mod transport;
 pub mod util;
 
