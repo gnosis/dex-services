@@ -7,6 +7,10 @@ use mockall::automock;
 
 use web3::types::U256;
 
+mod filtered_orderbook;
+pub use filtered_orderbook::FilteredOrderbookReader;
+pub use filtered_orderbook::OrderbookFilter;
+
 type Result<T> = std::result::Result<T, DriverError>;
 
 #[cfg_attr(test, automock)]
