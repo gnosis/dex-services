@@ -123,52 +123,58 @@ impl<'a> StableXDriver<'a> {
 mod tests {
     use super::*;
     use crate::error::ErrorKind;
-    use crate::orderbook::tests::StableXOrderBookReadingMock;
-    use crate::price_finding::price_finder_interface::tests::PriceFindingMock;
-    use crate::solution_submission::tests::StableXSolutionSubmittingMock;
+    use crate::orderbook::MockStableXOrderBookReading;
+    use crate::price_finding::error::{ErrorKind as PriceFindingErrorKind, PriceFindingError};
+    use crate::price_finding::price_finder_interface::MockPriceFinding;
+    use crate::solution_submission::MockStableXSolutionSubmitting;
 
     use dfusion_core::models::account_state::test_util::*;
     use dfusion_core::models::order::test_util::create_order_for_test;
     use dfusion_core::models::util::map_from_slice;
 
-    use mock_it::Matcher::{Any, Val};
+    use mockall::predicate::*;
 
     #[test]
     fn invokes_solver_with_reader_data_for_unprocessed_auction() {
-        let reader = StableXOrderBookReadingMock::default();
-        let submitter = StableXSolutionSubmittingMock::default();
-        let mut pf = PriceFindingMock::default();
+        let mut reader = MockStableXOrderBookReading::default();
+        let mut submitter = MockStableXSolutionSubmitting::default();
+        let mut pf = MockPriceFinding::default();
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
         let state = create_account_state_with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.get_auction_index.given(()).will_return(Ok(batch));
+        reader.expect_get_auction_index().return_const(Ok(batch));
 
         reader
-            .get_auction_data
-            .given(batch)
-            .will_return(Ok((state.clone(), orders.clone())));
+            .expect_get_auction_data()
+            .with(eq(batch))
+            .return_const(Ok((state.clone(), orders.clone())));
 
         submitter
-            .get_solution_objective_value
-            .given((batch, Val(orders.clone()), Any))
-            .will_return(Ok(U256::from(1337)));
+            .expect_get_solution_objective_value()
+            .with(eq(batch), eq(orders.clone()), always())
+            .return_const(Ok(U256::from(1337)));
 
         submitter
-            .submit_solution
-            .given((batch, Val(orders.clone()), Any, Val(U256::from(1337))))
-            .will_return(Ok(()));
+            .expect_submit_solution()
+            .with(
+                eq(batch),
+                eq(orders.clone()),
+                always(),
+                eq(U256::from(1337)),
+            )
+            .return_const(Ok(()));
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
         };
-        pf.find_prices
-            .given((orders, state))
-            .will_return(Ok(solution));
+        pf.expect_find_prices()
+            .withf(move |o, s| o == orders.as_slice() && *s == state)
+            .return_const(Ok(solution));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
         assert!(driver.run().unwrap());
@@ -176,40 +182,45 @@ mod tests {
 
     #[test]
     fn does_not_process_previously_processed_auction_again() {
-        let reader = StableXOrderBookReadingMock::default();
-        let submitter = StableXSolutionSubmittingMock::default();
-        let mut pf = PriceFindingMock::default();
+        let mut reader = MockStableXOrderBookReading::default();
+        let mut submitter = MockStableXSolutionSubmitting::default();
+        let mut pf = MockPriceFinding::default();
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
         let state = create_account_state_with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.get_auction_index.given(()).will_return(Ok(batch));
+        reader.expect_get_auction_index().return_const(Ok(batch));
 
         reader
-            .get_auction_data
-            .given(batch)
-            .will_return(Ok((state.clone(), orders.clone())));
+            .expect_get_auction_data()
+            .with(eq(batch))
+            .return_const(Ok((state.clone(), orders.clone())));
 
         submitter
-            .get_solution_objective_value
-            .given((batch, Val(orders.clone()), Any))
-            .will_return(Ok(U256::from(1337)));
+            .expect_get_solution_objective_value()
+            .with(eq(batch), eq(orders.clone()), always())
+            .return_const(Ok(U256::from(1337)));
 
         submitter
-            .submit_solution
-            .given((batch, Val(orders.clone()), Any, Val(U256::from(1337))))
-            .will_return(Ok(()));
+            .expect_submit_solution()
+            .with(
+                eq(batch),
+                eq(orders.clone()),
+                always(),
+                eq(U256::from(1337)),
+            )
+            .return_const(Ok(()));
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
         };
-        pf.find_prices
-            .given((orders, state))
-            .will_return(Ok(solution));
+        pf.expect_find_prices()
+            .withf(move |o, s| o == orders.as_slice() && *s == state)
+            .return_const(Ok(solution));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
@@ -222,10 +233,14 @@ mod tests {
 
     #[test]
     fn test_errors_on_failing_reader() {
-        let reader = StableXOrderBookReadingMock::default();
-        let submitter = StableXSolutionSubmittingMock::default();
-        let mut pf = PriceFindingMock::default();
+        let mut reader = MockStableXOrderBookReading::default();
+        let submitter = MockStableXSolutionSubmitting::default();
+        let mut pf = MockPriceFinding::default();
         let metrics = StableXMetrics::default();
+
+        reader
+            .expect_get_auction_index()
+            .return_const(Err(DriverError::new("Error", ErrorKind::Unknown)));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
@@ -234,80 +249,88 @@ mod tests {
 
     #[test]
     fn test_errors_on_failing_price_finder() {
-        let reader = StableXOrderBookReadingMock::default();
-        let submitter = StableXSolutionSubmittingMock::default();
-        let mut pf = PriceFindingMock::default();
+        let mut reader = MockStableXOrderBookReading::default();
+        let mut submitter = MockStableXSolutionSubmitting::default();
+        let mut pf = MockPriceFinding::default();
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
         let state = create_account_state_with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.get_auction_index.given(()).will_return(Ok(batch));
+        reader.expect_get_auction_index().return_const(Ok(batch));
 
         reader
-            .get_auction_data
-            .given(batch)
-            .will_return(Ok((state, orders.clone())));
+            .expect_get_auction_data()
+            .with(eq(batch))
+            .return_const(Ok((state, orders.clone())));
 
         submitter
-            .get_solution_objective_value
-            .given((batch, Val(orders.clone()), Any))
-            .will_return(Ok(U256::from(1337)));
+            .expect_get_solution_objective_value()
+            .with(eq(batch), eq(orders.clone()), always())
+            .return_const(Ok(U256::from(1337)));
 
         submitter
-            .submit_solution
-            .given((batch, Val(orders), Any, Val(U256::from(1337))))
-            .will_return(Ok(()));
+            .expect_submit_solution()
+            .with(eq(batch), eq(orders), always(), eq(U256::from(1337)))
+            .return_const(Ok(()));
+
+        pf.expect_find_prices()
+            .return_const(Err(PriceFindingError::new(
+                "Error",
+                PriceFindingErrorKind::Unknown,
+            )));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
-        assert!(driver.run().is_err())
+        assert!(driver.run().is_err());
     }
 
     #[test]
     fn test_do_not_invoke_solver_when_no_orders() {
-        let reader = StableXOrderBookReadingMock::default();
-        let submitter = StableXSolutionSubmittingMock::default();
-        let mut pf = PriceFindingMock::default();
+        let mut reader = MockStableXOrderBookReading::default();
+        let submitter = MockStableXSolutionSubmitting::default();
+        let mut pf = MockPriceFinding::default();
         let metrics = StableXMetrics::default();
 
         let orders = vec![];
         let state = create_account_state_with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.get_auction_index.given(()).will_return(Ok(batch));
+        reader.expect_get_auction_index().return_const(Ok(batch));
 
         reader
-            .get_auction_data
-            .given(batch)
-            .will_return(Ok((state.clone(), orders.clone())));
+            .expect_get_auction_data()
+            .with(eq(batch))
+            .return_const(Ok((state, orders)));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
-
         assert!(driver.run().is_ok());
-        assert!(!mock_it::verify(
-            pf.find_prices.was_called_with((orders, state))
-        ));
     }
 
     #[test]
     fn test_do_not_invoke_solver_when_previously_failed() {
-        let reader = StableXOrderBookReadingMock::default();
-        let submitter = StableXSolutionSubmittingMock::default();
-        let mut pf = PriceFindingMock::default();
+        let mut reader = MockStableXOrderBookReading::default();
+        let submitter = MockStableXSolutionSubmitting::default();
+        let mut pf = MockPriceFinding::default();
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
         let state = create_account_state_with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.get_auction_index.given(()).will_return(Ok(batch));
+        reader.expect_get_auction_index().return_const(Ok(batch));
 
         reader
-            .get_auction_data
-            .given(batch)
-            .will_return(Ok((state.clone(), orders.clone())));
+            .expect_get_auction_data()
+            .with(eq(batch))
+            .return_const(Ok((state, orders)));
+
+        pf.expect_find_prices()
+            .return_const(Err(PriceFindingError::new(
+                "Error",
+                PriceFindingErrorKind::Unknown,
+            )));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
@@ -316,83 +339,73 @@ mod tests {
 
         // Second run is skipped
         assert_eq!(driver.run().expect("should have succeeded"), false);
-        assert!(mock_it::verify(
-            pf.find_prices.was_called_with((orders, state)).times(1)
-        ));
     }
 
     #[test]
     fn test_does_not_submit_empty_solution() {
-        let reader = StableXOrderBookReadingMock::default();
-        let submitter = StableXSolutionSubmittingMock::default();
-        let mut pf = PriceFindingMock::default();
+        let mut reader = MockStableXOrderBookReading::default();
+        let mut submitter = MockStableXSolutionSubmitting::default();
+        let mut pf = MockPriceFinding::default();
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
         let state = create_account_state_with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.get_auction_index.given(()).will_return(Ok(batch));
+        reader.expect_get_auction_index().return_const(Ok(batch));
 
         reader
-            .get_auction_data
-            .given(batch)
-            .will_return(Ok((state.clone(), orders.clone())));
+            .expect_get_auction_data()
+            .with(eq(batch))
+            .return_const(Ok((state.clone(), orders.clone())));
 
         let solution = Solution::trivial(orders.len());
-        pf.find_prices
-            .given((orders, state))
-            .will_return(Ok(solution));
+        pf.expect_find_prices()
+            .withf(move |o, s| o == orders.as_slice() && *s == state)
+            .return_const(Ok(solution));
+
+        submitter.expect_submit_solution().times(0);
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
         assert!(driver.run().is_ok());
-        assert!(!mock_it::verify(
-            submitter
-                .submit_solution
-                .was_called_with((batch, Any, Any, Any))
-        ));
     }
     #[test]
     fn test_does_not_submit_solution_for_which_validation_failed() {
-        let reader = StableXOrderBookReadingMock::default();
-        let submitter = StableXSolutionSubmittingMock::default();
-        let mut pf = PriceFindingMock::default();
+        let mut reader = MockStableXOrderBookReading::default();
+        let mut submitter = MockStableXSolutionSubmitting::default();
+        let mut pf = MockPriceFinding::default();
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
         let state = create_account_state_with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.get_auction_index.given(()).will_return(Ok(batch));
+        reader.expect_get_auction_index().return_const(Ok(batch));
 
         reader
-            .get_auction_data
-            .given(batch)
-            .will_return(Ok((state.clone(), orders.clone())));
+            .expect_get_auction_data()
+            .with(eq(batch))
+            .return_const(Ok((state.clone(), orders.clone())));
 
         submitter
-            .get_solution_objective_value
-            .given((batch, Val(orders.clone()), Any))
-            .will_return(Err(DriverError::new(
+            .expect_get_solution_objective_value()
+            .with(eq(batch), eq(orders.clone()), always())
+            .return_const(Err(DriverError::new(
                 "get_solution_objective_value failed",
                 ErrorKind::Unknown,
             )));
+        submitter.expect_submit_solution().times(0);
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
             executed_sell_amounts: vec![0, 2],
             executed_buy_amounts: vec![0, 2],
         };
-        pf.find_prices
-            .given((orders, state))
-            .will_return(Ok(solution));
+        pf.expect_find_prices()
+            .withf(move |o, s| o == orders.as_slice() && *s == state)
+            .return_const(Ok(solution));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
         assert!(driver.run().is_err());
-        assert!(!mock_it::verify(
-            submitter
-                .submit_solution
-                .was_called_with((batch, Any, Any, Any))
-        ));
     }
 }

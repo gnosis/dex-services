@@ -2,11 +2,14 @@ use crate::contracts::stablex_contract::StableXContract;
 use crate::error::DriverError;
 
 use dfusion_core::models::{AccountState, Order};
+#[cfg(test)]
+use mockall::automock;
 
 use web3::types::U256;
 
 type Result<T> = std::result::Result<T, DriverError>;
 
+#[cfg_attr(test, automock)]
 pub trait StableXOrderBookReading {
     /// Returns the index of the auction that is currently being solved
     /// or an error in case it cannot get this information.
@@ -41,42 +44,5 @@ impl<'a> StableXOrderBookReading for StableXOrderBookReader<'a> {
 
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
         self.contract.get_auction_data(index)
-    }
-}
-
-#[cfg(test)]
-pub mod tests {
-    use super::*;
-    use crate::error::ErrorKind;
-    use mock_it::Mock;
-
-    #[derive(Clone)]
-    pub struct StableXOrderBookReadingMock {
-        pub get_auction_index: Mock<(), Result<U256>>,
-        pub get_auction_data: Mock<U256, Result<(AccountState, Vec<Order>)>>,
-    }
-
-    impl Default for StableXOrderBookReadingMock {
-        fn default() -> Self {
-            Self {
-                get_auction_index: Mock::new(Err(DriverError::new(
-                    "Unexpected call to get_auction_index",
-                    ErrorKind::Unknown,
-                ))),
-                get_auction_data: Mock::new(Err(DriverError::new(
-                    "Unexpected call to get_auction_data",
-                    ErrorKind::Unknown,
-                ))),
-            }
-        }
-    }
-
-    impl StableXOrderBookReading for StableXOrderBookReadingMock {
-        fn get_auction_index(&self) -> Result<U256> {
-            self.get_auction_index.called(())
-        }
-        fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
-            self.get_auction_data.called(index)
-        }
     }
 }

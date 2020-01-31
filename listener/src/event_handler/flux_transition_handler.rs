@@ -105,21 +105,22 @@ impl EventHandler for FluxTransitionHandler {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use dfusion_core::database::tests::DbInterfaceMock;
+    use dfusion_core::database::MockDbInterface;
     use dfusion_core::database::*;
     use dfusion_core::models::{AccountState, PendingFlux};
+    use mockall::predicate::*;
     use web3::types::{Bytes, H160, H256};
 
     #[test]
     fn test_applies_deposits_existing_state() {
-        let store = Arc::new(DbInterfaceMock::new());
+        let mut store = MockDbInterface::new();
 
         // Add previous account state and pending deposits into Store
         let existing_state = AccountState::new(H256::zero(), U256::zero(), vec![0, 0, 0, 0], 1);
         store
-            .get_balances_for_state_index
-            .given(U256::zero())
-            .will_return(Ok(existing_state));
+            .expect_get_balances_for_state_index()
+            .with(eq(U256::zero()))
+            .return_const(Ok(existing_state));
 
         let first_deposit = PendingFlux {
             slot_index: 0,
@@ -137,12 +138,12 @@ pub mod test {
             amount: 10,
         };
         store
-            .get_deposits_of_slot
-            .given(U256::zero())
-            .will_return(Ok(vec![first_deposit, second_deposit]));
+            .expect_get_deposits_of_slot()
+            .with(eq(U256::zero()))
+            .return_const(Ok(vec![first_deposit, second_deposit]));
 
         // Process event
-        let handler = FluxTransitionHandler::new(store);
+        let handler = FluxTransitionHandler::new(Arc::new(store));
         let log = create_state_transition_event(
             FluxTransitionType::Deposit,
             1,
@@ -169,18 +170,18 @@ pub mod test {
 
     #[test]
     fn test_apply_deposit_fails_if_state_does_not_exist() {
-        let store = Arc::new(DbInterfaceMock::new());
+        let mut store = MockDbInterface::new();
 
         // No data in store
         store
-            .get_balances_for_state_index
-            .given(U256::zero())
-            .will_return(Err(DatabaseError::new(
+            .expect_get_balances_for_state_index()
+            .with(eq(U256::zero()))
+            .return_const(Err(DatabaseError::new(
                 ErrorKind::StateError,
                 "No State found",
             )));
 
-        let handler = FluxTransitionHandler::new(store);
+        let handler = FluxTransitionHandler::new(Arc::new(store));
         let log = create_state_transition_event(
             FluxTransitionType::Deposit,
             1,
@@ -198,14 +199,14 @@ pub mod test {
 
     #[test]
     fn test_applies_withdraws_existing_state() {
-        let store = Arc::new(DbInterfaceMock::new());
+        let mut store = MockDbInterface::new();
 
         // Add previous account state and pending withdraws into Store
         let existing_state = AccountState::new(H256::zero(), U256::zero(), vec![10, 20, 0, 0], 1);
         store
-            .get_balances_for_state_index
-            .given(U256::zero())
-            .will_return(Ok(existing_state));
+            .expect_get_balances_for_state_index()
+            .with(eq(U256::zero()))
+            .return_const(Ok(existing_state));
 
         let first_withdraw = PendingFlux {
             slot_index: 0,
@@ -230,12 +231,12 @@ pub mod test {
         };
 
         store
-            .get_withdraws_of_slot
-            .given(U256::zero())
-            .will_return(Ok(vec![first_withdraw, second_withdraw, invalid_withdraw]));
+            .expect_get_withdraws_of_slot()
+            .with(eq(U256::zero()))
+            .return_const(Ok(vec![first_withdraw, second_withdraw, invalid_withdraw]));
 
         // Process event
-        let handler = FluxTransitionHandler::new(store);
+        let handler = FluxTransitionHandler::new(Arc::new(store));
         let log = create_state_transition_event(
             FluxTransitionType::Withdraw,
             1,

@@ -117,21 +117,22 @@ impl EventHandler for AuctionSettlementHandler {
 #[cfg(test)]
 pub mod unit_test {
     use super::*;
-    use dfusion_core::database::tests::DbInterfaceMock;
+    use dfusion_core::database::MockDbInterface;
     use dfusion_core::database::{DatabaseError, ErrorKind};
     use dfusion_core::models::{AccountState, BatchInformation, Order, StandingOrder};
+    use mockall::predicate::*;
     use web3::types::{Bytes, H160, H256, U256};
 
     #[test]
     fn test_from_log() {
-        let store = Arc::new(DbInterfaceMock::new());
+        let mut store = MockDbInterface::new();
 
         // Add previous account state and pending deposits into Store
         let existing_state = AccountState::new(H256::zero(), U256::from(0), vec![2, 0, 0, 0], 2);
         store
-            .get_balances_for_state_index
-            .given(U256::zero())
-            .will_return(Ok(existing_state));
+            .expect_get_balances_for_state_index()
+            .with(eq(U256::zero()))
+            .return_const(Ok(existing_state));
 
         let order = Order {
             batch_information: Some(BatchInformation {
@@ -146,17 +147,17 @@ pub mod unit_test {
         };
 
         store
-            .get_orders_of_slot
-            .given(U256::zero())
-            .will_return(Ok(vec![order]));
+            .expect_get_orders_of_slot()
+            .with(eq(U256::zero()))
+            .return_const(Ok(vec![order]));
 
         store
-            .get_standing_orders_of_slot
-            .given(U256::zero())
-            .will_return(Ok(StandingOrder::empty_array()));
+            .expect_get_standing_orders_of_slot()
+            .with(eq(U256::zero()))
+            .return_const(Ok(StandingOrder::empty_array()));
 
         // Process event
-        let handler = AuctionSettlementHandler::new(store);
+        let handler = AuctionSettlementHandler::new(Arc::new(store));
         let log = create_auction_settlement_event(0, 1, H256::from_low_u64_be(1));
 
         let result = handler.process_event(
@@ -180,18 +181,18 @@ pub mod unit_test {
 
     #[test]
     fn test_auction_settlement_fails_if_state_does_not_exist() {
-        let store = Arc::new(DbInterfaceMock::new());
+        let mut store = MockDbInterface::new();
 
         // No data in store
         store
-            .get_balances_for_state_index
-            .given(U256::zero())
-            .will_return(Err(DatabaseError::new(
+            .expect_get_balances_for_state_index()
+            .with(eq(U256::zero()))
+            .return_const(Err(DatabaseError::new(
                 ErrorKind::StateError,
                 "No State found",
             )));
 
-        let handler = AuctionSettlementHandler::new(store);
+        let handler = AuctionSettlementHandler::new(Arc::new(store));
         let log = create_auction_settlement_event(0, 1, H256::from_low_u64_be(1));
 
         let result = handler.process_event(
@@ -205,20 +206,25 @@ pub mod unit_test {
 
     #[test]
     fn test_auction_settlement_fails_if_orders_dont_exist() {
-        let store = Arc::new(DbInterfaceMock::new());
+        let mut store = MockDbInterface::new();
 
         let existing_state = AccountState::new(H256::zero(), U256::from(0), vec![2, 0, 0, 0], 2);
         store
-            .get_balances_for_state_index
-            .given(U256::zero())
-            .will_return(Ok(existing_state));
+            .expect_get_balances_for_state_index()
+            .with(eq(U256::zero()))
+            .return_const(Ok(existing_state));
 
         store
-            .get_orders_of_slot
-            .given(U256::zero())
-            .will_return(Ok(vec![]));
+            .expect_get_orders_of_slot()
+            .with(eq(U256::zero()))
+            .return_const(Ok(vec![]));
 
-        let handler = AuctionSettlementHandler::new(store);
+        store
+            .expect_get_standing_orders_of_slot()
+            .with(eq(U256::zero()))
+            .return_const(Err(DatabaseError::new(ErrorKind::Unknown, "Error")));
+
+        let handler = AuctionSettlementHandler::new(Arc::new(store));
         let log = create_auction_settlement_event(0, 1, H256::from_low_u64_be(1));
 
         let result = handler.process_event(
@@ -232,24 +238,24 @@ pub mod unit_test {
 
     #[test]
     fn test_auction_settlement_fails_if_standing_orders_dont_exist() {
-        let store = Arc::new(DbInterfaceMock::new());
+        let mut store = MockDbInterface::new();
 
         let existing_state = AccountState::new(H256::zero(), U256::from(0), vec![2, 0, 0, 0], 2);
         store
-            .get_balances_for_state_index
-            .given(U256::zero())
-            .will_return(Ok(existing_state));
+            .expect_get_balances_for_state_index()
+            .with(eq(U256::zero()))
+            .return_const(Ok(existing_state));
 
         // No orders in store
         store
-            .get_orders_of_slot
-            .given(U256::zero())
-            .will_return(Err(DatabaseError::new(
+            .expect_get_orders_of_slot()
+            .with(eq(U256::zero()))
+            .return_const(Err(DatabaseError::new(
                 ErrorKind::StateError,
                 "No Orders found",
             )));
 
-        let handler = AuctionSettlementHandler::new(store);
+        let handler = AuctionSettlementHandler::new(Arc::new(store));
         let log = create_auction_settlement_event(0, 1, H256::from_low_u64_be(1));
 
         let result = handler.process_event(
