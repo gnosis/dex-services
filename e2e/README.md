@@ -4,7 +4,7 @@ It is important to note that one must ensure that all dfusion related builds are
 
 From within the project source run:
 
-```shell script
+```sh
 docker-compose down && docker-compose up driver graph-listener truffle
 ```
 
