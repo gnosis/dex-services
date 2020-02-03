@@ -568,9 +568,10 @@ pub mod tests {
                 );
                 Ok(())
             },
-            run_solver: |_| Ok(()),
+            run_solver: |_, _| Ok(()),
             read_output: || Err(std::io::Error::last_os_error()),
             fee: Some(fee),
+            optimization_model: OptimizationModel::MIP,
         };
         let orders = vec![];
         assert!(solver
