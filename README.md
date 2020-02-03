@@ -211,6 +211,32 @@ LINEAR_OPTIMIZATION_SOLVER=1
 
 Afterwards, when you run your environment e.g. with `docker-compose up stablex` the linear optimizer should be automatically used. Note that the e2e tests might no longer work, as their resolution depends on the naive and not the optimal solving strategy.
 
+## Configuration
+
+The following environment variables can be used to configure the behavior of the services:
+
+### Common parameters:
+- *ETHEREUM_NODE_URL*: Full-Node to connect to. Make sure the node allows view queries without a gas limit in order to fetch the entire orderbook at once.
+- *NETWORK_ID*: Network ID (e.g. 1 for mainnet, 4 for rinkeby, 5777 for ganache)
+- *LINEAR_OPTIMIZATION_SOLVER*: Which style of solver to use (0 for naive, 1 for non-public linear solver)
+- *PRIVATE_KEY*: THe key with which to sign transactions
+
+### BatchExchange only
+- *DFUSION_LOG*: Log-level (e.g. `info,driver=debug,dfusion_core=debug`)
+- *ORDERBOOK_FILTER*: json encoded object of which tokens/filters to ignore. E.g.
+
+```json
+{
+  "tokens": [1, 2],
+  "users": {
+    "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A": { "OrderIds": [0, 1] },
+    "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B": "All"
+  }
+}
+```
+
+blacklists all orders that contain token 1 & 2, all orders of _0x...B_ and orderId 0 & 1 or _0x...A_
+
 ## Troubleshooting
 
 ### Logging
