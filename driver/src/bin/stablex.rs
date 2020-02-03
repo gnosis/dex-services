@@ -35,11 +35,14 @@ fn main() {
 
     let orderbook = StableXOrderBookReader::new(&contract);
     let filter = env::var("ORDERBOOK_FILTER").unwrap_or_default();
-    info!("Orderbook filter: {}", filter);
-    let filtered_orderbook = FilteredOrderbookReader::new(
-        &orderbook,
-        serde_json::from_str(&filter).unwrap_or_default(),
-    );
+    let parsed_filter = serde_json::from_str(&filter)
+        .map_err(|e| {
+            error!("Error parsing orderbook filter: {}", &e);
+            e
+        })
+        .unwrap_or_default();
+    info!("Orderbook filter: {:?}", parsed_filter);
+    let filtered_orderbook = FilteredOrderbookReader::new(&orderbook, parsed_filter);
 
     let solution_submitter = StableXSolutionSubmitter::new(&contract);
     let mut driver = StableXDriver::new(
