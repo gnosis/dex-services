@@ -150,33 +150,30 @@ npx truffle exec scripts/snapp/claim_withdraw.js --slot=0 --accountId=1 --tokenI
 
 ## Tests
 
-You need the following dependencies installed locally in order to run the e2e tests:
-- [jq](https://stedolan.github.io/jq/)
-
 For end-to-end tests, run from the project root:
 
 For BatchExchange:
 
 ```bash
 docker-compose down && docker-compose up stablex
-e2e-tests-stablex-ganache.sh
+cargo test -p e2e ganache -- --nocapture
 
 export PK=... # Some private key with Rinkeby OWL, DAI and ETH (for gas)
 docker-compose down && docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml up stablex
-e2e-tests-stablex-rinkeby.sh
+cargo test -p e2e rinkeby -- --nocapture
 ```
 
 For SnappAuction:
 
 ```bash
 docker-compose down && docker-compose up
-./test/e2e-tests-deposit-withdraw.sh
+cargo test -p e2e snapp_deposit_withdraw -- --nocapture
 
 docker-compose down && docker-compose up
-./test/e2e-tests-auction.sh
+cargo test -p e2e snapp_auction -- --nocapture
 
 docker-compose down && docker-compose up
-./test/e2e-tests-standing-order.sh
+cargo test -p e2e snapp_standing_order -- --nocapture
 ```
 
 If end-to-end tests are failing, check the `docker-compose logs` and consider inspecting the DB state using the web interface.

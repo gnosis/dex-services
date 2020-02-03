@@ -22,7 +22,7 @@ where `<testname>` can be any of "deposit_withdraw", "auction" or "standing_orde
 
 In order to run multiple tests some containers must be restarted and the database must be removed.
 For example, the following sequence of commands (in separate/alternating terminals) will run all the tests. 
-Notice that, although the travis file uses the bash script for restarting containers, this will not work locally.  
+Notice that, although the travis file uses the bash script for restarting containers, this will not work locally (except on Linux).  
 
 ```sh
 # T1:
@@ -58,7 +58,8 @@ cargo test -p e2e ganache
 
 ```sh
 # T1:
+export PK=... # Some private key with Rinkeby OWL, DAI and ETH (for gas)
 docker-compose down && docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml up stablex
-# T1:
+# T2:
 cargo test -p e2e rinkeby -- --nocapture
 ```
