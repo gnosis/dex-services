@@ -8,9 +8,11 @@ use web3::types::{H160, U256};
 #[derive(Debug, Default, Deserialize, PartialEq, Eq)]
 pub struct OrderbookFilter {
     /// The token ids that should be filtered/
+    #[serde(default)]
     tokens: HashSet<u16>,
 
     /// User addresses mapped to which of their orders to filter
+    #[serde(default)]
     users: HashMap<H160, UserOrderFilter>,
 }
 
