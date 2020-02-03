@@ -6,6 +6,7 @@ use dfusion_core::models;
 use chrono::Utc;
 use log::{debug, error};
 use std::collections::{HashMap, HashSet};
+use std::env;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::process::Command;
@@ -233,9 +234,12 @@ fn write_input(input_file: &str, input: &str) -> std::io::Result<()> {
 }
 
 fn run_solver(input_file: &str) -> Result<(), PriceFindingError> {
+    let optimization_config: String =
+        env::var("OPTIMIZATION_CONFIG").unwrap_or_else(|_| String::from(""));
     let output = Command::new("python")
         .args(&["-m", "batchauctions.scripts.e2e._run"])
         .arg(RESULT_FOLDER)
+        .arg(optimization_config)
         .args(&["--jsonFile", input_file])
         .output()?;
 
