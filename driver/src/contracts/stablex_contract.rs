@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::env;
 
-use dfusion_core::models::{AccountState, Order, Solution};
+use dfusion_core::models::{AccountState, BatchInformation, Order, Solution};
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
@@ -147,13 +147,20 @@ fn parse_auction_data(packed_auction_bytes: Vec<u8>, index: U256) -> (AccountSta
     );
 
     let mut account_state = AccountState::default();
-    let mut order_count = HashMap::new();
+    let mut order_count = HashMap::<H160, u16>::new();
     let relevant_orders = packed_auction_bytes
         .chunks(AUCTION_ELEMENT_WIDTH)
         .map(|chunk| {
             let mut chunk_array = [0; AUCTION_ELEMENT_WIDTH];
             chunk_array.copy_from_slice(chunk);
-            StableXAuctionElement::from_bytes(&mut order_count, &chunk_array)
+            let mut result = StableXAuctionElement::from_bytes(&chunk_array);
+            let order_counter = order_count.entry(result.order.account_id).or_insert(0);
+            result.order.batch_information = Some(BatchInformation {
+                slot_index: *order_counter,
+                slot: U256::from(0),
+            });
+            *order_counter += 1;
+            result
         })
         .filter(|x| x.in_auction(index) && x.order.sell_amount > 0)
         .map(|element| {

@@ -1,7 +1,6 @@
 use super::stablex_contract::AUCTION_ELEMENT_WIDTH;
 use byteorder::{BigEndian, ByteOrder};
-use dfusion_core::models::{BatchInformation, Order};
-use std::collections::HashMap;
+use dfusion_core::models::Order;
 use web3::types::{H160, U256};
 
 use crate::util::CeiledDiv;
@@ -19,10 +18,11 @@ impl StableXAuctionElement {
         self.valid_from <= index && index <= self.valid_until
     }
 
-    pub fn from_bytes(
-        order_count: &mut HashMap<H160, u16>,
-        bytes: &[u8; AUCTION_ELEMENT_WIDTH],
-    ) -> Self {
+    /// Deserialize an auction element that has been serialized by the smart
+    /// contract's `encodeAuctionElement` function.
+    /// Sets `batch_information` to `None` because this information is not
+    /// contained in the serialized information.
+    pub fn from_bytes(bytes: &[u8; AUCTION_ELEMENT_WIDTH]) -> Self {
         let account_id = H160::from_slice(&bytes[0..20]);
 
         // these go together (since sell_token_balance is emitted as u256 and treated as u128
@@ -45,17 +45,12 @@ impl StableXAuctionElement {
         let denominator = BigEndian::read_u128(&bytes[80..96]);
         let remaining = BigEndian::read_u128(&bytes[96..112]);
         let (buy_amount, sell_amount) = compute_buy_sell_amounts(numerator, denominator, remaining);
-        let order_counter = order_count.entry(account_id).or_insert(0);
-        *order_counter += 1;
         StableXAuctionElement {
             valid_from,
             valid_until,
             sell_token_balance,
             order: Order {
-                batch_information: Some(BatchInformation {
-                    slot_index: *order_counter - 1,
-                    slot: U256::from(0),
-                }),
+                batch_information: None,
                 account_id,
                 buy_token,
                 sell_token,
@@ -93,10 +88,7 @@ pub mod tests {
             valid_until: U256::from(0),
             sell_token_balance: 0,
             order: Order {
-                batch_information: Some(BatchInformation {
-                    slot_index: 0,
-                    slot: U256::from(0),
-                }),
+                batch_information: None,
                 account_id: H160::from_low_u64_be(0),
                 buy_token: 0,
                 sell_token: 0,
@@ -108,8 +100,7 @@ pub mod tests {
 
     #[test]
     fn null_auction_element_from_bytes() {
-        let mut order_count = HashMap::new();
-        let res = StableXAuctionElement::from_bytes(&mut order_count, &[0u8; 112]);
+        let res = StableXAuctionElement::from_bytes(&[0u8; 112]);
 
         assert_eq!(res, emptyish_auction_element());
     }
@@ -136,17 +127,13 @@ pub mod tests {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // remainingAmount: 2**8 + 1 = 257
         ];
-        let mut order_count = HashMap::new();
-        let res = StableXAuctionElement::from_bytes(&mut order_count, &bytes);
+        let res = StableXAuctionElement::from_bytes(&bytes);
         let auction_element = StableXAuctionElement {
             valid_from: U256::from(2),
             valid_until: U256::from(261),
             sell_token_balance: 3,
             order: Order {
-                batch_information: Some(BatchInformation {
-                    slot_index: 0,
-                    slot: U256::from(0),
-                }),
+                batch_information: None,
                 account_id: H160::from_low_u64_be(1),
                 buy_token: 258,
                 sell_token: 257,
@@ -170,20 +157,16 @@ pub mod tests {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // remainingAmount: 2**8 + 1 = 257
         ];
-        let mut order_count = HashMap::new();
-        StableXAuctionElement::from_bytes(&mut order_count, &bytes);
+        StableXAuctionElement::from_bytes(&bytes);
         let mut bytes_modified = bytes;
         bytes_modified[111] = 0; // setting remainingAmount: 2**8  = 256
-        let res = StableXAuctionElement::from_bytes(&mut order_count, &bytes_modified);
+        let res = StableXAuctionElement::from_bytes(&bytes_modified);
         let auction_element = StableXAuctionElement {
             valid_from: U256::from(2),
             valid_until: U256::from(261),
             sell_token_balance: 3,
             order: Order {
-                batch_information: Some(BatchInformation {
-                    slot_index: 1,
-                    slot: U256::from(0),
-                }),
+                batch_information: None,
                 account_id: H160::from_low_u64_be(1),
                 buy_token: 258,
                 sell_token: 257,
@@ -197,8 +180,7 @@ pub mod tests {
     #[test]
     #[should_panic]
     fn test_from_bytes_fails_on_hopefully_null() {
-        let mut order_count = HashMap::new();
-        StableXAuctionElement::from_bytes(&mut order_count, &[1u8; 112]);
+        StableXAuctionElement::from_bytes(&[1u8; 112]);
     }
 
     // Testing in_auction
