@@ -1,5 +1,7 @@
 # Guide to Running Tests
 
+## Snapp Tests
+
 Before proceeding, ensure that all dfusion-related docker images (i.e. driver, graph-listener) are recent and project submodules are updated. For further information on this please refer to the (installation guide)[https://github.com/gnosis/dex-services#installation] in the project root.  
 Observe that the last two lines of the installation guide involve a manual deployment of deterministic ganache environment followed by a manual migration of the contracts. Both of these are unnecessary in our scenario since these are handled by the `truffle` container in the following command. 
 
@@ -37,4 +39,26 @@ cargo test -p e2e snapp_auction -- --nocapture
 docker-compose down && docker-compose up driver graph-listener truffle
 # T2:
 cargo test -p e2e snapp_standing_order -- --nocapture
+```
+
+
+## StableX Tests
+
+To run the stableX related tests locally,
+
+### Ganache:
+```sh
+# T1:
+docker-compose down && docker-compose up stablex truffle
+# T2:
+cargo test -p e2e ganache
+```
+
+### Rinkeby:
+
+```sh
+# T1:
+docker-compose down && docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml up stablex
+# T1:
+cargo test -p e2e rinkeby -- --nocapture
 ```
