@@ -1,6 +1,7 @@
 # Guide to Running Tests
 
-It is important to note that one must ensure that all dfusion related builds are recent (i.e. driver, graph-listener and their dependents). 
+Before proceeding, ensure that all dfusion-related docker images (i.e. driver, graph-listener) are recent and project submodules are updated. For further information on this please refer to the (installation guide)[https://github.com/gnosis/dex-services#installation] in the project root.  
+Observe that the last two lines of the installation guide involve a manual deployment of deterministic ganache environment followed by a manual migration of the contracts. Both of these are unnecessary in our scenario since these are handled by the `truffle` container in the following command. 
 
 From within the project source run:
 
@@ -10,7 +11,7 @@ docker-compose down && docker-compose up driver graph-listener truffle
 
 Once the driver has recognized the deployed contracts each of the test must be run individually as
 
-```shell script
+```sh
 cargo test -p e2e snapp_<testname> -- --nocapture
 ```
 The nocapture used here will display log statements while the test is running to help identify where the test is at.
@@ -21,7 +22,7 @@ In order to run multiple tests some containers must be restarted and the databas
 For example, the following sequence of commands (in separate/alternating terminals) will run all the tests. 
 Notice that, although the travis file uses the bash script for restarting containers, this will not work locally.  
 
-```shell script
+```sh
 # T1:
 docker-compose down && docker-compose up driver graph-listener truffle
 # T2:
