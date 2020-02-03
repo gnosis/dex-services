@@ -225,7 +225,7 @@ fn snapp_auction() {
     let expected_state_hash =
         H256::from_str("572dd059c22fe72a966510cba30961215c9e60b96359ccb79996ad3f9c1668f8").unwrap();
     let auction_bid = await_and_fetch_auction_bid(&instance, U256::zero());
-    assert_eq!(expected_state_hash, auction_bid.tentative_state);
+    assert_eq!(expected_state_hash, auction_bid.tentative_state());
 
     println!("Advancing time for auction settlement and awaiting state transition");
     wait_for(&web3, 181);
@@ -355,12 +355,12 @@ fn snapp_standing_order() {
     println!("Ensure standing order is still traded");
     // TODO - use: let state = await_and_fetch_new_account_state(&db, &post_auction_state_hash);
     wait_for_condition(|| {
-        db.get_balances_for_state_root(&second_auction_bid.tentative_state)
+        db.get_balances_for_state_root(&second_auction_bid.tentative_state())
             .is_ok()
     })
     .expect("Did not detect account update in DB");
     let state = db
-        .get_balances_for_state_root(&second_auction_bid.tentative_state)
+        .get_balances_for_state_root(&second_auction_bid.tentative_state())
         .unwrap();
 
     assert_eq!(
@@ -431,12 +431,12 @@ fn snapp_standing_order() {
 
     println!("Ensure standing order was no longer traded");
     wait_for_condition(|| {
-        db.get_balances_for_state_root(&third_auction_bid.tentative_state)
+        db.get_balances_for_state_root(&third_auction_bid.tentative_state())
             .is_ok()
     })
     .expect("Did not detect account update in DB");
     let state = db
-        .get_balances_for_state_root(&third_auction_bid.tentative_state)
+        .get_balances_for_state_root(&third_auction_bid.tentative_state())
         .unwrap();
     assert_eq!(
         state.read_balance(1, H160::from_low_u64_be(0)),

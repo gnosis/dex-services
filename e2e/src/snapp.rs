@@ -80,7 +80,7 @@ pub fn await_and_fetch_auction_bid(instance: &SnappAuction, auction_index: U256)
     .expect("Did not detect bid placement in auction");
 
     AuctionBid::from(
-        &instance
+        instance
             .auctions(auction_index)
             .wait_and_expect("No auction bid detected on smart contract"),
     )
