@@ -6,7 +6,6 @@ use dfusion_core::models;
 use chrono::Utc;
 use log::{debug, error};
 use std::collections::{HashMap, HashSet};
-use std::env;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::process::Command;
@@ -15,6 +14,12 @@ use web3::types::H160;
 const RESULT_FOLDER: &str = "./results/tmp/";
 
 type PriceMap = HashMap<u16, u128>;
+
+#[derive(Clone, Copy)]
+pub enum OptimizationModel {
+    MIP,
+    NLP,
+}
 
 mod solver_output {
     use serde::Deserialize;
@@ -71,22 +76,24 @@ mod solver_input {
     }
 }
 
-pub struct LinearOptimisationPriceFinder {
+pub struct OptimisationPriceFinder {
     // default IO methods can be replaced for unit testing
     write_input: fn(&str, &str) -> std::io::Result<()>,
-    run_solver: fn(&str) -> Result<(), PriceFindingError>,
+    run_solver: fn(&str, OptimizationModel) -> Result<(), PriceFindingError>,
     read_output: fn() -> std::io::Result<String>,
     fee: Option<Fee>,
+    optimization_model: OptimizationModel,
 }
 
-impl LinearOptimisationPriceFinder {
-    pub fn new(fee: Option<Fee>) -> Self {
+impl OptimisationPriceFinder {
+    pub fn new(fee: Option<Fee>, optimization_model: OptimizationModel) -> Self {
         // All prices are 1 (10**18)
-        LinearOptimisationPriceFinder {
+        OptimisationPriceFinder {
             write_input,
             run_solver,
             read_output,
             fee,
+            optimization_model,
         }
     }
 }
@@ -203,7 +210,7 @@ fn deserialize_result(result: String) -> Result<models::Solution, PriceFindingEr
     })
 }
 
-impl PriceFinding for LinearOptimisationPriceFinder {
+impl PriceFinding for OptimisationPriceFinder {
     fn find_prices(
         &self,
         orders: &[models::Order],
@@ -218,7 +225,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
         };
         let input_file = format!("instance_{}.json", Utc::now().to_rfc3339());
         (self.write_input)(&input_file, &serde_json::to_string(&input)?)?;
-        (self.run_solver)(&input_file)?;
+        (self.run_solver)(&input_file, self.optimization_model)?;
         let result = (self.read_output)()?;
         let solution = deserialize_result(result)?;
         Ok(solution)
@@ -233,14 +240,20 @@ fn write_input(input_file: &str, input: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-fn run_solver(input_file: &str) -> Result<(), PriceFindingError> {
-    let optimization_config: String =
-        env::var("OPTIMIZATION_CONFIG").unwrap_or_else(|_| String::from(""));
+fn run_solver(
+    input_file: &str,
+    optimization_model: OptimizationModel,
+) -> Result<(), PriceFindingError> {
+    let optimization_model_str;
+    match optimization_model {
+        OptimizationModel::MIP => optimization_model_str = &"mip",
+        OptimizationModel::NLP => optimization_model_str = &"nlp",
+    }
     let output = Command::new("python")
         .args(&["-m", "batchauctions.scripts.e2e._run"])
         .arg(RESULT_FOLDER)
-        .arg(optimization_config)
         .args(&["--jsonFile", input_file])
+        .args(&["--optModel", optimization_model_str])
         .output()?;
 
     if !output.status.success() {
@@ -543,7 +556,7 @@ pub mod tests {
             token: 0,
             ratio: 0.001,
         };
-        let solver = LinearOptimisationPriceFinder {
+        let solver = OptimisationPriceFinder {
             write_input: |_, content: &str| {
                 let json: serde_json::value::Value = serde_json::from_str(content).unwrap();
                 assert_eq!(
