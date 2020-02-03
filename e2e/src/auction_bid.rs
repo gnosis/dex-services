@@ -15,18 +15,10 @@ type AuctionBidData = (
 );
 
 #[derive(Debug)]
-pub struct AuctionBid {
-    data: AuctionBidData,
-}
-
-impl From<AuctionBidData> for AuctionBid {
-    fn from(data: AuctionBidData) -> Self {
-        AuctionBid { data }
-    }
-}
+pub struct AuctionBid(pub AuctionBidData);
 
 impl AuctionBid {
     pub fn tentative_state(&self) -> H256 {
-        H256::from_slice(&self.data.5)
+        H256::from_slice(&(self.0).5)
     }
 }
