@@ -8,10 +8,15 @@ use web3::types::{Log, H160, H256, U256};
 use crate::models::util::*;
 use crate::models::{iter_hash, RollingHashable, Serializable};
 
+// TODO: refactor the struct to be an enum that can be either the stableX
+// version (slot index) or the Snapp version (slot_index + slot).
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct BatchInformation {
+    /// the order index of a StableX order (the n-th order a user has ever
+    /// placed in the system)
     pub slot: U256,
+    // only applies to the Snapp version
     pub slot_index: u16,
 }
 
