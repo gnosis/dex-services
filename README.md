@@ -150,33 +150,7 @@ npx truffle exec scripts/snapp/claim_withdraw.js --slot=0 --accountId=1 --tokenI
 
 ## Tests
 
-For end-to-end tests, run from the project root:
-
-For BatchExchange:
-
-```bash
-docker-compose down && docker-compose up stablex
-cargo test -p e2e ganache -- --nocapture
-
-export PK=... # Some private key with Rinkeby OWL, DAI and ETH (for gas)
-docker-compose down && docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml up stablex
-cargo test -p e2e rinkeby -- --nocapture
-```
-
-For SnappAuction:
-
-```bash
-docker-compose down && docker-compose up
-cargo test -p e2e snapp_deposit_withdraw -- --nocapture
-
-docker-compose down && docker-compose up
-cargo test -p e2e snapp_auction -- --nocapture
-
-docker-compose down && docker-compose up
-cargo test -p e2e snapp_standing_order -- --nocapture
-```
-
-If end-to-end tests are failing, check the `docker-compose logs` and consider inspecting the DB state using the web interface.
+For end-to-end tests, please consult the guide in [e2e/README](https://github.com/gnosis/dex-services/e2e#Guide).
 
 To run unit tests:
 
