@@ -98,9 +98,9 @@ pub fn wait_for(web3: &Web3<Http>, seconds: u32) {
         .expect("Cannot mine to increase time");
 }
 
-pub fn wait_for_condition<C>(condition: C) -> Result<(), Error>
+pub fn wait_for_condition<C>(mut condition: C) -> Result<(), Error>
 where
-    C: Fn() -> bool,
+    C: FnMut() -> bool,
 {
     // Repeatedly check condition with 100ms sleep time in between tries (max ~30s)
     for _ in 0..300 {

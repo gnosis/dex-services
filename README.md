@@ -2,7 +2,7 @@
 
 ## Intro
 
-This repository contains the backend logic for the dfusion exchange based on [this specification](github.com/gnosis/dex-research).
+This repository contains the backend logic for the dfusion exchange based on [this specification](https://github.com/gnosis/dex-research).
 
 It contains two sub-projects that both implement the market mechanism described above in different ways. An fully on-chain solution with instant finality but limited scalability (referred to as "BatchExchange") and a preliminary version that intends to achieves scalability by offloading computation and data-storage off-chain using an [optimistic roll-up](https://medium.com/plasma-group/ethereum-smart-contracts-in-l2-optimistic-rollup-2c1cef2ec537) approach. The latter is in early development stage and not yet ready for use.
 
@@ -41,9 +41,9 @@ docker-compose up stablex
 ```
 
 You can also run the rust binary locally (without docker). For that you will have to export the following environment variables:
-- ETHEREUM_NODE_URL (for testnets this is usually http://localhost:8545. You can use an infura node for rinkeby/mainnet)
+- ETHEREUM_NODE_URL (for test environments this is usually http://localhost:8545. You can use an infura node for rinkeby/mainnet)
 - NETWORK_ID (chainId, e.g. 5777 for ganache, 4 for rinkeby, 1 for mainnet)
-- PRIVATE_KEY (the hex key without leading 0x that should be used to sign transactiosn. Needs to be funded with eth for gas)
+- PRIVATE_KEY (the hex key without leading 0x that should be used to sign transactions. Needs to be funded with eth for gas)
 
 ```bash
 cargo run --bin stablex
@@ -150,36 +150,7 @@ npx truffle exec scripts/snapp/claim_withdraw.js --slot=0 --accountId=1 --tokenI
 
 ## Tests
 
-You need the following dependencies installed locally in order to run the e2e tests:
-- [jq](https://stedolan.github.io/jq/)
-
-For end-to-end tests, run from the project root:
-
-For BatchExchange:
-
-```bash
-docker-compose down && docker-compose up stablex
-e2e-tests-stablex-ganache.sh
-
-export PK=... # Some private key with Rinkeby OWL, DAI and ETH (for gas)
-docker-compose down && docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml up stablex
-e2e-tests-stablex-rinkeby.sh
-```
-
-For SnappAuction:
-
-```bash
-docker-compose down && docker-compose up
-./test/e2e-tests-deposit-withdraw.sh
-
-docker-compose down && docker-compose up
-./test/e2e-tests-auction.sh
-
-docker-compose down && docker-compose up
-./test/e2e-tests-standing-order.sh
-```
-
-If end-to-end tests are failing, check the `docker-compose logs` and consider inspecting the DB state using the web interface.
+For end-to-end tests, please consult the guide in [e2e/README](https://github.com/gnosis/dex-services/e2e#Guide).
 
 To run unit tests:
 
