@@ -34,7 +34,7 @@ fn main() {
     let mut price_finder = driver::util::create_price_finder(fee);
 
     let orderbook = StableXOrderBookReader::new(&contract);
-    let filter = env::var("ORDERBOOK_FILTER").unwrap_or_default();
+    let filter = env::var("ORDERBOOK_FILTER").unwrap_or_else(|_| String::from("{}"));
     let parsed_filter = serde_json::from_str(&filter)
         .map_err(|e| {
             error!("Error parsing orderbook filter: {}", &e);
