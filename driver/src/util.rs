@@ -108,8 +108,8 @@ pub fn create_price_finder(fee: Option<Fee>) -> Box<dyn PriceFinding> {
     let optimization_model_string: String =
         env::var("OPTIMIZATION_MODEL").unwrap_or_else(|_| String::from("mip"));
     let optimization_model = match optimization_model_string.as_str() {
-        "mip" => OptimizationModel::MIP,
-        "nlp" => OptimizationModel::NLP,
+        "MIP" => OptimizationModel::MIP,
+        "NLP" => OptimizationModel::NLP,
         _ => OptimizationModel::NAIVE,
     };
     if optimization_model == OptimizationModel::NAIVE {
