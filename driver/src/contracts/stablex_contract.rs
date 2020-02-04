@@ -79,8 +79,7 @@ impl StableXContract for BatchExchange {
         //   request to run into the gas limit
         orders_builder.m.tx.gas = None;
         let packed_auction_bytes = orders_builder.call().wait()?;
-        let auction_data = parse_auction_data(packed_auction_bytes, index);
-        Ok(auction_data)
+        Ok(get_auction_data(&packed_auction_bytes, index))
     }
 
     fn get_solution_objective_value(
@@ -137,8 +136,21 @@ impl StableXContract for BatchExchange {
     }
 }
 
-fn parse_auction_data(packed_auction_bytes: Vec<u8>, index: U256) -> (AccountState, Vec<Order>) {
-    // extract packed auction info
+fn get_auction_data(packed_auction_bytes: &[u8], index: U256) -> (AccountState, Vec<Order>) {
+    let auction_elements = parse_auction_elements(packed_auction_bytes, index, &mut HashMap::new());
+    let account_state = auction_elements_to_account_state(auction_elements.iter());
+    let orders = auction_elements
+        .into_iter()
+        .map(|auction_element| auction_element.order)
+        .collect();
+    (account_state, orders)
+}
+
+fn parse_auction_elements(
+    packed_auction_bytes: &[u8],
+    index: U256,
+    user_order_counts: &mut HashMap<H160, u16>,
+) -> Vec<StableXAuctionElement> {
     assert_eq!(
         packed_auction_bytes.len() % AUCTION_ELEMENT_WIDTH,
         0,
@@ -146,15 +158,15 @@ fn parse_auction_data(packed_auction_bytes: Vec<u8>, index: U256) -> (AccountSta
         AUCTION_ELEMENT_WIDTH
     );
 
-    let mut account_state = AccountState::default();
-    let mut order_count = HashMap::<H160, u16>::new();
-    let relevant_orders = packed_auction_bytes
+    packed_auction_bytes
         .chunks(AUCTION_ELEMENT_WIDTH)
         .map(|chunk| {
             let mut chunk_array = [0; AUCTION_ELEMENT_WIDTH];
             chunk_array.copy_from_slice(chunk);
             let mut result = StableXAuctionElement::from_bytes(&chunk_array);
-            let order_counter = order_count.entry(result.order.account_id).or_insert(0);
+            let order_counter = user_order_counts
+                .entry(result.order.account_id)
+                .or_insert(0);
             result.order.batch_information = Some(BatchInformation {
                 slot_index: *order_counter,
                 slot: U256::from(0),
@@ -163,14 +175,20 @@ fn parse_auction_data(packed_auction_bytes: Vec<u8>, index: U256) -> (AccountSta
             result
         })
         .filter(|x| x.in_auction(index) && x.order.sell_amount > 0)
-        .map(|element| {
-            account_state.modify_balance(element.order.account_id, element.order.sell_token, |x| {
-                *x = element.sell_token_balance
-            });
-            element.order
-        })
-        .collect();
-    (account_state, relevant_orders)
+        .collect()
+}
+
+fn auction_elements_to_account_state<'a, Iter>(auction_elements: Iter) -> AccountState
+where
+    Iter: Iterator<Item = &'a StableXAuctionElement>,
+{
+    let mut account_state = AccountState::default();
+    for element in auction_elements.into_iter() {
+        account_state.modify_balance(element.order.account_id, element.order.sell_token, |x| {
+            *x = element.sell_token_balance
+        });
+    }
+    account_state
 }
 
 fn encode_prices_for_contract(price_map: &HashMap<u16, u128>) -> (Vec<U128>, Vec<u64>) {
@@ -350,7 +368,7 @@ pub mod tests {
         account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 3);
         assert_eq!(
             (account_state, relevant_orders),
-            parse_auction_data(bytes, U256::from(3))
+            get_auction_data(&bytes, U256::from(3))
         );
     }
 
