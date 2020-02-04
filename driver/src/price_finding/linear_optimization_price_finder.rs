@@ -6,7 +6,7 @@ use dfusion_core::models;
 use chrono::Utc;
 use log::{debug, error};
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
+use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::process::Command;
 use web3::types::H160;
@@ -80,7 +80,7 @@ pub struct LinearOptimisationPriceFinder {
 
 impl LinearOptimisationPriceFinder {
     pub fn new(fee: Option<Fee>) -> Self {
-        // All prices are 1 (10**18)
+        create_dir_all("instances").expect("Could not create instance directory");
         LinearOptimisationPriceFinder {
             write_input,
             run_solver,
@@ -215,7 +215,7 @@ impl PriceFinding for LinearOptimisationPriceFinder {
             orders: orders.iter().map(serialize_order).collect(),
             fee: serialize_fee(&self.fee),
         };
-        let input_file = format!("instance_{}.json", Utc::now().to_rfc3339());
+        let input_file = format!("instances/instance_{}.json", Utc::now().to_rfc3339());
         (self.write_input)(&input_file, &serde_json::to_string(&input)?)?;
         (self.run_solver)(&input_file)?;
         let result = (self.read_output)()?;
