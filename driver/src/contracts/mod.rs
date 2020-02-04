@@ -1,7 +1,7 @@
+mod batched_auction_data_reader;
 pub mod snapp_contract;
 pub mod stablex_auction_element;
 pub mod stablex_contract;
-mod batched_auction_data_reader;
 
 use crate::error::DriverError;
 use crate::transport::LoggingTransport;

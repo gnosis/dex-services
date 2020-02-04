@@ -127,36 +127,48 @@ impl BatchedAuctionDataReader {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use lazy_static::lazy_static;
 
-    #[test]
-    fn batched_auction_data_reader_single_batch() {
-        let bytes: Vec<u8> = vec![
-            // order 1
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // user: 20 elements
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 3, // sellTokenBalance: 3, 32 elements
-            1, 2, // buyToken: 256+2,
-            1, 1, // sellToken: 256+1, 56
-            0, 0, 0, 2, // validFrom: 2
-            0, 0, 1, 5, // validUntil: 256+5 64
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // remainingAmount: 2**8 + 1 = 257
-            // order 2
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // user:
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 3, // sellTokenBalance: 3
-            1, 2, // buyToken: 256+2
-            1, 1, // sellToken: 256+1
-            0, 0, 0, 2, // validFrom: 2
-            0, 0, 1, 5, // validUntil: 256+5
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258;
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, // remainingAmount: 2**8 = 256
-        ];
-        let mut account_state = AccountState::default();
+    const ORDER_1_BYTES: &[u8] = &[
+        // order 1
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // user: 20 elements
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 4, // sellTokenBalance: 3, 32 elements
+        1, 2, // buyToken: 256+2,
+        1, 1, // sellToken: 256+1, 56
+        0, 0, 0, 2, // validFrom: 2
+        0, 0, 1, 5, // validUntil: 256+5 64
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // remainingAmount: 2**8 + 1 = 257
+    ];
+    const ORDER_2_BYTES: &[u8] = &[
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // user:
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 5, // sellTokenBalance: 3
+        1, 2, // buyToken: 256+2
+        1, 1, // sellToken: 256+1
+        0, 0, 0, 2, // validFrom: 2
+        0, 0, 1, 5, // validUntil: 256+5
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258;
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, // remainingAmount: 2**8 = 256
+    ];
+    const ORDER_3_BYTES: &[u8] = &[
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, // user:
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 6, // sellTokenBalance: 3
+        1, 2, // buyToken: 256+2
+        1, 1, // sellToken: 256+1
+        0, 0, 0, 2, // validFrom: 2
+        0, 0, 1, 5, // validUntil: 256+5
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258;
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, // remainingAmount: 2**8 = 256
+    ];
 
-        let order_1 = Order {
+    lazy_static! {
+        static ref ORDER_1: Order = Order {
             batch_information: Some(BatchInformation {
                 slot_index: 0,
                 slot: U256::from(0),
@@ -167,7 +179,7 @@ pub mod tests {
             sell_amount: 257,
             buy_amount: 257,
         };
-        let order_2 = Order {
+        static ref ORDER_2: Order = Order {
             batch_information: Some(BatchInformation {
                 slot_index: 1,
                 slot: U256::from(0),
@@ -178,11 +190,57 @@ pub mod tests {
             sell_amount: 256,
             buy_amount: 256,
         };
-        let relevant_orders: Vec<Order> = vec![order_1, order_2];
-        account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 3);
+    }
+
+    #[test]
+    fn batched_auction_data_reader_single_batch() {
+        let mut bytes = Vec::new();
+        bytes.extend(ORDER_1_BYTES);
+        bytes.extend(ORDER_2_BYTES);
         let mut reader = BatchedAuctionDataReader::new(U256::from(3));
         assert_eq!(reader.apply_batch(&bytes), 2);
+
+        let mut account_state = AccountState::default();
+        account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 5);
+
         assert_eq!(reader.account_state, account_state);
-        assert_eq!(reader.orders, relevant_orders);
+        assert_eq!(reader.orders, [ORDER_1.clone(), ORDER_2.clone()]);
+        assert_eq!(reader.pagination.previous_page_user, ORDER_1.account_id);
+        assert_eq!(reader.pagination.previous_page_user_offset, 2);
+    }
+
+    #[test]
+    fn batched_auction_data_reader_multiple_batches() {
+        let mut account_state = AccountState::default();
+        let mut reader = BatchedAuctionDataReader::new(U256::from(3));
+        let mut bytes = Vec::new();
+
+        bytes.extend(ORDER_1_BYTES);
+        assert_eq!(reader.apply_batch(&bytes), 1);
+        account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 4);
+        assert_eq!(reader.account_state, account_state);
+        assert_eq!(reader.orders, [ORDER_1.clone()]);
+        assert_eq!(reader.pagination.previous_page_user, ORDER_1.account_id);
+        assert_eq!(reader.pagination.previous_page_user_offset, 1);
+
+        bytes.clear();
+        bytes.extend(ORDER_2_BYTES);
+        assert_eq!(reader.apply_batch(&bytes), 1);
+        account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 5);
+        assert_eq!(reader.account_state, account_state);
+        assert_eq!(reader.orders, [ORDER_1.clone(), ORDER_2.clone()]);
+        assert_eq!(reader.pagination.previous_page_user, ORDER_1.account_id);
+        assert_eq!(reader.pagination.previous_page_user_offset, 2);
+
+        bytes.clear();
+        bytes.extend(ORDER_3_BYTES);
+        assert_eq!(reader.apply_batch(&bytes), 1);
+        account_state.modify_balance(H160::from_low_u64_be(2), 257, |x| *x = 6);
+        assert_eq!(reader.account_state, account_state);
+        assert_eq!(
+            reader.pagination.previous_page_user,
+            H160::from_low_u64_be(2)
+        );
+        assert_eq!(reader.pagination.previous_page_user_offset, 1);
     }
 }
