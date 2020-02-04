@@ -1,9 +1,10 @@
-use super::stablex_contract::AUCTION_ELEMENT_WIDTH;
 use byteorder::{BigEndian, ByteOrder};
 use dfusion_core::models::Order;
 use web3::types::{H160, U256};
 
 use crate::util::CeiledDiv;
+
+pub const AUCTION_ELEMENT_WIDTH: usize = 112;
 
 #[derive(Debug, PartialEq)]
 pub struct StableXAuctionElement {
