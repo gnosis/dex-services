@@ -105,27 +105,22 @@ pub fn batch_processing_state(
 }
 
 pub fn create_price_finder(fee: Option<Fee>) -> Box<dyn PriceFinding> {
-    let solver_env_var = env::var("LINEAR_OPTIMIZATION_SOLVER").unwrap_or_default();
     let optimization_model_string: String =
         env::var("OPTIMIZATION_MODEL").unwrap_or_else(|_| String::from("mip"));
-    let optimization_model;
-    match optimization_model_string.as_str() {
-        "mip" => optimization_model = OptimizationModel::MIP,
-        "nlp" => optimization_model = OptimizationModel::NLP,
-        _ => panic!(
-            "The env OPTIMIZATION_MODEL has not been set correctly. Its  value is: {:?}",
-            optimization_model_string.as_str()
-        ),
+    let optimization_model = match optimization_model_string.as_str() {
+        "mip" => OptimizationModel::MIP,
+        "nlp" => OptimizationModel::NLP,
+        _ => OptimizationModel::NAIVE,
     };
-    if solver_env_var == "1" {
+    if optimization_model == OptimizationModel::NAIVE {
+        info!("Using naive price finder");
+        Box::new(NaiveSolver::new(fee))
+    } else {
         info!(
             "Using {:} optimisation price finder",
             optimization_model_string
         );
         Box::new(OptimisationPriceFinder::new(fee, optimization_model))
-    } else {
-        info!("Using naive price finder");
-        Box::new(NaiveSolver::new(fee))
     }
 }
 
