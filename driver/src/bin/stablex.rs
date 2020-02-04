@@ -2,7 +2,7 @@ use driver::contracts::stablex_contract::BatchExchange;
 use driver::driver::stablex_driver::StableXDriver;
 use driver::logging;
 use driver::metrics::{MetricsServer, StableXMetrics};
-use driver::orderbook::{FilteredOrderbookReader, StableXOrderBookReader};
+use driver::orderbook::{FilteredOrderbookReader, PaginatedStableXOrderBookReader};
 use driver::price_finding::Fee;
 use driver::solution_submission::StableXSolutionSubmitter;
 
@@ -33,7 +33,8 @@ fn main() {
     let fee = Some(Fee::default());
     let mut price_finder = driver::util::create_price_finder(fee);
 
-    let orderbook = StableXOrderBookReader::new(&contract);
+    // let orderbook = StableXOrderBookReader::new(&contract);
+    let orderbook = PaginatedStableXOrderBookReader::new(&contract);
     let filter = env::var("ORDERBOOK_FILTER").unwrap_or_else(|_| String::from("{}"));
     let parsed_filter = serde_json::from_str(&filter)
         .map_err(|e| {

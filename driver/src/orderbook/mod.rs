@@ -58,6 +58,12 @@ pub struct PaginatedStableXOrderBookReader<'a> {
     contract: &'a dyn StableXContract,
 }
 
+impl<'a> PaginatedStableXOrderBookReader<'a> {
+    pub fn new(contract: &'a dyn StableXContract) -> Self {
+        Self { contract }
+    }
+}
+
 impl<'a> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a> {
     fn get_auction_index(&self) -> Result<U256> {
         StableXOrderBookReader::new(self.contract).get_auction_index()
