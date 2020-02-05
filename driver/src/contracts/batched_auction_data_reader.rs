@@ -13,27 +13,27 @@ pub struct BatchedAuctionDataReader {
     pub pagination: Pagination,
     index: U256,
     /// The total number of orders per user.
-    user_order_counts: HashMap<H160, u16>,
+    user_order_counts: HashMap<H160, usize>,
 }
 
 /// Data for the next call to the smart contract's `getEncodedUsersPaginated`
 /// function (which should be named `getEncodedOrdersPaginated`).
 pub struct Pagination {
     pub previous_page_user: H160,
-    pub previous_page_user_offset: u64,
+    pub previous_page_user_offset: usize,
 }
 
 impl BatchedAuctionDataReader {
     pub fn new(index: U256) -> BatchedAuctionDataReader {
         BatchedAuctionDataReader {
-            index,
             account_state: AccountState::default(),
             orders: Vec::new(),
-            user_order_counts: HashMap::new(),
             pagination: Pagination {
                 previous_page_user: H160::zero(),
                 previous_page_user_offset: 0,
             },
+            index,
+            user_order_counts: HashMap::new(),
         }
     }
 
@@ -46,10 +46,10 @@ impl BatchedAuctionDataReader {
     ///
     /// Panics if length of `packed_auction_bytes` is not a multiple of
     /// `AUCTION_ELEMENT_WIDTH`.
-    pub fn apply_batch(&mut self, packed_auction_bytes: &[u8]) -> u64 {
+    pub fn apply_batch(&mut self, packed_auction_bytes: &[u8]) -> usize {
         let previous_order_count = self.orders.len();
         self.apply_auction_data(&packed_auction_bytes);
-        let number_of_added_orders = (self.orders.len() - previous_order_count) as u64;
+        let number_of_added_orders = self.orders.len() - previous_order_count;
         if number_of_added_orders == 0 {
             return 0;
         }
@@ -61,8 +61,7 @@ impl BatchedAuctionDataReader {
             self.pagination.previous_page_user_offset = *self
                 .user_order_counts
                 .get(&last_order_user)
-                .expect("user has order but no order count")
-                as u64;
+                .expect("user has order but no order count");
         }
         number_of_added_orders
     }
@@ -116,7 +115,7 @@ impl BatchedAuctionDataReader {
                     .entry(result.order.account_id)
                     .or_insert(0);
                 result.order.batch_information = Some(BatchInformation {
-                    slot_index: *order_counter,
+                    slot_index: *order_counter as u16,
                     slot: U256::from(0),
                 });
                 *order_counter += 1;

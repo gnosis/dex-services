@@ -84,13 +84,13 @@ impl StableXContract for BatchExchange {
     }
 
     fn get_auction_data_batched(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
-        const PAGE_SIZE: u64 = 100;
+        const PAGE_SIZE: usize = 100;
         let mut reader = BatchedAuctionDataReader::new(index);
         loop {
             let mut orders_builder = self.get_encoded_users_paginated(
                 reader.pagination.previous_page_user,
-                reader.pagination.previous_page_user_offset,
-                PAGE_SIZE,
+                reader.pagination.previous_page_user_offset as u64,
+                PAGE_SIZE as u64,
             );
             orders_builder.m.tx.gas = None;
             let packed_auction_bytes = orders_builder.call().wait()?;
