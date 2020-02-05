@@ -87,11 +87,12 @@ impl StableXContract for BatchExchange {
         const PAGE_SIZE: u64 = 100;
         let mut reader = BatchedAuctionDataReader::new(index);
         loop {
-            let orders_builder = self.get_encoded_users_paginated(
+            let mut orders_builder = self.get_encoded_users_paginated(
                 reader.pagination.previous_page_user,
                 reader.pagination.previous_page_user_offset,
                 PAGE_SIZE,
             );
+            orders_builder.m.tx.gas = None;
             let packed_auction_bytes = orders_builder.call().wait()?;
             let number_of_added_orders = reader.apply_batch(&packed_auction_bytes);
             if number_of_added_orders < PAGE_SIZE {
