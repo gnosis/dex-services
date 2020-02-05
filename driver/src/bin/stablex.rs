@@ -1,4 +1,6 @@
 use driver::contracts::stablex_contract::BatchExchange;
+use driver::price_finding::price_finder_interface::OptimizationModel;
+
 use driver::driver::stablex_driver::StableXDriver;
 use driver::logging;
 use driver::metrics::{MetricsServer, StableXMetrics};
@@ -18,7 +20,19 @@ use std::time::Duration;
 fn main() {
     let (_, _guard) = logging::init();
 
-    let (contract, _event_loop) = BatchExchange::new().unwrap();
+    // Environment variable parsing
+    let filter = env::var("ORDERBOOK_FILTER").unwrap_or_else(|_| String::from("{}"));
+    let ethereum_node_url =
+        env::var("ETHEREUM_NODE_URL").expect("ETHEREUM_NODE_URL env var not set");
+    let network_id = env::var("NETWORK_ID")
+        .map(|s| s.parse().expect("Cannot parse NETWORK_ID"))
+        .expect("NETWORK_ID env var not set");
+
+    let optimization_model_string: String =
+        env::var("OPTIMIZATION_MODEL").unwrap_or_else(|_| String::from("NAIVE"));
+    let optimization_model = OptimizationModel::from(optimization_model_string.as_str());
+
+    let (contract, _event_loop) = BatchExchange::new(ethereum_node_url, network_id).unwrap();
     info!("Using contract at {}", contract.address());
     info!("Using account {}", contract.account());
 
@@ -31,10 +45,9 @@ fn main() {
     });
 
     let fee = Some(Fee::default());
-    let mut price_finder = driver::util::create_price_finder(fee);
+    let mut price_finder = driver::util::create_price_finder(fee, optimization_model);
 
     let orderbook = StableXOrderBookReader::new(&contract);
-    let filter = env::var("ORDERBOOK_FILTER").unwrap_or_else(|_| String::from("{}"));
     let parsed_filter = serde_json::from_str(&filter)
         .map_err(|e| {
             error!("Error parsing orderbook filter: {}", &e);

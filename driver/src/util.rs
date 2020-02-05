@@ -1,5 +1,4 @@
 use log::info;
-use std::env;
 use std::future::Future;
 use web3::types::{H256, U256};
 
@@ -104,18 +103,17 @@ pub fn batch_processing_state(
     Ok(ProcessingState::TooEarly)
 }
 
-pub fn create_price_finder(fee: Option<Fee>) -> Box<dyn PriceFinding> {
-    let optimization_model_string: String =
-        env::var("OPTIMIZATION_MODEL").unwrap_or_else(|_| String::from("NAIVE"));
-    let optimization_model = OptimizationModel::from(optimization_model_string.as_str());
-
+pub fn create_price_finder(
+    fee: Option<Fee>,
+    optimization_model: OptimizationModel,
+) -> Box<dyn PriceFinding> {
     if optimization_model == OptimizationModel::NAIVE {
         info!("Using naive price finder");
         Box::new(NaiveSolver::new(fee))
     } else {
         info!(
-            "Using {:} optimisation price finder",
-            optimization_model_string
+            "Using optimisation price finder with the args {:}",
+            optimization_model.to_args()
         );
         Box::new(OptimisationPriceFinder::new(fee, optimization_model))
     }

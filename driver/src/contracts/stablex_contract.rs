@@ -28,9 +28,9 @@ lazy_static! {
 include!(concat!(env!("OUT_DIR"), "/batch_exchange.rs"));
 
 impl BatchExchange {
-    pub fn new() -> Result<(Self, EventLoopHandle)> {
-        let (web3, event_loop) = contracts::web3_provider()?;
-        let defaults = contracts::method_defaults()?;
+    pub fn new(ethereum_node_url: String, network_id: u64) -> Result<(Self, EventLoopHandle)> {
+        let (web3, event_loop) = contracts::web3_provider(ethereum_node_url)?;
+        let defaults = contracts::method_defaults(network_id)?;
 
         let mut instance = BatchExchange::deployed(&web3).wait()?;
         *instance.defaults_mut() = defaults;
