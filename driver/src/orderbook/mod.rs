@@ -1,12 +1,14 @@
 use crate::contracts::stablex_contract::StableXContract;
 use crate::error::DriverError;
 
+use batched_auction_data_reader::BatchedAuctionDataReader;
 use dfusion_core::models::{AccountState, Order};
 #[cfg(test)]
 use mockall::automock;
 
 use web3::types::U256;
 
+mod batched_auction_data_reader;
 mod filtered_orderbook;
 pub use filtered_orderbook::FilteredOrderbookReader;
 pub use filtered_orderbook::OrderbookFilter;
@@ -27,19 +29,24 @@ pub trait StableXOrderBookReading {
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)>;
 }
 
-/// A simple implementation of the order book trait that forwards calls
-/// directly to the smart contract.
-pub struct StableXOrderBookReader<'a> {
+/// Implements the StableXOrderBookReading trait by using the underlying
+/// contract in a paginated way.
+/// This avoid hitting gas limits when the total amount of orders is large.
+pub struct PaginatedStableXOrderBookReader<'a> {
     contract: &'a dyn StableXContract,
+    page_size: u64,
 }
 
-impl<'a> StableXOrderBookReader<'a> {
-    pub fn new(contract: &'a dyn StableXContract) -> Self {
-        Self { contract }
+impl<'a> PaginatedStableXOrderBookReader<'a> {
+    pub fn new(contract: &'a dyn StableXContract, page_size: u64) -> Self {
+        Self {
+            contract,
+            page_size,
+        }
     }
 }
 
-impl<'a> StableXOrderBookReading for StableXOrderBookReader<'a> {
+impl<'a> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a> {
     fn get_auction_index(&self) -> Result<U256> {
         self.contract
             .get_current_auction_index()
@@ -47,29 +54,17 @@ impl<'a> StableXOrderBookReading for StableXOrderBookReader<'a> {
     }
 
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
-        self.contract.get_auction_data(index)
-    }
-}
-
-/// Implements the StableXOrderBookReading trait by using the underlying
-/// contract in a paginated way.
-/// This avoid hitting gas limits when the total amount of orders is large.
-pub struct PaginatedStableXOrderBookReader<'a> {
-    contract: &'a dyn StableXContract,
-}
-
-impl<'a> PaginatedStableXOrderBookReader<'a> {
-    pub fn new(contract: &'a dyn StableXContract) -> Self {
-        Self { contract }
-    }
-}
-
-impl<'a> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a> {
-    fn get_auction_index(&self) -> Result<U256> {
-        StableXOrderBookReader::new(self.contract).get_auction_index()
-    }
-
-    fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
-        self.contract.get_auction_data_batched(index)
+        let mut reader = BatchedAuctionDataReader::new(index);
+        loop {
+            let number_of_added_orders =
+                reader.apply_batch(&self.contract.get_auction_data_batched(
+                    self.page_size,
+                    reader.pagination.previous_page_user,
+                    reader.pagination.previous_page_user_offset as u64,
+                )?);
+            if (number_of_added_orders as u64) < self.page_size {
+                return Ok((reader.account_state, reader.orders));
+            }
+        }
     }
 }

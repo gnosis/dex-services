@@ -1,4 +1,4 @@
-use super::stablex_auction_element::{StableXAuctionElement, AUCTION_ELEMENT_WIDTH};
+use crate::contracts::stablex_auction_element::{StableXAuctionElement, AUCTION_ELEMENT_WIDTH};
 use dfusion_core::models::{AccountState, BatchInformation, Order};
 use std::collections::HashMap;
 use web3::types::{H160, U256};
@@ -253,7 +253,7 @@ pub mod tests {
     }
 
     #[test]
-    fn batched_auction_data_reader_multiple_batches_2() {
+    fn batched_auction_data_reader_multiple_batches_different_users() {
         let mut account_state = AccountState::default();
         let mut reader = BatchedAuctionDataReader::new(U256::from(3));
         let mut bytes = Vec::new();

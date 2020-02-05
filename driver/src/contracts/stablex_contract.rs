@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::env;
 
-use dfusion_core::models::{AccountState, Order, Solution};
+use dfusion_core::models::{Order, Solution};
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
@@ -11,7 +11,6 @@ use web3::transports::EventLoopHandle;
 use web3::types::{H160, U128, U256};
 
 use crate::contracts;
-use crate::contracts::batched_auction_data_reader::BatchedAuctionDataReader;
 use crate::error::DriverError;
 use crate::util::FutureWaitExt;
 
@@ -48,8 +47,13 @@ impl BatchExchange {
 #[cfg_attr(test, automock)]
 pub trait StableXContract {
     fn get_current_auction_index(&self) -> Result<U256>;
-    fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)>;
-    fn get_auction_data_batched(&self, index: U256) -> Result<(AccountState, Vec<Order>)>;
+    fn get_auction_data(&self) -> Result<Vec<u8>>;
+    fn get_auction_data_batched(
+        &self,
+        page_size: u64,
+        previous_page_user: H160,
+        previous_page_user_offset: u64,
+    ) -> Result<Vec<u8>>;
     fn get_solution_objective_value(
         &self,
         batch_index: U256,
@@ -71,34 +75,28 @@ impl StableXContract for BatchExchange {
         Ok(auction_index.into())
     }
 
-    fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
+    fn get_auction_data(&self) -> Result<Vec<u8>> {
         let mut orders_builder = self.get_encoded_orders();
         // NOTE: we need to override the gas limit which was set by the method
         //   defaults - large number of orders was causing this `eth_call`
         //   request to run into the gas limit
         orders_builder.m.tx.gas = None;
-        let packed_auction_bytes = orders_builder.call().wait()?;
-        let mut reader = BatchedAuctionDataReader::new(index);
-        reader.apply_batch(&packed_auction_bytes);
-        Ok((reader.account_state, reader.orders))
+        orders_builder.call().wait().map_err(From::from)
     }
 
-    fn get_auction_data_batched(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
-        const PAGE_SIZE: usize = 100;
-        let mut reader = BatchedAuctionDataReader::new(index);
-        loop {
-            let mut orders_builder = self.get_encoded_users_paginated(
-                reader.pagination.previous_page_user,
-                reader.pagination.previous_page_user_offset as u64,
-                PAGE_SIZE as u64,
-            );
-            orders_builder.m.tx.gas = None;
-            let packed_auction_bytes = orders_builder.call().wait()?;
-            let number_of_added_orders = reader.apply_batch(&packed_auction_bytes);
-            if number_of_added_orders < PAGE_SIZE {
-                return Ok((reader.account_state, reader.orders));
-            }
-        }
+    fn get_auction_data_batched(
+        &self,
+        page_size: u64,
+        previous_page_user: H160,
+        previous_page_user_offset: u64,
+    ) -> Result<Vec<u8>> {
+        let mut orders_builder = self.get_encoded_users_paginated(
+            previous_page_user,
+            previous_page_user_offset as u64,
+            page_size,
+        );
+        orders_builder.m.tx.gas = None;
+        orders_builder.call().wait().map_err(From::from)
     }
 
     fn get_solution_objective_value(
