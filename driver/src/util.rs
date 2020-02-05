@@ -107,8 +107,6 @@ pub fn batch_processing_state(
 pub fn create_price_finder(fee: Option<Fee>) -> Box<dyn PriceFinding> {
     let optimization_model_string: String =
         env::var("OPTIMIZATION_MODEL").unwrap_or_else(|_| String::from("mip"));
-    // let optimization_model: OptimizationModel =
-    //     OptimizationModel::From(optimization_model_string.clone());
     let optimization_model = OptimizationModel::from(optimization_model_string.clone());
 
     if optimization_model == OptimizationModel::NAIVE {
