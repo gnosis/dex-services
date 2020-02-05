@@ -36,7 +36,7 @@ matrix:
         - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
       install:
         - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
-        - ./test/setup_contracts.sh
+        - ./scripts/setup_contracts.sh
       script:
         - cargo build --locked
         # Build and publish compact image with compiled binary
@@ -59,7 +59,7 @@ matrix:
         - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
       install:
         - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
-        - ./test/setup_contracts.sh
+        - ./scripts/setup_contracts.sh
       before_script:
         - |
           mkdir -p $HOME/.sccache/bin
@@ -95,33 +95,15 @@ matrix:
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
         - (cd dex-contracts && yarn --frozen-lockfile)
-        - ./test/setup_contracts.sh
+        - ./scripts/setup_contracts.sh
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d driver graph-listener
         - cargo test -p e2e snapp_deposit -- --nocapture
-        - ./test/restart-containers.sh
+        - ./scripts/restart-containers.sh
         - cargo test -p e2e snapp_auction -- --nocapture
+        - ./scripts/restart-containers.sh
+        - cargo test -p e2e snapp_standing -- --nocapture
       after_script:
-        - docker-compose logs
-    - language: generic
-      name: "dƒusion e2e tests (Legacy - Bash Scripts)"
-      cache:
-        directories:
-          - $HOME/.cache/yarn
-          - $HOME/.cache/node-gyp
-      before_install:
-        - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
-      install:
-        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
-        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
-        - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
-        - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
-        - (cd dex-contracts && yarn --frozen-lockfile)
-        - ./test/setup_contracts.sh
-      script:
-        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d driver graph-listener
-        - ./test/e2e-tests-standing-order.sh
-      after_failure:
         - docker-compose logs
     - language: rust
       name: "StableX e2e Tests (Ganache)"
@@ -146,7 +128,7 @@ matrix:
         - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
         - (cd dex-contracts && yarn --frozen-lockfile)
-        - ./test/setup_contracts.sh
+        - ./scripts/setup_contracts.sh
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d stablex
         - cargo test -p e2e ganache -- --nocapture
@@ -176,7 +158,7 @@ matrix:
         - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
         - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
         # TODO - remove once https://github.com/gnosis/ethcontract-rs/pull/127 is merged
-        - ./test/setup_contracts.sh
+        - ./scripts/setup_contracts.sh
       script:
         - docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.yml up -d stablex
         - cargo test -p e2e rinkeby -- --nocapture

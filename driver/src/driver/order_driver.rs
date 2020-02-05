@@ -66,7 +66,7 @@ impl<'a> OrderProcessor<'a> {
             })?;
             match processing_state {
                 ProcessingState::TooEarly => {
-                    info!("Need to wait before processing auction slot {:?}", slot)
+                    debug!("Need to wait before processing auction slot {:?}", slot)
                 }
                 ProcessingState::AcceptsBids => {
                     if !self.auction_bids.contains_key(&slot) {
