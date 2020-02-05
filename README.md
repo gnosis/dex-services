@@ -150,7 +150,7 @@ npx truffle exec scripts/snapp/claim_withdraw.js --slot=0 --accountId=1 --tokenI
 
 ## Tests
 
-For end-to-end tests, please consult the guide in [e2e/README](https://github.com/gnosis/dex-services/e2e#Guide).
+For end-to-end tests, please consult the guide in [e2e/README](e2e/README.md).
 
 To run unit tests:
 
