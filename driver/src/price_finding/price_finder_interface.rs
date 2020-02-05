@@ -4,7 +4,7 @@ use std::convert::From;
 #[cfg(test)]
 use mockall::automock;
 
-use super::error::{ErrorKind, PriceFindingError};
+use super::error::PriceFindingError;
 
 #[derive(Clone)]
 pub struct Fee {
@@ -29,9 +29,9 @@ pub enum OptimizationModel {
     NLP,
 }
 
-impl From<String> for OptimizationModel {
-    fn from(optimization_model_string: String) -> OptimizationModel {
-        match optimization_model_string.to_lowercase().as_str() {
+impl From<&str> for OptimizationModel {
+    fn from(optimization_model_str: &str) -> OptimizationModel {
+        match optimization_model_str.to_lowercase().as_str() {
             "mip" => OptimizationModel::MIP,
             "nlp" => OptimizationModel::NLP,
             // the naive solver is the standard solver.
@@ -41,15 +41,13 @@ impl From<String> for OptimizationModel {
 }
 
 impl OptimizationModel {
-    pub fn to_args(self) -> Result<&'static str, PriceFindingError> {
+    pub fn to_args(self) -> &'static str {
         match self {
-            OptimizationModel::MIP => Ok(&"mip"),
-            OptimizationModel::NLP => Ok(&"nlp"),
-            // to_args is currently only used for the optimizations models mip and nlp
-            _ => Err(PriceFindingError::new(
-                "OptimizationSolver should not be called with naive solver",
-                ErrorKind::Unknown,
-            )),
+            OptimizationModel::MIP => &"--optModel=mip",
+            OptimizationModel::NLP => &"--optModel=nlp",
+            OptimizationModel::NAIVE => {
+                panic!("OptimizationSolver should not be called with naive solver")
+            }
         }
     }
 }

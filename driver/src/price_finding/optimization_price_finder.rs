@@ -238,12 +238,12 @@ fn run_solver(
     input_file: &str,
     optimization_model: OptimizationModel,
 ) -> Result<(), PriceFindingError> {
-    let optimization_model_str = optimization_model.to_args()?;
+    let optimization_model_str = optimization_model.to_args();
     let output = Command::new("python")
         .args(&["-m", "batchauctions.scripts.e2e._run"])
         .arg(RESULT_FOLDER)
         .args(&["--jsonFile", input_file])
-        .args(&["--optModel", optimization_model_str])
+        .args(&[optimization_model_str])
         .output()?;
 
     if !output.status.success() {
