@@ -32,7 +32,7 @@ docker-compose up -d ganache-cli
 
 The BatchExchange system only consists of a simple service that queries the relevant auction information (orders and balances) directly from the blockchain. It then tries to find and submit a valid solution as soon as the order collection phase for a given auction ends.
 
-The repo ships with a very naive solver, that can at the moment only match two orders between the fee token (*token0*) and another token if those orders overlap. A more sophisticated solver using a linear programming approach is not open sourced at the moment. In order to implement a custom solver, check the smart contract for the required constraints in the `submitSolution` method.
+The repo ships with a very naive solver, that can at the moment only match two orders between the fee token (*token0*) and another token if those orders overlap. A more sophisticated solver using a mixed integer programming approach is not open sourced at the moment. In order to implement a custom solver, check the smart contract for the required constraints in the `submitSolution` method.
 
 ### Running BatchExchange
 
@@ -195,7 +195,7 @@ The following environment variables can be used to configure the behavior of the
 ### Common parameters:
 - *ETHEREUM_NODE_URL*: Full-Node to connect to. Make sure the node allows view queries without a gas limit in order to fetch the entire orderbook at once.
 - *NETWORK_ID*: Network ID (e.g. 1 for mainnet, 4 for rinkeby, 5777 for ganache)
-- *LINEAR_OPTIMIZATION_SOLVER*: Which style of solver to use (0 for naive, 1 for non-public linear solver)
+- *OPTIMIZATION_MODEL*: Which style of solver to use (NAIVE for naive, MIP for mixed integer programming and NLP for the  non-linear programming solver)
 - *PRIVATE_KEY*: THe key with which to sign transactions
 
 ### BatchExchange only
@@ -229,7 +229,7 @@ More information on the logging filter syntax can be found in the `slog-envlogge
 
 ### docker-compose build
 
-If you have built the docker landscape before, and there are updates to the rust dependencies or other implementation details, you might have to rebuild your docker images (in particular if there is a new version of the linear optimization solver).
+If you have built the docker landscape before, and there are updates to the rust dependencies or other implementation details, you might have to rebuild your docker images (in particular if there is a new version of the dependent optimization solver).
 
 ```bash
 docker-compose build
