@@ -1,4 +1,6 @@
 use dfusion_core::models;
+use std::convert::From;
+
 #[cfg(test)]
 use mockall::automock;
 
@@ -16,6 +18,36 @@ impl Default for Fee {
         Fee {
             token: 0,
             ratio: 0.001,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum OptimizationModel {
+    NAIVE,
+    MIP,
+    NLP,
+}
+
+impl From<&str> for OptimizationModel {
+    fn from(optimization_model_str: &str) -> OptimizationModel {
+        match optimization_model_str.to_lowercase().as_str() {
+            "mip" => OptimizationModel::MIP,
+            "nlp" => OptimizationModel::NLP,
+            // the naive solver is the standard solver.
+            _ => OptimizationModel::NAIVE,
+        }
+    }
+}
+
+impl OptimizationModel {
+    pub fn to_args(self) -> &'static str {
+        match self {
+            OptimizationModel::MIP => &"--optModel=mip",
+            OptimizationModel::NLP => &"--optModel=nlp",
+            OptimizationModel::NAIVE => {
+                panic!("OptimizationSolver should not be called with naive solver")
+            }
         }
     }
 }
