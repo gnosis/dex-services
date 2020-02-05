@@ -16,11 +16,17 @@ use std::time::Duration;
 fn main() {
     let (logger, _guard) = logging::init();
 
+    let ethereum_node_url =
+        env::var("ETHEREUM_NODE_URL").expect("Specify ETHEREUM_NODE_URL variable");
+    let network_id = env::var("NETWORK_ID")
+        .map(|s| s.parse().expect("Cannot parse NETWORK_ID"))
+        .expect("Specify NETWORK_ID variable");
     let postgres_url = env::var("POSTGRES_URL").expect("Specify POSTGRES_URL variable");
+
     let store_reader = GraphNodeReader::new(postgres_url, &logger);
     let db_instance = GraphReader::new(Box::new(store_reader));
 
-    let snapp_contract = SnappContractImpl::new().unwrap();
+    let snapp_contract = SnappContractImpl::new(ethereum_node_url, network_id).unwrap();
     info!("Using contract at {}", snapp_contract.address());
     info!("Using account {}", snapp_contract.account());
 

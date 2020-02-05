@@ -11,8 +11,9 @@ use std::env;
 use web3::api::Web3;
 use web3::transports::{EventLoopHandle, Http};
 
-fn web3_provider() -> Result<(Web3<LoggingTransport<Http>>, EventLoopHandle), DriverError> {
-    let url = env::var("ETHEREUM_NODE_URL")?;
+fn web3_provider(
+    url: String,
+) -> Result<(Web3<LoggingTransport<Http>>, EventLoopHandle), DriverError> {
     let (event_loop, http) = Http::new(&url)?;
     let logging = LoggingTransport::new(http, Level::Debug);
     let web3 = Web3::new(logging);
@@ -20,8 +21,7 @@ fn web3_provider() -> Result<(Web3<LoggingTransport<Http>>, EventLoopHandle), Dr
     Ok((web3, event_loop))
 }
 
-fn method_defaults() -> Result<MethodDefaults, DriverError> {
-    let network_id = env::var("NETWORK_ID")?.parse()?;
+fn method_defaults(network_id: u64) -> Result<MethodDefaults, DriverError> {
     let secret = {
         let private_key: H256 = env::var("PRIVATE_KEY")?.parse()?;
         SecretKey::from_raw(&private_key[..]).map_err(ethsign::Error::from)?

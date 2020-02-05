@@ -18,7 +18,15 @@ use std::time::Duration;
 fn main() {
     let (_, _guard) = logging::init();
 
-    let (contract, _event_loop) = BatchExchange::new().unwrap();
+    // Environment variable parsing
+    let filter = env::var("ORDERBOOK_FILTER").unwrap_or_else(|_| String::from("{}"));
+    let ethereum_node_url =
+        env::var("ETHEREUM_NODE_URL").expect("ETHEREUM_NODE_URL env var not set");
+    let network_id = env::var("NETWORK_ID")
+        .map(|s| s.parse().expect("Cannot parse NETWORK_ID"))
+        .expect("NETWORK_ID env var not set");
+
+    let (contract, _event_loop) = BatchExchange::new(ethereum_node_url, network_id).unwrap();
     info!("Using contract at {}", contract.address());
     info!("Using account {}", contract.account());
 
@@ -34,7 +42,6 @@ fn main() {
     let mut price_finder = driver::util::create_price_finder(fee);
 
     let orderbook = StableXOrderBookReader::new(&contract);
-    let filter = env::var("ORDERBOOK_FILTER").unwrap_or_else(|_| String::from("{}"));
     let parsed_filter = serde_json::from_str(&filter)
         .map_err(|e| {
             error!("Error parsing orderbook filter: {}", &e);
