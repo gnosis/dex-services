@@ -1767,7 +1767,7 @@ dependencies = [
  "dfusion_core 0.1.0",
  "env_logger 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "graph 0.17.0 (git+https://github.com/graphprotocol/graph-node?tag=v0.17.0)",
  "graph-chain-ethereum 0.17.0 (git+https://github.com/graphprotocol/graph-node?tag=v0.17.0)",
  "graph-core 0.17.0 (git+https://github.com/graphprotocol/graph-node?tag=v0.17.0)",
