@@ -1,4 +1,6 @@
 use driver::contracts::stablex_contract::BatchExchange;
+use driver::price_finding::price_finder_interface::OptimizationModel;
+
 use driver::driver::stablex_driver::StableXDriver;
 use driver::logging;
 use driver::metrics::{MetricsServer, StableXMetrics};
@@ -26,6 +28,10 @@ fn main() {
         .map(|s| s.parse().expect("Cannot parse NETWORK_ID"))
         .expect("NETWORK_ID env var not set");
 
+    let optimization_model_string: String =
+        env::var("OPTIMIZATION_MODEL").unwrap_or_else(|_| String::from("NAIVE"));
+    let optimization_model = OptimizationModel::from(optimization_model_string.as_str());
+
     let (contract, _event_loop) = BatchExchange::new(ethereum_node_url, network_id).unwrap();
     info!("Using contract at {}", contract.address());
     info!("Using account {}", contract.account());
@@ -39,7 +45,7 @@ fn main() {
     });
 
     let fee = Some(Fee::default());
-    let mut price_finder = driver::util::create_price_finder(fee);
+    let mut price_finder = driver::util::create_price_finder(fee, optimization_model);
 
     let orderbook = StableXOrderBookReader::new(&contract);
     let parsed_filter = serde_json::from_str(&filter)

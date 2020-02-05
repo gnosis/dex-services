@@ -1,4 +1,5 @@
 use dfusion_core::database::GraphReader;
+use driver::price_finding::price_finder_interface::OptimizationModel;
 
 use driver::contracts::snapp_contract::SnappContractImpl;
 use driver::driver::order_driver::OrderProcessor;
@@ -23,6 +24,10 @@ fn main() {
         .expect("Specify NETWORK_ID variable");
     let postgres_url = env::var("POSTGRES_URL").expect("Specify POSTGRES_URL variable");
 
+    let optimization_model_string: String =
+        env::var("OPTIMIZATION_MODEL").unwrap_or_else(|_| String::from("NAIVE"));
+    let optimization_model = OptimizationModel::from(optimization_model_string.as_str());
+
     let store_reader = GraphNodeReader::new(postgres_url, &logger);
     let db_instance = GraphReader::new(Box::new(store_reader));
 
@@ -30,7 +35,7 @@ fn main() {
     info!("Using contract at {}", snapp_contract.address());
     info!("Using account {}", snapp_contract.account());
 
-    let mut price_finder = driver::util::create_price_finder(None);
+    let mut price_finder = driver::util::create_price_finder(None, optimization_model);
     let mut order_processor =
         OrderProcessor::new(&db_instance, &snapp_contract, &mut *price_finder);
     loop {
