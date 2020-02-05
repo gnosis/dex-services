@@ -6,14 +6,14 @@ use web3::types::{H160, U256};
 /// Handles reading of auction data that has been encoded with the smart
 /// contract's `encodeAuctionElement` function.
 pub struct BatchedAuctionDataReader {
-    index: U256,
     pub account_state: AccountState,
     /// All orders in the order they were received.
     pub orders: Vec<Order>,
-    /// The total number of orders per user.
-    pub user_order_counts: HashMap<H160, u16>,
     /// Used when reading data from the smart contract in batches.
     pub pagination: Pagination,
+    index: U256,
+    /// The total number of orders per user.
+    user_order_counts: HashMap<H160, u16>,
 }
 
 /// Data for the next call to the smart contract's `getEncodedUsersPaginated`
