@@ -44,7 +44,7 @@ impl BatchedAuctionDataReader {
     ///
     /// Returns the number of orders in the data.
     ///
-    /// Panics if `packed_auction_bytes` is not a multiple of
+    /// Panics if length of `packed_auction_bytes` is not a multiple of
     /// `AUCTION_ELEMENT_WIDTH`.
     pub fn apply_batch(&mut self, packed_auction_bytes: &[u8]) -> u64 {
         let previous_order_count = self.orders.len();
@@ -53,16 +53,16 @@ impl BatchedAuctionDataReader {
         if number_of_added_orders == 0 {
             return 0;
         }
-        let last_order_user = self
-            .orders
-            .last()
-            .expect("have at least one order")
-            .account_id;
+        let last_order_user = self.orders.last().expect("there are no orders").account_id;
         if self.pagination.previous_page_user == last_order_user {
             self.pagination.previous_page_user_offset += number_of_added_orders;
         } else {
             self.pagination.previous_page_user = last_order_user;
-            self.pagination.previous_page_user_offset = number_of_added_orders;
+            self.pagination.previous_page_user_offset = *self
+                .user_order_counts
+                .get(&last_order_user)
+                .expect("user has order but no order count")
+                as u64;
         }
         number_of_added_orders
     }
@@ -244,6 +244,34 @@ pub mod tests {
         bytes.clear();
         bytes.extend(ORDER_3_BYTES);
         assert_eq!(reader.apply_batch(&bytes), 1);
+        account_state.modify_balance(H160::from_low_u64_be(2), 257, |x| *x = 6);
+        assert_eq!(reader.account_state, account_state);
+        assert_eq!(
+            reader.pagination.previous_page_user,
+            H160::from_low_u64_be(2)
+        );
+        assert_eq!(reader.pagination.previous_page_user_offset, 1);
+    }
+
+    #[test]
+    fn batched_auction_data_reader_multiple_batches_2() {
+        let mut account_state = AccountState::default();
+        let mut reader = BatchedAuctionDataReader::new(U256::from(3));
+        let mut bytes = Vec::new();
+
+        bytes.extend(ORDER_1_BYTES);
+        assert_eq!(reader.apply_batch(&bytes), 1);
+        account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 4);
+        assert_eq!(reader.account_state, account_state);
+        assert_eq!(reader.orders, [ORDER_1.clone()]);
+        assert_eq!(reader.pagination.previous_page_user, ORDER_1.account_id);
+        assert_eq!(reader.pagination.previous_page_user_offset, 1);
+
+        bytes.clear();
+        bytes.extend(ORDER_2_BYTES);
+        bytes.extend(ORDER_3_BYTES);
+        assert_eq!(reader.apply_batch(&bytes), 2);
+        account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 5);
         account_state.modify_balance(H160::from_low_u64_be(2), 257, |x| *x = 6);
         assert_eq!(reader.account_state, account_state);
         assert_eq!(
