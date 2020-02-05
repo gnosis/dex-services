@@ -1,10 +1,8 @@
 pub mod error;
-pub mod linear_optimization_price_finder;
 pub mod naive_solver;
+pub mod optimization_price_finder;
 pub mod price_finder_interface;
 
-pub use crate::price_finding::linear_optimization_price_finder::{
-    OptimisationPriceFinder, OptimizationModel,
-};
 pub use crate::price_finding::naive_solver::NaiveSolver;
-pub use crate::price_finding::price_finder_interface::{Fee, PriceFinding};
+pub use crate::price_finding::optimization_price_finder::OptimisationPriceFinder;
+pub use crate::price_finding::price_finder_interface::{Fee, OptimizationModel, PriceFinding};

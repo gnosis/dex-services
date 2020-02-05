@@ -189,7 +189,7 @@ cargo test
 
 We also require `cargo clippy` and `cargo fmt` to pass for any PR to be merged.
 
-## Running with linear optimization solver
+## Running with optimization solver
 
 For this to work, you will need to have read access to our AWS docker registry and have [awscli](https://aws.amazon.com/cli/) installed. Use this command to login:
 
@@ -206,7 +206,13 @@ docker-compose build --build-arg SOLVER_BASE=163030813197.dkr.ecr.us-east-1.amaz
 and add the following line to you `common.env` file:
 
 ```
-LINEAR_OPTIMIZATION_SOLVER=1
+OPTIMIZATION_MODEL=MIP
+```
+
+or
+
+```
+OPTIMIZATION_MODEL=NLP
 ```
 
 Afterwards, when you run your environment e.g. with `docker-compose up stablex` the linear optimizer should be automatically used. Note that the e2e tests might no longer work, as their resolution depends on the naive and not the optimal solving strategy.

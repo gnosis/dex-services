@@ -1,8 +1,10 @@
 use dfusion_core::models;
+use std::convert::From;
+
 #[cfg(test)]
 use mockall::automock;
 
-use super::error::PriceFindingError;
+use super::error::{ErrorKind, PriceFindingError};
 
 #[derive(Clone)]
 pub struct Fee {
@@ -16,6 +18,38 @@ impl Default for Fee {
         Fee {
             token: 0,
             ratio: 0.001,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum OptimizationModel {
+    NAIVE,
+    MIP,
+    NLP,
+}
+
+impl From<String> for OptimizationModel {
+    fn from(optimization_model_string: String) -> OptimizationModel {
+        match optimization_model_string.to_lowercase().as_str() {
+            "mip" => OptimizationModel::MIP,
+            "nlp" => OptimizationModel::NLP,
+            // the naive solver is the standard solver.
+            _ => OptimizationModel::NAIVE,
+        }
+    }
+}
+
+impl OptimizationModel {
+    pub fn to_args(self) -> Result<&'static str, PriceFindingError> {
+        match self {
+            OptimizationModel::MIP => Ok(&"mip"),
+            OptimizationModel::NLP => Ok(&"nlp"),
+            // to_args is currently only used for the optimizations models mip and nlp
+            _ => Err(PriceFindingError::new(
+                "OptimizationSolver should not be called with naive solver",
+                ErrorKind::Unknown,
+            )),
         }
     }
 }

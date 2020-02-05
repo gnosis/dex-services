@@ -1,5 +1,5 @@
 use crate::price_finding::error::{ErrorKind, PriceFindingError};
-use crate::price_finding::price_finder_interface::{Fee, PriceFinding};
+use crate::price_finding::price_finder_interface::{Fee, OptimizationModel, PriceFinding};
 
 use dfusion_core::models;
 
@@ -14,13 +14,6 @@ use web3::types::H160;
 const RESULT_FOLDER: &str = "./results/tmp/";
 
 type PriceMap = HashMap<u16, u128>;
-
-#[derive(Clone, Copy, PartialEq)]
-pub enum OptimizationModel {
-    NAIVE,
-    MIP,
-    NLP,
-}
 
 mod solver_output {
     use serde::Deserialize;
@@ -245,14 +238,7 @@ fn run_solver(
     input_file: &str,
     optimization_model: OptimizationModel,
 ) -> Result<(), PriceFindingError> {
-    let optimization_model_str = match optimization_model {
-        OptimizationModel::MIP => Ok(&"mip"),
-        OptimizationModel::NLP => Ok(&"nlp"),
-        _ => Err(PriceFindingError::new(
-            "OptimizationSolver should not be called with naive solver",
-            ErrorKind::Unknown,
-        )),
-    }?;
+    let optimization_model_str = optimization_model.to_args()?;
     let output = Command::new("python")
         .args(&["-m", "batchauctions.scripts.e2e._run"])
         .arg(RESULT_FOLDER)
