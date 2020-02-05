@@ -33,7 +33,14 @@ fn main() {
     let fee = Some(Fee::default());
     let mut price_finder = driver::util::create_price_finder(fee);
 
-    let orderbook = PaginatedStableXOrderBookReader::new(&contract, 100);
+    const DEFAULT_AUCTION_DATA_BATCH_SIZE: u64 = 100;
+    let auction_data_batch_size: u64 = env::var("AUCTION_DATA_BATCH_SIZE")
+        .map(|str| {
+            str.parse()
+                .expect("couldn't parse AUCTION_DATA_BATCH_SIZE environment variable")
+        })
+        .unwrap_or(DEFAULT_AUCTION_DATA_BATCH_SIZE);
+    let orderbook = PaginatedStableXOrderBookReader::new(&contract, auction_data_batch_size);
     let filter = env::var("ORDERBOOK_FILTER").unwrap_or_else(|_| String::from("{}"));
     let parsed_filter = serde_json::from_str(&filter)
         .map_err(|e| {
