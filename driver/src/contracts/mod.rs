@@ -11,7 +11,8 @@ use std::env;
 use web3::api::Web3;
 use web3::transports::{EventLoopHandle, Http};
 
-fn web3_provider() -> Result<(Web3<LoggingTransport<Http>>, EventLoopHandle), DriverError> {
+pub(crate) fn web3_provider() -> Result<(Web3<LoggingTransport<Http>>, EventLoopHandle), DriverError>
+{
     let url = env::var("ETHEREUM_NODE_URL")?;
     let (event_loop, http) = Http::new(&url)?;
     let logging = LoggingTransport::new(http, Level::Debug);

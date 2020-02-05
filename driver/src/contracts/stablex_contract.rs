@@ -47,9 +47,13 @@ impl BatchExchange {
 #[cfg_attr(test, automock)]
 pub trait StableXContract {
     fn get_current_auction_index(&self) -> Result<U256>;
-    fn get_auction_data(&self) -> Result<Vec<u8>>;
+    /// Retrieve one batch of auction data.
+    /// `block` is needed because the state of the smart contract could change
+    /// between blocks which would make the returned auction data inconsistent
+    /// between calls.
     fn get_auction_data_batched(
         &self,
+        block: u64,
         page_size: u64,
         previous_page_user: H160,
         previous_page_user_offset: u64,
@@ -75,17 +79,9 @@ impl StableXContract for BatchExchange {
         Ok(auction_index.into())
     }
 
-    fn get_auction_data(&self) -> Result<Vec<u8>> {
-        let mut orders_builder = self.get_encoded_orders();
-        // NOTE: we need to override the gas limit which was set by the method
-        //   defaults - large number of orders was causing this `eth_call`
-        //   request to run into the gas limit
-        orders_builder.m.tx.gas = None;
-        orders_builder.call().wait().map_err(From::from)
-    }
-
     fn get_auction_data_batched(
         &self,
+        block: u64,
         page_size: u64,
         previous_page_user: H160,
         previous_page_user_offset: u64,
@@ -96,6 +92,7 @@ impl StableXContract for BatchExchange {
             page_size,
         );
         orders_builder.m.tx.gas = None;
+        orders_builder.block = Some(web3::types::BlockNumber::Number(block));
         orders_builder.call().wait().map_err(From::from)
     }
 

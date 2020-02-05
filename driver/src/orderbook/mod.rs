@@ -1,5 +1,6 @@
-use crate::contracts::stablex_contract::StableXContract;
+use crate::contracts::{stablex_contract::StableXContract, web3_provider};
 use crate::error::DriverError;
+use crate::web3::futures::Future;
 
 use batched_auction_data_reader::BatchedAuctionDataReader;
 use dfusion_core::models::{AccountState, Order};
@@ -54,10 +55,12 @@ impl<'a> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a> {
     }
 
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
+        let block = web3_provider()?.0.eth().block_number().wait()?.as_u64();
         let mut reader = BatchedAuctionDataReader::new(index);
         loop {
             let number_of_added_orders =
                 reader.apply_batch(&self.contract.get_auction_data_batched(
+                    block,
                     self.page_size,
                     reader.pagination.previous_page_user,
                     reader.pagination.previous_page_user_offset as u64,
