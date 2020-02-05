@@ -15,6 +15,18 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+fn auction_data_batch_size() -> u64 {
+    const KEY: &str = "AUCTION_DATA_BATCH_SIZE";
+    const DEFAULT: u64 = 100;
+    env::var(KEY)
+        .map(|str| {
+            str.parse()
+                .map_err(|err| format!("couldn't parse {} environment variable: {}", KEY, err))
+                .unwrap()
+        })
+        .unwrap_or(DEFAULT)
+}
+
 fn main() {
     let (_, _guard) = logging::init();
 
@@ -33,14 +45,7 @@ fn main() {
     let fee = Some(Fee::default());
     let mut price_finder = driver::util::create_price_finder(fee);
 
-    const DEFAULT_AUCTION_DATA_BATCH_SIZE: u64 = 100;
-    let auction_data_batch_size: u64 = env::var("AUCTION_DATA_BATCH_SIZE")
-        .map(|str| {
-            str.parse()
-                .expect("couldn't parse AUCTION_DATA_BATCH_SIZE environment variable")
-        })
-        .unwrap_or(DEFAULT_AUCTION_DATA_BATCH_SIZE);
-    let orderbook = PaginatedStableXOrderBookReader::new(&contract, auction_data_batch_size);
+    let orderbook = PaginatedStableXOrderBookReader::new(&contract, auction_data_batch_size());
     let filter = env::var("ORDERBOOK_FILTER").unwrap_or_else(|_| String::from("{}"));
     let parsed_filter = serde_json::from_str(&filter)
         .map_err(|e| {
