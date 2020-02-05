@@ -50,6 +50,9 @@ impl BatchedAuctionDataReader {
         let previous_order_count = self.orders.len();
         self.apply_auction_data(&packed_auction_bytes);
         let number_of_added_orders = (self.orders.len() - previous_order_count) as u64;
+        if number_of_added_orders == 0 {
+            return 0;
+        }
         let last_order_user = self
             .orders
             .last()
@@ -190,6 +193,12 @@ pub mod tests {
             sell_amount: 256,
             buy_amount: 256,
         };
+    }
+
+    #[test]
+    fn batched_auction_data_reader_empty() {
+        let mut reader = BatchedAuctionDataReader::new(U256::from(3));
+        assert_eq!(reader.apply_batch(&[]), 0);
     }
 
     #[test]
