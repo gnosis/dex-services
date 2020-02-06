@@ -20,7 +20,6 @@ ONBUILD RUN apt-get update \
 ONBUILD COPY dex-contracts/build ./dex-contracts/build
 ONBUILD COPY dfusion_rust_core ./dfusion_rust_core
 ONBUILD COPY driver ./driver
-ONBUILD COPY listener ./listener
 ONBUILD COPY e2e ./e2e
 
 ONBUILD COPY Cargo.* ./
@@ -35,8 +34,6 @@ ONBUILD RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 ONBUILD COPY target/debug/stablex stablex
-ONBUILD COPY target/debug/listener graph-listener
-ONBUILD COPY target/debug/dfusion dfusion
 
 # Trigger actual build
 FROM ${RUST_BASE}
