@@ -1,7 +1,8 @@
 use crate::*;
 
 use ethcontract::contract::{
-    CallFuture, Deploy, DeployBuilder, DeployFuture, MethodBuilder, ViewMethodBuilder, MethodSendFuture,
+    CallFuture, Deploy, DeployBuilder, DeployFuture, MethodBuilder, MethodSendFuture,
+    ViewMethodBuilder,
 };
 use ethcontract::web3::api::Web3;
 use ethcontract::web3::contract::tokens::Detokenize;
