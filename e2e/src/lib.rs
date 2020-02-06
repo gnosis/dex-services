@@ -6,7 +6,5 @@ ethcontract::contract!("dex-contracts/build/contracts/IterableAppendOnlySet.json
 ethcontract::contract!("dex-contracts/build/contracts/TokenOWL.json");
 ethcontract::contract!("dex-contracts/build/contracts/ERC20Mintable.json");
 
-pub mod auction_bid;
 pub mod common;
-pub mod snapp;
 pub mod stablex;
