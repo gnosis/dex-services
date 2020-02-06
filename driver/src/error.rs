@@ -3,8 +3,6 @@ use crate::price_finding::error::PriceFindingError;
 use std::error::Error;
 use std::fmt;
 
-use dfusion_core::database::DatabaseError;
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum ErrorKind {
     Unknown,
@@ -53,12 +51,6 @@ impl From<serde_json::Error> for DriverError {
     }
 }
 
-impl From<hex::FromHexError> for DriverError {
-    fn from(error: hex::FromHexError) -> Self {
-        DriverError::new(error.description(), ErrorKind::HexError)
-    }
-}
-
 impl From<rustc_hex::FromHexError> for DriverError {
     fn from(error: rustc_hex::FromHexError) -> Self {
         DriverError::new(error.description(), ErrorKind::HexError)
@@ -80,12 +72,6 @@ impl From<std::num::ParseIntError> for DriverError {
 impl From<&str> for DriverError {
     fn from(error: &str) -> Self {
         DriverError::new(error, ErrorKind::MiscError)
-    }
-}
-
-impl From<DatabaseError> for DriverError {
-    fn from(error: DatabaseError) -> Self {
-        DriverError::new(&format!("{}", error), ErrorKind::DbError)
     }
 }
 
