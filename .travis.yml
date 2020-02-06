@@ -56,33 +56,7 @@ matrix:
         # StableX e2e Tests (Ganache)
         - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d stablex
         - cargo test -p e2e ganache -- --nocapture
-      after_failure:
-        - docker-compose logs
-    - name: "StableX e2e Tests (Rinkeby)"
-      language: rust
-      cache:
-        directories:
-          - $HOME/.cache/yarn
-          - $HOME/.cache/node-gyp
-          - $HOME/.cache/sccache
-          - $HOME/.cargo
-          - $HOME/.rustup
-      before_install:
-        - |
-          mkdir -p $HOME/.sccache/bin
-          pushd $HOME/.sccache
-          curl -LO https://github.com/mozilla/sccache/releases/download/$SCCACHE_VERSION/sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz
-          tar -C bin -xvf sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz --wildcards '*/sccache' --strip 1
-          popd
-        - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
-      install:
-        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
-        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
-        - docker build --tag stablex-binary --build-arg SOLVER_BASE=163030813197.dkr.ecr.us-east-1.amazonaws.com/dex-solver:v0.5.8 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
-        - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
-        # TODO - remove once https://github.com/gnosis/ethcontract-rs/pull/127 is merged
-        - ./scripts/setup_contracts.sh
-      script:
+        # StableX e2e Tests (Rinkeby)
         - docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.yml up -d stablex
         - cargo test -p e2e rinkeby -- --nocapture
       after_script:
