@@ -138,34 +138,34 @@ fn test_rinkeby() {
         .gas(1_000_000.into())
         .gas_price(8_000_000_000u64.into())
         .from(account.clone())
-        .send_and_confirm(Duration::from_secs(1), 1);
+        .send();
     let second_approve = IERC20::at(&web3, token_b)
         .approve(instance.address(), 1_000_000.into())
         .nonce(nonce + 1)
         .gas(1_000_000.into())
         .gas_price(8_000_000_000u64.into())
         .from(account)
-        .send_and_confirm(Duration::from_secs(1), 1);
+        .send();
 
     // Deposit Funds
     let first_deposit = instance
         .deposit(token_a, 1_000_000.into())
         .nonce(nonce + 2)
-        .send_and_confirm(Duration::from_secs(1), 1);
+        .send();
     let second_deposit = instance
         .deposit(token_b, 1_000_000.into())
         .nonce(nonce + 3)
-        .send_and_confirm(Duration::from_secs(1), 1);
+        .send();
 
     // Place orders
     let first_order = instance
         .place_order(0, 7, batch + 2, 1_000_000.into(), 10_000_000.into())
         .nonce(nonce + 4)
-        .send_and_confirm(Duration::from_secs(1), 1);
+        .send();
     let second_order = instance
         .place_order(7, 0, batch + 1, 1_000_000.into(), 10_000_000.into())
         .nonce(nonce + 5)
-        .send_and_confirm(Duration::from_secs(1), 1);
+        .send();
 
     // Wait for all transactions to be confirmed
     println!("Waiting for transactions to be confirmed");
