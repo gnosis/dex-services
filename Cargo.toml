@@ -1,11 +1,9 @@
 [workspace]
 members = [
-    "dfusion_rust_core",
     "driver",
     "e2e",
 ]
 default-members = [
-    "dfusion_rust_core",
     "driver",
 ]
 

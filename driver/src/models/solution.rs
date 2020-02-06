@@ -36,7 +36,7 @@ impl Solution {
 #[cfg(test)]
 pub mod unit_test {
     use super::*;
-    use crate::models::util::map_from_slice;
+    use crate::util::map_from_slice;
 
     fn generic_non_trivial_solution() -> Solution {
         Solution {

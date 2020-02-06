@@ -1,5 +1,5 @@
 use log::debug;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use web3::types::{H160, H256, U256};
 

@@ -395,17 +395,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dfusion_core"
-version = "0.1.0"
-dependencies = [
- "log 0.4.8",
- "mockall",
- "serde",
- "serde_derive",
- "web3",
-]
-
-[[package]]
 name = "difference"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -456,7 +445,6 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "chrono",
- "dfusion_core",
  "ethcontract",
  "ethcontract-generate",
  "futures 0.3.3",
