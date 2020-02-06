@@ -8,9 +8,6 @@ rust: stable
 env:
   global:
     - CARGO_INCREMENTAL=0
-    - SCCACHE_VERSION=0.2.12
-    - SCCACHE=$HOME/.sccache/bin/sccache
-    - RUSTC_WRAPPER=$SCCACHE
 matrix:
   include:
     - stage: "Local and Rinkeby in Parallel"
@@ -18,21 +15,12 @@ matrix:
       cache:
         directories:
           - $HOME/.cache/yarn
-          - $HOME/.cache/node-gyp
-          - $HOME/.cache/sccache
-          - $HOME/.cargo
-          - $HOME/.rustup
+          - $HOME/.cargo/bin
       before_cache:
         - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
       before_install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
-        - |
-          mkdir -p $HOME/.sccache/bin
-          pushd $HOME/.sccache
-          curl -LO https://github.com/mozilla/sccache/releases/download/$SCCACHE_VERSION/sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz
-          tar -C bin -xvf sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz --wildcards '*/sccache' --strip 1
-          popd
         - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
         - rustup component add clippy rustfmt
       install:
