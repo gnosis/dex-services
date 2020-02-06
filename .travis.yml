@@ -8,159 +8,44 @@ rust: stable
 env:
   global:
     - CARGO_INCREMENTAL=0
-    - SCCACHE_VERSION=0.2.12
-    - SCCACHE=$HOME/.sccache/bin/sccache
-    - RUSTC_WRAPPER=$SCCACHE
 matrix:
   include:
-    - stage: "Warm Up"
-      name: "Build"
+    - stage: "Local and Rinkeby in Parallel"
+      name: "Build and Local Testing"
       cache:
         directories:
           - $HOME/.cache/yarn
-          - $HOME/.cache/node-gyp
-          - $HOME/.cache/sccache
-          - $HOME/.cargo
-          - $HOME/.rustup
+          - $HOME/.cargo/bin
       before_cache:
         - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
       before_install:
         - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
-        - |
-          mkdir -p $HOME/.sccache/bin
-          pushd $HOME/.sccache
-          curl -LO https://github.com/mozilla/sccache/releases/download/$SCCACHE_VERSION/sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz
-          tar -C bin -xvf sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz --wildcards '*/sccache' --strip 1
-          popd
         - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
+        - rustup component add clippy rustfmt
       install:
         - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
         - ./scripts/setup_contracts.sh
       script:
         - cargo build --locked
-        # Build and publish compact image with compiled binary
-        - docker build --tag stablex-binary --build-arg SOLVER_BASE=163030813197.dkr.ecr.us-east-1.amazonaws.com/dex-solver:v0.5.8 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
-        - docker tag stablex-binary $REGISTRY_URI:$TRAVIS_COMMIT
-        - docker push $REGISTRY_URI:$TRAVIS_COMMIT
-    - stage: "Tests"
-      name: "Unit Tests"
-      language: rust
-      cache:
-        directories:
-          - $HOME/.cache/yarn
-          - $HOME/.cache/node-gyp
-          - $HOME/.cache/sccache
-          - $HOME/.cargo
-          - $HOME/.rustup
-      before_cache:
-        - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
-      before_install:
-        - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
-      install:
-        - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
-        - ./scripts/setup_contracts.sh
-      before_script:
-        - |
-          mkdir -p $HOME/.sccache/bin
-          pushd $HOME/.sccache
-          curl -LO https://github.com/mozilla/sccache/releases/download/$SCCACHE_VERSION/sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz
-          tar -C bin -xvf sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz --wildcards '*/sccache' --strip 1
-          popd
-        - rustup component add clippy rustfmt
-      script:
+        # Unit Tests and Linting
         - cargo test
         - cargo clippy --all --all-targets -- -D warnings
         - cargo fmt --all -- --check
-    - name: "dƒusion e2e tests"
-      language: rust
-      cache:
-        directories:
-          - $HOME/.cache/yarn
-          - $HOME/.cache/node-gyp
-          - $HOME/.cache/sccache
-          - $HOME/.cargo
-          - $HOME/.rustup
-      before_install:
-        - |
-          mkdir -p $HOME/.sccache/bin
-          pushd $HOME/.sccache
-          curl -LO https://github.com/mozilla/sccache/releases/download/$SCCACHE_VERSION/sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz
-          tar -C bin -xvf sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz --wildcards '*/sccache' --strip 1
-          popd
-        - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
-      install:
-        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
-        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
-        - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
-        - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
-        - (cd dex-contracts && yarn --frozen-lockfile)
-        - ./scripts/setup_contracts.sh
-      script:
+        # Build and publish compact image with compiled binary
+        - docker build --tag stablex-binary --build-arg SOLVER_BASE=163030813197.dkr.ecr.us-east-1.amazonaws.com/dex-solver:v0.5.8 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
+        # dƒusion e2e tests
         - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d driver graph-listener
         - cargo test -p e2e snapp_deposit -- --nocapture
         - ./scripts/restart-containers.sh
         - cargo test -p e2e snapp_auction -- --nocapture
         - ./scripts/restart-containers.sh
         - cargo test -p e2e snapp_standing -- --nocapture
-      after_script:
-        - docker-compose logs
-    - language: rust
-      name: "StableX e2e Tests (Ganache)"
-      cache:
-        directories:
-          - $HOME/.cache/yarn
-          - $HOME/.cache/node-gyp
-          - $HOME/.cache/sccache
-          - $HOME/.cargo
-          - $HOME/.rustup
-      before_install:
-        - |
-          mkdir -p $HOME/.sccache/bin
-          pushd $HOME/.sccache
-          curl -LO https://github.com/mozilla/sccache/releases/download/$SCCACHE_VERSION/sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz
-          tar -C bin -xvf sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz --wildcards '*/sccache' --strip 1
-          popd
-        - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
-      install:
-        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
-        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
-        - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
-        - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
-        - (cd dex-contracts && yarn --frozen-lockfile)
-        - ./scripts/setup_contracts.sh
-      script:
+        # StableX e2e Tests (Ganache)
         - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d stablex
         - cargo test -p e2e ganache -- --nocapture
-      after_failure:
-        - docker-compose logs
-    - name: "StableX e2e Tests (Rinkeby)"
-      language: rust
-      cache:
-        directories:
-          - $HOME/.cache/yarn
-          - $HOME/.cache/node-gyp
-          - $HOME/.cache/sccache
-          - $HOME/.cargo
-          - $HOME/.rustup
-      before_install:
-        - |
-          mkdir -p $HOME/.sccache/bin
-          pushd $HOME/.sccache
-          curl -LO https://github.com/mozilla/sccache/releases/download/$SCCACHE_VERSION/sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz
-          tar -C bin -xvf sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl.tar.gz --wildcards '*/sccache' --strip 1
-          popd
-        - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
-      install:
-        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
-        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
-        - docker pull $REGISTRY_URI:$TRAVIS_COMMIT
-        - docker tag $REGISTRY_URI:$TRAVIS_COMMIT stablex-binary
-        - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
-        # TODO - remove once https://github.com/gnosis/ethcontract-rs/pull/127 is merged
-        - ./scripts/setup_contracts.sh
-      script:
-        - docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.yml up -d stablex
+        # StableX e2e Tests (Rinkeby)
+        - docker-compose down && docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.yml up -d stablex
         - cargo test -p e2e rinkeby -- --nocapture
       after_script:
         - docker-compose logs
