@@ -13,10 +13,10 @@ use crate::models::{iter_hash, RollingHashable, Serializable};
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct BatchInformation {
+    // only applies to the Snapp version
+    pub slot: U256,
     /// the order index of a StableX order (the n-th order a user has ever
     /// placed in the system)
-    pub slot: U256,
-    // only applies to the Snapp version
     pub slot_index: u16,
 }
 
