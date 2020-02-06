@@ -36,8 +36,8 @@ mod solver_output {
 }
 
 mod solver_input {
-    use serde::Serialize;
-    use std::collections::HashMap;
+    use serde::{Serialize, Serializer};
+    use std::collections::{BTreeMap, HashMap};
     use std::vec::Vec;
 
     #[derive(Serialize)]
@@ -62,11 +62,41 @@ mod solver_input {
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
     pub struct Input {
+        #[serde(serialize_with = "ordered_tokens")]
         pub tokens: Vec<String>,
         pub ref_token: String,
+        #[serde(serialize_with = "ordered_balances")]
         pub accounts: Accounts,
         pub orders: Vec<Order>,
         pub fee: Option<Fee>,
+    }
+
+    fn ordered_tokens<S>(value: &Vec<String>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut sorted = value.clone();
+        sorted.sort();
+        sorted.serialize(serializer)
+    }
+
+    fn ordered_balances<S>(value: &Accounts, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let ordered: BTreeMap<_, BTreeMap<_, _>> = value
+            .iter()
+            .map(|(user, token_balances)| {
+                (
+                    user,
+                    token_balances
+                        .iter()
+                        .filter(|(_, balance)| **balance != "0")
+                        .collect(),
+                )
+            })
+            .collect();
+        ordered.serialize(serializer)
     }
 }
 
@@ -567,5 +597,54 @@ pub mod tests {
         assert!(solver
             .find_prices(&orders, &create_account_state_with_balance_for(&orders))
             .is_err());
+    }
+
+    #[test]
+    fn test_balance_serialization() {
+        let mut accounts = HashMap::new();
+
+        // Balances should end up ordered by token ID
+        let mut user1_balances = HashMap::new();
+        user1_balances.insert("token3".to_owned(), "100".to_owned());
+        user1_balances.insert("token2".to_owned(), "100".to_owned());
+        user1_balances.insert("token1".to_owned(), "100".to_owned());
+        user1_balances.insert("token0".to_owned(), "100".to_owned());
+
+        // Zero amounts should be filtered out
+        let mut user2_balances = HashMap::new();
+        user2_balances.insert("token0".to_owned(), "0".to_owned());
+
+        // Accounts should end up sorted by account ID
+        accounts.insert(
+            "4fd7c947ca0aba9d8678885e2b8c4d6a4e946984".to_owned(),
+            user1_balances,
+        );
+        accounts.insert(
+            "52a67f22d628c84c1f1e73ebb0e9ae272e302dd9".to_owned(),
+            user2_balances,
+        );
+        accounts.insert(
+            "13a0b42b9c180065510615972858bf41d1972a55".to_owned(),
+            HashMap::new(),
+        );
+
+        let input = solver_input::Input {
+            // tokens should also end up sorted in the end
+            tokens: vec![
+                "token3".to_owned(),
+                "token2".to_owned(),
+                "token1".to_owned(),
+                "token0".to_owned(),
+            ],
+            ref_token: "token0".to_owned(),
+            accounts,
+            orders: vec![],
+            fee: None,
+        };
+        let result = serde_json::to_string(&input).expect("Unable to serialize account state");
+        assert_eq!(
+            result,
+            r#"{"tokens":["token0","token1","token2","token3"],"refToken":"token0","accounts":{"13a0b42b9c180065510615972858bf41d1972a55":{},"4fd7c947ca0aba9d8678885e2b8c4d6a4e946984":{"token0":"100","token1":"100","token2":"100","token3":"100"},"52a67f22d628c84c1f1e73ebb0e9ae272e302dd9":{}},"orders":[],"fee":null}"#
+        );
     }
 }
