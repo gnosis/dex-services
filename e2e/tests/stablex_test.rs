@@ -2,7 +2,7 @@ use ethcontract::web3::api::Web3;
 use ethcontract::web3::futures::Future as F;
 use ethcontract::web3::transports::Http;
 use ethcontract::web3::types::U256;
-use ethcontract::{ethsign, Account, SecretKey, H256};
+use ethcontract::{Account, PrivateKey};
 
 use futures::future::join_all;
 
@@ -105,13 +105,8 @@ fn test_rinkeby() {
     let mut instance =
         BatchExchange::deployed(&web3).wait_and_expect("Cannot get deployed Batch Exchange");
     let secret = {
-        let private_key: H256 = env::var("PK")
-            .expect("PK env var not set")
-            .parse()
-            .expect("PK not parsable");
-        SecretKey::from_raw(&private_key[..])
-            .map_err(ethsign::Error::from)
-            .expect("Cannot derive key")
+        let private_key = env::var("PK").expect("PK env var not set");
+        PrivateKey::from_hex_str(&private_key).expect("Cannot derive key")
     };
     let account = Account::Offline(secret, None);
     instance.defaults_mut().from = Some(account.clone());
