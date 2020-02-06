@@ -1,4 +1,4 @@
-use serde_derive::Deserialize;
+use serde::Deserialize;
 use web3::types::{H160, U256};
 
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialEq, PartialOrd)]

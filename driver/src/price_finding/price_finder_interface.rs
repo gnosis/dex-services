@@ -1,4 +1,4 @@
-use dfusion_core::models;
+use crate::models;
 use std::convert::From;
 
 #[cfg(test)]

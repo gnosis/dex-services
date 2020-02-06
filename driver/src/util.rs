@@ -1,5 +1,7 @@
 use log::info;
+use std::collections::HashMap;
 use std::future::Future;
+use std::hash::Hash;
 use web3::types::U256;
 
 use crate::price_finding::{
@@ -67,6 +69,10 @@ where
     }
 }
 
+pub fn map_from_slice<T: Copy + Eq + Hash, U: Copy>(arr: &[(T, U)]) -> HashMap<T, U> {
+    arr.iter().copied().collect()
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
@@ -121,5 +127,13 @@ pub mod tests {
     #[should_panic]
     fn test_ceiled_div_overflow_u256() {
         U256::max_value().ceiled_div(U256::from(1));
+    }
+
+    #[test]
+    fn test_map_from_slice() {
+        let mut expected = HashMap::new();
+        expected.insert(0u16, 1u128);
+        expected.insert(1u16, 2u128);
+        assert_eq!(map_from_slice(&[(0, 1), (1, 2)]), expected);
     }
 }

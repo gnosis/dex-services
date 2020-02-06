@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::models::{AccountState, Order};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use web3::types::{H160, U256};
@@ -68,7 +69,7 @@ impl<'a> StableXOrderBookReading for FilteredOrderbookReader<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use dfusion_core::models::order::test_util::create_order_for_test;
+    use crate::models::order::test_util::create_order_for_test;
     use std::str::FromStr;
 
     #[test]

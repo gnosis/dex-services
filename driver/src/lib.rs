@@ -3,6 +3,7 @@ pub mod driver;
 pub mod error;
 pub mod logging;
 pub mod metrics;
+pub mod models;
 pub mod orderbook;
 pub mod price_finding;
 pub mod solution_submission;

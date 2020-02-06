@@ -1,7 +1,7 @@
 use crate::contracts::stablex_contract::StableXContract;
 use crate::error::DriverError;
+use crate::models::{AccountState, Order};
 
-use dfusion_core::models::{AccountState, Order};
 #[cfg(test)]
 use mockall::automock;
 

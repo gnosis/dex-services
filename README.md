@@ -125,7 +125,7 @@ Afterwards, when you run your environment e.g. with `docker-compose up stablex` 
 
 The following environment variables can be used to configure the behavior of the services:
 
-- *DFUSION_LOG*: Log-level (e.g. `info,driver=debug,dfusion_core=debug`)
+- *DFUSION_LOG*: Log-level (e.g. `info,driver=debug`)
 - *ETHEREUM_NODE_URL*: Full-Node to connect to. Make sure the node allows view queries without a gas limit in order to fetch the entire orderbook at once.
 - *NETWORK_ID*: Network ID (e.g. 1 for mainnet, 4 for rinkeby, 5777 for ganache)
 - *OPTIMIZATION_MODEL*: Which style of solver to use (NAIVE for naive, MIP for mixed integer programming and NLP for the  non-linear programming solver)

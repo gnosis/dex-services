@@ -11,7 +11,6 @@ path = "src/lib.rs"
 [dependencies]
 byteorder = "1.3.1"
 chrono = "0.4.10"
-dfusion_core = { path = "../dfusion_rust_core" }
 ethcontract = { git = "https://github.com/gnosis/ethcontract-rs", branch = "graph-patches-v0.3.0" }
 futures = { version = "0.3.3", features = ["compat"] }
 jsonrpc-core = "13.2.0"

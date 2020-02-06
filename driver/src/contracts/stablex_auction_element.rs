@@ -1,6 +1,6 @@
 use super::stablex_contract::AUCTION_ELEMENT_WIDTH;
+use crate::models::{BatchInformation, Order};
 use byteorder::{BigEndian, ByteOrder};
-use dfusion_core::models::{BatchInformation, Order};
 use std::collections::HashMap;
 use web3::types::{H160, U256};
 

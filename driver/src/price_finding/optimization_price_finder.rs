@@ -1,7 +1,6 @@
+use crate::models;
 use crate::price_finding::error::{ErrorKind, PriceFindingError};
 use crate::price_finding::price_finder_interface::{Fee, OptimizationModel, PriceFinding};
-
-use dfusion_core::models;
 
 use chrono::Utc;
 use log::{debug, error};
@@ -272,8 +271,8 @@ fn read_output() -> std::io::Result<String> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use dfusion_core::models::account_state::test_util::*;
-    use dfusion_core::models::util::map_from_slice;
+    use crate::models::account_state::test_util::*;
+    use crate::util::map_from_slice;
     use serde_json::json;
     use std::error::Error;
     use web3::types::{H256, U256};
