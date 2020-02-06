@@ -82,15 +82,11 @@ impl BatchedAuctionDataReader {
             return 0;
         }
         let last_order_user = self.orders.last().expect("there are no orders").account_id;
-        if self.pagination.previous_page_user == last_order_user {
-            self.pagination.previous_page_user_offset += number_of_added_orders;
-        } else {
-            self.pagination.previous_page_user = last_order_user;
-            self.pagination.previous_page_user_offset = *self
-                .user_order_counts
-                .get(&last_order_user)
-                .expect("user has order but no order count");
-        }
+        self.pagination.previous_page_user = last_order_user;
+        self.pagination.previous_page_user_offset = *self
+            .user_order_counts
+            .get(&last_order_user)
+            .expect("user has order but no order count");
         number_of_added_orders
     }
 
