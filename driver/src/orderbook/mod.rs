@@ -62,11 +62,12 @@ impl<'a> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a> {
                 reader.apply_batch(&self.contract.get_auction_data_batched(
                     block,
                     self.page_size,
-                    reader.pagination.previous_page_user,
-                    reader.pagination.previous_page_user_offset as u64,
+                    reader.pagination().previous_page_user,
+                    reader.pagination().previous_page_user_offset as u64,
                 )?);
             if (number_of_added_orders as u64) < self.page_size {
-                return Ok((reader.account_state, reader.orders));
+                let done = reader.done();
+                return Ok((done.account_state, done.orders));
             }
         }
     }

@@ -7,11 +7,11 @@ use web3::types::{H160, U256};
 /// contract's `encodeAuctionElement` function.
 pub struct BatchedAuctionDataReader {
     /// The account state resulting from unfiltered handled orders.
-    pub account_state: AccountState,
+    account_state: AccountState,
     /// All unfiltered orders in the order they were received.
-    pub orders: Vec<Order>,
+    orders: Vec<Order>,
     /// Used when reading data from the smart contract in batches.
-    pub pagination: Pagination,
+    pagination: Pagination,
     /// The index of batch whose orders we are filtering for.
     index: U256,
     /// The total number of orders per user.
@@ -28,6 +28,14 @@ pub struct Pagination {
     pub previous_page_user_offset: usize,
 }
 
+/// The resulting order data of a finishes BatchedAuctionDataReader.
+pub struct Done {
+    /// The account state resulting from unfiltered handled orders.
+    pub account_state: AccountState,
+    /// All unfiltered orders in the order they were received.
+    pub orders: Vec<Order>,
+}
+
 impl BatchedAuctionDataReader {
     /// Create a new BatchedAuctionDataReader.
     pub fn new(index: U256) -> BatchedAuctionDataReader {
@@ -40,6 +48,20 @@ impl BatchedAuctionDataReader {
             },
             index,
             user_order_counts: HashMap::new(),
+        }
+    }
+
+    /// The pagination data used when reading data from the smart contract in
+    /// batches.
+    pub fn pagination(&self) -> &Pagination {
+        &self.pagination
+    }
+
+    /// Signal that no more data will be read and return the result.
+    pub fn done(self) -> Done {
+        Done {
+            account_state: self.account_state,
+            orders: self.orders,
         }
     }
 
