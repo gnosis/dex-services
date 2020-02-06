@@ -77,80 +77,13 @@ npx truffle exec scripts/stablex/claim_withdraw.js --accountId=0 --tokenId=1
 
 **Note:** Whenever stopping the `ganache-cli` service (e.g. by running `docker-compose down` you have to re-migrate the dex-contract before restarting `stablex`)
 
-## SnappAuction
-
-The Snapp system consists of two main components: The *Graph Listener* which indexes and processes calldata that is emitted via EVM events into the off-chain data store, and the *Driver* who interacts with the smart contract based on the data it finds in storage (e.g. applying pending deposits/withdraws or settling an auction).
-
-The *Graph Listener* registers for certain EVM events via a slightly trimmed down version of [The Graph](https://thegraph.com/).
-The [dex smart contract](https://github.com/gnosis/dex-contracts) emits these events on user interaction (deposit, withdraw, order) as well as when the saved state root hash is updated (state transitions).
-
-Upon receiving a relevant event from the contract, the event listener computes the implied changes to the underlying state. 
-E.g. if a *deposit* event is received, the list of pending deposits is updated.
-Similarly, if a *deposit state transition* event is received it updates the account balances based on the pending deposits that were included in the state transition.
-
-The *Driver* watches state updates to the database and reads relevant data from the smart contract to decide when a state transition can be applied.
-There are four types of state transitions:
-
-- apply deposit
-- apply withdraws
-- find solution for optimization problem
-- apply trade execution (according to the winning solution)
-
-The *Driver* computes the updated root state according to the data it reads from the database and submits a state transition to the smart contract.
-
-The *Driver* does not write into the database.
-Instead, the smart contract emits an event, which the *Event Listener* receives. The *Event Listener* then applies the state transition based on the data emitted in the event and the existing state in the database.
-It also updates the state in the database.
-
-Note that the *Event Listener* is the only component writing into the database.
-There are two main reasons for that:
-1. **Scalability:** By using the *Single Writer Principle* we can scale access to the database layer much better and thus provide a data availability provider that can also be used by external participants of the system.
-2. **Driver Competition:** We assume, there will be multiple systems (or at least multiple instances of this system) competing in optimization and driving the state machine forward. 
-Thus, our data layer has to rely only on the data emitted by the EVM. It cannot assume that the *Driver* is aware of updating all available data stores.
-
-More components, e.g. a watchtower to challenge invalid state transitions, will be added in the future.
-
-### Running the driver/listener
-
-```
-docker-compose down && docker-compose up driver graph-listener truffle
-```
-
-This will start:
-- ganache-cli, the local ethereum chain
-- a truffle image compiling and deploying your smart contracts to the local chain
-- postgres, the database storing the data of the snapp
-- graph-listener, a listener pulling data from the ganache-cli and inserting it into postgres
-- driver, a service calculating the new states and push these into the smart contract
-
-You can see the current state of the theGraph DB by opening [localhost:8000](http://localhost:8000) and connecting to the default database (top right).
-On the left side bar, under *Collections* select the collection you want to inspect, e.g. *accounts*.
-
-In order to setup some testing accounts and make the first deposits (from account 3, of the third registered token with an amount of 18), run in the same repo the following scripts:
-
-```bash
-cd dex-contracts
-npx truffle exec scripts/snapp/setup_environment.js
-npx truffle exec scripts/snapp/deposit.js --accountId=1 --tokenId=1 --amount=18
-npx truffle exec scripts/wait_seconds.js 181
-```
-
-To claim back the deposit, submit a withdraw request:
-
-```bash
-npx truffle exec scripts/snapp/request_withdraw.js --accountId=1 --tokenId=1 --amount=18
-```
-
-After 20 blocks have passed, the driver will apply the state transition and you should be able to claim back your funds:
-
-```bash
-npx truffle exec scripts/wait_seconds.js 181
-npx truffle exec scripts/snapp/claim_withdraw.js --slot=0 --accountId=1 --tokenId=1
-```
-
 ## Tests
 
+### End-to-End Tests
+
 For end-to-end tests, please consult the guide in [e2e/README](e2e/README.md).
+
+### Unit Tests
 
 To run unit tests:
 
@@ -192,15 +125,14 @@ Afterwards, when you run your environment e.g. with `docker-compose up stablex` 
 
 The following environment variables can be used to configure the behavior of the services:
 
-### Common parameters:
+- *DFUSION_LOG*: Log-level (e.g. `info,driver=debug,dfusion_core=debug`)
 - *ETHEREUM_NODE_URL*: Full-Node to connect to. Make sure the node allows view queries without a gas limit in order to fetch the entire orderbook at once.
 - *NETWORK_ID*: Network ID (e.g. 1 for mainnet, 4 for rinkeby, 5777 for ganache)
 - *OPTIMIZATION_MODEL*: Which style of solver to use (NAIVE for naive, MIP for mixed integer programming and NLP for the  non-linear programming solver)
+- *ORDERBOOK_FILTER*: json encoded object of which tokens/filters to ignore. See below for example filter.
 - *PRIVATE_KEY*: THe key with which to sign transactions
 
-### BatchExchange only
-- *DFUSION_LOG*: Log-level (e.g. `info,driver=debug,dfusion_core=debug`)
-- *ORDERBOOK_FILTER*: json encoded object of which tokens/filters to ignore. E.g.
+### Orderbook Filter Example
 
 ```json
 {
