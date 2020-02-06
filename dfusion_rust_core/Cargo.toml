@@ -15,4 +15,5 @@ mockall = "0.6.0"
 serde_derive = "1.0"
 serde = "1.0"
 sha2 = "0.8.1"
+graph-mock = { git = "https://github.com/graphprotocol/graph-node", tag = "v0.17.0" }
 web3 = "0.8.0"
