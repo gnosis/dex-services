@@ -108,7 +108,23 @@ impl BatchedAuctionDataReader {
             self.account_state.modify_balance(
                 element.order.account_id,
                 element.order.sell_token,
-                |x| *x = element.sell_token_balance,
+                |x| {
+                    if *x == 0 {
+                        *x = element.sell_token_balance
+                    } else {
+                        assert_eq!(
+                            *x,
+                            element.sell_token_balance,
+                            "got order which sets user {}'s sell token {} \
+                            balance to {} but sell_token_balance has already \
+                            been set to {}",
+                            element.order.account_id,
+                            element.order.sell_token,
+                            element.sell_token_balance,
+                            *x
+                        );
+                    }
+                },
             );
         }
     }
@@ -159,7 +175,7 @@ pub mod tests {
         // order 1
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // user: 20 elements
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 4, // sellTokenBalance: 3, 32 elements
+        0, 4, // sellTokenBalance: 4, 32 elements
         1, 2, // buyToken: 256+2,
         1, 1, // sellToken: 256+1, 56
         0, 0, 0, 2, // validFrom: 2
@@ -171,9 +187,9 @@ pub mod tests {
     const ORDER_2_BYTES: &[u8] = &[
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // user:
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 5, // sellTokenBalance: 3
-        1, 2, // buyToken: 256+2
-        1, 1, // sellToken: 256+1
+        0, 5, // sellTokenBalance: 5
+        1, 1, // buyToken: 256+1
+        1, 2, // sellToken: 256+2
         0, 0, 0, 2, // validFrom: 2
         0, 0, 1, 5, // validUntil: 256+5
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258;
@@ -183,7 +199,7 @@ pub mod tests {
     const ORDER_3_BYTES: &[u8] = &[
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, // user:
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 6, // sellTokenBalance: 3
+        0, 6, // sellTokenBalance: 6
         1, 2, // buyToken: 256+2
         1, 1, // sellToken: 256+1
         0, 0, 0, 2, // validFrom: 2
@@ -211,8 +227,8 @@ pub mod tests {
                 slot: U256::from(0),
             }),
             account_id: H160::from_low_u64_be(1),
-            sell_token: 257,
-            buy_token: 258,
+            sell_token: 258,
+            buy_token: 257,
             sell_amount: 256,
             buy_amount: 256,
         };
@@ -233,7 +249,8 @@ pub mod tests {
         assert_eq!(reader.apply_batch(&bytes), 2);
 
         let mut account_state = AccountState::default();
-        account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 5);
+        account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 4);
+        account_state.modify_balance(H160::from_low_u64_be(1), 258, |x| *x = 5);
 
         assert_eq!(reader.account_state, account_state);
         assert_eq!(reader.orders, [ORDER_1.clone(), ORDER_2.clone()]);
@@ -258,7 +275,7 @@ pub mod tests {
         bytes.clear();
         bytes.extend(ORDER_2_BYTES);
         assert_eq!(reader.apply_batch(&bytes), 1);
-        account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 5);
+        account_state.modify_balance(H160::from_low_u64_be(1), 258, |x| *x = 5);
         assert_eq!(reader.account_state, account_state);
         assert_eq!(reader.orders, [ORDER_1.clone(), ORDER_2.clone()]);
         assert_eq!(reader.pagination.previous_page_user, ORDER_1.account_id);
@@ -294,7 +311,7 @@ pub mod tests {
         bytes.extend(ORDER_2_BYTES);
         bytes.extend(ORDER_3_BYTES);
         assert_eq!(reader.apply_batch(&bytes), 2);
-        account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 5);
+        account_state.modify_balance(H160::from_low_u64_be(1), 258, |x| *x = 5);
         account_state.modify_balance(H160::from_low_u64_be(2), 257, |x| *x = 6);
         assert_eq!(reader.account_state, account_state);
         assert_eq!(
@@ -302,5 +319,18 @@ pub mod tests {
             H160::from_low_u64_be(2)
         );
         assert_eq!(reader.pagination.previous_page_user_offset, 1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn batched_auction_data_reader_panics() {
+        let mut reader = BatchedAuctionDataReader::new(U256::from(3));
+        let mut bytes = Vec::new();
+        bytes.extend(ORDER_1_BYTES);
+        assert_eq!(reader.apply_batch(&bytes), 1);
+        bytes[51] += 1;
+        // Incremented sell_token_balance which should cause a panic because it
+        // does not match the previous balance.
+        reader.apply_batch(&bytes);
     }
 }
