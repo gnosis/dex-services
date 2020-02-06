@@ -52,12 +52,6 @@ impl From<serde_json::Error> for DriverError {
     }
 }
 
-impl From<hex::FromHexError> for DriverError {
-    fn from(error: hex::FromHexError) -> Self {
-        DriverError::new(error.description(), ErrorKind::HexError)
-    }
-}
-
 impl From<rustc_hex::FromHexError> for DriverError {
     fn from(error: rustc_hex::FromHexError) -> Self {
         DriverError::new(error.description(), ErrorKind::HexError)
