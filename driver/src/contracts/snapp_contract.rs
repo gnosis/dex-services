@@ -29,9 +29,9 @@ where
 }
 
 impl SnappContractImpl<LoggingTransport<Http>> {
-    pub fn new() -> Result<Self> {
-        let (web3, event_loop) = contracts::web3_provider()?;
-        let defaults = contracts::method_defaults()?;
+    pub fn new(ethereum_node_url: String, network_id: u64) -> Result<Self> {
+        let (web3, event_loop) = contracts::web3_provider(&ethereum_node_url)?;
+        let defaults = contracts::method_defaults(network_id)?;
 
         let mut instance = SnappAuction::deployed(&web3).wait()?;
         *instance.defaults_mut() = defaults;

@@ -3,6 +3,7 @@ use driver::driver::stablex_driver::StableXDriver;
 use driver::logging;
 use driver::metrics::{MetricsServer, StableXMetrics};
 use driver::orderbook::{FilteredOrderbookReader, PaginatedStableXOrderBookReader};
+use driver::price_finding::price_finder_interface::OptimizationModel;
 use driver::price_finding::Fee;
 use driver::solution_submission::StableXSolutionSubmitter;
 
@@ -30,8 +31,20 @@ fn auction_data_batch_size() -> u64 {
 fn main() {
     let (_, _guard) = logging::init();
 
-    let (web3, _event_loop_handle) = web3_provider().unwrap();
-    let contract = BatchExchange::new(&web3).unwrap();
+    // Environment variable parsing
+    let filter = env::var("ORDERBOOK_FILTER").unwrap_or_else(|_| String::from("{}"));
+    let ethereum_node_url =
+        env::var("ETHEREUM_NODE_URL").expect("ETHEREUM_NODE_URL env var not set");
+    let network_id = env::var("NETWORK_ID")
+        .map(|s| s.parse().expect("Cannot parse NETWORK_ID"))
+        .expect("NETWORK_ID env var not set");
+
+    let optimization_model_string: String =
+        env::var("OPTIMIZATION_MODEL").unwrap_or_else(|_| String::from("NAIVE"));
+    let optimization_model = OptimizationModel::from(optimization_model_string.as_str());
+
+    let (web3, _event_loop_handle) = web3_provider(&ethereum_node_url).unwrap();
+    let contract = BatchExchange::new(&web3, network_id).unwrap();
     info!("Using contract at {}", contract.address());
     info!("Using account {}", contract.account());
 
@@ -44,11 +57,10 @@ fn main() {
     });
 
     let fee = Some(Fee::default());
-    let mut price_finder = driver::util::create_price_finder(fee);
+    let mut price_finder = driver::util::create_price_finder(fee, optimization_model);
 
     let orderbook =
         PaginatedStableXOrderBookReader::new(&contract, auction_data_batch_size(), &web3);
-    let filter = env::var("ORDERBOOK_FILTER").unwrap_or_else(|_| String::from("{}"));
     let parsed_filter = serde_json::from_str(&filter)
         .map_err(|e| {
             error!("Error parsing orderbook filter: {}", &e);
