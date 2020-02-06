@@ -88,7 +88,7 @@ impl StableXContract for BatchExchange {
     ) -> Result<Vec<u8>> {
         let mut orders_builder = self.get_encoded_users_paginated(
             previous_page_user,
-            previous_page_user_offset as u64,
+            previous_page_user_offset,
             page_size,
         );
         orders_builder.m.tx.gas = None;
