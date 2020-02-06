@@ -12,7 +12,7 @@ path = "src/lib.rs"
 byteorder = "1.3.1"
 chrono = "0.4.10"
 dfusion_core = { path = "../dfusion_rust_core" }
-ethcontract = { git = "https://github.com/gnosis/ethcontract-rs", branch = "graph-patches" }
+ethcontract = { git = "https://github.com/gnosis/ethcontract-rs", branch = "graph-patches-v0.3.0" }
 futures = { version = "0.3.3", features = ["compat"] }
 jsonrpc-core = "13.2.0"
 lazy_static = "1.4.0"
@@ -34,4 +34,4 @@ web3 = "0.8.0"
 mockall = "0.6.0"
 
 [build-dependencies]
-ethcontract-generate = { git = "https://github.com/gnosis/ethcontract-rs", branch = "graph-patches" }
+ethcontract-generate = { git = "https://github.com/gnosis/ethcontract-rs", branch = "graph-patches-v0.3.0" }

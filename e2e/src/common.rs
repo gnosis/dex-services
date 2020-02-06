@@ -1,9 +1,9 @@
 use crate::*;
 
 use ethcontract::contract::{
-    CallFuture, Deploy, DeployBuilder, DeployFuture, MethodBuilder, ViewMethodBuilder,
+    CallFuture, Deploy, DeployBuilder, DeployFuture, MethodBuilder, MethodSendFuture,
+    ViewMethodBuilder,
 };
-use ethcontract::transaction::SendFuture;
 use ethcontract::web3::api::Web3;
 use ethcontract::web3::contract::tokens::Detokenize;
 use ethcontract::web3::futures::Future as F;
@@ -56,7 +56,7 @@ impl<T, R> FutureBuilderExt for MethodBuilder<T, R>
 where
     T: Transport,
 {
-    type Future = SendFuture<T>;
+    type Future = MethodSendFuture<T>;
 
     fn into_future(self) -> Self::Future {
         self.send()

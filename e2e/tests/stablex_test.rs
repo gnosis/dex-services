@@ -2,7 +2,7 @@ use ethcontract::web3::api::Web3;
 use ethcontract::web3::futures::Future as F;
 use ethcontract::web3::transports::Http;
 use ethcontract::web3::types::U256;
-use ethcontract::{ethsign, Account, SecretKey, H256};
+use ethcontract::{Account, PrivateKey};
 
 use futures::future::join_all;
 
@@ -105,13 +105,8 @@ fn test_rinkeby() {
     let mut instance =
         BatchExchange::deployed(&web3).wait_and_expect("Cannot get deployed Batch Exchange");
     let secret = {
-        let private_key: H256 = env::var("PK")
-            .expect("PK env var not set")
-            .parse()
-            .expect("PK not parsable");
-        SecretKey::from_raw(&private_key[..])
-            .map_err(ethsign::Error::from)
-            .expect("Cannot derive key")
+        let private_key = env::var("PK").expect("PK env var not set");
+        PrivateKey::from_hex_str(&private_key).expect("Cannot derive key")
     };
     let account = Account::Offline(secret, None);
     instance.defaults_mut().from = Some(account.clone());
@@ -143,34 +138,34 @@ fn test_rinkeby() {
         .gas(1_000_000.into())
         .gas_price(8_000_000_000u64.into())
         .from(account.clone())
-        .send_and_confirm(Duration::from_secs(1), 1);
+        .send();
     let second_approve = IERC20::at(&web3, token_b)
         .approve(instance.address(), 1_000_000.into())
         .nonce(nonce + 1)
         .gas(1_000_000.into())
         .gas_price(8_000_000_000u64.into())
         .from(account)
-        .send_and_confirm(Duration::from_secs(1), 1);
+        .send();
 
     // Deposit Funds
     let first_deposit = instance
         .deposit(token_a, 1_000_000.into())
         .nonce(nonce + 2)
-        .send_and_confirm(Duration::from_secs(1), 1);
+        .send();
     let second_deposit = instance
         .deposit(token_b, 1_000_000.into())
         .nonce(nonce + 3)
-        .send_and_confirm(Duration::from_secs(1), 1);
+        .send();
 
     // Place orders
     let first_order = instance
         .place_order(0, 7, batch + 2, 1_000_000.into(), 10_000_000.into())
         .nonce(nonce + 4)
-        .send_and_confirm(Duration::from_secs(1), 1);
+        .send();
     let second_order = instance
         .place_order(7, 0, batch + 1, 1_000_000.into(), 10_000_000.into())
         .nonce(nonce + 5)
-        .send_and_confirm(Duration::from_secs(1), 1);
+        .send();
 
     // Wait for all transactions to be confirmed
     println!("Waiting for transactions to be confirmed");

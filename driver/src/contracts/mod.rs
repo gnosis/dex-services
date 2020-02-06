@@ -4,7 +4,7 @@ pub mod stablex_contract;
 use crate::error::DriverError;
 use crate::transport::LoggingTransport;
 use ethcontract::contract::MethodDefaults;
-use ethcontract::{ethsign, Account, SecretKey, H256};
+use ethcontract::{Account, PrivateKey};
 use log::Level;
 use std::env;
 use web3::api::Web3;
@@ -21,11 +21,11 @@ fn web3_provider(
 }
 
 fn method_defaults(network_id: u64) -> Result<MethodDefaults, DriverError> {
-    let secret = {
-        let private_key: H256 = env::var("PRIVATE_KEY")?.parse()?;
-        SecretKey::from_raw(&private_key[..]).map_err(ethsign::Error::from)?
+    let key = {
+        let private_key = env::var("PRIVATE_KEY")?;
+        PrivateKey::from_hex_str(&private_key)?
     };
-    let account = Account::Offline(secret, Some(network_id));
+    let account = Account::Offline(key, Some(network_id));
     let defaults = MethodDefaults {
         from: Some(account),
         gas: Some(100_000.into()),
