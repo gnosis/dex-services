@@ -1,4 +1,4 @@
-use driver::contracts::stablex_contract::BatchExchange;
+use driver::contracts::{stablex_contract::BatchExchange, web3_provider};
 use driver::driver::stablex_driver::StableXDriver;
 use driver::logging;
 use driver::metrics::{MetricsServer, StableXMetrics};
@@ -30,7 +30,8 @@ fn auction_data_batch_size() -> u64 {
 fn main() {
     let (_, _guard) = logging::init();
 
-    let (contract, _event_loop) = BatchExchange::new().unwrap();
+    let (web3, _event_loop_handle) = web3_provider().unwrap();
+    let contract = BatchExchange::new(&web3).unwrap();
     info!("Using contract at {}", contract.address());
     info!("Using account {}", contract.account());
 
@@ -45,7 +46,8 @@ fn main() {
     let fee = Some(Fee::default());
     let mut price_finder = driver::util::create_price_finder(fee);
 
-    let orderbook = PaginatedStableXOrderBookReader::new(&contract, auction_data_batch_size());
+    let orderbook =
+        PaginatedStableXOrderBookReader::new(&contract, auction_data_batch_size(), &web3);
     let filter = env::var("ORDERBOOK_FILTER").unwrap_or_else(|_| String::from("{}"));
     let parsed_filter = serde_json::from_str(&filter)
         .map_err(|e| {

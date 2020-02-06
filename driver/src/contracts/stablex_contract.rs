@@ -7,7 +7,6 @@ use dfusion_core::models::{Order, Solution};
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
-use web3::transports::EventLoopHandle;
 use web3::types::{H160, U128, U256};
 
 use crate::contracts;
@@ -25,14 +24,13 @@ lazy_static! {
 include!(concat!(env!("OUT_DIR"), "/batch_exchange.rs"));
 
 impl BatchExchange {
-    pub fn new() -> Result<(Self, EventLoopHandle)> {
-        let (web3, event_loop) = contracts::web3_provider()?;
+    pub fn new(web3: &contracts::Web3) -> Result<Self> {
         let defaults = contracts::method_defaults()?;
 
         let mut instance = BatchExchange::deployed(&web3).wait()?;
         *instance.defaults_mut() = defaults;
 
-        Ok((instance, event_loop))
+        Ok(instance)
     }
 
     pub fn account(&self) -> H160 {

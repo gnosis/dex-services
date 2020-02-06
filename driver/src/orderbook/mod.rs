@@ -1,4 +1,4 @@
-use crate::contracts::{stablex_contract::StableXContract, web3_provider};
+use crate::contracts::{stablex_contract::StableXContract, Web3};
 use crate::error::DriverError;
 use crate::web3::futures::Future;
 
@@ -33,21 +33,23 @@ pub trait StableXOrderBookReading {
 /// Implements the StableXOrderBookReading trait by using the underlying
 /// contract in a paginated way.
 /// This avoid hitting gas limits when the total amount of orders is large.
-pub struct PaginatedStableXOrderBookReader<'a> {
+pub struct PaginatedStableXOrderBookReader<'a, 'b> {
     contract: &'a dyn StableXContract,
     page_size: u64,
+    web3: &'b Web3,
 }
 
-impl<'a> PaginatedStableXOrderBookReader<'a> {
-    pub fn new(contract: &'a dyn StableXContract, page_size: u64) -> Self {
+impl<'a, 'b> PaginatedStableXOrderBookReader<'a, 'b> {
+    pub fn new(contract: &'a dyn StableXContract, page_size: u64, web3: &'b Web3) -> Self {
         Self {
             contract,
             page_size,
+            web3,
         }
     }
 }
 
-impl<'a> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a> {
+impl<'a, 'b> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a, 'b> {
     fn get_auction_index(&self) -> Result<U256> {
         self.contract
             .get_current_auction_index()
@@ -55,7 +57,7 @@ impl<'a> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a> {
     }
 
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
-        let block = web3_provider()?.0.eth().block_number().wait()?.as_u64();
+        let block = self.web3.eth().block_number().wait()?.as_u64();
         let mut reader = BatchedAuctionDataReader::new(index);
         loop {
             let number_of_added_orders =
