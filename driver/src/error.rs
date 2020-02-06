@@ -4,8 +4,6 @@ use ethcontract::ethsign;
 use std::error::Error;
 use std::fmt;
 
-use dfusion_core::database::DatabaseError;
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum ErrorKind {
     Unknown,
@@ -81,12 +79,6 @@ impl From<std::num::ParseIntError> for DriverError {
 impl From<&str> for DriverError {
     fn from(error: &str) -> Self {
         DriverError::new(error, ErrorKind::MiscError)
-    }
-}
-
-impl From<DatabaseError> for DriverError {
-    fn from(error: DatabaseError) -> Self {
-        DriverError::new(&format!("{}", error), ErrorKind::DbError)
     }
 }
 
