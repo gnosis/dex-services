@@ -5,4 +5,4 @@ edition = "2018"
 
 [dependencies]
 ethcontract = { git = "https://github.com/gnosis/ethcontract-rs", branch = "graph-patches-v0.3.0" }
-futures = { version = "0.3.3", features = ["compat"] }
+futures = { version = "0.3.4", features = ["compat"] }
