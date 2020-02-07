@@ -18,7 +18,6 @@ ONBUILD RUN apt-get update \
   && ln -s $HOME/.cargo/bin/* /usr/bin/
 
 ONBUILD COPY dex-contracts/build ./dex-contracts/build
-ONBUILD COPY dfusion_rust_core ./dfusion_rust_core
 ONBUILD COPY driver ./driver
 ONBUILD COPY e2e ./e2e
 
