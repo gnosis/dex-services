@@ -318,7 +318,7 @@ pub mod tests {
     #[test]
     fn test_serialize_order() {
         let order = models::Order {
-            batch_information: None,
+            id: 0,
             account_id: H160::from_low_u64_be(0),
             sell_token: 1,
             buy_token: 2,
@@ -534,7 +534,7 @@ pub mod tests {
         );
         let orders = [
             models::Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 2,
@@ -542,7 +542,7 @@ pub mod tests {
                 buy_amount: 200,
             },
             models::Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(1),
                 sell_token: 2,
                 buy_token: 1,
