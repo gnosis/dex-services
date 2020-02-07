@@ -52,7 +52,7 @@ impl StableXAuctionElement {
             valid_until,
             sell_token_balance,
             order: Order {
-                id: 0,
+                id: *order_counter - 1,
                 account_id,
                 buy_token,
                 sell_token,
@@ -171,7 +171,7 @@ pub mod tests {
             valid_until: U256::from(261),
             sell_token_balance: 3,
             order: Order {
-                id: 0,
+                id: 1,
                 account_id: H160::from_low_u64_be(1),
                 buy_token: 258,
                 sell_token: 257,

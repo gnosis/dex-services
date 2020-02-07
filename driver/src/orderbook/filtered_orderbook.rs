@@ -108,7 +108,7 @@ mod test {
         let mixed_user = H160::from_str("7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A").unwrap();
         let mut mixed_user_good_order = create_order_for_test();
         mixed_user_good_order.account_id = mixed_user;
-        mixed_user_good_order.id = 1;
+        mixed_user_good_order.id = 0;
 
         let mut mixed_user_bad_order = create_order_for_test();
         mixed_user_bad_order.account_id = mixed_user;

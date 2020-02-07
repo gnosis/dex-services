@@ -213,20 +213,6 @@ pub mod tests {
 
     #[test]
     #[should_panic]
-    fn encode_execution_fails_on_order_without_batch_info() {
-        let insufficient_order = Order {
-            id: 0,
-            account_id: H160::from_low_u64_be(1),
-            sell_token: 0,
-            buy_token: 1,
-            sell_amount: 1,
-            buy_amount: 1,
-        };
-        encode_execution_for_contract(vec![insufficient_order], vec![1]);
-    }
-
-    #[test]
-    #[should_panic]
     fn encode_execution_fails_on_inconsistent_results() {
         let some_reasonable_order = Order {
             id: 0,
