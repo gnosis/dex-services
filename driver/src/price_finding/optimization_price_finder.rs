@@ -71,11 +71,11 @@ mod solver_input {
         pub fee: Option<Fee>,
     }
 
-    fn ordered_tokens<S>(value: &Vec<String>, serializer: S) -> Result<S::Ok, S::Error>
+    fn ordered_tokens<S>(value: &[String], serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut sorted = value.clone();
+        let mut sorted = value.to_owned();
         sorted.sort();
         sorted.serialize(serializer)
     }
