@@ -19,8 +19,10 @@ pub struct Order {
     pub sell_amount: u128,
 }
 
+#[cfg(test)]
 pub mod test_util {
     use super::*;
+
     pub fn create_order_for_test() -> Order {
         Order {
             batch_information: Some(BatchInformation {

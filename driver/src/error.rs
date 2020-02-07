@@ -5,16 +5,13 @@ use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ErrorKind {
-    Unknown,
     MiscError,
     IoError,
     ContractError,
     JsonError,
     HexError,
     EnvError,
-    DbError,
     ParseIntError,
-    StateError,
     PriceFindingError,
     PrivateKeyError,
     ContractDeployedError,

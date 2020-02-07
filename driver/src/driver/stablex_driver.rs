@@ -118,13 +118,13 @@ impl<'a> StableXDriver<'a> {
 mod tests {
     use super::*;
     use crate::error::ErrorKind;
-    use crate::models::account_state::test_util::*;
     use crate::models::order::test_util::create_order_for_test;
+    use crate::models::AccountState;
     use crate::orderbook::MockStableXOrderBookReading;
     use crate::price_finding::error::{ErrorKind as PriceFindingErrorKind, PriceFindingError};
     use crate::price_finding::price_finder_interface::MockPriceFinding;
     use crate::solution_submission::MockStableXSolutionSubmitting;
-    use crate::util::map_from_slice;
+    use crate::util::test_util::map_from_slice;
 
     use mockall::predicate::*;
 
@@ -136,7 +136,7 @@ mod tests {
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
         reader.expect_get_auction_index().return_const(Ok(batch));
@@ -182,7 +182,7 @@ mod tests {
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
         reader.expect_get_auction_index().return_const(Ok(batch));
@@ -234,7 +234,7 @@ mod tests {
 
         reader
             .expect_get_auction_index()
-            .return_const(Err(DriverError::new("Error", ErrorKind::Unknown)));
+            .return_const(Err(DriverError::new("Error", ErrorKind::MiscError)));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
@@ -249,7 +249,7 @@ mod tests {
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
         reader.expect_get_auction_index().return_const(Ok(batch));
@@ -288,7 +288,7 @@ mod tests {
         let metrics = StableXMetrics::default();
 
         let orders = vec![];
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
         reader.expect_get_auction_index().return_const(Ok(batch));
@@ -310,7 +310,7 @@ mod tests {
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
         reader.expect_get_auction_index().return_const(Ok(batch));
@@ -343,7 +343,7 @@ mod tests {
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
         reader.expect_get_auction_index().return_const(Ok(batch));
@@ -372,7 +372,7 @@ mod tests {
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
         reader.expect_get_auction_index().return_const(Ok(batch));
@@ -387,7 +387,7 @@ mod tests {
             .with(eq(batch), eq(orders.clone()), always())
             .return_const(Err(DriverError::new(
                 "get_solution_objective_value failed",
-                ErrorKind::Unknown,
+                ErrorKind::MiscError,
             )));
         submitter.expect_submit_solution().times(0);
 
@@ -412,7 +412,7 @@ mod tests {
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
         reader.expect_get_auction_index().return_const(Ok(batch));
@@ -427,7 +427,7 @@ mod tests {
             .with(eq(batch), eq(orders.clone()), always())
             .return_const(Err(DriverError::new(
                 "get_solution_objective_value failed",
-                ErrorKind::Unknown,
+                ErrorKind::MiscError,
             )));
 
         let solution = Solution {
@@ -456,7 +456,7 @@ mod tests {
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
         reader.expect_get_auction_index().return_const(Ok(batch));
@@ -481,7 +481,7 @@ mod tests {
             )
             .return_const(Err(DriverError::new(
                 "submit_solution failed",
-                ErrorKind::Unknown,
+                ErrorKind::MiscError,
             )));
 
         let solution = Solution {

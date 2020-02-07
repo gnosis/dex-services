@@ -214,7 +214,7 @@ fn encode_execution_for_contract(
 pub mod tests {
     use super::*;
     use crate::models::BatchInformation;
-    use crate::util::map_from_slice;
+    use crate::util::test_util::map_from_slice;
 
     #[test]
     #[should_panic]
