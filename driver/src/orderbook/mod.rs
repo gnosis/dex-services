@@ -1,4 +1,4 @@
-use crate::contracts::stablex_contract::StableXContract;
+use crate::contracts::{stablex_contract::StableXContract, Web3};
 use crate::error::DriverError;
 use crate::models::{AccountState, Order};
 
@@ -32,18 +32,14 @@ pub trait StableXOrderBookReading {
 /// Implements the StableXOrderBookReading trait by using the underlying
 /// contract in a paginated way.
 /// This avoid hitting gas limits when the total amount of orders is large.
-pub struct PaginatedStableXOrderBookReader<'a, 'b, T: web3::Transport> {
+pub struct PaginatedStableXOrderBookReader<'a, 'b> {
     contract: &'a dyn StableXContract,
     page_size: u64,
-    web3: &'b web3::api::Web3<T>,
+    web3: &'b Web3,
 }
 
-impl<'a, 'b, T: web3::Transport> PaginatedStableXOrderBookReader<'a, 'b, T> {
-    pub fn new(
-        contract: &'a dyn StableXContract,
-        page_size: u64,
-        web3: &'b web3::api::Web3<T>,
-    ) -> Self {
+impl<'a, 'b> PaginatedStableXOrderBookReader<'a, 'b> {
+    pub fn new(contract: &'a dyn StableXContract, page_size: u64, web3: &'b Web3) -> Self {
         Self {
             contract,
             page_size,
@@ -52,9 +48,7 @@ impl<'a, 'b, T: web3::Transport> PaginatedStableXOrderBookReader<'a, 'b, T> {
     }
 }
 
-impl<'a, 'b, T: web3::Transport> StableXOrderBookReading
-    for PaginatedStableXOrderBookReader<'a, 'b, T>
-{
+impl<'a, 'b> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a, 'b> {
     fn get_auction_index(&self) -> Result<U256> {
         self.contract
             .get_current_auction_index()

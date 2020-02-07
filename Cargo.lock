@@ -470,7 +470,6 @@ dependencies = [
 name = "e2e"
 version = "1.0.0"
 dependencies = [
- "driver",
  "ethcontract",
  "futures 0.3.4",
 ]

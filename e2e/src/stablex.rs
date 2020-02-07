@@ -1,6 +1,5 @@
 use crate::*;
 
-use driver::contracts::stablex_contract::BatchExchange;
 use ethcontract::web3::api::Web3;
 use ethcontract::web3::transports::Http;
 use ethcontract::web3::types::{H160, U256};
