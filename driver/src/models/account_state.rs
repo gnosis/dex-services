@@ -34,7 +34,6 @@ impl AccountState {
 mod test_util {
     use super::*;
     use crate::models::Order;
-    use log::debug;
 
     impl AccountState {
         pub fn new(
@@ -83,10 +82,6 @@ mod test_util {
         }
 
         pub fn increment_balance(&mut self, token_id: u16, account_id: H160, amount: u128) {
-            debug!(
-                "Incrementing account {} balance of token {} by {}",
-                account_id, token_id, amount
-            );
             self.modify_balance(account_id, token_id, |balance| *balance += amount);
         }
     }
