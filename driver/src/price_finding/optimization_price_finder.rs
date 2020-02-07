@@ -123,7 +123,7 @@ impl OptimisationPriceFinder {
 }
 
 fn token_id(token: u16) -> String {
-    format!("token{}", token)
+    format!("token{:04}", token)
 }
 
 fn account_id(account: H160) -> String {
