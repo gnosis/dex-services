@@ -46,7 +46,7 @@ You can also run the rust binary locally (without docker). For that you will hav
 - PRIVATE_KEY (the hex key without leading 0x that should be used to sign transactions. Needs to be funded with eth for gas)
 
 ```bash
-cargo run --bin stablex
+cargo run
 ```
 
 The following commands will help you interact with a testnet instance.
@@ -154,7 +154,7 @@ The driver uses `slog-envlogger` as a `slog` drain which means that logging filt
 
 ```bash
 # only log warnings except for 'driver::transport' module
-DFUSION_LOG=warn,driver::transport=debug cargo run --bin stablex
+DFUSION_LOG=warn,driver::transport=debug cargo run
 ```
 
 More information on the logging filter syntax can be found in the `slog-envlogger` [documentation](https://docs.rs/slog-envlogger/2.2.0/slog_envlogger/).
