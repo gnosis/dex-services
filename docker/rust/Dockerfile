@@ -22,7 +22,7 @@ ONBUILD COPY driver ./driver
 ONBUILD COPY e2e ./e2e
 
 ONBUILD COPY Cargo.* ./
-ONBUILD RUN cargo build
+ONBUILD RUN cargo build --release
 
 # Build Option 2: Copy already compiled binary from host (used e.g. in travis)
 FROM ${SOLVER_BASE} as rust-binary
