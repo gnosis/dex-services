@@ -47,12 +47,7 @@ impl<'a> StableXOrderBookReading for FilteredOrderbookReader<'a> {
                 let user_filter = if let Some(user_filter) = self.filter.users.get(&o.account_id) {
                     match user_filter {
                         UserOrderFilter::All => true,
-                        UserOrderFilter::OrderIds(ids) => ids.contains(
-                            &o.batch_information
-                                .as_ref()
-                                .expect("StableX orders have batch information")
-                                .slot_index,
-                        ),
+                        UserOrderFilter::OrderIds(ids) => ids.contains(&o.id),
                     }
                 } else {
                     false
@@ -113,19 +108,11 @@ mod test {
         let mixed_user = H160::from_str("7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A").unwrap();
         let mut mixed_user_good_order = create_order_for_test();
         mixed_user_good_order.account_id = mixed_user;
-        mixed_user_good_order
-            .batch_information
-            .as_mut()
-            .unwrap()
-            .slot_index = 0;
+        mixed_user_good_order.id = 1;
 
         let mut mixed_user_bad_order = create_order_for_test();
         mixed_user_bad_order.account_id = mixed_user;
-        mixed_user_bad_order
-            .batch_information
-            .as_mut()
-            .unwrap()
-            .slot_index = 1;
+        mixed_user_bad_order.id = 1;
 
         let mut inner = MockStableXOrderBookReading::default();
         inner.expect_get_auction_data().return_const(Ok((

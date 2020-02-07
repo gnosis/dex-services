@@ -1,5 +1,5 @@
 use super::stablex_contract::AUCTION_ELEMENT_WIDTH;
-use crate::models::{BatchInformation, Order};
+use crate::models::Order;
 use byteorder::{BigEndian, ByteOrder};
 use std::collections::HashMap;
 use web3::types::{H160, U256};
@@ -52,10 +52,7 @@ impl StableXAuctionElement {
             valid_until,
             sell_token_balance,
             order: Order {
-                batch_information: Some(BatchInformation {
-                    slot_index: *order_counter - 1,
-                    slot: U256::from(0),
-                }),
+                id: 0,
                 account_id,
                 buy_token,
                 sell_token,
@@ -93,10 +90,7 @@ pub mod tests {
             valid_until: U256::from(0),
             sell_token_balance: 0,
             order: Order {
-                batch_information: Some(BatchInformation {
-                    slot_index: 0,
-                    slot: U256::from(0),
-                }),
+                id: 0,
                 account_id: H160::from_low_u64_be(0),
                 buy_token: 0,
                 sell_token: 0,
@@ -143,10 +137,7 @@ pub mod tests {
             valid_until: U256::from(261),
             sell_token_balance: 3,
             order: Order {
-                batch_information: Some(BatchInformation {
-                    slot_index: 0,
-                    slot: U256::from(0),
-                }),
+                id: 0,
                 account_id: H160::from_low_u64_be(1),
                 buy_token: 258,
                 sell_token: 257,
@@ -180,10 +171,7 @@ pub mod tests {
             valid_until: U256::from(261),
             sell_token_balance: 3,
             order: Order {
-                batch_information: Some(BatchInformation {
-                    slot_index: 1,
-                    slot: U256::from(0),
-                }),
+                id: 0,
                 account_id: H160::from_low_u64_be(1),
                 buy_token: 258,
                 sell_token: 257,
