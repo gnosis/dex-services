@@ -1,10 +1,7 @@
 use crate::price_finding::error::PriceFindingError;
 
-use ethcontract::ethsign;
 use std::error::Error;
 use std::fmt;
-
-use dfusion_core::database::DatabaseError;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ErrorKind {
@@ -19,9 +16,9 @@ pub enum ErrorKind {
     ParseIntError,
     StateError,
     PriceFindingError,
-    SigningError,
+    PrivateKeyError,
     ContractDeployedError,
-    ContractExecutionError,
+    ContractMethodError,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -54,12 +51,6 @@ impl From<serde_json::Error> for DriverError {
     }
 }
 
-impl From<hex::FromHexError> for DriverError {
-    fn from(error: hex::FromHexError) -> Self {
-        DriverError::new(error.description(), ErrorKind::HexError)
-    }
-}
-
 impl From<rustc_hex::FromHexError> for DriverError {
     fn from(error: rustc_hex::FromHexError) -> Self {
         DriverError::new(error.description(), ErrorKind::HexError)
@@ -84,21 +75,15 @@ impl From<&str> for DriverError {
     }
 }
 
-impl From<DatabaseError> for DriverError {
-    fn from(error: DatabaseError) -> Self {
-        DriverError::new(&format!("{}", error), ErrorKind::DbError)
-    }
-}
-
 impl From<PriceFindingError> for DriverError {
     fn from(error: PriceFindingError) -> Self {
         DriverError::new(&format!("{}", error), ErrorKind::PriceFindingError)
     }
 }
 
-impl From<ethsign::Error> for DriverError {
-    fn from(error: ethsign::Error) -> Self {
-        DriverError::new(&error.to_string(), ErrorKind::SigningError)
+impl From<ethcontract::errors::InvalidPrivateKey> for DriverError {
+    fn from(error: ethcontract::errors::InvalidPrivateKey) -> Self {
+        DriverError::new(&error.to_string(), ErrorKind::PrivateKeyError)
     }
 }
 
@@ -108,9 +93,9 @@ impl From<ethcontract::errors::DeployError> for DriverError {
     }
 }
 
-impl From<ethcontract::errors::ExecutionError> for DriverError {
-    fn from(error: ethcontract::errors::ExecutionError) -> Self {
-        DriverError::new(&error.to_string(), ErrorKind::ContractExecutionError)
+impl From<ethcontract::errors::MethodError> for DriverError {
+    fn from(error: ethcontract::errors::MethodError) -> Self {
+        DriverError::new(&error.to_string(), ErrorKind::ContractMethodError)
     }
 }
 

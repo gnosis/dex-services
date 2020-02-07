@@ -1,5 +1,5 @@
 use crate::contracts::stablex_auction_element::{StableXAuctionElement, AUCTION_ELEMENT_WIDTH};
-use dfusion_core::models::{AccountState, BatchInformation, Order};
+use crate::models::{AccountState, BatchInformation, Order};
 use std::collections::HashMap;
 use web3::types::{H160, U256};
 

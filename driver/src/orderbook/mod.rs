@@ -1,12 +1,11 @@
 use crate::contracts::{stablex_contract::StableXContract, Web3};
 use crate::error::DriverError;
-use crate::web3::futures::Future;
+use crate::models::{AccountState, Order};
 
 use batched_auction_data_reader::BatchedAuctionDataReader;
-use dfusion_core::models::{AccountState, Order};
 #[cfg(test)]
 use mockall::automock;
-
+use web3::futures::Future;
 use web3::types::U256;
 
 mod batched_auction_data_reader;

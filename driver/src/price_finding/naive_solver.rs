@@ -1,10 +1,11 @@
-use dfusion_core::models::{AccountState, Order, Solution};
-use web3::types::U256;
-
+use crate::models::{AccountState, Order, Solution};
 use crate::price_finding::error::PriceFindingError;
 use crate::price_finding::price_finder_interface::{Fee, PriceFinding};
 use crate::util::{CeiledDiv, CheckedConvertU128};
+
 use std::collections::HashMap;
+
+use web3::types::U256;
 
 const BASE_UNIT: u128 = 1_000_000_000_000_000_000u128;
 const BASE_PRICE: u128 = BASE_UNIT;
@@ -259,7 +260,7 @@ fn executed_buy_amount(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use dfusion_core::models::account_state::test_util::*;
+    use crate::models::account_state::test_util::*;
     use std::collections::HashMap;
     use web3::types::{H160, H256, U256};
 

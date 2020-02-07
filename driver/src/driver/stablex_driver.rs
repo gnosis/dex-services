@@ -1,10 +1,9 @@
 use crate::error::DriverError;
 use crate::metrics::StableXMetrics;
+use crate::models::Solution;
 use crate::orderbook::StableXOrderBookReading;
 use crate::price_finding::PriceFinding;
 use crate::solution_submission::StableXSolutionSubmitting;
-
-use dfusion_core::models::Solution;
 
 use log::info;
 
@@ -119,14 +118,13 @@ impl<'a> StableXDriver<'a> {
 mod tests {
     use super::*;
     use crate::error::ErrorKind;
+    use crate::models::account_state::test_util::*;
+    use crate::models::order::test_util::create_order_for_test;
     use crate::orderbook::MockStableXOrderBookReading;
     use crate::price_finding::error::{ErrorKind as PriceFindingErrorKind, PriceFindingError};
     use crate::price_finding::price_finder_interface::MockPriceFinding;
     use crate::solution_submission::MockStableXSolutionSubmitting;
-
-    use dfusion_core::models::account_state::test_util::*;
-    use dfusion_core::models::order::test_util::create_order_for_test;
-    use dfusion_core::models::util::map_from_slice;
+    use crate::util::map_from_slice;
 
     use mockall::predicate::*;
 

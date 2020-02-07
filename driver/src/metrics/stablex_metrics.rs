@@ -1,8 +1,8 @@
 use crate::error::DriverError;
 use crate::price_finding::error::PriceFindingError;
 
+use crate::models::{AccountState, Order, Solution};
 use chrono::Utc;
-use dfusion_core::models::{AccountState, Order, Solution};
 use prometheus::{IntCounterVec, IntGaugeVec, Opts, Registry};
 use std::collections::HashSet;
 use std::convert::TryInto;

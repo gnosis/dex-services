@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::env;
 
-use dfusion_core::models::{Order, Solution};
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
@@ -11,6 +10,7 @@ use web3::types::{H160, U128, U256};
 
 use crate::contracts;
 use crate::error::DriverError;
+use crate::models::{Order, Solution};
 use crate::util::FutureWaitExt;
 
 type Result<T> = std::result::Result<T, DriverError>;
@@ -195,8 +195,8 @@ fn encode_execution_for_contract(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use dfusion_core::models::util::map_from_slice;
-    use dfusion_core::models::BatchInformation;
+    use crate::models::BatchInformation;
+    use crate::util::map_from_slice;
 
     #[test]
     #[should_panic]
