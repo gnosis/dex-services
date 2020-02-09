@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::env;
 
+use ethcontract::transaction::GasPrice;
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
@@ -102,7 +103,6 @@ impl StableXContract for BatchExchange {
                 prices,
                 token_ids_for_price,
             )
-            .gas(5_000_000.into())
             .call()
             .wait()?;
 
@@ -128,8 +128,7 @@ impl StableXContract for BatchExchange {
             prices,
             token_ids_for_price,
         )
-        .gas(5_000_000.into())
-        .gas_price(20_000_000_000u64.into())
+        .gas_price(GasPrice::high())
         .send()
         .wait()?;
 
