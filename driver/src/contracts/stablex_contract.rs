@@ -128,7 +128,7 @@ impl StableXContract for BatchExchange {
             prices,
             token_ids_for_price,
         )
-        .gas_price(GasPrice::high())
+        .gas_price(GasPrice::Scaled(3.0))
         .send()
         .wait()?;
 
