@@ -28,14 +28,6 @@ pub struct Pagination {
     pub previous_page_user_offset: usize,
 }
 
-/// The resulting order data of a finishes BatchedAuctionDataReader.
-pub struct Done {
-    /// The account state resulting from unfiltered handled orders.
-    pub account_state: AccountState,
-    /// All unfiltered orders in the order they were received.
-    pub orders: Vec<Order>,
-}
-
 impl BatchedAuctionDataReader {
     /// Create a new BatchedAuctionDataReader.
     pub fn new(index: U256) -> BatchedAuctionDataReader {
@@ -57,12 +49,10 @@ impl BatchedAuctionDataReader {
         &self.pagination
     }
 
-    /// Signal that no more data will be read and return the result.
-    pub fn done(self) -> Done {
-        Done {
-            account_state: self.account_state,
-            orders: self.orders,
-        }
+    /// Signal that no more data will be read and return the result consuming
+    /// self.
+    pub fn get_auction_data(self) -> (AccountState, Vec<Order>) {
+        (self.account_state, self.orders)
     }
 
     /// Applies one batch of data.

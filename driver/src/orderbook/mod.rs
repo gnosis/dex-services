@@ -67,8 +67,7 @@ impl<'a, 'b> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a, 'b>
                     reader.pagination().previous_page_user_offset as u64,
                 )?);
             if (number_of_added_orders as u64) < self.page_size {
-                let done = reader.done();
-                return Ok((done.account_state, done.orders));
+                return Ok(reader.get_auction_data());
             }
         }
     }
