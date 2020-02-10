@@ -29,7 +29,7 @@ use std::time::Duration;
 
 fn auction_data_batch_size() -> u64 {
     const KEY: &str = "AUCTION_DATA_BATCH_SIZE";
-    const DEFAULT: u64 = 100;
+    const DEFAULT: u64 = 1000;
     env::var(KEY)
         .map(|str| {
             str.parse()
