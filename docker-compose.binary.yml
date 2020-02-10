@@ -11,10 +11,4 @@ x-rust-binary-service: &rust-binary-service
 services:
   stablex:
     <<: *rust-binary-service
-    command: ./stablex
-  driver:
-    <<: *rust-binary-service
-    command: ./dfusion
-  graph-listener:
-    <<: *rust-binary-service
-    command: ./graph-listener
+    command: ./driver

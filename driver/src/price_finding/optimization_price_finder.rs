@@ -301,8 +301,8 @@ fn read_output() -> std::io::Result<String> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::models::account_state::test_util::*;
-    use crate::util::map_from_slice;
+    use crate::models::AccountState;
+    use crate::util::test_util::map_from_slice;
     use serde_json::json;
     use std::error::Error;
     use web3::types::{H256, U256};
@@ -594,7 +594,7 @@ pub mod tests {
         };
         let orders = vec![];
         assert!(solver
-            .find_prices(&orders, &create_account_state_with_balance_for(&orders))
+            .find_prices(&orders, &AccountState::with_balance_for(&orders))
             .is_err());
     }
 

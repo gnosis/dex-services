@@ -17,16 +17,6 @@ impl Solution {
         }
     }
 
-    /// Returns the price for a token by ID or 0 if the token was not found.
-    pub fn price(&self, token_id: u16) -> Option<u128> {
-        self.prices.get(&token_id).copied()
-    }
-
-    /// Returns the maximum token id included in the solution's non-zero prices.
-    pub fn max_token(&self) -> Option<u16> {
-        self.prices.keys().max().copied()
-    }
-
     /// Returns true if a solution is non-trivial and false otherwise
     pub fn is_non_trivial(&self) -> bool {
         self.executed_sell_amounts.iter().any(|&amt| amt > 0)
@@ -34,9 +24,26 @@ impl Solution {
 }
 
 #[cfg(test)]
-pub mod unit_test {
+pub mod test_util {
     use super::*;
-    use crate::util::map_from_slice;
+
+    impl Solution {
+        /// Returns the price for a token by ID or 0 if the token was not found.
+        pub fn price(&self, token_id: u16) -> Option<u128> {
+            self.prices.get(&token_id).copied()
+        }
+
+        /// Returns the maximum token id included in the solution's non-zero prices.
+        pub fn max_token(&self) -> Option<u16> {
+            self.prices.keys().max().copied()
+        }
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use crate::util::test_util::map_from_slice;
 
     fn generic_non_trivial_solution() -> Solution {
         Solution {

@@ -1,7 +1,5 @@
 use log::info;
-use std::collections::HashMap;
 use std::future::Future;
-use std::hash::Hash;
 use web3::types::U256;
 
 use crate::price_finding::{
@@ -69,13 +67,21 @@ where
     }
 }
 
-pub fn map_from_slice<T: Copy + Eq + Hash, U: Copy>(arr: &[(T, U)]) -> HashMap<T, U> {
-    arr.iter().copied().collect()
+#[cfg(test)]
+pub mod test_util {
+    use std::collections::HashMap;
+    use std::hash::Hash;
+
+    pub fn map_from_slice<T: Copy + Eq + Hash, U: Copy>(arr: &[(T, U)]) -> HashMap<T, U> {
+        arr.iter().copied().collect()
+    }
 }
 
 #[cfg(test)]
 pub mod tests {
+    use super::test_util::*;
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_checked_u256_to_u128() {

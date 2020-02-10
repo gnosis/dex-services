@@ -1,9 +1,6 @@
-use log::debug;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use web3::types::{H160, H256, U256};
-
-use crate::models::Order;
 
 #[derive(Serialize, Default, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -15,47 +12,12 @@ pub struct AccountState {
 }
 
 impl AccountState {
-    pub fn new(state_hash: H256, state_index: U256, balances: Vec<u128>, num_tokens: u16) -> Self {
-        assert_eq!(
-            balances.len() % (num_tokens as usize),
-            0,
-            "Elements in balance vector needs to be a multiple of num_tokens"
-        );
-        AccountState {
-            state_hash,
-            state_index,
-            balances: balances
-                .chunks(num_tokens as usize)
-                .enumerate()
-                .map(|(account, token_balances)| {
-                    (
-                        H160::from_low_u64_be(account as u64), // TODO - these are not accurate addresses.
-                        token_balances
-                            .iter()
-                            .enumerate()
-                            .map(|(token, balance)| (token as u16, *balance))
-                            .collect(),
-                    )
-                })
-                .collect(),
-            num_tokens,
-        }
-    }
-
     pub fn read_balance(&self, token_id: u16, account_id: H160) -> u128 {
         *self
             .balances
             .get(&account_id)
             .and_then(|token_balance| token_balance.get(&token_id))
             .unwrap_or(&0)
-    }
-
-    pub fn increment_balance(&mut self, token_id: u16, account_id: H160, amount: u128) {
-        debug!(
-            "Incrementing account {} balance of token {} by {}",
-            account_id, token_id, amount
-        );
-        self.modify_balance(account_id, token_id, |balance| *balance += amount);
     }
 
     pub fn modify_balance<F>(&mut self, account_id: H160, token_id: u16, func: F)
@@ -68,19 +30,60 @@ impl AccountState {
     }
 }
 
-pub mod test_util {
+#[cfg(test)]
+mod test_util {
     use super::*;
-    pub fn create_account_state_with_balance_for(orders: &[Order]) -> AccountState {
-        let mut state = AccountState {
-            state_index: U256::zero(),
-            state_hash: H256::zero(),
-            balances: HashMap::new(),
-            num_tokens: std::u16::MAX,
-        };
-        for order in orders {
-            state.increment_balance(order.sell_token, order.account_id, order.sell_amount);
+    use crate::models::Order;
+
+    impl AccountState {
+        pub fn new(
+            state_hash: H256,
+            state_index: U256,
+            balances: Vec<u128>,
+            num_tokens: u16,
+        ) -> Self {
+            assert_eq!(
+                balances.len() % (num_tokens as usize),
+                0,
+                "Elements in balance vector needs to be a multiple of num_tokens"
+            );
+            AccountState {
+                state_hash,
+                state_index,
+                balances: balances
+                    .chunks(num_tokens as usize)
+                    .enumerate()
+                    .map(|(account, token_balances)| {
+                        (
+                            H160::from_low_u64_be(account as u64), // TODO - these are not accurate addresses.
+                            token_balances
+                                .iter()
+                                .enumerate()
+                                .map(|(token, balance)| (token as u16, *balance))
+                                .collect(),
+                        )
+                    })
+                    .collect(),
+                num_tokens,
+            }
         }
-        state
+
+        pub fn with_balance_for(orders: &[Order]) -> Self {
+            let mut state = AccountState {
+                state_index: U256::zero(),
+                state_hash: H256::zero(),
+                balances: HashMap::new(),
+                num_tokens: std::u16::MAX,
+            };
+            for order in orders {
+                state.increment_balance(order.sell_token, order.account_id, order.sell_amount);
+            }
+            state
+        }
+
+        pub fn increment_balance(&mut self, token_id: u16, account_id: H160, amount: u128) {
+            self.modify_balance(account_id, token_id, |balance| *balance += amount);
+        }
     }
 }
 
