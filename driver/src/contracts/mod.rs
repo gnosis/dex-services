@@ -27,8 +27,8 @@ fn method_defaults(network_id: u64) -> Result<MethodDefaults, DriverError> {
     let account = Account::Offline(key, Some(network_id));
     let defaults = MethodDefaults {
         from: Some(account),
-        gas: Some(100_000.into()),
-        gas_price: Some(1_000_000_000.into()),
+        gas: None,
+        gas_price: None,
     };
 
     Ok(defaults)
