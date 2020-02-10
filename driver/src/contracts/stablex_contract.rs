@@ -199,11 +199,7 @@ fn encode_execution_for_contract(
             // order was touched!
             // Note that above condition is only holds for sell orders.
             owners.push(orders[order_index].account_id);
-            let order_batch_info = orders[order_index]
-                .batch_information
-                .as_ref()
-                .expect("StableX Orders must have Batch Information");
-            order_ids.push(order_batch_info.slot_index as u64);
+            order_ids.push(orders[order_index].id as _);
             volumes.push(U128::from(buy_amount.to_be_bytes()));
         }
     }
@@ -213,31 +209,13 @@ fn encode_execution_for_contract(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::models::BatchInformation;
     use crate::util::test_util::map_from_slice;
-
-    #[test]
-    #[should_panic]
-    fn encode_execution_fails_on_order_without_batch_info() {
-        let insufficient_order = Order {
-            batch_information: None,
-            account_id: H160::from_low_u64_be(1),
-            sell_token: 0,
-            buy_token: 1,
-            sell_amount: 1,
-            buy_amount: 1,
-        };
-        encode_execution_for_contract(vec![insufficient_order], vec![1]);
-    }
 
     #[test]
     #[should_panic]
     fn encode_execution_fails_on_inconsistent_results() {
         let some_reasonable_order = Order {
-            batch_information: Some(BatchInformation {
-                slot_index: 0,
-                slot: U256::from(0),
-            }),
+            id: 0,
             account_id: H160::from_low_u64_be(1),
             sell_token: 0,
             buy_token: 1,
@@ -255,10 +233,7 @@ pub mod tests {
         let address_2 = H160::from_low_u64_be(2);
 
         let order_1 = Order {
-            batch_information: Some(BatchInformation {
-                slot_index: 0,
-                slot: U256::from(0),
-            }),
+            id: 0,
             account_id: address_1,
             sell_token: 0,
             buy_token: 2,
@@ -266,10 +241,7 @@ pub mod tests {
             buy_amount: 2,
         };
         let order_2 = Order {
-            batch_information: Some(BatchInformation {
-                slot_index: 1,
-                slot: U256::from(0),
-            }),
+            id: 1,
             account_id: address_2,
             sell_token: 2,
             buy_token: 0,
@@ -318,10 +290,7 @@ pub mod tests {
         let mut account_state = AccountState::default();
 
         let order_1 = Order {
-            batch_information: Some(BatchInformation {
-                slot_index: 0,
-                slot: U256::from(0),
-            }),
+            id: 0,
             account_id: H160::from_low_u64_be(1),
             sell_token: 257,
             buy_token: 258,
@@ -329,10 +298,7 @@ pub mod tests {
             buy_amount: 257,
         };
         let order_2 = Order {
-            batch_information: Some(BatchInformation {
-                slot_index: 1,
-                slot: U256::from(0),
-            }),
+            id: 1,
             account_id: H160::from_low_u64_be(1),
             sell_token: 257,
             buy_token: 258,

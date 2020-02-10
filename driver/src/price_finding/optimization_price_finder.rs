@@ -35,8 +35,8 @@ mod solver_output {
 }
 
 mod solver_input {
-    use serde::Serialize;
-    use std::collections::HashMap;
+    use serde::{Serialize, Serializer};
+    use std::collections::{BTreeMap, HashMap};
     use std::vec::Vec;
 
     #[derive(Serialize)]
@@ -61,11 +61,41 @@ mod solver_input {
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
     pub struct Input {
+        #[serde(serialize_with = "ordered_tokens")]
         pub tokens: Vec<String>,
         pub ref_token: String,
+        #[serde(serialize_with = "ordered_balances")]
         pub accounts: Accounts,
         pub orders: Vec<Order>,
         pub fee: Option<Fee>,
+    }
+
+    fn ordered_tokens<S>(value: &[String], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut sorted = value.to_owned();
+        sorted.sort();
+        sorted.serialize(serializer)
+    }
+
+    fn ordered_balances<S>(value: &Accounts, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let ordered: BTreeMap<_, BTreeMap<_, _>> = value
+            .iter()
+            .map(|(user, token_balances)| {
+                (
+                    user,
+                    token_balances
+                        .iter()
+                        .filter(|(_, balance)| **balance != "0")
+                        .collect(),
+                )
+            })
+            .collect();
+        ordered.serialize(serializer)
     }
 }
 
@@ -92,7 +122,7 @@ impl OptimisationPriceFinder {
 }
 
 fn token_id(token: u16) -> String {
-    format!("token{}", token)
+    format!("token{:04}", token)
 }
 
 fn account_id(account: H160) -> String {
@@ -288,7 +318,7 @@ pub mod tests {
     #[test]
     fn test_serialize_order() {
         let order = models::Order {
-            batch_information: None,
+            id: 0,
             account_id: H160::from_low_u64_be(0),
             sell_token: 1,
             buy_token: 2,
@@ -296,8 +326,8 @@ pub mod tests {
             buy_amount: 200,
         };
         let result = serialize_order(&order);
-        assert_eq!(result.sell_token, "token1");
-        assert_eq!(result.buy_token, "token2");
+        assert_eq!(result.sell_token, "token0001");
+        assert_eq!(result.buy_token, "token0002");
         assert_eq!(result.sell_amount, "100");
         assert_eq!(result.buy_amount, "200");
         assert_eq!(
@@ -322,7 +352,7 @@ pub mod tests {
         ];
         let mut result = serialize_tokens(&orders);
         result.sort_unstable();
-        let expected = vec!["token0", "token2", "token4"];
+        let expected = vec!["token0000", "token0002", "token0004"];
         assert_eq!(result, expected);
     }
 
@@ -330,9 +360,9 @@ pub mod tests {
     fn test_deserialize_result() {
         let json = json!({
             "prices": {
-                "token0": "14024052566155238000",
-                "token1": "170141183460469231731687303715884105728", // greater than max value of u64
-                "token2": null,
+                "token0000": "14024052566155238000",
+                "token0001": "170141183460469231731687303715884105728", // greater than max value of u64
+                "token0002": null,
             },
             "orders": [
                 {
@@ -421,7 +451,7 @@ pub mod tests {
     fn serialize_result_fails_if_orders_missing() {
         let json = json!({
             "prices": {
-                "token0": "100",
+                "token0000": "100",
             },
         });
         let err = deserialize_result(json.to_string()).expect_err("Should fail to parse");
@@ -448,7 +478,7 @@ pub mod tests {
     fn serialize_result_fails_if_order_sell_volume_not_parsable() {
         let json = json!({
             "prices": {
-                "token0": "100",
+                "token0000": "100",
             },
             "orders": [
                 {
@@ -465,7 +495,7 @@ pub mod tests {
     fn serialize_result_assumes_zero_if_order_does_not_have_buy_amount() {
         let json = json!({
             "prices": {
-                "token0": "100",
+                "token0000": "100",
             },
             "orders": [
                 {
@@ -481,7 +511,7 @@ pub mod tests {
     fn serialize_result_fails_if_order_buy_volume_not_parsable() {
         let json = json!({
             "prices": {
-                "token0": "100",
+                "token0000": "100",
             },
             "orders": [
                 {
@@ -504,7 +534,7 @@ pub mod tests {
         );
         let orders = [
             models::Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 2,
@@ -512,7 +542,7 @@ pub mod tests {
                 buy_amount: 200,
             },
             models::Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(1),
                 sell_token: 2,
                 buy_token: 1,
@@ -523,15 +553,15 @@ pub mod tests {
         let result = serialize_balances(&state, &orders);
         let mut expected = solver_input::Accounts::new();
         let mut first = HashMap::new();
-        first.insert("token1".to_string(), "200".to_string());
-        first.insert("token2".to_string(), "300".to_string());
+        first.insert("token0001".to_string(), "200".to_string());
+        first.insert("token0002".to_string(), "300".to_string());
         expected.insert(
             "0000000000000000000000000000000000000000".to_string(),
             first,
         );
         let mut second = HashMap::new();
-        second.insert("token1".to_string(), "500".to_string());
-        second.insert("token2".to_string(), "600".to_string());
+        second.insert("token0001".to_string(), "500".to_string());
+        second.insert("token0002".to_string(), "600".to_string());
         expected.insert(
             "0000000000000000000000000000000000000001".to_string(),
             second,
@@ -551,7 +581,7 @@ pub mod tests {
                 assert_eq!(
                     json["fee"],
                     json!({
-                        "token": "token0",
+                        "token": "token0000",
                         "ratio": 0.001
                     })
                 );
@@ -566,5 +596,54 @@ pub mod tests {
         assert!(solver
             .find_prices(&orders, &AccountState::with_balance_for(&orders))
             .is_err());
+    }
+
+    #[test]
+    fn test_balance_serialization() {
+        let mut accounts = HashMap::new();
+
+        // Balances should end up ordered by token ID
+        let mut user1_balances = HashMap::new();
+        user1_balances.insert("token0003".to_owned(), "100".to_owned());
+        user1_balances.insert("token0002".to_owned(), "100".to_owned());
+        user1_balances.insert("token0001".to_owned(), "100".to_owned());
+        user1_balances.insert("token0000".to_owned(), "100".to_owned());
+
+        // Zero amounts should be filtered out
+        let mut user2_balances = HashMap::new();
+        user2_balances.insert("token0000".to_owned(), "0".to_owned());
+
+        // Accounts should end up sorted by account ID
+        accounts.insert(
+            "4fd7c947ca0aba9d8678885e2b8c4d6a4e946984".to_owned(),
+            user1_balances,
+        );
+        accounts.insert(
+            "52a67f22d628c84c1f1e73ebb0e9ae272e302dd9".to_owned(),
+            user2_balances,
+        );
+        accounts.insert(
+            "13a0b42b9c180065510615972858bf41d1972a55".to_owned(),
+            HashMap::new(),
+        );
+
+        let input = solver_input::Input {
+            // tokens should also end up sorted in the end
+            tokens: vec![
+                "token0003".to_owned(),
+                "token0002".to_owned(),
+                "token0001".to_owned(),
+                "token0000".to_owned(),
+            ],
+            ref_token: "token0000".to_owned(),
+            accounts,
+            orders: vec![],
+            fee: None,
+        };
+        let result = serde_json::to_string(&input).expect("Unable to serialize account state");
+        assert_eq!(
+            result,
+            r#"{"tokens":["token0000","token0001","token0002","token0003"],"refToken":"token0000","accounts":{"13a0b42b9c180065510615972858bf41d1972a55":{},"4fd7c947ca0aba9d8678885e2b8c4d6a4e946984":{"token0000":"100","token0001":"100","token0002":"100","token0003":"100"},"52a67f22d628c84c1f1e73ebb0e9ae272e302dd9":{}},"orders":[],"fee":null}"#
+        );
     }
 }

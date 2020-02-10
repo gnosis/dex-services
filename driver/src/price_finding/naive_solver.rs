@@ -377,7 +377,7 @@ pub mod tests {
     fn test_retreth_example() {
         let orders = vec![
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(0),
                 sell_token: 3,
                 buy_token: 2,
@@ -385,7 +385,7 @@ pub mod tests {
                 buy_amount: 12,
             },
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(1),
                 sell_token: 2,
                 buy_token: 3,
@@ -393,7 +393,7 @@ pub mod tests {
                 buy_amount: 22,
             },
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(2),
                 sell_token: 3,
                 buy_token: 1,
@@ -401,7 +401,7 @@ pub mod tests {
                 buy_amount: 150,
             },
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(3),
                 sell_token: 2,
                 buy_token: 1,
@@ -409,7 +409,7 @@ pub mod tests {
                 buy_amount: 180,
             },
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(4),
                 sell_token: 1,
                 buy_token: 2,
@@ -417,7 +417,7 @@ pub mod tests {
                 buy_amount: 4,
             },
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(5),
                 sell_token: 1,
                 buy_token: 3,
@@ -449,7 +449,7 @@ pub mod tests {
         );
         let orders = vec![
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(1),
                 sell_token: 1,
                 buy_token: 2,
@@ -457,7 +457,7 @@ pub mod tests {
                 buy_amount: 4,
             },
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(0),
                 sell_token: 2,
                 buy_token: 1,
@@ -475,7 +475,7 @@ pub mod tests {
     fn test_no_matches() {
         let orders = vec![
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(1),
                 sell_token: 1,
                 buy_token: 2,
@@ -483,7 +483,7 @@ pub mod tests {
                 buy_amount: 4,
             },
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(0),
                 sell_token: 2,
                 buy_token: 1,
@@ -502,7 +502,7 @@ pub mod tests {
     fn test_stablex_contract_example() {
         let orders = vec![
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(0),
                 sell_token: 0,
                 buy_token: 1,
@@ -510,7 +510,7 @@ pub mod tests {
                 buy_amount: 9990,
             },
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 0,
@@ -547,7 +547,7 @@ pub mod tests {
         };
         let orders = vec![
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: users[0],
                 sell_token: 0,
                 buy_token: 1,
@@ -555,7 +555,7 @@ pub mod tests {
                 buy_amount: 999 * BASE_UNIT,
             },
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: users[1],
                 sell_token: 1,
                 buy_token: 0,
@@ -579,7 +579,7 @@ pub mod tests {
     fn test_does_not_trade_non_fee_tokens() {
         let orders = vec![
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(0),
                 sell_token: 0,
                 buy_token: 1,
@@ -587,7 +587,7 @@ pub mod tests {
                 buy_amount: 9990,
             },
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 0,
@@ -620,7 +620,7 @@ pub mod tests {
     fn test_empty_sell_volume() {
         let orders = vec![
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(0),
                 sell_token: 0,
                 buy_token: 1,
@@ -628,7 +628,7 @@ pub mod tests {
                 buy_amount: 0,
             },
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 0,
@@ -646,7 +646,7 @@ pub mod tests {
     fn order_pair_first_fully_matching_second() -> Vec<Order> {
         vec![
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(1),
                 sell_token: 0,
                 buy_token: 1,
@@ -654,7 +654,7 @@ pub mod tests {
                 buy_amount: 4 * BASE_UNIT,
             },
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 0,
@@ -667,7 +667,7 @@ pub mod tests {
     fn order_pair_both_fully_matched() -> Vec<Order> {
         vec![
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(1),
                 sell_token: 2,
                 buy_token: 1,
@@ -675,7 +675,7 @@ pub mod tests {
                 buy_amount: 10 * BASE_UNIT,
             },
             Order {
-                batch_information: None,
+                id: 0,
                 account_id: H160::from_low_u64_be(1),
                 sell_token: 1,
                 buy_token: 2,
