@@ -1,5 +1,5 @@
 use crate::contracts::stablex_auction_element::{StableXAuctionElement, AUCTION_ELEMENT_WIDTH};
-use crate::models::{AccountState, BatchInformation, Order};
+use crate::models::{AccountState, Order};
 use std::collections::HashMap;
 use web3::types::{H160, U256};
 
@@ -154,10 +154,7 @@ impl BatchedAuctionDataReader {
                     .user_order_counts
                     .entry(result.order.account_id)
                     .or_insert(0);
-                result.order.batch_information = Some(BatchInformation {
-                    slot_index: *order_counter as u16,
-                    slot: U256::from(0),
-                });
+                result.order.id = *order_counter as u16;
                 *order_counter += 1;
                 result
             })
@@ -211,10 +208,7 @@ pub mod tests {
 
     lazy_static! {
         static ref ORDER_1: Order = Order {
-            batch_information: Some(BatchInformation {
-                slot_index: 0,
-                slot: U256::from(0),
-            }),
+            id: 0,
             account_id: H160::from_low_u64_be(1),
             sell_token: 257,
             buy_token: 258,
@@ -222,10 +216,7 @@ pub mod tests {
             buy_amount: 257,
         };
         static ref ORDER_2: Order = Order {
-            batch_information: Some(BatchInformation {
-                slot_index: 1,
-                slot: U256::from(0),
-            }),
+            id: 1,
             account_id: H160::from_low_u64_be(1),
             sell_token: 258,
             buy_token: 257,
