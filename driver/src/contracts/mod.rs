@@ -7,12 +7,11 @@ use ethcontract::contract::MethodDefaults;
 use ethcontract::{Account, PrivateKey};
 use log::Level;
 use std::env;
-use web3::api::Web3;
 use web3::transports::{EventLoopHandle, Http};
 
-fn web3_provider(
-    url: String,
-) -> Result<(Web3<LoggingTransport<Http>>, EventLoopHandle), DriverError> {
+pub type Web3 = web3::api::Web3<LoggingTransport<Http>>;
+
+pub fn web3_provider(url: &str) -> Result<(Web3, EventLoopHandle), DriverError> {
     let (event_loop, http) = Http::new(&url)?;
     let logging = LoggingTransport::new(http, Level::Debug);
     let web3 = Web3::new(logging);
