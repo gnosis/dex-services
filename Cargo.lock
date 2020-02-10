@@ -504,7 +504,7 @@ dependencies = [
 [[package]]
 name = "ethcontract"
 version = "0.3.0"
-source = "git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches-v0.3.0#34be6c1f495a3fc1a6d31f327f2f0464ae9deef0"
+source = "git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches-v0.3.0#11861ba3c3e20b34c6be944db36e67e2e0b53404"
 dependencies = [
  "ethcontract-common",
  "ethcontract-derive",
@@ -525,7 +525,7 @@ dependencies = [
 [[package]]
 name = "ethcontract-common"
 version = "0.3.0"
-source = "git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches-v0.3.0#34be6c1f495a3fc1a6d31f327f2f0464ae9deef0"
+source = "git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches-v0.3.0#11861ba3c3e20b34c6be944db36e67e2e0b53404"
 dependencies = [
  "ethabi",
  "hex",
@@ -539,7 +539,7 @@ dependencies = [
 [[package]]
 name = "ethcontract-derive"
 version = "0.3.0"
-source = "git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches-v0.3.0#34be6c1f495a3fc1a6d31f327f2f0464ae9deef0"
+source = "git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches-v0.3.0#11861ba3c3e20b34c6be944db36e67e2e0b53404"
 dependencies = [
  "ethcontract-generate",
  "proc-macro2 1.0.8",
@@ -549,7 +549,7 @@ dependencies = [
 [[package]]
 name = "ethcontract-generate"
 version = "0.3.0"
-source = "git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches-v0.3.0#34be6c1f495a3fc1a6d31f327f2f0464ae9deef0"
+source = "git+https://github.com/gnosis/ethcontract-rs?branch=graph-patches-v0.3.0#11861ba3c3e20b34c6be944db36e67e2e0b53404"
 dependencies = [
  "Inflector",
  "anyhow",
