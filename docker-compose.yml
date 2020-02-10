@@ -36,7 +36,3 @@ services:
     depends_on:
       - ganache-cli
     command: cargo run
-    volumes:
-      # Don't sync target, otherwise we rebuild on every deploy
-      - ./dex-contracts:/app/dex-contracts
-      - ./driver/src:/app/driver/src
