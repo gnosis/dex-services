@@ -1,11 +1,22 @@
-use driver::contracts::{stablex_contract::BatchExchange, web3_provider};
-use driver::driver::stablex_driver::StableXDriver;
-use driver::logging;
-use driver::metrics::{MetricsServer, StableXMetrics};
-use driver::orderbook::{FilteredOrderbookReader, PaginatedStableXOrderBookReader};
-use driver::price_finding::price_finder_interface::OptimizationModel;
-use driver::price_finding::Fee;
-use driver::solution_submission::StableXSolutionSubmitter;
+mod contracts;
+mod driver;
+mod error;
+mod logging;
+mod metrics;
+mod models;
+mod orderbook;
+mod price_finding;
+mod solution_submission;
+mod transport;
+mod util;
+
+use crate::contracts::{stablex_contract::BatchExchange, web3_provider};
+use crate::driver::stablex_driver::StableXDriver;
+use crate::metrics::{MetricsServer, StableXMetrics};
+use crate::orderbook::{FilteredOrderbookReader, PaginatedStableXOrderBookReader};
+use crate::price_finding::price_finder_interface::OptimizationModel;
+use crate::price_finding::Fee;
+use crate::solution_submission::StableXSolutionSubmitter;
 
 use log::{error, info};
 
@@ -57,7 +68,7 @@ fn main() {
     });
 
     let fee = Some(Fee::default());
-    let mut price_finder = driver::util::create_price_finder(fee, optimization_model);
+    let mut price_finder = util::create_price_finder(fee, optimization_model);
 
     let orderbook =
         PaginatedStableXOrderBookReader::new(&contract, auction_data_batch_size(), &web3);

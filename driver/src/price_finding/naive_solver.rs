@@ -260,14 +260,14 @@ fn executed_buy_amount(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::models::account_state::test_util::*;
+    use crate::models::AccountState;
     use std::collections::HashMap;
     use web3::types::{H160, H256, U256};
 
     #[test]
     fn test_type_left_fully_matched_no_fee() {
         let orders = order_pair_first_fully_matching_second();
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
@@ -289,7 +289,7 @@ pub mod tests {
     #[test]
     fn test_type_left_fully_matched_with_fee() {
         let orders = order_pair_first_fully_matching_second();
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
         let fee = Some(Fee {
             token: 0,
             ratio: 0.001,
@@ -304,7 +304,7 @@ pub mod tests {
     fn test_type_right_fully_matched_no_fee() {
         let mut orders = order_pair_first_fully_matching_second();
         orders.reverse();
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
@@ -327,7 +327,7 @@ pub mod tests {
     fn test_type_right_fully_matched_with_fee() {
         let mut orders = order_pair_first_fully_matching_second();
         orders.reverse();
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
         let fee = Some(Fee {
             token: 0,
             ratio: 0.001,
@@ -341,7 +341,7 @@ pub mod tests {
     #[test]
     fn test_type_both_fully_matched_no_fee() {
         let orders = order_pair_both_fully_matched();
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
@@ -363,7 +363,7 @@ pub mod tests {
     #[test]
     fn test_type_both_fully_matched_with_fee() {
         let orders = order_pair_both_fully_matched();
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
         let fee = Some(Fee {
             token: 2,
             ratio: 0.001,
@@ -425,7 +425,7 @@ pub mod tests {
                 buy_amount: 20,
             },
         ];
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
@@ -491,7 +491,7 @@ pub mod tests {
                 buy_amount: 180,
             },
         ];
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
@@ -518,7 +518,7 @@ pub mod tests {
                 buy_amount: 19960,
             },
         ];
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let fee = Some(Fee {
             token: 0,
@@ -595,7 +595,7 @@ pub mod tests {
                 buy_amount: 19960,
             },
         ];
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let fee = Some(Fee {
             token: 2,
@@ -609,7 +609,7 @@ pub mod tests {
     #[test]
     fn test_empty_orders() {
         let orders: Vec<Order> = vec![];
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
@@ -636,7 +636,7 @@ pub mod tests {
                 buy_amount: 0,
             },
         ];
-        let state = create_account_state_with_balance_for(&orders);
+        let state = AccountState::with_balance_for(&orders);
 
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();

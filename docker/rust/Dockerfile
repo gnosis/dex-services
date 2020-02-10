@@ -18,7 +18,6 @@ ONBUILD RUN apt-get update \
   && ln -s $HOME/.cargo/bin/* /usr/bin/
 
 ONBUILD COPY dex-contracts/build ./dex-contracts/build
-ONBUILD COPY dfusion_rust_core ./dfusion_rust_core
 ONBUILD COPY driver ./driver
 ONBUILD COPY e2e ./e2e
 
@@ -33,7 +32,7 @@ ONBUILD RUN apt-get update \
   && apt-get install -y --no-install-recommends libpq-dev libssl1.0.0 libssl-dev ca-certificates \ 
   && rm -rf /var/lib/apt/lists/*
 
-ONBUILD COPY target/debug/stablex stablex
+ONBUILD COPY target/debug/driver driver
 
 # Trigger actual build
 FROM ${RUST_BASE}
