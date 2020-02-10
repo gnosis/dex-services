@@ -32,14 +32,14 @@ pub trait StableXOrderBookReading {
 /// Implements the StableXOrderBookReading trait by using the underlying
 /// contract in a paginated way.
 /// This avoid hitting gas limits when the total amount of orders is large.
-pub struct PaginatedStableXOrderBookReader<'a, 'b> {
+pub struct PaginatedStableXOrderBookReader<'a> {
     contract: &'a dyn StableXContract,
     page_size: u64,
-    web3: &'b Web3,
+    web3: &'a Web3,
 }
 
-impl<'a, 'b> PaginatedStableXOrderBookReader<'a, 'b> {
-    pub fn new(contract: &'a dyn StableXContract, page_size: u64, web3: &'b Web3) -> Self {
+impl<'a> PaginatedStableXOrderBookReader<'a> {
+    pub fn new(contract: &'a dyn StableXContract, page_size: u64, web3: &'a Web3) -> Self {
         Self {
             contract,
             page_size,
@@ -48,7 +48,7 @@ impl<'a, 'b> PaginatedStableXOrderBookReader<'a, 'b> {
     }
 }
 
-impl<'a, 'b> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a, 'b> {
+impl<'a> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a> {
     fn get_auction_index(&self) -> Result<U256> {
         self.contract
             .get_current_auction_index()
