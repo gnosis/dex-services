@@ -2,14 +2,14 @@ use crate::contracts::{stablex_contract::StableXContract, Web3};
 use crate::error::DriverError;
 use crate::models::{AccountState, Order};
 
-use batched_auction_data_reader::BatchedAuctionDataReader;
 #[cfg(test)]
 use mockall::automock;
+use paginated_auction_data_reader::PaginatedAuctionDataReader;
 use web3::futures::Future;
 use web3::types::U256;
 
-mod batched_auction_data_reader;
 mod filtered_orderbook;
+mod paginated_auction_data_reader;
 pub use filtered_orderbook::FilteredOrderbookReader;
 pub use filtered_orderbook::OrderbookFilter;
 
@@ -57,10 +57,10 @@ impl<'a> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a> {
 
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
         let block = self.web3.eth().block_number().wait()?.as_u64();
-        let mut reader = BatchedAuctionDataReader::new(index);
+        let mut reader = PaginatedAuctionDataReader::new(index);
         loop {
             let number_of_added_orders =
-                reader.apply_batch(&self.contract.get_auction_data_batched(
+                reader.apply_page(&self.contract.get_auction_data_paginated(
                     block,
                     self.page_size,
                     reader.pagination().previous_page_user,

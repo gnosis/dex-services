@@ -5,7 +5,7 @@ use web3::types::{H160, U256};
 
 /// Handles reading of auction data that has been encoded with the smart
 /// contract's `encodeAuctionElement` function.
-pub struct BatchedAuctionDataReader {
+pub struct PaginatedAuctionDataReader {
     /// The account state resulting from unfiltered handled orders.
     account_state: AccountState,
     /// All unfiltered orders in the order they were received.
@@ -28,10 +28,10 @@ pub struct Pagination {
     pub previous_page_user_offset: usize,
 }
 
-impl BatchedAuctionDataReader {
-    /// Create a new BatchedAuctionDataReader.
-    pub fn new(index: U256) -> BatchedAuctionDataReader {
-        BatchedAuctionDataReader {
+impl PaginatedAuctionDataReader {
+    /// Create a new PaginatedAuctionDataReader.
+    pub fn new(index: U256) -> PaginatedAuctionDataReader {
+        PaginatedAuctionDataReader {
             account_state: AccountState::default(),
             orders: Vec::new(),
             pagination: Pagination {
@@ -60,11 +60,11 @@ impl BatchedAuctionDataReader {
     /// A batch can come from `getEncodedUsersPaginated` or `getEncodedOrders`.
     /// In the latter case there is only one batch.
     ///
-    /// Returns the number of orders in the data, before filtering for `index`.
+    /// Returns the number of orders in `packed_auction_bytes`.
     ///
     /// Panics if length of `packed_auction_bytes` is not a multiple of
     /// `AUCTION_ELEMENT_WIDTH`.
-    pub fn apply_batch(&mut self, packed_auction_bytes: &[u8]) -> usize {
+    pub fn apply_page(&mut self, packed_auction_bytes: &[u8]) -> usize {
         let auction_elements = self.parse_auction_elements(packed_auction_bytes);
         let number_of_orders = auction_elements.len();
         if number_of_orders == 0 {
@@ -220,18 +220,18 @@ pub mod tests {
     }
 
     #[test]
-    fn batched_auction_data_reader_empty() {
-        let mut reader = BatchedAuctionDataReader::new(U256::from(3));
-        assert_eq!(reader.apply_batch(&[]), 0);
+    fn paginated_auction_data_reader_empty() {
+        let mut reader = PaginatedAuctionDataReader::new(U256::from(3));
+        assert_eq!(reader.apply_page(&[]), 0);
     }
 
     #[test]
-    fn batched_auction_data_reader_single_batch() {
+    fn paginated_auction_data_reader_single_batch() {
         let mut bytes = Vec::new();
         bytes.extend(ORDER_1_BYTES);
         bytes.extend(ORDER_2_BYTES);
-        let mut reader = BatchedAuctionDataReader::new(U256::from(3));
-        assert_eq!(reader.apply_batch(&bytes), 2);
+        let mut reader = PaginatedAuctionDataReader::new(U256::from(3));
+        assert_eq!(reader.apply_page(&bytes), 2);
 
         let mut account_state = AccountState::default();
         account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 4);
@@ -244,13 +244,13 @@ pub mod tests {
     }
 
     #[test]
-    fn batched_auction_data_reader_multiple_batches() {
+    fn paginated_auction_data_reader_multiple_batches() {
         let mut account_state = AccountState::default();
-        let mut reader = BatchedAuctionDataReader::new(U256::from(3));
+        let mut reader = PaginatedAuctionDataReader::new(U256::from(3));
         let mut bytes = Vec::new();
 
         bytes.extend(ORDER_1_BYTES);
-        assert_eq!(reader.apply_batch(&bytes), 1);
+        assert_eq!(reader.apply_page(&bytes), 1);
         account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 4);
         assert_eq!(reader.account_state, account_state);
         assert_eq!(reader.orders, [ORDER_1.clone()]);
@@ -259,7 +259,7 @@ pub mod tests {
 
         bytes.clear();
         bytes.extend(ORDER_2_BYTES);
-        assert_eq!(reader.apply_batch(&bytes), 1);
+        assert_eq!(reader.apply_page(&bytes), 1);
         account_state.modify_balance(H160::from_low_u64_be(1), 258, |x| *x = 5);
         assert_eq!(reader.account_state, account_state);
         assert_eq!(reader.orders, [ORDER_1.clone(), ORDER_2.clone()]);
@@ -268,7 +268,7 @@ pub mod tests {
 
         bytes.clear();
         bytes.extend(ORDER_3_BYTES);
-        assert_eq!(reader.apply_batch(&bytes), 1);
+        assert_eq!(reader.apply_page(&bytes), 1);
         account_state.modify_balance(H160::from_low_u64_be(2), 257, |x| *x = 6);
         assert_eq!(reader.account_state, account_state);
         assert_eq!(
@@ -279,13 +279,13 @@ pub mod tests {
     }
 
     #[test]
-    fn batched_auction_data_reader_multiple_batches_different_users() {
+    fn paginated_auction_data_reader_multiple_batches_different_users() {
         let mut account_state = AccountState::default();
-        let mut reader = BatchedAuctionDataReader::new(U256::from(3));
+        let mut reader = PaginatedAuctionDataReader::new(U256::from(3));
         let mut bytes = Vec::new();
 
         bytes.extend(ORDER_1_BYTES);
-        assert_eq!(reader.apply_batch(&bytes), 1);
+        assert_eq!(reader.apply_page(&bytes), 1);
         account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 4);
         assert_eq!(reader.account_state, account_state);
         assert_eq!(reader.orders, [ORDER_1.clone()]);
@@ -295,7 +295,7 @@ pub mod tests {
         bytes.clear();
         bytes.extend(ORDER_2_BYTES);
         bytes.extend(ORDER_3_BYTES);
-        assert_eq!(reader.apply_batch(&bytes), 2);
+        assert_eq!(reader.apply_page(&bytes), 2);
         account_state.modify_balance(H160::from_low_u64_be(1), 258, |x| *x = 5);
         account_state.modify_balance(H160::from_low_u64_be(2), 257, |x| *x = 6);
         assert_eq!(reader.account_state, account_state);
@@ -307,13 +307,13 @@ pub mod tests {
     }
 
     #[test]
-    fn batched_auction_data_reader_order_count_does_not_ignore_filtered_orders() {
+    fn paginated_auction_data_reader_order_count_does_not_ignore_filtered_orders() {
         let mut bytes = Vec::new();
         bytes.extend(ORDER_1_BYTES);
         bytes.extend(ORDER_2_BYTES);
-        let mut reader = BatchedAuctionDataReader::new(U256::from(1000));
+        let mut reader = PaginatedAuctionDataReader::new(U256::from(1000));
         // the bytes contain two orders
-        assert_eq!(reader.apply_batch(&bytes), 2);
+        assert_eq!(reader.apply_page(&bytes), 2);
 
         let mut account_state = AccountState::default();
         account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 4);
@@ -328,14 +328,14 @@ pub mod tests {
 
     #[test]
     #[should_panic]
-    fn batched_auction_data_reader_panics() {
-        let mut reader = BatchedAuctionDataReader::new(U256::from(3));
+    fn paginated_auction_data_reader_panics() {
+        let mut reader = PaginatedAuctionDataReader::new(U256::from(3));
         let mut bytes = Vec::new();
         bytes.extend(ORDER_1_BYTES);
-        assert_eq!(reader.apply_batch(&bytes), 1);
+        assert_eq!(reader.apply_page(&bytes), 1);
         bytes[51] += 1;
         // Incremented sell_token_balance which should cause a panic because it
         // does not match the previous balance.
-        reader.apply_batch(&bytes);
+        reader.apply_page(&bytes);
     }
 }

@@ -27,8 +27,8 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-fn auction_data_batch_size() -> u64 {
-    const KEY: &str = "AUCTION_DATA_BATCH_SIZE";
+fn auction_data_page_size() -> u64 {
+    const KEY: &str = "AUCTION_DATA_PAGE_SIZE";
     const DEFAULT: u64 = 100;
     env::var(KEY)
         .map(|str| {
@@ -71,7 +71,7 @@ fn main() {
     let mut price_finder = util::create_price_finder(fee, optimization_model);
 
     let orderbook =
-        PaginatedStableXOrderBookReader::new(&contract, auction_data_batch_size(), &web3);
+        PaginatedStableXOrderBookReader::new(&contract, auction_data_page_size(), &web3);
     let parsed_filter = serde_json::from_str(&filter)
         .map_err(|e| {
             error!("Error parsing orderbook filter: {}", &e);

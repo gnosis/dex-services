@@ -46,11 +46,11 @@ impl BatchExchange {
 #[cfg_attr(test, automock)]
 pub trait StableXContract {
     fn get_current_auction_index(&self) -> Result<U256>;
-    /// Retrieve one batch of auction data.
+    /// Retrieve one page of auction data.
     /// `block` is needed because the state of the smart contract could change
     /// between blocks which would make the returned auction data inconsistent
     /// between calls.
-    fn get_auction_data_batched(
+    fn get_auction_data_paginated(
         &self,
         block: u64,
         page_size: u64,
@@ -78,7 +78,7 @@ impl StableXContract for BatchExchange {
         Ok(auction_index.into())
     }
 
-    fn get_auction_data_batched(
+    fn get_auction_data_paginated(
         &self,
         block: u64,
         page_size: u64,
