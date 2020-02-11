@@ -104,7 +104,7 @@ $(aws ecr get-login --no-include-email)
 Then specify the solver image you want to use as a build argument, e.g.: 
 
 ```sh
-docker-compose build --build-arg SOLVER_BASE=163030813197.dkr.ecr.us-east-1.amazonaws.com/dex-solver:latest stablex
+docker-compose build --build-arg SOLVER_BASE=163030813197.dkr.ecr.us-east-1.amazonaws.com/dex-solver:master stablex
 ```
 
 and add the following line to you `common.env` file:
