@@ -60,32 +60,41 @@ impl BatchedAuctionDataReader {
     /// A batch can come from `getEncodedUsersPaginated` or `getEncodedOrders`.
     /// In the latter case there is only one batch.
     ///
-    /// Returns the number of orders in the data.
+    /// Returns the number of orders in the data, before filtering for `index`.
     ///
     /// Panics if length of `packed_auction_bytes` is not a multiple of
     /// `AUCTION_ELEMENT_WIDTH`.
     pub fn apply_batch(&mut self, packed_auction_bytes: &[u8]) -> usize {
-        let previous_order_count = self.orders.len();
-        self.apply_auction_data(&packed_auction_bytes);
-        let number_of_added_orders = self.orders.len() - previous_order_count;
-        if number_of_added_orders == 0 {
+        let auction_elements = self.parse_auction_elements(packed_auction_bytes);
+        let number_of_orders = auction_elements.len();
+        if number_of_orders == 0 {
             return 0;
         }
-        let last_order_user = self.orders.last().expect("there are no orders").account_id;
+
+        let last_order_user = auction_elements
+            .last()
+            .expect("there are no orders")
+            .order
+            .account_id;
+        self.apply_auction_data(auction_elements);
         self.pagination.previous_page_user = last_order_user;
         self.pagination.previous_page_user_offset = *self
             .user_order_counts
             .get(&last_order_user)
             .expect("user has order but no order count");
-        number_of_added_orders
+        number_of_orders
     }
 
-    fn apply_auction_data(&mut self, packed_auction_bytes: &[u8]) {
-        let auction_elements = self.parse_auction_elements(packed_auction_bytes);
+    fn apply_auction_data(&mut self, auction_elements: Vec<StableXAuctionElement>) {
         self.apply_auction_elements_to_account_state(auction_elements.iter());
+        // Workaround for borrow checker that would complain that `extend`
+        // borrows self as mutable while at the same time the filter
+        // closure borrows self as immutable because of using `self.index`.
+        let index = self.index;
         self.orders.extend(
             auction_elements
                 .into_iter()
+                .filter(|x| x.in_auction(index) && x.order.sell_amount > 0)
                 .map(|auction_element| auction_element.order),
         );
     }
@@ -130,10 +139,6 @@ impl BatchedAuctionDataReader {
             AUCTION_ELEMENT_WIDTH
         );
 
-        // Workaround for borrow checker that would complain that the map
-        // closure borrows self as mutable while at the same time the filter
-        // closure borrows self as immutable because of using `self.index`.
-        let index = self.index;
         packed_auction_bytes
             .chunks(AUCTION_ELEMENT_WIDTH)
             .map(|chunk| {
@@ -148,7 +153,6 @@ impl BatchedAuctionDataReader {
                 *order_counter += 1;
                 result
             })
-            .filter(|x| x.in_auction(index) && x.order.sell_amount > 0)
             .collect()
     }
 }
@@ -300,6 +304,26 @@ pub mod tests {
             H160::from_low_u64_be(2)
         );
         assert_eq!(reader.pagination.previous_page_user_offset, 1);
+    }
+
+    #[test]
+    fn batched_auction_data_reader_order_count_does_not_ignore_filtered_orders() {
+        let mut bytes = Vec::new();
+        bytes.extend(ORDER_1_BYTES);
+        bytes.extend(ORDER_2_BYTES);
+        let mut reader = BatchedAuctionDataReader::new(U256::from(1000));
+        // the bytes contain two orders
+        assert_eq!(reader.apply_batch(&bytes), 2);
+
+        let mut account_state = AccountState::default();
+        account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 4);
+        account_state.modify_balance(H160::from_low_u64_be(1), 258, |x| *x = 5);
+
+        assert_eq!(reader.account_state, account_state);
+        // orders is empty because `index` does not match
+        assert_eq!(reader.orders, []);
+        assert_eq!(reader.pagination.previous_page_user, ORDER_1.account_id);
+        assert_eq!(reader.pagination.previous_page_user_offset, 2);
     }
 
     #[test]
