@@ -21,7 +21,7 @@ pub struct StableXMetrics {
 impl StableXMetrics {
     pub fn new(registry: Arc<Registry>) -> Self {
         let processing_time_opts = Opts::new(
-            "processing_times",
+            "dfusion_service_processing_times",
             "timings between different processing stages",
         );
         let processing_times = IntGaugeVec::new(processing_time_opts, &["stage"]).unwrap();
@@ -29,23 +29,32 @@ impl StableXMetrics {
             .register(Box::new(processing_times.clone()))
             .unwrap();
 
-        let failure_opts = Opts::new("failures", "number of auctions failed");
+        let failure_opts = Opts::new("dfusion_service_failures", "number of auctions failed");
         let failures = IntCounterVec::new(failure_opts, &["stage"]).unwrap();
         registry.register(Box::new(failures.clone())).unwrap();
 
-        let success_opts = Opts::new("success", "number of auctions successfully processed");
+        let success_opts = Opts::new(
+            "dfusion_service_success",
+            "number of auctions successfully processed",
+        );
         let successes = IntCounterVec::new(success_opts, &["type"]).unwrap();
         registry.register(Box::new(successes.clone())).unwrap();
 
-        let order_opts = Opts::new("orders", "number of orders in a batch");
+        let order_opts = Opts::new("dfusion_service_orders", "number of orders in a batch");
         let orders = IntGaugeVec::new(order_opts, &["type"]).unwrap();
         registry.register(Box::new(orders.clone())).unwrap();
 
-        let token_opts = Opts::new("tokens", "number of distinct tokens in a batch");
+        let token_opts = Opts::new(
+            "dfusion_service_tokens",
+            "number of distinct tokens in a batch",
+        );
         let tokens = IntGaugeVec::new(token_opts, &["type"]).unwrap();
         registry.register(Box::new(tokens.clone())).unwrap();
 
-        let users_opts = Opts::new("users", "number of distinct users in a batch");
+        let users_opts = Opts::new(
+            "dfusion_service_users",
+            "number of distinct users in a batch",
+        );
         let users = IntGaugeVec::new(users_opts, &["type"]).unwrap();
         registry.register(Box::new(users.clone())).unwrap();
 
