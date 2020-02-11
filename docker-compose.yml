@@ -33,4 +33,5 @@ services:
       - ganache-cli
     command: cargo run
     volumes:
+      # Sync src folder to allow development without rebuilding on each change
       - ./driver:/app/driver
