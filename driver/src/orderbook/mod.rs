@@ -1,12 +1,14 @@
-use crate::contracts::stablex_contract::StableXContract;
+use crate::contracts::{stablex_contract::StableXContract, Web3};
 use crate::error::DriverError;
 use crate::models::{AccountState, Order};
 
+use batched_auction_data_reader::BatchedAuctionDataReader;
 #[cfg(test)]
 use mockall::automock;
-
+use web3::futures::Future;
 use web3::types::U256;
 
+mod batched_auction_data_reader;
 mod filtered_orderbook;
 pub use filtered_orderbook::FilteredOrderbookReader;
 pub use filtered_orderbook::OrderbookFilter;
@@ -27,19 +29,26 @@ pub trait StableXOrderBookReading {
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)>;
 }
 
-/// A simple implementation of the order book trait that forwards calls
-/// directly to the smart contract.
-pub struct StableXOrderBookReader<'a> {
+/// Implements the StableXOrderBookReading trait by using the underlying
+/// contract in a paginated way.
+/// This avoid hitting gas limits when the total amount of orders is large.
+pub struct PaginatedStableXOrderBookReader<'a> {
     contract: &'a dyn StableXContract,
+    page_size: u64,
+    web3: &'a Web3,
 }
 
-impl<'a> StableXOrderBookReader<'a> {
-    pub fn new(contract: &'a dyn StableXContract) -> Self {
-        Self { contract }
+impl<'a> PaginatedStableXOrderBookReader<'a> {
+    pub fn new(contract: &'a dyn StableXContract, page_size: u64, web3: &'a Web3) -> Self {
+        Self {
+            contract,
+            page_size,
+            web3,
+        }
     }
 }
 
-impl<'a> StableXOrderBookReading for StableXOrderBookReader<'a> {
+impl<'a> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a> {
     fn get_auction_index(&self) -> Result<U256> {
         self.contract
             .get_current_auction_index()
@@ -47,6 +56,19 @@ impl<'a> StableXOrderBookReading for StableXOrderBookReader<'a> {
     }
 
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
-        self.contract.get_auction_data(index)
+        let block = self.web3.eth().block_number().wait()?.as_u64();
+        let mut reader = BatchedAuctionDataReader::new(index);
+        loop {
+            let number_of_added_orders =
+                reader.apply_batch(&self.contract.get_auction_data_batched(
+                    block,
+                    self.page_size,
+                    reader.pagination().previous_page_user,
+                    reader.pagination().previous_page_user_offset as u64,
+                )?);
+            if (number_of_added_orders as u64) < self.page_size {
+                return Ok(reader.get_auction_data());
+            }
+        }
     }
 }
