@@ -1,14 +1,4 @@
 version: '3.6'
-x-rust-service:
-  &rust-service
-  build:
-    context: .
-    dockerfile: docker/rust/Dockerfile
-  restart: always
-  env_file: common.env
-  environment:
-    - RUST_BACKTRACE=1
-
 services:
   ganache-cli:
     ports:
@@ -29,10 +19,18 @@ services:
       - ./dex-contracts:/app/dex-contracts
 
   stablex:
-    << : *rust-service
+    build:
+      context: .
+      dockerfile: docker/rust/Dockerfile
+    restart: always
+    env_file: common.env
+    environment:
+      - RUST_BACKTRACE=1
     image: stablex
     ports:
       - '9586:9586'
     depends_on:
       - ganache-cli
     command: cargo run
+    volumes:
+      - ./driver:/app/driver
