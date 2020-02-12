@@ -4,8 +4,7 @@ use std::collections::HashMap;
 use std::env;
 
 use ethcontract::transaction::GasPrice;
-use ethcontract::web3::types::{H160, U256};
-use ethcontract::BlockNumber;
+use ethcontract::{Address as H160, BlockNumber, U256};
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
