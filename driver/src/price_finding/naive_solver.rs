@@ -5,7 +5,7 @@ use crate::util::{CeiledDiv, CheckedConvertU128};
 
 use std::collections::HashMap;
 
-use web3::types::U256;
+use ethcontract::U256;
 
 const BASE_UNIT: u128 = 1_000_000_000_000_000_000u128;
 const BASE_PRICE: u128 = BASE_UNIT;
@@ -261,8 +261,8 @@ fn executed_buy_amount(
 pub mod tests {
     use super::*;
     use crate::models::AccountState;
+    use ethcontract::{Address as H160, H256, U256};
     use std::collections::HashMap;
-    use web3::types::{H160, H256, U256};
 
     #[test]
     fn test_type_left_fully_matched_no_fee() {

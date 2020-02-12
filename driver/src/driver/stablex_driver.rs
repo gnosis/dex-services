@@ -9,7 +9,7 @@ use log::info;
 
 use std::collections::HashSet;
 
-use web3::types::U256;
+use ethcontract::U256;
 
 pub struct StableXDriver<'a> {
     past_auctions: HashSet<U256>,

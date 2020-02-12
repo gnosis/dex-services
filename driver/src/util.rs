@@ -1,6 +1,6 @@
+use ethcontract::U256;
 use log::info;
 use std::future::Future;
-use web3::types::U256;
 
 use crate::price_finding::{
     Fee, NaiveSolver, OptimisationPriceFinder, OptimizationModel, PriceFinding,

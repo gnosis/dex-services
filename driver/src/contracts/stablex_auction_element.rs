@@ -1,6 +1,6 @@
 use crate::models::Order;
 use byteorder::{BigEndian, ByteOrder};
-use web3::types::{H160, U256};
+use ethcontract::{Address as H160, U256};
 
 use crate::util::CeiledDiv;
 
