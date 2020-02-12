@@ -165,6 +165,8 @@ The following environment variables can be used to configure the behavior of the
 }
 ```
 
+- *AUCTION_DATA_PAGE_SIZE*: the page size with which to read orders from the smart contract
+
 blacklists all orders that contain token 1 & 2, all orders of _0x...B_ and orderId 0 & 1 or _0x...A_
 
 ## Troubleshooting
