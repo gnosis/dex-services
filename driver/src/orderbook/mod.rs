@@ -59,14 +59,13 @@ impl<'a> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a> {
         let block = self.web3.eth().block_number().wait()?.as_u64();
         let mut reader = PaginatedAuctionDataReader::new(index);
         loop {
-            let number_of_added_orders =
-                reader.apply_page(&self.contract.get_auction_data_paginated(
-                    block,
-                    self.page_size,
-                    reader.pagination().previous_page_user,
-                    reader.pagination().previous_page_user_offset as u64,
-                )?);
-            if (number_of_added_orders as u64) < self.page_size {
+            let number_of_orders = reader.apply_page(&self.contract.get_auction_data_paginated(
+                block,
+                self.page_size,
+                reader.pagination().previous_page_user,
+                reader.pagination().previous_page_user_offset as u64,
+            )?);
+            if (number_of_orders as u64) < self.page_size {
                 return Ok(reader.get_auction_data());
             }
         }
