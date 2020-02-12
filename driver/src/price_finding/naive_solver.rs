@@ -17,7 +17,12 @@ pub enum OrderPairType {
 }
 
 trait Matchable {
+    /// Returns whether the orders can be matched. For this the tokens need
+    /// to match, there must be a price that satisfies both orders and if there
+    /// is a fee then one of the tokens must be the fee token.
     fn attracts(&self, other: &Order, fee: &Option<Fee>) -> bool;
+    /// Returns whether the account to which the order belongs to has at least
+    /// as many funds of the sell token as the order's sell amount.
     fn sufficient_seller_funds(&self, state: &AccountState) -> bool;
     fn match_compare(
         &self,
@@ -25,8 +30,12 @@ trait Matchable {
         state: &AccountState,
         fee: &Option<Fee>,
     ) -> Option<OrderPairType>;
+    /// Returns whether this order's sell token is the other order's buy token
+    /// and vice versa.
     fn opposite_tokens(&self, other: &Order) -> bool;
+    /// Returns whether there is a price that satisfies both orders.
     fn have_price_overlap(&self, other: &Order) -> bool;
+    /// Returns whether the sell or buy token is the fee.
     fn trades_fee_token(&self, fee: &Fee) -> bool;
 }
 
@@ -87,6 +96,11 @@ impl Matchable for Order {
     }
 }
 
+/// Implements PriceFinding in a simplistic way.
+///
+/// Tries to find a match of two orders that trade the fee token and uses this
+/// as the only trade in the solution.
+/// If no such match can be found then the trivial solution is used.
 pub struct NaiveSolver {
     fee: Option<Fee>,
 }
