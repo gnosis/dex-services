@@ -1,14 +1,12 @@
 version: "3.6"
-x-rust-binary-service: &rust-binary-service
-  build:
-    context: .
-    dockerfile: docker/rust/Dockerfile
-    args:
-      - RUST_BASE=rust-binary
-  image: stablex-binary
-  environment:
-    - RUST_BACKTRACE=1
 services:
   stablex:
-    <<: *rust-binary-service
-    command: ./driver
+    command: ./stablex
+    build:
+      context: .
+      dockerfile: docker/rust/Dockerfile
+      args:
+        - RUST_BASE=rust-binary
+    image: stablex-binary
+    environment:
+      - RUST_BACKTRACE=1

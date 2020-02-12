@@ -32,7 +32,7 @@ ONBUILD RUN apt-get update \
   && apt-get install -y --no-install-recommends libpq-dev libssl1.0.0 libssl-dev ca-certificates \ 
   && rm -rf /var/lib/apt/lists/*
 
-ONBUILD COPY target/debug/driver driver
+ONBUILD COPY target/debug/driver stablex
 
 # Trigger actual build
 FROM ${RUST_BASE}
