@@ -14,23 +14,31 @@ pub struct KrakenClient {
     api: Box<dyn KrakenApi>,
 }
 
+/// The default Kraken API base URL.
 const DEFAULT_API_BASE_URL: &str = "https://api.kraken.com/0/public";
 
 #[allow(dead_code)]
 impl KrakenClient {
+    /// Creates a new client instance using an HTTP API instance and the default
+    /// Kraken API base URL.
     pub fn new() -> Result<Self> {
         KrakenClient::with_url(DEFAULT_API_BASE_URL)
     }
 
+    /// Create a new client instance using an HTTP Kraken API instance and a
+    /// base URL for API queries.
     pub fn with_url(base_url: &str) -> Result<Self> {
         let http_api = KrakenHttpApi::new(base_url)?;
         Ok(KrakenClient::with_api(http_api))
     }
 
+    /// Create a new client instance from an API.
     pub fn with_api(api: impl KrakenApi + 'static) -> Self {
         KrakenClient { api: Box::new(api) }
     }
 
+    /// Generates a mapping between Kraken asset pair identifiers and tokens
+    /// that are used when computing the price map.
     fn get_token_asset_pairs<'a>(&self, tokens: &'a [Token]) -> Result<HashMap<String, &'a Token>> {
         // TODO(nlordell): If these calls start taking too long, we can consider
         //   caching this information somehow. The only thing that is
@@ -80,6 +88,7 @@ impl PriceSource for KrakenClient {
     }
 }
 
+/// Finds the Kraken asset identifier given a token symbol.
 fn find_asset<'a>(symbol: &'a str, assets: &'a HashMap<String, Asset>) -> Option<&'a str> {
     if assets.contains_key(symbol) {
         Some(symbol)
@@ -90,6 +99,7 @@ fn find_asset<'a>(symbol: &'a str, assets: &'a HashMap<String, Asset>) -> Option
     }
 }
 
+/// Finds an asset pair from two Kraken asset identifiers.
 fn find_asset_pair<'a>(
     asset: &str,
     to: &str,

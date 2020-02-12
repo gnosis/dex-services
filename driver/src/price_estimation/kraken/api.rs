@@ -161,6 +161,8 @@ pub struct PricePair(
     #[serde(with = "f64str")] pub f64,
 );
 
+/// Prices are serialized as strings when retrieving ticker info from Kracken,
+/// this module implements deserialization for `f64` that accepts strings.
 mod f64str {
     use serde::de::{Deserialize, Deserializer, Error};
 
