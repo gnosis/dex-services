@@ -8,8 +8,6 @@ mod kraken;
 use anyhow::Result;
 use ethcontract::Address;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
 
 /// An opaque token ID.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -35,14 +33,7 @@ impl Token {
 
 /// A price oracle to retrieve price estimates for exchange tokens to help the
 /// solver find better solutions.
-///
-/// The price retrieval is done on a separate thread to ensure that even if the
-/// retrieval takes longer than expected, it does not take time from the solver
-/// for finding a solution.
-pub struct PriceOracle {
-    prices: Arc<Mutex<HashMap<TokenId, u128>>>,
-    update: JoinHandle<()>,
-}
+pub struct PriceOracle {}
 
 /// An abstraction around a type that retrieves price estimate from a source
 /// such as an exchange.
