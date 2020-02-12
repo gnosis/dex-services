@@ -21,7 +21,7 @@ trait Matchable {
     /// to match, there must be a price that satisfies both orders and if there
     /// is a fee then one of the tokens must be the fee token.
     fn attracts(&self, other: &Order, fee: &Option<Fee>) -> bool;
-    /// Returns whether the account to which the order belongs to has at least
+    /// Returns whether the account to which the order belongs has at least
     /// as many funds of the sell token as the order's sell amount.
     fn sufficient_seller_funds(&self, state: &AccountState) -> bool;
     fn match_compare(
@@ -100,7 +100,7 @@ impl Matchable for Order {
 ///
 /// Tries to find a match of two orders that trade the fee token and uses this
 /// as the only trade in the solution.
-/// If no such match can be found then the trivial solution is used.
+/// If no such match can be found then the trivial solution is returned.
 pub struct NaiveSolver {
     fee: Option<Fee>,
 }
@@ -122,6 +122,7 @@ impl PriceFinding for NaiveSolver {
         let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
         let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
 
+        let mut matching_orders_indices: Option<[usize; 2]> = None;
         'outer: for (i, x) in orders.iter().enumerate() {
             for j in i + 1..orders.len() {
                 // Preprocess order to leave "space" for fee to be taken
@@ -159,6 +160,7 @@ impl PriceFinding for NaiveSolver {
                     }
                     None => continue,
                 }
+                matching_orders_indices = Some([i, j]);
                 break 'outer;
             }
         }
@@ -178,7 +180,12 @@ impl PriceFinding for NaiveSolver {
 
             // apply fee to volumes account for rounding errors, moving them to
             // the fee token
-            for (i, order) in orders.iter().enumerate() {
+            for i in matching_orders_indices
+                .expect("fee price was nonzero so we should have a match")
+                .iter()
+            {
+                let i = *i;
+                let order = &orders[i];
                 if order.sell_token == fee.token {
                     let price_buy = prices[&order.buy_token];
                     exec_sell_amount[i] =
@@ -655,6 +662,92 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
         assert!(!res.is_non_trivial());
+    }
+
+    #[test]
+    fn test_match_and_unmatchable_order() {
+        let fee = Some(Fee {
+            token: 0,
+            ratio: 0.5,
+        });
+        let orders = [
+            Order {
+                id: 0,
+                account_id: H160::from_low_u64_be(0),
+                sell_token: 0,
+                buy_token: 1,
+                sell_amount: 20 * BASE_UNIT,
+                buy_amount: 10 * BASE_UNIT,
+            },
+            Order {
+                id: 1,
+                account_id: H160::from_low_u64_be(1),
+                sell_token: 1,
+                buy_token: 0,
+                sell_amount: 10 * BASE_UNIT,
+                buy_amount: 5 * BASE_UNIT,
+            },
+            Order {
+                id: 2,
+                account_id: H160::from_low_u64_be(2),
+                sell_token: 0,
+                buy_token: 2,
+                sell_amount: BASE_UNIT,
+                buy_amount: BASE_UNIT,
+            },
+        ];
+        let state = AccountState::with_balance_for(&orders);
+
+        let solver = NaiveSolver::new(fee.clone());
+        let res = solver.find_prices(&orders, &state).unwrap();
+        check_solution(&orders, res, &fee).unwrap();
+    }
+
+    #[test]
+    fn test_multiple_matches() {
+        let fee = Some(Fee {
+            token: 0,
+            ratio: 0.5,
+        });
+        let orders = [
+            Order {
+                id: 0,
+                account_id: H160::from_low_u64_be(0),
+                sell_token: 0,
+                buy_token: 1,
+                sell_amount: 20 * BASE_UNIT,
+                buy_amount: 10 * BASE_UNIT,
+            },
+            Order {
+                id: 1,
+                account_id: H160::from_low_u64_be(1),
+                sell_token: 1,
+                buy_token: 0,
+                sell_amount: 10 * BASE_UNIT,
+                buy_amount: 5 * BASE_UNIT,
+            },
+            Order {
+                id: 2,
+                account_id: H160::from_low_u64_be(2),
+                sell_token: 0,
+                buy_token: 2,
+                sell_amount: 20 * BASE_UNIT,
+                buy_amount: 10 * BASE_UNIT,
+            },
+            Order {
+                id: 3,
+                account_id: H160::from_low_u64_be(3),
+                sell_token: 2,
+                buy_token: 0,
+                sell_amount: 10 * BASE_UNIT,
+                buy_amount: 5 * BASE_UNIT,
+            },
+        ];
+        let state = AccountState::with_balance_for(&orders);
+
+        let solver = NaiveSolver::new(fee.clone());
+        let res = solver.find_prices(&orders, &state).unwrap();
+        check_solution(&orders, res, &fee).unwrap();
     }
 
     fn order_pair_first_fully_matching_second() -> Vec<Order> {
