@@ -3,6 +3,9 @@
 
 #![allow(dead_code)]
 
+#[macro_use]
+mod macros;
+
 mod kraken;
 
 use anyhow::Result;
@@ -25,8 +28,12 @@ struct Token {
 }
 
 impl Token {
-    fn get_price(&self, price: f64) -> u128 {
-        (price * 10.0f64.powi(self.decimals as _)) as _
+    /// Converts the prices from USD into the unit expected by the contract.
+    /// This price is relative to the OWL token which is considered pegged at
+    /// exactly 1 USD with 18 decimals.
+    fn get_price(&self, usd_price: f64) -> u128 {
+        let pow = 36 - (self.decimals as i32);
+        (usd_price * 10.0f64.powi(pow)) as _
     }
 }
 
@@ -41,34 +48,16 @@ pub struct PriceOracle {
     update: JoinHandle<()>,
 }
 
+/// An abstraction around a type that retrieves price estimate from a source
+/// such as an exchange.
+#[cfg_attr(test, mockall::automock)]
 trait PriceSource {
-    fn get_prices(&mut self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>>;
-}
-
-macro_rules! token_proxies {
-    (const $n:ident = { $( $token:ident => $( $proxy:ident ),* ;)* }) => {
-        lazy_static! {
-            static ref TOKEN_PROXIES: HashMap<String, HashSet<String>> = {
-                let mut proxies = HashMap::new();
-                $(
-                    proxies.insert(stringify!($token).into(), {
-                        let mut tokens = HashSet::new();
-                        $(
-                            tokens.insert(stringify!($proxy).into());
-                        )*
-                        tokens
-                    });
-                )*
-                proxies
-            };
-        }
-    };
+    fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>>;
 }
 
 token_proxies!(
     const TOKEN_PROXIES = {
-        DAI => USD;
-        PAX => USD;
-        WETH => ETH;
+        <=> DAI, GUSD, PAX, TUSD, USD, USDC, USDT, sUSD;
+        WETH, sETH => ETH;
     }
 );

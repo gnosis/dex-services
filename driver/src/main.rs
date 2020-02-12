@@ -1,3 +1,6 @@
+#[macro_use]
+mod macros;
+
 mod contracts;
 mod driver;
 mod error;
