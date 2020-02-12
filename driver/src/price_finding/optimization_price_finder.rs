@@ -183,7 +183,7 @@ fn serialize_fee(fee: &Option<Fee>) -> Option<solver_input::Fee> {
 }
 
 fn parse_token(key: &str) -> Result<u16, PriceFindingError> {
-    if key.starts_with("T") {
+    if key.starts_with('T') {
         return key[1..].parse::<u16>().map_err(|err| {
             PriceFindingError::new(
                 format!("Failed to parse token id: {}", err).as_ref(),
