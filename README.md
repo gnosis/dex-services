@@ -1,6 +1,27 @@
 [![Build Status](https://travis-ci.com/gnosis/dex-services.svg?branch=master)](https://travis-ci.com/gnosis/dex-services)
 
-## Intro
+
+# Contents
+1. [Introduction](#introduction)
+2. [Getting Started](#getting-started)
+    1. [Requirements](#requirements)
+    2. [Installation](#installation)
+3. [Batch Exchange](#batchexchange)
+    1. [Running](#running-batchexchange)
+4. [Testing](#tests)
+    1. [End to End](#end-to-end-tests)
+    2. [Unit tests](#unit-tests)
+5. [Optimization Solver](#running-with-optimization-solver)
+6. [Configuration](#configuration)
+    1. [Orderbook Filtering](#orderbook-filter-example)
+7. [Troubleshooting](#troubleshooting)
+    1. [Logging](#logging)
+    2. [Docker Compose](#docker-compose-build)
+    3. [Different Networks](#different-networks)
+
+---
+
+## Introduction
 
 This repository contains the backend logic for the dfusion exchange based on [this specification](https://github.com/gnosis/dex-research).
 
@@ -41,7 +62,7 @@ docker-compose up stablex
 ```
 
 You can also run the rust binary locally (without docker). For that you will have to export the following environment variables:
-- ETHEREUM_NODE_URL (for test environments this is usually http://localhost:8545. You can use an infura node for rinkeby/mainnet)
+- ETHEREUM_NODE_URL (for test environments this is usually http://localhost:8545. You can use an [Infura](https://infura.io/) node for rinkeby/mainnet)
 - NETWORK_ID (chainId, e.g. 5777 for ganache, 4 for rinkeby, 1 for mainnet)
 - PRIVATE_KEY (the hex key without leading 0x that should be used to sign transactions. Needs to be funded with eth for gas)
 
