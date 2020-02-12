@@ -175,10 +175,12 @@ mod f64str {
 }
 
 impl PricePair {
+    /// Retrieves the price since midnight.
     pub fn today(self) -> f64 {
         self.0
     }
 
+    /// Retrieves the price for the last 24 hours.
     pub fn last_24h(self) -> f64 {
         self.1
     }
