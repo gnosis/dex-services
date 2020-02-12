@@ -115,8 +115,8 @@ impl PaginatedAuctionDataReader {
                             *x,
                             element.sell_token_balance,
                             "got order which sets user {}'s sell token {} \
-                            balance to {} but sell_token_balance has already \
-                            been set to {}",
+                             balance to {} but sell_token_balance has already \
+                             been set to {}",
                             element.order.account_id,
                             element.order.sell_token,
                             element.sell_token_balance,
