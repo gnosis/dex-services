@@ -8,6 +8,5 @@ services:
       args:
         - RUST_BASE=rust-binary
     image: stablex-binary
-    volumes: [] # don't mount volumes as name clashes with name of the binary
     environment:
       - RUST_BACKTRACE=1
