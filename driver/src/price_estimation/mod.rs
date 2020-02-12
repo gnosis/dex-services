@@ -3,15 +3,11 @@
 
 #![allow(dead_code)]
 
-#[macro_use]
-mod macros;
-
 mod kraken;
 
 use anyhow::Result;
 use ethcontract::Address;
-use lazy_static::lazy_static;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
@@ -54,10 +50,3 @@ pub struct PriceOracle {
 trait PriceSource {
     fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>>;
 }
-
-token_proxies!(
-    const TOKEN_PROXIES = {
-        <=> DAI, GUSD, PAX, TUSD, USD, USDC, USDT, sUSD;
-        WETH, sETH => ETH;
-    }
-);
