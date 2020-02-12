@@ -1,7 +1,7 @@
 version: "3.6"
 services:
   stablex:
-    command: ./driver
+    command: ./stablex
     build:
       context: .
       dockerfile: docker/rust/Dockerfile
