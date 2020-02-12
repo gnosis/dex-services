@@ -5,6 +5,7 @@ mod logging;
 mod metrics;
 mod models;
 mod orderbook;
+mod price_estimation;
 mod price_finding;
 mod solution_submission;
 mod transport;
