@@ -61,13 +61,20 @@ impl<'a> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a> {
         let mut reader = PaginatedAuctionDataReader::new(index);
         loop {
             let number_of_orders: u16 = reader
-                .apply_page(&self.contract.get_auction_data_paginated(
-                    block,
-                    self.page_size,
-                    reader.pagination().previous_page_user,
-                    reader.pagination().previous_page_user_offset.try_into()?,
-                )?)
-                .try_into()?;
+                .apply_page(
+                    &self.contract.get_auction_data_paginated(
+                        block,
+                        self.page_size,
+                        reader.pagination().previous_page_user,
+                        reader
+                            .pagination()
+                            .previous_page_user_offset
+                            .try_into()
+                            .expect("user cannot have more than u16::MAX orders"),
+                    )?,
+                )
+                .try_into()
+                .expect("number of orders per page should never overflow a u16");
             if number_of_orders < self.page_size {
                 return Ok(reader.get_auction_data());
             }

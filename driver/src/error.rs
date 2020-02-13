@@ -12,7 +12,6 @@ pub enum ErrorKind {
     HexError,
     EnvError,
     ParseIntError,
-    TryFromIntError,
     PriceFindingError,
     PrivateKeyError,
     ContractDeployedError,
@@ -58,12 +57,6 @@ impl From<std::env::VarError> for DriverError {
 impl From<std::num::ParseIntError> for DriverError {
     fn from(error: std::num::ParseIntError) -> Self {
         DriverError::new(error.description(), ErrorKind::ParseIntError)
-    }
-}
-
-impl From<std::num::TryFromIntError> for DriverError {
-    fn from(error: std::num::TryFromIntError) -> Self {
-        DriverError::new(error.description(), ErrorKind::TryFromIntError)
     }
 }
 
