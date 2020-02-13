@@ -165,12 +165,13 @@ pub struct PricePair(
 /// this module implements deserialization for `f64` that accepts strings.
 mod f64str {
     use serde::de::{Deserialize, Deserializer, Error};
+    use std::borrow::Cow;
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<f64, D::Error>
     where
         D: Deserializer<'de>,
     {
-        <&str as Deserialize>::deserialize(deserializer)?
+        <Cow<'de, str> as Deserialize>::deserialize(deserializer)?
             .parse()
             .map_err(D::Error::custom)
     }

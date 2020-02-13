@@ -56,7 +56,6 @@ impl KrakenClient {
             .flat_map(|token| {
                 let asset = find_asset(&token.symbol, &assets)?;
                 let pair = find_asset_pair(asset, usd, &asset_pairs)?;
-
                 Some((pair.to_owned(), token))
             })
             .collect();
@@ -107,6 +106,9 @@ fn find_asset_pair<'a>(
 ) -> Option<&'a str> {
     let (pair_name, _) = asset_pairs
         .iter()
+        // NOTE: Filter out pairs ending in ".d" as they dont' seem to work for
+        //   retrieving ticker info.
+        .filter(|&(name, _)| !name.ends_with(".d"))
         .find(|&(_, pair)| pair.base == asset && pair.quote == to)?;
 
     Some(pair_name)
@@ -170,6 +172,40 @@ mod tests {
                 TokenId(1) => (99.0 * 10f64.powi(18)) as u128,
                 TokenId(4) => (1.01 * 10f64.powi(30)) as u128,
             }
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn get_real_token_prices() {
+        // Retrieve real token prices from Kraken, this test is ignored by
+        // default as there is no way to guarantee the service can be connected
+        // to and the values are unpredictable. To run this test and output the
+        // retrieved price estimates:
+        // ```
+        // cargo test get_real_token_prices -- --ignored --nocapture
+        // ```
+
+        let tokens = vec![
+            token(1, "ETH", 18),
+            token(2, "USDT", 6),
+            token(3, "TUSD", 18),
+            token(4, "USDC", 6),
+            token(5, "PAX", 18),
+            token(6, "GUSD", 2),
+            token(7, "DAI", 18),
+            token(8, "sETH", 18),
+            token(9, "sUSD", 18),
+            token(15, "SNX", 18),
+        ];
+
+        let client = KrakenClient::new().unwrap();
+        let prices = client.get_prices(&tokens).unwrap();
+
+        println!("{:#?}", prices);
+        assert!(
+            prices.contains_key(&TokenId(1)),
+            "expected ETH price to be found"
         );
     }
 }
