@@ -12,6 +12,7 @@ futures = { version = "0.3.4", features = ["compat"] }
 lazy_static = "1.4.0"
 log = "0.4.8"
 prometheus = "0.7.0"
+reqwest = { version = "0.10", features = ["blocking", "json"] }
 rouille = "3.0.0"
 rustc-hex = "2.1.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -22,6 +23,7 @@ slog-envlogger = "2.2.0"
 slog-scope = "4.3.0"
 slog-stdlog = "4.0.0"
 slog-term = "2.5.0"
+uint = "0.8"
 
 [dev-dependencies]
 mockall = "0.6.0"

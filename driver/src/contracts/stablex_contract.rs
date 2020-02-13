@@ -10,6 +10,7 @@ use lazy_static::lazy_static;
 use mockall::automock;
 
 use crate::contracts;
+use crate::contracts::gnosis_safe_gas_station;
 use crate::error::DriverError;
 use crate::models::{Order, Solution};
 use crate::util::FutureWaitExt;
@@ -139,7 +140,11 @@ impl StableXContract for BatchExchange {
             prices,
             token_ids_for_price,
         )
-        .gas_price(GasPrice::Scaled(3.0))
+        .gas_price(
+            gnosis_safe_gas_station::get_gas_price()
+                .map(|gas_price| GasPrice::Value(gas_price.fast))
+                .unwrap_or(GasPrice::Scaled(3.0)),
+        )
         .send()
         .wait()?;
 
