@@ -18,76 +18,6 @@ pub struct StableXMetrics {
     users: IntGaugeVec,
 }
 
-trait InitializeableMetric: 'static + Sized + AsRef<str> {
-    const LABEL: &'static str;
-    const ALL_STAGES: &'static [Self];
-
-    fn initialize_counters(c: &IntCounterVec) {
-        for stage in Self::ALL_STAGES {
-            c.with_label_values(&[stage.as_ref()]).inc_by(0);
-        }
-    }
-
-    fn initialize_gauges(g: &IntGaugeVec) {
-        for stage in Self::ALL_STAGES {
-            g.with_label_values(&[stage.as_ref()]).set(0);
-        }
-    }
-}
-
-enum ProcessingStage {
-    Started,
-    OrdersFetched,
-    Solved,
-    Verified,
-    Submitted,
-    Skipped,
-}
-
-impl AsRef<str> for ProcessingStage {
-    fn as_ref(&self) -> &'static str {
-        match self {
-            Self::Started => "started",
-            Self::OrdersFetched => "orders_fetched",
-            Self::Solved => "solved",
-            Self::Verified => "verified",
-            Self::Submitted => "submitted",
-            Self::Skipped => "skipped",
-        }
-    }
-}
-
-impl InitializeableMetric for ProcessingStage {
-    const LABEL: &'static str = "stage";
-    const ALL_STAGES: &'static [Self] = &[
-        Self::Started,
-        Self::OrdersFetched,
-        Self::Solved,
-        Self::Verified,
-        Self::Submitted,
-        Self::Skipped,
-    ];
-}
-
-enum BookType {
-    Orderbook,
-    Solution,
-}
-
-impl InitializeableMetric for BookType {
-    const LABEL: &'static str = "type";
-    const ALL_STAGES: &'static [Self] = &[Self::Orderbook, Self::Solution];
-}
-
-impl AsRef<str> for BookType {
-    fn as_ref(&self) -> &'static str {
-        match self {
-            Self::Orderbook => "orderbook",
-            Self::Solution => "solution",
-        }
-    }
-}
-
 impl StableXMetrics {
     pub fn new(registry: Arc<Registry>) -> Self {
         let processing_time_opts = Opts::new(
@@ -271,6 +201,76 @@ fn users_from_orders(orders: &[Order]) -> i64 {
         .len()
         .try_into()
         .unwrap_or(std::i64::MAX)
+}
+
+trait InitializeableMetric: 'static + Sized + AsRef<str> {
+    const LABEL: &'static str;
+    const ALL_STAGES: &'static [Self];
+
+    fn initialize_counters(c: &IntCounterVec) {
+        for stage in Self::ALL_STAGES {
+            c.with_label_values(&[stage.as_ref()]).inc_by(0);
+        }
+    }
+
+    fn initialize_gauges(g: &IntGaugeVec) {
+        for stage in Self::ALL_STAGES {
+            g.with_label_values(&[stage.as_ref()]).set(0);
+        }
+    }
+}
+
+enum ProcessingStage {
+    Started,
+    OrdersFetched,
+    Solved,
+    Verified,
+    Submitted,
+    Skipped,
+}
+
+impl AsRef<str> for ProcessingStage {
+    fn as_ref(&self) -> &'static str {
+        match self {
+            Self::Started => "started",
+            Self::OrdersFetched => "orders_fetched",
+            Self::Solved => "solved",
+            Self::Verified => "verified",
+            Self::Submitted => "submitted",
+            Self::Skipped => "skipped",
+        }
+    }
+}
+
+impl InitializeableMetric for ProcessingStage {
+    const LABEL: &'static str = "stage";
+    const ALL_STAGES: &'static [Self] = &[
+        Self::Started,
+        Self::OrdersFetched,
+        Self::Solved,
+        Self::Verified,
+        Self::Submitted,
+        Self::Skipped,
+    ];
+}
+
+enum BookType {
+    Orderbook,
+    Solution,
+}
+
+impl InitializeableMetric for BookType {
+    const LABEL: &'static str = "type";
+    const ALL_STAGES: &'static [Self] = &[Self::Orderbook, Self::Solution];
+}
+
+impl AsRef<str> for BookType {
+    fn as_ref(&self) -> &'static str {
+        match self {
+            Self::Orderbook => "orderbook",
+            Self::Solution => "solution",
+        }
+    }
 }
 
 #[cfg(test)]
