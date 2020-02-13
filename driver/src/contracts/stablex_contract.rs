@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::env;
 
 use ethcontract::transaction::GasPrice;
+use ethcontract::DynWeb3;
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
@@ -41,11 +42,27 @@ impl BatchExchange {
             .map(|from| from.address())
             .unwrap_or_default()
     }
+
+    pub fn web3(&self) -> DynWeb3 {
+        self.instance.web3()
+    }
+}
+
+impl Clone for BatchExchange {
+    fn clone(&self) -> Self {
+        BatchExchange {
+            instance: self.instance.clone(),
+        }
+    }
 }
 
 #[cfg_attr(test, automock)]
 pub trait StableXContract {
+    /// Retrieves the current number of registered tokens in the contract.
+    fn get_num_tokens(&self) -> Result<u16>;
+
     fn get_current_auction_index(&self) -> Result<U256>;
+
     /// Retrieve one page of auction data.
     /// `block` is needed because the state of the smart contract could change
     /// between blocks which would make the returned auction data inconsistent
@@ -57,12 +74,14 @@ pub trait StableXContract {
         previous_page_user: H160,
         previous_page_user_offset: u64,
     ) -> Result<Vec<u8>>;
+
     fn get_solution_objective_value(
         &self,
         batch_index: U256,
         orders: Vec<Order>,
         solution: Solution,
     ) -> Result<U256>;
+
     fn submit_solution(
         &self,
         batch_index: U256,
@@ -73,6 +92,11 @@ pub trait StableXContract {
 }
 
 impl StableXContract for BatchExchange {
+    fn get_num_tokens(&self) -> Result<u16> {
+        let num_tokens = self.num_tokens().call().wait()?;
+        Ok(num_tokens as _)
+    }
+
     fn get_current_auction_index(&self) -> Result<U256> {
         let auction_index = self.get_current_batch_id().call().wait()?;
         Ok(auction_index.into())

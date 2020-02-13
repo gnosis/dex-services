@@ -1,10 +1,5 @@
-use log::info;
 use std::future::Future;
 use web3::types::U256;
-
-use crate::price_finding::{
-    Fee, NaiveSolver, OptimisationPriceFinder, OptimizationModel, PriceFinding,
-};
 
 pub trait CeiledDiv {
     fn ceiled_div(&self, divisor: Self) -> Self;
@@ -35,22 +30,6 @@ impl CheckedConvertU128 for U256 {
         } else {
             None
         }
-    }
-}
-
-pub fn create_price_finder(
-    fee: Option<Fee>,
-    optimization_model: OptimizationModel,
-) -> Box<dyn PriceFinding> {
-    if optimization_model == OptimizationModel::NAIVE {
-        info!("Using naive price finder");
-        Box::new(NaiveSolver::new(fee))
-    } else {
-        info!(
-            "Using optimisation price finder with the args {:}",
-            optimization_model.to_args()
-        );
-        Box::new(OptimisationPriceFinder::new(fee, optimization_model))
     }
 }
 
