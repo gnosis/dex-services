@@ -21,6 +21,7 @@ use std::iter::FromIterator;
 ///
 /// This type implements JSON deserialization so that it is accepted as input to
 /// the solver.
+#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Clone, Debug, Default, Serialize)]
 #[serde(transparent)]
 pub struct PriceEstimates(pub BTreeMap<TokenId, u128>);
@@ -145,7 +146,8 @@ impl PriceOracle {
             Ok(prices) => prices,
             Err(err) => {
                 warn!(
-                    "error retrieving price estimates, solution results may be sub-optimal: {}",
+                    "error retrieving price estimates, \
+                     solution results may be sub-optimal: {}",
                     err
                 );
                 HashMap::new()
@@ -173,6 +175,8 @@ impl PriceOracle {
 pub struct TokenId(u16);
 
 /// A token reprensentation.
+#[cfg_attr(test, derive(Eq, PartialEq))]
+#[derive(Clone, Debug)]
 struct Token {
     id: TokenId,
     address: Address,
@@ -193,6 +197,17 @@ impl Token {
     fn get_price(&self, usd_price: f64) -> u128 {
         let pow = 36 - (self.decimals as i32);
         (usd_price * 10.0f64.powi(pow)) as _
+    }
+
+    /// Creates a new token with a fictional address for testing.
+    #[cfg(test)]
+    fn test(index: u16, symbol: &str, decimals: u8) -> Token {
+        Token {
+            id: TokenId(index),
+            address: Address::repeat_byte(index as _),
+            symbol: symbol.into(),
+            decimals,
+        }
     }
 }
 
@@ -266,4 +281,176 @@ trait PriceSource {
     /// Retrieve current prices for the current tokens. Returns a sparce price
     /// array as being unable to find a price is not considered an error.
     fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::contracts::stablex_contract::MockStableXContract;
+    use anyhow::anyhow;
+
+    #[test]
+    fn price_oracle_reads_tokens_and_fetches_prices() {
+        let mut contract = MockStableXContract::new();
+        contract.expect_get_num_tokens().return_const(Ok(3));
+
+        let mut token_reader = MockTokenReader::new();
+        token_reader
+            .expect_read_token()
+            .returning(|index| match index {
+                1 => Ok(Token::test(index, "ETH", 18)),
+                2 => Ok(Token::test(index, "USDT", 6)),
+                _ => panic!("unexpected token index {}", index),
+            });
+
+        let mut price_source = MockPriceSource::new();
+        price_source
+            .expect_get_prices()
+            .withf(|tokens| tokens == [Token::test(1, "ETH", 18), Token::test(2, "USDT", 6)])
+            .returning(|_| {
+                Ok(hash_map! {
+                    TokenId(2) => 1_000_000_000_000_000_000,
+                })
+            });
+
+        let mut price_oracle = PriceOracle::with_components(contract, token_reader, price_source);
+        let price_estimates = price_oracle.get_price_estimates();
+
+        assert_eq!(
+            price_estimates,
+            PriceEstimates::new(hash_map! {
+                TokenId(2) => 1_000_000_000_000_000_000,
+            })
+        );
+    }
+
+    #[test]
+    fn price_oracle_adds_new_tokens_to_cache() {
+        let mut contract = MockStableXContract::new();
+        contract.expect_get_num_tokens().return_const(Ok(3));
+
+        let mut token_reader = MockTokenReader::new();
+        token_reader
+            .expect_read_token()
+            .returning(|index| match index {
+                1 => Ok(Token::test(index, "ETH", 18)),
+                2 => Ok(Token::test(index, "USDT", 6)),
+                _ => panic!("unexpected token index {}", index),
+            });
+
+        let mut price_source = MockPriceSource::new();
+        price_source
+            .expect_get_prices()
+            .withf(|tokens| tokens == [Token::test(1, "ETH", 18), Token::test(2, "USDT", 6)])
+            .returning(|_| {
+                Ok(hash_map! {
+                    TokenId(2) => 1337,
+                })
+            });
+
+        let mut price_oracle = PriceOracle::with_components(contract, token_reader, price_source);
+        let price_estimates = price_oracle.get_price_estimates();
+
+        assert_eq!(
+            price_estimates,
+            PriceEstimates::new(hash_map! {
+                TokenId(2) => 1337,
+            })
+        );
+    }
+
+    #[test]
+    fn price_oracle_ignores_source_error() {
+        let mut contract = MockStableXContract::new();
+        contract.expect_get_num_tokens().return_const(Ok(2));
+
+        let mut token_reader = MockTokenReader::new();
+        token_reader
+            .expect_read_token()
+            .returning(|index| match index {
+                1 => Ok(Token::test(index, "ETH", 18)),
+                2 => Ok(Token::test(index, "USDT", 6)),
+                _ => panic!("unexpected token index {}", index),
+            });
+
+        let mut price_oracle =
+            PriceOracle::with_components(contract, token_reader, MockPriceSource::new());
+
+        price_oracle.update_tokens();
+        assert_eq!(price_oracle.tokens.len(), 1);
+
+        let mut contract = MockStableXContract::new();
+        contract.expect_get_num_tokens().return_const(Ok(3));
+        price_oracle.contract = Box::new(contract);
+
+        price_oracle.update_tokens();
+        assert_eq!(price_oracle.tokens.len(), 2);
+    }
+
+    #[test]
+    fn price_oracle_ignores_bad_tokens_and_does_not_read_again() {
+        let mut contract = MockStableXContract::new();
+        contract.expect_get_num_tokens().return_const(Ok(2));
+
+        let mut token_reader = MockTokenReader::new();
+        token_reader
+            .expect_read_token()
+            .returning(|index| match index {
+                1 => Err(anyhow!("whoops!")),
+                _ => panic!("unexpected token index {}", index),
+            });
+
+        let mut price_oracle =
+            PriceOracle::with_components(contract, token_reader, MockPriceSource::new());
+
+        price_oracle.update_tokens();
+        assert_eq!(price_oracle.tokens.len(), 0);
+
+        price_oracle.update_tokens();
+        assert_eq!(price_oracle.tokens.len(), 0);
+    }
+
+    #[test]
+    fn price_oracle_estimates_missing_usd_stable_coin_prices() {
+        let mut contract = MockStableXContract::new();
+        contract.expect_get_num_tokens().return_const(Ok(9));
+
+        let mut token_reader = MockTokenReader::new();
+        token_reader
+            .expect_read_token()
+            .returning(|index| match index {
+                1 => Ok(Token::test(index, "ETH", 18)),
+                2 => Ok(Token::test(index, "USDT", 6)),
+                3 => Ok(Token::test(index, "TUSD", 18)),
+                4 => Ok(Token::test(index, "USDC", 6)),
+                5 => Ok(Token::test(index, "PAX", 18)),
+                6 => Ok(Token::test(index, "DAI", 2)),
+                7 => Ok(Token::test(index, "sUSD", 18)),
+                8 => Ok(Token::test(index, "COIN", 42)),
+                _ => panic!("unexpected token index {}", index),
+            });
+
+        let mut price_source = MockPriceSource::new();
+        price_source.expect_get_prices().returning(|_| {
+            Ok(hash_map! {
+                TokenId(1) => 250_000_000_000_000_000_000,
+            })
+        });
+
+        let mut price_oracle = PriceOracle::with_components(contract, token_reader, price_source);
+        let price_estimates = price_oracle.get_price_estimates();
+
+        assert_eq!(
+            price_estimates,
+            PriceEstimates::new(hash_map! {
+                TokenId(1) => 250_000_000_000_000_000_000,
+                TokenId(2) => 10.0f64.powi(30) as _,
+                TokenId(3) => 10.0f64.powi(18) as _,
+                TokenId(4) => 10.0f64.powi(30) as _,
+                TokenId(5) => 10.0f64.powi(18) as _,
+                TokenId(6) => 10.0f64.powi(34) as _,
+                TokenId(7) => 10.0f64.powi(18) as _,
+            })
+        );
+    }
 }

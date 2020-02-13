@@ -120,21 +120,12 @@ mod tests {
     use super::*;
     use std::collections::HashSet;
 
-    fn token(id: u16, symbol: &str, decimals: u8) -> Token {
-        Token {
-            id: TokenId(id),
-            address: Default::default(),
-            symbol: symbol.into(),
-            decimals,
-        }
-    }
-
     #[test]
     fn get_token_prices() {
         let tokens = vec![
-            token(1, "ETH", 18),
-            token(4, "USDC", 6),
-            token(5, "PAX", 18),
+            Token::test(1, "ETH", 18),
+            Token::test(4, "USDC", 6),
+            Token::test(5, "PAX", 18),
         ];
 
         let mut api = MockKrakenApi::new();
@@ -187,16 +178,16 @@ mod tests {
         // ```
 
         let tokens = vec![
-            token(1, "ETH", 18),
-            token(2, "USDT", 6),
-            token(3, "TUSD", 18),
-            token(4, "USDC", 6),
-            token(5, "PAX", 18),
-            token(6, "GUSD", 2),
-            token(7, "DAI", 18),
-            token(8, "sETH", 18),
-            token(9, "sUSD", 18),
-            token(15, "SNX", 18),
+            Token::test(1, "ETH", 18),
+            Token::test(2, "USDT", 6),
+            Token::test(3, "TUSD", 18),
+            Token::test(4, "USDC", 6),
+            Token::test(5, "PAX", 18),
+            Token::test(6, "GUSD", 2),
+            Token::test(7, "DAI", 18),
+            Token::test(8, "sETH", 18),
+            Token::test(9, "sUSD", 18),
+            Token::test(15, "SNX", 18),
         ];
 
         let client = KrakenClient::new().unwrap();
