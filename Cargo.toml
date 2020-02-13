@@ -6,6 +6,3 @@ members = [
 default-members = [
     "driver",
 ]
-
-[patch.crates-io]
-web3 = { git = "https://github.com/graphprotocol/rust-web3", branch = "graph-patches" }

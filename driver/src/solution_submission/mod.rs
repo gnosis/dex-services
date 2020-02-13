@@ -7,7 +7,7 @@ use crate::models::{Order, Solution};
 #[cfg(test)]
 use mockall::automock;
 
-use web3::types::U256;
+use ethcontract::U256;
 
 type Result<T> = std::result::Result<T, DriverError>;
 

@@ -3,12 +3,12 @@ use crate::price_finding::error::{ErrorKind, PriceFindingError};
 use crate::price_finding::price_finder_interface::{Fee, OptimizationModel, PriceFinding};
 
 use chrono::Utc;
+use ethcontract::Address as H160;
 use log::{debug, error};
 use std::collections::{HashMap, HashSet};
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::process::Command;
-use web3::types::H160;
 
 const RESULT_FOLDER: &str = "./results/tmp/";
 
@@ -303,9 +303,9 @@ pub mod tests {
     use super::*;
     use crate::models::AccountState;
     use crate::util::test_util::map_from_slice;
+    use ethcontract::{H256, U256};
     use serde_json::json;
     use std::error::Error;
-    use web3::types::{H256, U256};
 
     #[test]
     fn test_parse_prices() {

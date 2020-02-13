@@ -1,9 +1,9 @@
 use super::*;
 
 use crate::models::{AccountState, Order};
+use ethcontract::{Address as H160, U256};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
-use web3::types::{H160, U256};
 
 /// Data structure to specify what type of orders to filter
 #[derive(Debug, Default, Deserialize, PartialEq, Eq)]

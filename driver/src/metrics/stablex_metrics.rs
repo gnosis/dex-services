@@ -3,11 +3,11 @@ use crate::price_finding::error::PriceFindingError;
 
 use crate::models::{AccountState, Order, Solution};
 use chrono::Utc;
+use ethcontract::U256;
 use prometheus::{IntCounterVec, IntGaugeVec, Opts, Registry};
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::sync::Arc;
-use web3::types::U256;
 
 pub struct StableXMetrics {
     processing_times: IntGaugeVec,

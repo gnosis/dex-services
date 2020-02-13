@@ -4,10 +4,10 @@ use std::collections::HashMap;
 use std::env;
 
 use ethcontract::transaction::GasPrice;
+use ethcontract::{Address as H160, BlockNumber, U256};
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
-use web3::types::{H160, U128, U256};
 
 use crate::contracts;
 use crate::error::DriverError;
@@ -53,9 +53,9 @@ pub trait StableXContract {
     fn get_auction_data_paginated(
         &self,
         block: u64,
-        page_size: u64,
+        page_size: u16,
         previous_page_user: H160,
-        previous_page_user_offset: u64,
+        previous_page_user_offset: u16,
     ) -> Result<Vec<u8>>;
     fn get_solution_objective_value(
         &self,
@@ -81,9 +81,9 @@ impl StableXContract for BatchExchange {
     fn get_auction_data_paginated(
         &self,
         block: u64,
-        page_size: u64,
+        page_size: u16,
         previous_page_user: H160,
-        previous_page_user_offset: u64,
+        previous_page_user_offset: u16,
     ) -> Result<Vec<u8>> {
         let mut orders_builder = self.get_encoded_users_paginated(
             previous_page_user,
@@ -91,7 +91,7 @@ impl StableXContract for BatchExchange {
             page_size,
         );
         orders_builder.m.tx.gas = None;
-        orders_builder.block = Some(web3::types::BlockNumber::Number(block));
+        orders_builder.block = Some(BlockNumber::Number(block.into()));
         orders_builder.call().wait().map_err(From::from)
     }
 
@@ -106,7 +106,7 @@ impl StableXContract for BatchExchange {
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
         let objective_value = self
             .submit_solution(
-                batch_index.low_u64(),
+                batch_index.low_u32(),
                 *MAX_OBJECTIVE_VALUE,
                 owners,
                 order_ids,
@@ -131,7 +131,7 @@ impl StableXContract for BatchExchange {
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
         self.submit_solution(
-            batch_index.low_u64(),
+            batch_index.low_u32(),
             claimed_objective_value,
             owners,
             order_ids,
@@ -147,7 +147,7 @@ impl StableXContract for BatchExchange {
     }
 }
 
-fn encode_prices_for_contract(price_map: &HashMap<u16, u128>) -> (Vec<U128>, Vec<u64>) {
+fn encode_prices_for_contract(price_map: &HashMap<u16, u128>) -> (Vec<u128>, Vec<u16>) {
     // Representing the solution's price vector as:
     // sorted_touched_token_ids, non_zero_prices (excluding price at token with id 0)
     let mut token_ids: Vec<u16> = price_map
@@ -158,15 +158,15 @@ fn encode_prices_for_contract(price_map: &HashMap<u16, u128>) -> (Vec<U128>, Vec
     token_ids.sort_unstable();
     let prices = token_ids
         .iter()
-        .map(|token_id| U128::from(price_map[token_id]))
+        .map(|token_id| price_map[token_id])
         .collect();
-    (prices, token_ids.iter().map(|t| *t as u64).collect())
+    (prices, token_ids)
 }
 
 fn encode_execution_for_contract(
     orders: Vec<Order>,
     executed_buy_amounts: Vec<u128>,
-) -> (Vec<H160>, Vec<u64>, Vec<U128>) {
+) -> (Vec<H160>, Vec<u16>, Vec<u128>) {
     assert_eq!(
         orders.len(),
         executed_buy_amounts.len(),
@@ -180,8 +180,8 @@ fn encode_execution_for_contract(
             // order was touched!
             // Note that above condition is only holds for sell orders.
             owners.push(orders[order_index].account_id);
-            order_ids.push(orders[order_index].id as _);
-            volumes.push(U128::from(buy_amount.to_be_bytes()));
+            order_ids.push(orders[order_index].id);
+            volumes.push(buy_amount);
         }
     }
     (owners, order_ids, volumes)
@@ -232,7 +232,7 @@ pub mod tests {
 
         let expected_owners = vec![address_1];
         let expected_order_ids = vec![0];
-        let expected_volumes = vec![U128::from(1)];
+        let expected_volumes = vec![1];
 
         let expected_results = (expected_owners, expected_order_ids, expected_volumes);
 
@@ -246,7 +246,7 @@ pub mod tests {
     fn generic_price_encoding() {
         let price_map = map_from_slice(&[(0, u128::max_value()), (1, 0), (2, 1), (3, 2)]);
         // Only contain non fee-tokens and non zero prices
-        let expected_prices = vec![1.into(), 2.into()];
+        let expected_prices = vec![1, 2];
         let expected_token_ids = vec![2, 3];
 
         assert_eq!(
@@ -260,8 +260,8 @@ pub mod tests {
         let unordered_price_map = map_from_slice(&[(4, 2), (1, 3), (5, 0), (0, 2), (3, 1)]);
 
         // Only contain non fee-token and non zero prices
-        let expected_prices = vec![3.into(), 1.into(), 2.into()];
-        let expected_token_ids = vec![1u64, 3u64, 4u64];
+        let expected_prices = vec![3, 1, 2];
+        let expected_token_ids = vec![1, 3, 4];
         assert_eq!(
             encode_prices_for_contract(&unordered_price_map),
             (expected_prices, expected_token_ids)
