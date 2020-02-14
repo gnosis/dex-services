@@ -6,7 +6,7 @@ use futures::compat::Compat;
 use futures::future::{BoxFuture, FutureExt, TryFutureExt};
 use isahc::config::VersionNegotiation;
 use isahc::prelude::{HttpClient, Request, ResponseExt};
-use log::{log, Level};
+use log::{log, warn, Level};
 use serde::Deserialize;
 use serde_json::Value;
 use std::fmt::{self, Debug, Formatter};
@@ -71,8 +71,7 @@ impl HttpTransportInner {
             .map_err(|err| Web3Error::Transport(err.to_string()))?;
 
         if !response.status().is_success() {
-            log!(
-                self.log_level,
+            warn!(
                 "[id:{}] HTTP error code {}: '{}' {:?}",
                 id,
                 response.status(),
@@ -91,8 +90,10 @@ impl HttpTransportInner {
         if let Some(map) = json.as_object_mut() {
             // NOTE: Ganache sometimes returns errors inlined with responses,
             //   filter those out.
-            if map.contains_key("result") && map.contains_key("error") {
-                map.remove("error");
+            if map.contains_key("result") {
+                if let Some(error) = map.remove("error") {
+                    warn!("[id:{}] received Ganache auxiliary error {}", id, error);
+                }
             }
         }
 
