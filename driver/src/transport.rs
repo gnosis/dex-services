@@ -121,7 +121,6 @@ impl Transport for HttpTransport {
     }
 
     fn send(&self, id: RequestId, request: Call) -> Self::Out {
-        let send = self.0.clone().execute(id, request);
-        send.boxed().compat()
+        self.0.clone().execute(id, request).boxed().compat()
     }
 }
