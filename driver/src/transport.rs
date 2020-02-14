@@ -50,18 +50,41 @@ impl HttpTransport {
 impl HttpTransportInner {
     async fn execute(self: Arc<Self>, id: RequestId, request: Call) -> Result<Value, Web3Error> {
         let request = serde_json::to_string(&request)?;
-        log!(self.log_level, "sending request ID {}: '{}'", id, &request);
+        log!(
+            self.log_level,
+            "[id:{}] sending request: '{}'",
+            id,
+            &request,
+        );
 
         let http_request = Request::post(&self.url)
             .header("Content-Type", "application/json")
             .body(request)
             .map_err(|err| Web3Error::Transport(err.to_string()))?;
-        let body = self
+        let mut response = self
             .client
             .send_async(http_request)
             .await
-            .and_then(|mut response| response.text())
             .map_err(|err| Web3Error::Transport(err.to_string()))?;
+        let body = response
+            .text()
+            .map_err(|err| Web3Error::Transport(err.to_string()))?;
+
+        if !response.status().is_success() {
+            log!(
+                self.log_level,
+                "[id:{}] HTTP error code {}: '{}' {:?}",
+                id,
+                response.status(),
+                body.trim(),
+                response,
+            );
+            return Err(Web3Error::Transport(format!(
+                "HTTP error status {}: '{}'",
+                response.status(),
+                body.trim(),
+            )));
+        }
         log!(self.log_level, "received response ID {}: '{}'", id, &body);
 
         let mut json = Value::from_str(&body)?;
