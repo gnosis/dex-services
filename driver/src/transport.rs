@@ -30,6 +30,8 @@ impl HttpTransport {
     pub fn new(url: impl Into<String>, timeout: Duration) -> Result<HttpTransport, DriverError> {
         let client = HttpClient::builder()
             .timeout(timeout)
+            // NOTE: This is needed as curl with try to upgrade to HTTP/2 which
+            //   causes a HTTP 400 error with Ganache.
             .version_negotiation(VersionNegotiation::http11())
             .build()?;
 
@@ -48,6 +50,8 @@ impl HttpTransportInner {
         debug!("[id:{}] sending request: '{}'", id, &request,);
 
         let http_request = Request::post(&self.url)
+            // NOTE: This is needed as Parity clients will respond with a HTTP
+            //   error when no content type is provided.
             .header("Content-Type", "application/json")
             .body(request)
             .map_err(transport_err)?;
