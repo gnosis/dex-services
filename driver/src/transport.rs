@@ -1,79 +1,97 @@
-use ethcontract::jsonrpc::types::request::Call;
-use ethcontract::web3::error::Error;
-use ethcontract::web3::futures::{Async, Future, Poll};
-use ethcontract::web3::{RequestId, Transport};
+use crate::error::DriverError;
+use ethcontract::jsonrpc::types::{Call, Output};
+use ethcontract::web3::helpers;
+use ethcontract::web3::{Error as Web3Error, RequestId, Transport};
+use futures::compat::Compat;
+use futures::future::{BoxFuture, FutureExt, TryFutureExt};
+use isahc::{HttpClient, ResponseExt};
 use log::{log, Level};
+use serde::Deserialize;
 use serde_json::Value;
+use std::fmt::{self, Debug, Formatter};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 
-/// A `Transport` wrapper that logs RPC messages
-#[derive(Clone, Debug)]
-pub struct LoggingTransport<T> {
-    inner: T,
-    level: Level,
+/// An HTTP transport implementation with timeout and logging.
+#[derive(Clone)]
+pub struct HttpTransport(Arc<HttpTransportInner>);
+
+struct HttpTransportInner {
+    url: String,
+    log_level: Level,
+    client: HttpClient,
+    id: AtomicUsize,
 }
 
-impl<T> LoggingTransport<T>
-where
-    T: Transport,
-{
-    /// Create a new `LoggingTranport` from an underlying transport and log
-    /// level.
-    pub fn new(inner: T, level: Level) -> Self {
-        LoggingTransport { inner, level }
+impl HttpTransport {
+    /// Creates a new HTTP transport with settings.
+    pub fn new(
+        url: impl Into<String>,
+        log_level: Level,
+        timeout: Duration,
+    ) -> Result<HttpTransport, DriverError> {
+        let client = HttpClient::builder().timeout(timeout).build()?;
+
+        Ok(HttpTransport(Arc::new(HttpTransportInner {
+            url: url.into(),
+            log_level,
+            client,
+            id: AtomicUsize::default(),
+        })))
     }
 }
 
-impl<T> Transport for LoggingTransport<T>
-where
-    T: Transport,
-{
-    type Out = LoggingFuture<T::Out>;
-
-    fn prepare(&self, method: &str, params: Vec<Value>) -> (RequestId, Call) {
-        self.inner.prepare(method, params)
-    }
-
-    fn send(&self, id: RequestId, request: Call) -> Self::Out {
+impl HttpTransportInner {
+    async fn execute(self: Arc<Self>, id: RequestId, request: Call) -> Result<Value, Web3Error> {
         log!(
-            self.level,
+            self.log_level,
             "sending request ID {}: {}",
             id,
             serde_json::to_string(&request).expect("request is invalid JSON")
         );
-        LoggingFuture {
-            inner: self.inner.send(id, request),
-            id,
-            level: self.level,
+
+        let request = serde_json::to_string(&request)?;
+        let mut response: Value = self
+            .client
+            .post_async(&self.url, request)
+            .await
+            .map_err(|err| Web3Error::Transport(err.to_string()))?
+            .json()?;
+
+        if let Some(map) = response.as_object_mut() {
+            // NOTE: Ganache sometimes returns errors inlined with responses,
+            //   filter those out.
+            if map.contains_key("result") && map.contains_key("error") {
+                map.remove("error");
+            }
         }
+
+        let output = Output::deserialize(response)?;
+        let result = helpers::to_result_from_output(output)?;
+
+        Ok(result)
     }
 }
 
-/// A future that wraps JSON RPC results.
-pub struct LoggingFuture<F> {
-    inner: F,
-    id: RequestId,
-    level: Level,
+impl Debug for HttpTransport {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_tuple("HttpTransport").field(&self.0.url).finish()
+    }
 }
 
-impl<F> Future for LoggingFuture<F>
-where
-    F: Future<Item = Value, Error = Error>,
-{
-    type Item = Value;
-    type Error = Error;
+impl Transport for HttpTransport {
+    type Out = Compat<BoxFuture<'static, Result<Value, Web3Error>>>;
 
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        let result = self.inner.poll();
-        match &result {
-            Ok(Async::Ready(ref value)) => log!(
-                self.level,
-                "request ID {} completed with result: {}",
-                self.id,
-                value
-            ),
-            Err(ref err) => log!(self.level, "request ID {} failed: {:?}", self.id, err),
-            _ => {}
-        }
-        result
+    fn prepare(&self, method: &str, params: Vec<Value>) -> (RequestId, Call) {
+        let id = self.0.id.fetch_add(1, Ordering::SeqCst);
+        let request = helpers::build_request(id, method, params);
+
+        (id, request)
+    }
+
+    fn send(&self, id: RequestId, request: Call) -> Self::Out {
+        let send = self.0.clone().execute(id, request);
+        send.boxed().compat()
     }
 }

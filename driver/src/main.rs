@@ -54,7 +54,7 @@ fn main() {
         env::var("OPTIMIZATION_MODEL").unwrap_or_else(|_| String::from("NAIVE"));
     let optimization_model = OptimizationModel::from(optimization_model_string.as_str());
 
-    let (web3, _event_loop_handle) = web3_provider(&ethereum_node_url).unwrap();
+    let web3 = web3_provider(&ethereum_node_url).unwrap();
     let contract = BatchExchange::new(&web3, network_id).unwrap();
     info!("Using contract at {}", contract.address());
     info!("Using account {}", contract.account());
