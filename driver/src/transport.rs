@@ -5,7 +5,8 @@ use ethcontract::web3::{Error as Web3Error, RequestId, Transport};
 use futures::compat::Compat;
 use futures::future::{BoxFuture, FutureExt, TryFutureExt};
 use isahc::config::VersionNegotiation;
-use isahc::prelude::{HttpClient, Request, ResponseExt};
+use isahc::prelude::{Body, Request, Response};
+use isahc::{Error as HttpError, HttpClient, ResponseExt};
 use log::{debug, warn};
 use serde::Deserialize;
 use serde_json::Value;
@@ -44,41 +45,45 @@ impl HttpTransport {
 }
 
 impl HttpTransportInner {
+    /// Performs an HTTP POST with the given data.
+    async fn post(&self, data: String) -> Result<(Response<Body>, String), HttpError> {
+        let http_request = Request::post(&self.url)
+            // NOTE: This is needed as Parity clients will respond with a HTTP
+            //   error when no content type is provided.
+            .header("Content-Type", "application/json")
+            .body(data)?;
+        let mut response = self.client.send_async(http_request).await?;
+        let content = response.text()?;
+
+        Ok((response, content))
+    }
+
     /// Execute an HTTP JSON RPC request.
     async fn execute(self: Arc<Self>, id: RequestId, request: Call) -> Result<Value, Web3Error> {
         let request = serde_json::to_string(&request)?;
         debug!("[id:{}] sending request: '{}'", id, &request,);
 
-        let http_request = Request::post(&self.url)
-            // NOTE: This is needed as Parity clients will respond with a HTTP
-            //   error when no content type is provided.
-            .header("Content-Type", "application/json")
-            .body(request)
-            .map_err(transport_err)?;
-        let mut response = self
-            .client
-            .send_async(http_request)
+        let (response, content) = self
+            .post(request)
             .await
-            .map_err(transport_err)?;
-        let body = response.text().map_err(transport_err)?;
-
+            .map_err(|err| Web3Error::Transport(err.to_string()))?;
         if !response.status().is_success() {
             warn!(
                 "[id:{}] HTTP error code {}: '{}' {:?}",
                 id,
                 response.status(),
-                body.trim(),
+                content.trim(),
                 response,
             );
             return Err(Web3Error::Transport(format!(
                 "HTTP error status {}: '{}'",
                 response.status(),
-                body.trim(),
+                content.trim(),
             )));
         }
-        debug!("[id:{}] received response: '{}'", id, &body);
 
-        let mut json = Value::from_str(&body)?;
+        debug!("[id:{}] received response: '{}'", id, &content);
+        let mut json = Value::from_str(&content)?;
         if let Some(map) = json.as_object_mut() {
             // NOTE: Ganache sometimes returns errors inlined with responses,
             //   filter those out.
@@ -115,9 +120,4 @@ impl Transport for HttpTransport {
     fn send(&self, id: RequestId, request: Call) -> Self::Out {
         self.0.clone().execute(id, request).boxed().compat()
     }
-}
-
-/// Error conversion method for wrapping an HTTP error in a `web3` error.
-fn transport_err(err: impl std::error::Error) -> Web3Error {
-    Web3Error::Transport(err.to_string())
 }
