@@ -49,29 +49,19 @@ impl HttpTransport {
 
 impl HttpTransportInner {
     async fn execute(self: Arc<Self>, id: RequestId, request: Call) -> Result<Value, Web3Error> {
-        let request_json = serde_json::to_string(&request)?;
-        log!(
-            self.log_level,
-            "sending request ID {}: '{}'",
-            id,
-            &request_json
-        );
+        let request = serde_json::to_string(&request)?;
+        log!(self.log_level, "sending request ID {}: '{}'", id, &request);
 
-        let response_text = self
+        let body = self
             .client
-            .post_async(&self.url, request_json)
+            .post_async(&self.url, request)
             .await
             .and_then(|mut response| response.text())
             .map_err(|err| Web3Error::Transport(err.to_string()))?;
-        log!(
-            self.log_level,
-            "received response ID {}: '{}'",
-            id,
-            &response_text
-        );
+        log!(self.log_level, "received response ID {}: '{}'", id, &body);
 
-        let mut response_json = Value::from_str(&response_text)?;
-        if let Some(map) = response_json.as_object_mut() {
+        let mut json = Value::from_str(&body)?;
+        if let Some(map) = json.as_object_mut() {
             // NOTE: Ganache sometimes returns errors inlined with responses,
             //   filter those out.
             if map.contains_key("result") && map.contains_key("error") {
@@ -79,7 +69,7 @@ impl HttpTransportInner {
             }
         }
 
-        let output = Output::deserialize(response_json)?;
+        let output = Output::deserialize(json)?;
         let result = helpers::to_result_from_output(output)?;
 
         Ok(result)
