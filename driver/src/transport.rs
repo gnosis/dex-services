@@ -4,11 +4,13 @@ use ethcontract::web3::helpers;
 use ethcontract::web3::{Error as Web3Error, RequestId, Transport};
 use futures::compat::Compat;
 use futures::future::{BoxFuture, FutureExt, TryFutureExt};
+use isahc::config::VersionNegotiation;
 use isahc::{HttpClient, ResponseExt};
 use log::{log, Level};
 use serde::Deserialize;
 use serde_json::Value;
 use std::fmt::{self, Debug, Formatter};
+use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -31,7 +33,10 @@ impl HttpTransport {
         log_level: Level,
         timeout: Duration,
     ) -> Result<HttpTransport, DriverError> {
-        let client = HttpClient::builder().timeout(timeout).build()?;
+        let client = HttpClient::builder()
+            .timeout(timeout)
+            .version_negotiation(VersionNegotiation::http11())
+            .build()?;
 
         Ok(HttpTransport(Arc::new(HttpTransportInner {
             url: url.into(),
@@ -44,18 +49,29 @@ impl HttpTransport {
 
 impl HttpTransportInner {
     async fn execute(self: Arc<Self>, id: RequestId, request: Call) -> Result<Value, Web3Error> {
-        let request = serde_json::to_string(&request)?;
-        log!(self.log_level, "sending request ID {}: {}", id, &request);
+        let request_json = serde_json::to_string(&request)?;
+        log!(
+            self.log_level,
+            "sending request ID {}: '{}'",
+            id,
+            &request_json
+        );
 
-        let mut response: Value = self
+        let response_text = self
             .client
-            .post_async(&self.url, request)
+            .post_async(&self.url, request_json)
             .await
-            .map_err(|err| Web3Error::Transport(err.to_string()))?
-            .json()?;
-        log!(self.log_level, "received response ID {}: {}", id, &response);
+            .and_then(|mut response| response.text())
+            .map_err(|err| Web3Error::Transport(err.to_string()))?;
+        log!(
+            self.log_level,
+            "received response ID {}: '{}'",
+            id,
+            &response_text
+        );
 
-        if let Some(map) = response.as_object_mut() {
+        let mut response_json = Value::from_str(&response_text)?;
+        if let Some(map) = response_json.as_object_mut() {
             // NOTE: Ganache sometimes returns errors inlined with responses,
             //   filter those out.
             if map.contains_key("result") && map.contains_key("error") {
@@ -63,7 +79,7 @@ impl HttpTransportInner {
             }
         }
 
-        let output = Output::deserialize(response)?;
+        let output = Output::deserialize(response_json)?;
         let result = helpers::to_result_from_output(output)?;
 
         Ok(result)
