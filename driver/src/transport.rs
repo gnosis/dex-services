@@ -44,20 +44,16 @@ impl HttpTransport {
 
 impl HttpTransportInner {
     async fn execute(self: Arc<Self>, id: RequestId, request: Call) -> Result<Value, Web3Error> {
-        log!(
-            self.log_level,
-            "sending request ID {}: {}",
-            id,
-            serde_json::to_string(&request).expect("request is invalid JSON")
-        );
-
         let request = serde_json::to_string(&request)?;
+        log!(self.log_level, "sending request ID {}: {}", id, &request);
+
         let mut response: Value = self
             .client
             .post_async(&self.url, request)
             .await
             .map_err(|err| Web3Error::Transport(err.to_string()))?
             .json()?;
+        log!(self.log_level, "received response ID {}: {}", id, &response);
 
         if let Some(map) = response.as_object_mut() {
             // NOTE: Ganache sometimes returns errors inlined with responses,
