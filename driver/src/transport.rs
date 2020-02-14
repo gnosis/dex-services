@@ -5,7 +5,7 @@ use ethcontract::web3::{Error as Web3Error, RequestId, Transport};
 use futures::compat::Compat;
 use futures::future::{BoxFuture, FutureExt, TryFutureExt};
 use isahc::config::VersionNegotiation;
-use isahc::{HttpClient, ResponseExt};
+use isahc::prelude::{HttpClient, Request, ResponseExt};
 use log::{log, Level};
 use serde::Deserialize;
 use serde_json::Value;
@@ -52,9 +52,13 @@ impl HttpTransportInner {
         let request = serde_json::to_string(&request)?;
         log!(self.log_level, "sending request ID {}: '{}'", id, &request);
 
+        let http_request = Request::post(&self.url)
+            .header("Content-Type", "application/json")
+            .body(request)
+            .map_err(|err| Web3Error::Transport(err.to_string()))?;
         let body = self
             .client
-            .post_async(&self.url, request)
+            .send_async(http_request)
             .await
             .and_then(|mut response| response.text())
             .map_err(|err| Web3Error::Transport(err.to_string()))?;
