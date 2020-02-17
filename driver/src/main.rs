@@ -70,8 +70,7 @@ fn main() {
     let fee = Some(Fee::default());
     let mut price_finder = util::create_price_finder(fee, optimization_model);
 
-    let orderbook =
-        PaginatedStableXOrderBookReader::new(&contract, auction_data_page_size(), &web3);
+    let orderbook = PaginatedStableXOrderBookReader::new(&contract, auction_data_page_size());
     let parsed_filter = serde_json::from_str(&filter)
         .map_err(|e| {
             error!("Error parsing orderbook filter: {}", &e);
