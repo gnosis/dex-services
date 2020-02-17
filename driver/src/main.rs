@@ -103,8 +103,7 @@ fn main() {
     let orderbook =
         PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size, &web3);
     info!("Orderbook filter: {:?}", options.orderbook_filter);
-    let filtered_orderbook =
-        FilteredOrderbookReader::new(&orderbook, options.orderbook_filter);
+    let filtered_orderbook = FilteredOrderbookReader::new(&orderbook, options.orderbook_filter);
 
     let solution_submitter = StableXSolutionSubmitter::new(&contract);
     let mut driver = StableXDriver::new(
