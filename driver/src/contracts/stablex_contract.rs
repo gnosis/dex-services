@@ -131,6 +131,13 @@ impl StableXContract for BatchExchange {
         let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
+        let gas_price = gnosis_safe_gas_station::get_gas_price();
+        if let Err(ref err) = gas_price {
+            log::warn!(
+                "failed to get gas price from gnosis safe gas station: {}",
+                err
+            );
+        }
         self.submit_solution(
             batch_index.low_u32(),
             claimed_objective_value,
@@ -141,7 +148,7 @@ impl StableXContract for BatchExchange {
             token_ids_for_price,
         )
         .gas_price(
-            gnosis_safe_gas_station::get_gas_price()
+            gas_price
                 .map(|gas_price| GasPrice::Value(gas_price.fast))
                 .unwrap_or(GasPrice::Scaled(3.0)),
         )
