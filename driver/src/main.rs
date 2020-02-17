@@ -19,7 +19,6 @@ use crate::price_finding::Fee;
 use crate::solution_submission::StableXSolutionSubmitter;
 
 use ethcontract::PrivateKey;
-use lazy_static::lazy_static;
 use log::{error, info};
 use prometheus::Registry;
 use std::sync::Arc;
@@ -78,17 +77,15 @@ struct Options {
     auction_data_page_size: u16,
 }
 
-lazy_static! {
-    static ref OPTIONS: Options = Options::from_args();
-}
-
 fn main() {
-    let (_, _guard) = logging::init(&OPTIONS.log_filter);
-    info!("using options: {:#?}", *OPTIONS);
+    let options = Options::from_args();
 
-    let (web3, _event_loop_handle) = web3_provider(OPTIONS.node_url.as_str()).unwrap();
+    let (_, _guard) = logging::init(&options.log_filter);
+    info!("using options: {:#?}", options);
+
+    let (web3, _event_loop_handle) = web3_provider(options.node_url.as_str()).unwrap();
     let contract =
-        BatchExchange::new(&web3, OPTIONS.private_key.clone(), OPTIONS.network_id).unwrap();
+        BatchExchange::new(&web3, options.private_key.clone(), options.network_id).unwrap();
     info!("Using contract at {:?}", contract.address());
     info!("Using account {:?}", contract.account());
 
@@ -101,13 +98,13 @@ fn main() {
     });
 
     let fee = Some(Fee::default());
-    let mut price_finder = util::create_price_finder(fee, OPTIONS.optimization_model);
+    let mut price_finder = util::create_price_finder(fee, options.optimization_model);
 
     let orderbook =
-        PaginatedStableXOrderBookReader::new(&contract, OPTIONS.auction_data_page_size, &web3);
-    info!("Orderbook filter: {:?}", OPTIONS.orderbook_filter);
+        PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size, &web3);
+    info!("Orderbook filter: {:?}", options.orderbook_filter);
     let filtered_orderbook =
-        FilteredOrderbookReader::new(&orderbook, OPTIONS.orderbook_filter.clone());
+        FilteredOrderbookReader::new(&orderbook, options.orderbook_filter);
 
     let solution_submitter = StableXSolutionSubmitter::new(&contract);
     let mut driver = StableXDriver::new(
