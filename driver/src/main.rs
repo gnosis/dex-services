@@ -1,6 +1,7 @@
 mod contracts;
 mod driver;
 mod error;
+mod gnosis_safe_gas_station;
 mod logging;
 mod metrics;
 mod models;

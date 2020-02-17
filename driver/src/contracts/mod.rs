@@ -1,4 +1,3 @@
-pub mod gnosis_safe_gas_station;
 pub mod stablex_auction_element;
 pub mod stablex_contract;
 

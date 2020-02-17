@@ -10,8 +10,8 @@ use lazy_static::lazy_static;
 use mockall::automock;
 
 use crate::contracts;
-use crate::contracts::gnosis_safe_gas_station;
 use crate::error::DriverError;
+use crate::gnosis_safe_gas_station;
 use crate::models::{Order, Solution};
 use crate::util::FutureWaitExt;
 
