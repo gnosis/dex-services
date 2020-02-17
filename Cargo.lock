@@ -525,9 +525,9 @@ dependencies = [
 
 [[package]]
 name = "ethcontract"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5f84a37fda5cc81423486c7892134816f2d1284baf30321a4d4247d187fcf1c"
+checksum = "cf2c5abb978a523ea91d48c228b34c3065df1f5a9cba8d28a31410a61bb95e38"
 dependencies = [
  "ethcontract-common",
  "ethcontract-derive",
@@ -549,9 +549,9 @@ dependencies = [
 
 [[package]]
 name = "ethcontract-common"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13bc3dfa18c03fefdb53c909f7282dc3bd035039ea0c2d480cdfeaf9e7a7813b"
+checksum = "cfc21b18d517a8db7c975625879cd23e98f040ed78ac7cbb450bd7cddd4dac1e"
 dependencies = [
  "ethabi",
  "hex",
@@ -564,9 +564,9 @@ dependencies = [
 
 [[package]]
 name = "ethcontract-derive"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34b27b7e083dabb96c8dde3ed2f902b167848ca572c21918a9a21b1acf2f9cfb"
+checksum = "9ce0a222bdcafd5c5423b8ef87e9fb2e158b52877938b9fab288085ec3687585"
 dependencies = [
  "ethcontract-generate",
  "proc-macro2",
@@ -575,9 +575,9 @@ dependencies = [
 
 [[package]]
 name = "ethcontract-generate"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39f6fe95eeb39e3ecff0b666fc1d2b360a664996a4735cfd9a2b19792a18bce6"
+checksum = "f7c3baaa9d3a5e2565ef56c58521beafffd298c7ea33616c39d4bd6626e0c664"
 dependencies = [
  "Inflector",
  "anyhow",
@@ -1151,9 +1151,9 @@ checksum = "60302e4db3a61da70c0cb7991976248362f30319e88850c487b9b95bbf059e00"
 
 [[package]]
 name = "memchr"
-version = "2.3.0"
+version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3197e20c7edb283f87c071ddfc7a2cca8f8e0b888c242959846a6fce03c72223"
+checksum = "53445de381a1f436797497c61d851644d0e8e88e6140f22872ad33a704933978"
 
 [[package]]
 name = "memoffset"
@@ -2020,9 +2020,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.47"
+version = "1.0.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15913895b61e0be854afd32fd4163fcd2a3df34142cf2cb961b310ce694cbf90"
+checksum = "9371ade75d4c2d6cb154141b9752cf3781ec9c05e0e5cf35060e1e70ee7b9c25"
 dependencies = [
  "itoa",
  "ryu",
