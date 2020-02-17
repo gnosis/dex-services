@@ -2,8 +2,7 @@ use crate::*;
 
 use ethcontract::web3::api::Web3;
 use ethcontract::web3::transports::Http;
-use ethcontract::web3::types::{H160, U256};
-use ethcontract::Account;
+use ethcontract::{Account, Address as H160, U256};
 
 use crate::common::{
     approve, create_accounts_with_funded_tokens, wait_for, FutureBuilderExt, FutureWaitExt, MAX_GAS,

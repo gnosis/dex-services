@@ -1,9 +1,9 @@
-use jsonrpc_core::types::request::Call;
+use ethcontract::jsonrpc::types::request::Call;
+use ethcontract::web3::error::Error;
+use ethcontract::web3::futures::{Async, Future, Poll};
+use ethcontract::web3::{RequestId, Transport};
 use log::{log, Level};
 use serde_json::Value;
-use web3::error::Error;
-use web3::futures::{Async, Future, Poll};
-use web3::{RequestId, Transport};
 
 /// A `Transport` wrapper that logs RPC messages
 #[derive(Clone, Debug)]

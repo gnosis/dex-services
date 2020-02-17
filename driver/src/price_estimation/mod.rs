@@ -249,21 +249,20 @@ impl TokenReader for EthTokenReader {
             .contract
             .token_id_to_address_map(index as _)
             .call()
-            .wait()
-            .unwrap();
+            .wait()?;
         let erc20 = ERC20Detailed::at(&self.contract.web3(), address);
         let symbol = {
             // NOTE: We check if the symbol is part of the overrides map, and
             //   use the overridden value if it is. This allows ERC20 tokens
             //   like WETH to be treated by ETH, since exchanges generally only
             //   track ETH prices and not WETH.
-            let symbol = erc20.symbol().call().wait().unwrap();
+            let symbol = erc20.symbol().call().wait()?;
             SYMBOL_OVERRIDES
                 .get(&symbol)
                 .map(|s| s.to_owned())
                 .unwrap_or(symbol)
         };
-        let decimals = erc20.decimals().call().wait().unwrap() as u8;
+        let decimals = erc20.decimals().call().wait()?;
 
         Ok(Token {
             id: TokenId(index),

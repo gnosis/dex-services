@@ -1,8 +1,7 @@
 use ethcontract::web3::api::Web3;
 use ethcontract::web3::futures::Future as F;
 use ethcontract::web3::transports::Http;
-use ethcontract::web3::types::U256;
-use ethcontract::{Account, PrivateKey};
+use ethcontract::{Account, PrivateKey, U256};
 
 use futures::future::join_all;
 
@@ -49,8 +48,8 @@ fn test_with_ganache() {
             second_token_id,
             first_token_id,
             batch + 20,
-            999_000.into(),
-            2_000_000.into(),
+            999_000,
+            2_000_000,
         )
         .from(Account::Local(accounts[0], None))
         .wait_and_expect("Cannot place first order");
@@ -60,8 +59,8 @@ fn test_with_ganache() {
             first_token_id,
             second_token_id,
             batch + 20,
-            1_996_000.into(),
-            999_000.into(),
+            1_996_000,
+            999_000,
         )
         .from(Account::Local(accounts[1], None))
         .wait_and_expect("Cannot place first order");
@@ -159,11 +158,11 @@ fn test_rinkeby() {
 
     // Place orders
     let first_order = instance
-        .place_order(0, 7, batch + 2, 1_000_000.into(), 10_000_000.into())
+        .place_order(0, 7, batch + 2, 1_000_000, 10_000_000)
         .nonce(nonce + 4)
         .send();
     let second_order = instance
-        .place_order(7, 0, batch + 1, 1_000_000.into(), 10_000_000.into())
+        .place_order(7, 0, batch + 1, 1_000_000, 10_000_000)
         .nonce(nonce + 5)
         .send();
 

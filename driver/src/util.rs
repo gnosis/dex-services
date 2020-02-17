@@ -1,5 +1,5 @@
+use ethcontract::U256;
 use std::future::Future;
-use web3::types::U256;
 
 pub trait CeiledDiv {
     fn ceiled_div(&self, divisor: Self) -> Self;

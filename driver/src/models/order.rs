@@ -1,5 +1,5 @@
+use ethcontract::Address as H160;
 use serde::Deserialize;
-use web3::types::H160;
 
 #[derive(Debug, Clone, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]

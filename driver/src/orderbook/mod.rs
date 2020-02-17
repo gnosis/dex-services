@@ -2,11 +2,12 @@ use crate::contracts::{stablex_contract::StableXContract, Web3};
 use crate::error::DriverError;
 use crate::models::{AccountState, Order};
 
+use ethcontract::web3::futures::Future;
+use ethcontract::U256;
 #[cfg(test)]
 use mockall::automock;
 use paginated_auction_data_reader::PaginatedAuctionDataReader;
-use web3::futures::Future;
-use web3::types::U256;
+use std::convert::TryInto;
 
 mod filtered_orderbook;
 mod paginated_auction_data_reader;
@@ -34,12 +35,12 @@ pub trait StableXOrderBookReading {
 /// This avoid hitting gas limits when the total amount of orders is large.
 pub struct PaginatedStableXOrderBookReader<'a> {
     contract: &'a dyn StableXContract,
-    page_size: u64,
+    page_size: u16,
     web3: &'a Web3,
 }
 
 impl<'a> PaginatedStableXOrderBookReader<'a> {
-    pub fn new(contract: &'a dyn StableXContract, page_size: u64, web3: &'a Web3) -> Self {
+    pub fn new(contract: &'a dyn StableXContract, page_size: u16, web3: &'a Web3) -> Self {
         Self {
             contract,
             page_size,
@@ -59,13 +60,22 @@ impl<'a> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a> {
         let block = self.web3.eth().block_number().wait()?.as_u64();
         let mut reader = PaginatedAuctionDataReader::new(index);
         loop {
-            let number_of_orders = reader.apply_page(&self.contract.get_auction_data_paginated(
-                block,
-                self.page_size,
-                reader.pagination().previous_page_user,
-                reader.pagination().previous_page_user_offset as u64,
-            )?);
-            if (number_of_orders as u64) < self.page_size {
+            let number_of_orders: u16 = reader
+                .apply_page(
+                    &self.contract.get_auction_data_paginated(
+                        block,
+                        self.page_size,
+                        reader.pagination().previous_page_user,
+                        reader
+                            .pagination()
+                            .previous_page_user_offset
+                            .try_into()
+                            .expect("user cannot have more than u16::MAX orders"),
+                    )?,
+                )
+                .try_into()
+                .expect("number of orders per page should never overflow a u16");
+            if number_of_orders < self.page_size {
                 return Ok(reader.get_auction_data());
             }
         }

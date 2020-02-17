@@ -31,9 +31,9 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-fn auction_data_page_size() -> u64 {
+fn auction_data_page_size() -> u16 {
     const KEY: &str = "AUCTION_DATA_PAGE_SIZE";
-    const DEFAULT: u64 = 100;
+    const DEFAULT: u16 = 100;
     env::var(KEY)
         .map(|str| {
             str.parse()

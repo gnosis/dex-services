@@ -5,12 +5,12 @@ pub mod stablex_contract;
 use crate::error::DriverError;
 use crate::transport::LoggingTransport;
 use ethcontract::contract::MethodDefaults;
+use ethcontract::web3::transports::{EventLoopHandle, Http};
 use ethcontract::{Account, PrivateKey};
 use log::Level;
 use std::env;
-use web3::transports::{EventLoopHandle, Http};
 
-pub type Web3 = web3::api::Web3<LoggingTransport<Http>>;
+pub type Web3 = ethcontract::web3::api::Web3<LoggingTransport<Http>>;
 
 pub fn web3_provider(url: &str) -> Result<(Web3, EventLoopHandle), DriverError> {
     let (event_loop, http) = Http::new(&url)?;

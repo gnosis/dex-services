@@ -1,6 +1,6 @@
+use ethcontract::{Address as H160, H256, U256};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use web3::types::{H160, H256, U256};
 
 #[derive(Serialize, Default, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -90,7 +90,7 @@ mod test_util {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use web3::types::H256;
+    use ethcontract::H256;
 
     #[test]
     #[should_panic]
