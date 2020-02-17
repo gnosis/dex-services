@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::env;
 
 use ethcontract::transaction::GasPrice;
-use ethcontract::{Address as H160, BlockNumber, U256};
+use ethcontract::{Address as H160, U256};
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
@@ -52,7 +52,6 @@ pub trait StableXContract {
     /// between calls.
     fn get_auction_data_paginated(
         &self,
-        block: u64,
         page_size: u16,
         previous_page_user: H160,
         previous_page_user_offset: u16,
@@ -80,7 +79,6 @@ impl StableXContract for BatchExchange {
 
     fn get_auction_data_paginated(
         &self,
-        block: u64,
         page_size: u16,
         previous_page_user: H160,
         previous_page_user_offset: u16,
@@ -91,7 +89,6 @@ impl StableXContract for BatchExchange {
             page_size,
         );
         orders_builder.m.tx.gas = None;
-        orders_builder.block = Some(BlockNumber::Number(block.into()));
         orders_builder.call().wait().map_err(From::from)
     }
 

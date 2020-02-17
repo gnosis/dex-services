@@ -110,10 +110,8 @@ impl PaginatedAuctionDataReader {
                 |x| {
                     if *x == 0 {
                         *x = element.sell_token_balance
-                    } else {
-                        assert_eq!(
-                            *x,
-                            element.sell_token_balance,
+                    } else if *x != element.sell_token_balance {
+                        log::warn!(
                             "got order which sets user {}'s sell token {} \
                              balance to {} but sell_token_balance has already \
                              been set to {}",
@@ -324,18 +322,5 @@ pub mod tests {
         assert_eq!(reader.orders, []);
         assert_eq!(reader.pagination.previous_page_user, ORDER_1.account_id);
         assert_eq!(reader.pagination.previous_page_user_offset, 2);
-    }
-
-    #[test]
-    #[should_panic]
-    fn paginated_auction_data_reader_panics() {
-        let mut reader = PaginatedAuctionDataReader::new(U256::from(3));
-        let mut bytes = Vec::new();
-        bytes.extend(ORDER_1_BYTES);
-        assert_eq!(reader.apply_page(&bytes), 1);
-        bytes[51] += 1;
-        // Incremented sell_token_balance which should cause a panic because it
-        // does not match the previous balance.
-        reader.apply_page(&bytes);
     }
 }
