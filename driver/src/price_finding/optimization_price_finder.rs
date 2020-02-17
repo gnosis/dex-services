@@ -10,8 +10,6 @@ use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::process::Command;
 
-const RESULT_FOLDER: &str = "./results/tmp/";
-
 type PriceMap = HashMap<u16, u128>;
 
 mod solver_output {
@@ -102,8 +100,8 @@ mod solver_input {
 pub struct OptimisationPriceFinder {
     // default IO methods can be replaced for unit testing
     write_input: fn(&str, &str) -> std::io::Result<()>,
-    run_solver: fn(&str, OptimizationModel) -> Result<(), PriceFindingError>,
-    read_output: fn() -> std::io::Result<String>,
+    run_solver: fn(&str, &str, OptimizationModel) -> Result<(), PriceFindingError>,
+    read_output: fn(&str) -> std::io::Result<String>,
     fee: Option<Fee>,
     optimization_model: OptimizationModel,
 }
@@ -246,10 +244,12 @@ impl PriceFinding for OptimisationPriceFinder {
             orders: orders.iter().map(serialize_order).collect(),
             fee: serialize_fee(&self.fee),
         };
-        let input_file = format!("instances/instance_{}.json", Utc::now().to_rfc3339());
+        let current_time = Utc::now().to_rfc3339();
+        let input_file = format!("instances/instance_{}.json", &current_time);
+        let result_folder = format!("results/instance_{}/", &current_time);
         (self.write_input)(&input_file, &serde_json::to_string(&input)?)?;
-        (self.run_solver)(&input_file, self.optimization_model)?;
-        let result = (self.read_output)()?;
+        (self.run_solver)(&input_file, &result_folder, self.optimization_model)?;
+        let result = (self.read_output)(&result_folder)?;
         let solution = deserialize_result(result)?;
         Ok(solution)
     }
@@ -265,12 +265,13 @@ fn write_input(input_file: &str, input: &str) -> std::io::Result<()> {
 
 fn run_solver(
     input_file: &str,
+    result_folder: &str,
     optimization_model: OptimizationModel,
 ) -> Result<(), PriceFindingError> {
     let optimization_model_str = optimization_model.to_args();
     let output = Command::new("python")
         .args(&["-m", "batchauctions.scripts.e2e._run"])
-        .arg(RESULT_FOLDER)
+        .arg(result_folder)
         .args(&["--jsonFile", input_file])
         .args(&[optimization_model_str])
         .output()?;
@@ -289,8 +290,8 @@ fn run_solver(
     Ok(())
 }
 
-fn read_output() -> std::io::Result<String> {
-    let file = File::open(format!("{}{}", RESULT_FOLDER, "06_solution_int_valid.json"))?;
+fn read_output(result_folder: &str) -> std::io::Result<String> {
+    let file = File::open(format!("{}{}", result_folder, "06_solution_int_valid.json"))?;
     let mut reader = BufReader::new(file);
     let mut result = String::new();
     reader.read_to_string(&mut result)?;
@@ -584,8 +585,8 @@ pub mod tests {
                 );
                 Ok(())
             },
-            run_solver: |_, _| Ok(()),
-            read_output: || Err(std::io::Error::last_os_error()),
+            run_solver: |_, _, _| Ok(()),
+            read_output: |_| Err(std::io::Error::last_os_error()),
             fee: Some(fee),
             optimization_model: OptimizationModel::MIP,
         };
