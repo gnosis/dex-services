@@ -31,7 +31,7 @@ impl HttpTransport {
     pub fn new(url: impl Into<String>, timeout: Duration) -> Result<HttpTransport, DriverError> {
         let client = HttpClient::builder()
             .timeout(timeout)
-            // NOTE: This is needed as curl with try to upgrade to HTTP/2 which
+            // NOTE: This is needed as curl will try to upgrade to HTTP/2 which
             //   causes a HTTP 400 error with Ganache.
             .version_negotiation(VersionNegotiation::http11())
             .build()?;
@@ -46,7 +46,7 @@ impl HttpTransport {
 
 impl HttpTransportInner {
     /// Performs an HTTP POST with the given data.
-    async fn post(&self, data: String) -> Result<(Response<Body>, String), HttpError> {
+    async fn post_json(&self, data: String) -> Result<(Response<Body>, String), HttpError> {
         let http_request = Request::post(&self.url)
             // NOTE: This is needed as Parity clients will respond with a HTTP
             //   error when no content type is provided.
@@ -59,12 +59,12 @@ impl HttpTransportInner {
     }
 
     /// Execute an HTTP JSON RPC request.
-    async fn execute(self: Arc<Self>, id: RequestId, request: Call) -> Result<Value, Web3Error> {
+    async fn execute_rpc(self: Arc<Self>, id: RequestId, request: Call) -> Result<Value, Web3Error> {
         let request = serde_json::to_string(&request)?;
         debug!("[id:{}] sending request: '{}'", id, &request,);
 
         let (response, content) = self
-            .post(request)
+            .post_json(request)
             .await
             .map_err(|err| Web3Error::Transport(err.to_string()))?;
         if !response.status().is_success() {
@@ -118,6 +118,6 @@ impl Transport for HttpTransport {
     }
 
     fn send(&self, id: RequestId, request: Call) -> Self::Out {
-        self.0.clone().execute(id, request).boxed().compat()
+        self.0.clone().execute_rpc(id, request).boxed().compat()
     }
 }
