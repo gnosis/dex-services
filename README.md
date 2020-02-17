@@ -152,7 +152,8 @@ The following environment variables can be used to configure the behavior of the
 - *NETWORK_ID*: Network ID (e.g. 1 for mainnet, 4 for rinkeby, 5777 for ganache)
 - *OPTIMIZATION_MODEL*: Which style of solver to use (NAIVE for naive, MIP for mixed integer programming and NLP for the  non-linear programming solver)
 - *ORDERBOOK_FILTER*: json encoded object of which tokens/filters to ignore. See below for example filter.
-- *PRIVATE_KEY*: THe key with which to sign transactions
+- *PRIVATE_KEY*: The key with which to sign transactions
+- *WEB3_RPC_TIMEOUT*: The timeout in milliseconds of web3 JSON RPC calls, defaults to 10000ms
 
 ### Orderbook Filter Example
 

@@ -16,6 +16,7 @@ pub enum ErrorKind {
     PrivateKeyError,
     ContractDeployedError,
     ContractMethodError,
+    HttpError,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -87,6 +88,12 @@ impl From<ethcontract::errors::DeployError> for DriverError {
 impl From<ethcontract::errors::MethodError> for DriverError {
     fn from(error: ethcontract::errors::MethodError) -> Self {
         DriverError::new(&error.to_string(), ErrorKind::ContractMethodError)
+    }
+}
+
+impl From<isahc::Error> for DriverError {
+    fn from(error: isahc::Error) -> Self {
+        DriverError::new(&error.to_string(), ErrorKind::HttpError)
     }
 }
 

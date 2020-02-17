@@ -21,6 +21,7 @@ use crate::solution_submission::StableXSolutionSubmitter;
 use ethcontract::PrivateKey;
 use log::{error, info};
 use prometheus::Registry;
+use std::num::ParseIntError;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -75,6 +76,15 @@ struct Options {
     /// The page size with which to read orders from the smart contract.
     #[structopt(long, env = "AUCTION_DATA_PAGE_SIZE", default_value = "100")]
     auction_data_page_size: u16,
+
+    /// The timeout in milliseconds of web3 JSON RPC calls, defaults to 10000ms
+    #[structopt(
+        long,
+        env = "WEB3_RPC_TIMEOUT",
+        default_value = "10000",
+        parse(try_from_str = duration_millis),
+    )]
+    rpc_timeout: Duration,
 }
 
 fn main() {
@@ -83,7 +93,7 @@ fn main() {
     let (_, _guard) = logging::init(&options.log_filter);
     info!("using options: {:#?}", options);
 
-    let (web3, _event_loop_handle) = web3_provider(options.node_url.as_str()).unwrap();
+    let web3 = web3_provider(options.node_url.as_str(), options.rpc_timeout).unwrap();
     let contract =
         BatchExchange::new(&web3, options.private_key.clone(), options.network_id).unwrap();
     info!("Using contract at {:?}", contract.address());
@@ -118,4 +128,8 @@ fn main() {
         }
         thread::sleep(Duration::from_secs(5));
     }
+}
+
+fn duration_millis(s: &str) -> Result<Duration, ParseIntError> {
+    Ok(Duration::from_millis(s.parse()?))
 }
