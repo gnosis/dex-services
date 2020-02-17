@@ -47,7 +47,7 @@ where
 {
     let s = String::deserialize(deserializer)?;
     U256::from_dec_str(&s)
-        .map_err(uint_error_to_string)
+        .map_err(|err| format!("{}: {}", uint_error_to_string(err), s))
         .map_err(serde::de::Error::custom)
 }
 
