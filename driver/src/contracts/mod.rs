@@ -10,8 +10,16 @@ use std::time::Duration;
 
 pub type Web3 = ethcontract::web3::api::Web3<HttpTransport>;
 
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
+
 pub fn web3_provider(url: &str) -> Result<Web3, DriverError> {
-    let http = HttpTransport::new(url, Duration::from_secs(10))?;
+    let timeout = env::var("WEB3_RPC_TIMEOUT")
+        .map_err(DriverError::from)
+        .and_then(|timeout| Ok(timeout.parse()?))
+        .map(Duration::from_millis)
+        .unwrap_or(DEFAULT_TIMEOUT);
+
+    let http = HttpTransport::new(url, timeout)?;
     let web3 = Web3::new(http);
 
     Ok(web3)
