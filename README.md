@@ -169,15 +169,15 @@ The following environment variables can be used to configure the behavior of the
 
 blacklists all orders that contain token 1 & 2, all orders of _0x...B_ and orderId 0 & 1 or _0x...A_
 
-### Command Line Configuration
+### Command-Line Configuration
 
-The driver also supports configuration by directly passing in commandline arguments. Run the following to get more information on all supported command line options:
+The driver also supports configuration by directly passing in command-line arguments. Run the following to get more information on all supported command-line options:
 
 ```
 cargo run -- --help
 ```
 
-The command line help output also specifies which arguments map to which of the environment variables specified above.
+The command-line help output also specifies which arguments map to which of the environment variables specified above.
 
 ## Troubleshooting
 
