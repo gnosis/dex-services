@@ -1,4 +1,5 @@
 use ethcontract::U256;
+use isahc::prelude::*;
 use serde::Deserialize;
 use std::time::Duration;
 use uint::FromDecStrErr;
@@ -25,16 +26,19 @@ pub struct GasPrice {
 /// Retrieves gas prices from the Gnosis Safe Relay api.
 ///
 /// Uses a timeout of 10 seconds.
-pub fn get_gas_price() -> Result<GasPrice, reqwest::Error> {
+pub fn get_gas_price() -> Result<GasPrice, isahc::Error> {
     const URL: &str = "https://safe-relay.gnosis.io/api/v1/gas-station/";
     const TIMEOUT: Duration = Duration::from_secs(10);
     // It would be more efficient to reuse the client between calls. However, we
     // only call this function once per batch when submitting a solution so this
     // is not important at the moment.
-    let client = reqwest::blocking::ClientBuilder::new()
-        .timeout(TIMEOUT)
-        .build()?;
-    client.get(URL).send()?.json()
+    let client = HttpClient::builder().timeout(TIMEOUT).build()?;
+    client
+        .get(URL)?
+        .json()
+        // It would more accurate to use a distinct error type but reusing this
+        // avoids creating a new enum and implementing `Error` on it.
+        .map_err(|err| isahc::Error::ResponseBodyError(Some(format!("{}", err))))
 }
 
 fn deserialize_u256_from_string<'de, D>(deserializer: D) -> Result<U256, D::Error>
