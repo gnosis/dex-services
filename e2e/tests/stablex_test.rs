@@ -104,7 +104,7 @@ fn test_rinkeby() {
     let mut instance =
         BatchExchange::deployed(&web3).wait_and_expect("Cannot get deployed Batch Exchange");
     let secret = {
-        let private_key = env::var("PK").expect("PK env var not set");
+        let private_key = env::var("PRIVATE_KEY").expect("PRIVATE_KEY env var not set");
         PrivateKey::from_hex_str(&private_key).expect("Cannot derive key")
     };
     let account = Account::Offline(secret, None);
