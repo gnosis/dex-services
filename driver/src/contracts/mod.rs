@@ -7,7 +7,6 @@ use ethcontract::contract::MethodDefaults;
 use ethcontract::web3::transports::{EventLoopHandle, Http};
 use ethcontract::{Account, PrivateKey};
 use log::Level;
-use std::env;
 
 pub type Web3 = ethcontract::web3::api::Web3<LoggingTransport<Http>>;
 
@@ -19,11 +18,7 @@ pub fn web3_provider(url: &str) -> Result<(Web3, EventLoopHandle), DriverError> 
     Ok((web3, event_loop))
 }
 
-fn method_defaults(network_id: u64) -> Result<MethodDefaults, DriverError> {
-    let key = {
-        let private_key = env::var("PRIVATE_KEY")?;
-        PrivateKey::from_hex_str(&private_key)?
-    };
+fn method_defaults(key: PrivateKey, network_id: u64) -> Result<MethodDefaults, DriverError> {
     let account = Account::Offline(key, Some(network_id));
     let defaults = MethodDefaults {
         from: Some(account),

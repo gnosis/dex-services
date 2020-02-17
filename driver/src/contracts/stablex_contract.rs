@@ -1,10 +1,9 @@
 #![allow(clippy::ptr_arg)] // required for automock
 
 use std::collections::HashMap;
-use std::env;
 
 use ethcontract::transaction::GasPrice;
-use ethcontract::{Address as H160, BlockNumber, U256};
+use ethcontract::{Address as H160, BlockNumber, PrivateKey, U256};
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
@@ -25,8 +24,8 @@ lazy_static! {
 include!(concat!(env!("OUT_DIR"), "/batch_exchange.rs"));
 
 impl BatchExchange {
-    pub fn new(web3: &contracts::Web3, network_id: u64) -> Result<Self> {
-        let defaults = contracts::method_defaults(network_id)?;
+    pub fn new(web3: &contracts::Web3, key: PrivateKey, network_id: u64) -> Result<Self> {
+        let defaults = contracts::method_defaults(key, network_id)?;
 
         let mut instance = BatchExchange::deployed(&web3).wait()?;
         *instance.defaults_mut() = defaults;
