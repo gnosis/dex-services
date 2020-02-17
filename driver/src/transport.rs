@@ -59,7 +59,11 @@ impl HttpTransportInner {
     }
 
     /// Execute an HTTP JSON RPC request.
-    async fn execute_rpc(self: Arc<Self>, id: RequestId, request: Call) -> Result<Value, Web3Error> {
+    async fn execute_rpc(
+        self: Arc<Self>,
+        id: RequestId,
+        request: Call,
+    ) -> Result<Value, Web3Error> {
         let request = serde_json::to_string(&request)?;
         debug!("[id:{}] sending request: '{}'", id, &request,);
 
