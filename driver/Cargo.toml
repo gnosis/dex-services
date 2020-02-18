@@ -28,4 +28,4 @@ slog-term = "2.5.0"
 mockall = "0.6.0"
 
 [build-dependencies]
-ethcontract-generate = "0.4.1"
+ethcontract-generate = "0.4.2"
