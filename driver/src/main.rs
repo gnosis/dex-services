@@ -56,7 +56,7 @@ fn main() {
         env::var("OPTIMIZATION_MODEL").unwrap_or_else(|_| String::from("NAIVE"));
     let optimization_model = OptimizationModel::from(optimization_model_string.as_str());
 
-    let (web3, _event_loop_handle) = web3_provider(&ethereum_node_url).unwrap();
+    let web3 = web3_provider(&ethereum_node_url).unwrap();
     let contract = BatchExchange::new(&web3, network_id).unwrap();
     info!("Using contract at {}", contract.address());
     info!("Using account {}", contract.account());
@@ -72,8 +72,7 @@ fn main() {
     let fee = Some(Fee::default());
     let mut price_finder = util::create_price_finder(fee, optimization_model);
 
-    let orderbook =
-        PaginatedStableXOrderBookReader::new(&contract, auction_data_page_size(), &web3);
+    let orderbook = PaginatedStableXOrderBookReader::new(&contract, auction_data_page_size());
     let parsed_filter = serde_json::from_str(&filter)
         .map_err(|e| {
             error!("Error parsing orderbook filter: {}", &e);
