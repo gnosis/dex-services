@@ -1,12 +1,17 @@
+//! Retrieves gas prices from the https://safe-relay.gnosis.io/ api call `/v1/gas-station`.
+
+use anyhow::Result;
 use ethcontract::U256;
+use isahc::http::uri::Uri;
 use isahc::prelude::*;
 use serde::Deserialize;
 use std::time::Duration;
 use uint::FromDecStrErr;
 
-/// Result of https://safe-relay.gnosis.io/ api call `/v1/gas-station`.
-///
-/// Prices are in wei.
+/// The default uri at which the gas station api is available under.
+pub const DEFAULT_URI: &str = "https://safe-relay.gnosis.io/api/v1/gas-station/";
+
+/// Result of the api call. Prices are in wei.
 #[derive(Deserialize, Debug, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GasPrice {
@@ -23,22 +28,30 @@ pub struct GasPrice {
     pub fastest: U256,
 }
 
-/// Retrieves gas prices from the Gnosis Safe Relay api.
-///
-/// Uses a timeout of 10 seconds.
-pub fn get_gas_price() -> Result<GasPrice, isahc::Error> {
-    const URL: &str = "https://safe-relay.gnosis.io/api/v1/gas-station/";
-    const TIMEOUT: Duration = Duration::from_secs(10);
-    // It would be more efficient to reuse the client between calls. However, we
-    // only call this function once per batch when submitting a solution so this
-    // is not important at the moment.
-    let client = HttpClient::builder().timeout(TIMEOUT).build()?;
-    client
-        .get(URL)?
-        .json()
-        // It would more accurate to use a distinct error type but reusing this
-        // avoids creating a new enum and implementing `Error` on it.
-        .map_err(|err| isahc::Error::ResponseBodyError(Some(format!("{}", err))))
+#[cfg_attr(test, mockall::automock)]
+pub trait GetGasPrice {
+    /// Retrieves gas prices from the Gnosis Safe Relay api.
+    fn get_gas_price(&self) -> Result<GasPrice>;
+}
+
+pub struct GasStation {
+    client: HttpClient,
+    uri: Uri,
+}
+
+impl GasStation {
+    pub fn new(request_timeout: Duration, api_uri: &str) -> Result<GasStation> {
+        //let uri: Uri = uri.parse()?;
+        let client = HttpClient::builder().timeout(request_timeout).build()?;
+        let uri: Uri = api_uri.parse()?;
+        Ok(GasStation { client, uri })
+    }
+}
+
+impl GetGasPrice for GasStation {
+    fn get_gas_price(&self) -> Result<GasPrice> {
+        Ok(self.client.get(&self.uri)?.json()?)
+    }
 }
 
 fn deserialize_u256_from_string<'de, D>(deserializer: D) -> Result<U256, D::Error>
@@ -82,5 +95,13 @@ pub mod tests {
             fastest: U256::from(1_377_000_000_001u64),
         };
         assert_eq!(serde_json::from_str::<GasPrice>(json).unwrap(), expected);
+    }
+
+    #[test]
+    #[ignore]
+    fn real_request() {
+        let gas_station = GasStation::new(Duration::from_secs(10), DEFAULT_URI).unwrap();
+        let gas_price = gas_station.get_gas_price().unwrap();
+        println!("{:?}", gas_price);
     }
 }

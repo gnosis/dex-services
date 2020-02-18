@@ -13,6 +13,7 @@ mod util;
 
 use crate::contracts::{stablex_contract::BatchExchange, web3_provider};
 use crate::driver::stablex_driver::StableXDriver;
+use crate::gnosis_safe_gas_station::GasStation;
 use crate::metrics::{MetricsServer, StableXMetrics};
 use crate::orderbook::{FilteredOrderbookReader, PaginatedStableXOrderBookReader};
 use crate::price_finding::price_finder_interface::OptimizationModel;
@@ -82,7 +83,12 @@ fn main() {
     info!("Orderbook filter: {:?}", parsed_filter);
     let filtered_orderbook = FilteredOrderbookReader::new(&orderbook, parsed_filter);
 
-    let solution_submitter = StableXSolutionSubmitter::new(&contract);
+    let gas_station = GasStation::new(
+        Duration::from_secs(10),
+        gnosis_safe_gas_station::DEFAULT_URI,
+    )
+    .unwrap();
+    let solution_submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
     let mut driver = StableXDriver::new(
         &mut *price_finder,
         &filtered_orderbook,

@@ -11,7 +11,7 @@ use mockall::automock;
 
 use crate::contracts;
 use crate::error::DriverError;
-use crate::gnosis_safe_gas_station;
+use crate::gnosis_safe_gas_station::GetGasPrice;
 use crate::models::{Order, Solution};
 use crate::util::FutureWaitExt;
 
@@ -70,6 +70,7 @@ pub trait StableXContract {
         orders: Vec<Order>,
         solution: Solution,
         claimed_objective_value: U256,
+        get_gas_price: &(dyn GetGasPrice + 'static),
     ) -> Result<()>;
 }
 
@@ -127,11 +128,12 @@ impl StableXContract for BatchExchange {
         orders: Vec<Order>,
         solution: Solution,
         claimed_objective_value: U256,
+        get_gas_price: &dyn GetGasPrice,
     ) -> Result<()> {
         let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
-        let gas_price = gnosis_safe_gas_station::get_gas_price();
+        let gas_price = get_gas_price.get_gas_price();
         if let Err(ref err) = gas_price {
             log::warn!(
                 "failed to get gas price from gnosis safe gas station: {}",

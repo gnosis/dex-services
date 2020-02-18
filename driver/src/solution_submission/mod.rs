@@ -2,6 +2,7 @@
 
 use crate::contracts::stablex_contract::StableXContract;
 use crate::error::DriverError;
+use crate::gnosis_safe_gas_station::GetGasPrice;
 use crate::models::{Order, Solution};
 
 #[cfg(test)]
@@ -45,11 +46,18 @@ pub trait StableXSolutionSubmitting {
 
 pub struct StableXSolutionSubmitter<'a> {
     contract: &'a dyn StableXContract,
+    get_gas_price: &'a (dyn GetGasPrice + 'static),
 }
 
-impl<'a> StableXSolutionSubmitter<'a> {
-    pub fn new(contract: &'a dyn StableXContract) -> Self {
-        Self { contract }
+impl<'a, 'b> StableXSolutionSubmitter<'a> {
+    pub fn new(
+        contract: &'a dyn StableXContract,
+        get_gas_price: &'a (dyn GetGasPrice + 'static),
+    ) -> Self {
+        Self {
+            contract,
+            get_gas_price,
+        }
     }
 }
 
@@ -71,7 +79,12 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
         solution: Solution,
         claimed_objective_value: U256,
     ) -> Result<()> {
-        self.contract
-            .submit_solution(batch_index, orders, solution, claimed_objective_value)
+        self.contract.submit_solution(
+            batch_index,
+            orders,
+            solution,
+            claimed_objective_value,
+            self.get_gas_price,
+        )
     }
 }
