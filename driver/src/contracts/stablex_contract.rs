@@ -1,10 +1,9 @@
 #![allow(clippy::ptr_arg)] // required for automock
 
 use std::collections::HashMap;
-use std::env;
 
 use ethcontract::transaction::GasPrice;
-use ethcontract::{Address as H160, U256};
+use ethcontract::{Address as H160, PrivateKey, U256};
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
@@ -33,10 +32,11 @@ pub struct StableXContractImpl<'a> {
 impl<'a> StableXContractImpl<'a> {
     pub fn new(
         web3: &contracts::Web3,
+        key: PrivateKey,
         network_id: u64,
         gas_price_estimating: &'a dyn GasPriceEstimating,
     ) -> Result<Self> {
-        let defaults = contracts::method_defaults(network_id)?;
+        let defaults = contracts::method_defaults(key, network_id)?;
 
         let mut instance = BatchExchange::deployed(&web3).wait()?;
         *instance.defaults_mut() = defaults;
