@@ -24,38 +24,44 @@ impl StableXMetrics {
             "dfusion_service_processing_times",
             "timings between different processing stages",
         );
-        let processing_times = IntGaugeVec::new(processing_time_opts, &["stage"]).unwrap();
+        let processing_times =
+            IntGaugeVec::new(processing_time_opts, &[ProcessingStage::LABEL]).unwrap();
         registry
             .register(Box::new(processing_times.clone()))
             .unwrap();
 
         let failure_opts = Opts::new("dfusion_service_failures", "number of auctions failed");
-        let failures = IntCounterVec::new(failure_opts, &["stage"]).unwrap();
+        let failures = IntCounterVec::new(failure_opts, &[ProcessingStage::LABEL]).unwrap();
+        ProcessingStage::initialize_counters(&failures);
         registry.register(Box::new(failures.clone())).unwrap();
 
         let success_opts = Opts::new(
             "dfusion_service_success",
             "number of auctions successfully processed",
         );
-        let successes = IntCounterVec::new(success_opts, &["type"]).unwrap();
+        let successes = IntCounterVec::new(success_opts, &[ProcessingStage::LABEL]).unwrap();
+        ProcessingStage::initialize_counters(&successes);
         registry.register(Box::new(successes.clone())).unwrap();
 
         let order_opts = Opts::new("dfusion_service_orders", "number of orders in a batch");
-        let orders = IntGaugeVec::new(order_opts, &["type"]).unwrap();
+        let orders = IntGaugeVec::new(order_opts, &[BookType::LABEL]).unwrap();
+        BookType::initialize_gauges(&orders);
         registry.register(Box::new(orders.clone())).unwrap();
 
         let token_opts = Opts::new(
             "dfusion_service_tokens",
             "number of distinct tokens in a batch",
         );
-        let tokens = IntGaugeVec::new(token_opts, &["type"]).unwrap();
+        let tokens = IntGaugeVec::new(token_opts, &[BookType::LABEL]).unwrap();
+        BookType::initialize_gauges(&tokens);
         registry.register(Box::new(tokens.clone())).unwrap();
 
         let users_opts = Opts::new(
             "dfusion_service_users",
             "number of distinct users in a batch",
         );
-        let users = IntGaugeVec::new(users_opts, &["type"]).unwrap();
+        let users = IntGaugeVec::new(users_opts, &[BookType::LABEL]).unwrap();
+        BookType::initialize_gauges(&users);
         registry.register(Box::new(users.clone())).unwrap();
 
         Self {
@@ -69,14 +75,14 @@ impl StableXMetrics {
     }
 
     pub fn auction_processing_started(&self, res: &Result<U256, DriverError>) {
-        let label = &["start"];
+        let stage_label = &[ProcessingStage::Started.as_ref()];
         match res {
             Ok(batch) => {
                 self.processing_times
-                    .with_label_values(label)
+                    .with_label_values(stage_label)
                     .set(time_elapsed_since_batch_start(*batch));
             }
-            Err(_) => self.failures.with_label_values(label).inc(),
+            Err(_) => self.failures.with_label_values(stage_label).inc(),
         };
     }
 
@@ -85,23 +91,24 @@ impl StableXMetrics {
         batch: U256,
         res: &Result<(AccountState, Vec<Order>), DriverError>,
     ) {
-        let label = &["orders"];
+        let stage_label = &[ProcessingStage::OrdersFetched.as_ref()];
+        let book_label = &[BookType::Orderbook.as_ref()];
         self.processing_times
-            .with_label_values(label)
+            .with_label_values(stage_label)
             .set(time_elapsed_since_batch_start(batch));
         match res {
             Ok((_, orders)) => {
                 self.orders
-                    .with_label_values(label)
+                    .with_label_values(book_label)
                     .set(orders.len().try_into().unwrap_or(std::i64::MAX));
                 self.tokens
-                    .with_label_values(label)
+                    .with_label_values(book_label)
                     .set(tokens_from_orders(&orders));
                 self.users
-                    .with_label_values(label)
+                    .with_label_values(book_label)
                     .set(users_from_orders(&orders));
             }
-            Err(_) => self.failures.with_label_values(label).inc(),
+            Err(_) => self.failures.with_label_values(stage_label).inc(),
         }
     }
 
@@ -111,9 +118,10 @@ impl StableXMetrics {
         orders: &[Order],
         res: &Result<Solution, PriceFindingError>,
     ) {
-        let label = &["solution"];
+        let stage_label = &[ProcessingStage::Solved.as_ref()];
+        let book_label = &[BookType::Solution.as_ref()];
         self.processing_times
-            .with_label_values(label)
+            .with_label_values(stage_label)
             .set(time_elapsed_since_batch_start(batch));
         match res {
             Ok(solution) => {
@@ -124,47 +132,47 @@ impl StableXMetrics {
                     .map(|(o, _)| o.clone())
                     .collect::<Vec<Order>>();
                 self.orders
-                    .with_label_values(label)
+                    .with_label_values(book_label)
                     .set(touched_orders.len().try_into().unwrap_or(std::i64::MAX));
                 self.tokens
-                    .with_label_values(label)
+                    .with_label_values(book_label)
                     .set(tokens_from_orders(&touched_orders));
                 self.users
-                    .with_label_values(label)
+                    .with_label_values(book_label)
                     .set(users_from_orders(&touched_orders));
             }
-            Err(_) => self.failures.with_label_values(label).inc(),
+            Err(_) => self.failures.with_label_values(stage_label).inc(),
         }
     }
 
     pub fn auction_solution_verified(&self, batch: U256, res: &Result<U256, DriverError>) {
-        let label = &["verification"];
+        let stage_label = &[ProcessingStage::Solved.as_ref()];
         self.processing_times
-            .with_label_values(label)
+            .with_label_values(stage_label)
             .set(time_elapsed_since_batch_start(batch));
         match res {
             Ok(_) => (),
-            Err(_) => self.failures.with_label_values(label).inc(),
+            Err(_) => self.failures.with_label_values(stage_label).inc(),
         }
     }
 
     pub fn auction_solution_submitted(&self, batch: U256, res: &Result<(), DriverError>) {
-        let label = &["submission"];
+        let stage_label = &[ProcessingStage::Submitted.as_ref()];
         self.processing_times
-            .with_label_values(label)
+            .with_label_values(stage_label)
             .set(time_elapsed_since_batch_start(batch));
         match res {
-            Ok(_) => self.successes.with_label_values(label).inc(),
-            Err(_) => self.failures.with_label_values(label).inc(),
+            Ok(_) => self.successes.with_label_values(stage_label).inc(),
+            Err(_) => self.failures.with_label_values(stage_label).inc(),
         }
     }
 
     pub fn auction_skipped(&self, batch: U256) {
-        let label = &["skipped"];
+        let stage_label = &[ProcessingStage::Skipped.as_ref()];
         self.processing_times
-            .with_label_values(label)
+            .with_label_values(stage_label)
             .set(time_elapsed_since_batch_start(batch));
-        self.successes.with_label_values(label).inc();
+        self.successes.with_label_values(stage_label).inc();
     }
 }
 
@@ -193,6 +201,76 @@ fn users_from_orders(orders: &[Order]) -> i64 {
         .len()
         .try_into()
         .unwrap_or(std::i64::MAX)
+}
+
+trait InitializeableMetric: 'static + Sized + AsRef<str> {
+    const LABEL: &'static str;
+    const ALL_STAGES: &'static [Self];
+
+    fn initialize_counters(c: &IntCounterVec) {
+        for stage in Self::ALL_STAGES {
+            c.with_label_values(&[stage.as_ref()]).inc_by(0);
+        }
+    }
+
+    fn initialize_gauges(g: &IntGaugeVec) {
+        for stage in Self::ALL_STAGES {
+            g.with_label_values(&[stage.as_ref()]).set(0);
+        }
+    }
+}
+
+enum ProcessingStage {
+    Started,
+    OrdersFetched,
+    Solved,
+    Verified,
+    Submitted,
+    Skipped,
+}
+
+impl AsRef<str> for ProcessingStage {
+    fn as_ref(&self) -> &'static str {
+        match self {
+            Self::Started => "started",
+            Self::OrdersFetched => "orders_fetched",
+            Self::Solved => "solved",
+            Self::Verified => "verified",
+            Self::Submitted => "submitted",
+            Self::Skipped => "skipped",
+        }
+    }
+}
+
+impl InitializeableMetric for ProcessingStage {
+    const LABEL: &'static str = "stage";
+    const ALL_STAGES: &'static [Self] = &[
+        Self::Started,
+        Self::OrdersFetched,
+        Self::Solved,
+        Self::Verified,
+        Self::Submitted,
+        Self::Skipped,
+    ];
+}
+
+enum BookType {
+    Orderbook,
+    Solution,
+}
+
+impl InitializeableMetric for BookType {
+    const LABEL: &'static str = "type";
+    const ALL_STAGES: &'static [Self] = &[Self::Orderbook, Self::Solution];
+}
+
+impl AsRef<str> for BookType {
+    fn as_ref(&self) -> &'static str {
+        match self {
+            Self::Orderbook => "orderbook",
+            Self::Solution => "solution",
+        }
+    }
 }
 
 #[cfg(test)]

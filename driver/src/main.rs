@@ -110,8 +110,7 @@ fn main() {
     let fee = Some(Fee::default());
     let mut price_finder = util::create_price_finder(fee, options.optimization_model);
 
-    let orderbook =
-        PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size, &web3);
+    let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
     info!("Orderbook filter: {:?}", options.orderbook_filter);
     let filtered_orderbook = FilteredOrderbookReader::new(&orderbook, options.orderbook_filter);
 
