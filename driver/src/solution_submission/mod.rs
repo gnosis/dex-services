@@ -47,7 +47,7 @@ pub struct StableXSolutionSubmitter<'a> {
     contract: &'a dyn StableXContract,
 }
 
-impl<'a, 'b> StableXSolutionSubmitter<'a> {
+impl<'a> StableXSolutionSubmitter<'a> {
     pub fn new(contract: &'a dyn StableXContract) -> Self {
         Self { contract }
     }
