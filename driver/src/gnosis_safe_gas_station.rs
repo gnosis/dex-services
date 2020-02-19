@@ -41,7 +41,6 @@ pub struct GasStation {
 
 impl GasStation {
     pub fn new(request_timeout: Duration, api_uri: &str) -> Result<GasStation> {
-        //let uri: Uri = uri.parse()?;
         let client = HttpClient::builder().timeout(request_timeout).build()?;
         let uri: Uri = api_uri.parse()?;
         Ok(GasStation { client, uri })
