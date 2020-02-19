@@ -44,6 +44,8 @@ fn main() {
 
     // Environment variable parsing
     let filter = env::var("ORDERBOOK_FILTER").unwrap_or_else(|_| String::from("{}"));
+    let backup_token_data =
+        env::var("PRICE_FEED_INFORMATION").unwrap_or_else(|_| String::from("{}"));
     let ethereum_node_url =
         env::var("ETHEREUM_NODE_URL").expect("ETHEREUM_NODE_URL env var not set");
     let network_id = env::var("NETWORK_ID")
@@ -68,7 +70,7 @@ fn main() {
     });
 
     let fee = Some(Fee::default());
-    let mut price_finder = util::create_price_finder(fee, optimization_model);
+    let mut price_finder = util::create_price_finder(fee, optimization_model, &backup_token_data);
 
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, auction_data_page_size());
     let parsed_filter = serde_json::from_str(&filter)

@@ -5,12 +5,23 @@ use crate::price_finding::price_finder_interface::{Fee, OptimizationModel, Price
 use chrono::Utc;
 use ethcontract::Address as H160;
 use log::{debug, error};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::process::Command;
 
 type PriceMap = HashMap<u16, u128>;
+
+#[derive(Clone, Copy, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenInfo {
+    //pub alias: String,
+    pub decimals: u32,
+    pub external_price: u128,
+}
+
+pub type TokenData = HashMap<u16, Option<TokenInfo>>;
 
 mod solver_output {
     use serde::Deserialize;
@@ -33,6 +44,7 @@ mod solver_output {
 }
 
 mod solver_input {
+    use super::{token_id, TokenData};
     use serde::{Serialize, Serializer};
     use std::collections::{BTreeMap, HashMap};
     use std::vec::Vec;
@@ -60,7 +72,7 @@ mod solver_input {
     #[serde(rename_all = "camelCase")]
     pub struct Input {
         #[serde(serialize_with = "ordered_tokens")]
-        pub tokens: Vec<String>,
+        pub tokens: TokenData,
         pub ref_token: String,
         #[serde(serialize_with = "ordered_balances")]
         pub accounts: Accounts,
@@ -68,13 +80,15 @@ mod solver_input {
         pub fee: Option<Fee>,
     }
 
-    fn ordered_tokens<S>(value: &[String], serializer: S) -> Result<S::Ok, S::Error>
+    fn ordered_tokens<S>(value: &TokenData, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut sorted = value.to_owned();
-        sorted.sort();
-        sorted.serialize(serializer)
+        let ordered: BTreeMap<_, _> = value
+            .iter()
+            .map(|(token, token_info)| (token_id(*token), token_info))
+            .collect();
+        ordered.serialize(serializer)
     }
 
     fn ordered_balances<S>(value: &Accounts, serializer: S) -> Result<S::Ok, S::Error>
@@ -104,10 +118,11 @@ pub struct OptimisationPriceFinder {
     read_output: fn(&str) -> std::io::Result<String>,
     fee: Option<Fee>,
     optimization_model: OptimizationModel,
+    token_data: TokenData,
 }
 
 impl OptimisationPriceFinder {
-    pub fn new(fee: Option<Fee>, optimization_model: OptimizationModel) -> Self {
+    pub fn new(fee: Option<Fee>, optimization_model: OptimizationModel, token_data: &str) -> Self {
         create_dir_all("instances").expect("Could not create instance directory");
         OptimisationPriceFinder {
             write_input,
@@ -115,6 +130,7 @@ impl OptimisationPriceFinder {
             read_output,
             fee,
             optimization_model,
+            token_data: deserialize_token_info(token_data),
         }
     }
 }
@@ -127,12 +143,14 @@ fn account_id(account: H160) -> String {
     format!("{:x}", account)
 }
 
-fn serialize_tokens(orders: &[models::Order]) -> Vec<String> {
+fn serialize_tokens(orders: &[models::Order], token_data: TokenData) -> TokenData {
     // Get collection of all token ids appearing in orders
     let mut token_ids = orders.iter().map(|o| o.buy_token).collect::<HashSet<u16>>();
     token_ids.extend(orders.iter().map(|o| o.sell_token));
-
-    token_ids.into_iter().map(token_id).collect::<Vec<String>>()
+    token_ids
+        .iter()
+        .map(|id| (*id, *(token_data.get(id).unwrap_or(&None))))
+        .collect()
 }
 
 fn serialize_balances(
@@ -201,6 +219,15 @@ fn parse_price(price: &Option<String>) -> Result<u128, PriceFindingError> {
     })
 }
 
+fn deserialize_token_info(result: &str) -> TokenData {
+    serde_json::from_str(result)
+        .map_err(|e| {
+            error!("Error parsing token info: {}", &e);
+            e
+        })
+        .unwrap_or_default()
+}
+
 fn deserialize_result(result: String) -> Result<models::Solution, PriceFindingError> {
     let output: solver_output::Output = serde_json::from_str(&result)?;
 
@@ -238,7 +265,7 @@ impl PriceFinding for OptimisationPriceFinder {
         state: &models::AccountState,
     ) -> Result<models::Solution, PriceFindingError> {
         let input = solver_input::Input {
-            tokens: serialize_tokens(&orders),
+            tokens: serialize_tokens(&orders, self.token_data.clone()),
             ref_token: token_id(0),
             accounts: serialize_balances(&state, &orders),
             orders: orders.iter().map(serialize_order).collect(),
@@ -259,7 +286,7 @@ fn write_input(input_file: &str, input: &str) -> std::io::Result<()> {
     let file = File::create(&input_file)?;
     let mut writer = BufWriter::new(file);
     writer.write_all(input.as_bytes())?;
-    debug!("Solver input: {}", input);
+    println!("Solver input: {}", input);
     Ok(())
 }
 
@@ -339,6 +366,18 @@ pub mod tests {
 
     #[test]
     fn test_serialize_tokens() {
+        let mut token_data = HashMap::new();
+        let token_info_1 = Some(TokenInfo {
+            decimals: 18,
+            external_price: 1000000000000000000,
+        });
+        let token_info_2 = Some(TokenInfo {
+            decimals: 13,
+            external_price: 1000000000000000000,
+        });
+        token_data.insert(0, token_info_1);
+        token_data.insert(2, token_info_2);
+
         let orders = [
             models::Order {
                 sell_token: 4,
@@ -351,9 +390,12 @@ pub mod tests {
                 ..models::Order::default()
             },
         ];
-        let mut result = serialize_tokens(&orders);
-        result.sort_unstable();
-        let expected = vec!["T0000", "T0002", "T0004"];
+        let result = serialize_tokens(&orders, token_data.clone());
+        let mut expected = HashMap::new();
+        expected.insert(0, token_info_1);
+        expected.insert(2, token_info_2);
+        expected.insert(4, None);
+
         assert_eq!(result, expected);
     }
 
@@ -573,6 +615,12 @@ pub mod tests {
             token: 0,
             ratio: 0.001,
         };
+        let mut token_data = HashMap::new();
+        let token_info = Some(TokenInfo {
+            decimals: 18,
+            external_price: 1000000000000000000,
+        });
+        token_data.insert(0, token_info);
         let solver = OptimisationPriceFinder {
             write_input: |_, content: &str| {
                 let json: serde_json::value::Value = serde_json::from_str(content).unwrap();
@@ -589,6 +637,7 @@ pub mod tests {
             read_output: |_| Err(std::io::Error::last_os_error()),
             fee: Some(fee),
             optimization_model: OptimizationModel::MIP,
+            token_data,
         };
         let orders = vec![];
         assert!(solver
@@ -624,15 +673,16 @@ pub mod tests {
             "13a0b42b9c180065510615972858bf41d1972a55".to_owned(),
             HashMap::new(),
         );
+        let mut token_data = HashMap::new();
+        let token_info_1 = Some(TokenInfo {
+            decimals: 18,
+            external_price: 1000000000000000000,
+        });
+        token_data.insert(1, token_info_1);
 
         let input = solver_input::Input {
             // tokens should also end up sorted in the end
-            tokens: vec![
-                "T0003".to_owned(),
-                "T0002".to_owned(),
-                "T0001".to_owned(),
-                "T0000".to_owned(),
-            ],
+            tokens: token_data,
             ref_token: "T0000".to_owned(),
             accounts,
             orders: vec![],
@@ -641,7 +691,7 @@ pub mod tests {
         let result = serde_json::to_string(&input).expect("Unable to serialize account state");
         assert_eq!(
             result,
-            r#"{"tokens":["T0000","T0001","T0002","T0003"],"refToken":"T0000","accounts":{"13a0b42b9c180065510615972858bf41d1972a55":{},"4fd7c947ca0aba9d8678885e2b8c4d6a4e946984":{"T0000":"100","T0001":"100","T0002":"100","T0003":"100"},"52a67f22d628c84c1f1e73ebb0e9ae272e302dd9":{}},"orders":[],"fee":null}"#
+            r#"{"tokens":{"T0001":{"decimals":18,"externalPrice":1000000000000000000}},"refToken":"T0000","accounts":{"13a0b42b9c180065510615972858bf41d1972a55":{},"4fd7c947ca0aba9d8678885e2b8c4d6a4e946984":{"T0000":"100","T0001":"100","T0002":"100","T0003":"100"},"52a67f22d628c84c1f1e73ebb0e9ae272e302dd9":{}},"orders":[],"fee":null}"#
         );
     }
 }
