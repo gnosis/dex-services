@@ -225,7 +225,7 @@ fn deserialize_token_info(result: &str) -> TokenData {
             error!("Error parsing token info: {}", &e);
             e
         })
-        .unwrap_or_default()
+        .unwrap()
 }
 
 fn deserialize_result(result: String) -> Result<models::Solution, PriceFindingError> {
