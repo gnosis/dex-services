@@ -14,7 +14,7 @@ use crate::contracts::{stablex_contract::BatchExchange, web3_provider};
 use crate::driver::stablex_driver::StableXDriver;
 use crate::metrics::{MetricsServer, StableXMetrics};
 use crate::orderbook::{FilteredOrderbookReader, PaginatedStableXOrderBookReader};
-use crate::price_finding::price_finder_interface::OptimizationModel;
+use crate::price_finding::price_finder_interface::SolverType;
 use crate::price_finding::Fee;
 use crate::solution_submission::StableXSolutionSubmitter;
 
@@ -51,8 +51,8 @@ fn main() {
         .expect("NETWORK_ID env var not set");
 
     let optimization_model_string: String =
-        env::var("OPTIMIZATION_MODEL").unwrap_or_else(|_| String::from("NAIVE"));
-    let optimization_model = OptimizationModel::from(optimization_model_string.as_str());
+        env::var("SOLVER_TYPE").unwrap_or_else(|_| String::from("NaiveSolver"));
+    let optimization_model = SolverType::from(optimization_model_string.as_str());
 
     let web3 = web3_provider(&ethereum_node_url).unwrap();
     let contract = BatchExchange::new(&web3, network_id).unwrap();

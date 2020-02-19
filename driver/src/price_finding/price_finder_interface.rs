@@ -23,29 +23,33 @@ impl Default for Fee {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-pub enum OptimizationModel {
-    NAIVE,
-    MIP,
-    NLP,
+pub enum SolverType {
+    NaiveSolver,
+    StandardSolver,
+    FallbackSolver,
 }
 
-impl From<&str> for OptimizationModel {
-    fn from(optimization_model_str: &str) -> OptimizationModel {
+impl From<&str> for SolverType {
+    fn from(optimization_model_str: &str) -> SolverType {
         match optimization_model_str.to_lowercase().as_str() {
-            "mip" => OptimizationModel::MIP,
-            "nlp" => OptimizationModel::NLP,
+            "standard-solver" => SolverType::StandardSolver,
+            "fallback-solver" => SolverType::FallbackSolver,
             // the naive solver is the standard solver.
-            _ => OptimizationModel::NAIVE,
+            _ => SolverType::NaiveSolver,
         }
     }
 }
 
-impl OptimizationModel {
+impl SolverType {
     pub fn to_args(self) -> &'static str {
         match self {
-            OptimizationModel::MIP => &"--optModel=mip",
-            OptimizationModel::NLP => &"--optModel=nlp",
-            OptimizationModel::NAIVE => {
+            SolverType::StandardSolver => &"--optModel=mip",
+            // TODO: Allow to hand over several args for the optimizer
+
+            // The fallback solver is also running --optModel=mip, as this is the default value
+            // although it is not handed over in the next line
+            SolverType::FallbackSolver => &"--tokenInfo=scripts/e2e/token_info_mainnet.json",
+            SolverType::NaiveSolver => {
                 panic!("OptimizationSolver should not be called with naive solver")
             }
         }

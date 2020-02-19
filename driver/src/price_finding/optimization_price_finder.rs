@@ -1,6 +1,6 @@
 use crate::models;
 use crate::price_finding::error::{ErrorKind, PriceFindingError};
-use crate::price_finding::price_finder_interface::{Fee, OptimizationModel, PriceFinding};
+use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverType};
 
 use chrono::Utc;
 use ethcontract::Address as H160;
@@ -100,14 +100,14 @@ mod solver_input {
 pub struct OptimisationPriceFinder {
     // default IO methods can be replaced for unit testing
     write_input: fn(&str, &str) -> std::io::Result<()>,
-    run_solver: fn(&str, &str, OptimizationModel) -> Result<(), PriceFindingError>,
+    run_solver: fn(&str, &str, SolverType) -> Result<(), PriceFindingError>,
     read_output: fn(&str) -> std::io::Result<String>,
     fee: Option<Fee>,
-    optimization_model: OptimizationModel,
+    optimization_model: SolverType,
 }
 
 impl OptimisationPriceFinder {
-    pub fn new(fee: Option<Fee>, optimization_model: OptimizationModel) -> Self {
+    pub fn new(fee: Option<Fee>, optimization_model: SolverType) -> Self {
         create_dir_all("instances").expect("Could not create instance directory");
         OptimisationPriceFinder {
             write_input,
@@ -266,7 +266,7 @@ fn write_input(input_file: &str, input: &str) -> std::io::Result<()> {
 fn run_solver(
     input_file: &str,
     result_folder: &str,
-    optimization_model: OptimizationModel,
+    optimization_model: SolverType,
 ) -> Result<(), PriceFindingError> {
     let optimization_model_str = optimization_model.to_args();
     let output = Command::new("python")
@@ -588,7 +588,7 @@ pub mod tests {
             run_solver: |_, _, _| Ok(()),
             read_output: |_| Err(std::io::Error::last_os_error()),
             fee: Some(fee),
-            optimization_model: OptimizationModel::MIP,
+            optimization_model: SolverType::StandardSolver,
         };
         let orders = vec![];
         assert!(solver

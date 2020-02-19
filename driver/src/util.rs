@@ -2,9 +2,7 @@ use ethcontract::U256;
 use log::info;
 use std::future::Future;
 
-use crate::price_finding::{
-    Fee, NaiveSolver, OptimisationPriceFinder, OptimizationModel, PriceFinding,
-};
+use crate::price_finding::{Fee, NaiveSolver, OptimisationPriceFinder, PriceFinding, SolverType};
 
 pub trait CeiledDiv {
     fn ceiled_div(&self, divisor: Self) -> Self;
@@ -40,9 +38,9 @@ impl CheckedConvertU128 for U256 {
 
 pub fn create_price_finder(
     fee: Option<Fee>,
-    optimization_model: OptimizationModel,
+    optimization_model: SolverType,
 ) -> Box<dyn PriceFinding> {
-    if optimization_model == OptimizationModel::NAIVE {
+    if optimization_model == SolverType::NaiveSolver {
         info!("Using naive price finder");
         Box::new(NaiveSolver::new(fee))
     } else {
