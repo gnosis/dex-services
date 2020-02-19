@@ -13,7 +13,8 @@ use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::process::Command;
 
-/// An opaque token ID as understood by the contract.
+/// A token ID wrapper type that implements JSON serialization in the solver
+/// format.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialOrd, PartialEq)]
 pub struct TokenId(pub u16);
 
@@ -41,6 +42,15 @@ impl Serialize for TokenId {
     }
 }
 
+/// A number wrapper type that correctly serializes large u128`s to strings to
+/// avoid precision loss.
+///
+/// The JSON standard specifies that all numbers are `f64`s and converting to
+/// `u128` -> `f64` -> `u128` is lossy. Using a string representation gets
+/// around that issue.
+///
+/// This type should be used together with standard library generic types where
+/// the serialization cannot be controlled.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(transparent)]
 pub struct Num(#[serde(with = "display_fromstr")] pub u128);
@@ -49,17 +59,21 @@ mod solver_output {
     use super::{Num, TokenId};
     use crate::models::Solution;
     use serde::Deserialize;
+    use serde_with::rust::display_fromstr;
     use std::collections::HashMap;
 
+    /// Order executed buy and sell amounts.
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct ExecutedOrder {
-        #[serde(default)]
-        pub exec_sell_amount: Num,
-        #[serde(default)]
-        pub exec_buy_amount: Num,
+        #[serde(default, with = "display_fromstr")]
+        pub exec_sell_amount: u128,
+        #[serde(default, with = "display_fromstr")]
+        pub exec_buy_amount: u128,
     }
 
+    /// Solver solution output format. This format can be converted directly to
+    /// the exchange solution format.
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct Output {
@@ -68,6 +82,7 @@ mod solver_output {
     }
 
     impl Output {
+        /// Convert the solver output to a solution.
         pub fn to_solution(&self) -> Solution {
             let prices = self
                 .prices
@@ -77,12 +92,12 @@ mod solver_output {
             let executed_sell_amounts = self
                 .orders
                 .iter()
-                .map(|order| order.exec_sell_amount.0)
+                .map(|order| order.exec_sell_amount)
                 .collect();
             let executed_buy_amounts = self
                 .orders
                 .iter()
-                .map(|order| order.exec_buy_amount.0)
+                .map(|order| order.exec_buy_amount)
                 .collect();
 
             Solution {
@@ -100,9 +115,15 @@ mod solver_input {
     use crate::price_finding;
     use ethcontract::H160;
     use serde::Serialize;
+    use serde_with::rust::display_fromstr;
     use std::collections::{BTreeMap, BTreeSet};
     use std::vec::Vec;
 
+    /// Fee information using `TokenId` so the JSON serialization format matches
+    /// what is expected by the solver.
+    ///
+    /// This type may be removed if the `crate::price_finding::Fee` is converted
+    /// to use `TokenId` in the future.
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
     pub struct Fee {
@@ -119,6 +140,11 @@ mod solver_input {
         }
     }
 
+    /// Order information using `TokenId` so the JSON serialization format
+    /// matches what is expected by the solver.
+    ///
+    /// This type may be removed if the `crate::modes::Order` is converted to
+    /// use `TokenId` in the future.
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
     pub struct Order {
@@ -126,8 +152,10 @@ mod solver_input {
         pub account_id: H160,
         pub sell_token: TokenId,
         pub buy_token: TokenId,
-        pub sell_amount: Num,
-        pub buy_amount: Num,
+        #[serde(with = "display_fromstr")]
+        pub sell_amount: u128,
+        #[serde(with = "display_fromstr")]
+        pub buy_amount: u128,
     }
 
     impl From<&'_ models::Order> for Order {
@@ -136,14 +164,15 @@ mod solver_input {
                 account_id: order.account_id,
                 sell_token: TokenId(order.sell_token),
                 buy_token: TokenId(order.buy_token),
-                sell_amount: Num(order.sell_amount),
-                buy_amount: Num(order.buy_amount),
+                sell_amount: order.sell_amount,
+                buy_amount: order.buy_amount,
             }
         }
     }
 
     pub type Accounts = BTreeMap<H160, BTreeMap<TokenId, Num>>;
 
+    /// JSON serializable solver input data.
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
     pub struct Input {
