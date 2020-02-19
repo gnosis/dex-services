@@ -34,20 +34,20 @@ pub trait GasPriceEstimating {
     fn estimate_gas_price(&self) -> Result<GasPrice>;
 }
 
-pub struct GasPriceEstimatingImpl {
+pub struct GnosisSafeGasStation {
     client: HttpClient,
     uri: Uri,
 }
 
-impl GasPriceEstimatingImpl {
-    pub fn new(request_timeout: Duration, api_uri: &str) -> Result<GasPriceEstimatingImpl> {
+impl GnosisSafeGasStation {
+    pub fn new(request_timeout: Duration, api_uri: &str) -> Result<GnosisSafeGasStation> {
         let client = HttpClient::builder().timeout(request_timeout).build()?;
         let uri: Uri = api_uri.parse()?;
-        Ok(GasPriceEstimatingImpl { client, uri })
+        Ok(GnosisSafeGasStation { client, uri })
     }
 }
 
-impl GasPriceEstimating for GasPriceEstimatingImpl {
+impl GasPriceEstimating for GnosisSafeGasStation {
     fn estimate_gas_price(&self) -> Result<GasPrice> {
         Ok(self.client.get(&self.uri)?.json()?)
     }
@@ -99,7 +99,7 @@ pub mod tests {
     #[test]
     #[ignore]
     fn real_request() {
-        let gas_station = GasPriceEstimatingImpl::new(Duration::from_secs(10), DEFAULT_URI).unwrap();
+        let gas_station = GnosisSafeGasStation::new(Duration::from_secs(10), DEFAULT_URI).unwrap();
         let gas_price = gas_station.estimate_gas_price().unwrap();
         println!("{:?}", gas_price);
     }

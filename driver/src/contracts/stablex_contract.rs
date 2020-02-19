@@ -10,7 +10,7 @@ use mockall::automock;
 
 use crate::contracts;
 use crate::error::DriverError;
-use crate::gnosis_safe_gas_station::GasPriceEstimating;
+use crate::gas_station::GasPriceEstimating;
 use crate::models::{Order, Solution};
 use crate::util::FutureWaitExt;
 
