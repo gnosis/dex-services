@@ -46,7 +46,7 @@ mod solver_input {
         pub buy_token: String,
         pub sell_amount: String,
         pub buy_amount: String,
-        pub order_id: String,
+        pub order_id: u16,
     }
 
     #[derive(Serialize)]
@@ -171,7 +171,7 @@ fn serialize_order(order: &models::Order) -> solver_input::Order {
         buy_token: token_id(order.buy_token),
         sell_amount: order.sell_amount.to_string(),
         buy_amount: order.buy_amount.to_string(),
-        order_id: order.id.to_string(),
+        order_id: order.id,
     }
 }
 
@@ -337,7 +337,7 @@ pub mod tests {
             result.account_id,
             "0000000000000000000000000000000000000000"
         );
-        assert_eq!(result.order_id, "0");
+        assert_eq!(result.order_id, 0);
     }
 
     #[test]
