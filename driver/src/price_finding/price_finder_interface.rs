@@ -48,7 +48,9 @@ impl SolverType {
 
             // The fallback solver is also running --optModel=mip, as this is the default value
             // although it is not handed over in the next line
-            SolverType::FallbackSolver => &"--tokenInfo=scripts/e2e/token_info_mainnet.json",
+            SolverType::FallbackSolver => {
+                &"--tokenInfo=/app/batchauctions/scripts/e2e/token_info_mainnet.json"
+            }
             SolverType::NaiveSolver => {
                 panic!("OptimizationSolver should not be called with naive solver")
             }
