@@ -1,5 +1,6 @@
 use crate::models;
-use std::convert::From;
+use std::convert::Infallible;
+use std::str::FromStr;
 
 #[cfg(test)]
 use mockall::automock;
@@ -22,30 +23,38 @@ impl Default for Fee {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
-pub enum OptimizationModel {
-    NAIVE,
-    MIP,
-    NLP,
+#[derive(Clone, Debug, Copy, PartialEq)]
+pub enum SolverType {
+    NaiveSolver,
+    StandardSolver,
+    FallbackSolver,
 }
 
-impl From<&str> for OptimizationModel {
-    fn from(optimization_model_str: &str) -> OptimizationModel {
-        match optimization_model_str.to_lowercase().as_str() {
-            "mip" => OptimizationModel::MIP,
-            "nlp" => OptimizationModel::NLP,
+impl FromStr for SolverType {
+    type Err = Infallible;
+
+    fn from_str(solver_type_str: &str) -> Result<Self, Self::Err> {
+        match solver_type_str.to_lowercase().as_str() {
+            "standard-solver" => Ok(SolverType::StandardSolver),
+            "fallback-solver" => Ok(SolverType::FallbackSolver),
             // the naive solver is the standard solver.
-            _ => OptimizationModel::NAIVE,
+            _ => Ok(SolverType::NaiveSolver),
         }
     }
 }
 
-impl OptimizationModel {
+impl SolverType {
     pub fn to_args(self) -> &'static str {
         match self {
-            OptimizationModel::MIP => &"--optModel=mip",
-            OptimizationModel::NLP => &"--optModel=nlp",
-            OptimizationModel::NAIVE => {
+            SolverType::StandardSolver => &"--optModel=mip",
+            // TODO: Allow to hand over several args for the optimizer
+
+            // The fallback solver is also running --optModel=mip, as this is the default value
+            // although it is not handed over in the next line
+            SolverType::FallbackSolver => {
+                &"--tokenInfo=/app/batchauctions/scripts/e2e/token_info_mainnet.json"
+            }
+            SolverType::NaiveSolver => {
                 panic!("OptimizationSolver should not be called with naive solver")
             }
         }

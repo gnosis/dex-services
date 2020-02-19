@@ -23,6 +23,8 @@ slog-envlogger = "2.2.0"
 slog-scope = "4.3.0"
 slog-stdlog = "4.0.0"
 slog-term = "2.5.0"
+structopt = "0.3.9"
+url = "2.1.1"
 
 [dev-dependencies]
 mockall = "0.6.0"
