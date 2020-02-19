@@ -184,7 +184,7 @@ fn parse_token(key: &str) -> Result<u16, PriceFindingError> {
     if key.starts_with('T') {
         return key[1..].parse::<u16>().map_err(|err| {
             PriceFindingError::new(
-                format!("Failed to parse token id: {}", err).as_ref(),
+                format!("Failed to parse token id: {}", err),
                 ErrorKind::ParseIntError,
             )
         });
@@ -306,7 +306,6 @@ pub mod tests {
     use crate::util::test_util::map_from_slice;
     use ethcontract::{H256, U256};
     use serde_json::json;
-    use std::error::Error;
 
     #[test]
     fn test_parse_prices() {
@@ -409,7 +408,7 @@ pub mod tests {
             },
         });
         let err = deserialize_result(json.to_string()).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "Token keys expected to start with \"T\"");
+        assert_eq!(err.details, "Token keys expected to start with \"T\"");
 
         let json = json!({
             "orders": [],
@@ -419,7 +418,7 @@ pub mod tests {
         });
         let err = deserialize_result(json.to_string()).expect_err("Should fail to parse");
         assert_eq!(
-            err.description(),
+            err.details,
             "Failed to parse token id: invalid digit found in string"
         );
 
@@ -431,7 +430,7 @@ pub mod tests {
         });
         let err = deserialize_result(json.to_string()).expect_err("Should fail to parse");
         assert_eq!(
-            err.description(),
+            err.to_string(),
             "Failed to parse token id: number too large to fit in target type"
         );
     }
