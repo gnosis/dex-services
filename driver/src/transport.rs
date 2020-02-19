@@ -67,10 +67,10 @@ impl HttpTransportInner {
         let request = serde_json::to_string(&request)?;
         debug!("[id:{}] sending request: '{}'", id, &request,);
 
-        let (response, content) = self
-            .post_json(request)
-            .await
-            .map_err(|err| Web3Error::Transport(err.to_string()))?;
+        let (response, content) = self.post_json(request).await.map_err(|err| {
+            warn!("[id:{}] returned an error: '{}'", id, err.to_string());
+            Web3Error::Transport(err.to_string())
+        })?;
         if !response.status().is_success() {
             warn!(
                 "[id:{}] HTTP error code {}: '{}' {:?}",

@@ -36,19 +36,16 @@ impl CheckedConvertU128 for U256 {
     }
 }
 
-pub fn create_price_finder(
-    fee: Option<Fee>,
-    optimization_model: SolverType,
-) -> Box<dyn PriceFinding> {
-    if optimization_model == SolverType::NaiveSolver {
+pub fn create_price_finder(fee: Option<Fee>, solver_type: SolverType) -> Box<dyn PriceFinding> {
+    if solver_type == SolverType::NaiveSolver {
         info!("Using naive price finder");
         Box::new(NaiveSolver::new(fee))
     } else {
         info!(
             "Using optimisation price finder with the args {:}",
-            optimization_model.to_args()
+            solver_type.to_args()
         );
-        Box::new(OptimisationPriceFinder::new(fee, optimization_model))
+        Box::new(OptimisationPriceFinder::new(fee, solver_type))
     }
 }
 

@@ -103,18 +103,18 @@ pub struct OptimisationPriceFinder {
     run_solver: fn(&str, &str, SolverType) -> Result<(), PriceFindingError>,
     read_output: fn(&str) -> std::io::Result<String>,
     fee: Option<Fee>,
-    optimization_model: SolverType,
+    solver_type: SolverType,
 }
 
 impl OptimisationPriceFinder {
-    pub fn new(fee: Option<Fee>, optimization_model: SolverType) -> Self {
+    pub fn new(fee: Option<Fee>, solver_type: SolverType) -> Self {
         create_dir_all("instances").expect("Could not create instance directory");
         OptimisationPriceFinder {
             write_input,
             run_solver,
             read_output,
             fee,
-            optimization_model,
+            solver_type,
         }
     }
 }
@@ -248,7 +248,7 @@ impl PriceFinding for OptimisationPriceFinder {
         let input_file = format!("instances/instance_{}.json", &current_time);
         let result_folder = format!("results/instance_{}/", &current_time);
         (self.write_input)(&input_file, &serde_json::to_string(&input)?)?;
-        (self.run_solver)(&input_file, &result_folder, self.optimization_model)?;
+        (self.run_solver)(&input_file, &result_folder, self.solver_type)?;
         let result = (self.read_output)(&result_folder)?;
         let solution = deserialize_result(result)?;
         Ok(solution)
@@ -266,14 +266,14 @@ fn write_input(input_file: &str, input: &str) -> std::io::Result<()> {
 fn run_solver(
     input_file: &str,
     result_folder: &str,
-    optimization_model: SolverType,
+    solver_type: SolverType,
 ) -> Result<(), PriceFindingError> {
-    let optimization_model_str = optimization_model.to_args();
+    let solver_type_str = solver_type.to_args();
     let output = Command::new("python")
         .args(&["-m", "batchauctions.scripts.e2e._run"])
         .arg(result_folder)
         .args(&["--jsonFile", input_file])
-        .args(&[optimization_model_str])
+        .args(&[solver_type_str])
         .output()?;
 
     if !output.status.success() {
@@ -588,7 +588,7 @@ pub mod tests {
             run_solver: |_, _, _| Ok(()),
             read_output: |_| Err(std::io::Error::last_os_error()),
             fee: Some(fee),
-            optimization_model: SolverType::StandardSolver,
+            solver_type: SolverType::StandardSolver,
         };
         let orders = vec![];
         assert!(solver

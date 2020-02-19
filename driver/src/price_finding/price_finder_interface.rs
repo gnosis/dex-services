@@ -1,5 +1,6 @@
 use crate::models;
-use std::convert::From;
+use std::convert::Infallible;
+use std::str::FromStr;
 
 #[cfg(test)]
 use mockall::automock;
@@ -22,20 +23,22 @@ impl Default for Fee {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Debug, Copy, PartialEq)]
 pub enum SolverType {
     NaiveSolver,
     StandardSolver,
     FallbackSolver,
 }
 
-impl From<&str> for SolverType {
-    fn from(optimization_model_str: &str) -> SolverType {
-        match optimization_model_str.to_lowercase().as_str() {
-            "standard-solver" => SolverType::StandardSolver,
-            "fallback-solver" => SolverType::FallbackSolver,
+impl FromStr for SolverType {
+    type Err = Infallible;
+
+    fn from_str(solver_type_str: &str) -> Result<Self, Self::Err> {
+        match solver_type_str.to_lowercase().as_str() {
+            "standard-solver" => Ok(SolverType::StandardSolver),
+            "fallback-solver" => Ok(SolverType::FallbackSolver),
             // the naive solver is the standard solver.
-            _ => SolverType::NaiveSolver,
+            _ => Ok(SolverType::NaiveSolver),
         }
     }
 }
