@@ -27,14 +27,14 @@ include!(concat!(env!("OUT_DIR"), "/batch_exchange.rs"));
 
 pub struct StableXContractImpl<'a> {
     instance: BatchExchange,
-    get_gas_price: &'a dyn GasPriceEstimating,
+    gas_price_estimating: &'a dyn GasPriceEstimating,
 }
 
 impl<'a> StableXContractImpl<'a> {
     pub fn new(
         web3: &contracts::Web3,
         network_id: u64,
-        get_gas_price: &'a dyn GasPriceEstimating,
+        gas_price_estimating: &'a dyn GasPriceEstimating,
     ) -> Result<Self> {
         let defaults = contracts::method_defaults(network_id)?;
 
@@ -43,7 +43,7 @@ impl<'a> StableXContractImpl<'a> {
 
         Ok(StableXContractImpl {
             instance,
-            get_gas_price,
+            gas_price_estimating,
         })
     }
 
@@ -146,7 +146,7 @@ impl<'a> StableXContract for StableXContractImpl<'a> {
         let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
-        let gas_price = self.get_gas_price.get_gas_price();
+        let gas_price = self.gas_price_estimating.estimate_gas_price();
         if let Err(ref err) = gas_price {
             log::warn!(
                 "failed to get gas price from gnosis safe gas station: {}",

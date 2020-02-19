@@ -13,7 +13,7 @@ mod util;
 
 use crate::contracts::{stablex_contract::StableXContractImpl, web3_provider};
 use crate::driver::stablex_driver::StableXDriver;
-use crate::gnosis_safe_gas_station::GasStation;
+use crate::gnosis_safe_gas_station::GasPriceEstimatingImpl;
 use crate::metrics::{MetricsServer, StableXMetrics};
 use crate::orderbook::{FilteredOrderbookReader, PaginatedStableXOrderBookReader};
 use crate::price_finding::price_finder_interface::OptimizationModel;
@@ -57,7 +57,7 @@ fn main() {
     let optimization_model = OptimizationModel::from(optimization_model_string.as_str());
 
     let web3 = web3_provider(&ethereum_node_url).unwrap();
-    let gas_station = GasStation::new(
+    let gas_station = GasPriceEstimatingImpl::new(
         Duration::from_secs(10),
         gnosis_safe_gas_station::DEFAULT_URI,
     )
