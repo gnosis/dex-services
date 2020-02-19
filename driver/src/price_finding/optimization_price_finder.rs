@@ -390,7 +390,7 @@ pub mod tests {
                 ..models::Order::default()
             },
         ];
-        let result = serialize_tokens(&orders, token_data.clone());
+        let result = serialize_tokens(&orders, token_data);
         let mut expected = HashMap::new();
         expected.insert(0, token_info_1);
         expected.insert(2, token_info_2);
