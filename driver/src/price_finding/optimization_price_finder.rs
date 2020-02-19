@@ -13,10 +13,10 @@ use std::process::Command;
 
 type PriceMap = HashMap<u16, u128>;
 
-#[derive(Clone, Copy, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenInfo {
-    //pub alias: String,
+    pub alias: String,
     pub decimals: u32,
     pub external_price: u128,
 }
@@ -122,7 +122,11 @@ pub struct OptimisationPriceFinder {
 }
 
 impl OptimisationPriceFinder {
-    pub fn new(fee: Option<Fee>, optimization_model: OptimizationModel, token_data: &str) -> Self {
+    pub fn new(
+        fee: Option<Fee>,
+        optimization_model: OptimizationModel,
+        token_data: String,
+    ) -> Self {
         create_dir_all("instances").expect("Could not create instance directory");
         OptimisationPriceFinder {
             write_input,
@@ -130,7 +134,7 @@ impl OptimisationPriceFinder {
             read_output,
             fee,
             optimization_model,
-            token_data: deserialize_token_info(token_data),
+            token_data: deserialize_token_info(&token_data),
         }
     }
 }
@@ -149,7 +153,7 @@ fn serialize_tokens(orders: &[models::Order], token_data: TokenData) -> TokenDat
     token_ids.extend(orders.iter().map(|o| o.sell_token));
     token_ids
         .iter()
-        .map(|id| (*id, *(token_data.get(id).unwrap_or(&None))))
+        .map(|id| (*id, (*token_data.get(id).unwrap_or(&None)).clone()))
         .collect()
 }
 
@@ -368,15 +372,17 @@ pub mod tests {
     fn test_serialize_tokens() {
         let mut token_data = HashMap::new();
         let token_info_1 = Some(TokenInfo {
+            alias: String::from("T1"),
             decimals: 18,
             external_price: 1_000_000_000_000_000_000,
         });
         let token_info_2 = Some(TokenInfo {
+            alias: String::from("T2"),
             decimals: 13,
             external_price: 1_000_000_000_000_000_000,
         });
-        token_data.insert(0, token_info_1);
-        token_data.insert(2, token_info_2);
+        token_data.insert(0, token_info_1.clone());
+        token_data.insert(2, token_info_2.clone());
 
         let orders = [
             models::Order {
@@ -617,6 +623,7 @@ pub mod tests {
         };
         let mut token_data = HashMap::new();
         let token_info = Some(TokenInfo {
+            alias: String::from("T1"),
             decimals: 18,
             external_price: 1_000_000_000_000_000_000,
         });
@@ -675,6 +682,7 @@ pub mod tests {
         );
         let mut token_data = HashMap::new();
         let token_info_1 = Some(TokenInfo {
+            alias: String::from("T1"),
             decimals: 18,
             external_price: 1_000_000_000_000_000_000,
         });
@@ -710,7 +718,7 @@ pub mod tests {
         let result = serde_json::to_string(&input).expect("Unable to serialize account state");
         assert_eq!(
             result,
-            r#"{"tokens":{"T0001":null,"T0002":{"decimals":18,"externalPrice":1000000000000000000}},"refToken":"T0000","accounts":{"13a0b42b9c180065510615972858bf41d1972a55":{},"4fd7c947ca0aba9d8678885e2b8c4d6a4e946984":{"T0000":"100","T0001":"100","T0002":"100","T0003":"100"},"52a67f22d628c84c1f1e73ebb0e9ae272e302dd9":{}},"orders":[{"accountID":"0000000000000000000000000000000000000000","sellToken":"T0001","buyToken":"T0002","sellAmount":"100","buyAmount":"200"},{"accountID":"0000000000000000000000000000000000000001","sellToken":"T0002","buyToken":"T0001","sellAmount":"200","buyAmount":"100"}],"fee":null}"#
+            r#"{"tokens":{"T0001":null,"T0002":{"alias":"T1","decimals":18,"externalPrice":1000000000000000000}},"refToken":"T0000","accounts":{"13a0b42b9c180065510615972858bf41d1972a55":{},"4fd7c947ca0aba9d8678885e2b8c4d6a4e946984":{"T0000":"100","T0001":"100","T0002":"100","T0003":"100"},"52a67f22d628c84c1f1e73ebb0e9ae272e302dd9":{}},"orders":[{"accountID":"0000000000000000000000000000000000000000","sellToken":"T0001","buyToken":"T0002","sellAmount":"100","buyAmount":"200"},{"accountID":"0000000000000000000000000000000000000001","sellToken":"T0002","buyToken":"T0001","sellAmount":"200","buyAmount":"100"}],"fee":null}"#
         );
     }
 }

@@ -41,7 +41,7 @@ impl CheckedConvertU128 for U256 {
 pub fn create_price_finder(
     fee: Option<Fee>,
     optimization_model: OptimizationModel,
-    token_data: &str,
+    token_data: String,
 ) -> Box<dyn PriceFinding> {
     if optimization_model == OptimizationModel::NAIVE {
         info!("Using naive price finder");
