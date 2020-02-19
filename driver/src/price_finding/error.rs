@@ -18,17 +18,17 @@ pub struct PriceFindingError {
 
 impl From<std::io::Error> for PriceFindingError {
     fn from(error: std::io::Error) -> Self {
-        PriceFindingError::new(error.description(), ErrorKind::IoError)
+        PriceFindingError::new(error, ErrorKind::IoError)
     }
 }
 impl From<serde_json::Error> for PriceFindingError {
     fn from(error: serde_json::Error) -> Self {
-        PriceFindingError::new(error.description(), ErrorKind::JsonError)
+        PriceFindingError::new(error, ErrorKind::JsonError)
     }
 }
 impl From<std::num::ParseIntError> for PriceFindingError {
     fn from(error: std::num::ParseIntError) -> Self {
-        PriceFindingError::new(error.description(), ErrorKind::ParseIntError)
+        PriceFindingError::new(error, ErrorKind::ParseIntError)
     }
 }
 impl From<&str> for PriceFindingError {
@@ -38,7 +38,7 @@ impl From<&str> for PriceFindingError {
 }
 
 impl PriceFindingError {
-    pub fn new(msg: &str, kind: ErrorKind) -> PriceFindingError {
+    pub fn new(msg: impl ToString, kind: ErrorKind) -> PriceFindingError {
         PriceFindingError {
             details: msg.to_string(),
             kind,
