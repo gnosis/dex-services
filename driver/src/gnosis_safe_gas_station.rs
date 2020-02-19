@@ -29,9 +29,9 @@ pub struct GasPrice {
 }
 
 #[cfg_attr(test, mockall::automock)]
-pub trait GetGasPrice {
+pub trait GasPriceEstimating {
     /// Retrieves gas prices from the Gnosis Safe Relay api.
-    fn get_gas_price(&self) -> Result<GasPrice>;
+    fn estimate_gas_price(&self) -> Result<GasPrice>;
 }
 
 pub struct GasStation {
@@ -47,8 +47,8 @@ impl GasStation {
     }
 }
 
-impl GetGasPrice for GasStation {
-    fn get_gas_price(&self) -> Result<GasPrice> {
+impl GasPriceEstimating for GasStation {
+    fn estimate_gas_price(&self) -> Result<GasPrice> {
         Ok(self.client.get(&self.uri)?.json()?)
     }
 }

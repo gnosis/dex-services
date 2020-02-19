@@ -11,7 +11,7 @@ use mockall::automock;
 
 use crate::contracts;
 use crate::error::DriverError;
-use crate::gnosis_safe_gas_station::GetGasPrice;
+use crate::gnosis_safe_gas_station::GasPriceEstimating;
 use crate::models::{Order, Solution};
 use crate::util::FutureWaitExt;
 
@@ -25,22 +25,39 @@ lazy_static! {
 
 include!(concat!(env!("OUT_DIR"), "/batch_exchange.rs"));
 
-impl BatchExchange {
-    pub fn new(web3: &contracts::Web3, network_id: u64) -> Result<Self> {
+pub struct StableXContractImpl<'a> {
+    instance: BatchExchange,
+    get_gas_price: &'a dyn GasPriceEstimating,
+}
+
+impl<'a> StableXContractImpl<'a> {
+    pub fn new(
+        web3: &contracts::Web3,
+        network_id: u64,
+        get_gas_price: &'a dyn GasPriceEstimating,
+    ) -> Result<Self> {
         let defaults = contracts::method_defaults(network_id)?;
 
         let mut instance = BatchExchange::deployed(&web3).wait()?;
         *instance.defaults_mut() = defaults;
 
-        Ok(instance)
+        Ok(StableXContractImpl {
+            instance,
+            get_gas_price,
+        })
     }
 
     pub fn account(&self) -> H160 {
-        self.defaults()
+        self.instance
+            .defaults()
             .from
             .as_ref()
             .map(|from| from.address())
             .unwrap_or_default()
+    }
+
+    pub fn instance(&self) -> &BatchExchange {
+        &self.instance
     }
 }
 
@@ -69,13 +86,12 @@ pub trait StableXContract {
         orders: Vec<Order>,
         solution: Solution,
         claimed_objective_value: U256,
-        get_gas_price: &(dyn GetGasPrice + 'static),
     ) -> Result<()>;
 }
 
-impl StableXContract for BatchExchange {
+impl<'a> StableXContract for StableXContractImpl<'a> {
     fn get_current_auction_index(&self) -> Result<U256> {
-        let auction_index = self.get_current_batch_id().call().wait()?;
+        let auction_index = self.instance.get_current_batch_id().call().wait()?;
         Ok(auction_index.into())
     }
 
@@ -85,7 +101,7 @@ impl StableXContract for BatchExchange {
         previous_page_user: H160,
         previous_page_user_offset: u16,
     ) -> Result<Vec<u8>> {
-        let mut orders_builder = self.get_encoded_users_paginated(
+        let mut orders_builder = self.instance.get_encoded_users_paginated(
             previous_page_user,
             previous_page_user_offset,
             page_size,
@@ -104,6 +120,7 @@ impl StableXContract for BatchExchange {
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
         let objective_value = self
+            .instance
             .submit_solution(
                 batch_index.low_u32(),
                 *MAX_OBJECTIVE_VALUE,
@@ -125,34 +142,34 @@ impl StableXContract for BatchExchange {
         orders: Vec<Order>,
         solution: Solution,
         claimed_objective_value: U256,
-        get_gas_price: &dyn GetGasPrice,
     ) -> Result<()> {
         let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
-        let gas_price = get_gas_price.get_gas_price();
+        let gas_price = self.get_gas_price.get_gas_price();
         if let Err(ref err) = gas_price {
             log::warn!(
                 "failed to get gas price from gnosis safe gas station: {}",
                 err
             );
         }
-        self.submit_solution(
-            batch_index.low_u32(),
-            claimed_objective_value,
-            owners,
-            order_ids,
-            volumes,
-            prices,
-            token_ids_for_price,
-        )
-        .gas_price(
-            gas_price
-                .map(|gas_price| GasPrice::Value(gas_price.fast))
-                .unwrap_or(GasPrice::Scaled(3.0)),
-        )
-        .send()
-        .wait()?;
+        self.instance
+            .submit_solution(
+                batch_index.low_u32(),
+                claimed_objective_value,
+                owners,
+                order_ids,
+                volumes,
+                prices,
+                token_ids_for_price,
+            )
+            .gas_price(
+                gas_price
+                    .map(|gas_price| GasPrice::Value(gas_price.fast))
+                    .unwrap_or(GasPrice::Scaled(3.0)),
+            )
+            .send()
+            .wait()?;
 
         Ok(())
     }

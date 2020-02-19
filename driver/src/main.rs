@@ -11,7 +11,7 @@ mod solution_submission;
 mod transport;
 mod util;
 
-use crate::contracts::{stablex_contract::BatchExchange, web3_provider};
+use crate::contracts::{stablex_contract::StableXContractImpl, web3_provider};
 use crate::driver::stablex_driver::StableXDriver;
 use crate::gnosis_safe_gas_station::GasStation;
 use crate::metrics::{MetricsServer, StableXMetrics};
@@ -57,8 +57,13 @@ fn main() {
     let optimization_model = OptimizationModel::from(optimization_model_string.as_str());
 
     let web3 = web3_provider(&ethereum_node_url).unwrap();
-    let contract = BatchExchange::new(&web3, network_id).unwrap();
-    info!("Using contract at {}", contract.address());
+    let gas_station = GasStation::new(
+        Duration::from_secs(10),
+        gnosis_safe_gas_station::DEFAULT_URI,
+    )
+    .unwrap();
+    let contract = StableXContractImpl::new(&web3, network_id, &gas_station).unwrap();
+    info!("Using contract at {}", contract.instance().address());
     info!("Using account {}", contract.account());
 
     // Set up metrics and serve in separate thread
@@ -82,12 +87,7 @@ fn main() {
     info!("Orderbook filter: {:?}", parsed_filter);
     let filtered_orderbook = FilteredOrderbookReader::new(&orderbook, parsed_filter);
 
-    let gas_station = GasStation::new(
-        Duration::from_secs(10),
-        gnosis_safe_gas_station::DEFAULT_URI,
-    )
-    .unwrap();
-    let solution_submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
+    let solution_submitter = StableXSolutionSubmitter::new(&contract);
     let mut driver = StableXDriver::new(
         &mut *price_finder,
         &filtered_orderbook,
