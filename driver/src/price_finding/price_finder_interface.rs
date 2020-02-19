@@ -1,5 +1,6 @@
 use crate::models;
-use std::convert::From;
+use std::convert::Infallible;
+use std::str::FromStr;
 
 #[cfg(test)]
 use mockall::automock;
@@ -22,20 +23,22 @@ impl Default for Fee {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum OptimizationModel {
     NAIVE,
     MIP,
     NLP,
 }
 
-impl From<&str> for OptimizationModel {
-    fn from(optimization_model_str: &str) -> OptimizationModel {
+impl FromStr for OptimizationModel {
+    type Err = Infallible;
+
+    fn from_str(optimization_model_str: &str) -> Result<Self, Self::Err> {
         match optimization_model_str.to_lowercase().as_str() {
-            "mip" => OptimizationModel::MIP,
-            "nlp" => OptimizationModel::NLP,
+            "mip" => Ok(OptimizationModel::MIP),
+            "nlp" => Ok(OptimizationModel::NLP),
             // the naive solver is the standard solver.
-            _ => OptimizationModel::NAIVE,
+            _ => Ok(OptimizationModel::NAIVE),
         }
     }
 }

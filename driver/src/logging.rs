@@ -3,23 +3,14 @@ use slog_async::Async;
 use slog_envlogger::LogBuilder;
 use slog_scope::GlobalLoggerGuard;
 use slog_term::{Decorator, TermDecorator};
-use std::env;
-
-/// The logging filter environment variable key.
-const FILTER_KEY: &str = "DFUSION_LOG";
-
-/// The default log message filter to pass into the `env_logger` when none is
-/// supplied by the environment.
-const DEFAULT_FILTER: &str = "info";
 
 /// The channel size for async logging.
 const BUFFER_SIZE: usize = 1024;
 
 /// Initialize driver logging.
-pub fn init() -> (Logger, GlobalLoggerGuard) {
-    let filter = env::var(FILTER_KEY).unwrap_or_else(|_| DEFAULT_FILTER.to_owned());
+pub fn init(filter: impl AsRef<str>) -> (Logger, GlobalLoggerGuard) {
     let format = CustomFormatter::new(TermDecorator::new().stderr().build()).fuse();
-    let drain = Async::new(LogBuilder::new(format).parse(&filter).build())
+    let drain = Async::new(LogBuilder::new(format).parse(filter.as_ref()).build())
         .chan_size(BUFFER_SIZE)
         .build();
     let logger = Logger::root(drain.fuse(), o!());

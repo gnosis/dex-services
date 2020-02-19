@@ -4,9 +4,10 @@ use crate::models::{AccountState, Order};
 use ethcontract::{Address as H160, U256};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
+use std::str::FromStr;
 
 /// Data structure to specify what type of orders to filter
-#[derive(Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 pub struct OrderbookFilter {
     /// The token ids that should be filtered/
     #[serde(default)]
@@ -21,6 +22,14 @@ pub struct OrderbookFilter {
 enum UserOrderFilter {
     All,
     OrderIds(HashSet<u16>),
+}
+
+impl FromStr for OrderbookFilter {
+    type Err = DriverError;
+
+    fn from_str(value: &str) -> Result<Self> {
+        Ok(serde_json::from_str(value)?)
+    }
 }
 
 pub struct FilteredOrderbookReader<'a> {
