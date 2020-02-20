@@ -47,8 +47,10 @@ impl Token {
 /// such as an exchange.
 #[cfg_attr(test, mockall::automock)]
 trait PriceSource {
-    /// Retrieve current prices for the current tokens. Returns a sparce price
-    /// array as being unable to find a price is not considered an error.
+    /// Retrieve current prices relative to the OWL token for the specified
+    /// tokens. The OWL token is peged at 1 USD with 18 decimals. Returns a
+    /// sparce price array as being unable to find a price is not considered an
+    /// error.
     fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>>;
 }
 
