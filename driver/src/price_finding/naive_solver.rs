@@ -112,11 +112,7 @@ impl NaiveSolver {
 }
 
 impl PriceFinding for NaiveSolver {
-    fn find_prices(
-        &self,
-        orders: &[Order],
-        state: &AccountState,
-    ) -> Result<Solution> {
+    fn find_prices(&self, orders: &[Order], state: &AccountState) -> Result<Solution> {
         // Initialize trivial solution (default of zero indicates untouched token).
         let mut prices = HashMap::new();
         let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];

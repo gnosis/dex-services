@@ -188,7 +188,9 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.expect_get_auction_index().returning(move || Ok(batch));
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
@@ -258,7 +260,9 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.expect_get_auction_index().returning(move || Ok(batch));
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
@@ -297,7 +301,9 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.expect_get_auction_index().returning(move || Ok(batch));
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
@@ -319,7 +325,9 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.expect_get_auction_index().returning(move || Ok(batch));
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
@@ -349,7 +357,9 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.expect_get_auction_index().returning(move || Ok(batch));
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
@@ -381,7 +391,9 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.expect_get_auction_index().returning(move || Ok(batch));
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
@@ -421,7 +433,9 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.expect_get_auction_index().returning(move || Ok(batch));
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
@@ -465,7 +479,9 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.expect_get_auction_index().returning(move || Ok(batch));
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()

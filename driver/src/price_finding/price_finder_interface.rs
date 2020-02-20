@@ -2,9 +2,9 @@ use crate::models;
 use std::convert::Infallible;
 use std::str::FromStr;
 
+use anyhow::Error;
 #[cfg(test)]
 use mockall::automock;
-use anyhow::Error;
 
 #[derive(Clone)]
 pub struct Fee {
