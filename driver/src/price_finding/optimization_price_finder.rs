@@ -59,17 +59,16 @@ mod solver_output {
     use super::{Num, TokenId};
     use crate::models::Solution;
     use serde::Deserialize;
-    use serde_with::rust::display_fromstr;
     use std::collections::HashMap;
 
     /// Order executed buy and sell amounts.
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct ExecutedOrder {
-        #[serde(default, with = "display_fromstr")]
-        pub exec_sell_amount: u128,
-        #[serde(default, with = "display_fromstr")]
-        pub exec_buy_amount: u128,
+        #[serde(default)]
+        pub exec_sell_amount: Num,
+        #[serde(default)]
+        pub exec_buy_amount: Num,
     }
 
     /// Solver solution output format. This format can be converted directly to
@@ -92,12 +91,12 @@ mod solver_output {
             let executed_sell_amounts = self
                 .orders
                 .iter()
-                .map(|order| order.exec_sell_amount)
+                .map(|order| order.exec_sell_amount.0)
                 .collect();
             let executed_buy_amounts = self
                 .orders
                 .iter()
-                .map(|order| order.exec_buy_amount)
+                .map(|order| order.exec_buy_amount.0)
                 .collect();
 
             Solution {
@@ -115,7 +114,6 @@ mod solver_input {
     use crate::price_finding;
     use ethcontract::H160;
     use serde::Serialize;
-    use serde_with::rust::display_fromstr;
     use std::collections::{BTreeMap, BTreeSet};
     use std::vec::Vec;
 
@@ -152,10 +150,8 @@ mod solver_input {
         pub account_id: H160,
         pub sell_token: TokenId,
         pub buy_token: TokenId,
-        #[serde(with = "display_fromstr")]
-        pub sell_amount: u128,
-        #[serde(with = "display_fromstr")]
-        pub buy_amount: u128,
+        pub sell_amount: Num,
+        pub buy_amount: Num,
     }
 
     impl From<&'_ models::Order> for Order {
@@ -164,8 +160,8 @@ mod solver_input {
                 account_id: order.account_id,
                 sell_token: TokenId(order.sell_token),
                 buy_token: TokenId(order.buy_token),
-                sell_amount: order.sell_amount,
-                buy_amount: order.buy_amount,
+                sell_amount: Num(order.sell_amount),
+                buy_amount: Num(order.buy_amount),
             }
         }
     }
