@@ -14,9 +14,9 @@ use crate::contracts::{stablex_contract::BatchExchange, web3_provider};
 use crate::driver::stablex_driver::StableXDriver;
 use crate::metrics::{MetricsServer, StableXMetrics};
 use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
+use crate::price_finding::optimization_price_finder::TokenData;
 use crate::price_finding::price_finder_interface::SolverType;
 
-use crate::price_finding::optimization_price_finder::deserialize_token_info;
 use crate::price_finding::Fee;
 
 use crate::solution_submission::StableXSolutionSubmitter;
@@ -61,7 +61,7 @@ struct Options {
     solver_type: SolverType,
 
     #[structopt(long, env = "PRICE_FEED_INFORMATION", default_value = "{}")]
-    backup_token_data: String,
+    backup_token_data: TokenData,
 
     /// JSON encoded object of which tokens/orders to ignore.
     ///
@@ -112,11 +112,8 @@ fn main() {
     });
 
     let fee = Some(Fee::default());
-    let mut price_finder = util::create_price_finder(
-        fee,
-        options.solver_type,
-        deserialize_token_info(&options.backup_token_data),
-    );
+    let mut price_finder =
+        util::create_price_finder(fee, options.solver_type, options.backup_token_data);
 
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
     info!("Orderbook filter: {:?}", options.orderbook_filter);
