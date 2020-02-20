@@ -61,7 +61,7 @@ pub struct Num(#[serde(with = "display_fromstr")] pub u128);
 #[serde(rename_all = "camelCase")]
 pub struct TokenInfo {
     alias: String,
-    decimals: u32,
+    decimals: u8,
     external_price: u128,
 }
 
