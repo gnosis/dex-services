@@ -3,6 +3,7 @@ use isahc::prelude::*;
 use serde::Deserialize;
 use serde_with::rust::display_fromstr;
 use std::collections::HashMap;
+use std::time::Duration;
 
 /// A trait representing a Kraken API client.
 ///
@@ -29,15 +30,21 @@ pub struct KrakenHttpApi {
 }
 
 /// The default Kraken API base URL.
-const DEFAULT_API_BASE_URL: &str = "https://api.kraken.com/0/public";
+pub const DEFAULT_API_BASE_URL: &str = "https://api.kraken.com/0/public";
+
+/// The default timeout used for HTTP requests to Kraken.
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
 impl KrakenHttpApi {
     pub fn new() -> Result<Self> {
-        KrakenHttpApi::with_url(DEFAULT_API_BASE_URL)
+        KrakenHttpApi::with_url(DEFAULT_API_BASE_URL, DEFAULT_TIMEOUT)
     }
 
-    pub fn with_url(base_url: &str) -> Result<Self> {
-        let client = HttpClient::new().context("failed to initialize HTTP client")?;
+    pub fn with_url(base_url: &str, timeout: Duration) -> Result<Self> {
+        let client = HttpClient::builder()
+            .timeout(timeout)
+            .build()
+            .context("failed to initialize HTTP client")?;
         Ok(KrakenHttpApi {
             base_url: base_url.into(),
             client,
@@ -108,7 +115,7 @@ pub struct Asset {
 impl Asset {
     /// Create a new asset from an alternate name.
     #[cfg(test)]
-    pub(crate) fn new(altname: &str) -> Asset {
+    pub fn new(altname: &str) -> Asset {
         Asset {
             altname: altname.into(),
         }
@@ -130,7 +137,7 @@ pub struct AssetPair {
 impl AssetPair {
     /// Create a new asset pair from base and quote assets.
     #[cfg(test)]
-    pub(crate) fn new(base: &str, quote: &str) -> AssetPair {
+    pub fn new(base: &str, quote: &str) -> AssetPair {
         AssetPair {
             base: base.into(),
             quote: quote.into(),
@@ -153,7 +160,7 @@ pub struct TickerInfo {
 impl TickerInfo {
     /// Create a new ticker info from its price pair.
     #[cfg(test)]
-    pub(crate) fn new(today: f64, last_24h: f64) -> TickerInfo {
+    pub fn new(today: f64, last_24h: f64) -> TickerInfo {
         TickerInfo {
             p: PricePair(today, last_24h),
         }
