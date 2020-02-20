@@ -1,3 +1,6 @@
+#[macro_use]
+mod macros;
+
 mod contracts;
 mod driver;
 mod error;
@@ -5,6 +8,7 @@ mod logging;
 mod metrics;
 mod models;
 mod orderbook;
+mod price_estimation;
 mod price_finding;
 mod solution_submission;
 mod transport;
