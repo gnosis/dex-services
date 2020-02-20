@@ -3,6 +3,8 @@
 
 #[allow(dead_code)]
 mod kraken;
+#[allow(dead_code)]
+mod tokens;
 
 pub use crate::price_finding::TokenId;
 use anyhow::Result;
@@ -41,6 +43,13 @@ impl Token {
             decimals,
         }
     }
+}
+
+/// A reader for retrieving ERC20 token information from the block-chain.
+#[cfg_attr(test, mockall::automock)]
+trait TokenReading {
+    /// Reads a token given its index in the exchange contract.
+    fn read_token(&self, index: u16) -> Result<Token>;
 }
 
 /// An abstraction around a type that retrieves price estimate from a source

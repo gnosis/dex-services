@@ -24,6 +24,12 @@ lazy_static! {
 
 include!(concat!(env!("OUT_DIR"), "/batch_exchange.rs"));
 
+impl BatchExchange {
+    pub fn web3(&self) -> ethcontract::DynWeb3 {
+        self.instance.web3()
+    }
+}
+
 pub struct StableXContractImpl<'a> {
     instance: BatchExchange,
     gas_price_estimating: &'a dyn GasPriceEstimating,

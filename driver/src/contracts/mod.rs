@@ -1,3 +1,4 @@
+pub mod erc20;
 pub mod stablex_auction_element;
 pub mod stablex_contract;
 
