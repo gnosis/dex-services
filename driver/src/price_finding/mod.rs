@@ -1,4 +1,3 @@
-pub mod error;
 pub mod naive_solver;
 pub mod optimization_price_finder;
 pub mod price_finder_interface;

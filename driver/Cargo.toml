@@ -29,7 +29,7 @@ uint = "0.8"
 structopt = "0.3.9"
 url = "2.1.1"
 
-[dev-dependencies]
+#[dev-dependencies]
 mockall = "0.6.0"
 
 [build-dependencies]

@@ -1,6 +1,7 @@
 use super::*;
 
 use crate::models::{AccountState, Order};
+use anyhow::Error;
 use ethcontract::{Address as H160, U256};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -25,7 +26,7 @@ enum UserOrderFilter {
 }
 
 impl FromStr for OrderbookFilter {
-    type Err = DriverError;
+    type Err = Error;
 
     fn from_str(value: &str) -> Result<Self> {
         Ok(serde_json::from_str(value)?)
@@ -124,15 +125,18 @@ mod test {
         mixed_user_bad_order.id = 1;
 
         let mut inner = MockStableXOrderBookReading::default();
-        inner.expect_get_auction_data().return_const(Ok((
-            AccountState::default(),
-            vec![
-                bad_buy_token.clone(),
-                bad_sell_token.clone(),
-                mixed_user_bad_order,
-                mixed_user_good_order.clone(),
-            ],
-        )));
+        inner.expect_get_auction_data().return_once({
+            let result = (
+                AccountState::default(),
+                vec![
+                    bad_buy_token.clone(),
+                    bad_sell_token.clone(),
+                    mixed_user_bad_order,
+                    mixed_user_good_order.clone(),
+                ],
+            );
+            move |_| Ok(result)
+        });
 
         let filter = OrderbookFilter {
             tokens: [bad_sell_token.sell_token, bad_buy_token.buy_token]

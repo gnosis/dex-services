@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use anyhow::Result;
 use ethcontract::transaction::GasPrice;
 use ethcontract::{Address as H160, PrivateKey, U256};
 use lazy_static::lazy_static;
@@ -9,12 +10,9 @@ use lazy_static::lazy_static;
 use mockall::automock;
 
 use crate::contracts;
-use crate::error::DriverError;
 use crate::gas_station::GasPriceEstimating;
 use crate::models::{Order, Solution};
 use crate::util::FutureWaitExt;
-
-type Result<T> = std::result::Result<T, DriverError>;
 
 lazy_static! {
     // In the BatchExchange smart contract, the objective value will be multiplied by

@@ -3,7 +3,6 @@ mod macros;
 
 mod contracts;
 mod driver;
-mod error;
 mod gas_station;
 mod logging;
 mod metrics;
@@ -34,6 +33,13 @@ use std::thread;
 use std::time::Duration;
 use structopt::StructOpt;
 use url::Url;
+
+
+#[mockall::automock]
+pub trait Foo {
+    fn bar(i: i32) -> f64;
+    fn baz(i: i32);
+}
 
 #[derive(Debug, StructOpt)]
 #[structopt(

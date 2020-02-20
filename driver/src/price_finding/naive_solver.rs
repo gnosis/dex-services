@@ -1,10 +1,10 @@
 use crate::models::{AccountState, Order, Solution};
-use crate::price_finding::error::PriceFindingError;
 use crate::price_finding::price_finder_interface::{Fee, PriceFinding};
 use crate::util::{CeiledDiv, CheckedConvertU128};
 
 use std::collections::HashMap;
 
+use anyhow::Result;
 use ethcontract::U256;
 
 const BASE_UNIT: u128 = 1_000_000_000_000_000_000u128;
@@ -116,7 +116,7 @@ impl PriceFinding for NaiveSolver {
         &self,
         orders: &[Order],
         state: &AccountState,
-    ) -> Result<Solution, PriceFindingError> {
+    ) -> Result<Solution> {
         // Initialize trivial solution (default of zero indicates untouched token).
         let mut prices = HashMap::new();
         let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];

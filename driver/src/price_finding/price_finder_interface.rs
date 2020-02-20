@@ -4,8 +4,7 @@ use std::str::FromStr;
 
 #[cfg(test)]
 use mockall::automock;
-
-use super::error::PriceFindingError;
+use anyhow::Error;
 
 #[derive(Clone)]
 pub struct Fee {
@@ -67,5 +66,5 @@ pub trait PriceFinding {
         &self,
         orders: &[models::Order],
         state: &models::AccountState,
-    ) -> Result<models::Solution, PriceFindingError>;
+    ) -> Result<models::Solution, Error>;
 }
