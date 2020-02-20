@@ -473,6 +473,7 @@ checksum = "4bb454f0228b18c7f4c3b0ebbee346ed9c52e7443b0999cd543ff3571205701d"
 name = "driver"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "byteorder",
  "chrono",
  "ethcontract",
@@ -495,6 +496,7 @@ dependencies = [
  "slog-stdlog",
  "slog-term",
  "structopt",
+ "uint",
  "url 2.1.1",
 ]
 
