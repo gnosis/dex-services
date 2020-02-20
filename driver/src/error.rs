@@ -21,13 +21,13 @@ pub enum ErrorKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DriverError {
-    details: String,
+    pub details: String,
     pub kind: ErrorKind,
 }
 
 impl From<std::io::Error> for DriverError {
     fn from(error: std::io::Error) -> Self {
-        DriverError::new(error.description(), ErrorKind::IoError)
+        DriverError::new(error, ErrorKind::IoError)
     }
 }
 
@@ -39,25 +39,25 @@ impl From<ethcontract::web3::Error> for DriverError {
 
 impl From<serde_json::Error> for DriverError {
     fn from(error: serde_json::Error) -> Self {
-        DriverError::new(error.description(), ErrorKind::JsonError)
+        DriverError::new(error, ErrorKind::JsonError)
     }
 }
 
 impl From<rustc_hex::FromHexError> for DriverError {
     fn from(error: rustc_hex::FromHexError) -> Self {
-        DriverError::new(error.description(), ErrorKind::HexError)
+        DriverError::new(error, ErrorKind::HexError)
     }
 }
 
 impl From<std::env::VarError> for DriverError {
     fn from(error: std::env::VarError) -> Self {
-        DriverError::new(error.description(), ErrorKind::EnvError)
+        DriverError::new(error, ErrorKind::EnvError)
     }
 }
 
 impl From<std::num::ParseIntError> for DriverError {
     fn from(error: std::num::ParseIntError) -> Self {
-        DriverError::new(error.description(), ErrorKind::ParseIntError)
+        DriverError::new(error, ErrorKind::ParseIntError)
     }
 }
 
@@ -69,36 +69,36 @@ impl From<&str> for DriverError {
 
 impl From<PriceFindingError> for DriverError {
     fn from(error: PriceFindingError) -> Self {
-        DriverError::new(&format!("{}", error), ErrorKind::PriceFindingError)
+        DriverError::new(format!("{}", error), ErrorKind::PriceFindingError)
     }
 }
 
 impl From<ethcontract::errors::InvalidPrivateKey> for DriverError {
     fn from(error: ethcontract::errors::InvalidPrivateKey) -> Self {
-        DriverError::new(&error.to_string(), ErrorKind::PrivateKeyError)
+        DriverError::new(error, ErrorKind::PrivateKeyError)
     }
 }
 
 impl From<ethcontract::errors::DeployError> for DriverError {
     fn from(error: ethcontract::errors::DeployError) -> Self {
-        DriverError::new(&error.to_string(), ErrorKind::ContractDeployedError)
+        DriverError::new(error, ErrorKind::ContractDeployedError)
     }
 }
 
 impl From<ethcontract::errors::MethodError> for DriverError {
     fn from(error: ethcontract::errors::MethodError) -> Self {
-        DriverError::new(&error.to_string(), ErrorKind::ContractMethodError)
+        DriverError::new(error, ErrorKind::ContractMethodError)
     }
 }
 
 impl From<isahc::Error> for DriverError {
     fn from(error: isahc::Error) -> Self {
-        DriverError::new(&error.to_string(), ErrorKind::HttpError)
+        DriverError::new(error, ErrorKind::HttpError)
     }
 }
 
 impl DriverError {
-    pub fn new(msg: &str, kind: ErrorKind) -> DriverError {
+    pub fn new(msg: impl ToString, kind: ErrorKind) -> DriverError {
         DriverError {
             details: msg.to_string(),
             kind,
@@ -112,8 +112,4 @@ impl fmt::Display for DriverError {
     }
 }
 
-impl Error for DriverError {
-    fn description(&self) -> &str {
-        &self.details
-    }
-}
+impl Error for DriverError {}
