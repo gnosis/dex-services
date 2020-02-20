@@ -61,7 +61,11 @@ impl<'a> StableXContractImpl<'a> {
 
 #[cfg_attr(test, automock)]
 pub trait StableXContract {
+    /// Retrieve the address of a token by ID.
+    fn get_token_address(&self, id: u16) -> Result<H160>;
+
     fn get_current_auction_index(&self) -> Result<U256>;
+
     /// Retrieve one page of auction data.
     /// `block` is needed because the state of the smart contract could change
     /// between blocks which would make the returned auction data inconsistent
@@ -72,12 +76,14 @@ pub trait StableXContract {
         previous_page_user: Address,
         previous_page_user_offset: u16,
     ) -> Result<Vec<u8>>;
+
     fn get_solution_objective_value(
         &self,
         batch_index: U256,
         orders: Vec<Order>,
         solution: Solution,
     ) -> Result<U256>;
+
     fn submit_solution(
         &self,
         batch_index: U256,
@@ -88,6 +94,11 @@ pub trait StableXContract {
 }
 
 impl<'a> StableXContract for StableXContractImpl<'a> {
+    fn get_token_address(&self, id: u16) -> Result<H160> {
+        let address = self.instance.token_id_to_address_map(id).call().wait()?;
+        Ok(address)
+    }
+
     fn get_current_auction_index(&self) -> Result<U256> {
         let auction_index = self.instance.get_current_batch_id().call().wait()?;
         Ok(auction_index.into())
