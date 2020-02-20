@@ -1,4 +1,4 @@
-//! Module containing utility macros for sharing for in the crate.
+//! Module containing utility macros for sharing in the crate.
 
 /// Macro for instanciating a `HashMap`. Note that `ToOwned::to_owned` is called
 /// for keys, so things like `str` keys atomatically get turned into `String`s.
