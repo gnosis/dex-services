@@ -20,7 +20,7 @@ use crate::driver::stablex_driver::StableXDriver;
 use crate::gas_station::GnosisSafeGasStation;
 use crate::metrics::{MetricsServer, StableXMetrics};
 use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
-use crate::price_finding::optimization_price_finder::TokenData;
+use crate::models::TokenData;
 use crate::price_finding::price_finder_interface::SolverType;
 use crate::price_finding::Fee;
 use crate::solution_submission::StableXSolutionSubmitter;

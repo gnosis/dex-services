@@ -36,6 +36,18 @@ impl Serialize for TokenId {
     }
 }
 
+impl Into<u16> for TokenId {
+    fn into(self) -> u16 {
+        self.0
+    }
+}
+
+impl From<u16> for TokenId {
+    fn from(id: u16) -> Self {
+        TokenId(id)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenInfo {
@@ -44,8 +56,33 @@ pub struct TokenInfo {
     pub external_price: u128,
 }
 
+impl TokenInfo {
+    /// Utility method for creating a token for unit tests.
+    #[cfg(test)]
+    pub fn test(alias: &str, decimals: u8, external_price: u128) -> Self {
+        TokenInfo {
+            alias: alias.into(),
+            decimals,
+            external_price,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TokenData(HashMap<TokenId, TokenInfo>);
+
+impl TokenData {
+    /// Retrieves some token information from a token ID.
+    pub fn info(&self, id: impl Into<TokenId>) -> Option<&TokenInfo> {
+        self.0.get(&id.into())
+    }
+
+    /// Utility method for creating a token for unit tests.
+    #[cfg(test)]
+    pub fn test(tokens: HashMap<TokenId, TokenInfo>) -> Self {
+        TokenData(tokens)
+    }
+}
 
 impl FromStr for TokenData {
     type Err = Error;

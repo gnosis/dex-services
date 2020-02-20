@@ -315,19 +315,10 @@ pub mod tests {
 
     #[test]
     fn test_serialize_tokens() {
-        let mut token_data = TokenData(BTreeMap::new());
-        let token_info_1 = Some(TokenInfo {
-            alias: String::from("T1"),
-            decimals: 18,
-            external_price: 1_000_000_000_000_000_000,
+        let token_data = TokenData::test(hash_map! {
+            TokenId(0) => TokenInfo::test("T1", 18, 1_000_000_000_000_000_000),
+            TokenId(2) => TokenInfo::test("T2", 13, 1_000_000_000_000_000_000),
         });
-        let token_info_2 = Some(TokenInfo {
-            alias: String::from("T2"),
-            decimals: 13,
-            external_price: 1_000_000_000_000_000_000,
-        });
-        token_data.0.insert(TokenId(0), token_info_1.clone());
-        token_data.0.insert(TokenId(2), token_info_2.clone());
 
         let orders = [
             models::Order {
@@ -341,10 +332,11 @@ pub mod tests {
                 ..models::Order::default()
             },
         ];
+
         let result = serialize_tokens(&orders, &token_data);
         let mut expected = BTreeMap::new();
-        expected.insert(TokenId(0), token_info_1);
-        expected.insert(TokenId(2), token_info_2);
+        expected.insert(TokenId(0), token_data.info(0).cloned());
+        expected.insert(TokenId(2), token_data.info(2).cloned());
         expected.insert(TokenId(4), None);
         assert_eq!(result, expected);
     }
@@ -549,13 +541,11 @@ pub mod tests {
             token: 0,
             ratio: 0.001,
         };
-        let mut token_data = TokenData(BTreeMap::new());
-        let token_info = Some(TokenInfo {
-            alias: String::from("T1"),
-            decimals: 18,
-            external_price: 1_000_000_000_000_000_000,
+
+        let token_data = TokenData::test(hash_map! {
+            TokenId(0) => TokenInfo::test("T1", 18, 1_000_000_000_000_000_000),
         });
-        token_data.0.insert(TokenId(0), token_info);
+
         let solver = OptimisationPriceFinder {
             write_input: |_, content: &str| {
                 let json: serde_json::value::Value = serde_json::from_str(content).unwrap();
@@ -600,13 +590,10 @@ pub mod tests {
             "13a0b42b9c180065510615972858bf41d1972a55".parse().unwrap(),
             BTreeMap::new(),
         );
-        let mut token_data = TokenData(BTreeMap::new());
-        let token_info_1 = Some(TokenInfo {
-            alias: String::from("T1"),
-            decimals: 18,
-            external_price: 1_000_000_000_000_000_000,
+
+        let token_data = TokenData::test(hash_map! {
+            TokenId(2) => TokenInfo::test("T1", 18, 1_000_000_000_000_000_000),
         });
-        token_data.0.insert(TokenId(2), token_info_1);
 
         let orders = [
             models::Order {

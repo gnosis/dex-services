@@ -3,8 +3,8 @@
 mod api;
 
 use self::api::{Asset, AssetPair, KrakenApi, KrakenHttpApi};
-use super::PriceSource;
-use crate::models::{TokenId, TokenInfo};
+use super::{PriceSource, Token};
+use crate::models::TokenId;
 use anyhow::{anyhow, Context, Result};
 use std::collections::HashMap;
 
@@ -35,10 +35,7 @@ where
 
     /// Generates a mapping between Kraken asset pair identifiers and tokens
     /// that are used when computing the price map.
-    fn get_token_asset_pairs<'a>(
-        &self,
-        tokens: &'a HashMap<TokenId, TokenInfo>,
-    ) -> Result<HashMap<String, (TokenId, &'a TokenInfo)>> {
+    fn get_token_asset_pairs<'a>(&self, tokens: &'a [Token]) -> Result<HashMap<String, &'a Token>> {
         // TODO(nlordell): If these calls start taking too long, we can consider
         //   caching this information somehow. The only thing that is
         //   complicated is determining when the cache needs to be invalidated
@@ -52,10 +49,10 @@ where
 
         let token_assets = tokens
             .iter()
-            .flat_map(|(id, token)| {
-                let asset = find_asset(&token.alias, &assets)?;
+            .flat_map(|token| {
+                let asset = find_asset(token.symbol(), &assets)?;
                 let pair = find_asset_pair(asset, usd, &asset_pairs)?;
-                Some((pair.to_owned(), (*id, token)))
+                Some((pair.to_owned(), token))
             })
             .collect();
 
