@@ -4,6 +4,7 @@ use std::future::Future;
 
 use crate::price_finding::optimization_price_finder::TokenData;
 use crate::price_finding::{Fee, NaiveSolver, OptimisationPriceFinder, PriceFinding, SolverType};
+
 pub trait CeiledDiv {
     fn ceiled_div(&self, divisor: Self) -> Self;
 }

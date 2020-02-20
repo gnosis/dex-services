@@ -26,7 +26,6 @@ impl From<serde_json::Error> for PriceFindingError {
         PriceFindingError::new(error, ErrorKind::JsonError)
     }
 }
-
 impl From<std::num::ParseIntError> for PriceFindingError {
     fn from(error: std::num::ParseIntError) -> Self {
         PriceFindingError::new(error, ErrorKind::ParseIntError)

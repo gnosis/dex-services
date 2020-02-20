@@ -2,8 +2,8 @@ use crate::error::DriverError;
 use crate::models;
 use crate::price_finding::error::{ErrorKind, PriceFindingError};
 use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverType};
-use chrono::Utc;
 
+use chrono::Utc;
 use log::{debug, error};
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
