@@ -1,48 +1,15 @@
-use crate::error::DriverError;
-use crate::models;
+use crate::models::{self, TokenData, TokenId, TokenInfo};
 use crate::price_finding::error::{ErrorKind, PriceFindingError};
 use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverType};
 
 use chrono::Utc;
 use log::{debug, error};
-use serde::de::Error as _;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use serde_with::rust::display_fromstr;
-use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::process::Command;
-use std::str::FromStr;
-
-/// A token ID wrapper type that implements JSON serialization in the solver
-/// format.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialOrd, PartialEq)]
-pub struct TokenId(pub u16);
-
-impl<'de> Deserialize<'de> for TokenId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let key = Cow::<str>::deserialize(deserializer)?;
-        if !key.starts_with('T') || key.len() != 5 {
-            return Err(D::Error::custom("Token ID must be of the form 'Txxxx'"));
-        }
-
-        let id = key[1..].parse::<u16>().map_err(D::Error::custom)?;
-        Ok(TokenId(id))
-    }
-}
-
-impl Serialize for TokenId {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        format!("T{:04}", self.0).serialize(serializer)
-    }
-}
 
 /// A number wrapper type that correctly serializes large u128`s to strings to
 /// avoid precision loss.
@@ -57,27 +24,7 @@ impl Serialize for TokenId {
 #[serde(transparent)]
 pub struct Num(#[serde(with = "display_fromstr")] pub u128);
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct TokenInfo {
-    alias: String,
-    decimals: u8,
-    external_price: u128,
-}
-
 pub type TokenDataType = BTreeMap<TokenId, Option<TokenInfo>>;
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TokenData(TokenDataType);
-
-impl FromStr for TokenData {
-    type Err = DriverError;
-    fn from_str(token_data: &str) -> Result<Self, DriverError> {
-        Ok(serde_json::from_str(token_data).map_err(|e| {
-            error!("Error parsing token info: {}", &e);
-            e
-        })?)
-    }
-}
 
 mod solver_output {
     use super::{Num, TokenId};
@@ -240,10 +187,8 @@ fn serialize_tokens(orders: &[models::Order], token_data: &TokenData) -> TokenDa
     token_ids
         .iter()
         .map(|id| {
-            (
-                TokenId(*id),
-                (*token_data.0.get(&TokenId(*id)).unwrap_or(&None)).clone(),
-            )
+            let id = TokenId(*id);
+            (id, token_data.info(id).cloned())
         })
         .collect()
 }
