@@ -2,6 +2,6 @@ pub mod account_state;
 pub mod order;
 pub mod solution;
 
-pub use crate::models::account_state::AccountState;
-pub use crate::models::order::Order;
-pub use crate::models::solution::Solution;
+pub use self::account_state::AccountState;
+pub use self::order::Order;
+pub use self::solution::Solution;

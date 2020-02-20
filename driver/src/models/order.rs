@@ -1,4 +1,4 @@
-use ethcontract::Address as H160;
+use ethcontract::H160;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
