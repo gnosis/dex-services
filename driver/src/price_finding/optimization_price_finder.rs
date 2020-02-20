@@ -141,7 +141,7 @@ impl OptimisationPriceFinder {
             read_output,
             fee,
             solver_type,
-            token_data: token_data,
+            token_data,
         }
     }
 }
