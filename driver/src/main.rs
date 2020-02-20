@@ -34,12 +34,6 @@ use std::time::Duration;
 use structopt::StructOpt;
 use url::Url;
 
-#[mockall::automock]
-pub trait Foo {
-    fn bar(i: i32) -> f64;
-    fn baz(i: i32);
-}
-
 #[derive(Debug, StructOpt)]
 #[structopt(
     name = "driver",
