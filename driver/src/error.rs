@@ -21,7 +21,7 @@ pub enum ErrorKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DriverError {
-    details: String,
+    pub details: String,
     pub kind: ErrorKind,
 }
 
@@ -69,7 +69,7 @@ impl From<&str> for DriverError {
 
 impl From<PriceFindingError> for DriverError {
     fn from(error: PriceFindingError) -> Self {
-        DriverError::new(&format!("{}", error), ErrorKind::PriceFindingError)
+        DriverError::new(format!("{}", error), ErrorKind::PriceFindingError)
     }
 }
 
@@ -112,8 +112,4 @@ impl fmt::Display for DriverError {
     }
 }
 
-impl Error for DriverError {
-    fn description(&self) -> &str {
-        &self.details
-    }
-}
+impl Error for DriverError {}

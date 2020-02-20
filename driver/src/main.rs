@@ -14,7 +14,8 @@ use crate::contracts::{stablex_contract::BatchExchange, web3_provider};
 use crate::driver::stablex_driver::StableXDriver;
 use crate::metrics::{MetricsServer, StableXMetrics};
 use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
-use crate::price_finding::price_finder_interface::OptimizationModel;
+use crate::price_finding::price_finder_interface::SolverType;
+
 use crate::price_finding::Fee;
 use crate::solution_submission::StableXSolutionSubmitter;
 
@@ -54,8 +55,8 @@ struct Options {
     /// Which style of solver to use. Can be one of: 'NAIVE' for the naive
     /// solver; 'MIP' for mixed integer programming solver; 'NLP' for non-linear
     /// programming solver.
-    #[structopt(long, env = "OPTIMIZATION_MODEL", default_value = "NAIVE")]
-    optimization_model: OptimizationModel,
+    #[structopt(long, env = "SOLVER_TYPE", default_value = "NaiveSolver")]
+    solver_type: SolverType,
 
     /// JSON encoded object of which tokens/orders to ignore.
     ///
@@ -108,7 +109,7 @@ fn main() {
     });
 
     let fee = Some(Fee::default());
-    let mut price_finder = util::create_price_finder(fee, options.optimization_model);
+    let mut price_finder = util::create_price_finder(fee, options.solver_type);
 
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
     info!("Orderbook filter: {:?}", options.orderbook_filter);

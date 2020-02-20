@@ -12,7 +12,7 @@ pub enum ErrorKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PriceFindingError {
-    details: String,
+    pub details: String,
     pub kind: ErrorKind,
 }
 
@@ -50,8 +50,4 @@ impl fmt::Display for PriceFindingError {
         write!(f, "{}", self.details)
     }
 }
-impl Error for PriceFindingError {
-    fn description(&self) -> &str {
-        &self.details
-    }
-}
+impl Error for PriceFindingError {}
