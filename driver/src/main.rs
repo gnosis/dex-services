@@ -115,7 +115,7 @@ fn main() {
         &gas_station,
     )
     .unwrap();
-    info!("Using contract at {:?}", contract.instance().address());
+    info!("Using contract at {:?}", contract.address());
     info!("Using account {:?}", contract.account());
 
     // Set up metrics and serve in separate thread

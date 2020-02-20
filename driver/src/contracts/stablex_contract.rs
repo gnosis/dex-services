@@ -56,8 +56,8 @@ impl<'a> StableXContractImpl<'a> {
             .unwrap_or_default()
     }
 
-    pub fn instance(&self) -> &BatchExchange {
-        &self.instance
+    pub fn address(&self) -> H160 {
+        self.instance.address()
     }
 }
 
