@@ -176,6 +176,7 @@ mod solver_input {
         pub buy_token: TokenId,
         pub sell_amount: Num,
         pub buy_amount: Num,
+        pub order_id: u16,
     }
 
     impl From<&'_ models::Order> for Order {
@@ -186,6 +187,7 @@ mod solver_input {
                 buy_token: TokenId(order.buy_token),
                 sell_amount: Num(order.sell_amount),
                 buy_amount: Num(order.buy_amount),
+                order_id: order.id,
             }
         }
     }

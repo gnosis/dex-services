@@ -1,6 +1,7 @@
 mod contracts;
 mod driver;
 mod error;
+mod gas_station;
 mod logging;
 mod metrics;
 mod models;
@@ -10,8 +11,9 @@ mod solution_submission;
 mod transport;
 mod util;
 
-use crate::contracts::{stablex_contract::BatchExchange, web3_provider};
+use crate::contracts::{stablex_contract::StableXContractImpl, web3_provider};
 use crate::driver::stablex_driver::StableXDriver;
+use crate::gas_station::GnosisSafeGasStation;
 use crate::metrics::{MetricsServer, StableXMetrics};
 use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
 use crate::price_finding::optimization_price_finder::TokenData;
@@ -89,6 +91,15 @@ struct Options {
         parse(try_from_str = duration_millis),
     )]
     rpc_timeout: Duration,
+
+    /// The timeout in milliseconds of gas station calls, defaults to 10000ms
+    #[structopt(
+        long,
+        env = "GAS_STATION_TIMEOUT",
+        default_value = "10000",
+        parse(try_from_str = duration_millis),
+    )]
+    gas_station_timeout: Duration,
 }
 
 fn main() {
@@ -96,8 +107,15 @@ fn main() {
     let (_, _guard) = logging::init(&options.log_filter);
     info!("Using options: {:#?}", options);
     let web3 = web3_provider(options.node_url.as_str(), options.rpc_timeout).unwrap();
-    let contract =
-        BatchExchange::new(&web3, options.private_key.clone(), options.network_id).unwrap();
+    let gas_station =
+        GnosisSafeGasStation::new(options.gas_station_timeout, gas_station::DEFAULT_URI).unwrap();
+    let contract = StableXContractImpl::new(
+        &web3,
+        options.private_key.clone(),
+        options.network_id,
+        &gas_station,
+    )
+    .unwrap();
     info!("Using contract at {:?}", contract.address());
     info!("Using account {:?}", contract.account());
 
