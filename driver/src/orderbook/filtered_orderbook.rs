@@ -1,7 +1,7 @@
 use super::*;
 
 use crate::models::{AccountState, Order};
-use ethcontract::{Address as H160, U256};
+use ethcontract::{H160, U256};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;

@@ -1,6 +1,6 @@
 use crate::contracts::stablex_auction_element::{StableXAuctionElement, AUCTION_ELEMENT_WIDTH};
 use crate::models::{AccountState, Order};
-use ethcontract::{Address as H160, U256};
+use ethcontract::{H160, U256};
 use std::collections::HashMap;
 
 /// Handles reading of auction data that has been encoded with the smart

@@ -282,7 +282,7 @@ fn executed_buy_amount(
 pub mod tests {
     use super::*;
     use crate::models::AccountState;
-    use ethcontract::{Address as H160, H256, U256};
+    use ethcontract::{H160, H256, U256};
     use std::collections::HashMap;
 
     #[test]

@@ -9,7 +9,7 @@ use ethcontract::web3::contract::tokens::Detokenize;
 use ethcontract::web3::futures::Future as F;
 use ethcontract::web3::transports::Http;
 use ethcontract::web3::Transport;
-use ethcontract::{Account, Address as H160, U256};
+use ethcontract::{Account, H160, U256};
 
 use std::fmt::Debug;
 use std::future::Future;

@@ -1,4 +1,4 @@
-use ethcontract::{Address as H160, H256, U256};
+use ethcontract::{H160, H256, U256};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
