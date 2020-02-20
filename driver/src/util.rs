@@ -2,10 +2,8 @@ use ethcontract::U256;
 use log::info;
 use std::future::Future;
 
-use crate::price_finding::{
-    Fee, NaiveSolver, OptimisationPriceFinder, OptimizationModel, PriceFinding,
-};
-
+use crate::price_finding::optimization_price_finder::TokenData;
+use crate::price_finding::{Fee, NaiveSolver, OptimisationPriceFinder, PriceFinding, SolverType};
 pub trait CeiledDiv {
     fn ceiled_div(&self, divisor: Self) -> Self;
 }
@@ -40,22 +38,18 @@ impl CheckedConvertU128 for U256 {
 
 pub fn create_price_finder(
     fee: Option<Fee>,
-    optimization_model: OptimizationModel,
-    token_data: String,
+    solver_type: SolverType,
+    token_data: TokenData,
 ) -> Box<dyn PriceFinding> {
-    if optimization_model == OptimizationModel::NAIVE {
+    if solver_type == SolverType::NaiveSolver {
         info!("Using naive price finder");
         Box::new(NaiveSolver::new(fee))
     } else {
         info!(
             "Using optimisation price finder with the args {:}",
-            optimization_model.to_args()
+            solver_type.to_args()
         );
-        Box::new(OptimisationPriceFinder::new(
-            fee,
-            optimization_model,
-            token_data,
-        ))
+        Box::new(OptimisationPriceFinder::new(fee, solver_type, token_data))
     }
 }
 

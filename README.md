@@ -146,6 +146,7 @@ Afterwards, when you run your environment e.g. with `docker-compose up stablex` 
 
 The following environment variables can be used to configure the behavior of the services:
 
+- *AUCTION_DATA_PAGE_SIZE*: the page size with which to read orders from the smart contract
 - *DFUSION_LOG*: Log-level (e.g. `info,driver=debug`)
 - *ETHEREUM_NODE_URL*: Full-Node to connect to. Make sure the node allows view queries without a gas limit in order to fetch the entire orderbook at once.
 - *NETWORK_ID*: Network ID (e.g. 1 for mainnet, 4 for rinkeby, 5777 for ganache)
@@ -166,9 +167,17 @@ The following environment variables can be used to configure the behavior of the
 }
 ```
 
-- *AUCTION_DATA_PAGE_SIZE*: the page size with which to read orders from the smart contract
-
 blacklists all orders that contain token 1 & 2, all orders of _0x...B_ and orderId 0 & 1 or _0x...A_
+
+### Command-Line Configuration
+
+The driver also supports configuration by directly passing in command-line arguments. Run the following to get more information on all supported command-line options:
+
+```
+cargo run -- --help
+```
+
+The command-line help output also specifies which arguments map to which of the environment variables specified above.
 
 ## Troubleshooting
 

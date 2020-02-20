@@ -1,8 +1,9 @@
 use crate::models;
 use crate::price_finding::error::{ErrorKind, PriceFindingError};
-use crate::price_finding::price_finder_interface::{Fee, OptimizationModel, PriceFinding};
+use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverType};
 
 use chrono::Utc;
+
 use ethcontract::Address as H160;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
@@ -16,13 +17,23 @@ type PriceMap = HashMap<u16, u128>;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenInfo {
-    pub alias: String,
-    pub decimals: u32,
-    pub external_price: u128,
+    alias: String,
+    decimals: u32,
+    external_price: u128,
 }
 
 pub type TokenData = HashMap<u16, Option<TokenInfo>>;
 
+// use std::str::FromStr;
+// use std::convert::Infallible;
+// impl FromStr for TokenData {
+//     fn from_str(token_data: &str) -> Result<Self, serde_json::Err> {
+//         serde_json::from_str(token_data).map_err(|e| {
+//             error!("Error parsing token info: {}", &e);
+//             e
+//         })
+//     }
+// }
 mod solver_output {
     use serde::Deserialize;
     use std::collections::HashMap;
@@ -114,27 +125,23 @@ mod solver_input {
 pub struct OptimisationPriceFinder {
     // default IO methods can be replaced for unit testing
     write_input: fn(&str, &str) -> std::io::Result<()>,
-    run_solver: fn(&str, &str, OptimizationModel) -> Result<(), PriceFindingError>,
+    run_solver: fn(&str, &str, SolverType) -> Result<(), PriceFindingError>,
     read_output: fn(&str) -> std::io::Result<String>,
     fee: Option<Fee>,
-    optimization_model: OptimizationModel,
+    solver_type: SolverType,
     token_data: TokenData,
 }
 
 impl OptimisationPriceFinder {
-    pub fn new(
-        fee: Option<Fee>,
-        optimization_model: OptimizationModel,
-        token_data: String,
-    ) -> Self {
+    pub fn new(fee: Option<Fee>, solver_type: SolverType, token_data: TokenData) -> Self {
         create_dir_all("instances").expect("Could not create instance directory");
         OptimisationPriceFinder {
             write_input,
             run_solver,
             read_output,
             fee,
-            optimization_model,
-            token_data: deserialize_token_info(&token_data),
+            solver_type,
+            token_data: token_data,
         }
     }
 }
@@ -185,6 +192,15 @@ fn serialize_balances(
     accounts
 }
 
+pub fn deserialize_token_info(result: &str) -> TokenData {
+    serde_json::from_str(result)
+        .map_err(|e| {
+            error!("Error parsing token info: {}", &e);
+            e
+        })
+        .unwrap()
+}
+
 fn serialize_order(order: &models::Order) -> solver_input::Order {
     solver_input::Order {
         account_id: account_id(order.account_id),
@@ -206,7 +222,7 @@ fn parse_token(key: &str) -> Result<u16, PriceFindingError> {
     if key.starts_with('T') {
         return key[1..].parse::<u16>().map_err(|err| {
             PriceFindingError::new(
-                format!("Failed to parse token id: {}", err).as_ref(),
+                format!("Failed to parse token id: {}", err),
                 ErrorKind::ParseIntError,
             )
         });
@@ -221,15 +237,6 @@ fn parse_price(price: &Option<String>) -> Result<u128, PriceFindingError> {
     price.as_ref().map_or(Ok(0), |price| {
         price.parse().map_err(PriceFindingError::from)
     })
-}
-
-fn deserialize_token_info(result: &str) -> TokenData {
-    serde_json::from_str(result)
-        .map_err(|e| {
-            error!("Error parsing token info: {}", &e);
-            e
-        })
-        .unwrap()
 }
 
 fn deserialize_result(result: String) -> Result<models::Solution, PriceFindingError> {
@@ -279,7 +286,7 @@ impl PriceFinding for OptimisationPriceFinder {
         let input_file = format!("instances/instance_{}.json", &current_time);
         let result_folder = format!("results/instance_{}/", &current_time);
         (self.write_input)(&input_file, &serde_json::to_string(&input)?)?;
-        (self.run_solver)(&input_file, &result_folder, self.optimization_model)?;
+        (self.run_solver)(&input_file, &result_folder, self.solver_type)?;
         let result = (self.read_output)(&result_folder)?;
         let solution = deserialize_result(result)?;
         Ok(solution)
@@ -290,21 +297,21 @@ fn write_input(input_file: &str, input: &str) -> std::io::Result<()> {
     let file = File::create(&input_file)?;
     let mut writer = BufWriter::new(file);
     writer.write_all(input.as_bytes())?;
-    println!("Solver input: {}", input);
+    debug!("Solver input: {}", input);
     Ok(())
 }
 
 fn run_solver(
     input_file: &str,
     result_folder: &str,
-    optimization_model: OptimizationModel,
+    solver_type: SolverType,
 ) -> Result<(), PriceFindingError> {
-    let optimization_model_str = optimization_model.to_args();
+    let solver_type_str = solver_type.to_args();
     let output = Command::new("python")
         .args(&["-m", "batchauctions.scripts.e2e._run"])
         .arg(result_folder)
         .args(&["--jsonFile", input_file])
-        .args(&[optimization_model_str])
+        .args(&[solver_type_str])
         .output()?;
 
     if !output.status.success() {
@@ -337,7 +344,6 @@ pub mod tests {
     use crate::util::test_util::map_from_slice;
     use ethcontract::{H256, U256};
     use serde_json::json;
-    use std::error::Error;
 
     #[test]
     fn test_parse_prices() {
@@ -457,7 +463,7 @@ pub mod tests {
             },
         });
         let err = deserialize_result(json.to_string()).expect_err("Should fail to parse");
-        assert_eq!(err.description(), "Token keys expected to start with \"T\"");
+        assert_eq!(err.details, "Token keys expected to start with \"T\"");
 
         let json = json!({
             "orders": [],
@@ -467,7 +473,7 @@ pub mod tests {
         });
         let err = deserialize_result(json.to_string()).expect_err("Should fail to parse");
         assert_eq!(
-            err.description(),
+            err.details,
             "Failed to parse token id: invalid digit found in string"
         );
 
@@ -479,7 +485,7 @@ pub mod tests {
         });
         let err = deserialize_result(json.to_string()).expect_err("Should fail to parse");
         assert_eq!(
-            err.description(),
+            err.to_string(),
             "Failed to parse token id: number too large to fit in target type"
         );
     }
@@ -643,7 +649,7 @@ pub mod tests {
             run_solver: |_, _, _| Ok(()),
             read_output: |_| Err(std::io::Error::last_os_error()),
             fee: Some(fee),
-            optimization_model: OptimizationModel::MIP,
+            solver_type: SolverType::StandardSolver,
             token_data,
         };
         let orders = vec![];
