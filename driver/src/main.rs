@@ -20,8 +20,8 @@ use crate::driver::stablex_driver::StableXDriver;
 use crate::gas_station::GnosisSafeGasStation;
 use crate::metrics::{MetricsServer, StableXMetrics};
 use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
+use crate::price_finding::optimization_price_finder::TokenData;
 use crate::price_finding::price_finder_interface::SolverType;
-
 use crate::price_finding::Fee;
 use crate::solution_submission::StableXSolutionSubmitter;
 
@@ -64,6 +64,9 @@ struct Options {
     #[structopt(long, env = "SOLVER_TYPE", default_value = "NaiveSolver")]
     solver_type: SolverType,
 
+    #[structopt(long, env = "PRICE_FEED_INFORMATION", default_value = "{}")]
+    backup_token_data: TokenData,
+
     /// JSON encoded object of which tokens/orders to ignore.
     ///
     /// For example: '{
@@ -105,10 +108,8 @@ struct Options {
 
 fn main() {
     let options = Options::from_args();
-
     let (_, _guard) = logging::init(&options.log_filter);
-    info!("using options: {:#?}", options);
-
+    info!("Using options: {:#?}", options);
     let web3 = web3_provider(options.node_url.as_str(), options.rpc_timeout).unwrap();
     let gas_station =
         GnosisSafeGasStation::new(options.gas_station_timeout, gas_station::DEFAULT_URI).unwrap();
@@ -131,7 +132,8 @@ fn main() {
     });
 
     let fee = Some(Fee::default());
-    let mut price_finder = util::create_price_finder(fee, options.solver_type);
+    let mut price_finder =
+        util::create_price_finder(fee, options.solver_type, options.backup_token_data);
 
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
     info!("Orderbook filter: {:?}", options.orderbook_filter);
