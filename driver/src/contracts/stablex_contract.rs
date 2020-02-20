@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use ethcontract::transaction::GasPrice;
-use ethcontract::{H160, PrivateKey, U256};
+use ethcontract::{PrivateKey, H160, U256};
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
