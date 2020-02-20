@@ -175,7 +175,7 @@ mod tests {
         // to and the values are unpredictable. To run this test and output the
         // retrieved price estimates:
         // ```
-        // cargo test get_real_token_prices -- --ignored --nocapture
+        // cargo test online_kraken_prices -- --ignored --nocapture
         // ```
 
         let tokens = vec![
