@@ -17,6 +17,7 @@ type Tokens = BTreeMap<TokenId, Option<TokenInfo>>;
 
 /// A trait representing a price oracle that retrieves price estimates for the
 /// tokens included in the current orderbook.
+#[cfg_attr(test, mockall::automock)]
 pub trait PriceEstimating {
     fn get_token_prices(&self, orders: &[Order]) -> Tokens;
 }

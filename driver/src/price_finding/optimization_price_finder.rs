@@ -1,4 +1,5 @@
-use crate::models::{self, TokenData, TokenId, TokenInfo};
+use crate::models::{self, TokenId, TokenInfo};
+use crate::price_estimation::PriceEstimating;
 use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverType};
 
 use anyhow::{anyhow, Result};
@@ -6,7 +7,7 @@ use chrono::Utc;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use serde_with::rust::display_fromstr;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::process::Command;
@@ -160,11 +161,15 @@ pub struct OptimisationPriceFinder {
     read_output: fn(&str) -> std::io::Result<String>,
     fee: Option<Fee>,
     solver_type: SolverType,
-    token_data: TokenData,
+    price_oracle: Box<dyn PriceEstimating>,
 }
 
 impl OptimisationPriceFinder {
-    pub fn new(fee: Option<Fee>, solver_type: SolverType, token_data: TokenData) -> Self {
+    pub fn new(
+        fee: Option<Fee>,
+        solver_type: SolverType,
+        price_oracle: impl PriceEstimating + 'static,
+    ) -> Self {
         create_dir_all("instances").expect("Could not create instance directory");
         OptimisationPriceFinder {
             write_input,
@@ -172,25 +177,9 @@ impl OptimisationPriceFinder {
             read_output,
             fee,
             solver_type,
-            token_data,
+            price_oracle: Box::new(price_oracle),
         }
     }
-}
-
-fn serialize_tokens(orders: &[models::Order], token_data: &TokenData) -> TokenDataType {
-    // Get collection of all token ids appearing in orders
-    let mut token_ids = orders
-        .iter()
-        .map(|o| o.buy_token)
-        .collect::<BTreeSet<u16>>();
-    token_ids.extend(orders.iter().map(|o| o.sell_token));
-    token_ids
-        .iter()
-        .map(|id| {
-            let id = TokenId(*id);
-            (id, token_data.info(id).cloned())
-        })
-        .collect()
 }
 
 fn serialize_balances(
@@ -222,7 +211,7 @@ impl PriceFinding for OptimisationPriceFinder {
         state: &models::AccountState,
     ) -> Result<models::Solution> {
         let input = solver_input::Input {
-            tokens: serialize_tokens(&orders, &self.token_data),
+            tokens: self.price_oracle.get_token_prices(&orders),
             ref_token: TokenId(0),
             accounts: serialize_balances(&state, &orders),
             orders: orders.iter().map(From::from).collect(),
@@ -280,6 +269,7 @@ fn read_output(result_folder: &str) -> std::io::Result<String> {
 pub mod tests {
     use super::*;
     use crate::models::AccountState;
+    use crate::price_estimation::MockPriceEstimating;
     use crate::util::test_util::map_from_slice;
     use ethcontract::{Address, H256, U256};
     use serde_json::json;
@@ -304,34 +294,6 @@ pub mod tests {
                 assert!(result.is_err());
             }
         }
-    }
-
-    #[test]
-    fn test_serialize_tokens() {
-        let token_data = TokenData::test(hash_map! {
-            TokenId(0) => TokenInfo::test("T1", 18, 1_000_000_000_000_000_000),
-            TokenId(2) => TokenInfo::test("T2", 13, 1_000_000_000_000_000_000),
-        });
-
-        let orders = [
-            models::Order {
-                sell_token: 4,
-                buy_token: 2,
-                ..models::Order::default()
-            },
-            models::Order {
-                sell_token: 2,
-                buy_token: 0,
-                ..models::Order::default()
-            },
-        ];
-
-        let result = serialize_tokens(&orders, &token_data);
-        let mut expected = BTreeMap::new();
-        expected.insert(TokenId(0), token_data.info(0).cloned());
-        expected.insert(TokenId(2), token_data.info(2).cloned());
-        expected.insert(TokenId(4), None);
-        assert_eq!(result, expected);
     }
 
     #[test]
@@ -535,9 +497,15 @@ pub mod tests {
             ratio: 0.001,
         };
 
-        let token_data = TokenData::test(hash_map! {
-            TokenId(0) => TokenInfo::test("T1", 18, 1_000_000_000_000_000_000),
-        });
+        let mut price_oracle = MockPriceEstimating::new();
+        price_oracle
+            .expect_get_token_prices()
+            .withf(|orders| orders == [])
+            .returning(|_| {
+                btree_map! {
+                    TokenId(0) => Some(TokenInfo::test("T1", 18, 1_000_000_000_000_000_000)),
+                }
+            });
 
         let solver = OptimisationPriceFinder {
             write_input: |_, content: &str| {
@@ -555,7 +523,7 @@ pub mod tests {
             read_output: |_| Err(std::io::Error::last_os_error()),
             fee: Some(fee),
             solver_type: SolverType::StandardSolver,
-            token_data,
+            price_oracle: Box::new(price_oracle),
         };
         let orders = vec![];
         assert!(solver
@@ -584,9 +552,10 @@ pub mod tests {
             BTreeMap::new(),
         );
 
-        let token_data = TokenData::test(hash_map! {
-            TokenId(2) => TokenInfo::test("T1", 18, 1_000_000_000_000_000_000),
-        });
+        let tokens = btree_map! {
+            TokenId(1) => None,
+            TokenId(2) => Some(TokenInfo::test("T1", 18, 1_000_000_000_000_000_000)),
+        };
 
         let orders = [
             models::Order {
@@ -609,7 +578,7 @@ pub mod tests {
         .to_vec();
         let input = solver_input::Input {
             // tokens should also end up sorted in the end
-            tokens: serialize_tokens(&orders, &token_data),
+            tokens,
             ref_token: TokenId::reference(),
             accounts,
             orders: orders.iter().map(From::from).collect(),
