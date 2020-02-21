@@ -177,7 +177,7 @@ mod tests {
         // ```
 
         let tokens = vec![
-            Token::new(1, "ETH", 18),
+            Token::new(1, "WETH", 18),
             Token::new(2, "USDT", 6),
             Token::new(3, "TUSD", 18),
             Token::new(4, "USDC", 6),

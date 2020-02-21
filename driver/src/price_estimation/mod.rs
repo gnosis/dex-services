@@ -188,9 +188,9 @@ mod tests {
 
     #[test]
     fn price_oracle_fetches_token_prices() {
-        let tokens = TokenData::test(hash_map! {
-            TokenId(1) => TokenInfo::test("WETH", 18, 0),
-            TokenId(2) => TokenInfo::test("USDT", 6, 0),
+        let tokens = TokenData::from(hash_map! {
+            TokenId(1) => TokenInfo::new("WETH", 18, 0),
+            TokenId(2) => TokenInfo::new("USDT", 6, 0),
         });
 
         let mut source = MockPriceSource::new();
@@ -199,7 +199,7 @@ mod tests {
             .withf(|tokens| {
                 let mut tokens = tokens.to_vec();
                 tokens.sort_unstable_by_key(|token| token.id);
-                tokens == [Token::test(1, "WETH", 18), Token::test(2, "USDT", 6)]
+                tokens == [Token::new(1, "WETH", 18), Token::new(2, "USDT", 6)]
             })
             .returning(|_| {
                 Ok(hash_map! {
@@ -220,8 +220,8 @@ mod tests {
             prices,
             btree_map! {
                 TokenId(0) => None,
-                TokenId(1) => Some(TokenInfo::test("WETH", 18, 0)),
-                TokenId(2) => Some(TokenInfo::test("USDT", 6, 1_000_000_000_000_000_000)),
+                TokenId(1) => Some(TokenInfo::new("WETH", 18, 0)),
+                TokenId(2) => Some(TokenInfo::new("USDT", 6, 1_000_000_000_000_000_000)),
                 TokenId(3) => None,
             }
         );
@@ -229,8 +229,8 @@ mod tests {
 
     #[test]
     fn price_oracle_ignores_source_error() {
-        let tokens = TokenData::test(hash_map! {
-            TokenId(1) => TokenInfo::test("WETH", 18, 0),
+        let tokens = TokenData::from(hash_map! {
+            TokenId(1) => TokenInfo::new("WETH", 18, 0),
         });
 
         let mut source = MockPriceSource::new();
@@ -245,7 +245,7 @@ mod tests {
             prices,
             btree_map! {
                 TokenId(0) => None,
-                TokenId(1) => Some(TokenInfo::test("WETH", 18, 0)),
+                TokenId(1) => Some(TokenInfo::new("WETH", 18, 0)),
             }
         );
     }
@@ -260,8 +260,8 @@ mod tests {
 
     #[test]
     fn price_oracle_uses_uses_fallback_prices() {
-        let tokens = TokenData::test(hash_map! {
-            TokenId(7) => TokenInfo::test("DAI", 18, 1_000_000_000_000_000_000),
+        let tokens = TokenData::from(hash_map! {
+            TokenId(7) => TokenInfo::new("DAI", 18, 1_000_000_000_000_000_000),
         });
 
         let mut source = MockPriceSource::new();
@@ -274,7 +274,7 @@ mod tests {
             prices,
             btree_map! {
                 TokenId(0) => None,
-                TokenId(7) => Some(TokenInfo::test("DAI", 18, 1_000_000_000_000_000_000)),
+                TokenId(7) => Some(TokenInfo::new("DAI", 18, 1_000_000_000_000_000_000)),
             }
         );
     }
@@ -295,13 +295,13 @@ mod tests {
     #[test]
     fn token_get_price_without_rounding_error() {
         assert_eq!(
-            Token::test(0, "OWL", 18).get_owl_price(1.0),
+            Token::new(0, "OWL", 18).get_owl_price(1.0),
             1_000_000_000_000_000_000,
         );
     }
 
     #[test]
     fn weth_token_symbol_is_eth() {
-        assert_eq!(Token::test(1, "WETH", 18).symbol(), "ETH");
+        assert_eq!(Token::new(1, "WETH", 18).symbol(), "ETH");
     }
 }
