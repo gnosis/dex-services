@@ -3,7 +3,8 @@
 mod api;
 
 use self::api::{Asset, AssetPair, KrakenApi, KrakenHttpApi};
-use super::{PriceSource, Token, TokenId};
+use super::{PriceSource, Token};
+use crate::models::TokenId;
 use anyhow::{anyhow, Context, Result};
 use std::collections::HashMap;
 
@@ -49,7 +50,7 @@ where
         let token_assets = tokens
             .iter()
             .flat_map(|token| {
-                let asset = find_asset(&token.symbol, &assets)?;
+                let asset = find_asset(token.symbol(), &assets)?;
                 let pair = find_asset_pair(asset, usd, &asset_pairs)?;
                 Some((pair.to_owned(), token))
             })
