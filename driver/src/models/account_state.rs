@@ -1,4 +1,4 @@
-use ethcontract::{H160, H256, U256};
+use ethcontract::{Address, H256, U256};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -7,12 +7,12 @@ use std::collections::HashMap;
 pub struct AccountState {
     pub state_hash: H256,
     pub state_index: U256,
-    balances: HashMap<H160, HashMap<u16, u128>>, // UserId => (TokenId => balance)
+    balances: HashMap<Address, HashMap<u16, u128>>, // UserId => (TokenId => balance)
     pub num_tokens: u16,
 }
 
 impl AccountState {
-    pub fn read_balance(&self, token_id: u16, account_id: H160) -> u128 {
+    pub fn read_balance(&self, token_id: u16, account_id: Address) -> u128 {
         *self
             .balances
             .get(&account_id)
@@ -20,7 +20,7 @@ impl AccountState {
             .unwrap_or(&0)
     }
 
-    pub fn modify_balance<F>(&mut self, account_id: H160, token_id: u16, func: F)
+    pub fn modify_balance<F>(&mut self, account_id: Address, token_id: u16, func: F)
     where
         F: FnOnce(&mut u128),
     {
@@ -55,7 +55,7 @@ mod test_util {
                     .enumerate()
                     .map(|(account, token_balances)| {
                         (
-                            H160::from_low_u64_be(account as u64), // TODO - these are not accurate addresses.
+                            Address::from_low_u64_be(account as u64), // TODO - these are not accurate addresses.
                             token_balances
                                 .iter()
                                 .enumerate()
@@ -81,7 +81,7 @@ mod test_util {
             state
         }
 
-        pub fn increment_balance(&mut self, token_id: u16, account_id: H160, amount: u128) {
+        pub fn increment_balance(&mut self, token_id: u16, account_id: Address, amount: u128) {
             self.modify_balance(account_id, token_id, |balance| *balance += amount);
         }
     }

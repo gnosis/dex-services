@@ -1,6 +1,6 @@
 use crate::models::Order;
 use byteorder::{BigEndian, ByteOrder};
-use ethcontract::{H160, U256};
+use ethcontract::{Address, U256};
 
 use crate::util::CeiledDiv;
 
@@ -24,7 +24,7 @@ impl StableXAuctionElement {
     /// Sets `id` to `0` because this information is not contained in the
     /// serialized information.
     pub fn from_bytes(bytes: &[u8; AUCTION_ELEMENT_WIDTH]) -> Self {
-        let account_id = H160::from_slice(&bytes[0..20]);
+        let account_id = Address::from_slice(&bytes[0..20]);
 
         // these go together (since sell_token_balance is emitted as u256 and treated as u128
         let sell_token_balance = BigEndian::read_u128(&bytes[36..52]);
@@ -90,7 +90,7 @@ pub mod tests {
             sell_token_balance: 0,
             order: Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 buy_token: 0,
                 sell_token: 0,
                 buy_amount: 0,
@@ -135,7 +135,7 @@ pub mod tests {
             sell_token_balance: 3,
             order: Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(1),
+                account_id: Address::from_low_u64_be(1),
                 buy_token: 258,
                 sell_token: 257,
                 buy_amount: (258 * 257 + 258) / 259,

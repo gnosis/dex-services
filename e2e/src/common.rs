@@ -9,7 +9,7 @@ use ethcontract::web3::contract::tokens::Detokenize;
 use ethcontract::web3::futures::Future as F;
 use ethcontract::web3::transports::Http;
 use ethcontract::web3::Transport;
-use ethcontract::{Account, H160, U256};
+use ethcontract::{Account, Address, U256};
 
 use std::fmt::Debug;
 use std::future::Future;
@@ -119,8 +119,8 @@ pub fn create_accounts_with_funded_tokens(
     num_tokens: usize,
     num_users: usize,
     token_minted: u32,
-) -> (Vec<H160>, Vec<IERC20>) {
-    let accounts: Vec<H160> =
+) -> (Vec<Address>, Vec<IERC20>) {
+    let accounts: Vec<Address> =
         web3.eth().accounts().wait().expect("get accounts failed")[..num_users].to_vec();
 
     let tokens: Vec<IERC20> = (0..num_tokens)
@@ -140,7 +140,7 @@ pub fn create_accounts_with_funded_tokens(
     (accounts, tokens)
 }
 
-pub fn approve(tokens: &[IERC20], address: H160, accounts: &[H160], approval_amount: u32) {
+pub fn approve(tokens: &[IERC20], address: Address, accounts: &[Address], approval_amount: u32) {
     for account in accounts {
         for token in tokens {
             token
