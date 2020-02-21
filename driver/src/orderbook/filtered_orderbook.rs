@@ -112,7 +112,8 @@ mod test {
         bad_buy_token.buy_token = 5;
 
         let mut bad_user = create_order_for_test();
-        bad_user.account_id = Address::from_str("7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B").unwrap();
+        bad_user.account_id =
+            Address::from_str("7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B").unwrap();
 
         let mixed_user = Address::from_str("7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A").unwrap();
         let mut mixed_user_good_order = create_order_for_test();
