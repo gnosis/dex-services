@@ -20,8 +20,7 @@ use crate::gas_station::GnosisSafeGasStation;
 use crate::metrics::{MetricsServer, StableXMetrics};
 use crate::models::TokenData;
 use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
-use crate::price_finding::price_finder_interface::SolverType;
-use crate::price_finding::Fee;
+use crate::price_finding::{Fee, SolverType};
 use crate::solution_submission::StableXSolutionSubmitter;
 
 use ethcontract::PrivateKey;
@@ -132,7 +131,7 @@ fn main() {
 
     let fee = Some(Fee::default());
     let mut price_finder =
-        util::create_price_finder(fee, options.solver_type, options.backup_token_data);
+        price_finding::create_price_finder(fee, options.solver_type, options.backup_token_data);
 
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
     info!("Orderbook filter: {:?}", options.orderbook_filter);
