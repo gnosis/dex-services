@@ -666,7 +666,7 @@ pub mod tests {
         let orders = [
             models::Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 100,
@@ -674,7 +674,7 @@ pub mod tests {
             },
             models::Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(1),
+                account_id: Address::from_low_u64_be(1),
                 sell_token: 2,
                 buy_token: 1,
                 sell_amount: 200,
