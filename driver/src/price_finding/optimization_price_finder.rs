@@ -209,15 +209,21 @@ mod solver_input {
 pub struct OptimisationPriceFinder {
     // default IO methods can be replaced for unit testing
     write_input: fn(&str, &str) -> std::io::Result<()>,
-    run_solver: fn(&str, &str, SolverType) -> Result<(), PriceFindingError>,
+    run_solver: fn(&str, &str, SolverType, u32) -> Result<(), PriceFindingError>,
     read_output: fn(&str) -> std::io::Result<String>,
     fee: Option<Fee>,
     solver_type: SolverType,
     token_data: TokenData,
+    solver_time_limit: u32,
 }
 
 impl OptimisationPriceFinder {
-    pub fn new(fee: Option<Fee>, solver_type: SolverType, token_data: TokenData) -> Self {
+    pub fn new(
+        fee: Option<Fee>,
+        solver_type: SolverType,
+        token_data: TokenData,
+        solver_time_limit: u32,
+    ) -> Self {
         create_dir_all("instances").expect("Could not create instance directory");
         OptimisationPriceFinder {
             write_input,
@@ -226,6 +232,7 @@ impl OptimisationPriceFinder {
             fee,
             solver_type,
             token_data,
+            solver_time_limit,
         }
     }
 }
@@ -287,7 +294,12 @@ impl PriceFinding for OptimisationPriceFinder {
         let input_file = format!("instances/instance_{}.json", &current_time);
         let result_folder = format!("results/instance_{}/", &current_time);
         (self.write_input)(&input_file, &serde_json::to_string(&input)?)?;
-        (self.run_solver)(&input_file, &result_folder, self.solver_type)?;
+        (self.run_solver)(
+            &input_file,
+            &result_folder,
+            self.solver_type,
+            self.solver_time_limit,
+        )?;
         let result = (self.read_output)(&result_folder)?;
         let solution = deserialize_result(result)?;
         Ok(solution)
@@ -306,6 +318,7 @@ fn run_solver(
     input_file: &str,
     result_folder: &str,
     solver_type: SolverType,
+    solver_time_limit: u32,
 ) -> Result<(), PriceFindingError> {
     let solver_type_str = solver_type.to_args();
     let output = Command::new("python")
@@ -313,6 +326,7 @@ fn run_solver(
         .arg(result_folder)
         .args(&["--jsonFile", input_file])
         .args(&[solver_type_str])
+        .args(&["--solverTimeLimit", &solver_time_limit.to_string()])
         .output()?;
 
     if !output.status.success() {
@@ -611,6 +625,7 @@ pub mod tests {
             external_price: 1_000_000_000_000_000_000,
         });
         token_data.0.insert(TokenId(0), token_info);
+        let solver_time_limit: u32 = 180;
         let solver = OptimisationPriceFinder {
             write_input: |_, content: &str| {
                 let json: serde_json::value::Value = serde_json::from_str(content).unwrap();
@@ -623,11 +638,12 @@ pub mod tests {
                 );
                 Ok(())
             },
-            run_solver: |_, _, _| Ok(()),
+            run_solver: |_, _, _, _| Ok(()),
             read_output: |_| Err(std::io::Error::last_os_error()),
             fee: Some(fee),
             solver_type: SolverType::StandardSolver,
             token_data,
+            solver_time_limit,
         };
         let orders = vec![];
         assert!(solver

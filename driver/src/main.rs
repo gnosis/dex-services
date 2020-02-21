@@ -64,8 +64,14 @@ struct Options {
     #[structopt(long, env = "SOLVER_TYPE", default_value = "NaiveSolver")]
     solver_type: SolverType,
 
+    /// JSON encoded object of back-up price information in case the oracle functionality is
+    /// not working.
     #[structopt(long, env = "PRICE_FEED_INFORMATION", default_value = "{}")]
     backup_token_data: TokenData,
+
+    /// Number of seconds the solver should maximally use for the optimization process
+    #[structopt(long, env = "SOLVER_TIME_LIMIT", default_value = "150")]
+    solver_time_limit: u32,
 
     /// JSON encoded object of which tokens/orders to ignore.
     ///
@@ -132,8 +138,12 @@ fn main() {
     });
 
     let fee = Some(Fee::default());
-    let mut price_finder =
-        util::create_price_finder(fee, options.solver_type, options.backup_token_data);
+    let mut price_finder = util::create_price_finder(
+        fee,
+        options.solver_type,
+        options.backup_token_data,
+        options.solver_time_limit,
+    );
 
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
     info!("Orderbook filter: {:?}", options.orderbook_filter);
