@@ -172,16 +172,11 @@ impl TickerInfo {
 #[derive(Copy, Clone, Debug, Deserialize)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct PricePair(
-    #[serde(with = "display_fromstr")] pub f64,
-    #[serde(with = "display_fromstr")] pub f64,
+    #[serde(with = "display_fromstr")] f64,
+    #[serde(with = "display_fromstr")] f64,
 );
 
 impl PricePair {
-    /// Retrieves the price since midnight.
-    pub fn today(self) -> f64 {
-        self.0
-    }
-
     /// Retrieves the price for the last 24 hours.
     pub fn last_24h(self) -> f64 {
         self.1
