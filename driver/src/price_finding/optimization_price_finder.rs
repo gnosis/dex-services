@@ -610,7 +610,7 @@ pub mod tests {
         let input = solver_input::Input {
             // tokens should also end up sorted in the end
             tokens: serialize_tokens(&orders, &token_data),
-            ref_token: TokenId(0),
+            ref_token: TokenId::reference(),
             accounts,
             orders: orders.iter().map(From::from).collect(),
             fee: None,

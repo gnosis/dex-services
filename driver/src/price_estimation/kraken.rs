@@ -50,7 +50,7 @@ where
         let token_assets = tokens
             .iter()
             .flat_map(|token| {
-                let asset = find_asset(token.symbol(), &assets)?;
+                let asset = find_asset(&token.symbol(), &assets)?;
                 let pair = find_asset_pair(asset, usd, &asset_pairs)?;
                 Some((pair.to_owned(), token))
             })
@@ -177,7 +177,7 @@ mod tests {
         // ```
 
         let tokens = vec![
-            Token::test(1, "ETH", 18),
+            Token::test(1, "WETH", 18),
             Token::test(2, "USDT", 6),
             Token::test(3, "TUSD", 18),
             Token::test(4, "USDC", 6),

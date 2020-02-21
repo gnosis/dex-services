@@ -12,6 +12,13 @@ use std::str::FromStr;
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialOrd, PartialEq)]
 pub struct TokenId(pub u16);
 
+impl TokenId {
+    /// Returns the token ID of the fee token.
+    pub fn reference() -> Self {
+        TokenId(0)
+    }
+}
+
 impl<'de> Deserialize<'de> for TokenId {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -68,7 +75,7 @@ impl TokenInfo {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TokenData(HashMap<TokenId, TokenInfo>);
 
 impl TokenData {
