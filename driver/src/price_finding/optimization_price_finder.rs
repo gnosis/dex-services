@@ -309,9 +309,9 @@ pub mod tests {
 
     #[test]
     fn test_serialize_tokens() {
-        let token_data = TokenData::test(hash_map! {
-            TokenId(0) => TokenInfo::test("T1", 18, 1_000_000_000_000_000_000),
-            TokenId(2) => TokenInfo::test("T2", 13, 1_000_000_000_000_000_000),
+        let token_data = TokenData::from(hash_map! {
+            TokenId(0) => TokenInfo::new("T1", 18, 1_000_000_000_000_000_000),
+            TokenId(2) => TokenInfo::new("T2", 13, 1_000_000_000_000_000_000),
         });
 
         let orders = [
@@ -536,7 +536,7 @@ pub mod tests {
             ratio: 0.001,
         };
 
-        let token_data = TokenData::test(hash_map! {
+        let token_data = TokenData::from(hash_map! {
             TokenId(0) => TokenInfo::new("T1", 18, 1_000_000_000_000_000_000),
         });
 

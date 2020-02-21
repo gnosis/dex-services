@@ -40,7 +40,7 @@ impl Token {
     pub fn new(id: impl Into<TokenId>, symbol: impl Into<String>, decimals: u8) -> Self {
         Token {
             id: id.into(),
-            address: H160::repeat_byte(index as _),
+            address: H160::zero(),
             info: TokenInfo {
                 alias: symbol.into(),
                 decimals,
