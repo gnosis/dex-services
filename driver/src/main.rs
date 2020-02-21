@@ -133,8 +133,7 @@ fn main() {
 
     let fee = Some(Fee::default());
     let price_oracle = PriceOracle::new(options.backup_token_data).unwrap();
-    let mut price_finder =
-        price_finding::create_price_finder(fee, options.solver_type, price_oracle);
+    let mut price_finder = util::create_price_finder(fee, options.solver_type, price_oracle);
 
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
     info!("Orderbook filter: {:?}", options.orderbook_filter);
