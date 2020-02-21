@@ -64,9 +64,9 @@ pub struct TokenInfo {
 }
 
 impl TokenInfo {
-    /// Utility method for creating a token for unit tests.
+    /// Create new token information from its parameters.
     #[cfg(test)]
-    pub fn test(alias: &str, decimals: u8, external_price: u128) -> Self {
+    pub fn new(alias: impl Into<String>, decimals: u8, external_price: u128) -> Self {
         TokenInfo {
             alias: alias.into(),
             decimals,
@@ -83,10 +83,10 @@ impl TokenData {
     pub fn info(&self, id: impl Into<TokenId>) -> Option<&TokenInfo> {
         self.0.get(&id.into())
     }
+}
 
-    /// Utility method for creating a token for unit tests.
-    #[cfg(test)]
-    pub fn test(tokens: HashMap<TokenId, TokenInfo>) -> Self {
+impl From<HashMap<TokenId, TokenInfo>> for TokenData {
+    fn from(tokens: HashMap<TokenId, TokenInfo>) -> Self {
         TokenData(tokens)
     }
 }
