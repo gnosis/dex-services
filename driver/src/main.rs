@@ -108,7 +108,7 @@ struct Options {
 fn main() {
     let options = Options::from_args();
     let (_, _guard) = logging::init(&options.log_filter);
-    info!("Using options: {:#?}", options);
+    info!("Starting driver with runtime options: {:#?}", options);
     let web3 = web3_provider(options.node_url.as_str(), options.rpc_timeout).unwrap();
     let gas_station =
         GnosisSafeGasStation::new(options.gas_station_timeout, gas_station::DEFAULT_URI).unwrap();
