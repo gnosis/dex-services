@@ -3,7 +3,6 @@ mod macros;
 
 mod contracts;
 mod driver;
-mod error;
 mod gas_station;
 mod logging;
 mod metrics;

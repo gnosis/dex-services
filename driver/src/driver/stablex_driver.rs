@@ -1,9 +1,9 @@
-use crate::error::DriverError;
 use crate::metrics::StableXMetrics;
 use crate::models::Solution;
 use crate::orderbook::StableXOrderBookReading;
 use crate::price_finding::PriceFinding;
 use crate::solution_submission::StableXSolutionSubmitting;
+use anyhow::Result;
 
 use log::info;
 
@@ -35,7 +35,7 @@ impl<'a> StableXDriver<'a> {
         }
     }
 
-    pub fn run(&mut self) -> Result<bool, DriverError> {
+    pub fn run(&mut self) -> Result<bool> {
         // Try to process previous batch auction
         let batch_to_solve_result = self.orderbook_reader.get_auction_index();
 
@@ -117,15 +117,13 @@ impl<'a> StableXDriver<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::ErrorKind;
     use crate::models::order::test_util::create_order_for_test;
     use crate::models::AccountState;
     use crate::orderbook::MockStableXOrderBookReading;
-    use crate::price_finding::error::{ErrorKind as PriceFindingErrorKind, PriceFindingError};
     use crate::price_finding::price_finder_interface::MockPriceFinding;
     use crate::solution_submission::MockStableXSolutionSubmitting;
     use crate::util::test_util::map_from_slice;
-
+    use anyhow::anyhow;
     use mockall::predicate::*;
 
     #[test]
@@ -139,17 +137,22 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.expect_get_auction_index().return_const(Ok(batch));
+        reader
+            .expect_get_auction_index()
+            .return_once(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
             .with(eq(batch))
-            .return_const(Ok((state.clone(), orders.clone())));
+            .return_once({
+                let result = (state.clone(), orders.clone());
+                |_| Ok(result)
+            });
 
         submitter
             .expect_get_solution_objective_value()
             .with(eq(batch), eq(orders.clone()), always())
-            .return_const(Ok(U256::from(1337)));
+            .returning(|_, _, _| Ok(U256::from(1337)));
 
         submitter
             .expect_submit_solution()
@@ -159,7 +162,7 @@ mod tests {
                 always(),
                 eq(U256::from(1337)),
             )
-            .return_const(Ok(()));
+            .returning(|_, _, _, _| Ok(()));
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
@@ -168,7 +171,7 @@ mod tests {
         };
         pf.expect_find_prices()
             .withf(move |o, s| o == orders.as_slice() && *s == state)
-            .return_const(Ok(solution));
+            .return_once(move |_, _| Ok(solution));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
         assert!(driver.run().unwrap());
@@ -185,17 +188,22 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.expect_get_auction_index().return_const(Ok(batch));
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
             .with(eq(batch))
-            .return_const(Ok((state.clone(), orders.clone())));
+            .return_once({
+                let result = (state.clone(), orders.clone());
+                |_| Ok(result)
+            });
 
         submitter
             .expect_get_solution_objective_value()
             .with(eq(batch), eq(orders.clone()), always())
-            .return_const(Ok(U256::from(1337)));
+            .returning(|_, _, _| Ok(U256::from(1337)));
 
         submitter
             .expect_submit_solution()
@@ -205,7 +213,7 @@ mod tests {
                 always(),
                 eq(U256::from(1337)),
             )
-            .return_const(Ok(()));
+            .returning(|_, _, _, _| Ok(()));
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
@@ -214,7 +222,7 @@ mod tests {
         };
         pf.expect_find_prices()
             .withf(move |o, s| o == orders.as_slice() && *s == state)
-            .return_const(Ok(solution));
+            .return_once(move |_, _| Ok(solution));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
@@ -234,7 +242,7 @@ mod tests {
 
         reader
             .expect_get_auction_index()
-            .return_const(Err(DriverError::new("Error", ErrorKind::MiscError)));
+            .returning(|| Err(anyhow!("Error")));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
@@ -252,28 +260,30 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.expect_get_auction_index().return_const(Ok(batch));
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
             .with(eq(batch))
-            .return_const(Ok((state, orders.clone())));
+            .return_once({
+                let result = (state, orders.clone());
+                |_| Ok(result)
+            });
 
         submitter
             .expect_get_solution_objective_value()
             .with(eq(batch), eq(orders.clone()), always())
-            .return_const(Ok(U256::from(1337)));
+            .returning(|_, _, _| Ok(U256::from(1337)));
 
         submitter
             .expect_submit_solution()
             .with(eq(batch), eq(orders), always(), eq(U256::from(1337)))
-            .return_const(Ok(()));
+            .returning(|_, _, _, _| Ok(()));
 
         pf.expect_find_prices()
-            .return_const(Err(PriceFindingError::new(
-                "Error",
-                PriceFindingErrorKind::Unknown,
-            )));
+            .returning(|_, _| Err(anyhow!("Error")));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
@@ -291,12 +301,14 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.expect_get_auction_index().return_const(Ok(batch));
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
             .with(eq(batch))
-            .return_const(Ok((state, orders)));
+            .return_once(move |_| Ok((state, orders)));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
         assert!(driver.run().is_ok());
@@ -313,18 +325,17 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.expect_get_auction_index().return_const(Ok(batch));
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
             .with(eq(batch))
-            .return_const(Ok((state, orders)));
+            .return_once(move |_| Ok((state, orders)));
 
         pf.expect_find_prices()
-            .return_const(Err(PriceFindingError::new(
-                "Error",
-                PriceFindingErrorKind::Unknown,
-            )));
+            .returning(|_, _| Err(anyhow!("Error")));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
@@ -346,17 +357,22 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.expect_get_auction_index().return_const(Ok(batch));
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
             .with(eq(batch))
-            .return_const(Ok((state.clone(), orders.clone())));
+            .return_once({
+                let result = (state.clone(), orders.clone());
+                |_| Ok(result)
+            });
 
         let solution = Solution::trivial(orders.len());
         pf.expect_find_prices()
             .withf(move |o, s| o == orders.as_slice() && *s == state)
-            .return_const(Ok(solution));
+            .return_once(move |_, _| Ok(solution));
 
         submitter.expect_submit_solution().times(0);
 
@@ -375,20 +391,22 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.expect_get_auction_index().return_const(Ok(batch));
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
             .with(eq(batch))
-            .return_const(Ok((state.clone(), orders.clone())));
+            .return_once({
+                let result = (state.clone(), orders.clone());
+                |_| Ok(result)
+            });
 
         submitter
             .expect_get_solution_objective_value()
             .with(eq(batch), eq(orders.clone()), always())
-            .return_const(Err(DriverError::new(
-                "get_solution_objective_value failed",
-                ErrorKind::MiscError,
-            )));
+            .returning(|_, _, _| Err(anyhow!("get_solution_objective_value failed")));
         submitter.expect_submit_solution().times(0);
 
         let solution = Solution {
@@ -398,7 +416,7 @@ mod tests {
         };
         pf.expect_find_prices()
             .withf(move |o, s| o == orders.as_slice() && *s == state)
-            .return_const(Ok(solution));
+            .return_once(move |_, _| Ok(solution));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
         assert!(driver.run().is_err());
@@ -415,20 +433,22 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.expect_get_auction_index().return_const(Ok(batch));
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
             .with(eq(batch))
-            .return_const(Ok((state.clone(), orders.clone())));
+            .return_once({
+                let result = (state.clone(), orders.clone());
+                |_| Ok(result)
+            });
 
         submitter
             .expect_get_solution_objective_value()
             .with(eq(batch), eq(orders.clone()), always())
-            .return_const(Err(DriverError::new(
-                "get_solution_objective_value failed",
-                ErrorKind::MiscError,
-            )));
+            .returning(|_, _, _| Err(anyhow!("get_solution_objective_value failed")));
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
@@ -437,7 +457,7 @@ mod tests {
         };
         pf.expect_find_prices()
             .withf(move |o, s| o == orders.as_slice() && *s == state)
-            .return_const(Ok(solution));
+            .return_once(move |_, _| Ok(solution));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 
@@ -459,17 +479,22 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader.expect_get_auction_index().return_const(Ok(batch));
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
             .with(eq(batch))
-            .return_const(Ok((state.clone(), orders.clone())));
+            .return_once({
+                let result = (state.clone(), orders.clone());
+                |_| Ok(result)
+            });
 
         submitter
             .expect_get_solution_objective_value()
             .with(eq(batch), eq(orders.clone()), always())
-            .return_const(Ok(U256::from(1337)));
+            .returning(|_, _, _| Ok(U256::from(1337)));
 
         submitter
             .expect_submit_solution()
@@ -479,10 +504,7 @@ mod tests {
                 always(),
                 eq(U256::from(1337)),
             )
-            .return_const(Err(DriverError::new(
-                "submit_solution failed",
-                ErrorKind::MiscError,
-            )));
+            .returning(|_, _, _, _| Err(anyhow!("submit_solution failed")));
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
@@ -491,7 +513,7 @@ mod tests {
         };
         pf.expect_find_prices()
             .withf(move |o, s| o == orders.as_slice() && *s == state)
-            .return_const(Ok(solution));
+            .return_once(move |_, _| Ok(solution));
 
         let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
 

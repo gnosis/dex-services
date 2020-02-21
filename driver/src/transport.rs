@@ -1,4 +1,4 @@
-use crate::error::DriverError;
+use anyhow::Error;
 use ethcontract::jsonrpc::types::{Call, Output};
 use ethcontract::web3::helpers;
 use ethcontract::web3::{Error as Web3Error, RequestId, Transport};
@@ -28,7 +28,7 @@ struct HttpTransportInner {
 
 impl HttpTransport {
     /// Creates a new HTTP transport with settings.
-    pub fn new(url: impl Into<String>, timeout: Duration) -> Result<HttpTransport, DriverError> {
+    pub fn new(url: impl Into<String>, timeout: Duration) -> Result<HttpTransport, Error> {
         let client = HttpClient::builder()
             .timeout(timeout)
             // NOTE: This is needed as curl will try to upgrade to HTTP/2 which

@@ -1,7 +1,7 @@
 use crate::models::{self, TokenData, TokenId, TokenInfo};
-use crate::price_finding::error::{ErrorKind, PriceFindingError};
 use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverType};
 
+use anyhow::{anyhow, Result};
 use chrono::Utc;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
@@ -156,7 +156,7 @@ mod solver_input {
 pub struct OptimisationPriceFinder {
     // default IO methods can be replaced for unit testing
     write_input: fn(&str, &str) -> std::io::Result<()>,
-    run_solver: fn(&str, &str, SolverType) -> Result<(), PriceFindingError>,
+    run_solver: fn(&str, &str, SolverType) -> Result<()>,
     read_output: fn(&str) -> std::io::Result<String>,
     fee: Option<Fee>,
     solver_type: SolverType,
@@ -210,7 +210,7 @@ fn serialize_balances(
     accounts
 }
 
-fn deserialize_result(result: String) -> Result<models::Solution, PriceFindingError> {
+fn deserialize_result(result: String) -> Result<models::Solution> {
     let output: solver_output::Output = serde_json::from_str(&result)?;
     Ok(output.to_solution())
 }
@@ -220,7 +220,7 @@ impl PriceFinding for OptimisationPriceFinder {
         &self,
         orders: &[models::Order],
         state: &models::AccountState,
-    ) -> Result<models::Solution, PriceFindingError> {
+    ) -> Result<models::Solution> {
         let input = solver_input::Input {
             tokens: serialize_tokens(&orders, &self.token_data),
             ref_token: TokenId(0),
@@ -247,11 +247,7 @@ fn write_input(input_file: &str, input: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-fn run_solver(
-    input_file: &str,
-    result_folder: &str,
-    solver_type: SolverType,
-) -> Result<(), PriceFindingError> {
+fn run_solver(input_file: &str, result_folder: &str, solver_type: SolverType) -> Result<()> {
     let solver_type_str = solver_type.to_args();
     let output = Command::new("python")
         .args(&["-m", "batchauctions.scripts.e2e._run"])
@@ -266,10 +262,7 @@ fn run_solver(
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
-        return Err(PriceFindingError::new(
-            "Solver execution failed",
-            ErrorKind::ExecutionError,
-        ));
+        return Err(anyhow!("Solver execution failed"));
     }
     Ok(())
 }

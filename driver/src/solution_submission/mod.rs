@@ -1,15 +1,12 @@
 #![allow(clippy::ptr_arg)] // required for automock
 
 use crate::contracts::stablex_contract::StableXContract;
-use crate::error::DriverError;
 use crate::models::{Order, Solution};
 
+use anyhow::Result;
+use ethcontract::U256;
 #[cfg(test)]
 use mockall::automock;
-
-use ethcontract::U256;
-
-type Result<T> = std::result::Result<T, DriverError>;
 
 #[cfg_attr(test, automock)]
 pub trait StableXSolutionSubmitting {

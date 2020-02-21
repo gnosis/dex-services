@@ -1,7 +1,7 @@
 use crate::contracts::stablex_contract::StableXContract;
-use crate::error::DriverError;
 use crate::models::{AccountState, Order};
 
+use anyhow::Result;
 use ethcontract::U256;
 #[cfg(test)]
 use mockall::automock;
@@ -12,8 +12,6 @@ mod filtered_orderbook;
 mod paginated_auction_data_reader;
 pub use filtered_orderbook::FilteredOrderbookReader;
 pub use filtered_orderbook::OrderbookFilter;
-
-type Result<T> = std::result::Result<T, DriverError>;
 
 #[cfg_attr(test, automock)]
 pub trait StableXOrderBookReading {
