@@ -63,6 +63,20 @@ struct Options {
     #[structopt(long, env = "SOLVER_TYPE", default_value = "NaiveSolver")]
     solver_type: SolverType,
 
+    /// JSON encoded backup token information to provide to the solver.
+    ///
+    /// For example: '{
+    ///   "T0001": {
+    ///     "alias": "WETH",
+    ///     "decimals": 18,
+    ///     "external_price": 200000000000000000000
+    ///   },
+    ///   "T0004": {
+    ///     "alias": "USDC",
+    ///     "decimals": 6,
+    ///     "external_price": 1000000000000000000000000000000,
+    ///   }
+    /// }'
     #[structopt(long, env = "PRICE_FEED_INFORMATION", default_value = "{}")]
     backup_token_data: TokenData,
 
