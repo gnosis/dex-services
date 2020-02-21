@@ -123,6 +123,7 @@ mod solver_input {
         pub buy_token: TokenId,
         pub sell_amount: Num,
         pub buy_amount: Num,
+        #[serde(rename = "orderID")]
         pub order_id: u16,
     }
 
