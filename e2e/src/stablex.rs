@@ -2,7 +2,7 @@ use crate::*;
 
 use ethcontract::web3::api::Web3;
 use ethcontract::web3::transports::Http;
-use ethcontract::{Account, Address as H160, U256};
+use ethcontract::{Account, Address, U256};
 
 use crate::common::{
     approve, create_accounts_with_funded_tokens, wait_for, FutureBuilderExt, FutureWaitExt, MAX_GAS,
@@ -13,7 +13,7 @@ pub fn setup_stablex(
     num_tokens: usize,
     num_users: usize,
     token_minted: u32,
-) -> (BatchExchange, Vec<H160>, Vec<IERC20>) {
+) -> (BatchExchange, Vec<Address>, Vec<IERC20>) {
     // Get all tokens but OWL in a generic way
     let (accounts, mut tokens) =
         create_accounts_with_funded_tokens(&web3, num_tokens - 1, num_users, token_minted);

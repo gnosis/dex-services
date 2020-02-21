@@ -136,7 +136,7 @@ mod solver_input {
     use super::{Num, TokenDataType, TokenId};
     use crate::models;
     use crate::price_finding;
-    use ethcontract::H160;
+    use ethcontract::Address;
     use serde::Serialize;
     use std::collections::BTreeMap;
     use std::vec::Vec;
@@ -171,7 +171,7 @@ mod solver_input {
     #[serde(rename_all = "camelCase")]
     pub struct Order {
         #[serde(rename = "accountID")]
-        pub account_id: H160,
+        pub account_id: Address,
         pub sell_token: TokenId,
         pub buy_token: TokenId,
         pub sell_amount: Num,
@@ -192,7 +192,7 @@ mod solver_input {
         }
     }
 
-    pub type Accounts = BTreeMap<H160, BTreeMap<TokenId, Num>>;
+    pub type Accounts = BTreeMap<Address, BTreeMap<TokenId, Num>>;
 
     /// JSON serializable solver input data.
     #[derive(Serialize)]
@@ -343,7 +343,7 @@ pub mod tests {
     use super::*;
     use crate::models::AccountState;
     use crate::util::test_util::map_from_slice;
-    use ethcontract::{H160, H256, U256};
+    use ethcontract::{Address, H256, U256};
     use serde_json::json;
     use std::collections::BTreeMap;
 
@@ -568,7 +568,7 @@ pub mod tests {
         let orders = [
             models::Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 100,
@@ -576,7 +576,7 @@ pub mod tests {
             },
             models::Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(1),
+                account_id: Address::from_low_u64_be(1),
                 sell_token: 2,
                 buy_token: 1,
                 sell_amount: 200,
@@ -589,12 +589,12 @@ pub mod tests {
         let mut first = BTreeMap::new();
         first.insert(TokenId(1), Num(200));
         first.insert(TokenId(2), Num(300));
-        expected.insert(H160::zero(), first);
+        expected.insert(Address::zero(), first);
 
         let mut second = BTreeMap::new();
         second.insert(TokenId(1), Num(500));
         second.insert(TokenId(2), Num(600));
-        expected.insert(H160::from_low_u64_be(1), second);
+        expected.insert(Address::from_low_u64_be(1), second);
         assert_eq!(result, expected)
     }
 
@@ -666,7 +666,7 @@ pub mod tests {
         let orders = [
             models::Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 100,
@@ -674,7 +674,7 @@ pub mod tests {
             },
             models::Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(1),
+                account_id: Address::from_low_u64_be(1),
                 sell_token: 2,
                 buy_token: 1,
                 sell_amount: 200,
