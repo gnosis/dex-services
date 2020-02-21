@@ -123,9 +123,9 @@ mod tests {
     #[test]
     fn get_token_prices() {
         let tokens = vec![
-            Token::test(1, "ETH", 18, None),
-            Token::test(4, "USDC", 6, None),
-            Token::test(5, "PAX", 18, None),
+            Token::new(1, "ETH", 18, None),
+            Token::new(4, "USDC", 6, None),
+            Token::new(5, "PAX", 18, None),
         ];
 
         let mut api = MockKrakenApi::new();
@@ -178,16 +178,16 @@ mod tests {
         // ```
 
         let tokens = vec![
-            Token::test(1, "WETH", 18, None),
-            Token::test(2, "USDT", 6, None),
-            Token::test(3, "TUSD", 18, None),
-            Token::test(4, "USDC", 6, None),
-            Token::test(5, "PAX", 18, None),
-            Token::test(6, "GUSD", 2, None),
-            Token::test(7, "DAI", 18, None),
-            Token::test(8, "sETH", 18, None),
-            Token::test(9, "sUSD", 18, None),
-            Token::test(15, "SNX", 18, None),
+            Token::new(1, "WETH", 18, None),
+            Token::new(2, "USDT", 6, None),
+            Token::new(3, "TUSD", 18, None),
+            Token::new(4, "USDC", 6, None),
+            Token::new(5, "PAX", 18, None),
+            Token::new(6, "GUSD", 2, None),
+            Token::new(7, "DAI", 18, None),
+            Token::new(8, "sETH", 18, None),
+            Token::new(9, "sUSD", 18, None),
+            Token::new(15, "SNX", 18, None),
         ];
 
         let client = KrakenClient::new().unwrap();

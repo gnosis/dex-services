@@ -153,21 +153,17 @@ impl Token {
         (usd_price * 10f64.powi(pow)) as _
     }
 
-    /// Creates a new token with a fictional address for testing.
+    /// Creates a new token from its parameters.
     #[cfg(test)]
-    pub fn test(
-        index: u16,
-        symbol: &'static str,
+    pub fn new(
+        id: impl Into<TokenId>,
+        symbol: impl Into<String>,
         decimals: u8,
-        external_price: Option<u128>,
+        external_price: impl Into<Option<u128>>,
     ) -> Self {
         Token {
-            id: TokenId(index),
-            info: TokenInfo {
-                alias: symbol.into(),
-                decimals,
-                external_price,
-            },
+            id: id.into(),
+            info: TokenInfo::new(symbol, decimals, external_price),
         }
     }
 }
@@ -190,9 +186,9 @@ mod tests {
 
     #[test]
     fn price_oracle_fetches_token_prices() {
-        let tokens = TokenData::test(hash_map! {
-            TokenId(1) => TokenInfo::test("WETH", 18, None),
-            TokenId(2) => TokenInfo::test("USDT", 6, Some(999_999_999_999_999_999)),
+        let tokens = TokenData::from(hash_map! {
+            TokenId(1) => TokenInfo::new("WETH", 18, None),
+            TokenId(2) => TokenInfo::new("USDT", 6, 999_999_999_999_999_999),
         });
 
         let mut source = MockPriceSource::new();
@@ -203,8 +199,8 @@ mod tests {
                 tokens.sort_unstable_by_key(|token| token.id);
                 tokens
                     == [
-                        Token::test(1, "WETH", 18, None),
-                        Token::test(2, "USDT", 6, Some(999_999_999_999_999_999)),
+                        Token::new(1, "WETH", 18, None),
+                        Token::new(2, "USDT", 6, 999_999_999_999_999_999),
                     ]
             })
             .returning(|_| {
@@ -226,8 +222,8 @@ mod tests {
             prices,
             btree_map! {
                 TokenId(0) => None,
-                TokenId(1) => Some(TokenInfo::test("WETH", 18, None)),
-                TokenId(2) => Some(TokenInfo::test("USDT", 6, Some(1_000_000_000_000_000_000))),
+                TokenId(1) => Some(TokenInfo::new("WETH", 18, None)),
+                TokenId(2) => Some(TokenInfo::new("USDT", 6, 1_000_000_000_000_000_000)),
                 TokenId(3) => None,
             }
         );
@@ -235,9 +231,9 @@ mod tests {
 
     #[test]
     fn price_oracle_without_fallback_price() {
-        let tokens = TokenData::test(hash_map! {
-            TokenId(1) => TokenInfo::test("WETH", 18, None),
-            TokenId(2) => TokenInfo::test("USDT", 6, None),
+        let tokens = TokenData::from(hash_map! {
+            TokenId(1) => TokenInfo::new("WETH", 18, None),
+            TokenId(2) => TokenInfo::new("USDT", 6, None),
         });
 
         let mut source = MockPriceSource::new();
@@ -254,16 +250,16 @@ mod tests {
             prices,
             btree_map! {
                 TokenId(0) => None,
-                TokenId(1) => Some(TokenInfo::test("WETH", 18, None)),
-                TokenId(2) => Some(TokenInfo::test("USDT", 6, Some(1_000_000_000_000_000_000))),
+                TokenId(1) => Some(TokenInfo::new("WETH", 18, None)),
+                TokenId(2) => Some(TokenInfo::new("USDT", 6, 1_000_000_000_000_000_000)),
             }
         );
     }
 
     #[test]
     fn price_oracle_ignores_source_error() {
-        let tokens = TokenData::test(hash_map! {
-            TokenId(1) => TokenInfo::test("WETH", 18, None),
+        let tokens = TokenData::from(hash_map! {
+            TokenId(1) => TokenInfo::new("WETH", 18, None),
         });
 
         let mut source = MockPriceSource::new();
@@ -278,7 +274,7 @@ mod tests {
             prices,
             btree_map! {
                 TokenId(0) => None,
-                TokenId(1) => Some(TokenInfo::test("WETH", 18, None)),
+                TokenId(1) => Some(TokenInfo::new("WETH", 18, None)),
             }
         );
     }
@@ -293,8 +289,8 @@ mod tests {
 
     #[test]
     fn price_oracle_uses_uses_fallback_prices() {
-        let tokens = TokenData::test(hash_map! {
-            TokenId(7) => TokenInfo::test("DAI", 18, Some(1_000_000_000_000_000_000)),
+        let tokens = TokenData::from(hash_map! {
+            TokenId(7) => TokenInfo::new("DAI", 18, 1_000_000_000_000_000_000),
         });
 
         let mut source = MockPriceSource::new();
@@ -307,7 +303,7 @@ mod tests {
             prices,
             btree_map! {
                 TokenId(0) => None,
-                TokenId(7) => Some(TokenInfo::test("DAI", 18, Some(1_000_000_000_000_000_000))),
+                TokenId(7) => Some(TokenInfo::new("DAI", 18, 1_000_000_000_000_000_000)),
             }
         );
     }
@@ -315,11 +311,11 @@ mod tests {
     #[test]
     fn token_get_price() {
         for (token, usd_price, expected) in &[
-            (Token::test(4, "USDC", 6, None), 0.99, 0.99 * 10f64.powi(30)),
-            (Token::test(7, "DAI", 18, None), 1.01, 1.01 * 10f64.powi(18)),
-            (Token::test(42, "FAKE", 32, None), 1.0, 10f64.powi(4)),
+            (Token::new(4, "USDC", 6, None), 0.99, 0.99 * 10f64.powi(30)),
+            (Token::new(7, "DAI", 18, None), 1.01, 1.01 * 10f64.powi(18)),
+            (Token::new(42, "FAKE", 32, None), 1.0, 10f64.powi(4)),
             (
-                Token::test(99, "SCAM", 42, None),
+                Token::new(99, "SCAM", 42, None),
                 10f64.powi(10),
                 10f64.powi(4),
             ),
@@ -332,13 +328,13 @@ mod tests {
     #[test]
     fn token_get_price_without_rounding_error() {
         assert_eq!(
-            Token::test(0, "OWL", 18, None).get_owl_price(1.0),
+            Token::new(0, "OWL", 18, None).get_owl_price(1.0),
             1_000_000_000_000_000_000,
         );
     }
 
     #[test]
     fn weth_token_symbol_is_eth() {
-        assert_eq!(Token::test(1, "WETH", 18, None).symbol(), "ETH");
+        assert_eq!(Token::new(1, "WETH", 18, None).symbol(), "ETH");
     }
 }

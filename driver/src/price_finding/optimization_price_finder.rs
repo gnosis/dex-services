@@ -503,7 +503,7 @@ pub mod tests {
             .withf(|orders| orders == [])
             .returning(|_| {
                 btree_map! {
-                    TokenId(0) => Some(TokenInfo::test("T1", 18, Some(1_000_000_000_000_000_000))),
+                    TokenId(0) => Some(TokenInfo::new("T1", 18, 1_000_000_000_000_000_000)),
                 }
             });
 
@@ -555,8 +555,8 @@ pub mod tests {
 
         let tokens = btree_map! {
             TokenId(1) => None,
-            TokenId(2) => Some(TokenInfo::test("T2", 18, Some(1_000_000_000_000_000_000))),
-            TokenId(4) => Some(TokenInfo::test("T4", 6, None)),
+            TokenId(2) => Some(TokenInfo::new("T2", 18, 1_000_000_000_000_000_000)),
+            TokenId(4) => Some(TokenInfo::new("T4", 6, None)),
         };
 
         let orders = [
