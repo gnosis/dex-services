@@ -4,7 +4,7 @@
 #[allow(dead_code)]
 mod kraken;
 
-pub use crate::price_finding::TokenId;
+use crate::models::{TokenId, TokenInfo};
 use anyhow::Result;
 use ethcontract::H160;
 use std::collections::HashMap;
@@ -18,27 +18,34 @@ use std::collections::HashMap;
 struct Token {
     id: TokenId,
     address: H160,
-    symbol: String,
-    decimals: u8,
+    info: TokenInfo,
 }
 
 impl Token {
+    /// Gets the ERC20 token symbol.
+    fn symbol(&self) -> &str {
+        &self.info.alias
+    }
+
     /// Converts the prices from USD into the unit expected by the contract.
     /// This price is relative to the OWL token which is considered pegged at
     /// exactly 1 USD with 18 decimals.
     fn get_owl_price(&self, usd_price: f64) -> u128 {
-        let pow = 36 - (self.decimals as i32);
+        let pow = 36 - (self.info.decimals as i32);
         (usd_price * 10f64.powi(pow)) as _
     }
 
     /// Creates a new token with a fictional address for testing.
     #[cfg(test)]
-    fn test(index: u16, symbol: &str, decimals: u8) -> Token {
+    pub fn test(index: u16, symbol: &str, decimals: u8) -> Self {
         Token {
             id: TokenId(index),
             address: H160::repeat_byte(index as _),
-            symbol: symbol.into(),
-            decimals,
+            info: TokenInfo {
+                alias: symbol.into(),
+                decimals,
+                external_price: 0,
+            },
         }
     }
 }
