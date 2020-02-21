@@ -503,7 +503,7 @@ pub mod tests {
             .withf(|orders| orders == [])
             .returning(|_| {
                 btree_map! {
-                    TokenId(0) => Some(TokenInfo::test("T1", 18, 1_000_000_000_000_000_000)),
+                    TokenId(0) => Some(TokenInfo::test("T1", 18, Some(1_000_000_000_000_000_000))),
                 }
             });
 
@@ -539,6 +539,7 @@ pub mod tests {
         let mut user1_balances = BTreeMap::new();
         user1_balances.insert(TokenId(3), Num(100));
         user1_balances.insert(TokenId(2), Num(100));
+        user1_balances.insert(TokenId(4), Num(100));
         user1_balances.insert(TokenId(1), Num(100));
         user1_balances.insert(TokenId(0), Num(100));
 
@@ -554,7 +555,8 @@ pub mod tests {
 
         let tokens = btree_map! {
             TokenId(1) => None,
-            TokenId(2) => Some(TokenInfo::test("T1", 18, 1_000_000_000_000_000_000)),
+            TokenId(2) => Some(TokenInfo::test("T2", 18, Some(1_000_000_000_000_000_000))),
+            TokenId(4) => Some(TokenInfo::test("T4", 6, None)),
         };
 
         let orders = [
@@ -587,7 +589,7 @@ pub mod tests {
         let result = serde_json::to_string(&input).expect("Unable to serialize account state");
         assert_eq!(
             result,
-            r#"{"tokens":{"T0001":null,"T0002":{"alias":"T1","decimals":18,"externalPrice":1000000000000000000}},"refToken":"T0000","accounts":{"0x13a0b42b9c180065510615972858bf41d1972a55":{},"0x4fd7c947ca0aba9d8678885e2b8c4d6a4e946984":{"T0000":"100","T0001":"100","T0002":"100","T0003":"100"}},"orders":[{"accountID":"0x0000000000000000000000000000000000000000","sellToken":"T0001","buyToken":"T0002","sellAmount":"100","buyAmount":"200","orderId":0},{"accountID":"0x0000000000000000000000000000000000000001","sellToken":"T0002","buyToken":"T0001","sellAmount":"200","buyAmount":"100","orderId":0}],"fee":null}"#
+            r#"{"tokens":{"T0001":null,"T0002":{"alias":"T2","decimals":18,"externalPrice":1000000000000000000},"T0004":{"alias":"T4","decimals":6,"externalPrice":null}},"refToken":"T0000","accounts":{"0x13a0b42b9c180065510615972858bf41d1972a55":{},"0x4fd7c947ca0aba9d8678885e2b8c4d6a4e946984":{"T0000":"100","T0001":"100","T0002":"100","T0003":"100","T0004":"100"}},"orders":[{"accountID":"0x0000000000000000000000000000000000000000","sellToken":"T0001","buyToken":"T0002","sellAmount":"100","buyAmount":"200","orderId":0},{"accountID":"0x0000000000000000000000000000000000000001","sellToken":"T0002","buyToken":"T0001","sellAmount":"200","buyAmount":"100","orderId":0}],"fee":null}"#
         );
     }
 }

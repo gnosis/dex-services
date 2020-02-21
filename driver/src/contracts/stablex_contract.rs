@@ -62,7 +62,7 @@ impl<'a> StableXContractImpl<'a> {
 #[cfg_attr(test, automock)]
 pub trait StableXContract {
     /// Retrieve the address of a token by ID.
-    fn get_token_address(&self, id: u16) -> Result<H160>;
+    fn get_token_address(&self, id: u16) -> Result<Address>;
 
     fn get_current_auction_index(&self) -> Result<U256>;
 
@@ -94,7 +94,7 @@ pub trait StableXContract {
 }
 
 impl<'a> StableXContract for StableXContractImpl<'a> {
-    fn get_token_address(&self, id: u16) -> Result<H160> {
+    fn get_token_address(&self, id: u16) -> Result<Address> {
         let address = self.instance.token_id_to_address_map(id).call().wait()?;
         Ok(address)
     }

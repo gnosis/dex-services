@@ -60,13 +60,13 @@ impl From<u16> for TokenId {
 pub struct TokenInfo {
     pub alias: String,
     pub decimals: u8,
-    pub external_price: u128,
+    pub external_price: Option<u128>,
 }
 
 impl TokenInfo {
     /// Utility method for creating a token for unit tests.
     #[cfg(test)]
-    pub fn test(alias: &str, decimals: u8, external_price: u128) -> Self {
+    pub fn test(alias: &str, decimals: u8, external_price: Option<u128>) -> Self {
         TokenInfo {
             alias: alias.into(),
             decimals,
