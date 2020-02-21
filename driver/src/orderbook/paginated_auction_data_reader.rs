@@ -1,6 +1,6 @@
 use crate::contracts::stablex_auction_element::{StableXAuctionElement, AUCTION_ELEMENT_WIDTH};
 use crate::models::{AccountState, Order};
-use ethcontract::{Address as H160, U256};
+use ethcontract::{Address, U256};
 use std::collections::HashMap;
 
 /// Handles reading of auction data that has been encoded with the smart
@@ -15,15 +15,15 @@ pub struct PaginatedAuctionDataReader {
     /// The index of batch whose orders we are filtering for.
     index: U256,
     /// The total number of orders per user.
-    user_order_counts: HashMap<H160, usize>,
+    user_order_counts: HashMap<Address, usize>,
 }
 
 /// Data for the next call to the smart contract's `getEncodedUsersPaginated`
 /// function (which should be named `getEncodedOrdersPaginated`).
 pub struct Pagination {
-    /// The user of the last received order or H160::zero when no order has been
+    /// The user of the last received order or Address::zero when no order has been
     /// received.
-    pub previous_page_user: H160,
+    pub previous_page_user: Address,
     /// The number of received orders for `previous_page_user`.
     pub previous_page_user_offset: usize,
 }
@@ -35,7 +35,7 @@ impl PaginatedAuctionDataReader {
             account_state: AccountState::default(),
             orders: Vec::new(),
             pagination: Pagination {
-                previous_page_user: H160::zero(),
+                previous_page_user: Address::zero(),
                 previous_page_user_offset: 0,
             },
             index,
@@ -201,7 +201,7 @@ pub mod tests {
     lazy_static! {
         static ref ORDER_1: Order = Order {
             id: 0,
-            account_id: H160::from_low_u64_be(1),
+            account_id: Address::from_low_u64_be(1),
             sell_token: 257,
             buy_token: 258,
             sell_amount: 257,
@@ -209,7 +209,7 @@ pub mod tests {
         };
         static ref ORDER_2: Order = Order {
             id: 1,
-            account_id: H160::from_low_u64_be(1),
+            account_id: Address::from_low_u64_be(1),
             sell_token: 258,
             buy_token: 257,
             sell_amount: 256,
@@ -232,8 +232,8 @@ pub mod tests {
         assert_eq!(reader.apply_page(&bytes), 2);
 
         let mut account_state = AccountState::default();
-        account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 4);
-        account_state.modify_balance(H160::from_low_u64_be(1), 258, |x| *x = 5);
+        account_state.modify_balance(Address::from_low_u64_be(1), 257, |x| *x = 4);
+        account_state.modify_balance(Address::from_low_u64_be(1), 258, |x| *x = 5);
 
         assert_eq!(reader.account_state, account_state);
         assert_eq!(reader.orders, [ORDER_1.clone(), ORDER_2.clone()]);
@@ -249,7 +249,7 @@ pub mod tests {
 
         bytes.extend(ORDER_1_BYTES);
         assert_eq!(reader.apply_page(&bytes), 1);
-        account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 4);
+        account_state.modify_balance(Address::from_low_u64_be(1), 257, |x| *x = 4);
         assert_eq!(reader.account_state, account_state);
         assert_eq!(reader.orders, [ORDER_1.clone()]);
         assert_eq!(reader.pagination.previous_page_user, ORDER_1.account_id);
@@ -258,7 +258,7 @@ pub mod tests {
         bytes.clear();
         bytes.extend(ORDER_2_BYTES);
         assert_eq!(reader.apply_page(&bytes), 1);
-        account_state.modify_balance(H160::from_low_u64_be(1), 258, |x| *x = 5);
+        account_state.modify_balance(Address::from_low_u64_be(1), 258, |x| *x = 5);
         assert_eq!(reader.account_state, account_state);
         assert_eq!(reader.orders, [ORDER_1.clone(), ORDER_2.clone()]);
         assert_eq!(reader.pagination.previous_page_user, ORDER_1.account_id);
@@ -267,11 +267,11 @@ pub mod tests {
         bytes.clear();
         bytes.extend(ORDER_3_BYTES);
         assert_eq!(reader.apply_page(&bytes), 1);
-        account_state.modify_balance(H160::from_low_u64_be(2), 257, |x| *x = 6);
+        account_state.modify_balance(Address::from_low_u64_be(2), 257, |x| *x = 6);
         assert_eq!(reader.account_state, account_state);
         assert_eq!(
             reader.pagination.previous_page_user,
-            H160::from_low_u64_be(2)
+            Address::from_low_u64_be(2)
         );
         assert_eq!(reader.pagination.previous_page_user_offset, 1);
     }
@@ -284,7 +284,7 @@ pub mod tests {
 
         bytes.extend(ORDER_1_BYTES);
         assert_eq!(reader.apply_page(&bytes), 1);
-        account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 4);
+        account_state.modify_balance(Address::from_low_u64_be(1), 257, |x| *x = 4);
         assert_eq!(reader.account_state, account_state);
         assert_eq!(reader.orders, [ORDER_1.clone()]);
         assert_eq!(reader.pagination.previous_page_user, ORDER_1.account_id);
@@ -294,12 +294,12 @@ pub mod tests {
         bytes.extend(ORDER_2_BYTES);
         bytes.extend(ORDER_3_BYTES);
         assert_eq!(reader.apply_page(&bytes), 2);
-        account_state.modify_balance(H160::from_low_u64_be(1), 258, |x| *x = 5);
-        account_state.modify_balance(H160::from_low_u64_be(2), 257, |x| *x = 6);
+        account_state.modify_balance(Address::from_low_u64_be(1), 258, |x| *x = 5);
+        account_state.modify_balance(Address::from_low_u64_be(2), 257, |x| *x = 6);
         assert_eq!(reader.account_state, account_state);
         assert_eq!(
             reader.pagination.previous_page_user,
-            H160::from_low_u64_be(2)
+            Address::from_low_u64_be(2)
         );
         assert_eq!(reader.pagination.previous_page_user_offset, 1);
     }
@@ -314,8 +314,8 @@ pub mod tests {
         assert_eq!(reader.apply_page(&bytes), 2);
 
         let mut account_state = AccountState::default();
-        account_state.modify_balance(H160::from_low_u64_be(1), 257, |x| *x = 4);
-        account_state.modify_balance(H160::from_low_u64_be(1), 258, |x| *x = 5);
+        account_state.modify_balance(Address::from_low_u64_be(1), 257, |x| *x = 4);
+        account_state.modify_balance(Address::from_low_u64_be(1), 258, |x| *x = 5);
 
         assert_eq!(reader.account_state, account_state);
         // orders is empty because `index` does not match

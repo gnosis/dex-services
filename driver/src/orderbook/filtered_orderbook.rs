@@ -1,8 +1,7 @@
 use super::*;
 
 use crate::models::{AccountState, Order};
-use anyhow::Error;
-use ethcontract::{Address as H160, U256};
+use ethcontract::{Address, U256};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
@@ -16,7 +15,7 @@ pub struct OrderbookFilter {
 
     /// User addresses mapped to which of their orders to filter
     #[serde(default)]
-    users: HashMap<H160, UserOrderFilter>,
+    users: HashMap<Address, UserOrderFilter>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
@@ -90,11 +89,11 @@ mod test {
             tokens: [1, 2].iter().copied().collect(),
             users: [
                 (
-                    H160::from_str("7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B").unwrap(),
+                    Address::from_str("7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B").unwrap(),
                     UserOrderFilter::All,
                 ),
                 (
-                    H160::from_str("7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A").unwrap(),
+                    Address::from_str("7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A").unwrap(),
                     UserOrderFilter::OrderIds([0u16, 1u16].iter().copied().collect()),
                 ),
             ]
@@ -113,9 +112,10 @@ mod test {
         bad_buy_token.buy_token = 5;
 
         let mut bad_user = create_order_for_test();
-        bad_user.account_id = H160::from_str("7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B").unwrap();
+        bad_user.account_id =
+            Address::from_str("7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B").unwrap();
 
-        let mixed_user = H160::from_str("7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A").unwrap();
+        let mixed_user = Address::from_str("7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A").unwrap();
         let mut mixed_user_good_order = create_order_for_test();
         mixed_user_good_order.account_id = mixed_user;
         mixed_user_good_order.id = 0;
