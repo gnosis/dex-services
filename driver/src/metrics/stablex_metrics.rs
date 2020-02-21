@@ -1,7 +1,5 @@
-use crate::error::DriverError;
-use crate::price_finding::error::PriceFindingError;
-
 use crate::models::{AccountState, Order, Solution};
+use anyhow::Result;
 use chrono::Utc;
 use ethcontract::U256;
 use prometheus::{IntCounterVec, IntGaugeVec, Opts, Registry};
@@ -74,7 +72,7 @@ impl StableXMetrics {
         }
     }
 
-    pub fn auction_processing_started(&self, res: &Result<U256, DriverError>) {
+    pub fn auction_processing_started(&self, res: &Result<U256>) {
         let stage_label = &[ProcessingStage::Started.as_ref()];
         match res {
             Ok(batch) => {
@@ -86,11 +84,7 @@ impl StableXMetrics {
         };
     }
 
-    pub fn auction_orders_fetched(
-        &self,
-        batch: U256,
-        res: &Result<(AccountState, Vec<Order>), DriverError>,
-    ) {
+    pub fn auction_orders_fetched(&self, batch: U256, res: &Result<(AccountState, Vec<Order>)>) {
         let stage_label = &[ProcessingStage::OrdersFetched.as_ref()];
         let book_label = &[BookType::Orderbook.as_ref()];
         self.processing_times
@@ -112,12 +106,7 @@ impl StableXMetrics {
         }
     }
 
-    pub fn auction_solution_computed(
-        &self,
-        batch: U256,
-        orders: &[Order],
-        res: &Result<Solution, PriceFindingError>,
-    ) {
+    pub fn auction_solution_computed(&self, batch: U256, orders: &[Order], res: &Result<Solution>) {
         let stage_label = &[ProcessingStage::Solved.as_ref()];
         let book_label = &[BookType::Solution.as_ref()];
         self.processing_times
@@ -145,7 +134,7 @@ impl StableXMetrics {
         }
     }
 
-    pub fn auction_solution_verified(&self, batch: U256, res: &Result<U256, DriverError>) {
+    pub fn auction_solution_verified(&self, batch: U256, res: &Result<U256>) {
         let stage_label = &[ProcessingStage::Solved.as_ref()];
         self.processing_times
             .with_label_values(stage_label)
@@ -156,7 +145,7 @@ impl StableXMetrics {
         }
     }
 
-    pub fn auction_solution_submitted(&self, batch: U256, res: &Result<(), DriverError>) {
+    pub fn auction_solution_submitted(&self, batch: U256, res: &Result<()>) {
         let stage_label = &[ProcessingStage::Submitted.as_ref()];
         self.processing_times
             .with_label_values(stage_label)

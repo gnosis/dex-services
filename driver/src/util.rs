@@ -2,7 +2,7 @@ use ethcontract::U256;
 use log::info;
 use std::future::Future;
 
-use crate::price_finding::optimization_price_finder::TokenData;
+use crate::models::TokenData;
 use crate::price_finding::{Fee, NaiveSolver, OptimisationPriceFinder, PriceFinding, SolverType};
 
 pub trait CeiledDiv {

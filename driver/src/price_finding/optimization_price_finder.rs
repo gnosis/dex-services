@@ -1,48 +1,15 @@
-use crate::error::DriverError;
-use crate::models;
-use crate::price_finding::error::{ErrorKind, PriceFindingError};
+use crate::models::{self, TokenData, TokenId, TokenInfo};
 use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverType};
 
+use anyhow::{anyhow, Result};
 use chrono::Utc;
 use log::{debug, error};
-use serde::de::Error as _;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use serde_with::rust::display_fromstr;
-use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::process::Command;
-use std::str::FromStr;
-
-/// A token ID wrapper type that implements JSON serialization in the solver
-/// format.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialOrd, PartialEq)]
-pub struct TokenId(pub u16);
-
-impl<'de> Deserialize<'de> for TokenId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let key = Cow::<str>::deserialize(deserializer)?;
-        if !key.starts_with('T') || key.len() != 5 {
-            return Err(D::Error::custom("Token ID must be of the form 'Txxxx'"));
-        }
-
-        let id = key[1..].parse::<u16>().map_err(D::Error::custom)?;
-        Ok(TokenId(id))
-    }
-}
-
-impl Serialize for TokenId {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        format!("T{:04}", self.0).serialize(serializer)
-    }
-}
 
 /// A number wrapper type that correctly serializes large u128`s to strings to
 /// avoid precision loss.
@@ -57,27 +24,7 @@ impl Serialize for TokenId {
 #[serde(transparent)]
 pub struct Num(#[serde(with = "display_fromstr")] pub u128);
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct TokenInfo {
-    alias: String,
-    decimals: u8,
-    external_price: u128,
-}
-
 pub type TokenDataType = BTreeMap<TokenId, Option<TokenInfo>>;
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TokenData(TokenDataType);
-
-impl FromStr for TokenData {
-    type Err = DriverError;
-    fn from_str(token_data: &str) -> Result<Self, DriverError> {
-        Ok(serde_json::from_str(token_data).map_err(|e| {
-            error!("Error parsing token info: {}", &e);
-            e
-        })?)
-    }
-}
 
 mod solver_output {
     use super::{Num, TokenId};
@@ -136,7 +83,7 @@ mod solver_input {
     use super::{Num, TokenDataType, TokenId};
     use crate::models;
     use crate::price_finding;
-    use ethcontract::H160;
+    use ethcontract::Address;
     use serde::Serialize;
     use std::collections::BTreeMap;
     use std::vec::Vec;
@@ -171,7 +118,7 @@ mod solver_input {
     #[serde(rename_all = "camelCase")]
     pub struct Order {
         #[serde(rename = "accountID")]
-        pub account_id: H160,
+        pub account_id: Address,
         pub sell_token: TokenId,
         pub buy_token: TokenId,
         pub sell_amount: Num,
@@ -192,7 +139,7 @@ mod solver_input {
         }
     }
 
-    pub type Accounts = BTreeMap<H160, BTreeMap<TokenId, Num>>;
+    pub type Accounts = BTreeMap<Address, BTreeMap<TokenId, Num>>;
 
     /// JSON serializable solver input data.
     #[derive(Serialize)]
@@ -209,7 +156,7 @@ mod solver_input {
 pub struct OptimisationPriceFinder {
     // default IO methods can be replaced for unit testing
     write_input: fn(&str, &str) -> std::io::Result<()>,
-    run_solver: fn(&str, &str, SolverType, u32) -> Result<(), PriceFindingError>,
+    run_solver: fn(&str, &str, SolverType, u32) -> Result<()>,
     read_output: fn(&str) -> std::io::Result<String>,
     fee: Option<Fee>,
     solver_type: SolverType,
@@ -247,10 +194,8 @@ fn serialize_tokens(orders: &[models::Order], token_data: &TokenData) -> TokenDa
     token_ids
         .iter()
         .map(|id| {
-            (
-                TokenId(*id),
-                (*token_data.0.get(&TokenId(*id)).unwrap_or(&None)).clone(),
-            )
+            let id = TokenId(*id);
+            (id, token_data.info(id).cloned())
         })
         .collect()
 }
@@ -272,7 +217,7 @@ fn serialize_balances(
     accounts
 }
 
-fn deserialize_result(result: String) -> Result<models::Solution, PriceFindingError> {
+fn deserialize_result(result: String) -> Result<models::Solution> {
     let output: solver_output::Output = serde_json::from_str(&result)?;
     Ok(output.to_solution())
 }
@@ -282,7 +227,7 @@ impl PriceFinding for OptimisationPriceFinder {
         &self,
         orders: &[models::Order],
         state: &models::AccountState,
-    ) -> Result<models::Solution, PriceFindingError> {
+    ) -> Result<models::Solution> {
         let input = solver_input::Input {
             tokens: serialize_tokens(&orders, &self.token_data),
             ref_token: TokenId(0),
@@ -319,7 +264,7 @@ fn run_solver(
     result_folder: &str,
     solver_type: SolverType,
     solver_time_limit: u32,
-) -> Result<(), PriceFindingError> {
+) -> Result<()> {
     let solver_type_str = solver_type.to_args();
     let output = Command::new("python")
         .args(&["-m", "batchauctions.scripts.e2e._run"])
@@ -335,10 +280,7 @@ fn run_solver(
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
-        return Err(PriceFindingError::new(
-            "Solver execution failed",
-            ErrorKind::ExecutionError,
-        ));
+        return Err(anyhow!("Solver execution failed"));
     }
     Ok(())
 }
@@ -357,7 +299,7 @@ pub mod tests {
     use super::*;
     use crate::models::AccountState;
     use crate::util::test_util::map_from_slice;
-    use ethcontract::{H160, H256, U256};
+    use ethcontract::{Address, H256, U256};
     use serde_json::json;
     use std::collections::BTreeMap;
 
@@ -384,19 +326,10 @@ pub mod tests {
 
     #[test]
     fn test_serialize_tokens() {
-        let mut token_data = TokenData(BTreeMap::new());
-        let token_info_1 = Some(TokenInfo {
-            alias: String::from("T1"),
-            decimals: 18,
-            external_price: 1_000_000_000_000_000_000,
+        let token_data = TokenData::test(hash_map! {
+            TokenId(0) => TokenInfo::test("T1", 18, 1_000_000_000_000_000_000),
+            TokenId(2) => TokenInfo::test("T2", 13, 1_000_000_000_000_000_000),
         });
-        let token_info_2 = Some(TokenInfo {
-            alias: String::from("T2"),
-            decimals: 13,
-            external_price: 1_000_000_000_000_000_000,
-        });
-        token_data.0.insert(TokenId(0), token_info_1.clone());
-        token_data.0.insert(TokenId(2), token_info_2.clone());
 
         let orders = [
             models::Order {
@@ -410,10 +343,11 @@ pub mod tests {
                 ..models::Order::default()
             },
         ];
+
         let result = serialize_tokens(&orders, &token_data);
         let mut expected = BTreeMap::new();
-        expected.insert(TokenId(0), token_info_1);
-        expected.insert(TokenId(2), token_info_2);
+        expected.insert(TokenId(0), token_data.info(0).cloned());
+        expected.insert(TokenId(2), token_data.info(2).cloned());
         expected.insert(TokenId(4), None);
         assert_eq!(result, expected);
     }
@@ -582,7 +516,7 @@ pub mod tests {
         let orders = [
             models::Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 100,
@@ -590,7 +524,7 @@ pub mod tests {
             },
             models::Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(1),
+                account_id: Address::from_low_u64_be(1),
                 sell_token: 2,
                 buy_token: 1,
                 sell_amount: 200,
@@ -603,12 +537,12 @@ pub mod tests {
         let mut first = BTreeMap::new();
         first.insert(TokenId(1), Num(200));
         first.insert(TokenId(2), Num(300));
-        expected.insert(H160::zero(), first);
+        expected.insert(Address::zero(), first);
 
         let mut second = BTreeMap::new();
         second.insert(TokenId(1), Num(500));
         second.insert(TokenId(2), Num(600));
-        expected.insert(H160::from_low_u64_be(1), second);
+        expected.insert(Address::from_low_u64_be(1), second);
         assert_eq!(result, expected)
     }
 
@@ -618,11 +552,9 @@ pub mod tests {
             token: 0,
             ratio: 0.001,
         };
-        let mut token_data = TokenData(BTreeMap::new());
-        let token_info = Some(TokenInfo {
-            alias: String::from("T1"),
-            decimals: 18,
-            external_price: 1_000_000_000_000_000_000,
+
+        let token_data = TokenData::test(hash_map! {
+            TokenId(0) => TokenInfo::test("T1", 18, 1_000_000_000_000_000_000),
         });
         token_data.0.insert(TokenId(0), token_info);
         let solver_time_limit: u32 = 180;
@@ -671,18 +603,15 @@ pub mod tests {
             "13a0b42b9c180065510615972858bf41d1972a55".parse().unwrap(),
             BTreeMap::new(),
         );
-        let mut token_data = TokenData(BTreeMap::new());
-        let token_info_1 = Some(TokenInfo {
-            alias: String::from("T1"),
-            decimals: 18,
-            external_price: 1_000_000_000_000_000_000,
+
+        let token_data = TokenData::test(hash_map! {
+            TokenId(2) => TokenInfo::test("T1", 18, 1_000_000_000_000_000_000),
         });
-        token_data.0.insert(TokenId(2), token_info_1);
 
         let orders = [
             models::Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 100,
@@ -690,7 +619,7 @@ pub mod tests {
             },
             models::Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(1),
+                account_id: Address::from_low_u64_be(1),
                 sell_token: 2,
                 buy_token: 1,
                 sell_amount: 200,

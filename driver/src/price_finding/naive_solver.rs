@@ -1,10 +1,10 @@
 use crate::models::{AccountState, Order, Solution};
-use crate::price_finding::error::PriceFindingError;
 use crate::price_finding::price_finder_interface::{Fee, PriceFinding};
 use crate::util::{CeiledDiv, CheckedConvertU128};
 
 use std::collections::HashMap;
 
+use anyhow::Result;
 use ethcontract::U256;
 
 const BASE_UNIT: u128 = 1_000_000_000_000_000_000u128;
@@ -112,11 +112,7 @@ impl NaiveSolver {
 }
 
 impl PriceFinding for NaiveSolver {
-    fn find_prices(
-        &self,
-        orders: &[Order],
-        state: &AccountState,
-    ) -> Result<Solution, PriceFindingError> {
+    fn find_prices(&self, orders: &[Order], state: &AccountState) -> Result<Solution> {
         // Initialize trivial solution (default of zero indicates untouched token).
         let mut prices = HashMap::new();
         let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
@@ -282,7 +278,7 @@ fn executed_buy_amount(
 pub mod tests {
     use super::*;
     use crate::models::AccountState;
-    use ethcontract::{Address as H160, H256, U256};
+    use ethcontract::{Address, H256, U256};
     use std::collections::HashMap;
 
     #[test]
@@ -399,7 +395,7 @@ pub mod tests {
         let orders = vec![
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 sell_token: 3,
                 buy_token: 2,
                 sell_amount: 12,
@@ -407,7 +403,7 @@ pub mod tests {
             },
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(1),
+                account_id: Address::from_low_u64_be(1),
                 sell_token: 2,
                 buy_token: 3,
                 sell_amount: 20,
@@ -415,7 +411,7 @@ pub mod tests {
             },
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(2),
+                account_id: Address::from_low_u64_be(2),
                 sell_token: 3,
                 buy_token: 1,
                 sell_amount: 10,
@@ -423,7 +419,7 @@ pub mod tests {
             },
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(3),
+                account_id: Address::from_low_u64_be(3),
                 sell_token: 2,
                 buy_token: 1,
                 sell_amount: 15,
@@ -431,7 +427,7 @@ pub mod tests {
             },
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(4),
+                account_id: Address::from_low_u64_be(4),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 52,
@@ -439,7 +435,7 @@ pub mod tests {
             },
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(5),
+                account_id: Address::from_low_u64_be(5),
                 sell_token: 1,
                 buy_token: 3,
                 sell_amount: 280,
@@ -471,7 +467,7 @@ pub mod tests {
         let orders = vec![
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(1),
+                account_id: Address::from_low_u64_be(1),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 52,
@@ -479,7 +475,7 @@ pub mod tests {
             },
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 sell_token: 2,
                 buy_token: 1,
                 sell_amount: 15,
@@ -497,7 +493,7 @@ pub mod tests {
         let orders = vec![
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(1),
+                account_id: Address::from_low_u64_be(1),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 52,
@@ -505,7 +501,7 @@ pub mod tests {
             },
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 sell_token: 2,
                 buy_token: 1,
                 sell_amount: 10,
@@ -524,7 +520,7 @@ pub mod tests {
         let orders = vec![
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 sell_token: 0,
                 buy_token: 1,
                 sell_amount: 20000,
@@ -532,7 +528,7 @@ pub mod tests {
             },
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 0,
                 sell_amount: 9990,
@@ -558,7 +554,7 @@ pub mod tests {
 
     #[test]
     fn stablex_e2e_auction() {
-        let users = [H160::from_low_u64_be(0), H160::from_low_u64_be(1)];
+        let users = [Address::from_low_u64_be(0), Address::from_low_u64_be(1)];
         let state = {
             let mut state = AccountState::default();
             state.num_tokens = u16::max_value();
@@ -601,7 +597,7 @@ pub mod tests {
         let orders = vec![
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 sell_token: 0,
                 buy_token: 1,
                 sell_amount: 20000,
@@ -609,7 +605,7 @@ pub mod tests {
             },
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 0,
                 sell_amount: 9990,
@@ -642,7 +638,7 @@ pub mod tests {
         let orders = vec![
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 sell_token: 0,
                 buy_token: 1,
                 sell_amount: 0,
@@ -650,7 +646,7 @@ pub mod tests {
             },
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 0,
                 sell_amount: 0,
@@ -673,7 +669,7 @@ pub mod tests {
         let orders = [
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 sell_token: 0,
                 buy_token: 1,
                 sell_amount: 20 * BASE_UNIT,
@@ -681,7 +677,7 @@ pub mod tests {
             },
             Order {
                 id: 1,
-                account_id: H160::from_low_u64_be(1),
+                account_id: Address::from_low_u64_be(1),
                 sell_token: 1,
                 buy_token: 0,
                 sell_amount: 10 * BASE_UNIT,
@@ -689,7 +685,7 @@ pub mod tests {
             },
             Order {
                 id: 2,
-                account_id: H160::from_low_u64_be(2),
+                account_id: Address::from_low_u64_be(2),
                 sell_token: 0,
                 buy_token: 2,
                 sell_amount: BASE_UNIT,
@@ -712,7 +708,7 @@ pub mod tests {
         let orders = [
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 sell_token: 0,
                 buy_token: 1,
                 sell_amount: 20 * BASE_UNIT,
@@ -720,7 +716,7 @@ pub mod tests {
             },
             Order {
                 id: 1,
-                account_id: H160::from_low_u64_be(1),
+                account_id: Address::from_low_u64_be(1),
                 sell_token: 1,
                 buy_token: 0,
                 sell_amount: 10 * BASE_UNIT,
@@ -728,7 +724,7 @@ pub mod tests {
             },
             Order {
                 id: 2,
-                account_id: H160::from_low_u64_be(2),
+                account_id: Address::from_low_u64_be(2),
                 sell_token: 0,
                 buy_token: 2,
                 sell_amount: 20 * BASE_UNIT,
@@ -736,7 +732,7 @@ pub mod tests {
             },
             Order {
                 id: 3,
-                account_id: H160::from_low_u64_be(3),
+                account_id: Address::from_low_u64_be(3),
                 sell_token: 2,
                 buy_token: 0,
                 sell_amount: 10 * BASE_UNIT,
@@ -754,7 +750,7 @@ pub mod tests {
         vec![
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(1),
+                account_id: Address::from_low_u64_be(1),
                 sell_token: 0,
                 buy_token: 1,
                 sell_amount: 52 * BASE_UNIT,
@@ -762,7 +758,7 @@ pub mod tests {
             },
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(0),
+                account_id: Address::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 0,
                 sell_amount: 15 * BASE_UNIT,
@@ -775,7 +771,7 @@ pub mod tests {
         vec![
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(1),
+                account_id: Address::from_low_u64_be(1),
                 sell_token: 2,
                 buy_token: 1,
                 sell_amount: 10 * BASE_UNIT,
@@ -783,7 +779,7 @@ pub mod tests {
             },
             Order {
                 id: 0,
-                account_id: H160::from_low_u64_be(1),
+                account_id: Address::from_low_u64_be(1),
                 sell_token: 1,
                 buy_token: 2,
                 sell_amount: 16 * BASE_UNIT,

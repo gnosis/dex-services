@@ -2,19 +2,17 @@
 
 use std::collections::HashMap;
 
+use anyhow::Result;
 use ethcontract::transaction::GasPrice;
-use ethcontract::{Address as H160, PrivateKey, U256};
+use ethcontract::{Address, PrivateKey, U256};
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
 
 use crate::contracts;
-use crate::error::DriverError;
 use crate::gas_station::GasPriceEstimating;
 use crate::models::{Order, Solution};
 use crate::util::FutureWaitExt;
-
-type Result<T> = std::result::Result<T, DriverError>;
 
 lazy_static! {
     // In the BatchExchange smart contract, the objective value will be multiplied by
@@ -47,7 +45,7 @@ impl<'a> StableXContractImpl<'a> {
         })
     }
 
-    pub fn account(&self) -> H160 {
+    pub fn account(&self) -> Address {
         self.instance
             .defaults()
             .from
@@ -56,7 +54,7 @@ impl<'a> StableXContractImpl<'a> {
             .unwrap_or_default()
     }
 
-    pub fn address(&self) -> H160 {
+    pub fn address(&self) -> Address {
         self.instance.address()
     }
 }
@@ -71,7 +69,7 @@ pub trait StableXContract {
     fn get_auction_data_paginated(
         &self,
         page_size: u16,
-        previous_page_user: H160,
+        previous_page_user: Address,
         previous_page_user_offset: u16,
     ) -> Result<Vec<u8>>;
     fn get_solution_objective_value(
@@ -98,7 +96,7 @@ impl<'a> StableXContract for StableXContractImpl<'a> {
     fn get_auction_data_paginated(
         &self,
         page_size: u16,
-        previous_page_user: H160,
+        previous_page_user: Address,
         previous_page_user_offset: u16,
     ) -> Result<Vec<u8>> {
         let mut orders_builder = self.instance.get_encoded_users_paginated(
@@ -194,7 +192,7 @@ fn encode_prices_for_contract(price_map: &HashMap<u16, u128>) -> (Vec<u128>, Vec
 fn encode_execution_for_contract(
     orders: Vec<Order>,
     executed_buy_amounts: Vec<u128>,
-) -> (Vec<H160>, Vec<u16>, Vec<u128>) {
+) -> (Vec<Address>, Vec<u16>, Vec<u128>) {
     assert_eq!(
         orders.len(),
         executed_buy_amounts.len(),
@@ -225,7 +223,7 @@ pub mod tests {
     fn encode_execution_fails_on_inconsistent_results() {
         let some_reasonable_order = Order {
             id: 0,
-            account_id: H160::from_low_u64_be(1),
+            account_id: Address::from_low_u64_be(1),
             sell_token: 0,
             buy_token: 1,
             sell_amount: 1,
@@ -238,8 +236,8 @@ pub mod tests {
     fn generic_encode_execution_test() {
         let executed_buy_amounts = vec![1, 0];
 
-        let address_1 = H160::from_low_u64_be(1);
-        let address_2 = H160::from_low_u64_be(2);
+        let address_1 = Address::from_low_u64_be(1);
+        let address_2 = Address::from_low_u64_be(2);
 
         let order_1 = Order {
             id: 0,

@@ -2,10 +2,9 @@ use crate::models;
 use std::convert::Infallible;
 use std::str::FromStr;
 
+use anyhow::Error;
 #[cfg(test)]
 use mockall::automock;
-
-use super::error::PriceFindingError;
 
 #[derive(Clone)]
 pub struct Fee {
@@ -67,5 +66,5 @@ pub trait PriceFinding {
         &self,
         orders: &[models::Order],
         state: &models::AccountState,
-    ) -> Result<models::Solution, PriceFindingError>;
+    ) -> Result<models::Solution, Error>;
 }
