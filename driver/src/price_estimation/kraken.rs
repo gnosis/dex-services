@@ -14,9 +14,6 @@ pub struct KrakenClient<Api> {
     api: Api,
 }
 
-/// The default Kraken API base URL.
-const DEFAULT_API_BASE_URL: &str = "https://api.kraken.com/0/public";
-
 impl KrakenClient<KrakenHttpApi> {
     /// Creates a new client instance using an HTTP API instance and the default
     /// Kraken API base URL.
