@@ -556,7 +556,6 @@ pub mod tests {
         let token_data = TokenData::test(hash_map! {
             TokenId(0) => TokenInfo::test("T1", 18, 1_000_000_000_000_000_000),
         });
-        token_data.0.insert(TokenId(0), token_info);
         let solver_time_limit: u32 = 180;
         let solver = OptimisationPriceFinder {
             write_input: |_, content: &str| {
