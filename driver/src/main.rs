@@ -20,7 +20,7 @@ use crate::gas_station::GnosisSafeGasStation;
 use crate::metrics::{MetricsServer, StableXMetrics};
 use crate::models::TokenData;
 use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
-use crate::price_finding::{Fee, SolverType};
+use crate::price_finding::{Fee, SolverConfig};
 use crate::solution_submission::StableXSolutionSubmitter;
 
 use ethcontract::PrivateKey;
@@ -126,7 +126,7 @@ fn main() {
     let options = Options::from_args();
     let (_, _guard) = logging::init(&options.log_filter);
     info!("Starting driver with runtime options: {:#?}", options);
-    let solver_config = SolverType::new(&options.solver_type, options.solver_time_limit);
+    let solver_config = SolverConfig::new(&options.solver_type, options.solver_time_limit);
     let web3 = web3_provider(options.node_url.as_str(), options.rpc_timeout).unwrap();
     let gas_station =
         GnosisSafeGasStation::new(options.gas_station_timeout, gas_station::DEFAULT_URI).unwrap();

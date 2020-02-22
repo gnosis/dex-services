@@ -1,5 +1,5 @@
 use crate::models::{self, TokenData, TokenId, TokenInfo};
-use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverType};
+use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverConfig};
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
@@ -157,15 +157,15 @@ mod solver_input {
 pub struct OptimisationPriceFinder {
     // default IO methods can be replaced for unit testing
     write_input: fn(&str, &str) -> std::io::Result<()>,
-    run_solver: fn(&str, &str, SolverType) -> Result<()>,
+    run_solver: fn(&str, &str, SolverConfig) -> Result<()>,
     read_output: fn(&str) -> std::io::Result<String>,
     fee: Option<Fee>,
-    solver_type: SolverType,
+    solver_type: SolverConfig,
     token_data: TokenData,
 }
 
 impl OptimisationPriceFinder {
-    pub fn new(fee: Option<Fee>, solver_type: SolverType, token_data: TokenData) -> Self {
+    pub fn new(fee: Option<Fee>, solver_type: SolverConfig, token_data: TokenData) -> Self {
         create_dir_all("instances").expect("Could not create instance directory");
         OptimisationPriceFinder {
             write_input,
@@ -248,7 +248,7 @@ fn write_input(input_file: &str, input: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-fn run_solver(input_file: &str, result_folder: &str, solver_type: SolverType) -> Result<()> {
+fn run_solver(input_file: &str, result_folder: &str, solver_type: SolverConfig) -> Result<()> {
     let solver_config_str = &solver_type.to_args();
     let output = Command::new("python")
         .args(&["-m", "batchauctions.scripts.e2e._run"])
@@ -554,7 +554,7 @@ pub mod tests {
             run_solver: |_, _, _| Ok(()),
             read_output: |_| Err(std::io::Error::last_os_error()),
             fee: Some(fee),
-            solver_type: SolverType::StandardSolver(180),
+            solver_type: SolverConfig::StandardSolver(180),
             token_data,
         };
         let orders = vec![];

@@ -20,31 +20,31 @@ impl Default for Fee {
 }
 
 #[derive(Clone, Debug, Copy, PartialEq)]
-pub enum SolverType {
+pub enum SolverConfig {
     NaiveSolver,
     StandardSolver(u32),
     FallbackSolver(u32),
 }
 
-impl SolverType {
+impl SolverConfig {
     pub fn new(solver_type_str: &str, solver_time_limit: u32) -> Self {
         match solver_type_str.to_lowercase().as_str() {
-            "standard-solver" => SolverType::StandardSolver(solver_time_limit),
-            "fallback-solver" => SolverType::FallbackSolver(solver_time_limit),
+            "standard-solver" => SolverConfig::StandardSolver(solver_time_limit),
+            "fallback-solver" => SolverConfig::FallbackSolver(solver_time_limit),
             // the naive solver is the standard solver.
-            _ => SolverType::NaiveSolver,
+            _ => SolverConfig::NaiveSolver,
         }
     }
 }
 
-impl SolverType {
+impl SolverConfig {
     pub fn to_args(self) -> String {
         match self {
-            SolverType::StandardSolver(i) => format!("--optModel=mip --solverTimeLimit={:?}", i),
-            SolverType::FallbackSolver(i) => {
+            SolverConfig::StandardSolver(i) => format!("--optModel=mip --solverTimeLimit={:?}", i),
+            SolverConfig::FallbackSolver(i) => {
                 format!("--optModel=mip --solverTimeLimit={:?} --tokenInfo=/app/batchauctions/scripts/e2e/token_info_mainnet.json", i)
             }
-            SolverType::NaiveSolver => {
+            SolverConfig::NaiveSolver => {
                 panic!("OptimizationSolver should not be called with naive solver")
             }
         }
