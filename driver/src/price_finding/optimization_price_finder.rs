@@ -539,7 +539,6 @@ pub mod tests {
         let token_data = TokenData::from(hash_map! {
             TokenId(0) => TokenInfo::new("T1", 18, 1_000_000_000_000_000_000),
         });
-        let solver_time_limit: u32 = 180;
         let solver = OptimisationPriceFinder {
             write_input: |_, content: &str| {
                 let json: serde_json::value::Value = serde_json::from_str(content).unwrap();
