@@ -42,7 +42,7 @@ impl SolverConfig {
         match self {
             SolverConfig::StandardSolver(i) => format!("--optModel=mip --solverTimeLimit={:?}", i),
             SolverConfig::FallbackSolver(i) => {
-                format!("--optModel=mip --solverTimeLimit={:?} --tokenInfo=/app/batchauctions/scripts/e2e/token_info_mainnet.json", i)
+                format!("--optModel=mip --solverTimeLimit={:?} --tokenInfo=/app/batchauctions/scripts/e2e/token_info_mainnet.json --useExternalPrices", i)
             }
             SolverConfig::NaiveSolver => {
                 panic!("OptimizationSolver should not be called with naive solver")
