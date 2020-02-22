@@ -20,8 +20,7 @@ use crate::gas_station::GnosisSafeGasStation;
 use crate::metrics::{MetricsServer, StableXMetrics};
 use crate::models::TokenData;
 use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
-use crate::price_finding::price_finder_interface::SolverType;
-use crate::price_finding::Fee;
+use crate::price_finding::{Fee, SolverType};
 use crate::solution_submission::StableXSolutionSubmitter;
 
 use ethcontract::PrivateKey;
@@ -61,10 +60,22 @@ struct Options {
     /// solver; 'MIP' for mixed integer programming solver; 'NLP' for non-linear
     /// programming solver.
     #[structopt(long, env = "SOLVER_TYPE", default_value = "NaiveSolver")]
-    solver_type: SolverType,
+    solver_type: String,
 
-    /// JSON encoded object of back-up price information in case the oracle functionality is
-    /// not working.
+    /// JSON encoded backup token information to provide to the solver.
+    ///
+    /// For example: '{
+    ///   "T0001": {
+    ///     "alias": "WETH",
+    ///     "decimals": 18,
+    ///     "external_price": 200000000000000000000
+    ///   },
+    ///   "T0004": {
+    ///     "alias": "USDC",
+    ///     "decimals": 6,
+    ///     "external_price": 1000000000000000000000000000000,
+    ///   }
+    /// }'
     #[structopt(long, env = "PRICE_FEED_INFORMATION", default_value = "{}")]
     backup_token_data: TokenData,
 
@@ -114,7 +125,8 @@ struct Options {
 fn main() {
     let options = Options::from_args();
     let (_, _guard) = logging::init(&options.log_filter);
-    info!("Using options: {:#?}", options);
+    info!("Starting driver with runtime options: {:#?}", options);
+    let solver_config = SolverType::new(&options.solver_type, options.solver_time_limit);
     let web3 = web3_provider(options.node_url.as_str(), options.rpc_timeout).unwrap();
     let gas_station =
         GnosisSafeGasStation::new(options.gas_station_timeout, gas_station::DEFAULT_URI).unwrap();
@@ -137,12 +149,8 @@ fn main() {
     });
 
     let fee = Some(Fee::default());
-    let mut price_finder = util::create_price_finder(
-        fee,
-        options.solver_type,
-        options.backup_token_data,
-        options.solver_time_limit,
-    );
+    let mut price_finder =
+        price_finding::create_price_finder(fee, solver_config, options.backup_token_data);
 
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
     info!("Orderbook filter: {:?}", options.orderbook_filter);

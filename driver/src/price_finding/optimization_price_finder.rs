@@ -123,6 +123,7 @@ mod solver_input {
         pub buy_token: TokenId,
         pub sell_amount: Num,
         pub buy_amount: Num,
+        #[serde(rename = "orderID")]
         pub order_id: u16,
     }
 
@@ -156,21 +157,15 @@ mod solver_input {
 pub struct OptimisationPriceFinder {
     // default IO methods can be replaced for unit testing
     write_input: fn(&str, &str) -> std::io::Result<()>,
-    run_solver: fn(&str, &str, SolverType, u32) -> Result<()>,
+    run_solver: fn(&str, &str, SolverType) -> Result<()>,
     read_output: fn(&str) -> std::io::Result<String>,
     fee: Option<Fee>,
     solver_type: SolverType,
     token_data: TokenData,
-    solver_time_limit: u32,
 }
 
 impl OptimisationPriceFinder {
-    pub fn new(
-        fee: Option<Fee>,
-        solver_type: SolverType,
-        token_data: TokenData,
-        solver_time_limit: u32,
-    ) -> Self {
+    pub fn new(fee: Option<Fee>, solver_type: SolverType, token_data: TokenData) -> Self {
         create_dir_all("instances").expect("Could not create instance directory");
         OptimisationPriceFinder {
             write_input,
@@ -179,7 +174,6 @@ impl OptimisationPriceFinder {
             fee,
             solver_type,
             token_data,
-            solver_time_limit,
         }
     }
 }
@@ -239,12 +233,7 @@ impl PriceFinding for OptimisationPriceFinder {
         let input_file = format!("instances/instance_{}.json", &current_time);
         let result_folder = format!("results/instance_{}/", &current_time);
         (self.write_input)(&input_file, &serde_json::to_string(&input)?)?;
-        (self.run_solver)(
-            &input_file,
-            &result_folder,
-            self.solver_type,
-            self.solver_time_limit,
-        )?;
+        (self.run_solver)(&input_file, &result_folder, self.solver_type)?;
         let result = (self.read_output)(&result_folder)?;
         let solution = deserialize_result(result)?;
         Ok(solution)
@@ -259,19 +248,13 @@ fn write_input(input_file: &str, input: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-fn run_solver(
-    input_file: &str,
-    result_folder: &str,
-    solver_type: SolverType,
-    solver_time_limit: u32,
-) -> Result<()> {
-    let solver_type_str = solver_type.to_args();
+fn run_solver(input_file: &str, result_folder: &str, solver_type: SolverType) -> Result<()> {
+    let solver_config_str = &solver_type.to_args();
     let output = Command::new("python")
         .args(&["-m", "batchauctions.scripts.e2e._run"])
         .arg(result_folder)
         .args(&["--jsonFile", input_file])
-        .args(&[solver_type_str])
-        .args(&["--solverTimeLimit", &solver_time_limit.to_string()])
+        .args(&[solver_config_str])
         .output()?;
 
     if !output.status.success() {
@@ -326,9 +309,9 @@ pub mod tests {
 
     #[test]
     fn test_serialize_tokens() {
-        let token_data = TokenData::test(hash_map! {
-            TokenId(0) => TokenInfo::test("T1", 18, 1_000_000_000_000_000_000),
-            TokenId(2) => TokenInfo::test("T2", 13, 1_000_000_000_000_000_000),
+        let token_data = TokenData::from(hash_map! {
+            TokenId(0) => TokenInfo::new("T1", 18, 1_000_000_000_000_000_000),
+            TokenId(2) => TokenInfo::new("T2", 13, 1_000_000_000_000_000_000),
         });
 
         let orders = [
@@ -553,8 +536,8 @@ pub mod tests {
             ratio: 0.001,
         };
 
-        let token_data = TokenData::test(hash_map! {
-            TokenId(0) => TokenInfo::test("T1", 18, 1_000_000_000_000_000_000),
+        let token_data = TokenData::from(hash_map! {
+            TokenId(0) => TokenInfo::new("T1", 18, 1_000_000_000_000_000_000),
         });
         let solver_time_limit: u32 = 180;
         let solver = OptimisationPriceFinder {
@@ -569,12 +552,11 @@ pub mod tests {
                 );
                 Ok(())
             },
-            run_solver: |_, _, _, _| Ok(()),
+            run_solver: |_, _, _| Ok(()),
             read_output: |_| Err(std::io::Error::last_os_error()),
             fee: Some(fee),
-            solver_type: SolverType::StandardSolver,
+            solver_type: SolverType::StandardSolver(180),
             token_data,
-            solver_time_limit,
         };
         let orders = vec![];
         assert!(solver
@@ -603,8 +585,8 @@ pub mod tests {
             BTreeMap::new(),
         );
 
-        let token_data = TokenData::test(hash_map! {
-            TokenId(2) => TokenInfo::test("T1", 18, 1_000_000_000_000_000_000),
+        let token_data = TokenData::from(hash_map! {
+            TokenId(2) => TokenInfo::new("T1", 18, 1_000_000_000_000_000_000),
         });
 
         let orders = [
@@ -637,7 +619,7 @@ pub mod tests {
         let result = serde_json::to_string(&input).expect("Unable to serialize account state");
         assert_eq!(
             result,
-            r#"{"tokens":{"T0001":null,"T0002":{"alias":"T1","decimals":18,"externalPrice":1000000000000000000}},"refToken":"T0000","accounts":{"0x13a0b42b9c180065510615972858bf41d1972a55":{},"0x4fd7c947ca0aba9d8678885e2b8c4d6a4e946984":{"T0000":"100","T0001":"100","T0002":"100","T0003":"100"}},"orders":[{"accountID":"0x0000000000000000000000000000000000000000","sellToken":"T0001","buyToken":"T0002","sellAmount":"100","buyAmount":"200","orderId":0},{"accountID":"0x0000000000000000000000000000000000000001","sellToken":"T0002","buyToken":"T0001","sellAmount":"200","buyAmount":"100","orderId":0}],"fee":null}"#
+            r#"{"tokens":{"T0001":null,"T0002":{"alias":"T1","decimals":18,"externalPrice":1000000000000000000}},"refToken":"T0000","accounts":{"0x13a0b42b9c180065510615972858bf41d1972a55":{},"0x4fd7c947ca0aba9d8678885e2b8c4d6a4e946984":{"T0000":"100","T0001":"100","T0002":"100","T0003":"100"}},"orders":[{"accountID":"0x0000000000000000000000000000000000000000","sellToken":"T0001","buyToken":"T0002","sellAmount":"100","buyAmount":"200","orderID":0},{"accountID":"0x0000000000000000000000000000000000000001","sellToken":"T0002","buyToken":"T0001","sellAmount":"200","buyAmount":"100","orderID":0}],"fee":null}"#
         );
     }
 }

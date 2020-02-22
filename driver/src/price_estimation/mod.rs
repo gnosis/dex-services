@@ -35,12 +35,12 @@ impl Token {
         (usd_price * 10f64.powi(pow)) as _
     }
 
-    /// Creates a new token with a fictional address for testing.
+    /// Creates a new token from its parameters.
     #[cfg(test)]
-    pub fn test(index: u16, symbol: &str, decimals: u8) -> Self {
+    pub fn new(id: impl Into<TokenId>, symbol: impl Into<String>, decimals: u8) -> Self {
         Token {
-            id: TokenId(index),
-            address: H160::repeat_byte(index as _),
+            id: id.into(),
+            address: H160::zero(),
             info: TokenInfo {
                 alias: symbol.into(),
                 decimals,
@@ -68,10 +68,10 @@ mod tests {
     #[test]
     fn token_get_price() {
         for (token, usd_price, expected) in &[
-            (Token::test(4, "USDC", 6), 0.99, 0.99 * 10f64.powi(30)),
-            (Token::test(7, "DAI", 18), 1.01, 1.01 * 10f64.powi(18)),
-            (Token::test(42, "FAKE", 32), 1.0, 10f64.powi(4)),
-            (Token::test(99, "SCAM", 42), 10f64.powi(10), 10f64.powi(4)),
+            (Token::new(4, "USDC", 6), 0.99, 0.99 * 10f64.powi(30)),
+            (Token::new(7, "DAI", 18), 1.01, 1.01 * 10f64.powi(18)),
+            (Token::new(42, "FAKE", 32), 1.0, 10f64.powi(4)),
+            (Token::new(99, "SCAM", 42), 10f64.powi(10), 10f64.powi(4)),
         ] {
             let owl_price = token.get_owl_price(*usd_price);
             assert_eq!(owl_price, *expected as u128);

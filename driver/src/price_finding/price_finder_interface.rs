@@ -1,7 +1,4 @@
 use crate::models;
-use std::convert::Infallible;
-use std::str::FromStr;
-
 use anyhow::Error;
 #[cfg(test)]
 use mockall::automock;
@@ -25,33 +22,27 @@ impl Default for Fee {
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum SolverType {
     NaiveSolver,
-    StandardSolver,
-    FallbackSolver,
+    StandardSolver(u32),
+    FallbackSolver(u32),
 }
 
-impl FromStr for SolverType {
-    type Err = Infallible;
-
-    fn from_str(solver_type_str: &str) -> Result<Self, Self::Err> {
+impl SolverType {
+    pub fn new(solver_type_str: &str, solver_time_limit: u32) -> Self {
         match solver_type_str.to_lowercase().as_str() {
-            "standard-solver" => Ok(SolverType::StandardSolver),
-            "fallback-solver" => Ok(SolverType::FallbackSolver),
+            "standard-solver" => SolverType::StandardSolver(solver_time_limit),
+            "fallback-solver" => SolverType::FallbackSolver(solver_time_limit),
             // the naive solver is the standard solver.
-            _ => Ok(SolverType::NaiveSolver),
+            _ => SolverType::NaiveSolver,
         }
     }
 }
 
 impl SolverType {
-    pub fn to_args(self) -> &'static str {
+    pub fn to_args(self) -> String {
         match self {
-            SolverType::StandardSolver => &"--optModel=mip",
-            // TODO: Allow to hand over several args for the optimizer
-
-            // The fallback solver is also running --optModel=mip, as this is the default value
-            // although it is not handed over in the next line
-            SolverType::FallbackSolver => {
-                &"--tokenInfo=/app/batchauctions/scripts/e2e/token_info_mainnet.json"
+            SolverType::StandardSolver(i) => format!("--optModel=mip --solverTimeLimit={:?}", i),
+            SolverType::FallbackSolver(i) => {
+                format!("--optModel=mip --solverTimeLimit={:?} --tokenInfo=/app/batchauctions/scripts/e2e/token_info_mainnet.json", i)
             }
             SolverType::NaiveSolver => {
                 panic!("OptimizationSolver should not be called with naive solver")

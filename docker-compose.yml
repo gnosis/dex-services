@@ -31,7 +31,7 @@ services:
       - '9586:9586'
     depends_on:
       - ganache-cli
-    command: cargo run
+    command: ["cargo", "run"]
     volumes:
       # Sync src folder to allow development without rebuilding on each change
       - ./driver:/app/driver
