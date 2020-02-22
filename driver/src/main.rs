@@ -21,8 +21,7 @@ use crate::metrics::{MetricsServer, StableXMetrics};
 use crate::models::TokenData;
 use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
 use crate::price_estimation::PriceOracle;
-use crate::price_finding::price_finder_interface::SolverType;
-use crate::price_finding::Fee;
+use crate::price_finding::{Fee, SolverType};
 use crate::solution_submission::StableXSolutionSubmitter;
 
 use ethcontract::PrivateKey;
@@ -64,6 +63,20 @@ struct Options {
     #[structopt(long, env = "SOLVER_TYPE", default_value = "NaiveSolver")]
     solver_type: SolverType,
 
+    /// JSON encoded backup token information to provide to the solver.
+    ///
+    /// For example: '{
+    ///   "T0001": {
+    ///     "alias": "WETH",
+    ///     "decimals": 18,
+    ///     "external_price": 200000000000000000000
+    ///   },
+    ///   "T0004": {
+    ///     "alias": "USDC",
+    ///     "decimals": 6,
+    ///     "external_price": 1000000000000000000000000000000,
+    ///   }
+    /// }'
     #[structopt(long, env = "PRICE_FEED_INFORMATION", default_value = "{}")]
     backup_token_data: TokenData,
 
@@ -133,7 +146,8 @@ fn main() {
 
     let fee = Some(Fee::default());
     let price_oracle = PriceOracle::new(options.backup_token_data).unwrap();
-    let mut price_finder = util::create_price_finder(fee, options.solver_type, price_oracle);
+    let mut price_finder =
+        price_finding::create_price_finder(fee, options.solver_type, price_oracle);
 
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
     info!("Orderbook filter: {:?}", options.orderbook_filter);
