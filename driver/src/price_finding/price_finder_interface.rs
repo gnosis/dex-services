@@ -42,14 +42,13 @@ impl SolverConfig {
     pub fn to_args(self) -> Vec<String> {
         match self {
             SolverConfig::StandardSolver(solver_time_limit) => {
-                vec![format!("--solverTimeLimit={:}", solver_time_limit)].clone()
+                vec![format!("--solverTimeLimit={:}", solver_time_limit)]
             }
             SolverConfig::FallbackSolver(solver_time_limit) => vec![
                 format!("--solverTimeLimit={:}", solver_time_limit),
                 String::from("--tokenInfo=/app/batchauctions/scripts/token_info_mainnet.json"),
                 String::from("--useExternalPrices"),
-            ]
-            .clone(),
+            ],
             SolverConfig::NaiveSolver => {
                 panic!("OptimizationSolver should not be called with naive solver")
             }
