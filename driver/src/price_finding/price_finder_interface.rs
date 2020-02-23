@@ -22,7 +22,7 @@ impl Default for Fee {
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum SolverConfig {
     NaiveSolver,
-    StandardSolver(u32),
+    StandardSolver(u32), //params for --solverTimeLimit
     FallbackSolver(u32),
 }
 
@@ -36,14 +36,20 @@ impl SolverConfig {
         }
     }
 }
+// use std::process::Command::{args}
 
 impl SolverConfig {
-    pub fn to_args(self) -> String {
+    pub fn to_args(self) -> Vec<String> {
         match self {
-            SolverConfig::StandardSolver(i) => format!("--optModel=mip --solverTimeLimit={:?}", i),
-            SolverConfig::FallbackSolver(i) => {
-                format!("--optModel=mip --solverTimeLimit={:?} --tokenInfo=/app/batchauctions/scripts/e2e/token_info_mainnet.json --useExternalPrices", i)
+            SolverConfig::StandardSolver(solver_time_limit) => {
+                vec![format!("--solverTimeLimit={:}", solver_time_limit)].clone()
             }
+            SolverConfig::FallbackSolver(solver_time_limit) => vec![
+                format!("--solverTimeLimit={:}", solver_time_limit),
+                String::from("--tokenInfo=/app/batchauctions/scripts/token_info_mainnet.json"),
+                String::from("--useExternalPrices"),
+            ]
+            .clone(),
             SolverConfig::NaiveSolver => {
                 panic!("OptimizationSolver should not be called with naive solver")
             }

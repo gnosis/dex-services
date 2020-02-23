@@ -18,7 +18,7 @@ pub fn create_price_finder(
         Box::new(NaiveSolver::new(fee))
     } else {
         info!(
-            "Using optimisation price finder with the args {:}",
+            "Using optimization price finder with the args {:?}",
             solver_type.to_args()
         );
         Box::new(OptimisationPriceFinder::new(fee, solver_type, token_data))
