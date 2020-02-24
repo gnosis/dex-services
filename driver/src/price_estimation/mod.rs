@@ -1,10 +1,12 @@
 //! Module responsible for aggregating price estimates from various sources to
 //! give good price estimates to the solver for better results.
 
+pub mod data;
 mod kraken;
 
+pub use self::data::TokenData;
 use self::kraken::KrakenClient;
-use crate::models::{Order, TokenData, TokenId, TokenInfo};
+use crate::models::{Order, TokenId, TokenInfo};
 use anyhow::Result;
 use lazy_static::lazy_static;
 use log::warn;
@@ -50,7 +52,10 @@ impl PriceOracle {
     ///
     /// Note that all token ids in the returned results are garanteed to be
     /// unique.
-    fn split_order_tokens(&self, orders: &[Order]) -> (Vec<Token>, Vec<TokenId>) {
+    fn split_order_tokens(
+        &self,
+        orders: &[Order],
+    ) -> (Vec<Token>, Vec<(TokenId, Option<TokenInfo>)>) {
         let unique_token_ids: HashSet<_> = orders
             .iter()
             .flat_map(|order| vec![order.buy_token, order.sell_token])
@@ -64,13 +69,13 @@ impl PriceOracle {
         unique_token_ids.into_iter().fold(
             (Vec::new(), Vec::new()),
             |(mut tokens_to_price, mut unpriced_token_ids), id| {
-                if let Some(info) = self.tokens.info(id) {
-                    tokens_to_price.push(Token {
+                match self.tokens.info(id).cloned() {
+                    Some(info) if info.should_estimate_price => tokens_to_price.push(Token {
                         id,
-                        info: info.clone(),
-                    });
-                } else {
-                    unpriced_token_ids.push(id)
+                        info: info.into(),
+                    }),
+                    Some(info) => unpriced_token_ids.push((id, Some(info.into()))),
+                    None => unpriced_token_ids.push((id, None)),
                 }
                 (tokens_to_price, unpriced_token_ids)
             },
@@ -113,7 +118,7 @@ impl PriceEstimating for PriceOracle {
                     }),
                 )
             })
-            .chain(unpriced_token_ids.into_iter().map(|id| (id, None)))
+            .chain(unpriced_token_ids.into_iter())
             .collect()
     }
 }
@@ -183,14 +188,15 @@ trait PriceSource {
 
 #[cfg(test)]
 mod tests {
+    use super::data::TokenBaseInfo;
     use super::*;
     use anyhow::anyhow;
 
     #[test]
     fn price_oracle_fetches_token_prices() {
         let tokens = TokenData::from(hash_map! {
-            TokenId(1) => TokenInfo::new("WETH", 18, 0),
-            TokenId(2) => TokenInfo::new("USDT", 6, 0),
+            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0, true),
+            TokenId(2) => TokenBaseInfo::new("USDT", 6, 0, true),
         });
 
         let mut source = MockPriceSource::new();
@@ -230,7 +236,7 @@ mod tests {
     #[test]
     fn price_oracle_ignores_source_error() {
         let tokens = TokenData::from(hash_map! {
-            TokenId(1) => TokenInfo::new("WETH", 18, 0),
+            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0, true),
         });
 
         let mut source = MockPriceSource::new();
@@ -261,7 +267,7 @@ mod tests {
     #[test]
     fn price_oracle_uses_uses_fallback_prices() {
         let tokens = TokenData::from(hash_map! {
-            TokenId(7) => TokenInfo::new("DAI", 18, 1_000_000_000_000_000_000),
+            TokenId(7) => TokenBaseInfo::new("DAI", 18, 1_000_000_000_000_000_000, true),
         });
 
         let mut source = MockPriceSource::new();
@@ -275,6 +281,37 @@ mod tests {
             btree_map! {
                 TokenId(0) => None,
                 TokenId(7) => Some(TokenInfo::new("DAI", 18, 1_000_000_000_000_000_000)),
+            }
+        );
+    }
+
+    #[test]
+    fn price_oracle_ignores_tokens_not_flagged_for_estimation() {
+        let tokens = TokenData::from(hash_map! {
+            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0, false),
+            TokenId(2) => TokenBaseInfo::new("USDT", 6, 0, true),
+        });
+
+        let mut source = MockPriceSource::new();
+        source
+            .expect_get_prices()
+            .withf(|tokens| tokens == [Token::new(2, "USDT", 6)])
+            .returning(|_| {
+                Ok(hash_map! {
+                    TokenId(1) => 1_000_000_000_000_000_000,
+                    TokenId(2) => 1_000_000_000_000_000_000,
+                })
+            });
+
+        let oracle = PriceOracle::with_source(tokens, source);
+        let prices = oracle.get_token_prices(&[Order::for_token_pair(1, 2)]);
+
+        assert_eq!(
+            prices,
+            btree_map! {
+                TokenId(0) => None,
+                TokenId(1) => Some(TokenInfo::new("WETH", 18, 0)),
+                TokenId(2) => Some(TokenInfo::new("USDT", 6, 1_000_000_000_000_000_000)),
             }
         );
     }
