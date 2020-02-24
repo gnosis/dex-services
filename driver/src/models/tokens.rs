@@ -1,16 +1,20 @@
 //! Module implements common data types for tokens on the exchange.
 
-use anyhow::{Context, Error, Result};
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
-use std::collections::HashMap;
-use std::str::FromStr;
 
 /// A token ID wrapper type that implements JSON serialization in the solver
 /// format.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialOrd, PartialEq)]
 pub struct TokenId(pub u16);
+
+impl TokenId {
+    /// Returns the token ID of the fee token.
+    pub fn reference() -> Self {
+        TokenId(0)
+    }
+}
 
 impl<'de> Deserialize<'de> for TokenId {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -65,30 +69,5 @@ impl TokenInfo {
             decimals,
             external_price,
         }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TokenData(HashMap<TokenId, TokenInfo>);
-
-impl TokenData {
-    /// Retrieves some token information from a token ID.
-    pub fn info(&self, id: impl Into<TokenId>) -> Option<&TokenInfo> {
-        self.0.get(&id.into())
-    }
-}
-
-impl From<HashMap<TokenId, TokenInfo>> for TokenData {
-    fn from(tokens: HashMap<TokenId, TokenInfo>) -> Self {
-        TokenData(tokens)
-    }
-}
-
-impl FromStr for TokenData {
-    type Err = Error;
-
-    fn from_str(token_data: &str) -> Result<Self> {
-        Ok(serde_json::from_str(token_data)
-            .context("failed to parse token data from JSON string")?)
     }
 }

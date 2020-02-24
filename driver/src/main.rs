@@ -18,8 +18,8 @@ use crate::contracts::{stablex_contract::StableXContractImpl, web3_provider};
 use crate::driver::stablex_driver::StableXDriver;
 use crate::gas_station::GnosisSafeGasStation;
 use crate::metrics::{MetricsServer, StableXMetrics};
-use crate::models::TokenData;
 use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
+use crate::price_estimation::{PriceOracle, TokenData};
 use crate::price_finding::{Fee, SolverConfig};
 use crate::solution_submission::StableXSolutionSubmitter;
 
@@ -74,6 +74,7 @@ struct Options {
     ///     "alias": "USDC",
     ///     "decimals": 6,
     ///     "external_price": 1000000000000000000000000000000,
+    ///     "should_estimate_price": true
     ///   }
     /// }'
     #[structopt(long, env = "PRICE_FEED_INFORMATION", default_value = "{}")]
@@ -149,8 +150,8 @@ fn main() {
     });
 
     let fee = Some(Fee::default());
-    let mut price_finder =
-        price_finding::create_price_finder(fee, solver_config, options.backup_token_data);
+    let price_oracle = PriceOracle::new(options.backup_token_data).unwrap();
+    let mut price_finder = price_finding::create_price_finder(fee, solver_config, price_oracle);
 
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
     info!("Orderbook filter: {:?}", options.orderbook_filter);

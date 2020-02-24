@@ -12,6 +12,21 @@ pub struct Order {
     pub sell_amount: u128,
 }
 
+impl Order {
+    /// Creates a fake order in between a token pair for unit testing.
+    #[cfg(test)]
+    pub fn for_token_pair(buy_token: u16, sell_token: u16) -> Self {
+        Order {
+            id: 0,
+            account_id: Address::repeat_byte(0x42),
+            buy_token,
+            sell_token,
+            buy_amount: 1_000_000_000_000_000_000,
+            sell_amount: 1_000_000_000_000_000_000,
+        }
+    }
+}
+
 #[cfg(test)]
 pub mod test_util {
     use super::*;
