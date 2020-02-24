@@ -20,7 +20,7 @@ use crate::gas_station::GnosisSafeGasStation;
 use crate::metrics::{MetricsServer, StableXMetrics};
 use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
 use crate::price_estimation::{PriceOracle, TokenData};
-use crate::price_finding::{Fee, SolverType};
+use crate::price_finding::{Fee, SolverConfig};
 use crate::solution_submission::StableXSolutionSubmitter;
 
 use ethcontract::PrivateKey;
@@ -59,8 +59,8 @@ struct Options {
     /// Which style of solver to use. Can be one of: 'NAIVE' for the naive
     /// solver; 'MIP' for mixed integer programming solver; 'NLP' for non-linear
     /// programming solver.
-    #[structopt(long, env = "SOLVER_TYPE", default_value = "NaiveSolver")]
-    solver_type: SolverType,
+    #[structopt(long, env = "SOLVER_TYPE", default_value = "naive-solver")]
+    solver_type: String,
 
     /// JSON encoded backup token information to provide to the solver.
     ///
@@ -79,6 +79,10 @@ struct Options {
     /// }'
     #[structopt(long, env = "PRICE_FEED_INFORMATION", default_value = "{}")]
     backup_token_data: TokenData,
+
+    /// Number of seconds the solver should maximally use for the optimization process
+    #[structopt(long, env = "SOLVER_TIME_LIMIT", default_value = "150")]
+    solver_time_limit: u32,
 
     /// JSON encoded object of which tokens/orders to ignore.
     ///
@@ -123,6 +127,7 @@ fn main() {
     let options = Options::from_args();
     let (_, _guard) = logging::init(&options.log_filter);
     info!("Starting driver with runtime options: {:#?}", options);
+    let solver_config = SolverConfig::new(&options.solver_type, options.solver_time_limit).unwrap();
     let web3 = web3_provider(options.node_url.as_str(), options.rpc_timeout).unwrap();
     let gas_station =
         GnosisSafeGasStation::new(options.gas_station_timeout, gas_station::DEFAULT_URI).unwrap();
@@ -146,8 +151,7 @@ fn main() {
 
     let fee = Some(Fee::default());
     let price_oracle = PriceOracle::new(options.backup_token_data).unwrap();
-    let mut price_finder =
-        price_finding::create_price_finder(fee, options.solver_type, price_oracle);
+    let mut price_finder = price_finding::create_price_finder(fee, solver_config, price_oracle);
 
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
     info!("Orderbook filter: {:?}", options.orderbook_filter);

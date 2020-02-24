@@ -1,8 +1,5 @@
 use crate::models;
-use std::convert::Infallible;
-use std::str::FromStr;
-
-use anyhow::Error;
+use anyhow::{anyhow, Error, Result};
 #[cfg(test)]
 use mockall::automock;
 
@@ -23,37 +20,35 @@ impl Default for Fee {
 }
 
 #[derive(Clone, Debug, Copy, PartialEq)]
-pub enum SolverType {
+pub enum SolverConfig {
     NaiveSolver,
-    StandardSolver,
-    FallbackSolver,
+    StandardSolver { solver_time_limit: u32 },
+    FallbackSolver { solver_time_limit: u32 },
 }
 
-impl FromStr for SolverType {
-    type Err = Infallible;
-
-    fn from_str(solver_type_str: &str) -> Result<Self, Self::Err> {
+impl SolverConfig {
+    pub fn new(solver_type_str: &str, solver_time_limit: u32) -> Result<Self> {
         match solver_type_str.to_lowercase().as_str() {
-            "standard-solver" => Ok(SolverType::StandardSolver),
-            "fallback-solver" => Ok(SolverType::FallbackSolver),
-            // the naive solver is the standard solver.
-            _ => Ok(SolverType::NaiveSolver),
+            "standard-solver" => Ok(SolverConfig::StandardSolver { solver_time_limit }),
+            "fallback-solver" => Ok(SolverConfig::FallbackSolver { solver_time_limit }),
+            "naive-solver" => Ok(SolverConfig::NaiveSolver),
+            _ => Err(anyhow!("solver type does not exit")),
         }
     }
 }
 
-impl SolverType {
-    pub fn to_args(self) -> &'static str {
+impl SolverConfig {
+    pub fn to_args(self) -> Vec<String> {
         match self {
-            SolverType::StandardSolver => &"--optModel=mip",
-            // TODO: Allow to hand over several args for the optimizer
-
-            // The fallback solver is also running --optModel=mip, as this is the default value
-            // although it is not handed over in the next line
-            SolverType::FallbackSolver => {
-                &"--tokenInfo=/app/batchauctions/scripts/e2e/token_info_mainnet.json"
+            SolverConfig::StandardSolver { solver_time_limit } => {
+                vec![format!("--solverTimeLimit={:}", solver_time_limit)]
             }
-            SolverType::NaiveSolver => {
+            SolverConfig::FallbackSolver { solver_time_limit } => vec![
+                format!("--solverTimeLimit={:}", solver_time_limit),
+                String::from("--tokenInfo=/app/batchauctions/scripts/token_info_mainnet.json"),
+                String::from("--useExternalPrices"),
+            ],
+            SolverConfig::NaiveSolver => {
                 panic!("OptimizationSolver should not be called with naive solver")
             }
         }

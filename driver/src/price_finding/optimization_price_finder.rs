@@ -1,6 +1,6 @@
 use crate::models::{self, TokenId, TokenInfo};
 use crate::price_estimation::PriceEstimating;
-use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverType};
+use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverConfig};
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
@@ -158,17 +158,17 @@ mod solver_input {
 pub struct OptimisationPriceFinder {
     // default IO methods can be replaced for unit testing
     write_input: fn(&str, &str) -> std::io::Result<()>,
-    run_solver: fn(&str, &str, SolverType) -> Result<()>,
+    run_solver: fn(&str, &str, SolverConfig) -> Result<()>,
     read_output: fn(&str) -> std::io::Result<String>,
     fee: Option<Fee>,
-    solver_type: SolverType,
+    solver_type: SolverConfig,
     price_oracle: Box<dyn PriceEstimating>,
 }
 
 impl OptimisationPriceFinder {
     pub fn new(
         fee: Option<Fee>,
-        solver_type: SolverType,
+        solver_type: SolverConfig,
         price_oracle: impl PriceEstimating + 'static,
     ) -> Self {
         create_dir_all("instances").expect("Could not create instance directory");
@@ -237,15 +237,14 @@ fn write_input(input_file: &str, input: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-fn run_solver(input_file: &str, result_folder: &str, solver_type: SolverType) -> Result<()> {
-    let solver_type_str = solver_type.to_args();
-    let output = Command::new("python")
+fn run_solver(input_file: &str, result_folder: &str, solver_config: SolverConfig) -> Result<()> {
+    let output;
+    output = Command::new("python")
         .args(&["-m", "batchauctions.scripts.e2e._run"])
         .arg(result_folder)
         .args(&["--jsonFile", input_file])
-        .args(&[solver_type_str])
+        .args(solver_config.to_args())
         .output()?;
-
     if !output.status.success() {
         error!(
             "Solver failed - stdout: {}, error: {}",
@@ -523,7 +522,9 @@ pub mod tests {
             run_solver: |_, _, _| Ok(()),
             read_output: |_| Err(std::io::Error::last_os_error()),
             fee: Some(fee),
-            solver_type: SolverType::StandardSolver,
+            solver_type: SolverConfig::StandardSolver {
+                solver_time_limit: 180,
+            },
             price_oracle: Box::new(price_oracle),
         };
         let orders = vec![];
