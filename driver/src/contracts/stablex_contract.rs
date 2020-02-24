@@ -128,8 +128,6 @@ impl<'a> StableXContract for StableXContractImpl<'a> {
                 prices,
                 token_ids_for_price,
             )
-            // Gas estimate might be off, as we race with other solution submissions and thus might have to revert trades which costs more gas than expected.
-            .gas(5_500_000.into())
             .call()
             .wait()?;
 
@@ -168,6 +166,10 @@ impl<'a> StableXContract for StableXContractImpl<'a> {
                     .map(|gas_price| GasPrice::Value(gas_price.fast))
                     .unwrap_or(GasPrice::Scaled(3.0)),
             )
+            // NOTE: Gas estimate might be off, as we race with other solution
+            //   submissions and thus might have to revert trades which costs
+            //   more gas than expected.
+            .gas(5_500_000.into())
             .send()
             .wait()?;
 
