@@ -31,12 +31,11 @@ impl SolverConfig {
         match solver_type_str.to_lowercase().as_str() {
             "standard-solver" => SolverConfig::StandardSolver(solver_time_limit),
             "fallback-solver" => SolverConfig::FallbackSolver(solver_time_limit),
-            // the naive solver is the standard solver.
-            _ => SolverConfig::NaiveSolver,
+            "naive-solver" => SolverConfig::NaiveSolver,
+            _ => panic!("solver type does not exist"),
         }
     }
 }
-// use std::process::Command::{args}
 
 impl SolverConfig {
     pub fn to_args(self) -> Vec<String> {
