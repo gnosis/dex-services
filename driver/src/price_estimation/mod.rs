@@ -4,7 +4,7 @@
 pub mod fallback;
 mod kraken;
 
-pub use self::fallback::TokenFallbackData;
+pub use self::fallback::TokenData;
 use self::kraken::KrakenClient;
 use crate::models::{Order, TokenId, TokenInfo};
 use anyhow::Result;
@@ -26,7 +26,7 @@ pub trait PriceEstimating {
 pub struct PriceOracle {
     /// The token data supplied by the environment. This ensures that only
     /// whitelisted tokens get their prices estimated.
-    tokens: TokenFallbackData,
+    tokens: TokenData,
     /// The price source to use.
     ///
     /// Note that currently only one price source is supported, but more price
@@ -36,11 +36,11 @@ pub struct PriceOracle {
 
 impl PriceOracle {
     /// Creates a new price oracle from a token whitelist data.
-    pub fn new(tokens: TokenFallbackData) -> Result<Self> {
+    pub fn new(tokens: TokenData) -> Result<Self> {
         Ok(PriceOracle::with_source(tokens, KrakenClient::new()?))
     }
 
-    fn with_source(tokens: TokenFallbackData, source: impl PriceSource + 'static) -> Self {
+    fn with_source(tokens: TokenData, source: impl PriceSource + 'static) -> Self {
         PriceOracle {
             tokens,
             source: Box::new(source),
@@ -188,15 +188,15 @@ trait PriceSource {
 
 #[cfg(test)]
 mod tests {
-    use super::fallback::TokenFallbackInfo;
+    use super::fallback::TokenBaseInfo;
     use super::*;
     use anyhow::anyhow;
 
     #[test]
     fn price_oracle_fetches_token_prices() {
-        let tokens = TokenFallbackData::from(hash_map! {
-            TokenId(1) => TokenFallbackInfo::new("WETH", 18, 0, true),
-            TokenId(2) => TokenFallbackInfo::new("USDT", 6, 0, true),
+        let tokens = TokenData::from(hash_map! {
+            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0, true),
+            TokenId(2) => TokenBaseInfo::new("USDT", 6, 0, true),
         });
 
         let mut source = MockPriceSource::new();
@@ -235,8 +235,8 @@ mod tests {
 
     #[test]
     fn price_oracle_ignores_source_error() {
-        let tokens = TokenFallbackData::from(hash_map! {
-            TokenId(1) => TokenFallbackInfo::new("WETH", 18, 0, true),
+        let tokens = TokenData::from(hash_map! {
+            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0, true),
         });
 
         let mut source = MockPriceSource::new();
@@ -258,7 +258,7 @@ mod tests {
 
     #[test]
     fn price_oracle_always_includes_reference_token() {
-        let oracle = PriceOracle::with_source(TokenFallbackData::default(), MockPriceSource::new());
+        let oracle = PriceOracle::with_source(TokenData::default(), MockPriceSource::new());
         let prices = oracle.get_token_prices(&[]);
 
         assert_eq!(prices, btree_map! { TokenId(0) => None });
@@ -266,8 +266,8 @@ mod tests {
 
     #[test]
     fn price_oracle_uses_uses_fallback_prices() {
-        let tokens = TokenFallbackData::from(hash_map! {
-            TokenId(7) => TokenFallbackInfo::new("DAI", 18, 1_000_000_000_000_000_000, true),
+        let tokens = TokenData::from(hash_map! {
+            TokenId(7) => TokenBaseInfo::new("DAI", 18, 1_000_000_000_000_000_000, true),
         });
 
         let mut source = MockPriceSource::new();
@@ -287,9 +287,9 @@ mod tests {
 
     #[test]
     fn price_oracle_ignores_tokens_not_flagged_for_estimation() {
-        let tokens = TokenFallbackData::from(hash_map! {
-            TokenId(1) => TokenFallbackInfo::new("WETH", 18, 0, false),
-            TokenId(2) => TokenFallbackInfo::new("USDT", 6, 0, true),
+        let tokens = TokenData::from(hash_map! {
+            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0, false),
+            TokenId(2) => TokenBaseInfo::new("USDT", 6, 0, true),
         });
 
         let mut source = MockPriceSource::new();

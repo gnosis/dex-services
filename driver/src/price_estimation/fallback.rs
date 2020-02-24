@@ -7,11 +7,14 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::str::FromStr;
 
-/// Token fallback info to use for providing token information to the solver.
+/// Base token info to use for providing token information to the solver. This
+/// differs slightly from the `TokenInfo` type in that is allows some extra
+/// parameters that are used by the `price_estimation` module but do not get
+/// passed to the solver.
 #[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TokenFallbackInfo {
+pub struct TokenBaseInfo {
     // NOTE: We have to, unfortunately duplicate fields and cannot use
     //   `#[serde(flatten)]` as it does not interact correctly with `u128`s:
     //   https://github.com/serde-rs/json/issues/625
@@ -22,7 +25,7 @@ pub struct TokenFallbackInfo {
     pub should_estimate_price: bool,
 }
 
-impl TokenFallbackInfo {
+impl TokenBaseInfo {
     /// Create new token information from its parameters.
     #[cfg(test)]
     pub fn new(
@@ -31,7 +34,7 @@ impl TokenFallbackInfo {
         external_price: u128,
         should_estimate_price: bool,
     ) -> Self {
-        TokenFallbackInfo {
+        TokenBaseInfo {
             alias: alias.into(),
             decimals,
             external_price,
@@ -40,7 +43,7 @@ impl TokenFallbackInfo {
     }
 }
 
-impl Into<TokenInfo> for TokenFallbackInfo {
+impl Into<TokenInfo> for TokenBaseInfo {
     fn into(self) -> TokenInfo {
         TokenInfo {
             alias: self.alias,
@@ -55,22 +58,22 @@ impl Into<TokenInfo> for TokenFallbackInfo {
 #[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(transparent)]
-pub struct TokenFallbackData(HashMap<TokenId, TokenFallbackInfo>);
+pub struct TokenData(HashMap<TokenId, TokenBaseInfo>);
 
-impl TokenFallbackData {
+impl TokenData {
     /// Retrieves some token information from a token ID.
-    pub fn info(&self, id: impl Into<TokenId>) -> Option<&TokenFallbackInfo> {
+    pub fn info(&self, id: impl Into<TokenId>) -> Option<&TokenBaseInfo> {
         self.0.get(&id.into())
     }
 }
 
-impl From<HashMap<TokenId, TokenFallbackInfo>> for TokenFallbackData {
-    fn from(tokens: HashMap<TokenId, TokenFallbackInfo>) -> Self {
-        TokenFallbackData(tokens)
+impl From<HashMap<TokenId, TokenBaseInfo>> for TokenData {
+    fn from(tokens: HashMap<TokenId, TokenBaseInfo>) -> Self {
+        TokenData(tokens)
     }
 }
 
-impl FromStr for TokenFallbackData {
+impl FromStr for TokenData {
     type Err = Error;
 
     fn from_str(token_data: &str) -> Result<Self> {
@@ -100,10 +103,10 @@ mod tests {
         }"#;
 
         assert_eq!(
-            TokenFallbackData::from_str(json).unwrap(),
-            TokenFallbackData::from(hash_map! {
-                TokenId(1) => TokenFallbackInfo::new("WETH", 18, 200_000_000_000_000_000_000, false),
-                TokenId(4) => TokenFallbackInfo::new("USDC", 6, 1_000_000_000_000_000_000_000_000_000_000, true),
+            TokenData::from_str(json).unwrap(),
+            TokenData::from(hash_map! {
+                TokenId(1) => TokenBaseInfo::new("WETH", 18, 200_000_000_000_000_000_000, false),
+                TokenId(4) => TokenBaseInfo::new("USDC", 6, 1_000_000_000_000_000_000_000_000_000_000, true),
             })
         );
     }

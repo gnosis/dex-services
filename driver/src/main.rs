@@ -19,7 +19,7 @@ use crate::driver::stablex_driver::StableXDriver;
 use crate::gas_station::GnosisSafeGasStation;
 use crate::metrics::{MetricsServer, StableXMetrics};
 use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
-use crate::price_estimation::{PriceOracle, TokenFallbackData};
+use crate::price_estimation::{PriceOracle, TokenData};
 use crate::price_finding::{Fee, SolverType};
 use crate::solution_submission::StableXSolutionSubmitter;
 
@@ -78,7 +78,7 @@ struct Options {
     ///   }
     /// }'
     #[structopt(long, env = "PRICE_FEED_INFORMATION", default_value = "{}")]
-    backup_token_data: TokenFallbackData,
+    backup_token_data: TokenData,
 
     /// JSON encoded object of which tokens/orders to ignore.
     ///
