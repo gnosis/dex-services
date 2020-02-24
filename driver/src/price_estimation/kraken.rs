@@ -118,6 +118,7 @@ mod tests {
     use super::api::{MockKrakenApi, TickerInfo};
     use super::*;
     use std::collections::HashSet;
+    use std::time::Instant;
 
     #[test]
     fn get_token_prices() {
@@ -189,13 +190,18 @@ mod tests {
             Token::new(15, "SNX", 18),
         ];
 
-        let client = KrakenClient::new().unwrap();
-        let prices = client.get_prices(&tokens).unwrap();
+        let start_time = Instant::now();
+        {
+            let client = KrakenClient::new().unwrap();
+            let prices = client.get_prices(&tokens).unwrap();
 
-        println!("{:#?}", prices);
-        assert!(
-            prices.contains_key(&TokenId(1)),
-            "expected ETH price to be found"
-        );
+            println!("{:#?}", prices);
+            assert!(
+                prices.contains_key(&TokenId(1)),
+                "expected ETH price to be found"
+            );
+        }
+        let elapsed_millis = start_time.elapsed().as_secs_f64() * 1000.0;
+        println!("Total elapsed time: {}ms", elapsed_millis);
     }
 }
