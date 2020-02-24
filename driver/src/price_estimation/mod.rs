@@ -1,10 +1,10 @@
 //! Module responsible for aggregating price estimates from various sources to
 //! give good price estimates to the solver for better results.
 
-pub mod fallback;
+pub mod data;
 mod kraken;
 
-pub use self::fallback::TokenData;
+pub use self::data::TokenData;
 use self::kraken::KrakenClient;
 use crate::models::{Order, TokenId, TokenInfo};
 use anyhow::Result;
@@ -188,7 +188,7 @@ trait PriceSource {
 
 #[cfg(test)]
 mod tests {
-    use super::fallback::TokenBaseInfo;
+    use super::data::TokenBaseInfo;
     use super::*;
     use anyhow::anyhow;
 
