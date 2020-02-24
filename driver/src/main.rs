@@ -126,7 +126,7 @@ fn main() {
     let options = Options::from_args();
     let (_, _guard) = logging::init(&options.log_filter);
     info!("Starting driver with runtime options: {:#?}", options);
-    let solver_config = SolverConfig::new(&options.solver_type, options.solver_time_limit);
+    let solver_config = SolverConfig::new(&options.solver_type, options.solver_time_limit).unwrap();
     let web3 = web3_provider(options.node_url.as_str(), options.rpc_timeout).unwrap();
     let gas_station =
         GnosisSafeGasStation::new(options.gas_station_timeout, gas_station::DEFAULT_URI).unwrap();

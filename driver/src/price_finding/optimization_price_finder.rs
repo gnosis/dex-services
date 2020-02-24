@@ -553,7 +553,9 @@ pub mod tests {
             run_solver: |_, _, _| Ok(()),
             read_output: |_| Err(std::io::Error::last_os_error()),
             fee: Some(fee),
-            solver_type: SolverConfig::StandardSolver(180),
+            solver_type: SolverConfig::StandardSolver {
+                solver_time_limit: 180,
+            },
             token_data,
         };
         let orders = vec![];

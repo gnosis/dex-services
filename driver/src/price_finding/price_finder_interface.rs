@@ -1,5 +1,5 @@
 use crate::models;
-use anyhow::Error;
+use anyhow::{anyhow, Error, Result};
 #[cfg(test)]
 use mockall::automock;
 
@@ -22,17 +22,17 @@ impl Default for Fee {
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum SolverConfig {
     NaiveSolver,
-    StandardSolver(u32), //params for --solverTimeLimit
-    FallbackSolver(u32),
+    StandardSolver { solver_time_limit: u32 },
+    FallbackSolver { solver_time_limit: u32 },
 }
 
 impl SolverConfig {
-    pub fn new(solver_type_str: &str, solver_time_limit: u32) -> Self {
+    pub fn new(solver_type_str: &str, solver_time_limit: u32) -> Result<Self> {
         match solver_type_str.to_lowercase().as_str() {
-            "standard-solver" => SolverConfig::StandardSolver(solver_time_limit),
-            "fallback-solver" => SolverConfig::FallbackSolver(solver_time_limit),
-            "naive-solver" => SolverConfig::NaiveSolver,
-            _ => panic!("solver type does not exist"),
+            "standard-solver" => Ok(SolverConfig::StandardSolver { solver_time_limit }),
+            "fallback-solver" => Ok(SolverConfig::FallbackSolver { solver_time_limit }),
+            "naive-solver" => Ok(SolverConfig::NaiveSolver),
+            _ => Err(anyhow!("solver type does not exit")),
         }
     }
 }
@@ -40,10 +40,10 @@ impl SolverConfig {
 impl SolverConfig {
     pub fn to_args(self) -> Vec<String> {
         match self {
-            SolverConfig::StandardSolver(solver_time_limit) => {
+            SolverConfig::StandardSolver { solver_time_limit } => {
                 vec![format!("--solverTimeLimit={:}", solver_time_limit)]
             }
-            SolverConfig::FallbackSolver(solver_time_limit) => vec![
+            SolverConfig::FallbackSolver { solver_time_limit } => vec![
                 format!("--solverTimeLimit={:}", solver_time_limit),
                 String::from("--tokenInfo=/app/batchauctions/scripts/token_info_mainnet.json"),
                 String::from("--useExternalPrices"),
