@@ -11,7 +11,7 @@ use mockall::automock;
 
 use crate::contracts;
 use crate::gas_station::GasPriceEstimating;
-use crate::models::{Order, Solution};
+use crate::models::{ExecutedOrder, Solution};
 use crate::util::FutureWaitExt;
 
 lazy_static! {
@@ -75,14 +75,12 @@ pub trait StableXContract {
     fn get_solution_objective_value(
         &self,
         batch_index: U256,
-        orders: Vec<Order>,
         solution: Solution,
         block_number: Option<BlockNumber>,
     ) -> Result<U256>;
     fn submit_solution(
         &self,
         batch_index: U256,
-        orders: Vec<Order>,
         solution: Solution,
         claimed_objective_value: U256,
     ) -> Result<()>;
@@ -112,13 +110,11 @@ impl<'a> StableXContract for StableXContractImpl<'a> {
     fn get_solution_objective_value(
         &self,
         batch_index: U256,
-        orders: Vec<Order>,
         solution: Solution,
         block_number: Option<BlockNumber>,
     ) -> Result<U256> {
         let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
-        let (owners, order_ids, volumes) =
-            encode_execution_for_contract(orders, solution.executed_buy_amounts);
+        let (owners, order_ids, volumes) = encode_execution_for_contract(&solution.executed_orders);
         let mut builder = self
             .instance
             .submit_solution(
@@ -139,13 +135,11 @@ impl<'a> StableXContract for StableXContractImpl<'a> {
     fn submit_solution(
         &self,
         batch_index: U256,
-        orders: Vec<Order>,
         solution: Solution,
         claimed_objective_value: U256,
     ) -> Result<()> {
         let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
-        let (owners, order_ids, volumes) =
-            encode_execution_for_contract(orders, solution.executed_buy_amounts);
+        let (owners, order_ids, volumes) = encode_execution_for_contract(&solution.executed_orders);
         let gas_price = self.gas_price_estimating.estimate_gas_price();
         if let Err(ref err) = gas_price {
             log::warn!(
@@ -196,24 +190,18 @@ fn encode_prices_for_contract(price_map: &HashMap<u16, u128>) -> (Vec<u128>, Vec
 }
 
 fn encode_execution_for_contract(
-    orders: Vec<Order>,
-    executed_buy_amounts: Vec<u128>,
+    executed_orders: &[ExecutedOrder],
 ) -> (Vec<Address>, Vec<u16>, Vec<u128>) {
-    assert_eq!(
-        orders.len(),
-        executed_buy_amounts.len(),
-        "Received inconsistent auction result data."
-    );
     let mut owners = vec![];
     let mut order_ids = vec![];
     let mut volumes = vec![];
-    for (order_index, buy_amount) in executed_buy_amounts.into_iter().enumerate() {
-        if buy_amount > 0 {
+    for order in executed_orders {
+        if order.buy_amount > 0 {
             // order was touched!
             // Note that above condition is only holds for sell orders.
-            owners.push(orders[order_index].account_id);
-            order_ids.push(orders[order_index].id);
-            volumes.push(buy_amount);
+            owners.push(order.account_id);
+            order_ids.push(order.order_id);
+            volumes.push(order.buy_amount);
         }
     }
     (owners, order_ids, volumes)
@@ -225,41 +213,21 @@ pub mod tests {
     use crate::util::test_util::map_from_slice;
 
     #[test]
-    #[should_panic]
-    fn encode_execution_fails_on_inconsistent_results() {
-        let some_reasonable_order = Order {
-            id: 0,
-            account_id: Address::from_low_u64_be(1),
-            sell_token: 0,
-            buy_token: 1,
-            sell_amount: 1,
-            buy_amount: 1,
-        };
-        encode_execution_for_contract(vec![some_reasonable_order], vec![]);
-    }
-
-    #[test]
     fn generic_encode_execution_test() {
-        let executed_buy_amounts = vec![1, 0];
-
         let address_1 = Address::from_low_u64_be(1);
         let address_2 = Address::from_low_u64_be(2);
 
-        let order_1 = Order {
-            id: 0,
+        let order_1 = ExecutedOrder {
+            order_id: 0,
             account_id: address_1,
-            sell_token: 0,
-            buy_token: 2,
             sell_amount: 1,
-            buy_amount: 2,
+            buy_amount: 1,
         };
-        let order_2 = Order {
-            id: 1,
+        let order_2 = ExecutedOrder {
+            order_id: 1,
             account_id: address_2,
-            sell_token: 2,
-            buy_token: 0,
-            sell_amount: 3,
-            buy_amount: 4,
+            sell_amount: 0,
+            buy_amount: 0,
         };
 
         let expected_owners = vec![address_1];
@@ -269,7 +237,7 @@ pub mod tests {
         let expected_results = (expected_owners, expected_order_ids, expected_volumes);
 
         assert_eq!(
-            encode_execution_for_contract(vec![order_1, order_2], executed_buy_amounts),
+            encode_execution_for_contract(&[order_1, order_2]),
             expected_results
         );
     }

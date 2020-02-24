@@ -2,7 +2,7 @@
 
 use crate::contracts::stablex_contract::StableXContract;
 use crate::eth_rpc::EthRpc;
-use crate::models::{Order, Solution};
+use crate::models::Solution;
 
 use anyhow::{Error, Result};
 use ethcontract::errors::{ExecutionError, MethodError};
@@ -23,7 +23,6 @@ pub trait StableXSolutionSubmitting {
     fn get_solution_objective_value(
         &self,
         batch_index: U256,
-        orders: Vec<Order>,
         solution: Solution,
     ) -> Result<U256, SolutionSubmissionError>;
 
@@ -37,7 +36,6 @@ pub trait StableXSolutionSubmitting {
     fn submit_solution(
         &self,
         batch_index: U256,
-        orders: Vec<Order>,
         solution: Solution,
         claimed_objective_value: U256,
     ) -> Result<(), SolutionSubmissionError>;
@@ -92,25 +90,22 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
     fn get_solution_objective_value(
         &self,
         batch_index: U256,
-        orders: Vec<Order>,
         solution: Solution,
     ) -> Result<U256, SolutionSubmissionError> {
         self.contract
-            .get_solution_objective_value(batch_index, orders, solution, None)
+            .get_solution_objective_value(batch_index, solution, None)
             .map_err(SolutionSubmissionError::from)
     }
 
     fn submit_solution(
         &self,
         batch_index: U256,
-        orders: Vec<Order>,
         solution: Solution,
         claimed_objective_value: U256,
     ) -> Result<(), SolutionSubmissionError> {
         self.contract
             .submit_solution(
                 batch_index.clone(),
-                orders.clone(),
                 solution.clone(),
                 claimed_objective_value,
             )
@@ -121,7 +116,6 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
                         let block_number = receipt.block_number?;
                         match self.contract.get_solution_objective_value(
                             batch_index,
-                            orders,
                             solution,
                             Some(block_number.into()),
                         ) {
@@ -159,7 +153,7 @@ mod tests {
 
         contract
             .expect_get_solution_objective_value()
-            .return_once(move |_, _, _, _| {
+            .return_once(move |_, _, _| {
                 Err(anyhow!(MethodError::from_parts(
                 "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
                     .to_owned(),
@@ -168,8 +162,7 @@ mod tests {
             });
 
         let submitter = StableXSolutionSubmitter::new(&contract, &eth_rpc);
-        let result =
-            submitter.get_solution_objective_value(U256::zero(), vec![], Solution::trivial(0));
+        let result = submitter.get_solution_objective_value(U256::zero(), Solution::trivial());
 
         match result.expect_err("Should have errored") {
             SolutionSubmissionError::Benign(_) => (),
@@ -207,7 +200,7 @@ mod tests {
         // Submit Solution returns failed tx
         contract
             .expect_submit_solution()
-            .return_once(move |_, _, _, _| {
+            .return_once(move |_, _, _| {
                 Err(anyhow!(MethodError::from_parts(
                 "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
                     .to_owned(),
@@ -217,8 +210,8 @@ mod tests {
         // Get objective value on old block number returns revert reason
         contract
             .expect_get_solution_objective_value()
-            .with(always(), always(), always(), eq(Some(block_number.into())))
-            .return_once(move |_, _, _, _| {
+            .with(always(), always(), eq(Some(block_number.into())))
+            .return_once(move |_, _, _| {
                 Err(anyhow!(MethodError::from_parts(
                 "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
                     .to_owned(),
@@ -227,8 +220,7 @@ mod tests {
             });
 
         let submitter = StableXSolutionSubmitter::new(&contract, &eth_rpc);
-        let result =
-            submitter.submit_solution(U256::zero(), vec![], Solution::trivial(0), U256::zero());
+        let result = submitter.submit_solution(U256::zero(), Solution::trivial(), U256::zero());
 
         match result.expect_err("Should have errored") {
             SolutionSubmissionError::Benign(_) => (),

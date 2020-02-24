@@ -30,6 +30,7 @@ impl Order {
 #[cfg(test)]
 pub mod test_util {
     use super::*;
+    use crate::models::ExecutedOrder;
 
     pub fn create_order_for_test() -> Order {
         Order {
@@ -39,6 +40,19 @@ pub mod test_util {
             sell_token: 2,
             buy_amount: 5,
             sell_amount: 4,
+        }
+    }
+
+    pub fn order_to_executed_order(
+        order: &Order,
+        sell_amount: u128,
+        buy_amount: u128,
+    ) -> ExecutedOrder {
+        ExecutedOrder {
+            account_id: order.account_id,
+            order_id: order.id,
+            sell_amount,
+            buy_amount,
         }
     }
 }

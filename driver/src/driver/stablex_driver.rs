@@ -60,11 +60,11 @@ impl<'a> StableXDriver<'a> {
 
         let solution = if orders.is_empty() {
             info!("No orders in batch {}", batch_to_solve);
-            Solution::trivial(0)
+            Solution::trivial()
         } else {
             let price_finder_result = self.price_finder.find_prices(&orders, &account_state);
             self.metrics
-                .auction_solution_computed(batch_to_solve, &orders, &price_finder_result);
+                .auction_solution_computed(batch_to_solve, &price_finder_result);
 
             let solution = price_finder_result?;
             info!("Computed solution: {:?}", &solution);
@@ -77,11 +77,9 @@ impl<'a> StableXDriver<'a> {
             //   solution gets validated, ensured that it is better than the
             //   latest submitted solution, and that solutions are still being
             //   accepted for this batch ID.
-            let verification_result = self.solution_submitter.get_solution_objective_value(
-                batch_to_solve,
-                orders.clone(),
-                solution.clone(),
-            );
+            let verification_result = self
+                .solution_submitter
+                .get_solution_objective_value(batch_to_solve, solution.clone());
             self.metrics
                 .auction_solution_verified(batch_to_solve, &verification_result);
 
@@ -113,12 +111,9 @@ impl<'a> StableXDriver<'a> {
         };
 
         let submitted = if let Some(objective_value) = verified {
-            let submission_result = self.solution_submitter.submit_solution(
-                batch_to_solve,
-                orders,
-                solution,
-                objective_value,
-            );
+            let submission_result =
+                self.solution_submitter
+                    .submit_solution(batch_to_solve, solution, objective_value);
             self.metrics
                 .auction_solution_submitted(batch_to_solve, &submission_result);
             submission_result?;
@@ -136,7 +131,7 @@ impl<'a> StableXDriver<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::order::test_util::create_order_for_test;
+    use crate::models::order::test_util::{create_order_for_test, order_to_executed_order};
     use crate::models::AccountState;
     use crate::orderbook::MockStableXOrderBookReading;
     use crate::price_finding::price_finder_interface::MockPriceFinding;
@@ -170,23 +165,20 @@ mod tests {
 
         submitter
             .expect_get_solution_objective_value()
-            .with(eq(batch), eq(orders.clone()), always())
-            .returning(|_, _, _| Ok(U256::from(1337)));
+            .with(eq(batch), always())
+            .returning(|_, _| Ok(U256::from(1337)));
 
         submitter
             .expect_submit_solution()
-            .with(
-                eq(batch),
-                eq(orders.clone()),
-                always(),
-                eq(U256::from(1337)),
-            )
-            .returning(|_, _, _, _| Ok(()));
+            .with(eq(batch), always(), eq(U256::from(1337)))
+            .returning(|_, _, _| Ok(()));
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
-            executed_sell_amounts: vec![0, 2],
-            executed_buy_amounts: vec![0, 2],
+            executed_orders: vec![
+                order_to_executed_order(&orders[0], 0, 0),
+                order_to_executed_order(&orders[1], 2, 2),
+            ],
         };
         pf.expect_find_prices()
             .withf(move |o, s| o == orders.as_slice() && *s == state)
@@ -221,23 +213,20 @@ mod tests {
 
         submitter
             .expect_get_solution_objective_value()
-            .with(eq(batch), eq(orders.clone()), always())
-            .returning(|_, _, _| Ok(U256::from(1337)));
+            .with(eq(batch), always())
+            .returning(|_, _| Ok(U256::from(1337)));
 
         submitter
             .expect_submit_solution()
-            .with(
-                eq(batch),
-                eq(orders.clone()),
-                always(),
-                eq(U256::from(1337)),
-            )
-            .returning(|_, _, _, _| Ok(()));
+            .with(eq(batch), always(), eq(U256::from(1337)))
+            .returning(|_, _, _| Ok(()));
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
-            executed_sell_amounts: vec![0, 2],
-            executed_buy_amounts: vec![0, 2],
+            executed_orders: vec![
+                order_to_executed_order(&orders[0], 0, 0),
+                order_to_executed_order(&orders[1], 2, 2),
+            ],
         };
         pf.expect_find_prices()
             .withf(move |o, s| o == orders.as_slice() && *s == state)
@@ -293,13 +282,13 @@ mod tests {
 
         submitter
             .expect_get_solution_objective_value()
-            .with(eq(batch), eq(orders.clone()), always())
-            .returning(|_, _, _| Ok(U256::from(1337)));
+            .with(eq(batch), always())
+            .returning(|_, _| Ok(U256::from(1337)));
 
         submitter
             .expect_submit_solution()
-            .with(eq(batch), eq(orders), always(), eq(U256::from(1337)))
-            .returning(|_, _, _, _| Ok(()));
+            .with(eq(batch), always(), eq(U256::from(1337)))
+            .returning(|_, _, _| Ok(()));
 
         pf.expect_find_prices()
             .returning(|_, _| Err(anyhow!("Error")));
@@ -388,7 +377,7 @@ mod tests {
                 |_| Ok(result)
             });
 
-        let solution = Solution::trivial(orders.len());
+        let solution = Solution::trivial();
         pf.expect_find_prices()
             .withf(move |o, s| o == orders.as_slice() && *s == state)
             .return_once(move |_, _| Ok(solution));
@@ -424,8 +413,8 @@ mod tests {
 
         submitter
             .expect_get_solution_objective_value()
-            .with(eq(batch), eq(orders.clone()), always())
-            .returning(|_, _, _| {
+            .with(eq(batch), always())
+            .returning(|_, _| {
                 Err(SolutionSubmissionError::Unexpected(anyhow!(
                     "get_solution_objective_value failed"
                 )))
@@ -434,8 +423,10 @@ mod tests {
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
-            executed_sell_amounts: vec![0, 2],
-            executed_buy_amounts: vec![0, 2],
+            executed_orders: vec![
+                order_to_executed_order(&orders[0], 0, 0),
+                order_to_executed_order(&orders[1], 2, 2),
+            ],
         };
         pf.expect_find_prices()
             .withf(move |o, s| o == orders.as_slice() && *s == state)
@@ -470,8 +461,8 @@ mod tests {
 
         submitter
             .expect_get_solution_objective_value()
-            .with(eq(batch), eq(orders.clone()), always())
-            .returning(|_, _, _| {
+            .with(eq(batch), always())
+            .returning(|_, _| {
                 Err(SolutionSubmissionError::Unexpected(anyhow!(
                     "get_solution_objective_value failed"
                 )))
@@ -479,8 +470,10 @@ mod tests {
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
-            executed_sell_amounts: vec![0, 2],
-            executed_buy_amounts: vec![0, 2],
+            executed_orders: vec![
+                order_to_executed_order(&orders[0], 0, 0),
+                order_to_executed_order(&orders[1], 2, 2),
+            ],
         };
         pf.expect_find_prices()
             .withf(move |o, s| o == orders.as_slice() && *s == state)
@@ -520,18 +513,13 @@ mod tests {
 
         submitter
             .expect_get_solution_objective_value()
-            .with(eq(batch), eq(orders.clone()), always())
-            .returning(|_, _, _| Ok(U256::from(1337)));
+            .with(eq(batch), always())
+            .returning(|_, _| Ok(U256::from(1337)));
 
         submitter
             .expect_submit_solution()
-            .with(
-                eq(batch),
-                eq(orders.clone()),
-                always(),
-                eq(U256::from(1337)),
-            )
-            .returning(|_, _, _, _| {
+            .with(eq(batch), always(), eq(U256::from(1337)))
+            .returning(|_, _, _| {
                 Err(SolutionSubmissionError::Unexpected(anyhow!(
                     "submit_solution failed"
                 )))
@@ -539,8 +527,10 @@ mod tests {
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
-            executed_sell_amounts: vec![0, 2],
-            executed_buy_amounts: vec![0, 2],
+            executed_orders: vec![
+                order_to_executed_order(&orders[0], 0, 0),
+                order_to_executed_order(&orders[1], 2, 2),
+            ],
         };
         pf.expect_find_prices()
             .withf(move |o, s| o == orders.as_slice() && *s == state)
@@ -580,14 +570,16 @@ mod tests {
 
         submitter
             .expect_get_solution_objective_value()
-            .with(eq(batch), eq(orders.clone()), always())
-            .returning(|_, _, _| Err(SolutionSubmissionError::Benign("Benign Error".to_owned())));
+            .with(eq(batch), always())
+            .returning(|_, _| Err(SolutionSubmissionError::Benign("Benign Error".to_owned())));
         submitter.expect_submit_solution().times(0);
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
-            executed_sell_amounts: vec![0, 2],
-            executed_buy_amounts: vec![0, 2],
+            executed_orders: vec![
+                order_to_executed_order(&orders[0], 0, 0),
+                order_to_executed_order(&orders[1], 2, 2),
+            ],
         };
         pf.expect_find_prices()
             .withf(move |o, s| o == orders.as_slice() && *s == state)
