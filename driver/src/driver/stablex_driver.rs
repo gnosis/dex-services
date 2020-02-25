@@ -1,3 +1,4 @@
+use crate::contracts::extract_benign_submission_failure;
 use crate::metrics::StableXMetrics;
 use crate::models::Solution;
 use crate::orderbook::StableXOrderBookReading;
@@ -72,7 +73,7 @@ impl<'a> StableXDriver<'a> {
             solution
         };
 
-        let submitted = if solution.is_non_trivial() {
+        let verified = if solution.is_non_trivial() {
             // NOTE: in retrieving the objective value from the reader the
             //   solution gets validated, ensured that it is better than the
             //   latest submitted solution, and that solutions are still being
@@ -85,11 +86,33 @@ impl<'a> StableXDriver<'a> {
             self.metrics
                 .auction_solution_verified(batch_to_solve, &verification_result);
 
-            let objective_value = verification_result?;
+            match verification_result {
+                Ok(objective_value) => {
+                    info!(
+                        "Verified solution with objective value: {}",
+                        objective_value
+                    );
+                    Some(objective_value)
+                }
+                Err(err) => {
+                    if let Some(reason) = extract_benign_submission_failure(&err) {
+                        info!("Benign failure while verifying solution: {}", reason);
+                        None
+                    } else {
+                        // Return from entire function with the unexpected error
+                        return Err(err);
+                    }
+                }
+            }
+        } else {
             info!(
-                "Verified solution with objective value: {}",
-                objective_value
+                "Not submitting trivial solution for batch {}",
+                batch_to_solve
             );
+            None
+        };
+
+        let submitted = if let Some(objective_value) = verified {
             let submission_result = self.solution_submitter.submit_solution(
                 batch_to_solve,
                 orders,
@@ -103,10 +126,6 @@ impl<'a> StableXDriver<'a> {
             info!("Successfully applied solution to batch {}", batch_to_solve);
             true
         } else {
-            info!(
-                "Not submitting trivial solution for batch {}",
-                batch_to_solve
-            );
             self.metrics.auction_skipped(batch_to_solve);
             false
         };
@@ -522,5 +541,47 @@ mod tests {
 
         // Second run is skipped
         assert_eq!(driver.run().expect("should have succeeded"), false);
+    }
+
+    #[test]
+    fn test_do_not_fail_on_benign_error() {
+        let mut reader = MockStableXOrderBookReading::default();
+        let mut submitter = MockStableXSolutionSubmitting::default();
+        let mut pf = MockPriceFinding::default();
+        let metrics = StableXMetrics::default();
+
+        let orders = vec![create_order_for_test(), create_order_for_test()];
+        let state = AccountState::with_balance_for(&orders);
+
+        let batch = U256::from(42);
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
+
+        reader
+            .expect_get_auction_data()
+            .with(eq(batch))
+            .return_once({
+                let result = (state.clone(), orders.clone());
+                |_| Ok(result)
+            });
+
+        submitter
+            .expect_get_solution_objective_value()
+            .with(eq(batch), eq(orders.clone()), always())
+            .returning(|_, _, _| Err(crate::contracts::tests::benign_error()));
+        submitter.expect_submit_solution().times(0);
+
+        let solution = Solution {
+            prices: map_from_slice(&[(0, 1), (1, 2)]),
+            executed_sell_amounts: vec![0, 2],
+            executed_buy_amounts: vec![0, 2],
+        };
+        pf.expect_find_prices()
+            .withf(move |o, s| o == orders.as_slice() && *s == state)
+            .return_once(move |_, _| Ok(solution));
+
+        let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
+        assert!(driver.run().is_ok());
     }
 }

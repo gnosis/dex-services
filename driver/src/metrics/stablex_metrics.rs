@@ -1,3 +1,4 @@
+use crate::contracts::extract_benign_submission_failure;
 use crate::models::{AccountState, Order, Solution};
 use anyhow::Result;
 use chrono::Utc;
@@ -141,7 +142,11 @@ impl StableXMetrics {
             .set(time_elapsed_since_batch_start(batch));
         match res {
             Ok(_) => (),
-            Err(_) => self.failures.with_label_values(stage_label).inc(),
+            Err(err) => {
+                if extract_benign_submission_failure(err).is_none() {
+                    self.failures.with_label_values(stage_label).inc()
+                }
+            }
         }
     }
 
