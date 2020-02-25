@@ -496,6 +496,7 @@ dependencies = [
  "slog-stdlog",
  "slog-term",
  "structopt",
+ "thiserror",
  "uint",
  "url 2.1.1",
 ]

@@ -2,9 +2,8 @@ pub mod stablex_auction_element;
 pub mod stablex_contract;
 
 use crate::transport::HttpTransport;
-use anyhow::{anyhow, Error, Result};
+use anyhow::{anyhow, Result};
 use ethcontract::contract::MethodDefaults;
-use ethcontract::errors::{ExecutionError, MethodError};
 
 use ethcontract::{Account, PrivateKey};
 use std::convert::TryFrom;
@@ -61,29 +60,5 @@ impl TryFrom<&str> for BenignSolutionFailure {
             "SafeMath: subtraction overflow" => Ok(BenignSolutionFailure::NegativeUtility),
             _ => Err(anyhow!("Unexpected error")),
         }
-    }
-}
-
-pub fn extract_benign_submission_failure(err: &Error) -> Option<BenignSolutionFailure> {
-    err.downcast_ref::<MethodError>()
-        .and_then(|method_error| match &method_error.inner {
-            ExecutionError::Revert(Some(reason)) => {
-                let reason_slice: &str = &*reason;
-                BenignSolutionFailure::try_from(reason_slice).ok()
-            }
-            _ => None,
-        })
-}
-
-#[cfg(test)]
-pub mod tests {
-    use super::{ExecutionError, MethodError};
-    use anyhow::anyhow;
-    pub fn benign_error() -> anyhow::Error {
-        anyhow!(MethodError::from_parts(
-            "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
-                .to_owned(),
-            ExecutionError::Revert(Some("SafeMath: subtraction overflow".to_owned())),
-        ))
     }
 }

@@ -1,9 +1,8 @@
-use crate::contracts::extract_benign_submission_failure;
 use crate::metrics::StableXMetrics;
 use crate::models::Solution;
 use crate::orderbook::StableXOrderBookReading;
 use crate::price_finding::PriceFinding;
-use crate::solution_submission::StableXSolutionSubmitting;
+use crate::solution_submission::{SolutionSubmissionError, StableXSolutionSubmitting};
 use anyhow::Result;
 
 use log::info;
@@ -94,15 +93,16 @@ impl<'a> StableXDriver<'a> {
                     );
                     Some(objective_value)
                 }
-                Err(err) => {
-                    if let Some(reason) = extract_benign_submission_failure(&err) {
+                Err(err) => match err {
+                    SolutionSubmissionError::Benign(reason) => {
                         info!("Benign failure while verifying solution: {}", reason);
                         None
-                    } else {
+                    }
+                    SolutionSubmissionError::Unexpected(err) => {
                         // Return from entire function with the unexpected error
                         return Err(err);
                     }
-                }
+                },
             }
         } else {
             info!(
@@ -425,7 +425,11 @@ mod tests {
         submitter
             .expect_get_solution_objective_value()
             .with(eq(batch), eq(orders.clone()), always())
-            .returning(|_, _, _| Err(anyhow!("get_solution_objective_value failed")));
+            .returning(|_, _, _| {
+                Err(SolutionSubmissionError::Unexpected(anyhow!(
+                    "get_solution_objective_value failed"
+                )))
+            });
         submitter.expect_submit_solution().times(0);
 
         let solution = Solution {
@@ -467,7 +471,11 @@ mod tests {
         submitter
             .expect_get_solution_objective_value()
             .with(eq(batch), eq(orders.clone()), always())
-            .returning(|_, _, _| Err(anyhow!("get_solution_objective_value failed")));
+            .returning(|_, _, _| {
+                Err(SolutionSubmissionError::Unexpected(anyhow!(
+                    "get_solution_objective_value failed"
+                )))
+            });
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
@@ -523,7 +531,11 @@ mod tests {
                 always(),
                 eq(U256::from(1337)),
             )
-            .returning(|_, _, _, _| Err(anyhow!("submit_solution failed")));
+            .returning(|_, _, _, _| {
+                Err(SolutionSubmissionError::Unexpected(anyhow!(
+                    "submit_solution failed"
+                )))
+            });
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
@@ -569,7 +581,7 @@ mod tests {
         submitter
             .expect_get_solution_objective_value()
             .with(eq(batch), eq(orders.clone()), always())
-            .returning(|_, _, _| Err(crate::contracts::tests::benign_error()));
+            .returning(|_, _, _| Err(SolutionSubmissionError::Benign("Benign Error".to_owned())));
         submitter.expect_submit_solution().times(0);
 
         let solution = Solution {

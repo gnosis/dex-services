@@ -3,10 +3,12 @@
 use crate::contracts::stablex_contract::StableXContract;
 use crate::models::{Order, Solution};
 
-use anyhow::Result;
+use anyhow::{Error, Result};
+use ethcontract::errors::{ExecutionError, MethodError};
 use ethcontract::U256;
 #[cfg(test)]
 use mockall::automock;
+use thiserror::Error;
 
 #[cfg_attr(test, automock)]
 pub trait StableXSolutionSubmitting {
@@ -22,7 +24,7 @@ pub trait StableXSolutionSubmitting {
         batch_index: U256,
         orders: Vec<Order>,
         solution: Solution,
-    ) -> Result<U256>;
+    ) -> Result<U256, SolutionSubmissionError>;
 
     /// Submits the provided solution and returns the result of the submission
     ///
@@ -37,7 +39,41 @@ pub trait StableXSolutionSubmitting {
         orders: Vec<Order>,
         solution: Solution,
         claimed_objective_value: U256,
-    ) -> Result<()>;
+    ) -> Result<(), SolutionSubmissionError>;
+}
+
+/// An error with verifying or submitting a solution
+#[derive(Debug, Error)]
+pub enum SolutionSubmissionError {
+    #[error("Benign Error: {0}")]
+    Benign(String),
+    #[error("Unexpected Error: {0}")]
+    Unexpected(Error),
+}
+
+impl From<Error> for SolutionSubmissionError {
+    fn from(err: Error) -> Self {
+        err.downcast_ref::<MethodError>()
+            .and_then(|method_error| match &method_error.inner {
+                ExecutionError::Revert(Some(reason)) => {
+                    let reason_slice: &str = &*reason;
+                    match reason_slice {
+                        "New objective doesn\'t sufficiently improve current solution" => {
+                            Some(SolutionSubmissionError::Benign(reason.clone()))
+                        }
+                        "Claimed objective doesn't sufficiently improve current solution" => {
+                            Some(SolutionSubmissionError::Benign(reason.clone()))
+                        }
+                        "SafeMath: subtraction overflow" => {
+                            Some(SolutionSubmissionError::Benign(reason.clone()))
+                        }
+                        _ => None,
+                    }
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| SolutionSubmissionError::Unexpected(err))
+    }
 }
 
 pub struct StableXSolutionSubmitter<'a> {
@@ -56,9 +92,10 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
         batch_index: U256,
         orders: Vec<Order>,
         solution: Solution,
-    ) -> Result<U256> {
+    ) -> Result<U256, SolutionSubmissionError> {
         self.contract
             .get_solution_objective_value(batch_index, orders, solution)
+            .map_err(SolutionSubmissionError::from)
     }
 
     fn submit_solution(
@@ -67,8 +104,9 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
         orders: Vec<Order>,
         solution: Solution,
         claimed_objective_value: U256,
-    ) -> Result<()> {
+    ) -> Result<(), SolutionSubmissionError> {
         self.contract
             .submit_solution(batch_index, orders, solution, claimed_objective_value)
+            .map_err(SolutionSubmissionError::from)
     }
 }
