@@ -1,11 +1,13 @@
 #![allow(clippy::ptr_arg)] // required for automock
 
+use crate::contracts;
 use crate::contracts::stablex_contract::StableXContract;
 use crate::models::{Order, Solution};
 
 use anyhow::{Error, Result};
 use ethcontract::errors::{ExecutionError, MethodError};
-use ethcontract::U256;
+use ethcontract::web3::futures::Future as F;
+use ethcontract::{H256, U256};
 #[cfg(test)]
 use mockall::automock;
 use thiserror::Error;
@@ -78,11 +80,12 @@ impl From<Error> for SolutionSubmissionError {
 
 pub struct StableXSolutionSubmitter<'a> {
     contract: &'a dyn StableXContract,
+    web3: &'a contracts::Web3,
 }
 
 impl<'a> StableXSolutionSubmitter<'a> {
-    pub fn new(contract: &'a dyn StableXContract) -> Self {
-        Self { contract }
+    pub fn new(contract: &'a dyn StableXContract, web3: &'a contracts::Web3) -> Self {
+        Self { contract, web3 }
     }
 }
 
@@ -94,7 +97,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
         solution: Solution,
     ) -> Result<U256, SolutionSubmissionError> {
         self.contract
-            .get_solution_objective_value(batch_index, orders, solution)
+            .get_solution_objective_value(batch_index, orders, solution, None)
             .map_err(SolutionSubmissionError::from)
     }
 
@@ -106,7 +109,36 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
         claimed_objective_value: U256,
     ) -> Result<(), SolutionSubmissionError> {
         self.contract
-            .submit_solution(batch_index, orders, solution, claimed_objective_value)
-            .map_err(SolutionSubmissionError::from)
+            .submit_solution(
+                batch_index.clone(),
+                orders.clone(),
+                solution.clone(),
+                claimed_objective_value,
+            )
+            .map_err(|err| {
+                extract_transaction_hash(&err)
+                    .and_then(|hash| {
+                        let receipt = self.web3.eth().transaction_receipt(hash).wait().ok()??;
+                        let block_number = receipt.block_number?;
+                        match self.contract.get_solution_objective_value(
+                            batch_index,
+                            orders,
+                            solution,
+                            Some(block_number.into()),
+                        ) {
+                            Ok(_) => None,
+                            Err(e) => Some(SolutionSubmissionError::from(e)),
+                        }
+                    })
+                    .unwrap_or_else(|| SolutionSubmissionError::Unexpected(err))
+            })
     }
+}
+
+fn extract_transaction_hash(err: &Error) -> Option<H256> {
+    err.downcast_ref::<MethodError>()
+        .and_then(|method_error| match &method_error.inner {
+            ExecutionError::Failure(tx_hash) => Some(*tx_hash),
+            _ => None,
+        })
 }

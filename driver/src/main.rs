@@ -157,7 +157,7 @@ fn main() {
     info!("Orderbook filter: {:?}", options.orderbook_filter);
     let filtered_orderbook = FilteredOrderbookReader::new(&orderbook, options.orderbook_filter);
 
-    let solution_submitter = StableXSolutionSubmitter::new(&contract);
+    let solution_submitter = StableXSolutionSubmitter::new(&contract, &web3);
     let mut driver = StableXDriver::new(
         &mut *price_finder,
         &filtered_orderbook,
