@@ -166,7 +166,12 @@ impl StableXMetrics {
             .set(time_elapsed_since_batch_start(batch));
         match res {
             Ok(_) => self.successes.with_label_values(stage_label).inc(),
-            Err(_) => self.failures.with_label_values(stage_label).inc(),
+            Err(err) => match err {
+                SolutionSubmissionError::Benign(_) => (),
+                SolutionSubmissionError::Unexpected(_) => {
+                    self.failures.with_label_values(stage_label).inc()
+                }
+            },
         }
     }
 
