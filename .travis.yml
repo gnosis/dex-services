@@ -34,7 +34,7 @@ matrix:
         - cargo clippy --all --all-targets -- -D warnings
         - cargo fmt --all -- --check
         # Build and publish compact image with compiled binary
-        - docker build --tag stablex-binary --build-arg SOLVER_BASE=163030813197.dkr.ecr.us-east-1.amazonaws.com/dex-solver:v0.5.14 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
+        - docker build --tag stablex-binary --build-arg SOLVER_BASE=163030813197.dkr.ecr.us-east-1.amazonaws.com/dex-solver:v0.5.15 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
         # StableX e2e Tests (Ganache)
         - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d stablex
         - cargo test -p e2e ganache -- --nocapture
