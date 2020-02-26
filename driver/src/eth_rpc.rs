@@ -7,11 +7,14 @@ use ethcontract::H256;
 #[cfg(test)]
 use mockall::automock;
 
+/// Interface defining possible interactions via Ethereum RPCs
+/// Main purpose it to allow mocking the concrete Web3 implementation
 #[cfg_attr(test, automock)]
 pub trait EthRpc {
     fn get_transaction_receipts(&self, tx_hash: H256) -> Result<Option<TransactionReceipt>, Error>;
 }
 
+/// Ethereum RPC implementation via Web3
 pub struct Web3EthRpc<'a> {
     web3: &'a contracts::Web3,
 }
