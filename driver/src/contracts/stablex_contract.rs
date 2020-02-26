@@ -119,7 +119,7 @@ impl<'a> StableXContract for StableXContractImpl<'a> {
         let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
-        let builder = self
+        let mut builder = self
             .instance
             .submit_solution(
                 batch_index.low_u32(),
@@ -131,12 +131,7 @@ impl<'a> StableXContract for StableXContractImpl<'a> {
                 token_ids_for_price,
             )
             .view();
-
-        let builder = if let Some(block_number) = block_number {
-            builder.block(block_number)
-        } else {
-            builder
-        };
+        builder.block = block_number;
         let objective_value = builder.call().wait()?;
         Ok(objective_value)
     }
