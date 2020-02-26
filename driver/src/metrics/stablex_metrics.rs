@@ -1,4 +1,5 @@
 use crate::models::{AccountState, Order, Solution};
+use crate::solution_submission::SolutionSubmissionError;
 use anyhow::Result;
 use chrono::Utc;
 use ethcontract::U256;
@@ -134,18 +135,31 @@ impl StableXMetrics {
         }
     }
 
-    pub fn auction_solution_verified(&self, batch: U256, res: &Result<U256>) {
+    pub fn auction_solution_verified(
+        &self,
+        batch: U256,
+        res: &Result<U256, SolutionSubmissionError>,
+    ) {
         let stage_label = &[ProcessingStage::Solved.as_ref()];
         self.processing_times
             .with_label_values(stage_label)
             .set(time_elapsed_since_batch_start(batch));
         match res {
             Ok(_) => (),
-            Err(_) => self.failures.with_label_values(stage_label).inc(),
+            Err(err) => match err {
+                SolutionSubmissionError::Benign(_) => (),
+                SolutionSubmissionError::Unexpected(_) => {
+                    self.failures.with_label_values(stage_label).inc()
+                }
+            },
         }
     }
 
-    pub fn auction_solution_submitted(&self, batch: U256, res: &Result<()>) {
+    pub fn auction_solution_submitted(
+        &self,
+        batch: U256,
+        res: &Result<(), SolutionSubmissionError>,
+    ) {
         let stage_label = &[ProcessingStage::Submitted.as_ref()];
         self.processing_times
             .with_label_values(stage_label)
