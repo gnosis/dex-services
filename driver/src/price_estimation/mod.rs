@@ -2,6 +2,7 @@
 //! give good price estimates to the solver for better results.
 
 pub mod data;
+mod dexag;
 mod kraken;
 
 pub use self::data::TokenData;
