@@ -81,7 +81,7 @@ struct Options {
     ///   }
     /// }'
     #[structopt(long, env = "TOKEN_DATA", default_value = "{}")]
-    backup_token_data: TokenData,
+    token_data: TokenData,
 
     /// Number of seconds the solver should maximally use for the optimization process
     #[structopt(long, env = "SOLVER_TIME_LIMIT", default_value = "150")]
