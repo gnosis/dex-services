@@ -1,4 +1,5 @@
 use crate::http::{HttpClient, HttpFactory};
+use crate::metrics::GasStationLabel;
 use anyhow::Result;
 use ethcontract::U256;
 use isahc::http::uri::Uri;
@@ -32,7 +33,7 @@ pub trait GasPriceEstimating {
 }
 
 pub struct GnosisSafeGasStation {
-    client: HttpClient,
+    client: HttpClient<GasStationLabel>,
     uri: Uri,
 }
 
@@ -46,7 +47,7 @@ impl GnosisSafeGasStation {
 
 impl GasPriceEstimating for GnosisSafeGasStation {
     fn estimate_gas_price(&self) -> Result<GasPrice> {
-        self.client.get_json(&self.uri)
+        self.client.get_json_unlabeled(&self.uri)
     }
 }
 

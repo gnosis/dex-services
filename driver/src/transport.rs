@@ -1,4 +1,5 @@
 use crate::http::{HttpClient, HttpFactory};
+use crate::metrics::Web3Label;
 use anyhow::Error;
 use ethcontract::jsonrpc::types::{Call, Output};
 use ethcontract::web3::helpers;
@@ -21,7 +22,7 @@ pub struct HttpTransport(Arc<HttpTransportInner>);
 
 struct HttpTransportInner {
     url: String,
-    client: HttpClient,
+    client: HttpClient<Web3Label>,
     id: AtomicUsize,
 }
 
@@ -55,12 +56,18 @@ impl HttpTransportInner {
         id: RequestId,
         request: Call,
     ) -> Result<Value, Web3Error> {
+        let label = match &request {
+            Call::MethodCall(call) if call.method == "eth_call" => Web3Label::Call,
+            Call::MethodCall(call) if call.method == "eth_estimateGas" => Web3Label::EstimateGas,
+            _ => Web3Label::Other,
+        };
+
         let request = serde_json::to_string(&request)?;
         debug!("[id:{}] sending request: '{}'", id, &request,);
 
         let content = self
             .client
-            .post_raw_json_async(&self.url, request)
+            .post_raw_json_async_labeled(&self.url, request, label)
             .await
             .map_err(|err| {
                 warn!("[id:{}] returned an error: '{}'", id, err.to_string());
