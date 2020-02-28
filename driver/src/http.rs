@@ -11,12 +11,6 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-#[cfg(test)]
-lazy_static::lazy_static! {
-    /// An HTTP factory used for testing.
-    pub static ref TEST_FACTORY: HttpFactory = HttpFactory::new(Duration::from_secs(10), HttpMetrics::default());
-}
-
 /// A factory type for creating HTTP clients.
 #[derive(Debug)]
 pub struct HttpFactory {
@@ -51,6 +45,13 @@ impl HttpFactory {
             metrics,
             _subsystem: PhantomData,
         })
+    }
+}
+
+#[cfg(test)]
+impl Default for HttpFactory {
+    fn default() -> Self {
+        HttpFactory::new(Duration::from_secs(10), HttpMetrics::default())
     }
 }
 
