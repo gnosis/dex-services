@@ -4,6 +4,7 @@ mod api;
 
 use self::api::{Asset, AssetPair, KrakenApi, KrakenHttpApi};
 use super::{PriceSource, Token};
+use crate::http::HttpFactory;
 use crate::models::TokenId;
 use anyhow::{anyhow, Context, Result};
 use std::collections::HashMap;
@@ -18,8 +19,8 @@ pub struct KrakenClient<Api> {
 impl KrakenClient<KrakenHttpApi> {
     /// Creates a new client instance using an HTTP API instance and the default
     /// Kraken API base URL.
-    pub fn new() -> Result<Self> {
-        let api = KrakenHttpApi::new()?;
+    pub fn new(http_factory: &HttpFactory) -> Result<Self> {
+        let api = KrakenHttpApi::new(http_factory)?;
         Ok(KrakenClient::with_api(api))
     }
 }
@@ -117,6 +118,7 @@ fn find_asset_pair<'a>(
 mod tests {
     use super::api::{MockKrakenApi, TickerInfo};
     use super::*;
+    use crate::http::TEST_FACTORY;
     use std::collections::HashSet;
     use std::time::Instant;
 
@@ -192,7 +194,7 @@ mod tests {
 
         let start_time = Instant::now();
         {
-            let client = KrakenClient::new().unwrap();
+            let client = KrakenClient::new(&*TEST_FACTORY).unwrap();
             let prices = client.get_prices(&tokens).unwrap();
 
             println!("{:#?}", prices);
