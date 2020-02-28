@@ -47,6 +47,19 @@ impl<'a> StableXDriver<'a> {
             return Ok(false);
         }
 
+        // NOTE: As an interim solution, we skip the first batch so we don't
+        //   spill over into the second batch.
+        if let Some(first_batch) = batch_to_solve_result.as_ref().ok().and_then(|batch| {
+            if self.past_auctions.is_empty() {
+                Some(*batch)
+            } else {
+                None
+            }
+        }) {
+            self.past_auctions.insert(first_batch);
+            return OK(false);
+        }
+
         self.metrics
             .auction_processing_started(&batch_to_solve_result);
         let batch_to_solve = batch_to_solve_result?;
