@@ -118,8 +118,7 @@ impl PriceFinding for NaiveSolver {
         let mut executed_orders: Option<[ExecutedOrder; 2]> = None;
         let mut matching_orders_indices: Option<[usize; 2]> = None;
         'outer: for (i, x) in orders.iter().enumerate() {
-            for j in i + 1..orders.len() {
-                let y = &orders[j];
+            for (j, y) in orders.iter().enumerate().skip(i + 1) {
                 let mut set_matched_orders = |sell_amounts: [u128; 2], buy_amounts: [u128; 2]| {
                     executed_orders = Some([
                         ExecutedOrder {

@@ -276,7 +276,7 @@ mod tests {
             .expect_get_auction_data()
             .with(eq(batch))
             .return_once({
-                let result = (state, orders.clone());
+                let result = (state, orders);
                 |_| Ok(result)
             });
 
