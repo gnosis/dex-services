@@ -71,7 +71,6 @@ fn uint_error_to_string(err: FromDecStrErr) -> &'static str {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::http::TEST_FACTORY;
 
     #[test]
     fn deserialize() {
@@ -98,7 +97,7 @@ pub mod tests {
     #[test]
     #[ignore]
     fn real_request() {
-        let gas_station = GnosisSafeGasStation::new(&*TEST_FACTORY, DEFAULT_URI).unwrap();
+        let gas_station = GnosisSafeGasStation::new(&HttpFactory::default(), DEFAULT_URI).unwrap();
         let gas_price = gas_station.estimate_gas_price().unwrap();
         println!("{:?}", gas_price);
     }

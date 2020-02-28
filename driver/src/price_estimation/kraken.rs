@@ -118,7 +118,6 @@ fn find_asset_pair<'a>(
 mod tests {
     use super::api::{MockKrakenApi, TickerInfo};
     use super::*;
-    use crate::http::TEST_FACTORY;
     use std::collections::HashSet;
     use std::time::Instant;
 
@@ -194,7 +193,7 @@ mod tests {
 
         let start_time = Instant::now();
         {
-            let client = KrakenClient::new(&*TEST_FACTORY).unwrap();
+            let client = KrakenClient::new(&HttpFactory::default()).unwrap();
             let prices = client.get_prices(&tokens).unwrap();
 
             println!("{:#?}", prices);

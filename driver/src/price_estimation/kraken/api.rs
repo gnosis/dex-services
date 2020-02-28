@@ -183,7 +183,6 @@ impl PricePair {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::http::TEST_FACTORY;
     use serde::de::DeserializeOwned;
 
     fn deserialize<T: DeserializeOwned>(json: &str) -> T {
@@ -251,7 +250,7 @@ mod tests {
         // cargo test online_kraken_api -- --ignored --nocapture
         // ```
 
-        let api = KrakenHttpApi::new(&*TEST_FACTORY).unwrap();
+        let api = KrakenHttpApi::new(&HttpFactory::default()).unwrap();
 
         let assets = api.assets().unwrap();
         println!("GNO asset information: {:?}", assets["GNO"]);
