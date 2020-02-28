@@ -73,6 +73,11 @@ impl StableXMetrics {
         }
     }
 
+    pub fn auction_ignored(&self) {
+        let stage_label = &[ProcessingStage::Started.as_ref()];
+        self.failures.with_label_values(stage_label).inc();
+    }
+
     pub fn auction_processing_started(&self, res: &Result<U256>) {
         let stage_label = &[ProcessingStage::Started.as_ref()];
         match res {
