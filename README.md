@@ -154,7 +154,7 @@ The following environment variables can be used to configure the behavior of the
 - *ORDERBOOK_FILTER*: json encoded object of which tokens/filters to ignore. See below for example filter.
 - *PRIVATE_KEY*: The key with which to sign transactions
 - *WEB3_RPC_TIMEOUT*: The timeout in milliseconds of web3 JSON RPC calls, defaults to 10000ms
-- _TOKEN_DATA_: Allows to set token data - i.e symbol name, decimals, a default external price and a flag for indicating whether updated external prices should be fetched.
+- *TOKEN_DATA*: Allows to set token data - i.e symbol name, decimals, a default external price and a flag for indicating whether updated external prices should be fetched.
 
 ### Orderbook Filter Example
 
