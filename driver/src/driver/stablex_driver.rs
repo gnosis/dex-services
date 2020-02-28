@@ -59,6 +59,7 @@ impl<'a> StableXDriver<'a> {
                 }
             }) {
                 self.past_auctions.insert(first_batch);
+                self.metrics.auction_ignored();
                 return Ok(false);
             }
         }
