@@ -1,11 +1,8 @@
-//! Retrieves gas prices from the https://safe-relay.gnosis.io/ api call `/v1/gas-station`.
-
+use crate::http::{HttpClient, HttpFactory};
 use anyhow::Result;
 use ethcontract::U256;
 use isahc::http::uri::Uri;
-use isahc::prelude::*;
 use serde::Deserialize;
-use std::time::Duration;
 use uint::FromDecStrErr;
 
 /// The default uri at which the gas station api is available under.
@@ -40,8 +37,8 @@ pub struct GnosisSafeGasStation {
 }
 
 impl GnosisSafeGasStation {
-    pub fn new(request_timeout: Duration, api_uri: &str) -> Result<GnosisSafeGasStation> {
-        let client = HttpClient::builder().timeout(request_timeout).build()?;
+    pub fn new(http_factory: &HttpFactory, api_uri: &str) -> Result<GnosisSafeGasStation> {
+        let client = http_factory.create()?;
         let uri: Uri = api_uri.parse()?;
         Ok(GnosisSafeGasStation { client, uri })
     }
@@ -49,7 +46,7 @@ impl GnosisSafeGasStation {
 
 impl GasPriceEstimating for GnosisSafeGasStation {
     fn estimate_gas_price(&self) -> Result<GasPrice> {
-        Ok(self.client.get(&self.uri)?.json()?)
+        self.client.get_json(&self.uri)
     }
 }
 
@@ -73,6 +70,7 @@ fn uint_error_to_string(err: FromDecStrErr) -> &'static str {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::http::TEST_FACTORY;
 
     #[test]
     fn deserialize() {
@@ -99,7 +97,7 @@ pub mod tests {
     #[test]
     #[ignore]
     fn real_request() {
-        let gas_station = GnosisSafeGasStation::new(Duration::from_secs(10), DEFAULT_URI).unwrap();
+        let gas_station = GnosisSafeGasStation::new(&*TEST_FACTORY, DEFAULT_URI).unwrap();
         let gas_price = gas_station.estimate_gas_price().unwrap();
         println!("{:?}", gas_price);
     }

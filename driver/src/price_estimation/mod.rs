@@ -6,6 +6,7 @@ mod kraken;
 
 pub use self::data::TokenData;
 use self::kraken::KrakenClient;
+use crate::http::HttpFactory;
 use crate::models::{Order, TokenId, TokenInfo};
 use anyhow::Result;
 use lazy_static::lazy_static;
@@ -36,8 +37,11 @@ pub struct PriceOracle {
 
 impl PriceOracle {
     /// Creates a new price oracle from a token whitelist data.
-    pub fn new(tokens: TokenData) -> Result<Self> {
-        Ok(PriceOracle::with_source(tokens, KrakenClient::new()?))
+    pub fn new(http_factory: &HttpFactory, tokens: TokenData) -> Result<Self> {
+        Ok(PriceOracle::with_source(
+            tokens,
+            KrakenClient::new(http_factory)?,
+        ))
     }
 
     fn with_source(tokens: TokenData, source: impl PriceSource + 'static) -> Self {

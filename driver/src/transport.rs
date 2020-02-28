@@ -1,3 +1,4 @@
+use crate::http::{HttpClient, HttpFactory};
 use anyhow::Error;
 use ethcontract::jsonrpc::types::{Call, Output};
 use ethcontract::web3::helpers;
@@ -5,9 +6,7 @@ use ethcontract::web3::{Error as Web3Error, RequestId, Transport};
 use futures::compat::Compat;
 use futures::future::{BoxFuture, FutureExt, TryFutureExt};
 use isahc::config::VersionNegotiation;
-use isahc::prelude::{Body, Request, Response};
-use isahc::{Error as HttpError, HttpClient, ResponseExt};
-use log::{debug, warn};
+use log::{debug, info, warn};
 use serde::Deserialize;
 use serde_json::Value;
 use std::fmt::{self, Debug, Formatter};
@@ -28,13 +27,18 @@ struct HttpTransportInner {
 
 impl HttpTransport {
     /// Creates a new HTTP transport with settings.
-    pub fn new(url: impl Into<String>, timeout: Duration) -> Result<HttpTransport, Error> {
-        let client = HttpClient::builder()
-            .timeout(timeout)
-            // NOTE: This is needed as curl will try to upgrade to HTTP/2 which
-            //   causes a HTTP 400 error with Ganache.
-            .version_negotiation(VersionNegotiation::http11())
-            .build()?;
+    pub fn new(
+        http_factory: &HttpFactory,
+        url: impl Into<String>,
+        timeout: Duration,
+    ) -> Result<HttpTransport, Error> {
+        let client = http_factory.with_config(|builder| {
+            builder
+                .timeout(timeout)
+                // NOTE: This is needed as curl will try to upgrade to HTTP/2 which
+                //   causes a HTTP 400 error with Ganache.
+                .version_negotiation(VersionNegotiation::http11())
+        })?;
 
         Ok(HttpTransport(Arc::new(HttpTransportInner {
             url: url.into(),
@@ -45,19 +49,6 @@ impl HttpTransport {
 }
 
 impl HttpTransportInner {
-    /// Performs an HTTP POST with the given data.
-    async fn post_json(&self, data: String) -> Result<(Response<Body>, String), HttpError> {
-        let http_request = Request::post(&self.url)
-            // NOTE: This is needed as Parity clients will respond with a HTTP
-            //   error when no content type is provided.
-            .header("Content-Type", "application/json")
-            .body(data)?;
-        let mut response = self.client.send_async(http_request).await?;
-        let content = response.text()?;
-
-        Ok((response, content))
-    }
-
     /// Execute an HTTP JSON RPC request.
     async fn execute_rpc(
         self: Arc<Self>,
@@ -67,24 +58,14 @@ impl HttpTransportInner {
         let request = serde_json::to_string(&request)?;
         debug!("[id:{}] sending request: '{}'", id, &request,);
 
-        let (response, content) = self.post_json(request).await.map_err(|err| {
-            warn!("[id:{}] returned an error: '{}'", id, err.to_string());
-            Web3Error::Transport(err.to_string())
-        })?;
-        if !response.status().is_success() {
-            warn!(
-                "[id:{}] HTTP error code {}: '{}' {:?}",
-                id,
-                response.status(),
-                content.trim(),
-                response,
-            );
-            return Err(Web3Error::Transport(format!(
-                "HTTP error status {}: '{}'",
-                response.status(),
-                content.trim(),
-            )));
-        }
+        let content = self
+            .client
+            .post_raw_json_async(&self.url, request)
+            .await
+            .map_err(|err| {
+                warn!("[id:{}] returned an error: '{}'", id, err.to_string());
+                Web3Error::Transport(err.to_string())
+            })?;
 
         debug!("[id:{}] received response: '{}'", id, &content);
         let mut json = Value::from_str(&content)?;
@@ -93,7 +74,7 @@ impl HttpTransportInner {
             //   filter those out.
             if map.contains_key("result") {
                 if let Some(error) = map.remove("error") {
-                    warn!("[id:{}] received Ganache auxiliary error {}", id, error);
+                    info!("[id:{}] received Ganache auxiliary error {}", id, error);
                 }
             }
         }
