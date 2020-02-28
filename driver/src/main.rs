@@ -70,16 +70,17 @@ struct Options {
     ///   "T0001": {
     ///     "alias": "WETH",
     ///     "decimals": 18,
-    ///     "external_price": 200000000000000000000
+    ///     "externalPrice": 200000000000000000000,
+    ///     "shouldEstimatePrice": false
     ///   },
     ///   "T0004": {
     ///     "alias": "USDC",
     ///     "decimals": 6,
-    ///     "external_price": 1000000000000000000000000000000,
-    ///     "should_estimate_price": true
+    ///     "externalPrice": 1000000000000000000000000000000,
+    ///     "shouldEstimatePrice": true
     ///   }
     /// }'
-    #[structopt(long, env = "PRICE_FEED_INFORMATION", default_value = "{}")]
+    #[structopt(long, env = "TOKEN_DATA", default_value = "{}")]
     backup_token_data: TokenData,
 
     /// Number of seconds the solver should maximally use for the optimization process

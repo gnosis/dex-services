@@ -238,8 +238,7 @@ fn write_input(input_file: &str, input: &str) -> std::io::Result<()> {
 }
 
 fn run_solver(input_file: &str, result_folder: &str, solver_config: SolverConfig) -> Result<()> {
-    let output;
-    output = Command::new("python")
+    let output = Command::new("python")
         .args(&["-m", "batchauctions.scripts.e2e._run"])
         .arg(result_folder)
         .args(&["--jsonFile", input_file])
