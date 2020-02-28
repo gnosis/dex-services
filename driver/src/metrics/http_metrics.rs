@@ -41,44 +41,40 @@ impl HttpMetrics {
         Ok(metrics)
     }
 
-    /// Add a request latency measurement to the current HTTP metrics registry
-    /// for the specified label.
-    pub fn request_latency_labeled<L: LabeledSubsystem + Any>(&self, label: L, value: Duration) {
-        self.labeled
+    /// Add a request latency and size measurement to the current HTTP metrics
+    /// registry for the specified label.
+    pub fn request_labeled<L: LabeledSubsystem + Any>(
+        &self,
+        label: L,
+        latency: Duration,
+        size: usize,
+    ) {
+        let subsystem = self
+            .labeled
             .get(&TypeId::of::<L>())
-            .expect("all labeled subsystems have registered metrics")
+            .expect("all labeled subsystems have registered metrics");
+
+        subsystem
             .latency
             .with_label_values(&[label.label()])
-            .set(value.as_millis() as _);
-    }
+            .set(latency.as_millis() as _);
 
-    /// Add a request size measurement to the current HTTP metrics registry for
-    /// the specified label.
-    pub fn request_size_labeled<L: LabeledSubsystem + Any>(&self, label: L, value: usize) {
-        self.labeled
-            .get(&TypeId::of::<L>())
-            .expect("all labeled subsystems have registered metrics")
+        subsystem
             .size
             .with_label_values(&[label.label()])
-            .set(value as _);
+            .set(size as _);
     }
 
-    /// Add a request latency measurement to the current HTTP metrics registry.
-    pub fn request_latency_unlabeled<L: UnlabeledSubsystem + Any>(&self, value: Duration) {
-        self.unlabeled
+    /// Add a request latency and size measurement to the current HTTP metrics
+    /// registry.
+    pub fn request_unlabeled<L: UnlabeledSubsystem + Any>(&self, latency: Duration, size: usize) {
+        let subsystem = self
+            .unlabeled
             .get(&TypeId::of::<L>())
-            .expect("all labeled subsystems have registered metrics")
-            .latency
-            .set(value.as_millis() as _);
-    }
+            .expect("all labeled subsystems have registered metrics");
 
-    /// Add a request size measurement to the current HTTP metrics registry.
-    pub fn request_size_unlabeled<L: UnlabeledSubsystem + Any>(&self, value: usize) {
-        self.unlabeled
-            .get(&TypeId::of::<L>())
-            .expect("all labeled subsystems have registered metrics")
-            .size
-            .set(value as _);
+        subsystem.latency.set(latency.as_millis() as _);
+        subsystem.size.set(size as _);
     }
 
     /// Initialize the metrics for a labeled subsystem.
@@ -91,7 +87,7 @@ impl HttpMetrics {
         let latency = {
             let opts = Opts::new(
                 format!("dfusion_service_http_{}_latency", name),
-                format!("Latency for {} HTTP requests", name),
+                format!("Latency in milliseconds for {} HTTP requests", name),
             );
             L::initialize_gauges(opts)?
         };
@@ -100,7 +96,7 @@ impl HttpMetrics {
         let size = {
             let opts = Opts::new(
                 format!("dfusion_service_http_{}_size", name),
-                format!("Size of {} HTTP responses", name),
+                format!("Size in bytes of {} HTTP responses", name),
             );
             L::initialize_gauges(opts)?
         };
@@ -154,7 +150,7 @@ impl Default for HttpMetrics {
 
 /// A trait abstracting a labeled subsystem, that is a specific use of an HTTP
 /// client where the HTTP requests should be differenciated.
-pub trait LabeledSubsystem: Copy {
+pub trait LabeledSubsystem {
     fn name() -> &'static str;
     fn all_labels() -> &'static [&'static str];
     fn label(&self) -> &'static str;
@@ -171,7 +167,7 @@ pub trait LabeledSubsystem: Copy {
 
 /// A trait abstracting a labeled subsystem, that is a specific use of an HTTP
 /// client where the HTTP requests should not be differenciated.
-pub trait UnlabeledSubsystem: Copy {
+pub trait UnlabeledSubsystem {
     fn name() -> &'static str;
 }
 

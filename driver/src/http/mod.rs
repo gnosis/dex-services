@@ -125,8 +125,7 @@ impl<Subsystem: LabeledSubsystem + 'static> HttpClient<Subsystem> {
         Uri: HttpTryFrom<U>,
     {
         let (value, latency) = self.inner.post_raw_json_async(url, data).await?;
-        self.metrics.request_latency_labeled(label, latency);
-        self.metrics.request_size_labeled(label, value.len());
+        self.metrics.request_labeled(label, latency, value.len());
 
         Ok(value)
     }
@@ -138,8 +137,7 @@ impl<Subsystem: LabeledSubsystem + 'static> HttpClient<Subsystem> {
         T: DeserializeOwned,
     {
         let (value, latency, size) = self.inner.get_json(url)?;
-        self.metrics.request_latency_labeled(label, latency);
-        self.metrics.request_size_labeled(label, size);
+        self.metrics.request_labeled(label, latency, size);
 
         Ok(value)
     }
@@ -153,8 +151,7 @@ impl<Subsystem: UnlabeledSubsystem + 'static> HttpClient<Subsystem> {
         T: DeserializeOwned,
     {
         let (value, latency, size) = self.inner.get_json(url)?;
-        self.metrics.request_latency_unlabeled::<Subsystem>(latency);
-        self.metrics.request_size_unlabeled::<Subsystem>(size);
+        self.metrics.request_unlabeled::<Subsystem>(latency, size);
 
         Ok(value)
     }
