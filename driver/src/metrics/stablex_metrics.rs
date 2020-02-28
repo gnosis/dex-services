@@ -73,7 +73,6 @@ impl StableXMetrics {
         }
     }
 
-    #[cfg(not(test))]
     pub fn auction_ignored(&self) {
         let stage_label = &[ProcessingStage::Started.as_ref()];
         self.failures.with_label_values(stage_label).inc();
