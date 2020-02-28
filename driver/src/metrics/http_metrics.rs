@@ -156,7 +156,7 @@ pub trait LabeledSubsystem {
     fn label(&self) -> &'static str;
 
     fn initialize_gauges(opts: Opts) -> Result<IntGaugeVec> {
-        let gauges = IntGaugeVec::new(opts, Self::all_labels())?;
+        let gauges = IntGaugeVec::new(opts, &["request"])?;
         for label in Self::all_labels() {
             gauges.with_label_values(&[label]).set(0);
         }
