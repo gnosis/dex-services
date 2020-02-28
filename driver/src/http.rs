@@ -8,12 +8,6 @@ use isahc::{HttpClientBuilder, ResponseExt};
 use serde::de::DeserializeOwned;
 use std::time::Duration;
 
-#[cfg(test)]
-lazy_static::lazy_static! {
-    /// An HTTP factory used for testing.
-    pub static ref TEST_FACTORY: HttpFactory = HttpFactory::new(Duration::from_secs(10));
-}
-
 /// A factory type for creating HTTP clients.
 #[derive(Debug)]
 pub struct HttpFactory {
@@ -38,6 +32,13 @@ impl HttpFactory {
     ) -> Result<HttpClient> {
         let inner = configure(isahc::HttpClient::builder()).build()?;
         Ok(HttpClient { inner })
+    }
+}
+
+#[cfg(test)]
+impl Default for HttpFactory {
+    fn default() -> Self {
+        HttpFactory::new(Duration::from_secs(10))
     }
 }
 
