@@ -142,13 +142,25 @@ impl<'a> StableXDriver<'a> {
             );
             self.metrics
                 .auction_solution_submitted(batch_to_solve, &submission_result);
-            submission_result?;
-
-            info!("Successfully applied solution to batch {}", batch_to_solve);
-            true
+            match submission_result {
+                Ok(_) => {
+                    info!("Successfully applied solution to batch {}", batch_to_solve);
+                    true
+                }
+                Err(err) => match err {
+                    SolutionSubmissionError::Benign(reason) => {
+                        info!("Benign failure while submitting solution: {}", reason);
+                        false
+                    }
+                    SolutionSubmissionError::Unexpected(err) => return Err(err),
+                },
+            }
         } else {
-            self.metrics.auction_skipped(batch_to_solve);
             false
+        };
+
+        if !submitted {
+            self.metrics.auction_skipped(batch_to_solve);
         };
         Ok(submitted)
     }
@@ -594,7 +606,7 @@ mod tests {
     }
 
     #[test]
-    fn test_do_not_fail_on_benign_error() {
+    fn test_do_not_fail_on_benign_verification_error() {
         let mut reader = MockStableXOrderBookReading::default();
         let mut submitter = MockStableXSolutionSubmitting::default();
         let mut pf = MockPriceFinding::default();
@@ -632,6 +644,53 @@ mod tests {
             .return_once(move |_, _| Ok(solution));
 
         let mut driver = StableXDriver::with_past_auction(&mut pf, &reader, &submitter, metrics);
+        assert!(driver.run().is_ok());
+    }
+
+    #[test]
+    fn test_do_not_fail_on_benign_submission_error() {
+        let mut reader = MockStableXOrderBookReading::default();
+        let mut submitter = MockStableXSolutionSubmitting::default();
+        let mut pf = MockPriceFinding::default();
+        let metrics = StableXMetrics::default();
+
+        let orders = vec![create_order_for_test(), create_order_for_test()];
+        let state = AccountState::with_balance_for(&orders);
+
+        let batch = U256::from(42);
+        reader
+            .expect_get_auction_index()
+            .returning(move || Ok(batch));
+
+        reader
+            .expect_get_auction_data()
+            .with(eq(batch))
+            .return_once({
+                let result = (state.clone(), orders.clone());
+                |_| Ok(result)
+            });
+
+        submitter
+            .expect_get_solution_objective_value()
+            .with(eq(batch), eq(orders.clone()), always())
+            .returning(|_, _, _| Ok(42.into()));
+        submitter
+            .expect_submit_solution()
+            .with(eq(batch), eq(orders.clone()), always(), eq(U256::from(42)))
+            .returning(|_, _, _, _| {
+                Err(SolutionSubmissionError::Benign("Benign Error".to_owned()))
+            });
+
+        let solution = Solution {
+            prices: map_from_slice(&[(0, 1), (1, 2)]),
+            executed_sell_amounts: vec![0, 2],
+            executed_buy_amounts: vec![0, 2],
+        };
+        pf.expect_find_prices()
+            .withf(move |o, s| o == orders.as_slice() && *s == state)
+            .return_once(move |_, _| Ok(solution));
+
+        let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
         assert!(driver.run().is_ok());
     }
 }
