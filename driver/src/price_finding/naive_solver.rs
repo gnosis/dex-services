@@ -376,18 +376,8 @@ pub mod tests {
 
         assert_eq!(
             vec![
-                ExecutedOrder {
-                    account_id: orders[0].account_id,
-                    order_id: orders[0].id,
-                    sell_amount: 10 * BASE_UNIT,
-                    buy_amount: 16 * BASE_UNIT,
-                },
-                ExecutedOrder {
-                    account_id: orders[1].account_id,
-                    order_id: orders[1].id,
-                    sell_amount: 16 * BASE_UNIT,
-                    buy_amount: 10 * BASE_UNIT,
-                }
+                order_to_executed_order(&orders[0], 10 * BASE_UNIT, 16 * BASE_UNIT),
+                order_to_executed_order(&orders[1], 16 * BASE_UNIT, 10 * BASE_UNIT),
             ],
             res.executed_orders
         );
