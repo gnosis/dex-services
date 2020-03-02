@@ -185,10 +185,12 @@ impl PriceFinding for NaiveSolver {
 
             // apply fee to volumes account for rounding errors, moving them to
             // the fee token
+            let expect_message = "fee price was nonzero so we should have a match";
+            let matching_orders_indices = matching_orders_indices.expect(expect_message);
+            let executed_orders = &mut executed_orders.as_mut().expect(expect_message);
             for i in 0..2 {
-                let expect_message = "fee price was nonzero so we should have a match";
-                let order = &orders[matching_orders_indices.expect(expect_message)[i]];
-                let executed_order = &mut executed_orders.as_mut().expect(expect_message)[i];
+                let order = &orders[matching_orders_indices[i]];
+                let executed_order = &mut executed_orders[i];
                 if order.sell_token == fee.token {
                     let price_buy = prices[&order.buy_token];
                     executed_order.sell_amount =
