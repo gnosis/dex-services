@@ -29,13 +29,18 @@ fn test_with_ganache() {
     let second_token_id = instance
         .token_address_to_id_map(tokens[1].address())
         .wait_and_expect("Cannot get second token id");
+
+    // Using realistic prices helps non naive solvers find a solution in case
+    // they filter out orders that are extremely small.
+    let usd_price_in_fee = u128::pow(10, 18);
+
     instance
-        .deposit(tokens[0].address(), 3_000_000.into())
+        .deposit(tokens[0].address(), (3000 * usd_price_in_fee).into())
         .from(Account::Local(accounts[0], None))
         .wait_and_expect("Failed to send first deposit");
 
     instance
-        .deposit(tokens[1].address(), 3_000_000.into())
+        .deposit(tokens[1].address(), (3000 * usd_price_in_fee).into())
         .from(Account::Local(accounts[1], None))
         .wait_and_expect("Failed to send second deposit");
 
@@ -48,8 +53,8 @@ fn test_with_ganache() {
             second_token_id,
             first_token_id,
             batch + 20,
-            999_000,
-            2_000_000,
+            999 * usd_price_in_fee,
+            2_000 * usd_price_in_fee,
         )
         .from(Account::Local(accounts[0], None))
         .wait_and_expect("Cannot place first order");
@@ -59,8 +64,8 @@ fn test_with_ganache() {
             first_token_id,
             second_token_id,
             batch + 20,
-            1_996_000,
-            999_000,
+            1_996 * usd_price_in_fee,
+            999 * usd_price_in_fee,
         )
         .from(Account::Local(accounts[1], None))
         .wait_and_expect("Cannot place first order");
@@ -76,7 +81,7 @@ fn test_with_ganache() {
     .expect("No non-trivial solution submitted");
 
     instance
-        .request_withdraw(tokens[1].address(), 999_000.into())
+        .request_withdraw(tokens[1].address(), (999 * usd_price_in_fee).into())
         .from(Account::Local(accounts[0], None))
         .wait_and_expect("Cannot place request withdraw");
     close_auction(&web3, &instance);
@@ -92,7 +97,10 @@ fn test_with_ganache() {
     let balance_after = tokens[1]
         .balance_of(accounts[0])
         .wait_and_expect("Cannot get balance after");
-    assert_eq!(balance_after - balance_before, 999_000.into())
+    assert_eq!(
+        balance_after - balance_before,
+        (999 * usd_price_in_fee).into()
+    )
 }
 
 #[test]

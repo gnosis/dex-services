@@ -30,9 +30,9 @@ pub fn setup_stablex(
     owl.set_minter(accounts[0])
         .wait_and_expect("Cannot set minter");
     for account in &accounts {
-        owl.mint_owl(*account, U256::exp10(18) * token_minted)
+        owl.mint_owl(*account, U256::exp10(22) * token_minted)
             .wait_and_expect("Cannot mint OWl");
-        owl.approve(instance.address(), U256::exp10(18) * token_minted)
+        owl.approve(instance.address(), U256::exp10(22) * token_minted)
             .from(Account::Local(*account, None))
             .wait_and_expect("Cannot approve OWL for burning");
     }

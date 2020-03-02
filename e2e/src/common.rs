@@ -131,7 +131,7 @@ pub fn create_accounts_with_funded_tokens(
                 .wait_and_expect("Cannot deploy Mintable Token");
             for account in &accounts {
                 token
-                    .mint(*account, U256::exp10(18) * token_minted)
+                    .mint(*account, U256::exp10(22) * token_minted)
                     .wait_and_expect("Cannot mint token");
             }
             IERC20::at(&web3, token.address())
@@ -144,7 +144,7 @@ pub fn approve(tokens: &[IERC20], address: Address, accounts: &[Address], approv
     for account in accounts {
         for token in tokens {
             token
-                .approve(address, U256::exp10(18) * approval_amount)
+                .approve(address, U256::exp10(22) * approval_amount)
                 .from(Account::Local(*account, None))
                 .wait()
                 .unwrap_or_else(|_| panic!("Cannot approve token {:x}", token.address()));
