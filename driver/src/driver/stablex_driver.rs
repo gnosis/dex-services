@@ -68,7 +68,6 @@ impl<'a> StableXDriver<'a> {
         //   spill over into the second batch.
         if self.past_auctions.is_empty() {
             self.past_auctions.insert(batch_to_solve);
-            self.metrics.auction_ignored();
             return Ok(false);
         }
 
