@@ -21,7 +21,9 @@ pub trait DexagApi {
 pub struct Token {
     pub name: String,
     pub symbol: String,
-    pub address: Option<Address_>,
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialize_address")]
+    pub address: Option<Address>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -30,29 +32,27 @@ pub struct Price {
     pub price: f64,
 }
 
-/// Wrapper type of Address that implements deserialize from a hex string.
-#[derive(Clone, Debug)]
-pub struct Address_(pub Address);
-
-impl<'de> Deserialize<'de> for Address_ {
-    fn deserialize<D>(deserializer: D) -> Result<Address_, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        fn hex_string_to_address(string: &str) -> Result<Address> {
-            let prefix = "0x";
-            if !string.starts_with(prefix) {
-                return Err(anyhow!("does not start with {}", prefix));
-            }
-            Ok(string[2..].parse()?)
+fn deserialize_address<'de, D>(deserializer: D) -> Result<Option<Address>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    fn hex_string_to_address(string: &str) -> Result<Address> {
+        let prefix = "0x";
+        if !string.starts_with(prefix) {
+            return Err(anyhow!("does not start with {}", prefix));
         }
+        Ok(string[2..].parse()?)
+    }
 
-        let string = String::deserialize(deserializer)?;
+    let string: Option<String> = Option::deserialize(deserializer)?;
+    Ok(if let Some(string) = string {
         let address = hex_string_to_address(&string)
             .with_context(|| format!("failed to parse address \"{}\"", string))
             .map_err(D::Error::custom)?;
-        Ok(Address_(address))
-    }
+        Some(address)
+    } else {
+        None
+    })
 }
 
 pub enum EitherAmount {
@@ -139,9 +139,18 @@ mod tests {
         assert_eq!(token.name, "SAI old DAI (SAI)");
         assert_eq!(token.symbol, "SAI");
         assert_eq!(
-            token.address.unwrap().0,
+            token.address.unwrap(),
             Address::from_str("89d24a6b4ccb1b6faa2625fe562bdd9a23260359").unwrap()
         );
+    }
+
+    #[test]
+    fn deserialize_token_no_address() {
+        let json = r#"{"name":"SAI old DAI (SAI)","symbol":"SAI"}"#;
+        let token: Token = serde_json::from_str(json).unwrap();
+        assert_eq!(token.name, "SAI old DAI (SAI)");
+        assert_eq!(token.symbol, "SAI");
+        assert!(token.address.is_none());
     }
 
     #[test]
