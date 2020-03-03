@@ -14,10 +14,11 @@ pub trait DexagApi {
     /// https://docs.dex.ag/api/tokens
     fn get_token_list(&self) -> Result<Vec<Token>>;
     /// https://docs.dex.ag/api/price
-    fn get_price(&self, from: &Token, to: &Token, amount: EitherAmount) -> Result<Price>;
+    /// Returns the price of one unit of `to` expressed in `from`.
+    fn get_price(&self, from: &Token, to: &Token) -> Result<f64>;
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Token {
     pub name: String,
     pub symbol: String,
@@ -27,9 +28,9 @@ pub struct Token {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct Price {
+struct Price {
     #[serde(with = "display_fromstr")]
-    pub price: f64,
+    price: f64,
 }
 
 fn deserialize_address<'de, D>(deserializer: D) -> Result<Option<Address>, D::Error>
@@ -53,11 +54,6 @@ where
     } else {
         None
     })
-}
-
-pub enum EitherAmount {
-    From(f64),
-    To(f64),
 }
 
 #[derive(Debug)]
@@ -97,7 +93,7 @@ impl DexagApi for DexagHttpApi {
             .context("failed to parse token list json from dexag response")
     }
 
-    fn get_price(&self, from: &Token, to: &Token, amount: EitherAmount) -> Result<Price> {
+    fn get_price(&self, from: &Token, to: &Token) -> Result<f64> {
         let mut url = self.base_url.clone();
         url.set_path("price");
         {
@@ -105,10 +101,7 @@ impl DexagApi for DexagHttpApi {
             let mut q = url.query_pairs_mut();
             q.append_pair("from", &from.symbol);
             q.append_pair("to", &to.symbol);
-            match amount {
-                EitherAmount::From(amount) => q.append_pair("fromAmount", &amount.to_string()),
-                EitherAmount::To(amount) => q.append_pair("toAmount", &amount.to_string()),
-            };
+            q.append_pair("fromAmount", "1");
             q.append_pair("dex", "ag");
         }
         self.client
@@ -116,6 +109,7 @@ impl DexagApi for DexagHttpApi {
             .context("failed to retrieve price from dexag")?
             .json::<Price>()
             .context("failed to parse price json from dexag")
+            .map(|price| price.price)
     }
 }
 
@@ -160,9 +154,7 @@ mod tests {
         let api = DexagHttpApi::new().unwrap();
         let tokens = api.get_token_list().unwrap();
         println!("{:?}", tokens);
-        let price = api
-            .get_price(&tokens[0], &tokens[1], EitherAmount::From(1.0))
-            .unwrap();
+        let price = api.get_price(&tokens[0], &tokens[1]).unwrap();
         println!("{:?}", price);
     }
 }
