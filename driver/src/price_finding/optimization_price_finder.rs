@@ -30,6 +30,7 @@ pub type TokenDataType = BTreeMap<TokenId, Option<TokenInfo>>;
 mod solver_output {
     use super::{Num, TokenId};
     use crate::models::Solution;
+    use ethcontract::Address;
     use serde::Deserialize;
     use std::collections::HashMap;
 
@@ -37,6 +38,10 @@ mod solver_output {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct ExecutedOrder {
+        #[serde(rename = "accountID")]
+        pub account_id: Address,
+        #[serde(rename = "orderID")]
+        pub order_id: u16,
         #[serde(default)]
         pub exec_sell_amount: Num,
         #[serde(default)]
@@ -60,21 +65,21 @@ mod solver_output {
                 .iter()
                 .map(|(token, price)| (token.0, price.unwrap_or_default().0))
                 .collect();
-            let executed_sell_amounts = self
+
+            let executed_orders = self
                 .orders
                 .iter()
-                .map(|order| order.exec_sell_amount.0)
-                .collect();
-            let executed_buy_amounts = self
-                .orders
-                .iter()
-                .map(|order| order.exec_buy_amount.0)
+                .map(|order| crate::models::ExecutedOrder {
+                    account_id: order.account_id,
+                    order_id: order.order_id,
+                    buy_amount: order.exec_buy_amount.0,
+                    sell_amount: order.exec_sell_amount.0,
+                })
                 .collect();
 
             Solution {
                 prices,
-                executed_sell_amounts,
-                executed_buy_amounts,
+                executed_orders,
             }
         }
     }
@@ -306,10 +311,14 @@ pub mod tests {
             },
             "orders": [
                 {
+                    "accountID": "0x0000000000000000000000000000000000000000",
+                    "orderID": 0,
                     "execSellAmount": "0",
                     "execBuyAmount": "0"
                 },
                 {
+                    "accountID": "0x0000000000000000000000000000000000000000",
+                    "orderID": 1,
                     "execSellAmount": "318390084925498118944",
                     "execBuyAmount": "95042777139162480000"
                 },
@@ -322,8 +331,21 @@ pub mod tests {
                 (1, 170_141_183_460_469_231_731_687_303_715_884_105_728),
                 (2, 0),
             ]),
-            executed_sell_amounts: vec![0, 318_390_084_925_498_118_944],
-            executed_buy_amounts: vec![0, 95_042_777_139_162_480_000],
+
+            executed_orders: vec![
+                crate::models::ExecutedOrder {
+                    account_id: Address::zero(),
+                    order_id: 0,
+                    sell_amount: 0,
+                    buy_amount: 0,
+                },
+                crate::models::ExecutedOrder {
+                    account_id: Address::zero(),
+                    order_id: 1,
+                    sell_amount: 318_390_084_925_498_118_944,
+                    buy_amount: 95_042_777_139_162_480_000,
+                },
+            ],
         };
 
         let solution = deserialize_result(json.to_string()).expect("Should not fail to parse");
@@ -391,6 +413,8 @@ pub mod tests {
             },
             "orders": [
                 {
+                    "accountID": "0x0000000000000000000000000000000000000000",
+                    "orderID": 0,
                     "execBuyAmount": "0"
                 }
             ]
@@ -398,7 +422,7 @@ pub mod tests {
         let result = deserialize_result(json.to_string())
             .map_err(|err| err.to_string())
             .expect("Should not fail to parse");
-        assert_eq!(result.executed_sell_amounts[0], 0);
+        assert_eq!(result.executed_orders[0].sell_amount, 0);
     }
 
     #[test]
@@ -409,6 +433,8 @@ pub mod tests {
             },
             "orders": [
                 {
+                    "accountID": "0x0000000000000000000000000000000000000000",
+                    "orderID": 0,
                     "execSellAmount": "0a",
                     "execBuyAmount": "0"
                 }
@@ -425,12 +451,14 @@ pub mod tests {
             },
             "orders": [
                 {
+                    "accountID": "0x0000000000000000000000000000000000000000",
+                    "orderID": 0,
                     "execSellAmount": "0"
                 }
             ]
         });
         let result = deserialize_result(json.to_string()).expect("Should not fail to parse");
-        assert_eq!(result.executed_buy_amounts[0], 0);
+        assert_eq!(result.executed_orders[0].buy_amount, 0);
     }
 
     #[test]
@@ -441,6 +469,8 @@ pub mod tests {
             },
             "orders": [
                 {
+                    "accountID": "0x0000000000000000000000000000000000000000",
+                    "orderID": 0,
                     "execSellAmount": "0",
                     "execBuyAmount": "0a"
                 }

@@ -112,7 +112,7 @@ impl StableXMetrics {
         }
     }
 
-    pub fn auction_solution_computed(&self, batch: U256, orders: &[Order], res: &Result<Solution>) {
+    pub fn auction_solution_computed(&self, batch: U256, res: &Result<Solution>) {
         let stage_label = &[ProcessingStage::Solved.as_ref()];
         let book_label = &[BookType::Solution.as_ref()];
         self.processing_times
@@ -120,21 +120,19 @@ impl StableXMetrics {
             .set(time_elapsed_since_batch_start(batch));
         match res {
             Ok(solution) => {
-                let touched_orders = orders
-                    .iter()
-                    .zip(&solution.executed_buy_amounts)
-                    .filter(|(_, &amount)| amount > 0u128)
-                    .map(|(o, _)| o.clone())
-                    .collect::<Vec<Order>>();
-                self.orders
-                    .with_label_values(book_label)
-                    .set(touched_orders.len().try_into().unwrap_or(std::i64::MAX));
+                self.orders.with_label_values(book_label).set(
+                    solution
+                        .executed_orders
+                        .len()
+                        .try_into()
+                        .unwrap_or(std::i64::MAX),
+                );
                 self.tokens
                     .with_label_values(book_label)
-                    .set(tokens_from_orders(&touched_orders));
+                    .set(tokens_from_solution(solution));
                 self.users
                     .with_label_values(book_label)
-                    .set(users_from_orders(&touched_orders));
+                    .set(users_from_solution(solution));
             }
             Err(_) => self.failures.with_label_values(stage_label).inc(),
         }
@@ -206,8 +204,23 @@ fn tokens_from_orders(orders: &[Order]) -> i64 {
         .unwrap_or(std::i64::MAX)
 }
 
+fn tokens_from_solution(solution: &Solution) -> i64 {
+    solution.prices.len().try_into().unwrap_or(std::i64::MAX)
+}
+
 fn users_from_orders(orders: &[Order]) -> i64 {
     orders
+        .iter()
+        .map(|order| order.account_id)
+        .collect::<HashSet<_>>()
+        .len()
+        .try_into()
+        .unwrap_or(std::i64::MAX)
+}
+
+fn users_from_solution(solution: &Solution) -> i64 {
+    solution
+        .executed_orders
         .iter()
         .map(|order| order.account_id)
         .collect::<HashSet<_>>()

@@ -1,4 +1,4 @@
-use crate::models::{AccountState, Order, Solution};
+use crate::models::{AccountState, ExecutedOrder, Order, Solution};
 use crate::price_finding::price_finder_interface::{Fee, PriceFinding};
 use crate::util::{CeiledDiv, CheckedConvertU128};
 
@@ -115,48 +115,57 @@ impl PriceFinding for NaiveSolver {
     fn find_prices(&self, orders: &[Order], state: &AccountState) -> Result<Solution> {
         // Initialize trivial solution (default of zero indicates untouched token).
         let mut prices = HashMap::new();
-        let mut exec_buy_amount: Vec<u128> = vec![0; orders.len()];
-        let mut exec_sell_amount: Vec<u128> = vec![0; orders.len()];
-
+        let mut executed_orders: Option<[ExecutedOrder; 2]> = None;
         let mut matching_orders_indices: Option<[usize; 2]> = None;
         'outer: for (i, x) in orders.iter().enumerate() {
-            for j in i + 1..orders.len() {
+            for (j, y) in orders.iter().enumerate().skip(i + 1) {
+                let mut set_matched_orders = |sell_amounts: [u128; 2], buy_amounts: [u128; 2]| {
+                    executed_orders = Some([
+                        ExecutedOrder {
+                            account_id: x.account_id,
+                            order_id: x.id,
+                            sell_amount: sell_amounts[0],
+                            buy_amount: buy_amounts[0],
+                        },
+                        ExecutedOrder {
+                            account_id: y.account_id,
+                            order_id: y.id,
+                            sell_amount: sell_amounts[1],
+                            buy_amount: buy_amounts[1],
+                        },
+                    ]);
+                    matching_orders_indices = Some([i, j]);
+                };
                 // Preprocess order to leave "space" for fee to be taken
-                let x = order_with_buffer_for_fee(&x, &self.fee);
-                let y = order_with_buffer_for_fee(&orders[j], &self.fee);
+                let x = order_with_buffer_for_fee(x, &self.fee);
+                let y = order_with_buffer_for_fee(y, &self.fee);
                 match x.match_compare(&y, &state, &self.fee) {
                     Some(OrderPairType::LhsFullyFilled) => {
                         prices.insert(x.buy_token, x.sell_amount);
                         prices.insert(y.buy_token, x.buy_amount);
-                        exec_sell_amount[i] = x.sell_amount;
-                        exec_sell_amount[j] = x.buy_amount;
-
-                        exec_buy_amount[i] = x.buy_amount;
-                        exec_buy_amount[j] = x.sell_amount;
+                        set_matched_orders(
+                            [x.sell_amount, x.buy_amount],
+                            [x.buy_amount, x.sell_amount],
+                        );
                     }
                     Some(OrderPairType::RhsFullyFilled) => {
                         prices.insert(x.sell_token, y.sell_amount);
                         prices.insert(y.sell_token, y.buy_amount);
-
-                        exec_sell_amount[i] = y.buy_amount;
-                        exec_sell_amount[j] = y.sell_amount;
-
-                        exec_buy_amount[i] = y.sell_amount;
-                        exec_buy_amount[j] = y.buy_amount;
+                        set_matched_orders(
+                            [y.buy_amount, y.sell_amount],
+                            [y.sell_amount, y.buy_amount],
+                        );
                     }
                     Some(OrderPairType::BothFullyFilled) => {
                         prices.insert(y.buy_token, y.sell_amount);
                         prices.insert(x.buy_token, x.sell_amount);
-
-                        exec_sell_amount[i] = x.sell_amount;
-                        exec_sell_amount[j] = y.sell_amount;
-
-                        exec_buy_amount[i] = y.sell_amount;
-                        exec_buy_amount[j] = x.sell_amount;
+                        set_matched_orders(
+                            [x.sell_amount, y.sell_amount],
+                            [y.sell_amount, x.sell_amount],
+                        );
                     }
                     None => continue,
                 }
-                matching_orders_indices = Some([i, j]);
                 break 'outer;
             }
         }
@@ -165,43 +174,47 @@ impl PriceFinding for NaiveSolver {
             // normalize prices so fee token price is BASE_PRICE
             let pre_normalized_fee_price = prices.get(&fee.token).copied().unwrap_or(0);
             if pre_normalized_fee_price == 0 {
-                return Ok(Solution::trivial(orders.len()));
+                return Ok(Solution::trivial());
             }
             for price in prices.values_mut() {
                 *price = match normalize_price(*price, pre_normalized_fee_price) {
                     Some(price) => price,
-                    None => return Ok(Solution::trivial(orders.len())),
+                    None => return Ok(Solution::trivial()),
                 };
             }
 
             // apply fee to volumes account for rounding errors, moving them to
             // the fee token
-            for i in matching_orders_indices
-                .expect("fee price was nonzero so we should have a match")
-                .iter()
-            {
-                let i = *i;
-                let order = &orders[i];
+            let expect_message = "fee price was nonzero so we should have a match";
+            let matching_orders_indices = matching_orders_indices.expect(expect_message);
+            let executed_orders = &mut executed_orders.as_mut().expect(expect_message);
+            for i in 0..2 {
+                let order = &orders[matching_orders_indices[i]];
+                let executed_order = &mut executed_orders[i];
                 if order.sell_token == fee.token {
                     let price_buy = prices[&order.buy_token];
-                    exec_sell_amount[i] =
-                        executed_sell_amount(fee, exec_buy_amount[i], price_buy, BASE_PRICE);
+                    executed_order.sell_amount =
+                        executed_sell_amount(fee, executed_order.buy_amount, price_buy, BASE_PRICE);
                 } else {
                     let price_sell = prices[&order.sell_token];
-                    exec_buy_amount[i] =
-                        match executed_buy_amount(fee, exec_sell_amount[i], BASE_PRICE, price_sell)
-                        {
-                            Some(exec_buy_amt) => exec_buy_amt,
-                            None => return Ok(Solution::trivial(orders.len())),
-                        };
+                    executed_order.buy_amount = match executed_buy_amount(
+                        fee,
+                        executed_order.sell_amount,
+                        BASE_PRICE,
+                        price_sell,
+                    ) {
+                        Some(exec_buy_amt) => exec_buy_amt,
+                        None => return Ok(Solution::trivial()),
+                    };
                 }
             }
         }
 
         let solution = Solution {
             prices,
-            executed_sell_amounts: exec_sell_amount,
-            executed_buy_amounts: exec_buy_amount,
+            executed_orders: executed_orders
+                .map(|orders| orders.to_vec())
+                .unwrap_or_else(|| vec![]),
         };
         Ok(solution)
     }
@@ -277,7 +290,9 @@ fn executed_buy_amount(
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::models::order::test_util::order_to_executed_order;
     use crate::models::AccountState;
+
     use ethcontract::{Address, H256, U256};
     use std::collections::HashMap;
 
@@ -290,12 +305,11 @@ pub mod tests {
         let res = solver.find_prices(&orders, &state).unwrap();
 
         assert_eq!(
-            vec![4 * BASE_UNIT, 52 * BASE_UNIT],
-            res.executed_buy_amounts
-        );
-        assert_eq!(
-            vec![52 * BASE_UNIT, 4 * BASE_UNIT],
-            res.executed_sell_amounts
+            vec![
+                order_to_executed_order(&orders[0], 52 * BASE_UNIT, 4 * BASE_UNIT),
+                order_to_executed_order(&orders[1], 4 * BASE_UNIT, 52 * BASE_UNIT),
+            ],
+            res.executed_orders
         );
         assert_eq!(4 * BASE_UNIT, res.prices[&0]);
         assert_eq!(52 * BASE_UNIT, res.prices[&1]);
@@ -327,12 +341,11 @@ pub mod tests {
         let res = solver.find_prices(&orders, &state).unwrap();
 
         assert_eq!(
-            vec![52 * BASE_UNIT, 4 * BASE_UNIT],
-            res.executed_buy_amounts
-        );
-        assert_eq!(
-            vec![4 * BASE_UNIT, 52 * BASE_UNIT],
-            res.executed_sell_amounts
+            vec![
+                order_to_executed_order(&orders[0], 4 * BASE_UNIT, 52 * BASE_UNIT),
+                order_to_executed_order(&orders[1], 52 * BASE_UNIT, 4 * BASE_UNIT),
+            ],
+            res.executed_orders
         );
         assert_eq!(4 * BASE_UNIT, res.prices[&0]);
         assert_eq!(52 * BASE_UNIT, res.prices[&1]);
@@ -364,12 +377,11 @@ pub mod tests {
         let res = solver.find_prices(&orders, &state).unwrap();
 
         assert_eq!(
-            vec![16 * BASE_UNIT, 10 * BASE_UNIT],
-            res.executed_buy_amounts
-        );
-        assert_eq!(
-            vec![10 * BASE_UNIT, 16 * BASE_UNIT],
-            res.executed_sell_amounts
+            vec![
+                order_to_executed_order(&orders[0], 10 * BASE_UNIT, 16 * BASE_UNIT),
+                order_to_executed_order(&orders[1], 16 * BASE_UNIT, 10 * BASE_UNIT),
+            ],
+            res.executed_orders
         );
         assert_eq!(10 * BASE_UNIT, res.prices[&1]);
         assert_eq!(16 * BASE_UNIT, res.prices[&2]);
@@ -447,8 +459,13 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
 
-        assert_eq!(vec![0, 0, 0, 52, 4, 0], res.executed_buy_amounts);
-        assert_eq!(vec![0, 0, 0, 4, 52, 0], res.executed_sell_amounts);
+        assert_eq!(
+            vec![
+                order_to_executed_order(&orders[3], 4, 52),
+                order_to_executed_order(&orders[4], 52, 4),
+            ],
+            res.executed_orders
+        );
         assert_eq!(4, res.prices[&1]);
         assert_eq!(52, res.prices[&2]);
 
@@ -527,7 +544,7 @@ pub mod tests {
                 buy_amount: 9990,
             },
             Order {
-                id: 0,
+                id: 1,
                 account_id: Address::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 0,
@@ -544,8 +561,13 @@ pub mod tests {
         let solver = NaiveSolver::new(fee.clone());
         let res = solver.find_prices(&orders, &state).unwrap();
 
-        assert_eq!(res.executed_sell_amounts, [20000, 9990]);
-        assert_eq!(res.executed_buy_amounts, [9990, 19961]);
+        assert_eq!(
+            vec![
+                order_to_executed_order(&orders[0], 20000, 9990),
+                order_to_executed_order(&orders[1], 9990, 19961)
+            ],
+            res.executed_orders
+        );
         assert_eq!(res.prices[&0], BASE_PRICE);
         assert_eq!(res.prices[&1], BASE_PRICE * 2);
 
@@ -630,7 +652,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver.find_prices(&orders, &state).unwrap();
-        assert_eq!(res, Solution::trivial(0));
+        assert_eq!(res, Solution::trivial());
     }
 
     #[test]
@@ -778,7 +800,7 @@ pub mod tests {
                 buy_amount: 10 * BASE_UNIT,
             },
             Order {
-                id: 0,
+                id: 1,
                 account_id: Address::from_low_u64_be(1),
                 sell_token: 1,
                 buy_token: 2,
@@ -812,7 +834,15 @@ pub mod tests {
             let buy_token_price = *solution.prices.get(&order.buy_token).unwrap_or(&0u128);
             let sell_token_price = *solution.prices.get(&order.sell_token).unwrap_or(&0u128);
 
-            let exec_buy_amount = solution.executed_buy_amounts[i];
+            let exec_buy_amount = solution
+                .executed_orders
+                .iter()
+                .find(|executed_order| {
+                    executed_order.account_id == order.account_id
+                        && executed_order.order_id == order.id
+                })
+                .map(|executed_order| executed_order.buy_amount)
+                .unwrap_or(0);
             let exec_sell_amount = if sell_token_price > 0 {
                 if let Some(fee) = fee {
                     let fee_denominator = (1.0 / fee.ratio) as u128;
