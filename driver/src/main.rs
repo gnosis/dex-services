@@ -70,17 +70,18 @@ struct Options {
     ///   "T0001": {
     ///     "alias": "WETH",
     ///     "decimals": 18,
-    ///     "external_price": 200000000000000000000
+    ///     "externalPrice": 200000000000000000000,
+    ///     "shouldEstimatePrice": false
     ///   },
     ///   "T0004": {
     ///     "alias": "USDC",
     ///     "decimals": 6,
-    ///     "external_price": 1000000000000000000000000000000,
-    ///     "should_estimate_price": true
+    ///     "externalPrice": 1000000000000000000000000000000,
+    ///     "shouldEstimatePrice": true
     ///   }
     /// }'
-    #[structopt(long, env = "PRICE_FEED_INFORMATION", default_value = "{}")]
-    backup_token_data: TokenData,
+    #[structopt(long, env = "TOKEN_DATA", default_value = "{}")]
+    token_data: TokenData,
 
     /// Number of seconds the solver should maximally use for the optimization process
     #[structopt(long, env = "SOLVER_TIME_LIMIT", default_value = "150")]
@@ -152,7 +153,7 @@ fn main() {
     });
 
     let fee = Some(Fee::default());
-    let price_oracle = PriceOracle::new(options.backup_token_data).unwrap();
+    let price_oracle = PriceOracle::new(options.token_data).unwrap();
     let mut price_finder = price_finding::create_price_finder(fee, solver_config, price_oracle);
 
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
