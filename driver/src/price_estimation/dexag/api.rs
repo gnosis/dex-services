@@ -12,16 +12,9 @@ use url::Url;
 /// Parts of the dex.ag api.
 pub trait DexagApi {
     /// https://docs.dex.ag/api/tokens
-    fn token_list_full(&self) -> Result<Vec<Token>>;
+    fn get_token_list(&self) -> Result<Vec<Token>>;
     /// https://docs.dex.ag/api/price
-    fn price(
-        &self,
-        from: &str,
-        to: &str,
-        amount: EitherAmount,
-        dex: Dex,
-        discluded: &str,
-    ) -> Result<Price>;
+    fn get_price(&self, from: &Token, to: &Token, amount: EitherAmount) -> Result<Price>;
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -67,11 +60,6 @@ pub enum EitherAmount {
     To(f64),
 }
 
-// There are more dexes supported by dex.ag but we only use this one.
-pub enum Dex {
-    Ag,
-}
-
 #[derive(Debug)]
 pub struct DexagApiImpl {
     base_url: Url,
@@ -99,7 +87,7 @@ impl DexagApiImpl {
 }
 
 impl DexagApi for DexagApiImpl {
-    fn token_list_full(&self) -> Result<Vec<Token>> {
+    fn get_token_list(&self) -> Result<Vec<Token>> {
         let mut url = self.base_url.clone();
         url.set_path("token-list-full");
         self.client
@@ -109,32 +97,19 @@ impl DexagApi for DexagApiImpl {
             .context("failed to parse token list json from dexag response")
     }
 
-    fn price(
-        &self,
-        from: &str,
-        to: &str,
-        amount: EitherAmount,
-        dex: Dex,
-        discluded: &str,
-    ) -> Result<Price> {
+    fn get_price(&self, from: &Token, to: &Token, amount: EitherAmount) -> Result<Price> {
         let mut url = self.base_url.clone();
         url.set_path("price");
         {
             // This is in its own block because we are supposed to drop `q`.
             let mut q = url.query_pairs_mut();
-            q.append_pair("from", from);
-            q.append_pair("to", to);
+            q.append_pair("from", &from.symbol);
+            q.append_pair("to", &to.symbol);
             match amount {
                 EitherAmount::From(amount) => q.append_pair("fromAmount", &amount.to_string()),
                 EitherAmount::To(amount) => q.append_pair("toAmount", &amount.to_string()),
             };
-            q.append_pair(
-                "dex",
-                match dex {
-                    Dex::Ag => "ag",
-                },
-            );
-            q.append_pair("discluded", discluded);
+            q.append_pair("dex", "ag");
         }
         self.client
             .get(url.to_string())
@@ -173,10 +148,10 @@ mod tests {
     #[ignore]
     fn online_dexag_api() {
         let api = DexagApiImpl::new().unwrap();
-        let tokens = api.token_list_full().unwrap();
+        let tokens = api.get_token_list().unwrap();
         println!("{:?}", tokens);
         let price = api
-            .price("ETH", "DAI", EitherAmount::From(1.0), Dex::Ag, "")
+            .get_price(&tokens[0], &tokens[1], EitherAmount::From(1.0))
             .unwrap();
         println!("{:?}", price);
     }
