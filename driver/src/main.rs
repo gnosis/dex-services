@@ -3,6 +3,7 @@ mod macros;
 
 mod contracts;
 mod driver;
+mod eth_rpc;
 mod gas_station;
 mod logging;
 mod metrics;
@@ -16,6 +17,7 @@ mod util;
 
 use crate::contracts::{stablex_contract::StableXContractImpl, web3_provider};
 use crate::driver::stablex_driver::StableXDriver;
+use crate::eth_rpc::Web3EthRpc;
 use crate::gas_station::GnosisSafeGasStation;
 use crate::metrics::{MetricsServer, StableXMetrics};
 use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
@@ -157,7 +159,9 @@ fn main() {
     info!("Orderbook filter: {:?}", options.orderbook_filter);
     let filtered_orderbook = FilteredOrderbookReader::new(&orderbook, options.orderbook_filter);
 
-    let solution_submitter = StableXSolutionSubmitter::new(&contract);
+    let eth_rpc = Web3EthRpc::new(&web3);
+
+    let solution_submitter = StableXSolutionSubmitter::new(&contract, &eth_rpc);
     let mut driver = StableXDriver::new(
         &mut *price_finder,
         &filtered_orderbook,

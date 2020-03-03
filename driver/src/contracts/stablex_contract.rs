@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use ethcontract::transaction::GasPrice;
-use ethcontract::{Address, PrivateKey, U256};
+use ethcontract::{Address, BlockNumber, PrivateKey, U256};
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
@@ -77,6 +77,7 @@ pub trait StableXContract {
         batch_index: U256,
         orders: Vec<Order>,
         solution: Solution,
+        block_number: Option<BlockNumber>,
     ) -> Result<U256>;
     fn submit_solution(
         &self,
@@ -113,11 +114,12 @@ impl<'a> StableXContract for StableXContractImpl<'a> {
         batch_index: U256,
         orders: Vec<Order>,
         solution: Solution,
+        block_number: Option<BlockNumber>,
     ) -> Result<U256> {
         let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
         let (owners, order_ids, volumes) =
             encode_execution_for_contract(orders, solution.executed_buy_amounts);
-        let objective_value = self
+        let mut builder = self
             .instance
             .submit_solution(
                 batch_index.low_u32(),
@@ -128,9 +130,9 @@ impl<'a> StableXContract for StableXContractImpl<'a> {
                 prices,
                 token_ids_for_price,
             )
-            .call()
-            .wait()?;
-
+            .view();
+        builder.block = block_number;
+        let objective_value = builder.call().wait()?;
         Ok(objective_value)
     }
 
