@@ -61,7 +61,7 @@ pub enum EitherAmount {
 }
 
 #[derive(Debug)]
-pub struct DexagApiImpl {
+pub struct DexagHttpApi {
     base_url: Url,
     client: HttpClient,
 }
@@ -69,7 +69,7 @@ pub struct DexagApiImpl {
 pub const DEFAULT_BASE_URL: &str = "https://api-v2.dex.ag";
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
-impl DexagApiImpl {
+impl DexagHttpApi {
     pub fn new() -> Result<Self> {
         Self::custom(DEFAULT_BASE_URL, DEFAULT_TIMEOUT)
     }
@@ -82,11 +82,11 @@ impl DexagApiImpl {
         let base_url = base_url
             .parse()
             .with_context(|| format!("failed to parse url {}", base_url))?;
-        Ok(Self { base_url, client })
+        Ok(DexagHttpApi { base_url, client })
     }
 }
 
-impl DexagApi for DexagApiImpl {
+impl DexagApi for DexagHttpApi {
     fn get_token_list(&self) -> Result<Vec<Token>> {
         let mut url = self.base_url.clone();
         url.set_path("token-list-full");
@@ -153,10 +153,11 @@ mod tests {
         assert!(token.address.is_none());
     }
 
+    // Run with `cargo test online_dexag_api -- --include-ignored --nocapture`.
     #[test]
     #[ignore]
     fn online_dexag_api() {
-        let api = DexagApiImpl::new().unwrap();
+        let api = DexagHttpApi::new().unwrap();
         let tokens = api.get_token_list().unwrap();
         println!("{:?}", tokens);
         let price = api
