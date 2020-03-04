@@ -12,7 +12,8 @@ pub trait DexagApi {
     /// https://docs.dex.ag/api/tokens
     fn get_token_list(&self) -> Result<Vec<Token>>;
     /// https://docs.dex.ag/api/price
-    /// Returns the price of one unit of `to` expressed in `from`.
+    /// Returns the price of one unit of `from` expressed in `to`.
+    /// For example `get_price("ETH", "DAI")` is ~220.
     fn get_price(&self, from: &Token, to: &Token) -> Result<f64>;
 }
 
