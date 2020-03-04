@@ -200,7 +200,17 @@ fn tokens_from_orders(orders: &[Order]) -> i64 {
 }
 
 fn tokens_from_solution(solution: &Solution) -> i64 {
-    solution.prices.len().try_into().unwrap_or(std::i64::MAX)
+    if solution.is_non_trivial() {
+        solution
+            .prices
+            .iter()
+            .filter(|(_token_id, price)| **price > 0)
+            .count()
+            .try_into()
+            .unwrap_or(std::i64::MAX)
+    } else {
+        0
+    }
 }
 
 fn users_from_orders(orders: &[Order]) -> i64 {
