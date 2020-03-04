@@ -97,10 +97,13 @@ fn test_with_ganache() {
     let balance_after = tokens[1]
         .balance_of(accounts[0])
         .wait_and_expect("Cannot get balance after");
-    assert_eq!(
-        balance_after - balance_before,
-        (999 * usd_price_in_fee).into()
-    )
+    let balance_change = (balance_after - balance_before).as_u128();
+    let expected_balance_change = 999 * usd_price_in_fee;
+    // With a non naive solver it is possible that the trade does not exactly
+    // match what is expected.
+    let allowed_difference = usd_price_in_fee;
+    let difference = ((balance_change as i128) - (expected_balance_change as i128)).abs();
+    assert!(difference < allowed_difference as i128);
 }
 
 #[test]
