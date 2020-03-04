@@ -124,12 +124,9 @@ impl NaiveSolver {
         None
     }
 
-    fn create_executed_orders(
-        &self,
-        first_match: &Match,
-    ) -> ([ExecutedOrder; 2], HashMap<u16, u128>) {
+    fn create_executed_orders(&self, first_match: &Match) -> (ExecutedOrderPair, PriceMap) {
         let mut prices = HashMap::new();
-        let mut executed_orders: Option<[ExecutedOrder; 2]> = None;
+        let mut executed_orders: Option<ExecutedOrderPair> = None;
 
         let x = &first_match.orders[0];
         let y = &first_match.orders[1];
@@ -177,64 +174,78 @@ impl NaiveSolver {
 
         (executed_orders.unwrap(), prices)
     }
+
+    /// Returns whether the solution should be trivial.
+    fn update_with_fee(
+        &self,
+        orders: &OrderPair,
+        executed_orders: &mut ExecutedOrderPair,
+        prices: &mut PriceMap,
+    ) -> bool {
+        if let Some(fee) = &self.fee {
+            // normalize prices so fee token price is BASE_PRICE
+            let pre_normalized_fee_price = prices.get(&fee.token).copied().unwrap_or(0);
+            if pre_normalized_fee_price == 0 {
+                return true;
+            }
+            for price in prices.values_mut() {
+                *price = match normalize_price(*price, pre_normalized_fee_price) {
+                    Some(price) => price,
+                    None => return true,
+                };
+            }
+
+            // apply fee to volumes account for rounding errors, moving them to
+            // the fee token
+            for (i, order) in orders.iter().enumerate() {
+                let executed_order = &mut executed_orders[i];
+                if order.sell_token == fee.token {
+                    let price_buy = prices[&order.buy_token];
+                    executed_order.sell_amount =
+                        executed_sell_amount(fee, executed_order.buy_amount, price_buy, BASE_PRICE);
+                } else {
+                    let price_sell = prices[&order.sell_token];
+                    executed_order.buy_amount = match executed_buy_amount(
+                        fee,
+                        executed_order.sell_amount,
+                        BASE_PRICE,
+                        price_sell,
+                    ) {
+                        Some(exec_buy_amt) => exec_buy_amt,
+                        None => return true,
+                    };
+                }
+            }
+        }
+        false
+    }
 }
 
 pub struct Match {
     order_pair_type: OrderPairType,
-    orders: [Order; 2],
+    orders: OrderPair,
 }
+
+type PriceMap = HashMap<u16, u128>;
+type OrderPair = [Order; 2];
+type ExecutedOrderPair = [ExecutedOrder; 2];
 
 impl PriceFinding for NaiveSolver {
     fn find_prices(&self, orders: &[Order], state: &AccountState) -> Result<Solution> {
-        if let Some(first_match) = self.find_first_match(orders, state) {
+        let solution = if let Some(first_match) = self.find_first_match(orders, state) {
             let (mut executed_orders, mut prices) = self.create_executed_orders(&first_match);
-            if let Some(fee) = &self.fee {
-                // normalize prices so fee token price is BASE_PRICE
-                let pre_normalized_fee_price = prices.get(&fee.token).copied().unwrap_or(0);
-                if pre_normalized_fee_price == 0 {
-                    return Ok(Solution::trivial());
-                }
-                for price in prices.values_mut() {
-                    *price = match normalize_price(*price, pre_normalized_fee_price) {
-                        Some(price) => price,
-                        None => return Ok(Solution::trivial()),
-                    };
-                }
-
-                // apply fee to volumes account for rounding errors, moving them to
-                // the fee token
-                for (i, order) in first_match.orders.iter().enumerate() {
-                    let executed_order = &mut executed_orders[i];
-                    if order.sell_token == fee.token {
-                        let price_buy = prices[&order.buy_token];
-                        executed_order.sell_amount = executed_sell_amount(
-                            fee,
-                            executed_order.buy_amount,
-                            price_buy,
-                            BASE_PRICE,
-                        );
-                    } else {
-                        let price_sell = prices[&order.sell_token];
-                        executed_order.buy_amount = match executed_buy_amount(
-                            fee,
-                            executed_order.sell_amount,
-                            BASE_PRICE,
-                            price_sell,
-                        ) {
-                            Some(exec_buy_amt) => exec_buy_amt,
-                            None => return Ok(Solution::trivial()),
-                        };
-                    }
+            if self.update_with_fee(&first_match.orders, &mut executed_orders, &mut prices) {
+                Solution::trivial()
+            } else {
+                Solution {
+                    prices,
+                    executed_orders: executed_orders.to_vec(),
                 }
             }
-
-            Ok(Solution {
-                prices,
-                executed_orders: executed_orders.to_vec(),
-            })
         } else {
-            Ok(Solution::trivial())
-        }
+            Solution::trivial()
+        };
+        Ok(solution)
     }
 }
 
