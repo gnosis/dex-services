@@ -3,7 +3,7 @@ mod api;
 use super::{PriceSource, Token};
 use crate::models::TokenId;
 use anyhow::{anyhow, Result};
-use api::{DexagApi, DexagApiImpl};
+use api::{DexagApi, DexagHttpApi};
 use std::collections::HashMap;
 
 pub struct DexagClient<Api> {
@@ -14,9 +14,9 @@ pub struct DexagClient<Api> {
     stable_coin: api::Token,
 }
 
-impl DexagClient<DexagApiImpl> {
+impl DexagClient<DexagHttpApi> {
     pub fn new() -> Result<Self> {
-        let api = DexagApiImpl::new()?;
+        let api = DexagHttpApi::new()?;
         Self::with_api(api)
     }
 }
@@ -55,6 +55,7 @@ where
     Api: DexagApi,
 {
     fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>> {
+        // TODO: parallel requests
         Ok(tokens
             .iter()
             .filter_map(|token| {
@@ -139,6 +140,7 @@ mod tests {
         );
     }
 
+    // Run with `cargo test online_dexag_client -- --include-ignored --nocapture`.
     #[test]
     #[ignore]
     fn online_dexag_client() {
