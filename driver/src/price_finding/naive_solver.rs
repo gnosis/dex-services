@@ -153,7 +153,7 @@ fn find_first_match(orders: &[Order], state: &AccountState, fee: &Option<Fee>) -
 }
 
 fn create_executed_orders(first_match: &Match, fee: &Option<Fee>) -> (ExecutedOrderPair, PriceMap) {
-    fn create_order(order: &Order, sell_amount: u128, buy_amount: u128) -> ExecutedOrder {
+    fn create_executed_order(order: &Order, sell_amount: u128, buy_amount: u128) -> ExecutedOrder {
         ExecutedOrder {
             account_id: order.account_id,
             order_id: order.id,
@@ -162,34 +162,33 @@ fn create_executed_orders(first_match: &Match, fee: &Option<Fee>) -> (ExecutedOr
         }
     }
 
-    let mut prices = HashMap::new();
     // Preprocess order to leave "space" for fee to be taken
     let x = order_with_buffer_for_fee(&first_match.orders[0], fee);
     let y = order_with_buffer_for_fee(&first_match.orders[1], fee);
+
+    let create_orders = |x_sell_amount, x_buy_amount, y_sell_amount, y_buy_amount| {
+        [
+            create_executed_order(&x, x_sell_amount, x_buy_amount),
+            create_executed_order(&y, y_sell_amount, y_buy_amount),
+        ]
+    };
+
+    let mut prices = HashMap::new();
     let executed_orders = match first_match.order_pair_type {
         OrderPairType::LhsFullyFilled => {
             prices.insert(x.buy_token, x.sell_amount);
             prices.insert(y.buy_token, x.buy_amount);
-            [
-                create_order(&x, x.sell_amount, x.buy_amount),
-                create_order(&y, x.buy_amount, x.sell_amount),
-            ]
+            create_orders(x.sell_amount, x.buy_amount, x.buy_amount, x.sell_amount)
         }
         OrderPairType::RhsFullyFilled => {
             prices.insert(x.sell_token, y.sell_amount);
             prices.insert(y.sell_token, y.buy_amount);
-            [
-                create_order(&x, y.buy_amount, y.sell_amount),
-                create_order(&y, y.sell_amount, y.buy_amount),
-            ]
+            create_orders(y.buy_amount, y.sell_amount, y.sell_amount, y.buy_amount)
         }
         OrderPairType::BothFullyFilled => {
             prices.insert(y.buy_token, y.sell_amount);
             prices.insert(x.buy_token, x.sell_amount);
-            [
-                create_order(&x, x.sell_amount, y.sell_amount),
-                create_order(&y, y.sell_amount, x.sell_amount),
-            ]
+            create_orders(x.sell_amount, y.sell_amount, y.sell_amount, x.sell_amount)
         }
     };
 
