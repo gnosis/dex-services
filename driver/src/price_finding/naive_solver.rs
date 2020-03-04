@@ -123,6 +123,60 @@ impl NaiveSolver {
         }
         None
     }
+
+    fn create_executed_orders(
+        &self,
+        first_match: &Match,
+    ) -> ([ExecutedOrder; 2], HashMap<u16, u128>) {
+        let mut prices = HashMap::new();
+        let mut executed_orders: Option<[ExecutedOrder; 2]> = None;
+
+        let x = &first_match.orders[0];
+        let y = &first_match.orders[1];
+
+        let mut set_matched_orders = |sell_amounts: [u128; 2], buy_amounts: [u128; 2]| {
+            executed_orders = Some([
+                ExecutedOrder {
+                    account_id: x.account_id,
+                    order_id: x.id,
+                    sell_amount: sell_amounts[0],
+                    buy_amount: buy_amounts[0],
+                },
+                ExecutedOrder {
+                    account_id: y.account_id,
+                    order_id: y.id,
+                    sell_amount: sell_amounts[1],
+                    buy_amount: buy_amounts[1],
+                },
+            ]);
+        };
+
+        // Preprocess order to leave "space" for fee to be taken
+        let x = order_with_buffer_for_fee(x, &self.fee);
+        let y = order_with_buffer_for_fee(y, &self.fee);
+        match first_match.order_pair_type {
+            OrderPairType::LhsFullyFilled => {
+                prices.insert(x.buy_token, x.sell_amount);
+                prices.insert(y.buy_token, x.buy_amount);
+                set_matched_orders([x.sell_amount, x.buy_amount], [x.buy_amount, x.sell_amount]);
+            }
+            OrderPairType::RhsFullyFilled => {
+                prices.insert(x.sell_token, y.sell_amount);
+                prices.insert(y.sell_token, y.buy_amount);
+                set_matched_orders([y.buy_amount, y.sell_amount], [y.sell_amount, y.buy_amount]);
+            }
+            OrderPairType::BothFullyFilled => {
+                prices.insert(y.buy_token, y.sell_amount);
+                prices.insert(x.buy_token, x.sell_amount);
+                set_matched_orders(
+                    [x.sell_amount, y.sell_amount],
+                    [y.sell_amount, x.sell_amount],
+                );
+            }
+        }
+
+        (executed_orders.unwrap(), prices)
+    }
 }
 
 pub struct Match {
@@ -133,59 +187,7 @@ pub struct Match {
 impl PriceFinding for NaiveSolver {
     fn find_prices(&self, orders: &[Order], state: &AccountState) -> Result<Solution> {
         if let Some(first_match) = self.find_first_match(orders, state) {
-            let mut prices = HashMap::new();
-            let mut executed_orders: Option<[ExecutedOrder; 2]> = None;
-
-            let x = &first_match.orders[0];
-            let y = &first_match.orders[1];
-
-            let mut set_matched_orders = |sell_amounts: [u128; 2], buy_amounts: [u128; 2]| {
-                executed_orders = Some([
-                    ExecutedOrder {
-                        account_id: x.account_id,
-                        order_id: x.id,
-                        sell_amount: sell_amounts[0],
-                        buy_amount: buy_amounts[0],
-                    },
-                    ExecutedOrder {
-                        account_id: y.account_id,
-                        order_id: y.id,
-                        sell_amount: sell_amounts[1],
-                        buy_amount: buy_amounts[1],
-                    },
-                ]);
-            };
-
-            // Preprocess order to leave "space" for fee to be taken
-            let x = order_with_buffer_for_fee(x, &self.fee);
-            let y = order_with_buffer_for_fee(y, &self.fee);
-            match first_match.order_pair_type {
-                OrderPairType::LhsFullyFilled => {
-                    prices.insert(x.buy_token, x.sell_amount);
-                    prices.insert(y.buy_token, x.buy_amount);
-                    set_matched_orders(
-                        [x.sell_amount, x.buy_amount],
-                        [x.buy_amount, x.sell_amount],
-                    );
-                }
-                OrderPairType::RhsFullyFilled => {
-                    prices.insert(x.sell_token, y.sell_amount);
-                    prices.insert(y.sell_token, y.buy_amount);
-                    set_matched_orders(
-                        [y.buy_amount, y.sell_amount],
-                        [y.sell_amount, y.buy_amount],
-                    );
-                }
-                OrderPairType::BothFullyFilled => {
-                    prices.insert(y.buy_token, y.sell_amount);
-                    prices.insert(x.buy_token, x.sell_amount);
-                    set_matched_orders(
-                        [x.sell_amount, y.sell_amount],
-                        [y.sell_amount, x.sell_amount],
-                    );
-                }
-            }
-
+            let (mut executed_orders, mut prices) = self.create_executed_orders(&first_match);
             if let Some(fee) = &self.fee {
                 // normalize prices so fee token price is BASE_PRICE
                 let pre_normalized_fee_price = prices.get(&fee.token).copied().unwrap_or(0);
@@ -201,10 +203,7 @@ impl PriceFinding for NaiveSolver {
 
                 // apply fee to volumes account for rounding errors, moving them to
                 // the fee token
-                let expect_message = "fee price was nonzero so we should have a match";
-                let executed_orders = &mut executed_orders.as_mut().expect(expect_message);
-                for i in 0..2 {
-                    let order = &first_match.orders[i];
+                for (i, order) in first_match.orders.iter().enumerate() {
                     let executed_order = &mut executed_orders[i];
                     if order.sell_token == fee.token {
                         let price_buy = prices[&order.buy_token];
@@ -229,13 +228,10 @@ impl PriceFinding for NaiveSolver {
                 }
             }
 
-            let solution = Solution {
+            Ok(Solution {
                 prices,
-                executed_orders: executed_orders
-                    .map(|orders| orders.to_vec())
-                    .unwrap_or_else(|| vec![]),
-            };
-            Ok(solution)
+                executed_orders: executed_orders.to_vec(),
+            })
         } else {
             Ok(Solution::trivial())
         }
