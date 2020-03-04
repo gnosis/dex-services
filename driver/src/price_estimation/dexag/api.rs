@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use ethcontract::Address;
 use isahc::prelude::*;
-use serde::{de::Error as _, Deserialize, Deserializer};
+use serde::Deserialize;
 use serde_with::rust::display_fromstr;
 use std::time::Duration;
 use url::Url;
@@ -21,8 +21,6 @@ pub trait DexagApi {
 pub struct Token {
     pub name: String,
     pub symbol: String,
-    #[serde(default)]
-    #[serde(deserialize_with = "deserialize_address")]
     pub address: Option<Address>,
 }
 
@@ -30,29 +28,6 @@ pub struct Token {
 pub struct Price {
     #[serde(with = "display_fromstr")]
     pub price: f64,
-}
-
-fn deserialize_address<'de, D>(deserializer: D) -> Result<Option<Address>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    fn hex_string_to_address(string: &str) -> Result<Address> {
-        let prefix = "0x";
-        if !string.starts_with(prefix) {
-            return Err(anyhow!("does not start with {}", prefix));
-        }
-        Ok(string[2..].parse()?)
-    }
-
-    let string: Option<String> = Option::deserialize(deserializer)?;
-    Ok(if let Some(string) = string {
-        let address = hex_string_to_address(&string)
-            .with_context(|| format!("failed to parse address \"{}\"", string))
-            .map_err(D::Error::custom)?;
-        Some(address)
-    } else {
-        None
-    })
 }
 
 pub enum EitherAmount {
