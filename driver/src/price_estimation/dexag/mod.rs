@@ -16,6 +16,7 @@ pub struct DexagClient<Api> {
 
 impl DexagClient<DexagHttpApi> {
     /// Create a DexagClient using DexagHttpApi as the api implementation.
+    #[allow(dead_code)]
     pub fn new() -> Result<Self> {
         let api = DexagHttpApi::new()?;
         Self::with_api(api)
@@ -56,7 +57,6 @@ where
     Api: DexagApi,
 {
     fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>> {
-        // TODO: parallel requests
         Ok(tokens
             .iter()
             .filter_map(|token| {
@@ -126,7 +126,13 @@ mod tests {
             .with(eq(api_tokens[0].clone()), eq(api_tokens[3].clone()))
             .returning(|_, _| Err(anyhow!("")));
         api.expect_get_price()
-            .with(eq(api_tokens[0].clone()), eq(api_tokens[0].clone()))
+            .with(
+                eq(api_tokens[0].clone()),
+                // Clippy claims we can remove the clone here but compilation
+                // actually fails if we follow the suggestion.
+                #[allow(clippy::redundant_clone)]
+                eq(api_tokens[0].clone()),
+            )
             .returning(|_, _| Ok(1.0));
 
         let client = DexagClient::with_api(api).unwrap();
