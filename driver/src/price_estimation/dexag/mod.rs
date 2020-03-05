@@ -123,7 +123,11 @@ mod tests {
             .with(eq(api_tokens[0].clone()), eq(api_tokens[1].clone()))
             .returning(|_, _| Ok(0.7));
         api.expect_get_price()
-            .with(eq(api_tokens[0].clone()), eq(api_tokens[2].clone()))
+            .with(
+                eq(api_tokens[0].clone()),
+                #[allow(clippy::redundant_clone)]
+                eq(api_tokens[2].clone()),
+            )
             .returning(|_, _| Ok(1.2));
 
         let client = DexagClient::with_api(api).unwrap();
@@ -162,7 +166,11 @@ mod tests {
             .returning(move || Ok(api_tokens_.to_vec()));
 
         api.expect_get_price()
-            .with(eq(api_tokens[0].clone()), eq(api_tokens[1].clone()))
+            .with(
+                eq(api_tokens[0].clone()),
+                #[allow(clippy::redundant_clone)]
+                eq(api_tokens[1].clone()),
+            )
             .returning(|_, _| Err(anyhow!("")));
 
         let client = DexagClient::with_api(api).unwrap();
