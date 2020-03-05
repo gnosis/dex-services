@@ -57,20 +57,18 @@ where
     Api: DexagApi + Sync,
 {
     fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>> {
-        // Each element in tokens_ is the token for the future at the same
-        // position.
-        // We need separate vectors because `join_all` takes a vector.
-        let mut tokens_ = Vec::<&Token>::new();
-        let mut futures = Vec::<BoxFuture<Result<f64>>>::new();
-        for token in tokens {
-            if token.symbol() == self.stable_coin.symbol {
-                tokens_.push(token);
-                futures.push(Box::pin(future::ready(Ok(1.0))));
-            } else if let Some(api_token) = self.tokens.get(token.symbol()) {
-                tokens_.push(token);
-                futures.push(self.api.get_price(api_token, &self.stable_coin));
-            }
-        }
+        let (tokens_, futures): (Vec<_>, Vec<_>) = tokens
+            .iter()
+            .filter_map(|token| -> Option<(&Token, BoxFuture<Result<f64>>)> {
+                if token.symbol() == self.stable_coin.symbol {
+                    Some((token, Box::pin(future::ready(Ok(1.0)))))
+                } else if let Some(api_token) = self.tokens.get(token.symbol()) {
+                    Some((token, self.api.get_price(api_token, &self.stable_coin)))
+                } else {
+                    None
+                }
+            })
+            .unzip();
 
         let joined = future::join_all(futures);
         let results = futures::executor::block_on(joined);
