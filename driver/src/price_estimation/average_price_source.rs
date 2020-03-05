@@ -1,26 +1,34 @@
 use super::{PriceSource, Token};
 use crate::models::TokenId;
 use anyhow::{anyhow, Result};
+use crossbeam_utils::thread;
 use std::collections::HashMap;
+use std::sync::Mutex;
 
 /// Combines two prices into one average.
 pub struct AveragePriceSource<T0, T1> {
-    source_0: T0,
-    source_1: T1,
+    source_0: Mutex<T0>,
+    source_1: Mutex<T1>,
 }
 
 impl<T0, T1> AveragePriceSource<T0, T1> {
     pub fn new(source_0: T0, source_1: T1) -> Self {
-        Self { source_0, source_1 }
+        Self {
+            source_0: Mutex::new(source_0),
+            source_1: Mutex::new(source_1),
+        }
     }
 }
 
-impl<T0: PriceSource, T1: PriceSource> PriceSource for AveragePriceSource<T0, T1> {
+impl<T0: PriceSource + Send, T1: PriceSource + Send> PriceSource for AveragePriceSource<T0, T1> {
     fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>> {
-        match (
-            self.source_0.get_prices(tokens),
-            self.source_1.get_prices(tokens),
-        ) {
+        let prices = thread::scope(|s| {
+            let handle_0 = s.spawn(|_| self.source_0.lock().unwrap().get_prices(tokens));
+            let handle_1 = s.spawn(|_| self.source_1.lock().unwrap().get_prices(tokens));
+            (handle_0.join().unwrap(), handle_1.join().unwrap())
+        })
+        .unwrap();
+        match prices {
             (Ok(p0), Ok(p1)) => Ok(average_prices(p0, p1)),
             (Ok(p), Err(e)) | (Err(e), Ok(p)) => {
                 log::warn!("one price source failed: {}", e);
