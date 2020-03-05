@@ -14,6 +14,7 @@ isahc = { version = "0.8.2", features = ["json"] }
 lazy_static = "1.4.0"
 log = "0.4.8"
 prometheus = "0.8.0"
+rayon = "1"
 rouille = "3.0.0"
 rustc-hex = "2.1.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -25,9 +26,9 @@ slog-envlogger = "2.2.0"
 slog-scope = "4.3.0"
 slog-stdlog = "4.0.0"
 slog-term = "2.5.0"
-uint = "0.8"
 structopt = "0.3.11"
 thiserror = "1.0"
+uint = "0.8"
 url = "2.1.1"
 
 [dev-dependencies]

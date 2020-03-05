@@ -53,21 +53,34 @@ where
 
 impl<Api> PriceSource for DexagClient<Api>
 where
-    Api: DexagApi,
+    Api: DexagApi + Sync,
 {
     fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>> {
-        Ok(tokens
-            .iter()
-            .filter_map(|token| {
-                let stable_coin_price = if token.symbol() == self.stable_coin.symbol {
-                    1.0
-                } else {
-                    let dexag_token = self.tokens.get(token.symbol())?;
-                    self.api.get_price(&self.stable_coin, dexag_token).ok()?
-                };
-                Some((token.id, token.get_owl_price(stable_coin_price)))
-            })
-            .collect())
+        use rayon::prelude::*;
+        // Use rayon as a quick and dirty way to make requests in parallel. It
+        // would be more efficient if we used async or Futures instead but for
+        // now this is fine.
+        // async is not currently supported in traits so we cannot use it in the
+        // `PriceSource` trait.
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(8)
+            .build()
+            .unwrap();
+        let result = pool.install(|| {
+            tokens
+                .par_iter()
+                .filter_map(|token| {
+                    let stable_coin_price = if token.symbol() == self.stable_coin.symbol {
+                        1.0
+                    } else {
+                        let dexag_token = self.tokens.get(token.symbol())?;
+                        self.api.get_price(&self.stable_coin, dexag_token).ok()?
+                    };
+                    Some((token.id, token.get_owl_price(stable_coin_price)))
+                })
+                .collect()
+        });
+        Ok(result)
     }
 }
 
@@ -187,6 +200,8 @@ mod tests {
     #[test]
     #[ignore]
     fn online_dexag_client() {
+        use std::time::Instant;
+
         let tokens = &[
             Token::new(1, "WETH", 18),
             Token::new(2, "USDT", 6),
@@ -201,7 +216,13 @@ mod tests {
         ];
 
         let client = DexagClient::new().unwrap();
+        let before = Instant::now();
         let prices = client.get_prices(tokens).unwrap();
+        let after = Instant::now();
+        println!(
+            "Took {} seconds to get prices.",
+            (after - before).as_secs_f64()
+        );
 
         for token in tokens {
             if let Some(price) = prices.get(&token.id) {
