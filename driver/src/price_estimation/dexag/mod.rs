@@ -16,7 +16,6 @@ pub struct DexagClient<Api> {
 
 impl DexagClient<DexagHttpApi> {
     /// Create a DexagClient using DexagHttpApi as the api implementation.
-    #[allow(dead_code)]
     pub fn new() -> Result<Self> {
         let api = DexagHttpApi::new()?;
         Self::with_api(api)
