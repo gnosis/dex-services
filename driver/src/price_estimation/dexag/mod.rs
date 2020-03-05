@@ -4,7 +4,10 @@ use super::{PriceSource, Token};
 use crate::models::TokenId;
 use anyhow::{anyhow, Result};
 use api::{DexagApi, DexagHttpApi};
+use futures::future;
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
 
 pub struct DexagClient<Api> {
     api: Api,
@@ -56,35 +59,34 @@ where
     Api: DexagApi + Sync,
 {
     fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>> {
-        use rayon::prelude::*;
-        // Use rayon as a quick and dirty way to make requests in parallel. It
-        // would be more efficient if we used async or Futures instead but for
-        // now this is fine.
-        // async is not currently supported in traits so we cannot use it in the
-        // `PriceSource` trait.
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(8)
-            .build()
-            .unwrap();
-        let result = pool.install(|| {
-            tokens
-                .par_iter()
-                .filter_map(|token| {
-                    let usd_price_of_token_approximated_by_stable_coin =
-                        if token.symbol() == self.stable_coin.symbol {
-                            1.0
-                        } else {
-                            let dexag_token = self.tokens.get(token.symbol())?;
-                            self.api.get_price(dexag_token, &self.stable_coin).ok()?
-                        };
-                    Some((
-                        token.id,
-                        token.get_owl_price(usd_price_of_token_approximated_by_stable_coin),
-                    ))
-                })
-                .collect()
-        });
-        Ok(result)
+        // Each element in tokens_ is the token for the future at the same
+        // position.
+        // We need separate vectors because `join_all` takes a vector.
+        let mut tokens_ = Vec::<&Token>::new();
+        let mut futures = Vec::<Pin<Box<dyn Future<Output = Result<f64>>>>>::new();
+        for token in tokens {
+            if token.symbol() == self.stable_coin.symbol {
+                tokens_.push(token);
+                futures.push(Box::pin(future::ready(Ok(1.0))));
+            } else if let Some(api_token) = self.tokens.get(token.symbol()) {
+                tokens_.push(token);
+                futures.push(self.api.get_price(api_token, &self.stable_coin));
+            }
+        }
+
+        let joined = future::join_all(futures);
+        let results = futures::executor::block_on(joined);
+        assert_eq!(tokens_.len(), results.len());
+
+        Ok(tokens_
+            .iter()
+            .zip(results.iter())
+            .filter_map(|(token, result)| match result {
+                Ok(price) => Some((token, price)),
+                Err(_) => None,
+            })
+            .map(|(token, price)| (token.id, token.get_owl_price(*price)))
+            .collect())
     }
 }
 
@@ -136,15 +138,15 @@ mod tests {
             .returning(move || Ok(api_tokens_.to_vec()));
 
         api.expect_get_price()
-            .with(eq(api_tokens[0].clone()), eq(api_tokens[1].clone()))
-            .returning(|_, _| Ok(0.7));
+            .with(eq(api_tokens[1].clone()), eq(api_tokens[0].clone()))
+            .returning(|_, _| Box::pin(future::ready(Ok(0.7))));
         api.expect_get_price()
             .with(
-                eq(api_tokens[0].clone()),
-                #[allow(clippy::redundant_clone)]
                 eq(api_tokens[2].clone()),
+                #[allow(clippy::redundant_clone)]
+                eq(api_tokens[0].clone()),
             )
-            .returning(|_, _| Ok(1.2));
+            .returning(|_, _| Box::pin(future::ready(Ok(1.2))));
 
         let client = DexagClient::with_api(api).unwrap();
         let prices = client.get_prices(&tokens).unwrap();
@@ -183,11 +185,11 @@ mod tests {
 
         api.expect_get_price()
             .with(
-                eq(api_tokens[0].clone()),
-                #[allow(clippy::redundant_clone)]
                 eq(api_tokens[1].clone()),
+                #[allow(clippy::redundant_clone)]
+                eq(api_tokens[0].clone()),
             )
-            .returning(|_, _| Err(anyhow!("")));
+            .returning(|_, _| Box::pin(future::ready(Err(anyhow!("")))));
 
         let client = DexagClient::with_api(api).unwrap();
         let prices = client.get_prices(&tokens).unwrap();
