@@ -45,7 +45,6 @@ impl SolverConfig {
             }
             SolverConfig::FallbackSolver { solver_time_limit } => vec![
                 format!("--solverTimeLimit={:}", solver_time_limit),
-                String::from("--tokenInfo=/app/batchauctions/scripts/token_info_mainnet.json"),
                 String::from("--useExternalPrices"),
             ],
             SolverConfig::NaiveSolver => {
