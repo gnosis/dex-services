@@ -79,14 +79,23 @@ mod tests {
     use mockall::predicate::*;
 
     #[test]
+    fn fails_if_stable_coin_does_not_exist() {
+        let mut api = MockDexagApi::new();
+        api.expect_get_token_list()
+            .returning(move || Ok(Vec::new()));
+
+        assert!(DexagClient::with_api(api).is_err());
+    }
+
+    #[test]
     fn get_token_prices() {
         let mut api = MockDexagApi::new();
 
         let tokens = [
+            Token::new(6, "DAI", 18),
             Token::new(1, "ETH", 18),
             Token::new(4, "USDC", 6),
             Token::new(5, "PAX", 18),
-            Token::new(6, "DAI", 18),
         ];
 
         let api_tokens = [
@@ -140,9 +149,11 @@ mod tests {
         assert_eq!(
             prices,
             hash_map! {
-                TokenId(1) => tokens[0].get_owl_price(0.7) as u128,
-                TokenId(4) => tokens[1].get_owl_price(1.2) as u128,
-                TokenId(6) => tokens[3].get_owl_price(1.0) as u128,
+                TokenId(1) => tokens[1].get_owl_price(0.7) as u128,
+                TokenId(4) => tokens[2].get_owl_price(1.2) as u128,
+                TokenId(6) => tokens[0].get_owl_price(1.0) as u128,
+                // No TokenId(5) because we set return an error for this in the
+                // mock api above.
             }
         );
     }
