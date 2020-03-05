@@ -111,7 +111,7 @@ impl NaiveSolver {
     }
 }
 
-pub struct Match {
+struct Match {
     order_pair_type: OrderPairType,
     orders: OrderPair,
 }
@@ -122,19 +122,20 @@ type ExecutedOrderPair = [ExecutedOrder; 2];
 
 impl PriceFinding for NaiveSolver {
     fn find_prices(&self, orders: &[Order], state: &AccountState) -> Result<Solution> {
-        if let Some(first_match) = find_first_match(orders, state, &self.fee) {
-            let (mut executed_orders, mut prices) = create_executed_orders(&first_match, &self.fee);
+        let solution = if let Some(first_match) = find_first_match(orders, state, &self.fee) {
+            let (executed_orders, prices) = create_executed_orders(&first_match, &self.fee);
             if let Some(ref fee) = self.fee {
-                if update_with_fee(&first_match.orders, fee, &mut executed_orders, &mut prices) {
-                    return Ok(Solution::trivial());
+                create_solution_with_fee(&first_match.orders, fee, executed_orders, prices)
+            } else {
+                Solution {
+                    prices,
+                    executed_orders: executed_orders.to_vec(),
                 }
             }
-            return Ok(Solution {
-                prices,
-                executed_orders: executed_orders.to_vec(),
-            });
-        }
-        Ok(Solution::trivial())
+        } else {
+            Solution::trivial()
+        };
+        Ok(solution)
     }
 }
 
@@ -195,22 +196,21 @@ fn create_executed_orders(first_match: &Match, fee: &Option<Fee>) -> (ExecutedOr
     (executed_orders, prices)
 }
 
-/// Returns whether the solution should be trivial.
-fn update_with_fee(
+fn create_solution_with_fee(
     orders: &OrderPair,
     fee: &Fee,
-    executed_orders: &mut ExecutedOrderPair,
-    prices: &mut PriceMap,
-) -> bool {
+    mut executed_orders: ExecutedOrderPair,
+    mut prices: PriceMap,
+) -> Solution {
     // normalize prices so fee token price is BASE_PRICE
     let pre_normalized_fee_price = prices.get(&fee.token).copied().unwrap_or(0);
     if pre_normalized_fee_price == 0 {
-        return true;
+        return Solution::trivial();
     }
     for price in prices.values_mut() {
         *price = match normalize_price(*price, pre_normalized_fee_price) {
             Some(price) => price,
-            None => return true,
+            None => return Solution::trivial(),
         };
     }
 
@@ -231,12 +231,15 @@ fn update_with_fee(
                 price_sell,
             ) {
                 Some(exec_buy_amt) => exec_buy_amt,
-                None => return true,
+                None => return Solution::trivial(),
             };
         }
     }
 
-    false
+    Solution {
+        prices,
+        executed_orders: executed_orders.to_vec(),
+    }
 }
 
 fn order_with_buffer_for_fee(order: &Order, fee: &Option<Fee>) -> Order {
