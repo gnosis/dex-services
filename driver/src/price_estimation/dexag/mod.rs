@@ -70,13 +70,17 @@ where
             tokens
                 .par_iter()
                 .filter_map(|token| {
-                    let stable_coin_price = if token.symbol() == self.stable_coin.symbol {
-                        1.0
-                    } else {
-                        let dexag_token = self.tokens.get(token.symbol())?;
-                        self.api.get_price(&self.stable_coin, dexag_token).ok()?
-                    };
-                    Some((token.id, token.get_owl_price(stable_coin_price)))
+                    let usd_price_of_token_approximated_by_stable_coin =
+                        if token.symbol() == self.stable_coin.symbol {
+                            1.0
+                        } else {
+                            let dexag_token = self.tokens.get(token.symbol())?;
+                            self.api.get_price(dexag_token, &self.stable_coin).ok()?
+                        };
+                    Some((
+                        token.id,
+                        token.get_owl_price(usd_price_of_token_approximated_by_stable_coin),
+                    ))
                 })
                 .collect()
         });
