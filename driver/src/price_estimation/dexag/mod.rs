@@ -4,10 +4,8 @@ use super::{PriceSource, Token};
 use crate::models::TokenId;
 use anyhow::{anyhow, Result};
 use api::{DexagApi, DexagHttpApi};
-use futures::future;
+use futures::future::{self, BoxFuture};
 use std::collections::HashMap;
-use std::future::Future;
-use std::pin::Pin;
 
 pub struct DexagClient<Api> {
     api: Api,
@@ -63,7 +61,7 @@ where
         // position.
         // We need separate vectors because `join_all` takes a vector.
         let mut tokens_ = Vec::<&Token>::new();
-        let mut futures = Vec::<Pin<Box<dyn Future<Output = Result<f64>>>>>::new();
+        let mut futures = Vec::<BoxFuture<Result<f64>>>::new();
         for token in tokens {
             if token.symbol() == self.stable_coin.symbol {
                 tokens_.push(token);
