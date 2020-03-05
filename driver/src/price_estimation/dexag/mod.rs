@@ -95,7 +95,6 @@ mod tests {
             Token::new(6, "DAI", 18),
             Token::new(1, "ETH", 18),
             Token::new(4, "USDC", 6),
-            Token::new(5, "PAX", 18),
         ];
 
         let api_tokens = [
@@ -114,11 +113,6 @@ mod tests {
                 symbol: "USDC".to_string(),
                 address: None,
             },
-            super::api::Token {
-                name: String::new(),
-                symbol: "PAX".to_string(),
-                address: None,
-            },
         ];
 
         let api_tokens_ = api_tokens.clone();
@@ -131,18 +125,6 @@ mod tests {
         api.expect_get_price()
             .with(eq(api_tokens[0].clone()), eq(api_tokens[2].clone()))
             .returning(|_, _| Ok(1.2));
-        api.expect_get_price()
-            .with(eq(api_tokens[0].clone()), eq(api_tokens[3].clone()))
-            .returning(|_, _| Err(anyhow!("")));
-        api.expect_get_price()
-            .with(
-                eq(api_tokens[0].clone()),
-                // Clippy claims we can remove the clone here but compilation
-                // actually fails if we follow the suggestion.
-                #[allow(clippy::redundant_clone)]
-                eq(api_tokens[0].clone()),
-            )
-            .returning(|_, _| Ok(1.0));
 
         let client = DexagClient::with_api(api).unwrap();
         let prices = client.get_prices(&tokens).unwrap();
@@ -152,8 +134,44 @@ mod tests {
                 TokenId(1) => tokens[1].get_owl_price(0.7) as u128,
                 TokenId(4) => tokens[2].get_owl_price(1.2) as u128,
                 TokenId(6) => tokens[0].get_owl_price(1.0) as u128,
-                // No TokenId(5) because we set return an error for this in the
-                // mock api above.
+            }
+        );
+    }
+
+    #[test]
+    fn get_token_prices_error() {
+        let mut api = MockDexagApi::new();
+
+        let tokens = [Token::new(6, "DAI", 18), Token::new(1, "ETH", 18)];
+
+        let api_tokens = [
+            super::api::Token {
+                name: String::new(),
+                symbol: "DAI".to_string(),
+                address: None,
+            },
+            super::api::Token {
+                name: String::new(),
+                symbol: "ETH".to_string(),
+                address: None,
+            },
+        ];
+
+        let api_tokens_ = api_tokens.clone();
+        api.expect_get_token_list()
+            .returning(move || Ok(api_tokens_.to_vec()));
+
+        api.expect_get_price()
+            .with(eq(api_tokens[0].clone()), eq(api_tokens[1].clone()))
+            .returning(|_, _| Err(anyhow!("")));
+
+        let client = DexagClient::with_api(api).unwrap();
+        let prices = client.get_prices(&tokens).unwrap();
+        assert_eq!(
+            prices,
+            hash_map! {
+                // No TokenId(1) because we made the price error above.
+                TokenId(6) => tokens[0].get_owl_price(1.0) as u128,
             }
         );
     }
