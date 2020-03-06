@@ -476,6 +476,7 @@ dependencies = [
  "anyhow",
  "byteorder",
  "chrono",
+ "crossbeam-utils 0.7.0",
  "ethcontract",
  "ethcontract-generate",
  "futures 0.3.4",

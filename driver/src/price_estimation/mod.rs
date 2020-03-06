@@ -1,13 +1,17 @@
 //! Module responsible for aggregating price estimates from various sources to
 //! give good price estimates to the solver for better results.
 
+mod average_price_source;
 pub mod data;
+mod dexag;
 mod kraken;
 
 pub use self::data::TokenData;
+use self::dexag::DexagClient;
 use self::kraken::KrakenClient;
 use crate::models::{Order, TokenId, TokenInfo};
 use anyhow::Result;
+use average_price_source::AveragePriceSource;
 use lazy_static::lazy_static;
 use log::warn;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -37,7 +41,10 @@ pub struct PriceOracle {
 impl PriceOracle {
     /// Creates a new price oracle from a token whitelist data.
     pub fn new(tokens: TokenData) -> Result<Self> {
-        Ok(PriceOracle::with_source(tokens, KrakenClient::new()?))
+        Ok(PriceOracle::with_source(
+            tokens,
+            AveragePriceSource::new(KrakenClient::new()?, DexagClient::new()?),
+        ))
     }
 
     fn with_source(tokens: TokenData, source: impl PriceSource + 'static) -> Self {
@@ -180,8 +187,8 @@ impl Token {
 #[cfg_attr(test, mockall::automock)]
 trait PriceSource {
     /// Retrieve current prices relative to the OWL token for the specified
-    /// tokens. The OWL token is peged at 1 USD with 18 decimals. Returns a
-    /// sparce price array as being unable to find a price is not considered an
+    /// tokens. The OWL token is pegged at 1 USD with 18 decimals. Returns a
+    /// sparse price array as being unable to find a price is not considered an
     /// error.
     fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>>;
 }
