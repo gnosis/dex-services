@@ -4,6 +4,7 @@ use super::{PriceSource, Token};
 use crate::models::TokenId;
 use anyhow::{anyhow, Result};
 use api::{DexagApi, DexagHttpApi};
+use futures::future::{self, BoxFuture};
 use std::collections::HashMap;
 
 pub struct DexagClient<Api> {
@@ -16,7 +17,6 @@ pub struct DexagClient<Api> {
 
 impl DexagClient<DexagHttpApi> {
     /// Create a DexagClient using DexagHttpApi as the api implementation.
-    #[allow(dead_code)]
     pub fn new() -> Result<Self> {
         let api = DexagHttpApi::new()?;
         Self::with_api(api)
@@ -54,20 +54,34 @@ where
 
 impl<Api> PriceSource for DexagClient<Api>
 where
-    Api: DexagApi,
+    Api: DexagApi + Sync,
 {
     fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>> {
-        Ok(tokens
+        let (tokens_, futures): (Vec<_>, Vec<_>) = tokens
             .iter()
-            .filter_map(|token| {
-                let stable_coin_price = if token.symbol() == self.stable_coin.symbol {
-                    1.0
+            .filter_map(|token| -> Option<(&Token, BoxFuture<Result<f64>>)> {
+                if token.symbol() == self.stable_coin.symbol {
+                    Some((token, Box::pin(future::ready(Ok(1.0)))))
+                } else if let Some(api_token) = self.tokens.get(token.symbol()) {
+                    Some((token, self.api.get_price(api_token, &self.stable_coin)))
                 } else {
-                    let dexag_token = self.tokens.get(token.symbol())?;
-                    self.api.get_price(&self.stable_coin, dexag_token).ok()?
-                };
-                Some((token.id, token.get_owl_price(stable_coin_price)))
+                    None
+                }
             })
+            .unzip();
+
+        let joined = future::join_all(futures);
+        let results = futures::executor::block_on(joined);
+        assert_eq!(tokens_.len(), results.len());
+
+        Ok(tokens_
+            .iter()
+            .zip(results.iter())
+            .filter_map(|(token, result)| match result {
+                Ok(price) => Some((token, price)),
+                Err(_) => None,
+            })
+            .map(|(token, price)| (token.id, token.get_owl_price(*price)))
             .collect())
     }
 }
@@ -120,15 +134,15 @@ mod tests {
             .returning(move || Ok(api_tokens_.to_vec()));
 
         api.expect_get_price()
-            .with(eq(api_tokens[0].clone()), eq(api_tokens[1].clone()))
-            .returning(|_, _| Ok(0.7));
+            .with(eq(api_tokens[1].clone()), eq(api_tokens[0].clone()))
+            .returning(|_, _| Box::pin(future::ready(Ok(0.7))));
         api.expect_get_price()
             .with(
-                eq(api_tokens[0].clone()),
-                #[allow(clippy::redundant_clone)]
                 eq(api_tokens[2].clone()),
+                #[allow(clippy::redundant_clone)]
+                eq(api_tokens[0].clone()),
             )
-            .returning(|_, _| Ok(1.2));
+            .returning(|_, _| Box::pin(future::ready(Ok(1.2))));
 
         let client = DexagClient::with_api(api).unwrap();
         let prices = client.get_prices(&tokens).unwrap();
@@ -167,11 +181,11 @@ mod tests {
 
         api.expect_get_price()
             .with(
-                eq(api_tokens[0].clone()),
-                #[allow(clippy::redundant_clone)]
                 eq(api_tokens[1].clone()),
+                #[allow(clippy::redundant_clone)]
+                eq(api_tokens[0].clone()),
             )
-            .returning(|_, _| Err(anyhow!("")));
+            .returning(|_, _| Box::pin(future::ready(Err(anyhow!("")))));
 
         let client = DexagClient::with_api(api).unwrap();
         let prices = client.get_prices(&tokens).unwrap();
@@ -188,6 +202,8 @@ mod tests {
     #[test]
     #[ignore]
     fn online_dexag_client() {
+        use std::time::Instant;
+
         let tokens = &[
             Token::new(1, "WETH", 18),
             Token::new(2, "USDT", 6),
@@ -202,7 +218,13 @@ mod tests {
         ];
 
         let client = DexagClient::new().unwrap();
+        let before = Instant::now();
         let prices = client.get_prices(tokens).unwrap();
+        let after = Instant::now();
+        println!(
+            "Took {} seconds to get prices.",
+            (after - before).as_secs_f64()
+        );
 
         for token in tokens {
             if let Some(price) = prices.get(&token.id) {

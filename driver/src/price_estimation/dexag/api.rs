@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use ethcontract::Address;
+use futures::future::{BoxFuture, FutureExt};
 use isahc::prelude::*;
 use serde::Deserialize;
 use serde_with::rust::display_fromstr;
@@ -14,7 +15,7 @@ pub trait DexagApi {
     /// https://docs.dex.ag/api/price
     /// Returns the price of one unit of `from` expressed in `to`.
     /// For example `get_price("ETH", "DAI")` is ~220.
-    fn get_price(&self, from: &Token, to: &Token) -> Result<f64>;
+    fn get_price<'a>(&'a self, from: &Token, to: &Token) -> BoxFuture<'a, Result<f64>>;
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -67,7 +68,7 @@ impl DexagApi for DexagHttpApi {
             .context("failed to parse token list json from dexag response")
     }
 
-    fn get_price(&self, from: &Token, to: &Token) -> Result<f64> {
+    fn get_price<'a>(&'a self, from: &Token, to: &Token) -> BoxFuture<'a, Result<f64>> {
         let mut url = self.base_url.clone();
         url.set_path("price");
         {
@@ -78,12 +79,17 @@ impl DexagApi for DexagHttpApi {
             q.append_pair("fromAmount", "1");
             q.append_pair("dex", "ag");
         }
+
         self.client
-            .get(url.to_string())
-            .context("failed to retrieve price from dexag")?
-            .json::<Price>()
-            .context("failed to parse price json from dexag")
-            .map(|price| price.price)
+            .get_async(url.to_string())
+            .map(|response| {
+                let mut body = response.context("failed to retrieve price from dexag")?;
+                let price = body
+                    .json::<Price>()
+                    .context("failed to parse price json from dexag")?;
+                Ok(price.price)
+            })
+            .boxed()
     }
 }
 
@@ -128,7 +134,7 @@ mod tests {
         let api = DexagHttpApi::new().unwrap();
         let tokens = api.get_token_list().unwrap();
         println!("{:?}", tokens);
-        let price = api.get_price(&tokens[0], &tokens[1]).unwrap();
+        let price = futures::executor::block_on(api.get_price(&tokens[0], &tokens[1])).unwrap();
         println!("{:?}", price);
     }
 }
