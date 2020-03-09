@@ -20,6 +20,8 @@ use log::warn;
 use price_source::PriceSource;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter;
+use std::time::Duration;
+use threaded_price_source::ThreadedPriceSource;
 
 /// A type alias for token information map that is passed to the solver.
 type Tokens = BTreeMap<TokenId, Option<TokenInfo>>;
@@ -36,19 +38,15 @@ pub struct PriceOracle {
     /// whitelisted tokens get their prices estimated.
     tokens: TokenData,
     /// The price source to use.
-    ///
-    /// Note that currently only one price source is supported, but more price
-    /// source are expected to be added in the future.
     source: Box<dyn PriceSource>,
 }
 
 impl PriceOracle {
     /// Creates a new price oracle from a token whitelist data.
-    pub fn new(tokens: TokenData) -> Result<Self> {
-        Ok(PriceOracle::with_source(
-            tokens,
-            AveragePriceSource::new(KrakenClient::new()?, DexagClient::new()?),
-        ))
+    pub fn new(tokens: TokenData, update_interval: Duration) -> Result<Self> {
+        let source = AveragePriceSource::new(KrakenClient::new()?, DexagClient::new()?);
+        let (source, _) = ThreadedPriceSource::new(source, update_interval);
+        Ok(PriceOracle::with_source(tokens, source))
     }
 
     fn with_source(tokens: TokenData, source: impl PriceSource + 'static) -> Self {

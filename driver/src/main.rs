@@ -124,6 +124,15 @@ struct Options {
         parse(try_from_str = duration_millis),
     )]
     gas_station_timeout: Duration,
+
+    /// Time interval in seconds in which price sources should be updated.
+    #[structopt(
+        long,
+        env = "PRICE_SOURCE_UPDATE_INTERVAL",
+        default_value = "1000",
+        parse(try_from_str = duration_secs),
+    )]
+    price_source_update_interval: Duration,
 }
 
 fn main() {
@@ -153,7 +162,8 @@ fn main() {
     });
 
     let fee = Some(Fee::default());
-    let price_oracle = PriceOracle::new(options.token_data).unwrap();
+    let price_oracle =
+        PriceOracle::new(options.token_data, options.price_source_update_interval).unwrap();
     let mut price_finder = price_finding::create_price_finder(fee, solver_config, price_oracle);
 
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
@@ -179,4 +189,8 @@ fn main() {
 
 fn duration_millis(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_millis(s.parse()?))
+}
+
+fn duration_secs(s: &str) -> Result<Duration, ParseIntError> {
+    Ok(Duration::from_secs(s.parse()?))
 }
