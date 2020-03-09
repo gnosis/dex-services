@@ -5,6 +5,7 @@ mod average_price_source;
 pub mod data;
 mod dexag;
 mod kraken;
+mod manually_updated_price_source;
 mod price_source;
 
 pub use self::data::TokenData;
