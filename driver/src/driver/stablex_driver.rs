@@ -738,4 +738,27 @@ mod tests {
             .run_internal(SystemTime::UNIX_EPOCH + BATCH_DURATION * 43)
             .is_ok());
     }
+
+    #[test]
+    pub fn batch_id_current() {
+        let start_time = SystemTime::UNIX_EPOCH;
+        let batch_id = BatchId::current(start_time).unwrap();
+        assert_eq!(batch_id.0, 0);
+        assert_eq!(batch_id.start_time(), start_time);
+
+        let start_time = SystemTime::UNIX_EPOCH;
+        let batch_id = BatchId::current(start_time + Duration::from_secs(299)).unwrap();
+        assert_eq!(batch_id.0, 0);
+        assert_eq!(batch_id.start_time(), start_time);
+
+        let start_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
+        let batch_id = BatchId::current(start_time).unwrap();
+        assert_eq!(batch_id.0, 1);
+        assert_eq!(batch_id.start_time(), start_time);
+
+        let start_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
+        let batch_id = BatchId::current(start_time + Duration::from_secs(299)).unwrap();
+        assert_eq!(batch_id.0, 1);
+        assert_eq!(batch_id.start_time(), start_time);
+    }
 }
