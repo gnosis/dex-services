@@ -124,6 +124,26 @@ struct Options {
         parse(try_from_str = duration_millis),
     )]
     gas_station_timeout: Duration,
+
+    /// The duration in seconds which should be waited at the start of a batch
+    /// before beginning to solve it.
+    #[structopt(
+        long,
+        env = "BATCH_WAIT_TIME",
+        default_value = "30",
+        parse(try_from_str = duration_secs),
+    )]
+    batch_wait_time: Duration,
+
+    /// The duration in seconds which can have at most been elapsed since the
+    /// the start of the current batch if we should still attempt to solve it.
+    #[structopt(
+        long,
+        env = "MAX_BATCH_ELAPSED_TIME",
+        default_value = "180",
+        parse(try_from_str = duration_secs),
+    )]
+    max_batch_elapsed_time: Duration,
 }
 
 fn main() {
@@ -168,6 +188,8 @@ fn main() {
         &filtered_orderbook,
         &solution_submitter,
         stablex_metrics,
+        options.batch_wait_time,
+        options.max_batch_elapsed_time,
     );
     loop {
         if let Err(e) = driver.run() {
@@ -179,4 +201,8 @@ fn main() {
 
 fn duration_millis(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_millis(s.parse()?))
+}
+
+fn duration_secs(s: &str) -> Result<Duration, ParseIntError> {
+    Ok(Duration::from_secs(s.parse()?))
 }
