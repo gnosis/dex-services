@@ -15,9 +15,7 @@ pub struct ThreadedPriceSource {
     // Shared between this struct and the thread. The background thread writes
     // the prices, the thread calling `get_prices` reads them.
     price_map: Arc<Mutex<HashMap<TokenId, u128>>>,
-    // Only used so the thread can react to the owner getting dropped. No
-    // messages are actually sent. Could conceptually be a condition variable
-    // but channel is easier to use.
+    // Allows the thread to notice when the owning struct is dropped.
     _channel_to_thread: Sender<()>,
 }
 
@@ -54,6 +52,8 @@ impl ThreadedPriceSource {
             }
         });
 
+        // Update the prices immediately.
+        sender.send(()).unwrap();
         (
             Self {
                 price_map,
