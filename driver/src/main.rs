@@ -129,7 +129,7 @@ struct Options {
     #[structopt(
         long,
         env = "PRICE_SOURCE_UPDATE_INTERVAL",
-        default_value = "1000",
+        default_value = "300",
         parse(try_from_str = duration_secs),
     )]
     price_source_update_interval: Duration,
