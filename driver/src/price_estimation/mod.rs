@@ -43,9 +43,23 @@ pub struct PriceOracle {
 impl PriceOracle {
     /// Creates a new price oracle from a token whitelist data.
     pub fn new(tokens: TokenData, update_interval: Duration) -> Result<Self> {
-        let source = AveragePriceSource::new(KrakenClient::new()?, DexagClient::new()?);
-        let (source, _) = ThreadedPriceSource::new(tokens.clone().into(), source, update_interval);
-        Ok(PriceOracle::with_source(tokens, source))
+        Ok(if tokens.is_empty() {
+            // If there are no tokens we don't need to create a real price
+            // source. This avoids sending requests in the Dexag constructor.
+            struct EmptyPriceSource {};
+            impl PriceSource for EmptyPriceSource {
+                fn get_prices(&self, _tokens: &[Token]) -> Result<HashMap<TokenId, u128>> {
+                    Ok(HashMap::new())
+                }
+            }
+            let source = EmptyPriceSource {};
+            PriceOracle::with_source(tokens, source)
+        } else {
+            let source = AveragePriceSource::new(KrakenClient::new()?, DexagClient::new()?);
+            let (source, _) =
+                ThreadedPriceSource::new(tokens.clone().into(), source, update_interval);
+            PriceOracle::with_source(tokens, source)
+        })
     }
 
     fn with_source(tokens: TokenData, source: impl PriceSource + 'static) -> Self {
