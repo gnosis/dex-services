@@ -5,6 +5,7 @@ mod average_price_source;
 pub mod data;
 mod dexag;
 mod kraken;
+mod price_source;
 
 pub use self::data::TokenData;
 use self::dexag::DexagClient;
@@ -14,6 +15,7 @@ use anyhow::Result;
 use average_price_source::AveragePriceSource;
 use lazy_static::lazy_static;
 use log::warn;
+use price_source::PriceSource;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter;
 
@@ -133,7 +135,7 @@ impl PriceEstimating for PriceOracle {
 /// A token reprensentation.
 #[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Clone, Debug)]
-struct Token {
+pub struct Token {
     /// The ID of the token.
     id: TokenId,
     /// The token info for this token including, token symbol and number of
@@ -182,22 +184,12 @@ impl Token {
     }
 }
 
-/// An abstraction around a type that retrieves price estimate from a source
-/// such as an exchange.
-#[cfg_attr(test, mockall::automock)]
-trait PriceSource {
-    /// Retrieve current prices relative to the OWL token for the specified
-    /// tokens. The OWL token is pegged at 1 USD with 18 decimals. Returns a
-    /// sparse price array as being unable to find a price is not considered an
-    /// error.
-    fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>>;
-}
-
 #[cfg(test)]
 mod tests {
     use super::data::TokenBaseInfo;
     use super::*;
     use anyhow::anyhow;
+    use price_source::MockPriceSource;
 
     #[test]
     fn price_oracle_fetches_token_prices() {
