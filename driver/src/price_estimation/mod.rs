@@ -5,7 +5,6 @@ mod average_price_source;
 pub mod data;
 mod dexag;
 mod kraken;
-mod manually_updated_price_source;
 mod price_source;
 mod threaded_price_source;
 
@@ -45,7 +44,7 @@ impl PriceOracle {
     /// Creates a new price oracle from a token whitelist data.
     pub fn new(tokens: TokenData, update_interval: Duration) -> Result<Self> {
         let source = AveragePriceSource::new(KrakenClient::new()?, DexagClient::new()?);
-        let (source, _) = ThreadedPriceSource::new(source, update_interval);
+        let (source, _) = ThreadedPriceSource::new(tokens.clone().into(), source, update_interval);
         Ok(PriceOracle::with_source(tokens, source))
     }
 

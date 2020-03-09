@@ -1,4 +1,3 @@
-use super::manually_updated_price_source::ManuallyUpdatedPriceSource;
 use super::{price_source::PriceSource, Token};
 use crate::models::TokenId;
 use anyhow::Result;
@@ -8,45 +7,45 @@ use std::sync::{
     Arc, Mutex,
 };
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// Implements `PriceSource` in a non blocking way by updating prices in a
 /// thread and reusing previous results.
 pub struct ThreadedPriceSource {
     // Shared between this struct and the thread. The background thread writes
     // the prices, the thread calling `get_prices` reads them.
-    non_blocking_price_source: Arc<Mutex<ManuallyUpdatedPriceSource>>,
-    // Channel over which the thread can be told to update the prices.
-    channel_to_thread: Sender<ThreadMessage>,
+    price_map: Arc<Mutex<HashMap<TokenId, u128>>>,
+    // Only used so the thread can react to the owner getting dropped. No
+    // messages are actually sent. Could conceptually be a condition variable
+    // but channel is easier to use.
+    _channel_to_thread: Sender<()>,
 }
 
 impl ThreadedPriceSource {
+    /// All token prices will be updated every `update_interval`. Prices for
+    /// other tokens will not be returned in `get_prices`.
+    ///
     /// The join handle represents the background thread. It can be used to
     /// verify that it exits when the created struct is dropped.
     #[allow(dead_code)]
     pub fn new<T: 'static + PriceSource + Send>(
+        tokens: Vec<Token>,
         price_source: T,
         update_interval: Duration,
     ) -> (Self, JoinHandle<()>) {
-        let non_blocking_price_source = Arc::new(Mutex::new(ManuallyUpdatedPriceSource::new()));
-        let (sender, receiver) = mpsc::channel::<ThreadMessage>();
+        let price_map = Arc::new(Mutex::new(HashMap::new()));
+        let (sender, receiver) = mpsc::channel::<()>();
 
-        let nbps = non_blocking_price_source.clone();
+        let price_map_ = price_map.clone();
         // vk: Clippy notes that the following loop and match can be written as
         // a `while let` loop but I find it clearer to make all cases explicit.
         #[allow(clippy::while_let_loop)]
         let join_handle = thread::spawn(move || loop {
             match receiver.recv_timeout(update_interval) {
-                Ok(ThreadMessage::UpdateImmediately) | Err(RecvTimeoutError::Timeout) => {
-                    let now = Instant::now();
-                    let cutoff = now.checked_sub(update_interval).unwrap_or(now);
-                    let tokens = nbps.lock().unwrap().tokens_that_need_updating(cutoff);
-                    if tokens.is_empty() {
-                        continue;
-                    }
+                Ok(()) | Err(RecvTimeoutError::Timeout) => {
                     // Make sure we don't hold the mutex while this blocking call happens.
                     match price_source.get_prices(&tokens) {
-                        Ok(prices) => nbps.lock().unwrap().update_tokens(&tokens, &prices, now),
+                        Ok(prices) => price_map_.lock().unwrap().extend(prices),
                         Err(err) => log::warn!("price_source::get_prices failed: {}", err),
                     }
                 }
@@ -57,8 +56,8 @@ impl ThreadedPriceSource {
 
         (
             Self {
-                non_blocking_price_source,
-                channel_to_thread: sender,
+                price_map,
+                _channel_to_thread: sender,
             },
             join_handle,
         )
@@ -68,26 +67,9 @@ impl ThreadedPriceSource {
 impl PriceSource for ThreadedPriceSource {
     /// Non blocking.
     /// Infallible.
-    fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>> {
-        let mut nbps = self.non_blocking_price_source.lock().unwrap();
-        nbps.track_tokens(tokens);
-        // At this point tokens that were not being tracked already have been
-        // added but they do not yet have prices. This is expected because this
-        // function is supposed to be non blocking.
-        let result = nbps.get_prices(tokens);
-        std::mem::drop(nbps);
-        // We do tell the thread to immediately update the prices instead of
-        // waiting a full update interval so that the prices are hopefully
-        // available the next `get_prices` is called.
-        self.channel_to_thread
-            .send(ThreadMessage::UpdateImmediately)
-            .unwrap();
-        result
+    fn get_prices(&self, _tokens: &[Token]) -> Result<HashMap<TokenId, u128>> {
+        Ok(self.price_map.lock().unwrap().clone())
     }
-}
-
-enum ThreadMessage {
-    UpdateImmediately,
 }
 
 #[cfg(test)]
@@ -117,56 +99,12 @@ mod tests {
 
     #[test]
     fn thread_exits_when_owner_is_dropped() {
-        let (tps, handle) =
-            ThreadedPriceSource::new(MockPriceSource::new(), Duration::from_secs(std::u64::MAX));
+        let (tps, handle) = ThreadedPriceSource::new(
+            TOKENS.to_vec(),
+            MockPriceSource::new(),
+            Duration::from_secs(std::u64::MAX),
+        );
         // If the thread didn't exit we would wait forever.
-        join(tps, handle);
-    }
-
-    #[test]
-    fn update_triggered_by_get_prices() {
-        let mut ps = MockPriceSource::new();
-        let call_count = Arc::new(atomic::AtomicU64::new(0));
-        let call_count_ = call_count.clone();
-        ps.expect_get_prices()
-            .returning(move |_| match call_count_.fetch_add(1, ORDERING) {
-                0 => Ok(hash_map! {TOKENS[0].id => 0}),
-                1 => Ok(hash_map! {TOKENS[0].id => 1, TOKENS[1].id => 2}),
-                _ => Ok(hash_map! {}),
-            });
-
-        let (tps, handle) = ThreadedPriceSource::new(ps, Duration::from_secs(std::u64::MAX));
-        assert_eq!(call_count.load(ORDERING), 0);
-        assert!(tps.get_prices(&TOKENS[..]).unwrap().is_empty());
-
-        // We have to sleep to give the thread time to work.
-        thread::sleep(Duration::from_millis(5));
-        assert_eq!(call_count.load(ORDERING), 1);
-        assert_eq!(
-            tps.get_prices(&TOKENS[..]).unwrap(),
-            hash_map! {TOKENS[0].id => 0}
-        );
-
-        thread::sleep(Duration::from_millis(5));
-        assert_eq!(call_count.load(ORDERING), 2);
-        assert_eq!(
-            tps.get_prices(&TOKENS[..]).unwrap(),
-            hash_map! {TOKENS[0].id => 1, TOKENS[1].id => 2}
-        );
-
-        thread::sleep(Duration::from_millis(5));
-        assert_eq!(call_count.load(ORDERING), 3);
-        assert_eq!(
-            tps.get_prices(&TOKENS[..]).unwrap(),
-            hash_map! {TOKENS[0].id => 1, TOKENS[1].id => 2}
-        );
-
-        thread::sleep(Duration::from_millis(5));
-        assert_eq!(call_count.load(ORDERING), 4);
-        assert_eq!(
-            tps.get_prices(&TOKENS[..]).unwrap(),
-            hash_map! {TOKENS[0].id => 1, TOKENS[1].id => 2}
-        );
         join(tps, handle);
     }
 
@@ -183,7 +121,7 @@ mod tests {
             })
         });
 
-        let (tps, handle) = ThreadedPriceSource::new(ps, Duration::from_millis(5));
+        let (tps, handle) = ThreadedPriceSource::new(TOKENS.to_vec(), ps, Duration::from_millis(5));
         assert_eq!(tps.get_prices(&TOKENS[..]).unwrap(), hash_map! {});
         thread::sleep(Duration::from_millis(10));
         start_returning.store(true, ORDERING);
