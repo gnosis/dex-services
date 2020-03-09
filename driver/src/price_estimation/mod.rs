@@ -7,6 +7,7 @@ mod dexag;
 mod kraken;
 mod manually_updated_price_source;
 mod price_source;
+mod threaded_price_source;
 
 pub use self::data::TokenData;
 use self::dexag::DexagClient;

@@ -13,7 +13,6 @@ pub struct ManuallyUpdatedPriceSource {
 }
 
 impl ManuallyUpdatedPriceSource {
-    #[allow(dead_code)]
     pub fn new() -> Self {
         ManuallyUpdatedPriceSource {
             price_map: HashMap::new(),
