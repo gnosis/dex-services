@@ -16,7 +16,7 @@ mod transport;
 mod util;
 
 use crate::contracts::{stablex_contract::StableXContractImpl, web3_provider};
-use crate::driver::stablex_driver::StableXDriver;
+use crate::driver::{scheduler::Scheduler, stablex_driver::StableXDriverImpl};
 use crate::eth_rpc::Web3EthRpc;
 use crate::gas_station::GnosisSafeGasStation;
 use crate::metrics::{MetricsServer, StableXMetrics};
@@ -26,7 +26,7 @@ use crate::price_finding::{Fee, SolverConfig};
 use crate::solution_submission::StableXSolutionSubmitter;
 
 use ethcontract::PrivateKey;
-use log::{error, info};
+use log::info;
 use prometheus::Registry;
 use std::num::ParseIntError;
 use std::sync::Arc;
@@ -183,20 +183,20 @@ fn main() {
     let eth_rpc = Web3EthRpc::new(&web3);
 
     let solution_submitter = StableXSolutionSubmitter::new(&contract, &eth_rpc);
-    let mut driver = StableXDriver::new(
+    let mut driver = StableXDriverImpl::new(
         &mut *price_finder,
         &filtered_orderbook,
         &solution_submitter,
-        stablex_metrics,
+        &stablex_metrics,
+    );
+    let mut scheduler = Scheduler::new(
+        &mut driver,
+        &filtered_orderbook,
+        &stablex_metrics,
         options.batch_wait_time,
         options.max_batch_elapsed_time,
     );
-    loop {
-        if let Err(e) = driver.run() {
-            error!("StableXDriver error: {}", e);
-        }
-        thread::sleep(Duration::from_secs(5));
-    }
+    scheduler.run_forever();
 }
 
 fn duration_millis(s: &str) -> Result<Duration, ParseIntError> {

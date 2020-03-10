@@ -86,7 +86,9 @@ where
     }
 }
 
-pub fn wait_for(web3: &Web3<Http>, seconds: u32) {
+pub fn wait_for(_web3: &Web3<Http>, seconds: u32) {
+    std::thread::sleep(std::time::Duration::from_secs(seconds as u64 + 1));
+    /* TODO vk:
     web3.transport()
         .execute("evm_increaseTime", vec![seconds.into()])
         .wait()
@@ -95,6 +97,7 @@ pub fn wait_for(web3: &Web3<Http>, seconds: u32) {
         .execute("evm_mine", vec![])
         .wait()
         .expect("Cannot mine to increase time");
+    */
 }
 
 pub fn wait_for_condition<C>(mut condition: C) -> Result<(), Error>
