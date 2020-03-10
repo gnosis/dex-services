@@ -19,8 +19,16 @@ impl BatchId {
         Ok(Self(time_since_epoch.as_secs() / BATCH_DURATION.as_secs()))
     }
 
+    pub fn currently_being_solved(now: SystemTime) -> std::result::Result<Self, SystemTimeError> {
+        Self::current(now).map(|batch_id| batch_id.prev())
+    }
+
     pub fn start_time(self) -> SystemTime {
         SystemTime::UNIX_EPOCH + Duration::from_secs(self.0 * BATCH_DURATION.as_secs())
+    }
+
+    pub fn solve_start_time(self) -> SystemTime {
+        self.start_time() + BATCH_DURATION
     }
 
     pub fn next(self) -> BatchId {
@@ -95,6 +103,7 @@ impl<'a> Scheduler<'a> {
                         );
                         self.wait_for_batch_id(batch_id, Instant::now() + duration);
                     }
+                    info!("Running solver for batch {}.", batch_id.0);
                     if let Err(err) = self.driver.run(batch_id.0.into()) {
                         error!("StableXDriver error: {}", err);
                     }
@@ -111,9 +120,8 @@ impl<'a> Scheduler<'a> {
 
     /// Return current batch id and what to do with it.
     fn determine_action(&self, now: SystemTime) -> Result<(BatchId, Action)> {
-        let open_batch =
-            BatchId::current(now).with_context(|| anyhow!("failed to get current batch id"))?;
-        let solving_batch = open_batch.prev();
+        let solving_batch = BatchId::currently_being_solved(now)
+            .with_context(|| anyhow!("failed to get batch id currently being solved"))?;
         // unwrap here because this cannot fail because the `solving_batch`'s
         // start time is always before `now`.
         let elapsed_time = now.duration_since(solving_batch.start_time()).unwrap() - BATCH_DURATION;
@@ -150,11 +158,16 @@ impl<'a> Scheduler<'a> {
         }
     }
 
-    fn wait_for_next_batch_id(&self, current: BatchId) {
-        let next = current.next();
-        if let Ok(duration) = SystemTime::now().duration_since(next.start_time()) {
-            thread::sleep(duration);
+    fn wait_for_next_batch_id(&self, currently_being_solved: BatchId) {
+        let mut duration = Duration::from_secs(1);
+        if let Ok(duration_) = currently_being_solved
+            .next()
+            .solve_start_time()
+            .duration_since(SystemTime::now())
+        {
+            duration = duration_;
         }
+        thread::sleep(duration);
     }
 }
 
