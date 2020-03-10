@@ -8,7 +8,7 @@ use ethcontract::U256;
 use log::info;
 use std::collections::HashSet;
 use std::thread;
-use std::time::{Duration, SystemTime, SystemTimeError};
+use std::time::{Duration, Instant, SystemTime, SystemTimeError};
 
 const BATCH_DURATION: Duration = Duration::from_secs(300);
 
@@ -59,6 +59,25 @@ impl<'a> StableXDriver<'a> {
         self.run_internal(SystemTime::now())
     }
 
+    /// Wait until the batch id matches the batch id according to the order book
+    /// but at most until deadline.
+    fn wait_before_solving_batch(&self, batch: BatchId, deadline: Instant) {
+        let sleep_interval = Duration::from_secs(5);
+        loop {
+            if let Ok(index) = self.orderbook_reader.get_auction_index() {
+                if index.low_u64() == batch.0 {
+                    break;
+                }
+            }
+            let remaining = deadline - Instant::now();
+            if remaining <= sleep_interval {
+                thread::sleep(remaining);
+                break;
+            }
+            thread::sleep(sleep_interval);
+        }
+    }
+
     fn run_internal(&mut self, now: SystemTime) -> Result<bool> {
         let open_batch = BatchId::current(now)?;
         let solving_batch = BatchId(open_batch.0 - 1);
@@ -82,7 +101,10 @@ impl<'a> StableXDriver<'a> {
         }
 
         if elapsed_time < self.batch_wait_time {
-            thread::sleep(self.batch_wait_time - elapsed_time);
+            self.wait_before_solving_batch(
+                solving_batch,
+                Instant::now() + self.batch_wait_time - elapsed_time,
+            );
             info!("Starting batch at intended time");
         } else {
             info!("Starting batch later than intended");
