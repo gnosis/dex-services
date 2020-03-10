@@ -99,11 +99,10 @@ mod tests {
 
     #[test]
     fn thread_exits_when_owner_is_dropped() {
-        let (tps, handle) = ThreadedPriceSource::new(
-            TOKENS.to_vec(),
-            MockPriceSource::new(),
-            Duration::from_secs(std::u64::MAX),
-        );
+        let mut ps = MockPriceSource::new();
+        ps.expect_get_prices().returning(|_| Ok(HashMap::new()));
+        let (tps, handle) =
+            ThreadedPriceSource::new(TOKENS.to_vec(), ps, Duration::from_secs(std::u64::MAX));
         // If the thread didn't exit we would wait forever.
         join(tps, handle);
     }
