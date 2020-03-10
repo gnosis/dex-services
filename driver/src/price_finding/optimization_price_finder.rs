@@ -224,7 +224,8 @@ impl PriceFinding for OptimisationPriceFinder {
         };
 
         let now = Utc::now();
-        let batch_id = now.timestamp() / 300;
+        // We are solving the batch before the current one
+        let batch_id = (now.timestamp() / 300) - 1;
         let date = now.format("%Y-%m-%d");
         // We only need to create the folder for the input, the output
         // folder is created by the python script

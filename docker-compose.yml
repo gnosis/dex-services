@@ -35,4 +35,3 @@ services:
     volumes:
       # Sync src folder to allow development without rebuilding on each change
       - ./driver:/app/driver
-      - ./dex-contracts:/app/dex-contracts
