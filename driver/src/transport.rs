@@ -65,7 +65,7 @@ impl HttpTransportInner {
         request: Call,
     ) -> Result<Value, Web3Error> {
         let request = serde_json::to_string(&request)?;
-        debug!("[id:{}] sending request: '{}'", id, &request,);
+        debug!("[id:{}] sending request: '{}'", id, &request);
 
         let (response, content) = self.post_json(request).await.map_err(|err| {
             warn!("[id:{}] returned an error: '{}'", id, err.to_string());
@@ -86,7 +86,7 @@ impl HttpTransportInner {
             )));
         }
 
-        debug!("[id:{}] received response: '{}'", id, &content);
+        debug!("[id:{}] received response: '{}'", id, content.trim());
         let mut json = Value::from_str(&content)?;
         if let Some(map) = json.as_object_mut() {
             // NOTE: Ganache sometimes returns errors inlined with responses,
