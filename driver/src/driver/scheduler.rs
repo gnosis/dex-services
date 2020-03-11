@@ -1,10 +1,9 @@
 use super::stablex_driver::StableXDriver;
-use crate::orderbook::StableXOrderBookReading;
 use anyhow::{anyhow, Context, Result};
 use log::error;
 use log::info;
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, SystemTimeError};
+use std::time::{Duration, SystemTime, SystemTimeError};
 
 const BATCH_DURATION: Duration = Duration::from_secs(300);
 
@@ -21,12 +20,12 @@ impl BatchId {
         Self::current(now).map(|batch_id| batch_id.prev())
     }
 
-    pub fn start_time(self) -> SystemTime {
+    pub fn order_collection_start_time(self) -> SystemTime {
         SystemTime::UNIX_EPOCH + Duration::from_secs(self.0 * BATCH_DURATION.as_secs())
     }
 
     pub fn solve_start_time(self) -> SystemTime {
-        self.start_time() + BATCH_DURATION
+        self.order_collection_start_time() + BATCH_DURATION
     }
 
     pub fn next(self) -> BatchId {
@@ -164,22 +163,22 @@ mod tests {
         let start_time = SystemTime::UNIX_EPOCH;
         let batch_id = BatchId::current(start_time).unwrap();
         assert_eq!(batch_id.0, 0);
-        assert_eq!(batch_id.start_time(), start_time);
+        assert_eq!(batch_id.order_collection_start_time(), start_time);
 
         let start_time = SystemTime::UNIX_EPOCH;
         let batch_id = BatchId::current(start_time + Duration::from_secs(299)).unwrap();
         assert_eq!(batch_id.0, 0);
-        assert_eq!(batch_id.start_time(), start_time);
+        assert_eq!(batch_id.order_collection_start_time(), start_time);
 
         let start_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
         let batch_id = BatchId::current(start_time).unwrap();
         assert_eq!(batch_id.0, 1);
-        assert_eq!(batch_id.start_time(), start_time);
+        assert_eq!(batch_id.order_collection_start_time(), start_time);
 
         let start_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
         let batch_id = BatchId::current(start_time + Duration::from_secs(299)).unwrap();
         assert_eq!(batch_id.0, 1);
-        assert_eq!(batch_id.start_time(), start_time);
+        assert_eq!(batch_id.order_collection_start_time(), start_time);
     }
 
     #[test]
