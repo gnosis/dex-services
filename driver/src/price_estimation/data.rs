@@ -66,10 +66,6 @@ impl TokenData {
     pub fn info(&self, id: impl Into<TokenId>) -> Option<&TokenBaseInfo> {
         self.0.get(&id.into())
     }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
 }
 
 impl Into<Vec<Token>> for TokenData {
