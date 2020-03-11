@@ -144,11 +144,16 @@ impl<'a> Scheduler<'a> {
     }
 
     fn wait_for_next_batch_id(&self, currently_being_solved: BatchId) {
-        let duration = currently_being_solved
-            .next()
-            .solve_start_time()
+        let next = currently_being_solved.next();
+        let duration = (next.solve_start_time()
+            + self.auction_timing_configuration.target_start_solve_time)
             .duration_since(SystemTime::now())
             .unwrap_or(Duration::from_secs(1));
+        info!(
+            "Waiting {}s to handle batch {}.",
+            duration.as_secs(),
+            next.0
+        );
         thread::sleep(duration);
     }
 }
