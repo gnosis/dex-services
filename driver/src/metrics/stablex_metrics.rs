@@ -74,6 +74,12 @@ impl StableXMetrics {
     }
 
     pub fn auction_processing_started(&self, res: &Result<U256>) {
+        // Reset values from previous batch
+        for stage in ProcessingStage::ALL_STAGES {
+            self.processing_times
+                .with_label_values(&[stage.as_ref()])
+                .set(0);
+        }
         let stage_label = &[ProcessingStage::Started.as_ref()];
         match res {
             Ok(batch) => {
