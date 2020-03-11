@@ -93,7 +93,7 @@ You should then see the docker container computing and applying a solution to th
 ```
 npx truffle exec scripts/stablex/request_withdraw.js --accountId=0 --tokenId=1 --amount=999
 npx truffle exec scripts/stablex/close_auction.js
-npx truffle exec scripts/stablex/claim_withdraw.js --accountId=0 --tokenId=1 
+npx truffle exec scripts/stablex/claim_withdraw.js --accountId=0 --tokenId=1
 ```
 
 **Note:** Whenever stopping the `ganache-cli` service (e.g. by running `docker-compose down` you have to re-migrate the dex-contract before restarting `stablex`)
@@ -122,7 +122,7 @@ For this to work, you will need to have read access to our AWS docker registry a
 $(aws ecr get-login --no-include-email)
 ```
 
-Then specify the solver image you want to use as a build argument, e.g.: 
+Then specify the solver image you want to use as a build argument, e.g.:
 
 ```sh
 docker-compose build --build-arg SOLVER_BASE=163030813197.dkr.ecr.us-east-1.amazonaws.com/dex-solver:master stablex
@@ -155,6 +155,8 @@ The following environment variables can be used to configure the behavior of the
 - *PRIVATE_KEY*: The key with which to sign transactions
 - *WEB3_RPC_TIMEOUT*: The timeout in milliseconds of web3 JSON RPC calls, defaults to 10000ms
 - *TOKEN_DATA*: Allows to set token data - i.e symbol name, decimals, a default external price and a flag for indicating whether updated external prices should be fetched.
+- *TARGET_START_SOLVE_TIME*: The offset from the start of a batch in seconds at which point we should start solving.
+- *LATEST_SOLVE_ATTEMPT_TIME*: The offset from the start of the batch in seconds at which point there is not enough time left to attempt to solve.
 
 ### Orderbook Filter Example
 

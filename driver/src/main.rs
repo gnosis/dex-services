@@ -132,7 +132,7 @@ struct Options {
     /// should start solving.
     #[structopt(
         long,
-        env = "BATCH_WAIT_TIME",
+        env = "TARGET_START_SOLVE_TIME",
         default_value = "30",
         parse(try_from_str = duration_secs),
     )]
@@ -142,7 +142,7 @@ struct Options {
     /// is not enough time left to attempt to solve.
     #[structopt(
         long,
-        env = "MAX_BATCH_ELAPSED_TIME",
+        env = "LATEST_SOLVE_ATTEMPT_TIME",
         default_value = "180",
         parse(try_from_str = duration_secs),
     )]
