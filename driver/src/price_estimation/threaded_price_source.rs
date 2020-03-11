@@ -109,10 +109,10 @@ mod tests {
 
     #[test]
     fn update_triggered_by_interval() {
-        let mut ps = MockPriceSource::new();
+        let mut price_source = MockPriceSource::new();
         let start_returning = Arc::new(atomic::AtomicBool::new(false));
         let start_returning_ = start_returning.clone();
-        ps.expect_get_prices().returning(move |_| {
+        price_source.expect_get_prices().returning(move |_| {
             Ok(if start_returning_.load(ORDERING) {
                 hash_map! {TOKENS[0].id => 1}
             } else {
@@ -120,7 +120,8 @@ mod tests {
             })
         });
 
-        let (tps, handle) = ThreadedPriceSource::new(TOKENS.to_vec(), ps, Duration::from_millis(5));
+        let (tps, handle) =
+            ThreadedPriceSource::new(TOKENS.to_vec(), price_source, Duration::from_millis(5));
         assert_eq!(tps.get_prices(&TOKENS[..]).unwrap(), hash_map! {});
         thread::sleep(Duration::from_millis(10));
         start_returning.store(true, ORDERING);
