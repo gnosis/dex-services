@@ -41,38 +41,28 @@ where
         }
     }
 
-    /// Initialize `self.api_tokens` to `Some` if it was `None`.
-    ///
-    /// Returns `Ok` if `self.api_tokens` is now `Some` or `Err` if initializing
-    /// it failed.
-    fn initialize_if_needed(&self) -> Result<()> {
-        let api_tokens = &mut self.api_tokens.borrow_mut();
+    fn create_api_tokens(&self) -> Result<ApiTokens> {
+        let tokens = self.api.get_token_list()?;
+        let mut tokens: HashMap<String, api::Token> = tokens
+            .into_iter()
+            .map(|token| (token.symbol.clone(), token))
+            .collect();
 
-        if api_tokens.is_none() {
-            let tokens = self.api.get_token_list()?;
-            let mut tokens: HashMap<String, api::Token> = tokens
-                .into_iter()
-                .map(|token| (token.symbol.clone(), token))
-                .collect();
+        // We need to return prices in OWL but Dexag does not track it. OWL
+        // tracks USD so we use another stable coin as an approximate
+        // USD price.
+        const STABLE_COIN: &str = "DAI";
+        let stable_coin = tokens.remove(STABLE_COIN).ok_or_else(|| {
+            anyhow!(
+                "dexag exchange does not track our stable coin {}",
+                STABLE_COIN
+            )
+        })?;
 
-            // We need to return prices in OWL but Dexag does not track it. OWL
-            // tracks USD so we use another stable coin as an approximate
-            // USD price.
-            const STABLE_COIN: &str = "DAI";
-            let stable_coin = tokens.remove(STABLE_COIN).ok_or_else(|| {
-                anyhow!(
-                    "dexag exchange does not track our stable coin {}",
-                    STABLE_COIN
-                )
-            })?;
-
-            api_tokens.replace(ApiTokens {
-                tokens,
-                stable_coin,
-            });
-        }
-
-        Ok(())
+        Ok(ApiTokens {
+            tokens,
+            stable_coin,
+        })
     }
 }
 
@@ -85,11 +75,16 @@ where
             return Ok(HashMap::new());
         }
 
-        self.initialize_if_needed()
-            .with_context(|| anyhow!("failed to perform lazy initialization"))?;
-        let api_tokens_borrow = self.api_tokens.borrow();
-        // If initialize_if_needed did not error then the unwrap is fine.
-        let api_tokens = api_tokens_borrow.as_ref().unwrap();
+        let api_tokens_option = &mut self.api_tokens.borrow_mut();
+        let api_tokens: &ApiTokens = match api_tokens_option.as_ref() {
+            Some(api_tokens) => api_tokens,
+            None => {
+                let initialized = self
+                    .create_api_tokens()
+                    .with_context(|| anyhow!("failed to perform lazy initialization"))?;
+                api_tokens_option.get_or_insert(initialized)
+            }
+        };
 
         let (tokens_, futures): (Vec<_>, Vec<_>) = tokens
             .iter()
@@ -127,7 +122,7 @@ where
 mod tests {
     use super::api::MockDexagApi;
     use super::*;
-    use mockall::predicate::*;
+    use mockall::{predicate::*, Sequence};
 
     #[test]
     fn fails_if_stable_coin_does_not_exist() {
@@ -138,6 +133,35 @@ mod tests {
         assert!(DexagClient::with_api(api)
             .get_prices(&[Token::new(6, "DAI", 18)])
             .is_err());
+    }
+
+    #[test]
+    fn get_token_prices_initialization_fails_then_works() {
+        let tokens = [Token::new(1, "ETH", 18)];
+        let mut api = MockDexagApi::new();
+        let mut seq = Sequence::new();
+
+        api.expect_get_token_list()
+            .times(2)
+            .in_sequence(&mut seq)
+            .returning(|| Err(anyhow!("")));
+
+        api.expect_get_token_list()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(|| {
+                Ok(vec![super::api::Token {
+                    name: String::new(),
+                    symbol: "DAI".to_string(),
+                    address: None,
+                }])
+            });
+
+        let client = DexagClient::with_api(api);
+        assert!(client.get_prices(&tokens).is_err());
+        assert!(client.get_prices(&tokens).is_err());
+        assert!(client.get_prices(&tokens).is_ok());
+        assert!(client.get_prices(&tokens).is_ok());
     }
 
     #[test]
