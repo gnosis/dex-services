@@ -100,6 +100,7 @@ impl<'a> Scheduler<'a> {
         info!("Running solver for batch {}.", batch_id.0);
         if let Err(err) = self.driver.run(batch_id.0.into()) {
             error!("StableXDriver error: {}", err);
+            thread::sleep(Duration::from_secs(10));
         } else {
             self.last_solved_batch.replace(batch_id);
         }

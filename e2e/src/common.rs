@@ -14,6 +14,7 @@ use ethcontract::{Account, Address, U256};
 use std::fmt::Debug;
 use std::future::Future;
 use std::io::{Error, ErrorKind};
+use std::time::{Duration, Instant};
 
 pub const MAX_GAS: u32 = 6_000_000;
 
@@ -95,20 +96,17 @@ pub fn wait_for(web3: &Web3<Http>, seconds: u32) {
         .execute("evm_mine", vec![])
         .wait()
         .expect("Cannot mine to increase time");
-    // TODO vk:
-    std::thread::sleep(std::time::Duration::from_secs(seconds as u64 + 10));
 }
 
-pub fn wait_for_condition<C>(mut condition: C) -> Result<(), Error>
+pub fn wait_for_condition<C>(mut condition: C, deadline: Instant) -> Result<(), Error>
 where
     C: FnMut() -> bool,
 {
-    // Repeatedly check condition with 100ms sleep time in between tries (max ~30s)
-    for _ in 0..300 {
+    while Instant::now() < deadline {
         if condition() {
             return Ok(());
         }
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        std::thread::sleep(Duration::from_secs(1));
     }
     Err(Error::new(
         ErrorKind::TimedOut,
