@@ -2,6 +2,8 @@ use super::{price_source::PriceSource, Token};
 use crate::models::TokenId;
 use anyhow::Result;
 use std::collections::HashMap;
+#[cfg(test)]
+use std::sync::mpsc::Receiver;
 use std::sync::{
     mpsc::{self, RecvTimeoutError, Sender},
     Arc, Mutex,
@@ -17,6 +19,11 @@ pub struct ThreadedPriceSource {
     price_map: Arc<Mutex<HashMap<TokenId, u128>>>,
     // Allows the thread to notice when the owning struct is dropped.
     _channel_to_thread: Sender<()>,
+
+    // To make testing easier we use another channel to which the thread sends
+    // a message whenever it completes one update loop.
+    #[cfg(test)]
+    test_receiver: Receiver<()>,
 }
 
 impl ThreadedPriceSource {
@@ -25,7 +32,6 @@ impl ThreadedPriceSource {
     ///
     /// The join handle represents the background thread. It can be used to
     /// verify that it exits when the created struct is dropped.
-    #[allow(dead_code)]
     pub fn new<T: 'static + PriceSource + Send>(
         tokens: Vec<Token>,
         price_source: T,
@@ -33,6 +39,9 @@ impl ThreadedPriceSource {
     ) -> (Self, JoinHandle<()>) {
         let price_map = Arc::new(Mutex::new(HashMap::new()));
         let (sender, receiver) = mpsc::channel::<()>();
+
+        #[cfg(test)]
+        let (test_sender, test_receiver) = mpsc::channel::<()>();
 
         let price_map_ = price_map.clone();
         // vk: Clippy notes that the following loop and match can be written as
@@ -50,6 +59,9 @@ impl ThreadedPriceSource {
                 // The owning struct has been dropped.
                 Err(RecvTimeoutError::Disconnected) => break,
             }
+
+            #[cfg(test)]
+            let _ = test_sender.send(());
         });
 
         // Update the prices immediately.
@@ -58,6 +70,8 @@ impl ThreadedPriceSource {
             Self {
                 price_map,
                 _channel_to_thread: sender,
+                #[cfg(test)]
+                test_receiver,
             },
             join_handle,
         )
@@ -77,8 +91,10 @@ mod tests {
     use super::super::price_source::MockPriceSource;
     use super::*;
     use std::sync::atomic;
+    use std::time::Instant;
 
     const ORDERING: atomic::Ordering = atomic::Ordering::SeqCst;
+    const THREAD_TIMEOUT: Duration = Duration::from_secs(1);
 
     lazy_static::lazy_static! {
         static ref TOKENS: [Token; 3] = [
@@ -93,8 +109,32 @@ mod tests {
     /// panics happen in the thread which would otherwise let the tests pass
     /// when an expectation is violated.
     fn join(tps: ThreadedPriceSource, handle: JoinHandle<()>) {
-        std::mem::drop(tps);
+        fn extract_test_receiver(tps: ThreadedPriceSource) -> Receiver<()> {
+            tps.test_receiver
+        }
+        let test_receiver = extract_test_receiver(tps);
+        let deadline = Instant::now() + THREAD_TIMEOUT;
+        loop {
+            match test_receiver.recv_timeout(THREAD_TIMEOUT) {
+                // The sender side of `test_receiver` has been dropped which
+                // only happens when the thread exits.
+                Err(RecvTimeoutError::Disconnected) => break,
+                // There is still a queued messages on the channel.
+                Ok(_) if Instant::now() <= deadline => continue,
+                Ok(_) | Err(RecvTimeoutError::Timeout) =>
+                    panic!("Background thread of ThreadedPriceSource did not exit in time after owner was dropped."),
+            }
+        }
+        // Propagate any panic.
+        // Does not block because we know the thread has exited.
         handle.join().unwrap();
+    }
+
+    fn wait_for_thread_to_loop(tps: &ThreadedPriceSource) {
+        // Clear previous messages.
+        for _ in tps.test_receiver.try_iter() {}
+        // Wait for one new message.
+        tps.test_receiver.recv_timeout(THREAD_TIMEOUT).unwrap();
     }
 
     #[test]
@@ -103,7 +143,6 @@ mod tests {
         ps.expect_get_prices().returning(|_| Ok(HashMap::new()));
         let (tps, handle) =
             ThreadedPriceSource::new(TOKENS.to_vec(), ps, Duration::from_secs(std::u64::MAX));
-        // If the thread didn't exit we would wait forever.
         join(tps, handle);
     }
 
@@ -121,11 +160,11 @@ mod tests {
         });
 
         let (tps, handle) =
-            ThreadedPriceSource::new(TOKENS.to_vec(), price_source, Duration::from_millis(5));
+            ThreadedPriceSource::new(TOKENS.to_vec(), price_source, Duration::from_millis(1));
         assert_eq!(tps.get_prices(&TOKENS[..]).unwrap(), hash_map! {});
-        thread::sleep(Duration::from_millis(10));
+        wait_for_thread_to_loop(&tps);
         start_returning.store(true, ORDERING);
-        thread::sleep(Duration::from_millis(10));
+        wait_for_thread_to_loop(&tps);
         assert_eq!(
             tps.get_prices(&TOKENS[..]).unwrap(),
             hash_map! {TOKENS[0].id => 1}
