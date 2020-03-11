@@ -50,7 +50,6 @@ pub struct AuctionTimingConfiguration {
 
 pub struct Scheduler<'a> {
     driver: &'a mut dyn StableXDriver,
-    orderbook_reader: &'a dyn StableXOrderBookReading,
     auction_timing_configuration: AuctionTimingConfiguration,
 }
 
@@ -64,7 +63,6 @@ enum Action {
 impl<'a> Scheduler<'a> {
     pub fn new(
         driver: &'a mut dyn StableXDriver,
-        orderbook_reader: &'a dyn StableXOrderBookReading,
         auction_timing_configuration: AuctionTimingConfiguration,
     ) -> Self {
         assert!(auction_timing_configuration.latest_solve_attempt_time <= BATCH_DURATION);
@@ -74,7 +72,6 @@ impl<'a> Scheduler<'a> {
         );
         Self {
             driver,
-            orderbook_reader,
             auction_timing_configuration,
         }
     }
@@ -100,7 +97,7 @@ impl<'a> Scheduler<'a> {
                         duration.as_secs(),
                         batch_id.0
                     );
-                    self.wait_for_batch_id(batch_id, Instant::now() + duration);
+                    thread::sleep(duration);
                     self.run_solver(batch_id);
                     self.wait_for_next_batch_id(batch_id);
                 }
@@ -147,35 +144,12 @@ impl<'a> Scheduler<'a> {
         ))
     }
 
-    /// Wait until the batch id matches the batch id according to the order book
-    /// but at most until deadline.
-    fn wait_for_batch_id(&self, batch_id: BatchId, deadline: Instant) {
-        info!("Waiting for the next batch ({}) to begin.", batch_id.0);
-        let sleep_interval = Duration::from_secs(5);
-        loop {
-            if let Ok(index) = self.orderbook_reader.get_auction_index() {
-                if index.low_u64() == batch_id.0 {
-                    break;
-                }
-            }
-            let remaining = deadline - Instant::now();
-            if remaining <= sleep_interval {
-                thread::sleep(remaining);
-                break;
-            }
-            thread::sleep(sleep_interval);
-        }
-    }
-
     fn wait_for_next_batch_id(&self, currently_being_solved: BatchId) {
-        let mut duration = Duration::from_secs(1);
-        if let Ok(duration_) = currently_being_solved
+        let duration = currently_being_solved
             .next()
             .solve_start_time()
             .duration_since(SystemTime::now())
-        {
-            duration = duration_;
-        }
+            .unwrap_or(Duration::from_secs(1));
         thread::sleep(duration);
     }
 }
@@ -184,7 +158,6 @@ impl<'a> Scheduler<'a> {
 mod tests {
     use super::super::stablex_driver::MockStableXDriver;
     use super::*;
-    use crate::orderbook::MockStableXOrderBookReading;
 
     #[test]
     fn batch_id_current() {
@@ -212,13 +185,11 @@ mod tests {
     #[test]
     fn determine_action() {
         let mut driver = MockStableXDriver::new();
-        let orderbook_reader = MockStableXOrderBookReading::new();
         let auction_timing_configuration = AuctionTimingConfiguration {
             target_start_solve_time: Duration::from_secs(10),
             latest_solve_attempt_time: Duration::from_secs(20),
         };
-        let scheduler =
-            Scheduler::new(&mut driver, &orderbook_reader, auction_timing_configuration);
+        let scheduler = Scheduler::new(&mut driver, auction_timing_configuration);
 
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
 

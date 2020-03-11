@@ -194,7 +194,6 @@ fn main() {
     );
     let mut scheduler = Scheduler::new(
         &mut driver,
-        &filtered_orderbook,
         AuctionTimingConfiguration {
             target_start_solve_time: options.target_start_solve_time,
             latest_solve_attempt_time: options.latest_solve_attempt_time,
