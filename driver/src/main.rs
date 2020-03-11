@@ -16,7 +16,10 @@ mod transport;
 mod util;
 
 use crate::contracts::{stablex_contract::StableXContractImpl, web3_provider};
-use crate::driver::{scheduler::Scheduler, stablex_driver::StableXDriverImpl};
+use crate::driver::{
+    scheduler::{AuctionTimingConfiguration, Scheduler},
+    stablex_driver::StableXDriverImpl,
+};
 use crate::eth_rpc::Web3EthRpc;
 use crate::gas_station::GnosisSafeGasStation;
 use crate::metrics::{MetricsServer, StableXMetrics};
@@ -125,25 +128,25 @@ struct Options {
     )]
     gas_station_timeout: Duration,
 
-    /// The duration in seconds which should be waited at the start of a batch
-    /// before beginning to solve it.
+    /// The offset from the start of a batch in seconds at which point we
+    /// should start solving.
     #[structopt(
         long,
         env = "BATCH_WAIT_TIME",
         default_value = "30",
         parse(try_from_str = duration_secs),
     )]
-    batch_wait_time: Duration,
+    target_start_solve_time: Duration,
 
-    /// The duration in seconds which can have at most been elapsed since the
-    /// the start of the current batch if we should still attempt to solve it.
+    /// The offset from the start of the batch in seconds at which point there
+    /// is not enough time left to attempt to solve.
     #[structopt(
         long,
         env = "MAX_BATCH_ELAPSED_TIME",
         default_value = "180",
         parse(try_from_str = duration_secs),
     )]
-    max_batch_elapsed_time: Duration,
+    latest_solve_attempt_time: Duration,
 }
 
 fn main() {
@@ -192,9 +195,10 @@ fn main() {
     let mut scheduler = Scheduler::new(
         &mut driver,
         &filtered_orderbook,
-        &stablex_metrics,
-        options.batch_wait_time,
-        options.max_batch_elapsed_time,
+        AuctionTimingConfiguration {
+            target_start_solve_time: options.target_start_solve_time,
+            latest_solve_attempt_time: options.latest_solve_attempt_time,
+        },
     );
     scheduler.run_forever();
 }

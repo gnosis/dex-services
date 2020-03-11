@@ -1,10 +1,8 @@
 use super::stablex_driver::StableXDriver;
-use crate::metrics::StableXMetrics;
 use crate::orderbook::StableXOrderBookReading;
 use anyhow::{anyhow, Context, Result};
 use log::error;
 use log::info;
-use std::collections::HashSet;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, SystemTimeError};
 
@@ -40,37 +38,44 @@ impl BatchId {
     }
 }
 
+#[derive(Debug)]
+pub struct AuctionTimingConfiguration {
+    /// The offset from the start of a batch at which point we should start
+    /// solving.
+    pub target_start_solve_time: Duration,
+    /// The offset from the start of the batch at which point there is not
+    /// enough time left to attempt to solve.
+    pub latest_solve_attempt_time: Duration,
+}
+
 pub struct Scheduler<'a> {
     driver: &'a mut dyn StableXDriver,
     orderbook_reader: &'a dyn StableXOrderBookReading,
-    metrics: &'a StableXMetrics,
-    batch_wait_time: Duration,
-    max_batch_elapsed_time: Duration,
-    past_auctions: HashSet<BatchId>,
+    auction_timing_configuration: AuctionTimingConfiguration,
 }
 
 #[derive(Debug, Eq, PartialEq)]
 enum Action {
-    AlreadyHandled,
     NotEnoughTimeLeft,
-    Solve,
+    SolveImmediately,
+    SolveAtTime(SystemTime),
 }
 
 impl<'a> Scheduler<'a> {
     pub fn new(
         driver: &'a mut dyn StableXDriver,
         orderbook_reader: &'a dyn StableXOrderBookReading,
-        metrics: &'a StableXMetrics,
-        batch_wait_time: Duration,
-        max_batch_elapsed_time: Duration,
+        auction_timing_configuration: AuctionTimingConfiguration,
     ) -> Self {
+        assert!(auction_timing_configuration.latest_solve_attempt_time <= BATCH_DURATION);
+        assert!(
+            auction_timing_configuration.target_start_solve_time
+                < auction_timing_configuration.latest_solve_attempt_time
+        );
         Self {
             driver,
             orderbook_reader,
-            metrics,
-            batch_wait_time,
-            max_batch_elapsed_time,
-            past_auctions: HashSet::new(),
+            auction_timing_configuration,
         }
     }
 
@@ -78,36 +83,29 @@ impl<'a> Scheduler<'a> {
         loop {
             let now = SystemTime::now();
             match self.determine_action(now) {
-                Ok((batch_id, Action::AlreadyHandled)) => {
-                    info!(
-                        "Skipping batch {} because it has already been handled.",
-                        batch_id.0
-                    );
-                    self.wait_for_next_batch_id(batch_id);
-                }
                 Ok((batch_id, Action::NotEnoughTimeLeft)) => {
                     info!(
                         "Skipping batch {} because there is not enough time left.",
                         batch_id.0
                     );
-                    self.metrics.auction_skipped(batch_id.0.into());
                     self.wait_for_next_batch_id(batch_id);
                 }
-                Ok((batch_id, Action::Solve)) => {
-                    let deadline = batch_id.start_time() + self.batch_wait_time;
-                    if let Ok(duration) = deadline.duration_since(now) {
-                        info!(
-                            "Waiting {}s to handle batch {}.",
-                            duration.as_secs(),
-                            batch_id.0
-                        );
-                        self.wait_for_batch_id(batch_id, Instant::now() + duration);
-                    }
-                    info!("Running solver for batch {}.", batch_id.0);
-                    if let Err(err) = self.driver.run(batch_id.0.into()) {
-                        error!("StableXDriver error: {}", err);
-                    }
-                    self.past_auctions.insert(batch_id);
+                Ok((batch_id, Action::SolveAtTime(target_time))) => {
+                    // unwrap is ok because it would be a logic error in
+                    // determine_action to return SolveAtTime with a time that
+                    // is not actually in the future.
+                    let duration = target_time.duration_since(now).unwrap();
+                    info!(
+                        "Waiting {}s to handle batch {}.",
+                        duration.as_secs(),
+                        batch_id.0
+                    );
+                    self.wait_for_batch_id(batch_id, Instant::now() + duration);
+                    self.run_solver(batch_id);
+                    self.wait_for_next_batch_id(batch_id);
+                }
+                Ok((batch_id, Action::SolveImmediately)) => {
+                    self.run_solver(batch_id);
                     self.wait_for_next_batch_id(batch_id);
                 }
                 Err(err) => {
@@ -118,22 +116,33 @@ impl<'a> Scheduler<'a> {
         }
     }
 
+    fn run_solver(&mut self, batch_id: BatchId) {
+        info!("Running solver for batch {}.", batch_id.0);
+        if let Err(err) = self.driver.run(batch_id.0.into()) {
+            error!("StableXDriver error: {}", err);
+        }
+    }
+
     /// Return current batch id and what to do with it.
     fn determine_action(&self, now: SystemTime) -> Result<(BatchId, Action)> {
         let solving_batch = BatchId::currently_being_solved(now)
             .with_context(|| anyhow!("failed to get batch id currently being solved"))?;
+        let intended_solve_start_time = solving_batch.solve_start_time()
+            + self.auction_timing_configuration.target_start_solve_time;
         // unwrap here because this cannot fail because the `solving_batch`'s
         // start time is always before `now`.
-        let elapsed_time = now.duration_since(solving_batch.start_time()).unwrap() - BATCH_DURATION;
+        let elapsed_time = now
+            .duration_since(solving_batch.solve_start_time())
+            .unwrap();
 
         Ok((
             solving_batch,
-            if self.past_auctions.contains(&solving_batch) {
-                Action::AlreadyHandled
-            } else if elapsed_time > self.max_batch_elapsed_time {
+            if elapsed_time > self.auction_timing_configuration.latest_solve_attempt_time {
                 Action::NotEnoughTimeLeft
+            } else if now < intended_solve_start_time {
+                Action::SolveAtTime(intended_solve_start_time)
             } else {
-                Action::Solve
+                Action::SolveImmediately
             },
         ))
     }
@@ -204,44 +213,59 @@ mod tests {
     fn determine_action() {
         let mut driver = MockStableXDriver::new();
         let orderbook_reader = MockStableXOrderBookReading::new();
-        let metrics = StableXMetrics::default();
-        let batch_wait_time = Duration::from_secs(10);
-        let max_batch_elapsed_time = Duration::from_secs(100);
-        let mut scheduler = Scheduler::new(
-            &mut driver,
-            &orderbook_reader,
-            &metrics,
-            batch_wait_time,
-            max_batch_elapsed_time,
+        let auction_timing_configuration = AuctionTimingConfiguration {
+            target_start_solve_time: Duration::from_secs(10),
+            latest_solve_attempt_time: Duration::from_secs(20),
+        };
+        let scheduler =
+            Scheduler::new(&mut driver, &orderbook_reader, auction_timing_configuration);
+
+        let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
+
+        assert_eq!(
+            scheduler.determine_action(base_time).unwrap(),
+            (
+                BatchId(0),
+                Action::SolveAtTime(base_time + Duration::from_secs(10))
+            )
         );
 
         assert_eq!(
             scheduler
-                .determine_action(SystemTime::UNIX_EPOCH + Duration::from_secs(305))
+                .determine_action(base_time + Duration::from_secs(9))
                 .unwrap(),
-            (BatchId(0), Action::Solve)
+            (
+                BatchId(0),
+                Action::SolveAtTime(base_time + Duration::from_secs(10))
+            )
         );
 
         assert_eq!(
             scheduler
-                .determine_action(SystemTime::UNIX_EPOCH + Duration::from_secs(605))
+                .determine_action(base_time + Duration::from_secs(10))
                 .unwrap(),
-            (BatchId(1), Action::Solve)
+            (BatchId(0), Action::SolveImmediately)
         );
 
         assert_eq!(
             scheduler
-                .determine_action(SystemTime::UNIX_EPOCH + Duration::from_secs(550))
+                .determine_action(base_time + Duration::from_secs(19))
+                .unwrap(),
+            (BatchId(0), Action::SolveImmediately)
+        );
+
+        assert_eq!(
+            scheduler
+                .determine_action(base_time + Duration::from_secs(21))
                 .unwrap(),
             (BatchId(0), Action::NotEnoughTimeLeft)
         );
 
-        scheduler.past_auctions.insert(BatchId(0));
         assert_eq!(
             scheduler
-                .determine_action(SystemTime::UNIX_EPOCH + Duration::from_secs(305))
+                .determine_action(base_time + Duration::from_secs(299))
                 .unwrap(),
-            (BatchId(0), Action::AlreadyHandled)
+            (BatchId(0), Action::NotEnoughTimeLeft)
         );
     }
 }
