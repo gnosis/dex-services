@@ -207,7 +207,7 @@ fn test_rinkeby() {
         .arg("logs")
         .output()
         .expect("failed to execute process");
-    let logs = String::from_utf8(output.stdout).expect("failed to read logs");
-    // Our logger prints log level with four characters, thus searching for ERRO
-    assert!(!logs.to_lowercase().contains("erro"));
+    // Errors go to stderr while other messages go to stdout.
+    let logs = String::from_utf8(output.stderr).expect("failed to read logs");
+    assert!(logs.is_empty());
 }
