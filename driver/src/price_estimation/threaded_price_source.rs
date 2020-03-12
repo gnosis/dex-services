@@ -132,7 +132,12 @@ mod tests {
 
     fn wait_for_thread_to_loop(tps: &ThreadedPriceSource) {
         // Clear previous messages.
-        for _ in tps.test_receiver.try_iter() {}
+        let deadline = Instant::now() + THREAD_TIMEOUT;
+        for _ in tps.test_receiver.try_iter() {
+            if Instant::now() >= deadline {
+                panic!("Background thread of ThreadedPriceSource ran too many loops.");
+            }
+        }
         // Wait for one new message.
         tps.test_receiver.recv_timeout(THREAD_TIMEOUT).unwrap();
     }
