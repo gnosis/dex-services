@@ -104,6 +104,7 @@ impl<'a> Scheduler<'a> {
             }
             DriverResult::Retry(err) => {
                 error!("StableXDriver retryable error: {}", err);
+                thread::sleep(Duration::from_secs(10));
             }
             DriverResult::Skip(err) => {
                 error!("StableXDriver unretryable error: {}", err);
