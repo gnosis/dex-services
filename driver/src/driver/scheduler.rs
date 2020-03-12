@@ -1,4 +1,4 @@
-use super::stablex_driver::StableXDriver;
+use super::stablex_driver::{DriverResult, StableXDriver};
 use anyhow::{anyhow, Context, Result};
 use log::error;
 use log::info;
@@ -98,10 +98,17 @@ impl<'a> Scheduler<'a> {
 
     fn run_solver(&mut self, batch_id: BatchId) {
         info!("Running solver for batch {}.", batch_id.0);
-        if let Err(err) = self.driver.run(batch_id.0.into()) {
-            error!("StableXDriver error: {}", err);
-        } else {
-            self.last_solved_batch.replace(batch_id);
+        match self.driver.run(batch_id.0.into()) {
+            DriverResult::Ok => {
+                self.last_solved_batch.replace(batch_id);
+            }
+            DriverResult::Retry(err) => {
+                error!("StableXDriver retryable error: {}", err);
+            }
+            DriverResult::Skip(err) => {
+                error!("StableXDriver unretryable error: {}", err);
+                self.last_solved_batch.replace(batch_id);
+            }
         }
     }
 

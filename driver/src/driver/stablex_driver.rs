@@ -1,16 +1,22 @@
 use crate::metrics::StableXMetrics;
-use crate::models::Solution;
+use crate::models::{account_state::AccountState, order::Order, Solution};
 use crate::orderbook::StableXOrderBookReading;
 use crate::price_finding::PriceFinding;
 use crate::solution_submission::{SolutionSubmissionError, StableXSolutionSubmitting};
-use anyhow::Result;
+use anyhow::{Error, Result};
 use ethcontract::U256;
 use log::info;
 
+#[derive(Debug)]
+pub enum DriverResult {
+    Ok,
+    Retry(Error),
+    Skip(Error),
+}
+
 #[cfg_attr(test, mockall::automock)]
 pub trait StableXDriver {
-    /// Returns whether a solution was submitted.
-    fn run(&mut self, batch_to_solve: U256) -> Result<bool>;
+    fn run(&mut self, batch_to_solve: U256) -> DriverResult;
 }
 
 pub struct StableXDriverImpl<'a> {
@@ -34,16 +40,20 @@ impl<'a> StableXDriverImpl<'a> {
             metrics,
         }
     }
-}
 
-impl<'a> StableXDriver for StableXDriverImpl<'a> {
-    fn run(&mut self, batch_to_solve: U256) -> Result<bool> {
-        self.metrics.auction_processing_started(&Ok(batch_to_solve));
+    fn get_orderbook(&mut self, batch_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
         let get_auction_data_result = self.orderbook_reader.get_auction_data(batch_to_solve);
         self.metrics
             .auction_orders_fetched(batch_to_solve, &get_auction_data_result);
-        let (account_state, orders) = get_auction_data_result?;
+        get_auction_data_result
+    }
 
+    fn solve(
+        &mut self,
+        batch_to_solve: U256,
+        account_state: AccountState,
+        orders: Vec<Order>,
+    ) -> Result<()> {
         let solution = if orders.is_empty() {
             info!("No orders in batch {}", batch_to_solve);
             Solution::trivial()
@@ -122,7 +132,22 @@ impl<'a> StableXDriver for StableXDriverImpl<'a> {
         if !submitted {
             self.metrics.auction_skipped(batch_to_solve);
         };
-        Ok(submitted)
+
+        Ok(())
+    }
+}
+
+impl<'a> StableXDriver for StableXDriverImpl<'a> {
+    fn run(&mut self, batch_to_solve: U256) -> DriverResult {
+        self.metrics.auction_processing_started(&Ok(batch_to_solve));
+        let (account_state, orders) = match self.get_orderbook(batch_to_solve) {
+            Ok(ok) => ok,
+            Err(err) => return DriverResult::Retry(err),
+        };
+        match self.solve(batch_to_solve, account_state, orders) {
+            Ok(()) => DriverResult::Ok,
+            Err(err) => DriverResult::Skip(err),
+        }
     }
 }
 
@@ -137,6 +162,29 @@ mod tests {
     use crate::util::test_util::map_from_slice;
     use anyhow::anyhow;
     use mockall::predicate::*;
+
+    impl DriverResult {
+        fn is_ok(&self) -> bool {
+            match self {
+                DriverResult::Ok => true,
+                _ => false,
+            }
+        }
+
+        fn is_retry(&self) -> bool {
+            match self {
+                DriverResult::Retry(_) => true,
+                _ => false,
+            }
+        }
+
+        fn is_skip(&self) -> bool {
+            match self {
+                DriverResult::Skip(_) => true,
+                _ => false,
+            }
+        }
+    }
 
     #[test]
     fn invokes_solver_with_reader_data_for_unprocessed_auction() {
@@ -180,7 +228,7 @@ mod tests {
             .return_once(move |_, _| Ok(solution));
 
         let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
-        assert!(driver.run(batch).unwrap());
+        assert!(driver.run(batch).is_ok());
     }
 
     #[test]
@@ -196,7 +244,7 @@ mod tests {
 
         let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
 
-        assert!(driver.run(U256::from(42)).is_err())
+        assert!(driver.run(U256::from(42)).is_retry())
     }
 
     #[test]
@@ -234,7 +282,7 @@ mod tests {
 
         let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
 
-        assert!(driver.run(batch).is_err());
+        assert!(driver.run(batch).is_skip());
     }
 
     #[test]
@@ -331,7 +379,7 @@ mod tests {
             .return_once(move |_, _| Ok(solution));
 
         let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
-        assert!(driver.run(batch).is_err());
+        assert!(driver.run(batch).is_skip());
     }
 
     #[test]
