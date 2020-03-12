@@ -1,5 +1,5 @@
 use super::stablex_driver::{DriverResult, StableXDriver};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use log::error;
 use log::info;
 use std::thread;
@@ -7,32 +7,34 @@ use std::time::{Duration, SystemTime, SystemTimeError};
 
 const BATCH_DURATION: Duration = Duration::from_secs(300);
 
+/// Wraps a batch id as in the smart contract to add functionality related to
+/// the current time.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct BatchId(u64);
 
 impl BatchId {
-    pub fn current(now: SystemTime) -> std::result::Result<Self, SystemTimeError> {
+    fn current(now: SystemTime) -> std::result::Result<Self, SystemTimeError> {
         let time_since_epoch = now.duration_since(SystemTime::UNIX_EPOCH)?;
         Ok(Self(time_since_epoch.as_secs() / BATCH_DURATION.as_secs()))
     }
 
-    pub fn currently_being_solved(now: SystemTime) -> std::result::Result<Self, SystemTimeError> {
+    fn currently_being_solved(now: SystemTime) -> std::result::Result<Self, SystemTimeError> {
         Self::current(now).map(|batch_id| batch_id.prev())
     }
 
-    pub fn order_collection_start_time(self) -> SystemTime {
+    fn order_collection_start_time(self) -> SystemTime {
         SystemTime::UNIX_EPOCH + Duration::from_secs(self.0 * BATCH_DURATION.as_secs())
     }
 
-    pub fn solve_start_time(self) -> SystemTime {
+    fn solve_start_time(self) -> SystemTime {
         self.order_collection_start_time() + BATCH_DURATION
     }
 
-    pub fn next(self) -> BatchId {
+    fn next(self) -> BatchId {
         self.0.checked_add(1).map(BatchId).unwrap()
     }
 
-    pub fn prev(self) -> BatchId {
+    fn prev(self) -> BatchId {
         self.0.checked_sub(1).map(BatchId).unwrap()
     }
 }
@@ -116,7 +118,7 @@ impl<'a> Scheduler<'a> {
     /// Return current batch id and what to do with it.
     fn determine_action(&self, now: SystemTime) -> Result<Action> {
         let solving_batch = BatchId::currently_being_solved(now)
-            .with_context(|| anyhow!("failed to get batch id currently being solved"))?;
+            .context("failed to get batch id currently being solved")?;
         let intended_solve_start_time = solving_batch.solve_start_time()
             + self.auction_timing_configuration.target_start_solve_time;
         // unwrap here because this cannot fail because the `solving_batch`'s
