@@ -1,6 +1,7 @@
 mod api;
 
 use super::{PriceSource, Token};
+use crate::http::HttpFactory;
 use crate::models::TokenId;
 use anyhow::{anyhow, Context, Result};
 use api::{DexagApi, DexagHttpApi};
@@ -24,8 +25,8 @@ pub struct DexagClient<Api> {
 
 impl DexagClient<DexagHttpApi> {
     /// Create a DexagClient using DexagHttpApi as the api implementation.
-    pub fn new() -> Result<Self> {
-        let api = DexagHttpApi::new()?;
+    pub fn new(http_factory: &HttpFactory) -> Result<Self> {
+        let api = DexagHttpApi::new(http_factory)?;
         Ok(Self::with_api(api))
     }
 }
@@ -280,7 +281,7 @@ mod tests {
             Token::new(15, "SNX", 18),
         ];
 
-        let client = DexagClient::new().unwrap();
+        let client = DexagClient::new(&HttpFactory::default()).unwrap();
         let before = Instant::now();
         let prices = client.get_prices(tokens).unwrap();
         let after = Instant::now();

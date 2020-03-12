@@ -80,4 +80,13 @@ impl HttpClient {
     {
         Ok(self.inner.get(url)?.json()?)
     }
+
+    /// Async HTTP GET request that parses the result as JSON.
+    pub async fn get_json_async<U, T>(&self, url: U) -> Result<T>
+    where
+        Uri: HttpTryFrom<U>,
+        T: DeserializeOwned,
+    {
+        Ok(self.inner.get_async(url).await?.json()?)
+    }
 }

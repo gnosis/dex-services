@@ -1,10 +1,9 @@
+use crate::http::{HttpClient, HttpFactory};
 use anyhow::{Context, Result};
 use ethcontract::Address;
 use futures::future::{BoxFuture, FutureExt};
-use isahc::prelude::*;
 use serde::Deserialize;
 use serde_with::rust::display_fromstr;
-use std::time::Duration;
 use url::Url;
 
 #[cfg_attr(test, mockall::automock)]
@@ -38,17 +37,15 @@ pub struct DexagHttpApi {
 }
 
 pub const DEFAULT_BASE_URL: &str = "https://api-v2.dex.ag";
-pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
 impl DexagHttpApi {
-    pub fn new() -> Result<Self> {
-        Self::custom(DEFAULT_BASE_URL, DEFAULT_TIMEOUT)
+    pub fn new(http_factory: &HttpFactory) -> Result<Self> {
+        Self::with_url(http_factory, DEFAULT_BASE_URL)
     }
 
-    pub fn custom(base_url: &str, timeout: Duration) -> Result<Self> {
-        let client = HttpClient::builder()
-            .timeout(timeout)
-            .build()
+    pub fn with_url(http_factory: &HttpFactory, base_url: &str) -> Result<Self> {
+        let client = http_factory
+            .create()
             .context("failed to initialize HTTP client")?;
         let base_url = base_url
             .parse()
@@ -62,9 +59,7 @@ impl DexagApi for DexagHttpApi {
         let mut url = self.base_url.clone();
         url.set_path("token-list-full");
         self.client
-            .get(url.to_string())
-            .context("failed to retrieve token list from dexag")?
-            .json::<Vec<Token>>()
+            .get_json(url.to_string())
             .context("failed to parse token list json from dexag response")
     }
 
@@ -80,16 +75,14 @@ impl DexagApi for DexagHttpApi {
             q.append_pair("dex", "ag");
         }
 
-        self.client
-            .get_async(url.to_string())
-            .map(|response| {
-                let mut body = response.context("failed to retrieve price from dexag")?;
-                let price = body
-                    .json::<Price>()
-                    .context("failed to parse price json from dexag")?;
-                Ok(price.price)
-            })
-            .boxed()
+        async move {
+            Ok(self
+                .client
+                .get_json_async(url.as_str())
+                .await
+                .context("failed to parse price json from dexag")?)
+        }
+        .boxed()
     }
 }
 
@@ -131,7 +124,7 @@ mod tests {
     #[test]
     #[ignore]
     fn online_dexag_api() {
-        let api = DexagHttpApi::new().unwrap();
+        let api = DexagHttpApi::new(&HttpFactory::default()).unwrap();
         let tokens = api.get_token_list().unwrap();
         println!("{:?}", tokens);
         let price = futures::executor::block_on(api.get_price(&tokens[0], &tokens[1])).unwrap();
