@@ -78,9 +78,10 @@ impl DexagApi for DexagHttpApi {
         async move {
             Ok(self
                 .client
-                .get_json_async(url.as_str())
+                .get_json_async::<_, Price>(url.as_str())
                 .await
-                .context("failed to parse price json from dexag")?)
+                .context("failed to parse price json from dexag")?
+                .price)
         }
         .boxed()
     }
@@ -120,14 +121,15 @@ mod tests {
         assert!(token.address.is_none());
     }
 
-    // Run with `cargo test online_dexag_api -- --include-ignored --nocapture`.
+    // Run with `cargo test online_dexag_api -- --ignored --nocapture`.
     #[test]
     #[ignore]
     fn online_dexag_api() {
         let api = DexagHttpApi::new(&HttpFactory::default()).unwrap();
         let tokens = api.get_token_list().unwrap();
-        println!("{:?}", tokens);
+        println!("{:#?}", tokens);
+
         let price = futures::executor::block_on(api.get_price(&tokens[0], &tokens[1])).unwrap();
-        println!("{:?}", price);
+        println!("{:#?}", price);
     }
 }

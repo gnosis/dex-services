@@ -262,7 +262,7 @@ mod tests {
         );
     }
 
-    // Run with `cargo test online_dexag_client -- --include-ignored --nocapture`.
+    // Run with `cargo test online_dexag_client -- --ignored --nocapture`.
     #[test]
     #[ignore]
     fn online_dexag_client() {
