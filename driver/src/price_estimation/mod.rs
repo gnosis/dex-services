@@ -9,6 +9,7 @@ mod kraken;
 pub use self::data::TokenData;
 use self::dexag::DexagClient;
 use self::kraken::KrakenClient;
+use crate::http::HttpFactory;
 use crate::models::{Order, TokenId, TokenInfo};
 use anyhow::Result;
 use average_price_source::AveragePriceSource;
@@ -40,10 +41,13 @@ pub struct PriceOracle {
 
 impl PriceOracle {
     /// Creates a new price oracle from a token whitelist data.
-    pub fn new(tokens: TokenData) -> Result<Self> {
+    pub fn new(http_factory: &HttpFactory, tokens: TokenData) -> Result<Self> {
         Ok(PriceOracle::with_source(
             tokens,
-            AveragePriceSource::new(KrakenClient::new()?, DexagClient::new()?),
+            AveragePriceSource::new(
+                KrakenClient::new(http_factory)?,
+                DexagClient::new(http_factory)?,
+            ),
         ))
     }
 

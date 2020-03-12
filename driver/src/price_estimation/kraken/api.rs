@@ -1,9 +1,8 @@
+use crate::http::{HttpClient, HttpFactory};
 use anyhow::{anyhow, Context, Result};
-use isahc::prelude::*;
 use serde::Deserialize;
 use serde_with::rust::display_fromstr;
 use std::collections::HashMap;
-use std::time::Duration;
 
 /// A trait representing a Kraken API client.
 ///
@@ -32,19 +31,13 @@ pub struct KrakenHttpApi {
 /// The default Kraken API base URL.
 pub const DEFAULT_API_BASE_URL: &str = "https://api.kraken.com/0/public";
 
-/// The default timeout used for HTTP requests to Kraken.
-pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
-
 impl KrakenHttpApi {
-    pub fn new() -> Result<Self> {
-        KrakenHttpApi::with_url(DEFAULT_API_BASE_URL, DEFAULT_TIMEOUT)
+    pub fn new(http_factory: &HttpFactory) -> Result<Self> {
+        KrakenHttpApi::with_url(http_factory, DEFAULT_API_BASE_URL)
     }
 
-    pub fn with_url(base_url: &str, timeout: Duration) -> Result<Self> {
-        let client = HttpClient::builder()
-            .timeout(timeout)
-            .build()
-            .context("failed to initialize HTTP client")?;
+    pub fn with_url(http_factory: &HttpFactory, base_url: &str) -> Result<Self> {
+        let client = http_factory.create()?;
         Ok(KrakenHttpApi {
             base_url: base_url.into(),
             client,
@@ -55,27 +48,25 @@ impl KrakenHttpApi {
 impl KrakenApi for KrakenHttpApi {
     fn assets(&self) -> Result<HashMap<String, Asset>> {
         self.client
-            .get(format!("{}/Assets", self.base_url))
-            .context("failed to retrieve list of assets from Kraken")?
-            .json::<KrakenResult<_>>()
+            .get_json::<_, KrakenResult<_>>(format!("{}/Assets", self.base_url))
             .context("failed to parse assets JSON")?
             .into_result()
     }
 
     fn asset_pairs(&self) -> Result<HashMap<String, AssetPair>> {
         self.client
-            .get(format!("{}/AssetPairs", self.base_url))
-            .context("failed to retrieve list of asset pairs from Kraken")?
-            .json::<KrakenResult<_>>()
+            .get_json::<_, KrakenResult<_>>(format!("{}/AssetPairs", self.base_url))
             .context("failed to parse asset pairs JSON")?
             .into_result()
     }
 
     fn ticker(&self, pairs: &[&str]) -> Result<HashMap<String, TickerInfo>> {
         self.client
-            .get(format!("{}/Ticker?pair={}", self.base_url, pairs.join(",")))
-            .context("failed to retrieve ticker infos from Kraken")?
-            .json::<KrakenResult<_>>()
+            .get_json::<_, KrakenResult<_>>(format!(
+                "{}/Ticker?pair={}",
+                self.base_url,
+                pairs.join(",")
+            ))
             .context("failed to parse ticker JSON")?
             .into_result()
     }
@@ -253,7 +244,7 @@ mod tests {
         // cargo test online_kraken_api -- --ignored --nocapture
         // ```
 
-        let api = KrakenHttpApi::new().unwrap();
+        let api = KrakenHttpApi::new(&HttpFactory::default()).unwrap();
 
         let assets = api.assets().unwrap();
         println!("GNO asset information: {:?}", assets["GNO"]);
