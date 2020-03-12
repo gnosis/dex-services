@@ -80,37 +80,39 @@ impl<'a> Scheduler<'a> {
 
     pub fn run_forever(&mut self) {
         loop {
-            let now = SystemTime::now();
-            match self.determine_action(now) {
-                Ok(Action::Sleep(duration)) => {
-                    info!("Sleeping {}s.", duration.as_secs());
-                    thread::sleep(duration);
-                }
-                Ok(Action::Solve(batch_id)) => {
-                    info!("Solving batch {}.", batch_id.0);
-                    self.run_solver(batch_id);
-                }
-                Err(err) => {
-                    error!("Scheduler error: {}", err);
-                    thread::sleep(Duration::from_secs(10));
-                }
-            }
+            thread::sleep(self.run_forever_single_iteration(SystemTime::now()));
         }
     }
 
-    fn run_solver(&mut self, batch_id: BatchId) {
-        info!("Running solver for batch {}.", batch_id.0);
-        match self.driver.run(batch_id.0.into()) {
-            DriverResult::Ok => {
-                self.last_solved_batch.replace(batch_id);
+    /// Returns how long to sleep before starting the next iteration.
+    fn run_forever_single_iteration(&mut self, now: SystemTime) -> Duration {
+        match self.determine_action(now) {
+            Ok(Action::Sleep(duration)) => {
+                info!("Sleeping {}s.", duration.as_secs());
+                duration
             }
-            DriverResult::Retry(err) => {
-                error!("StableXDriver retryable error: {}", err);
-                thread::sleep(Duration::from_secs(10));
+            Ok(Action::Solve(batch_id)) => {
+                info!("Starting to solve batch {}.", batch_id.0);
+                match self.driver.run(batch_id.0.into()) {
+                    DriverResult::Ok => {
+                        info!("Batch {} solved without error.", batch_id.0);
+                        self.last_solved_batch.replace(batch_id);
+                        Duration::from_secs(0)
+                    }
+                    DriverResult::Retry(err) => {
+                        error!("StableXDriver retryable error: {}", err);
+                        Duration::from_secs(10)
+                    }
+                    DriverResult::Skip(err) => {
+                        error!("StableXDriver unretryable error: {}", err);
+                        self.last_solved_batch.replace(batch_id);
+                        Duration::from_secs(0)
+                    }
+                }
             }
-            DriverResult::Skip(err) => {
-                error!("StableXDriver unretryable error: {}", err);
-                self.last_solved_batch.replace(batch_id);
+            Err(err) => {
+                error!("Scheduler error: {}", err);
+                Duration::from_secs(10)
             }
         }
     }
@@ -148,6 +150,10 @@ impl<'a> Scheduler<'a> {
 
 #[cfg(test)]
 mod tests {
+    use anyhow::anyhow;
+    use ethcontract::U256;
+    use mockall::predicate::eq;
+
     use super::super::stablex_driver::MockStableXDriver;
     use super::*;
 
@@ -278,6 +284,67 @@ mod tests {
                 .determine_action(base_time + Duration::from_secs(299))
                 .unwrap(),
             Action::Sleep(Duration::from_secs(11))
+        );
+    }
+
+    #[test]
+    fn run_forever_single_iteration() {
+        let mut driver = MockStableXDriver::new();
+        driver
+            .expect_run()
+            .with(eq(U256::from(0)))
+            .returning(|_| DriverResult::Ok);
+        driver
+            .expect_run()
+            .with(eq(U256::from(1)))
+            .returning(|_| DriverResult::Retry(anyhow!("")));
+        driver
+            .expect_run()
+            .with(eq(U256::from(2)))
+            .returning(|_| DriverResult::Skip(anyhow!("")));
+
+        let auction_timing_configuration = AuctionTimingConfiguration {
+            target_start_solve_time: Duration::from_secs(10),
+            latest_solve_attempt_time: Duration::from_secs(20),
+        };
+        let mut scheduler = Scheduler::new(&mut driver, auction_timing_configuration);
+
+        let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
+
+        // Driver not invoked
+        assert_eq!(
+            scheduler.run_forever_single_iteration(base_time),
+            Duration::from_secs(10)
+        );
+
+        // Ok
+        assert_eq!(
+            scheduler.run_forever_single_iteration(base_time + Duration::from_secs(10)),
+            Duration::from_secs(0)
+        );
+
+        // Batch already handled
+        assert_eq!(
+            scheduler.run_forever_single_iteration(base_time + Duration::from_secs(10)),
+            Duration::from_secs(300)
+        );
+
+        // Retry
+        assert_eq!(
+            scheduler.run_forever_single_iteration(base_time + Duration::from_secs(310)),
+            Duration::from_secs(10)
+        );
+
+        // Skip
+        assert_eq!(
+            scheduler.run_forever_single_iteration(base_time + Duration::from_secs(610)),
+            Duration::from_secs(0)
+        );
+
+        // Batch already handled
+        assert_eq!(
+            scheduler.run_forever_single_iteration(base_time + Duration::from_secs(610)),
+            Duration::from_secs(300)
         );
     }
 }
