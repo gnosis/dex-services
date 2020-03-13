@@ -142,7 +142,8 @@ struct Options {
 fn main() {
     let options = Options::from_args();
     let (_, _guard) = logging::init(&options.log_filter);
-    log::error("aaaaaaaaaa errror aaaaaaaaa");
+    log::error!("aaaaaaaaaa error aaaaaaaaa");
+    log::info!("aaaaaaaaaa info error aaaaaaaaa");
     info!("Starting driver with runtime options: {:#?}", options);
     let solver_config = SolverConfig::new(&options.solver_type, options.solver_time_limit).unwrap();
 
