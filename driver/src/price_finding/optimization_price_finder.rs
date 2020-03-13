@@ -176,7 +176,6 @@ impl OptimisationPriceFinder {
         solver_type: SolverConfig,
         price_oracle: impl PriceEstimating + 'static,
     ) -> Self {
-        create_dir_all("instances").expect("Could not create instance directory");
         OptimisationPriceFinder {
             write_input,
             run_solver,
@@ -223,9 +222,28 @@ impl PriceFinding for OptimisationPriceFinder {
             orders: orders.iter().map(From::from).collect(),
             fee: self.fee.as_ref().map(From::from),
         };
-        let current_time = Utc::now().to_rfc3339();
-        let input_file = format!("instances/instance_{}.json", &current_time);
-        let result_folder = format!("results/instance_{}/", &current_time);
+
+        let now = Utc::now();
+        // We are solving the batch before the current one
+        let batch_id = (now.timestamp() / 300) - 1;
+        let date = now.format("%Y-%m-%d");
+        // We only need to create the folder for the input, the output
+        // folder is created by the python script
+        let input_folder = format!("instances/{}", &date);
+        create_dir_all(&input_folder)?;
+        let input_file = format!(
+            "{}/instance_{}_{}.json",
+            &input_folder,
+            &batch_id,
+            &now.to_rfc3339()
+        );
+        let result_folder = format!(
+            "results/{}/instance_{}_{}/",
+            &date,
+            &batch_id,
+            &now.to_rfc3339()
+        );
+
         (self.write_input)(&input_file, &serde_json::to_string(&input)?)?;
         (self.run_solver)(&input_file, &result_folder, self.solver_type)?;
         let result = (self.read_output)(&result_folder)?;

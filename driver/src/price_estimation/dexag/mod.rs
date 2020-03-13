@@ -1,25 +1,33 @@
 mod api;
 
 use super::{PriceSource, Token};
+use crate::http::HttpFactory;
 use crate::models::TokenId;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use api::{DexagApi, DexagHttpApi};
 use futures::future::{self, BoxFuture};
+use std::cell::RefCell;
 use std::collections::HashMap;
 
-pub struct DexagClient<Api> {
-    api: Api,
+struct ApiTokens {
     // Maps Token::symbol to Token.
     // This is cached in the struct because we don't expect it to change often.
     tokens: HashMap<String, api::Token>,
     stable_coin: api::Token,
 }
 
+pub struct DexagClient<Api> {
+    api: Api,
+    /// Lazily retrieved the first time it is needed when `get_prices` is
+    /// called. We don't want to use the network in `new`.
+    api_tokens: RefCell<Option<ApiTokens>>,
+}
+
 impl DexagClient<DexagHttpApi> {
     /// Create a DexagClient using DexagHttpApi as the api implementation.
-    pub fn new() -> Result<Self> {
-        let api = DexagHttpApi::new()?;
-        Self::with_api(api)
+    pub fn new(http_factory: &HttpFactory) -> Result<Self> {
+        let api = DexagHttpApi::new(http_factory)?;
+        Ok(Self::with_api(api))
     }
 }
 
@@ -27,16 +35,24 @@ impl<Api> DexagClient<Api>
 where
     Api: DexagApi,
 {
-    pub fn with_api(api: Api) -> Result<Self> {
-        // We need to return prices in OWL but Dexag does not track it. OWL tracks
-        // USD so we use another stable coin as an approximate USD price.
-        const STABLE_COIN: &str = "DAI";
+    pub fn with_api(api: Api) -> Self {
+        Self {
+            api,
+            api_tokens: RefCell::new(None),
+        }
+    }
 
-        let tokens = api.get_token_list()?;
+    fn create_api_tokens(&self) -> Result<ApiTokens> {
+        let tokens = self.api.get_token_list()?;
         let mut tokens: HashMap<String, api::Token> = tokens
             .into_iter()
             .map(|token| (token.symbol.clone(), token))
             .collect();
+
+        // We need to return prices in OWL but Dexag does not track it. OWL
+        // tracks USD so we use another stable coin as an approximate
+        // USD price.
+        const STABLE_COIN: &str = "DAI";
         let stable_coin = tokens.remove(STABLE_COIN).ok_or_else(|| {
             anyhow!(
                 "dexag exchange does not track our stable coin {}",
@@ -44,8 +60,7 @@ where
             )
         })?;
 
-        Ok(Self {
-            api,
+        Ok(ApiTokens {
             tokens,
             stable_coin,
         })
@@ -57,13 +72,31 @@ where
     Api: DexagApi + Sync,
 {
     fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>> {
+        if tokens.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let api_tokens_option = &mut self.api_tokens.borrow_mut();
+        let api_tokens: &ApiTokens = match api_tokens_option.as_ref() {
+            Some(api_tokens) => api_tokens,
+            None => {
+                let initialized = self
+                    .create_api_tokens()
+                    .with_context(|| anyhow!("failed to perform lazy initialization"))?;
+                api_tokens_option.get_or_insert(initialized)
+            }
+        };
+
         let (tokens_, futures): (Vec<_>, Vec<_>) = tokens
             .iter()
             .filter_map(|token| -> Option<(&Token, BoxFuture<Result<f64>>)> {
-                if token.symbol() == self.stable_coin.symbol {
+                if token.symbol() == api_tokens.stable_coin.symbol {
                     Some((token, Box::pin(future::ready(Ok(1.0)))))
-                } else if let Some(api_token) = self.tokens.get(token.symbol()) {
-                    Some((token, self.api.get_price(api_token, &self.stable_coin)))
+                } else if let Some(api_token) = api_tokens.tokens.get(token.symbol()) {
+                    Some((
+                        token,
+                        self.api.get_price(api_token, &api_tokens.stable_coin),
+                    ))
                 } else {
                     None
                 }
@@ -90,7 +123,7 @@ where
 mod tests {
     use super::api::MockDexagApi;
     use super::*;
-    use mockall::predicate::*;
+    use mockall::{predicate::*, Sequence};
 
     #[test]
     fn fails_if_stable_coin_does_not_exist() {
@@ -98,7 +131,38 @@ mod tests {
         api.expect_get_token_list()
             .returning(move || Ok(Vec::new()));
 
-        assert!(DexagClient::with_api(api).is_err());
+        assert!(DexagClient::with_api(api)
+            .get_prices(&[Token::new(6, "DAI", 18)])
+            .is_err());
+    }
+
+    #[test]
+    fn get_token_prices_initialization_fails_then_works() {
+        let tokens = [Token::new(1, "ETH", 18)];
+        let mut api = MockDexagApi::new();
+        let mut seq = Sequence::new();
+
+        api.expect_get_token_list()
+            .times(2)
+            .in_sequence(&mut seq)
+            .returning(|| Err(anyhow!("")));
+
+        api.expect_get_token_list()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(|| {
+                Ok(vec![super::api::Token {
+                    name: String::new(),
+                    symbol: "DAI".to_string(),
+                    address: None,
+                }])
+            });
+
+        let client = DexagClient::with_api(api);
+        assert!(client.get_prices(&tokens).is_err());
+        assert!(client.get_prices(&tokens).is_err());
+        assert!(client.get_prices(&tokens).is_ok());
+        assert!(client.get_prices(&tokens).is_ok());
     }
 
     #[test]
@@ -144,7 +208,7 @@ mod tests {
             )
             .returning(|_, _| Box::pin(future::ready(Ok(1.2))));
 
-        let client = DexagClient::with_api(api).unwrap();
+        let client = DexagClient::with_api(api);
         let prices = client.get_prices(&tokens).unwrap();
         assert_eq!(
             prices,
@@ -187,7 +251,7 @@ mod tests {
             )
             .returning(|_, _| Box::pin(future::ready(Err(anyhow!("")))));
 
-        let client = DexagClient::with_api(api).unwrap();
+        let client = DexagClient::with_api(api);
         let prices = client.get_prices(&tokens).unwrap();
         assert_eq!(
             prices,
@@ -198,7 +262,7 @@ mod tests {
         );
     }
 
-    // Run with `cargo test online_dexag_client -- --include-ignored --nocapture`.
+    // Run with `cargo test online_dexag_client -- --ignored --nocapture`.
     #[test]
     #[ignore]
     fn online_dexag_client() {
@@ -217,7 +281,7 @@ mod tests {
             Token::new(15, "SNX", 18),
         ];
 
-        let client = DexagClient::new().unwrap();
+        let client = DexagClient::new(&HttpFactory::default()).unwrap();
         let before = Instant::now();
         let prices = client.get_prices(tokens).unwrap();
         let after = Instant::now();
