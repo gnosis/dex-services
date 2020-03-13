@@ -5,6 +5,7 @@ mod contracts;
 mod driver;
 mod eth_rpc;
 mod gas_station;
+mod http;
 mod logging;
 mod metrics;
 mod models;
@@ -19,6 +20,7 @@ use crate::contracts::{stablex_contract::StableXContractImpl, web3_provider};
 use crate::driver::stablex_driver::StableXDriver;
 use crate::eth_rpc::Web3EthRpc;
 use crate::gas_station::GnosisSafeGasStation;
+use crate::http::HttpFactory;
 use crate::metrics::{MetricsServer, StableXMetrics};
 use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
 use crate::price_estimation::{PriceOracle, TokenData};
@@ -116,14 +118,16 @@ struct Options {
     )]
     rpc_timeout: Duration,
 
-    /// The timeout in milliseconds of gas station calls, defaults to 10000ms
+    /// The default timeout in milliseconds of HTTP requests to remote services
+    /// such as the Gnosis Safe gas station and exchange REST APIs for fetching
+    /// price estimates.
     #[structopt(
         long,
-        env = "GAS_STATION_TIMEOUT",
+        env = "HTTP_TIMEOUT",
         default_value = "10000",
         parse(try_from_str = duration_millis),
     )]
-    gas_station_timeout: Duration,
+    http_timeout: Duration,
 
     /// Time interval in seconds in which price sources should be updated.
     #[structopt(
@@ -140,9 +144,32 @@ fn main() {
     let (_, _guard) = logging::init(&options.log_filter);
     info!("Starting driver with runtime options: {:#?}", options);
     let solver_config = SolverConfig::new(&options.solver_type, options.solver_time_limit).unwrap();
-    let web3 = web3_provider(options.node_url.as_str(), options.rpc_timeout).unwrap();
-    let gas_station =
-        GnosisSafeGasStation::new(options.gas_station_timeout, gas_station::DEFAULT_URI).unwrap();
+
+    // Set up metrics and serve in separate thread.
+    let prometheus_registry = Arc::new(Registry::new());
+    let stablex_metrics = StableXMetrics::new(prometheus_registry.clone());
+    let metric_server = MetricsServer::new(prometheus_registry);
+    thread::spawn(move || {
+        metric_server.serve(9586);
+    });
+
+    // Set up shared HTTP client and HTTP services.
+    let http_factory = HttpFactory::new(options.http_timeout);
+    let web3 = web3_provider(
+        &http_factory,
+        options.node_url.as_str(),
+        options.rpc_timeout,
+    )
+    .unwrap();
+    let gas_station = GnosisSafeGasStation::new(&http_factory, gas_station::DEFAULT_URI).unwrap();
+    let price_oracle = PriceOracle::new(
+        &http_factory,
+        options.token_data,
+        options.price_source_update_interval,
+    )
+    .unwrap();
+
+    // Set up web3 and contract connection.
     let contract = StableXContractImpl::new(
         &web3,
         options.private_key.clone(),
@@ -153,26 +180,20 @@ fn main() {
     info!("Using contract at {:?}", contract.address());
     info!("Using account {:?}", contract.account());
 
-    // Set up metrics and serve in separate thread
-    let prometheus_registry = Arc::new(Registry::new());
-    let stablex_metrics = StableXMetrics::new(prometheus_registry.clone());
-    let metric_server = MetricsServer::new(prometheus_registry);
-    thread::spawn(move || {
-        metric_server.serve(9586);
-    });
-
+    // Set up solver.
     let fee = Some(Fee::default());
-    let price_oracle =
-        PriceOracle::new(options.token_data, options.price_source_update_interval).unwrap();
     let mut price_finder = price_finding::create_price_finder(fee, solver_config, price_oracle);
 
+    // Create the orderbook reader.
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
     info!("Orderbook filter: {:?}", options.orderbook_filter);
     let filtered_orderbook = FilteredOrderbookReader::new(&orderbook, options.orderbook_filter);
 
+    // Set up solution submitter.
     let eth_rpc = Web3EthRpc::new(&web3);
-
     let solution_submitter = StableXSolutionSubmitter::new(&contract, &eth_rpc);
+
+    // Set up the driver and start the run-loop.
     let mut driver = StableXDriver::new(
         &mut *price_finder,
         &filtered_orderbook,

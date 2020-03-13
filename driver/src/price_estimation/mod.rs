@@ -11,6 +11,7 @@ mod threaded_price_source;
 pub use self::data::TokenData;
 use self::dexag::DexagClient;
 use self::kraken::KrakenClient;
+use crate::http::HttpFactory;
 use crate::models::{Order, TokenId, TokenInfo};
 use anyhow::Result;
 use average_price_source::AveragePriceSource;
@@ -41,11 +42,18 @@ pub struct PriceOracle {
 
 impl PriceOracle {
     /// Creates a new price oracle from a token whitelist data.
-    pub fn new(tokens: TokenData, update_interval: Duration) -> Result<Self> {
+    pub fn new(
+        http_factory: &HttpFactory,
+        tokens: TokenData,
+        update_interval: Duration,
+    ) -> Result<Self> {
         let source: Box<dyn PriceSource> = if tokens.is_empty() {
             Box::new(NoopPriceSource)
         } else {
-            let source = AveragePriceSource::new(KrakenClient::new()?, DexagClient::new()?);
+            let source = AveragePriceSource::new(
+                KrakenClient::new(http_factory)?,
+                DexagClient::new(http_factory)?,
+            );
             let (source, _) = ThreadedPriceSource::new(
                 tokens.all_tokens_to_estimate_price(),
                 source,
