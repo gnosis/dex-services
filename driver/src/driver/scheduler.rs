@@ -85,7 +85,7 @@ impl<'a> Scheduler<'a> {
     }
 
     /// Returns how long to sleep before starting the next iteration.
-    fn run_forever_single_iteration(&mut self, now: SystemTime) -> Duration {
+    fn run_once(&mut self, now: SystemTime) -> Duration {
         match self.determine_action(now) {
             Ok(Action::Sleep(duration)) => {
                 info!("Sleeping {}s.", duration.as_secs());
@@ -95,7 +95,7 @@ impl<'a> Scheduler<'a> {
                 info!("Starting to solve batch {}.", batch_id.0);
                 match self.driver.run(batch_id.0.into()) {
                     DriverResult::Ok => {
-                        info!("Batch {} solved without error.", batch_id.0);
+                        info!("Batch {} solved successfully.", batch_id.0);
                         self.last_solved_batch.replace(batch_id);
                         Duration::from_secs(0)
                     }
@@ -154,7 +154,7 @@ mod tests {
     use ethcontract::U256;
     use mockall::predicate::eq;
 
-    use super::super::stablex_driver::MockStableXDriver;
+    use crate::driver::stablex_driver::MockStableXDriver;
     use super::*;
 
     #[test]
