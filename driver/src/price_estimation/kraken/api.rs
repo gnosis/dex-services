@@ -61,6 +61,10 @@ impl KrakenApi for KrakenHttpApi {
     }
 
     fn ticker(&self, pairs: &[&str]) -> Result<HashMap<String, TickerInfo>> {
+        if pairs.is_empty() {
+            return Ok(HashMap::new());
+        }
+
         self.client
             .get_json::<_, KrakenResult<_>>(format!(
                 "{}/Ticker?pair={}",

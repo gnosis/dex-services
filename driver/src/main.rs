@@ -128,6 +128,15 @@ struct Options {
         parse(try_from_str = duration_millis),
     )]
     http_timeout: Duration,
+
+    /// Time interval in seconds in which price sources should be updated.
+    #[structopt(
+        long,
+        env = "PRICE_SOURCE_UPDATE_INTERVAL",
+        default_value = "300",
+        parse(try_from_str = duration_secs),
+    )]
+    price_source_update_interval: Duration,
 }
 
 fn main() {
@@ -153,7 +162,12 @@ fn main() {
     )
     .unwrap();
     let gas_station = GnosisSafeGasStation::new(&http_factory, gas_station::DEFAULT_URI).unwrap();
-    let price_oracle = PriceOracle::new(&http_factory, options.token_data).unwrap();
+    let price_oracle = PriceOracle::new(
+        &http_factory,
+        options.token_data,
+        options.price_source_update_interval,
+    )
+    .unwrap();
 
     // Set up web3 and contract connection.
     let contract = StableXContractImpl::new(
@@ -196,4 +210,8 @@ fn main() {
 
 fn duration_millis(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_millis(s.parse()?))
+}
+
+fn duration_secs(s: &str) -> Result<Duration, ParseIntError> {
+    Ok(Duration::from_secs(s.parse()?))
 }

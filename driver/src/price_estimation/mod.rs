@@ -5,6 +5,8 @@ mod average_price_source;
 pub mod data;
 mod dexag;
 mod kraken;
+mod price_source;
+mod threaded_price_source;
 
 pub use self::data::TokenData;
 use self::dexag::DexagClient;
@@ -13,10 +15,12 @@ use crate::http::HttpFactory;
 use crate::models::{Order, TokenId, TokenInfo};
 use anyhow::Result;
 use average_price_source::AveragePriceSource;
-use lazy_static::lazy_static;
 use log::warn;
+use price_source::{NoopPriceSource, PriceSource, Token};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter;
+use std::time::Duration;
+use threaded_price_source::ThreadedPriceSource;
 
 /// A type alias for token information map that is passed to the solver.
 type Tokens = BTreeMap<TokenId, Option<TokenInfo>>;
@@ -33,24 +37,35 @@ pub struct PriceOracle {
     /// whitelisted tokens get their prices estimated.
     tokens: TokenData,
     /// The price source to use.
-    ///
-    /// Note that currently only one price source is supported, but more price
-    /// source are expected to be added in the future.
     source: Box<dyn PriceSource>,
 }
 
 impl PriceOracle {
     /// Creates a new price oracle from a token whitelist data.
-    pub fn new(http_factory: &HttpFactory, tokens: TokenData) -> Result<Self> {
-        Ok(PriceOracle::with_source(
-            tokens,
-            AveragePriceSource::new(
+    pub fn new(
+        http_factory: &HttpFactory,
+        tokens: TokenData,
+        update_interval: Duration,
+    ) -> Result<Self> {
+        let source: Box<dyn PriceSource> = if tokens.is_empty() {
+            Box::new(NoopPriceSource)
+        } else {
+            let source = AveragePriceSource::new(
                 KrakenClient::new(http_factory)?,
                 DexagClient::new(http_factory)?,
-            ),
-        ))
+            );
+            let (source, _) = ThreadedPriceSource::new(
+                tokens.all_tokens_to_estimate_price(),
+                source,
+                update_interval,
+            );
+            Box::new(source)
+        };
+
+        Ok(PriceOracle { tokens, source })
     }
 
+    #[cfg(test)]
     fn with_source(tokens: TokenData, source: impl PriceSource + 'static) -> Self {
         PriceOracle {
             tokens,
@@ -134,74 +149,12 @@ impl PriceEstimating for PriceOracle {
     }
 }
 
-/// A token reprensentation.
-#[cfg_attr(test, derive(Eq, PartialEq))]
-#[derive(Clone, Debug)]
-struct Token {
-    /// The ID of the token.
-    id: TokenId,
-    /// The token info for this token including, token symbol and number of
-    /// decimals.
-    info: TokenInfo,
-}
-
-impl Token {
-    /// Retrieves the token symbol for this token.
-    ///
-    /// Note that the token info alias is first checked if it is part of a
-    /// symbol override map, and if it is, then that value is used instead. This
-    /// allows ERC20 tokens like WETH to be treated as ETH, since exchanges
-    /// generally only track prices for the latter.
-    fn symbol(&self) -> &str {
-        lazy_static! {
-            static ref SYMBOL_OVERRIDES: HashMap<String, String> = hash_map! {
-                "WETH" => "ETH".to_owned(),
-            };
-        }
-
-        SYMBOL_OVERRIDES
-            .get(&self.info.alias)
-            .unwrap_or(&self.info.alias)
-    }
-
-    /// Converts the prices from USD into the unit expected by the contract.
-    /// This price is relative to the OWL token which is considered pegged at
-    /// exactly 1 USD with 18 decimals.
-    fn get_owl_price(&self, usd_price: f64) -> u128 {
-        let pow = 36 - (self.info.decimals as i32);
-        (usd_price * 10f64.powi(pow)) as _
-    }
-
-    /// Creates a new token from its parameters.
-    #[cfg(test)]
-    pub fn new(id: impl Into<TokenId>, symbol: impl Into<String>, decimals: u8) -> Self {
-        Token {
-            id: id.into(),
-            info: TokenInfo {
-                alias: symbol.into(),
-                decimals,
-                external_price: 0,
-            },
-        }
-    }
-}
-
-/// An abstraction around a type that retrieves price estimate from a source
-/// such as an exchange.
-#[cfg_attr(test, mockall::automock)]
-trait PriceSource {
-    /// Retrieve current prices relative to the OWL token for the specified
-    /// tokens. The OWL token is pegged at 1 USD with 18 decimals. Returns a
-    /// sparse price array as being unable to find a price is not considered an
-    /// error.
-    fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>>;
-}
-
 #[cfg(test)]
 mod tests {
     use super::data::TokenBaseInfo;
     use super::*;
     use anyhow::anyhow;
+    use price_source::MockPriceSource;
 
     #[test]
     fn price_oracle_fetches_token_prices() {

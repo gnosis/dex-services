@@ -1,6 +1,7 @@
 //! This module contains fallback token data that should be used by the price
 //! estimator when prices are not available.
 
+use super::Token;
 use crate::models::{TokenId, TokenInfo};
 use anyhow::{Context, Error, Result};
 use serde::Deserialize;
@@ -64,6 +65,24 @@ impl TokenData {
     /// Retrieves some token information from a token ID.
     pub fn info(&self, id: impl Into<TokenId>) -> Option<&TokenBaseInfo> {
         self.0.get(&id.into())
+    }
+
+    /// Returns true if the token data is empty and contains no token infos.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Returns a vector with all the tokens that should be priced in the token
+    /// data map.
+    pub fn all_tokens_to_estimate_price(&self) -> Vec<Token> {
+        self.0
+            .iter()
+            .filter(|&(_, info)| info.should_estimate_price)
+            .map(|(&id, info)| Token {
+                id,
+                info: info.clone().into(),
+            })
+            .collect()
     }
 }
 
