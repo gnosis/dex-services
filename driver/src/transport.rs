@@ -5,7 +5,7 @@ use ethcontract::web3::helpers;
 use ethcontract::web3::{Error as Web3Error, RequestId, Transport};
 use futures::compat::Compat;
 use futures::future::{BoxFuture, FutureExt, TryFutureExt};
-use isahc::config::VersionNegotiation;
+use isahc::config::{Configurable, VersionNegotiation};
 use log::{debug, info, warn};
 use serde::Deserialize;
 use serde_json::Value;
@@ -35,8 +35,8 @@ impl HttpTransport {
         let client = http_factory.with_config(|builder| {
             builder
                 .timeout(timeout)
-                // NOTE: This is needed as curl will try to upgrade to HTTP/2 which
-                //   causes a HTTP 400 error with Ganache.
+                // NOTE: This is needed as curl will try to upgrade to HTTP/2
+                //   which causes a HTTP 400 error with Ganache.
                 .version_negotiation(VersionNegotiation::http11())
         })?;
 

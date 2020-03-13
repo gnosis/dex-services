@@ -2,10 +2,11 @@
 //! driver components.
 
 use anyhow::{anyhow, Result};
-use isahc::http::{HttpTryFrom, Uri};
-use isahc::prelude::Request;
+use isahc::http::{Error as HttpError, Uri};
+use isahc::prelude::{Configurable, Request};
 use isahc::{HttpClientBuilder, ResponseExt};
 use serde::de::DeserializeOwned;
+use std::convert::TryFrom;
 use std::time::Duration;
 
 /// A factory type for creating HTTP clients.
@@ -22,7 +23,7 @@ impl HttpFactory {
 
     /// Creates a new HTTP client with the default configuration.
     pub fn create(&self) -> Result<HttpClient> {
-        self.with_config(|builder| builder)
+        self.with_config(|builder| builder.timeout(self.default_timeout))
     }
 
     /// Creates a new HTTP Client with the given configuration.
@@ -53,7 +54,8 @@ impl HttpClient {
     /// request has been completed.
     pub async fn post_raw_json_async<U>(&self, url: U, data: impl Into<String>) -> Result<String>
     where
-        Uri: HttpTryFrom<U>,
+        Uri: TryFrom<U>,
+        <Uri as TryFrom<U>>::Error: Into<HttpError>,
     {
         let http_request = Request::post(url)
             .header("Content-Type", "application/json")
@@ -75,7 +77,8 @@ impl HttpClient {
     /// Standard HTTP GET request that parses the result as JSON.
     pub fn get_json<U, T>(&self, url: U) -> Result<T>
     where
-        Uri: HttpTryFrom<U>,
+        Uri: TryFrom<U>,
+        <Uri as TryFrom<U>>::Error: Into<HttpError>,
         T: DeserializeOwned,
     {
         Ok(self.inner.get(url)?.json()?)
@@ -84,7 +87,8 @@ impl HttpClient {
     /// Async HTTP GET request that parses the result as JSON.
     pub async fn get_json_async<U, T>(&self, url: U) -> Result<T>
     where
-        Uri: HttpTryFrom<U>,
+        Uri: TryFrom<U>,
+        <Uri as TryFrom<U>>::Error: Into<HttpError>,
         T: DeserializeOwned,
     {
         Ok(self.inner.get_async(url).await?.json()?)
