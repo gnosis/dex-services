@@ -4,5 +4,6 @@ version = "1.0.0"
 edition = "2018"
 
 [dependencies]
+anyhow = "1"
 ethcontract = "0.4.2"
 futures = { version = "0.3.4", features = ["compat"] }

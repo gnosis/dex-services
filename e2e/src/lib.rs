@@ -7,4 +7,5 @@ ethcontract::contract!("dex-contracts/build/contracts/TokenOWL.json");
 ethcontract::contract!("dex-contracts/build/contracts/ERC20Mintable.json");
 
 pub mod common;
+pub mod docker_logs;
 pub mod stablex;

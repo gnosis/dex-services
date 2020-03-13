@@ -512,6 +512,7 @@ dependencies = [
 name = "e2e"
 version = "1.0.0"
 dependencies = [
+ "anyhow",
  "ethcontract",
  "futures 0.3.4",
 ]
