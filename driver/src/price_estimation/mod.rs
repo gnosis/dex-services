@@ -14,9 +14,8 @@ use self::kraken::KrakenClient;
 use crate::models::{Order, TokenId, TokenInfo};
 use anyhow::Result;
 use average_price_source::AveragePriceSource;
-use lazy_static::lazy_static;
 use log::warn;
-use price_source::PriceSource;
+use price_source::{NoopPriceSource, PriceSource, Token};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter;
 use std::time::Duration;
@@ -43,11 +42,22 @@ pub struct PriceOracle {
 impl PriceOracle {
     /// Creates a new price oracle from a token whitelist data.
     pub fn new(tokens: TokenData, update_interval: Duration) -> Result<Self> {
-        let source = AveragePriceSource::new(KrakenClient::new()?, DexagClient::new()?);
-        let (source, _) = ThreadedPriceSource::new(tokens.clone().into(), source, update_interval);
-        Ok(PriceOracle::with_source(tokens, source))
+        let source: Box<dyn PriceSource> = if tokens.is_empty() {
+            Box::new(NoopPriceSource)
+        } else {
+            let source = AveragePriceSource::new(KrakenClient::new()?, DexagClient::new()?);
+            let (source, _) = ThreadedPriceSource::new(
+                tokens.all_tokens_to_estimate_price(),
+                source,
+                update_interval,
+            );
+            Box::new(source)
+        };
+
+        Ok(PriceOracle { tokens, source })
     }
 
+    #[cfg(test)]
     fn with_source(tokens: TokenData, source: impl PriceSource + 'static) -> Self {
         PriceOracle {
             tokens,
@@ -128,58 +138,6 @@ impl PriceEstimating for PriceOracle {
             })
             .chain(unpriced_token_ids.into_iter())
             .collect()
-    }
-}
-
-/// A token reprensentation.
-#[cfg_attr(test, derive(Eq, PartialEq))]
-#[derive(Clone, Debug)]
-pub struct Token {
-    /// The ID of the token.
-    id: TokenId,
-    /// The token info for this token including, token symbol and number of
-    /// decimals.
-    info: TokenInfo,
-}
-
-impl Token {
-    /// Retrieves the token symbol for this token.
-    ///
-    /// Note that the token info alias is first checked if it is part of a
-    /// symbol override map, and if it is, then that value is used instead. This
-    /// allows ERC20 tokens like WETH to be treated as ETH, since exchanges
-    /// generally only track prices for the latter.
-    fn symbol(&self) -> &str {
-        lazy_static! {
-            static ref SYMBOL_OVERRIDES: HashMap<String, String> = hash_map! {
-                "WETH" => "ETH".to_owned(),
-            };
-        }
-
-        SYMBOL_OVERRIDES
-            .get(&self.info.alias)
-            .unwrap_or(&self.info.alias)
-    }
-
-    /// Converts the prices from USD into the unit expected by the contract.
-    /// This price is relative to the OWL token which is considered pegged at
-    /// exactly 1 USD with 18 decimals.
-    fn get_owl_price(&self, usd_price: f64) -> u128 {
-        let pow = 36 - (self.info.decimals as i32);
-        (usd_price * 10f64.powi(pow)) as _
-    }
-
-    /// Creates a new token from its parameters.
-    #[cfg(test)]
-    pub fn new(id: impl Into<TokenId>, symbol: impl Into<String>, decimals: u8) -> Self {
-        Token {
-            id: id.into(),
-            info: TokenInfo {
-                alias: symbol.into(),
-                decimals,
-                external_price: 0,
-            },
-        }
     }
 }
 

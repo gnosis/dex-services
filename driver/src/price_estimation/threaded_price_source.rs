@@ -43,25 +43,32 @@ impl ThreadedPriceSource {
         #[cfg(test)]
         let (test_sender, test_receiver) = mpsc::channel::<()>();
 
-        let price_map_ = price_map.clone();
-        // vk: Clippy notes that the following loop and match can be written as
-        // a `while let` loop but I find it clearer to make all cases explicit.
-        #[allow(clippy::while_let_loop)]
-        let join_handle = thread::spawn(move || loop {
-            match receiver.recv_timeout(update_interval) {
-                Ok(()) | Err(RecvTimeoutError::Timeout) => {
-                    // Make sure we don't hold the mutex while this blocking call happens.
-                    match price_source.get_prices(&tokens) {
-                        Ok(prices) => price_map_.lock().unwrap().extend(prices),
-                        Err(err) => log::warn!("price_source::get_prices failed: {}", err),
-                    }
-                }
-                // The owning struct has been dropped.
-                Err(RecvTimeoutError::Disconnected) => break,
-            }
+        let join_handle = thread::spawn({
+            let price_map = price_map.clone();
 
-            #[cfg(test)]
-            let _ = test_sender.send(());
+            // vk: Clippy notes that the following loop and match can be written
+            // as a `while let` loop but I find it clearer to make all cases
+            // explicit.
+            #[allow(clippy::while_let_loop)]
+            move || loop {
+                match receiver.recv_timeout(update_interval) {
+                    Ok(()) | Err(RecvTimeoutError::Timeout) => {
+                        // Make sure we don't hold the mutex while this blocking call happens.
+                        match price_source.get_prices(&tokens) {
+                            Ok(prices) => price_map
+                                .lock()
+                                .expect("mutex should never be poisoned")
+                                .extend(prices),
+                            Err(err) => log::warn!("price_source::get_prices failed: {}", err),
+                        }
+                    }
+                    // The owning struct has been dropped.
+                    Err(RecvTimeoutError::Disconnected) => break,
+                }
+
+                #[cfg(test)]
+                let _ = test_sender.send(());
+            }
         });
 
         // Update the prices immediately.
@@ -79,10 +86,15 @@ impl ThreadedPriceSource {
 }
 
 impl PriceSource for ThreadedPriceSource {
-    /// Non blocking.
-    /// Infallible.
     fn get_prices(&self, _tokens: &[Token]) -> Result<HashMap<TokenId, u128>> {
-        Ok(self.price_map.lock().unwrap().clone())
+        // NOTE: Return all the prices as they will get filtered by the caller
+        //   anyway.
+
+        Ok(self
+            .price_map
+            .lock()
+            .expect("mutex should never be poisoned")
+            .clone())
     }
 }
 

@@ -72,6 +72,10 @@ impl KrakenApi for KrakenHttpApi {
     }
 
     fn ticker(&self, pairs: &[&str]) -> Result<HashMap<String, TickerInfo>> {
+        if pairs.is_empty() {
+            return Ok(HashMap::new());
+        }
+
         self.client
             .get(format!("{}/Ticker?pair={}", self.base_url, pairs.join(",")))
             .context("failed to retrieve ticker infos from Kraken")?

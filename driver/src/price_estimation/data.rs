@@ -66,15 +66,21 @@ impl TokenData {
     pub fn info(&self, id: impl Into<TokenId>) -> Option<&TokenBaseInfo> {
         self.0.get(&id.into())
     }
-}
 
-impl Into<Vec<Token>> for TokenData {
-    fn into(self) -> Vec<Token> {
+    /// Returns true if the token data is empty and contains no token infos.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Returns a vector with all the tokens that should be priced in the token
+    /// data map.
+    pub fn all_tokens_to_estimate_price(&self) -> Vec<Token> {
         self.0
-            .into_iter()
-            .map(|(id, token_base_info)| Token {
+            .iter()
+            .filter(|&(_, info)| info.should_estimate_price)
+            .map(|(&id, info)| Token {
                 id,
-                info: token_base_info.into(),
+                info: info.clone().into(),
             })
             .collect()
     }
