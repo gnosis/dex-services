@@ -80,12 +80,13 @@ impl<'a> Scheduler<'a> {
 
     pub fn run_forever(&mut self) {
         loop {
-            thread::sleep(self.run_forever_single_iteration(SystemTime::now()));
+            thread::sleep(self.run_once(SystemTime::now()));
         }
     }
 
     /// Returns how long to sleep before starting the next iteration.
     fn run_once(&mut self, now: SystemTime) -> Duration {
+        const RETRY_TIMEOUT: Duration = Duration::from_secs(10);
         match self.determine_action(now) {
             Ok(Action::Sleep(duration)) => {
                 info!("Sleeping {}s.", duration.as_secs());
@@ -101,7 +102,7 @@ impl<'a> Scheduler<'a> {
                     }
                     DriverResult::Retry(err) => {
                         error!("StableXDriver retryable error: {}", err);
-                        Duration::from_secs(10)
+                        RETRY_TIMEOUT
                     }
                     DriverResult::Skip(err) => {
                         error!("StableXDriver unretryable error: {}", err);
@@ -112,7 +113,7 @@ impl<'a> Scheduler<'a> {
             }
             Err(err) => {
                 error!("Scheduler error: {}", err);
-                Duration::from_secs(10)
+                RETRY_TIMEOUT
             }
         }
     }
@@ -154,8 +155,8 @@ mod tests {
     use ethcontract::U256;
     use mockall::predicate::eq;
 
-    use crate::driver::stablex_driver::MockStableXDriver;
     use super::*;
+    use crate::driver::stablex_driver::MockStableXDriver;
 
     #[test]
     fn batch_id_current() {
@@ -312,38 +313,35 @@ mod tests {
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
 
         // Driver not invoked
-        assert_eq!(
-            scheduler.run_forever_single_iteration(base_time),
-            Duration::from_secs(10)
-        );
+        assert_eq!(scheduler.run_once(base_time), Duration::from_secs(10));
 
         // Ok
         assert_eq!(
-            scheduler.run_forever_single_iteration(base_time + Duration::from_secs(10)),
+            scheduler.run_once(base_time + Duration::from_secs(10)),
             Duration::from_secs(0)
         );
 
         // Batch already handled
         assert_eq!(
-            scheduler.run_forever_single_iteration(base_time + Duration::from_secs(10)),
+            scheduler.run_once(base_time + Duration::from_secs(10)),
             Duration::from_secs(300)
         );
 
         // Retry
         assert_eq!(
-            scheduler.run_forever_single_iteration(base_time + Duration::from_secs(310)),
+            scheduler.run_once(base_time + Duration::from_secs(310)),
             Duration::from_secs(10)
         );
 
         // Skip
         assert_eq!(
-            scheduler.run_forever_single_iteration(base_time + Duration::from_secs(610)),
+            scheduler.run_once(base_time + Duration::from_secs(610)),
             Duration::from_secs(0)
         );
 
         // Batch already handled
         assert_eq!(
-            scheduler.run_forever_single_iteration(base_time + Duration::from_secs(610)),
+            scheduler.run_once(base_time + Duration::from_secs(610)),
             Duration::from_secs(300)
         );
     }
