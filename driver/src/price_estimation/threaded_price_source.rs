@@ -86,15 +86,15 @@ impl ThreadedPriceSource {
 }
 
 impl PriceSource for ThreadedPriceSource {
-    fn get_prices(&self, _tokens: &[Token]) -> Result<HashMap<TokenId, u128>> {
-        // NOTE: Return all the prices as they will get filtered by the caller
-        //   anyway.
-
-        Ok(self
+    fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>> {
+        let price_map = self
             .price_map
             .lock()
-            .expect("mutex should never be poisoned")
-            .clone())
+            .expect("mutex should never be poisoned");
+        Ok(tokens
+            .iter()
+            .filter_map(|token| Some((token.id, *price_map.get(&token.id)?)))
+            .collect())
     }
 }
 
