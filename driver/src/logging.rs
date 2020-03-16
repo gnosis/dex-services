@@ -29,13 +29,13 @@ pub fn init(filter: impl AsRef<str>) -> (Logger, GlobalLoggerGuard) {
 
 /// Uses one decorator for `Error` and `Critical` log messages and the other for
 /// the rest.
-pub struct CustomFormatter<T0, T1> {
-    err_decorator: T0,
-    rest_decorator: T1,
+pub struct CustomFormatter<ErrDecorator, RestDecorator> {
+    err_decorator: ErrDecorator,
+    rest_decorator: RestDecorator,
 }
 
-impl<T0, T1> CustomFormatter<T0, T1> {
-    fn new(err_decorator: T0, rest_decorator: T1) -> Self {
+impl<ErrDecorator, RestDecorator> CustomFormatter<ErrDecorator, RestDecorator> {
+    fn new(err_decorator: ErrDecorator, rest_decorator: RestDecorator) -> Self {
         Self {
             err_decorator,
             rest_decorator,
@@ -43,7 +43,9 @@ impl<T0, T1> CustomFormatter<T0, T1> {
     }
 }
 
-impl<T0: Decorator, T1: Decorator> Drain for CustomFormatter<T0, T1> {
+impl<ErrDecorator: Decorator, RestDecorator: Decorator> Drain
+    for CustomFormatter<ErrDecorator, RestDecorator>
+{
     type Ok = ();
     type Err = std::io::Error;
     fn log(
