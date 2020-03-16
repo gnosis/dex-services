@@ -202,5 +202,5 @@ fn test_rinkeby() {
     println!("Sleeping {} seconds...", sleep_time);
     std::thread::sleep(Duration::from_secs(sleep_time));
 
-    docker_logs::assert_no_errors_logged();
+    docker_logs::assert_no_errors_logged("dex-services_stablex_1");
 }
