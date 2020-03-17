@@ -76,12 +76,12 @@ impl From<Error> for SolutionSubmissionError {
 }
 
 pub struct StableXSolutionSubmitter<'a> {
-    contract: &'a dyn StableXContract,
-    rpc: &'a dyn EthRpc,
+    contract: &'a (dyn StableXContract + Sync),
+    rpc: &'a (dyn EthRpc + Sync),
 }
 
 impl<'a> StableXSolutionSubmitter<'a> {
-    pub fn new(contract: &'a dyn StableXContract, rpc: &'a dyn EthRpc) -> Self {
+    pub fn new(contract: &'a (dyn StableXContract + Sync), rpc: &'a (dyn EthRpc + Sync)) -> Self {
         Self { contract, rpc }
     }
 }

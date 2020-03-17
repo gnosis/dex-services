@@ -11,8 +11,8 @@ use log::info;
 pub fn create_price_finder(
     fee: Option<Fee>,
     solver_type: SolverType,
-    price_oracle: impl PriceEstimating + 'static,
-) -> Box<dyn PriceFinding> {
+    price_oracle: impl PriceEstimating + Sync + 'static,
+) -> Box<dyn PriceFinding + Sync> {
     if solver_type == SolverType::NaiveSolver {
         info!("Using naive price finder");
         Box::new(NaiveSolver::new(fee))

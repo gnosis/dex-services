@@ -18,12 +18,14 @@ pub struct ThreadedPriceSource {
     // the prices, the thread calling `get_prices` reads them.
     price_map: Arc<Mutex<HashMap<TokenId, u128>>>,
     // Allows the thread to notice when the owning struct is dropped.
-    _channel_to_thread: Sender<()>,
+    // Mutex is not needed because we don't access the sender at all but we need
+    // this struct to be sync and this makes the compiler happy.
+    _channel_to_thread: Mutex<Sender<()>>,
 
     // To make testing easier we use another channel to which the thread sends
     // a message whenever it completes one update loop.
     #[cfg(test)]
-    test_receiver: Receiver<()>,
+    test_receiver: Mutex<Receiver<()>>,
 }
 
 impl ThreadedPriceSource {
@@ -76,9 +78,9 @@ impl ThreadedPriceSource {
         (
             Self {
                 price_map,
-                _channel_to_thread: sender,
+                _channel_to_thread: Mutex::new(sender),
                 #[cfg(test)]
-                test_receiver,
+                test_receiver: Mutex::new(test_receiver),
             },
             join_handle,
         )
@@ -122,7 +124,7 @@ mod tests {
     /// when an expectation is violated.
     fn join(tps: ThreadedPriceSource, handle: JoinHandle<()>) {
         fn extract_test_receiver(tps: ThreadedPriceSource) -> Receiver<()> {
-            tps.test_receiver
+            tps.test_receiver.into_inner().unwrap()
         }
         let test_receiver = extract_test_receiver(tps);
         let deadline = Instant::now() + THREAD_TIMEOUT;
@@ -145,13 +147,17 @@ mod tests {
     fn wait_for_thread_to_loop(tps: &ThreadedPriceSource) {
         // Clear previous messages.
         let deadline = Instant::now() + THREAD_TIMEOUT;
-        for _ in tps.test_receiver.try_iter() {
+        for _ in tps.test_receiver.lock().unwrap().try_iter() {
             if Instant::now() >= deadline {
                 panic!("Background thread of ThreadedPriceSource ran too many loops.");
             }
         }
         // Wait for one new message.
-        tps.test_receiver.recv_timeout(THREAD_TIMEOUT).unwrap();
+        tps.test_receiver
+            .lock()
+            .unwrap()
+            .recv_timeout(THREAD_TIMEOUT)
+            .unwrap();
     }
 
     #[test]

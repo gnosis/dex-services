@@ -34,12 +34,15 @@ impl FromStr for OrderbookFilter {
 }
 
 pub struct FilteredOrderbookReader<'a> {
-    orderbook: &'a dyn StableXOrderBookReading,
+    orderbook: &'a (dyn StableXOrderBookReading + Sync),
     filter: OrderbookFilter,
 }
 
 impl<'a> FilteredOrderbookReader<'a> {
-    pub fn new(orderbook: &'a dyn StableXOrderBookReading, filter: OrderbookFilter) -> Self {
+    pub fn new(
+        orderbook: &'a (dyn StableXOrderBookReading + Sync),
+        filter: OrderbookFilter,
+    ) -> Self {
         Self { orderbook, filter }
     }
 }
@@ -80,7 +83,7 @@ mod test {
     #[test]
     fn test_filter_deserialization() {
         let json = r#"{
-            "tokens": [1,2], 
+            "tokens": [1,2],
             "users": {
                 "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A": {"OrderIds": [0,1]},
                 "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B": "All"

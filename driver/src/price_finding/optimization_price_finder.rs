@@ -168,14 +168,14 @@ pub struct OptimisationPriceFinder {
     read_output: fn(&str) -> std::io::Result<String>,
     fee: Option<Fee>,
     solver_type: SolverType,
-    price_oracle: Box<dyn PriceEstimating>,
+    price_oracle: Box<dyn PriceEstimating + Sync>,
 }
 
 impl OptimisationPriceFinder {
     pub fn new(
         fee: Option<Fee>,
         solver_type: SolverType,
-        price_oracle: impl PriceEstimating + 'static,
+        price_oracle: impl PriceEstimating + Sync + 'static,
     ) -> Self {
         OptimisationPriceFinder {
             write_input,

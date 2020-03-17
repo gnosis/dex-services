@@ -210,8 +210,7 @@ fn main() {
 
     // Set up solver.
     let fee = Some(Fee::default());
-    let mut price_finder =
-        price_finding::create_price_finder(fee, options.solver_type, price_oracle);
+    let price_finder = price_finding::create_price_finder(fee, options.solver_type, price_oracle);
 
     // Create the orderbook reader.
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
@@ -223,14 +222,14 @@ fn main() {
     let solution_submitter = StableXSolutionSubmitter::new(&contract, &eth_rpc);
 
     // Set up the driver and start the run-loop.
-    let mut driver = StableXDriverImpl::new(
-        &mut *price_finder,
+    let driver = StableXDriverImpl::new(
+        &*price_finder,
         &filtered_orderbook,
         &solution_submitter,
         &stablex_metrics,
     );
     let mut scheduler = Scheduler::new(
-        &mut driver,
+        &driver,
         AuctionTimingConfiguration {
             target_start_solve_time: options.target_start_solve_time,
             latest_solve_attempt_time: options.latest_solve_attempt_time,
