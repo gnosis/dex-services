@@ -72,7 +72,10 @@ fn test_with_ganache() {
 
     let batch_id = instance.get_current_batch_id().call().wait().unwrap();
     close_auction(&web3, &instance);
-    let wait_time = Duration::from_secs(310);
+    // If our orders were placed at the very start of a batch then that batch
+    // becomes solvable 300 seconds later. The driver waits an additional 30
+    // seconds before solving and we give it 10 seconds leeway.
+    let wait_time = Duration::from_secs(300 + 30 + 10);
     println!(
         "Waiting {}s for the solver to submit a solution for batch {}",
         wait_time.as_secs(),
@@ -207,7 +210,7 @@ fn test_rinkeby() {
         .get_seconds_remaining_in_batch()
         .wait_and_expect("Cannot get seconds remaining in batch")
         .low_u64()
-        + 30;
+        + 40;
 
     println!("Sleeping {} seconds...", sleep_time);
     std::thread::sleep(Duration::from_secs(sleep_time));
