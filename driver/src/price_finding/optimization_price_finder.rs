@@ -1,6 +1,6 @@
 use crate::models::{self, TokenId, TokenInfo};
 use crate::price_estimation::PriceEstimating;
-use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverConfig};
+use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverType};
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::process::Command;
+use std::time::Duration;
 
 /// A number wrapper type that correctly serializes large u128`s to strings to
 /// avoid precision loss.
@@ -163,17 +164,17 @@ mod solver_input {
 pub struct OptimisationPriceFinder {
     // default IO methods can be replaced for unit testing
     write_input: fn(&str, &str) -> std::io::Result<()>,
-    run_solver: fn(&str, &str, SolverConfig) -> Result<()>,
+    run_solver: fn(&str, &str, SolverType, Duration) -> Result<()>,
     read_output: fn(&str) -> std::io::Result<String>,
     fee: Option<Fee>,
-    solver_type: SolverConfig,
+    solver_type: SolverType,
     price_oracle: Box<dyn PriceEstimating>,
 }
 
 impl OptimisationPriceFinder {
     pub fn new(
         fee: Option<Fee>,
-        solver_type: SolverConfig,
+        solver_type: SolverType,
         price_oracle: impl PriceEstimating + 'static,
     ) -> Self {
         OptimisationPriceFinder {
@@ -214,6 +215,7 @@ impl PriceFinding for OptimisationPriceFinder {
         &self,
         orders: &[models::Order],
         state: &models::AccountState,
+        time_limit: Duration,
     ) -> Result<models::Solution> {
         let input = solver_input::Input {
             tokens: self.price_oracle.get_token_prices(&orders),
@@ -245,7 +247,7 @@ impl PriceFinding for OptimisationPriceFinder {
         );
 
         (self.write_input)(&input_file, &serde_json::to_string(&input)?)?;
-        (self.run_solver)(&input_file, &result_folder, self.solver_type)?;
+        (self.run_solver)(&input_file, &result_folder, self.solver_type, time_limit)?;
         let result = (self.read_output)(&result_folder)?;
         let solution = deserialize_result(result)?;
         Ok(solution)
@@ -260,11 +262,17 @@ fn write_input(input_file: &str, input: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-fn run_solver(input_file: &str, result_folder: &str, solver_config: SolverConfig) -> Result<()> {
+fn run_solver(
+    input_file: &str,
+    result_folder: &str,
+    solver_config: SolverType,
+    time_limit: Duration,
+) -> Result<()> {
     let output = Command::new("python")
         .args(&["-m", "batchauctions.scripts.e2e._run"])
         .arg(result_folder)
         .args(&["--jsonFile", input_file])
+        .arg(format!("--solverTimeLimit={:}", time_limit.as_secs()))
         .args(solver_config.to_args())
         .output()?;
     if !output.status.success() {
@@ -566,17 +574,19 @@ pub mod tests {
                 );
                 Ok(())
             },
-            run_solver: |_, _, _| Ok(()),
+            run_solver: |_, _, _, _| Ok(()),
             read_output: |_| Err(std::io::Error::last_os_error()),
             fee: Some(fee),
-            solver_type: SolverConfig::StandardSolver {
-                solver_time_limit: 180,
-            },
+            solver_type: SolverType::StandardSolver,
             price_oracle: Box::new(price_oracle),
         };
         let orders = vec![];
         assert!(solver
-            .find_prices(&orders, &AccountState::with_balance_for(&orders))
+            .find_prices(
+                &orders,
+                &AccountState::with_balance_for(&orders),
+                Duration::from_secs(180)
+            )
             .is_err());
     }
 

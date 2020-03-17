@@ -6,6 +6,7 @@ use crate::solution_submission::{SolutionSubmissionError, StableXSolutionSubmitt
 use anyhow::{Error, Result};
 use ethcontract::U256;
 use log::info;
+use std::time::Duration;
 
 #[derive(Debug)]
 pub enum DriverResult {
@@ -16,7 +17,7 @@ pub enum DriverResult {
 
 #[cfg_attr(test, mockall::automock)]
 pub trait StableXDriver {
-    fn run(&mut self, batch_to_solve: U256) -> DriverResult;
+    fn run(&mut self, batch_to_solve: U256, time_limit: Duration) -> DriverResult;
 }
 
 pub struct StableXDriverImpl<'a> {
@@ -51,6 +52,7 @@ impl<'a> StableXDriverImpl<'a> {
     fn solve(
         &mut self,
         batch_to_solve: U256,
+        time_limit: Duration,
         account_state: AccountState,
         orders: Vec<Order>,
     ) -> Result<()> {
@@ -58,7 +60,9 @@ impl<'a> StableXDriverImpl<'a> {
             info!("No orders in batch {}", batch_to_solve);
             Solution::trivial()
         } else {
-            let price_finder_result = self.price_finder.find_prices(&orders, &account_state);
+            let price_finder_result =
+                self.price_finder
+                    .find_prices(&orders, &account_state, time_limit);
             self.metrics
                 .auction_solution_computed(batch_to_solve, &price_finder_result);
 
@@ -138,13 +142,13 @@ impl<'a> StableXDriverImpl<'a> {
 }
 
 impl<'a> StableXDriver for StableXDriverImpl<'a> {
-    fn run(&mut self, batch_to_solve: U256) -> DriverResult {
+    fn run(&mut self, batch_to_solve: U256, time_limit: Duration) -> DriverResult {
         self.metrics.auction_processing_started(&Ok(batch_to_solve));
         let (account_state, orders) = match self.get_orderbook(batch_to_solve) {
             Ok(ok) => ok,
             Err(err) => return DriverResult::Retry(err),
         };
-        match self.solve(batch_to_solve, account_state, orders) {
+        match self.solve(batch_to_solve, time_limit, account_state, orders) {
             Ok(()) => DriverResult::Ok,
             Err(err) => DriverResult::Skip(err),
         }
@@ -197,6 +201,7 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
+        let time_limit = Duration::from_secs(120);
 
         reader
             .expect_get_auction_data()
@@ -224,11 +229,11 @@ mod tests {
             ],
         };
         pf.expect_find_prices()
-            .withf(move |o, s| o == orders.as_slice() && *s == state)
-            .return_once(move |_, _| Ok(solution));
+            .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t == time_limit)
+            .return_once(move |_, _, _| Ok(solution));
 
         let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
-        assert!(driver.run(batch).is_ok());
+        assert!(driver.run(batch, time_limit).is_ok());
     }
 
     #[test]
@@ -244,7 +249,7 @@ mod tests {
 
         let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
 
-        assert!(driver.run(U256::from(42)).is_retry())
+        assert!(driver.run(U256::from(42), Duration::default()).is_retry())
     }
 
     #[test]
@@ -258,6 +263,7 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
+        let time_limit = Duration::from_secs(120);
 
         reader
             .expect_get_auction_data()
@@ -278,11 +284,11 @@ mod tests {
             .returning(|_, _, _| Ok(()));
 
         pf.expect_find_prices()
-            .returning(|_, _| Err(anyhow!("Error")));
+            .returning(|_, _, _| Err(anyhow!("Error")));
 
         let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
 
-        assert!(driver.run(batch).is_skip());
+        assert!(driver.run(batch, time_limit).is_skip());
     }
 
     #[test]
@@ -296,6 +302,7 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
+        let time_limit = Duration::from_secs(120);
 
         reader
             .expect_get_auction_data()
@@ -303,7 +310,7 @@ mod tests {
             .return_once(move |_| Ok((state, orders)));
 
         let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
-        assert!(driver.run(batch).is_ok());
+        assert!(driver.run(batch, time_limit).is_ok());
     }
 
     #[test]
@@ -317,6 +324,7 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
+        let time_limit = Duration::from_secs(120);
 
         reader
             .expect_get_auction_data()
@@ -328,13 +336,13 @@ mod tests {
 
         let solution = Solution::trivial();
         pf.expect_find_prices()
-            .withf(move |o, s| o == orders.as_slice() && *s == state)
-            .return_once(move |_, _| Ok(solution));
+            .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t == time_limit)
+            .return_once(move |_, _, _| Ok(solution));
 
         submitter.expect_submit_solution().times(0);
 
         let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
-        assert!(driver.run(batch).is_ok());
+        assert!(driver.run(batch, time_limit).is_ok());
     }
 
     #[test]
@@ -348,6 +356,7 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
+        let time_limit = Duration::from_secs(120);
 
         reader
             .expect_get_auction_data()
@@ -375,11 +384,11 @@ mod tests {
             ],
         };
         pf.expect_find_prices()
-            .withf(move |o, s| o == orders.as_slice() && *s == state)
-            .return_once(move |_, _| Ok(solution));
+            .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t == time_limit)
+            .return_once(move |_, _, _| Ok(solution));
 
         let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
-        assert!(driver.run(batch).is_skip());
+        assert!(driver.run(batch, time_limit).is_skip());
     }
 
     #[test]
@@ -393,6 +402,7 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
+        let time_limit = Duration::from_secs(120);
 
         reader
             .expect_get_auction_data()
@@ -416,11 +426,11 @@ mod tests {
             ],
         };
         pf.expect_find_prices()
-            .withf(move |o, s| o == orders.as_slice() && *s == state)
-            .return_once(move |_, _| Ok(solution));
+            .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t == time_limit)
+            .return_once(move |_, _, _| Ok(solution));
 
         let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
-        assert!(driver.run(batch).is_ok());
+        assert!(driver.run(batch, time_limit).is_ok());
     }
 
     #[test]
@@ -434,6 +444,7 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
+        let time_limit = Duration::from_secs(120);
 
         reader
             .expect_get_auction_data()
@@ -460,10 +471,10 @@ mod tests {
             ],
         };
         pf.expect_find_prices()
-            .withf(move |o, s| o == orders.as_slice() && *s == state)
-            .return_once(move |_, _| Ok(solution));
+            .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t == time_limit)
+            .return_once(move |_, _, _| Ok(solution));
 
         let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
-        assert!(driver.run(batch).is_ok());
+        assert!(driver.run(batch, time_limit).is_ok());
     }
 }

@@ -157,6 +157,7 @@ The following environment variables can be used to configure the behavior of the
 - *TOKEN_DATA*: Allows to set token data - i.e symbol name, decimals, a default external price and a flag for indicating whether updated external prices should be fetched.
 - *TARGET_START_SOLVE_TIME*: The offset from the start of a batch in seconds at which point we should start solving.
 - *LATEST_SOLVE_ATTEMPT_TIME*: The offset from the start of the batch in seconds at which point there is not enough time left to attempt to solve.
+- *SOLVER_TIME_LIMIT*: The offset from the start of the batch to cap the solver's execution time. Note that this is slightly different from *LATEST_SOLVE_ATTEMPT_TIME*, the latter is that absolute latest in which solving a solution will be attempted, while the former determines how much time the solver actually has to run.
 - *PRICE_SOURCE_UPDATE_INTERVAL*: Time interval in seconds in which price sources should be updated.
 
 ### Orderbook Filter Example

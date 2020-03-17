@@ -27,7 +27,7 @@ use crate::http::HttpFactory;
 use crate::metrics::{MetricsServer, StableXMetrics};
 use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
 use crate::price_estimation::{PriceOracle, TokenData};
-use crate::price_finding::{Fee, SolverConfig};
+use crate::price_finding::{Fee, SolverType};
 use crate::solution_submission::StableXSolutionSubmitter;
 
 use ethcontract::PrivateKey;
@@ -67,7 +67,7 @@ struct Options {
     /// solver; 'MIP' for mixed integer programming solver; 'NLP' for non-linear
     /// programming solver.
     #[structopt(long, env = "SOLVER_TYPE", default_value = "naive-solver")]
-    solver_type: String,
+    solver_type: SolverType,
 
     /// JSON encoded backup token information to provide to the solver.
     ///
@@ -87,10 +87,6 @@ struct Options {
     /// }'
     #[structopt(long, env = "TOKEN_DATA", default_value = "{}")]
     token_data: TokenData,
-
-    /// Number of seconds the solver should maximally use for the optimization process
-    #[structopt(long, env = "SOLVER_TIME_LIMIT", default_value = "150")]
-    solver_time_limit: u32,
 
     /// JSON encoded object of which tokens/orders to ignore.
     ///
@@ -152,6 +148,16 @@ struct Options {
     )]
     latest_solve_attempt_time: Duration,
 
+    /// The offset from the start of the batch to cap the solver's execution
+    /// time.
+    #[structopt(
+        long,
+        env = "SOLVER_TIME_LIMIT",
+        default_value = "210",
+        parse(try_from_str = duration_secs),
+    )]
+    solver_time_limit: Duration,
+
     /// Time interval in seconds in which price sources should be updated.
     #[structopt(
         long,
@@ -166,7 +172,6 @@ fn main() {
     let options = Options::from_args();
     let (_, _guard) = logging::init(&options.log_filter);
     info!("Starting driver with runtime options: {:#?}", options);
-    let solver_config = SolverConfig::new(&options.solver_type, options.solver_time_limit).unwrap();
 
     // Set up metrics and serve in separate thread.
     let prometheus_registry = Arc::new(Registry::new());
@@ -205,7 +210,8 @@ fn main() {
 
     // Set up solver.
     let fee = Some(Fee::default());
-    let mut price_finder = price_finding::create_price_finder(fee, solver_config, price_oracle);
+    let mut price_finder =
+        price_finding::create_price_finder(fee, options.solver_type, price_oracle);
 
     // Create the orderbook reader.
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
@@ -228,6 +234,7 @@ fn main() {
         AuctionTimingConfiguration {
             target_start_solve_time: options.target_start_solve_time,
             latest_solve_attempt_time: options.latest_solve_attempt_time,
+            solver_time_limit: options.solver_time_limit,
         },
     );
     scheduler.run_forever();
