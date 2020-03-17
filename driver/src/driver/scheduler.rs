@@ -109,7 +109,11 @@ impl<'a> Scheduler<'a> {
                 duration
             }
             Ok(Action::Solve(batch_id, time_limit)) => {
-                info!("Starting to solve batch {}.", batch_id.0);
+                info!(
+                    "Starting to solve batch {} with time limit {}s.",
+                    batch_id.0,
+                    time_limit.as_secs_f64()
+                );
                 match self.driver.run(batch_id.0.into(), time_limit) {
                     DriverResult::Ok => {
                         info!("Batch {} solved successfully.", batch_id.0);
