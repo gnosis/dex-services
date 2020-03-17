@@ -1,33 +1,39 @@
 use crate::metrics::StableXMetrics;
-use crate::models::Solution;
+use crate::models::{account_state::AccountState, order::Order, Solution};
 use crate::orderbook::StableXOrderBookReading;
 use crate::price_finding::PriceFinding;
 use crate::solution_submission::{SolutionSubmissionError, StableXSolutionSubmitting};
-use anyhow::Result;
-
+use anyhow::{Error, Result};
+use ethcontract::U256;
 use log::info;
 
-use std::collections::HashSet;
+#[derive(Debug)]
+pub enum DriverResult {
+    Ok,
+    Retry(Error),
+    Skip(Error),
+}
 
-use ethcontract::U256;
+#[cfg_attr(test, mockall::automock)]
+pub trait StableXDriver {
+    fn run(&mut self, batch_to_solve: U256) -> DriverResult;
+}
 
-pub struct StableXDriver<'a> {
-    past_auctions: HashSet<U256>,
+pub struct StableXDriverImpl<'a> {
     price_finder: &'a mut dyn PriceFinding,
     orderbook_reader: &'a dyn StableXOrderBookReading,
     solution_submitter: &'a dyn StableXSolutionSubmitting,
-    metrics: StableXMetrics,
+    metrics: &'a StableXMetrics,
 }
 
-impl<'a> StableXDriver<'a> {
+impl<'a> StableXDriverImpl<'a> {
     pub fn new(
         price_finder: &'a mut dyn PriceFinding,
         orderbook_reader: &'a dyn StableXOrderBookReading,
         solution_submitter: &'a dyn StableXSolutionSubmitting,
-        metrics: StableXMetrics,
+        metrics: &'a StableXMetrics,
     ) -> Self {
-        StableXDriver {
-            past_auctions: HashSet::new(),
+        Self {
             price_finder,
             orderbook_reader,
             solution_submitter,
@@ -35,49 +41,19 @@ impl<'a> StableXDriver<'a> {
         }
     }
 
-    #[cfg(test)]
-    fn with_past_auction(
-        price_finder: &'a mut dyn PriceFinding,
-        orderbook_reader: &'a dyn StableXOrderBookReading,
-        solution_submitter: &'a dyn StableXSolutionSubmitting,
-        metrics: StableXMetrics,
-    ) -> Self {
-        let mut driver =
-            StableXDriver::new(price_finder, orderbook_reader, solution_submitter, metrics);
-        driver.past_auctions.insert(0.into());
-        driver
-    }
-
-    pub fn run(&mut self) -> Result<bool> {
-        // Try to process previous batch auction
-        let batch_to_solve_result = self.orderbook_reader.get_auction_index();
-
-        if batch_to_solve_result
-            .as_ref()
-            .map(|batch| self.past_auctions.contains(batch))
-            .unwrap_or(false)
-        {
-            return Ok(false);
-        }
-
-        self.metrics
-            .auction_processing_started(&batch_to_solve_result);
-        let batch_to_solve = batch_to_solve_result?;
-
-        // NOTE: As an interim solution, we skip the first batch so we don't
-        //   spill over into the second batch.
-        if self.past_auctions.is_empty() {
-            self.past_auctions.insert(batch_to_solve);
-            return Ok(false);
-        }
-
+    fn get_orderbook(&mut self, batch_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
         let get_auction_data_result = self.orderbook_reader.get_auction_data(batch_to_solve);
         self.metrics
             .auction_orders_fetched(batch_to_solve, &get_auction_data_result);
-        let (account_state, orders) = get_auction_data_result?;
+        get_auction_data_result
+    }
 
-        self.past_auctions.insert(batch_to_solve);
-
+    fn solve(
+        &mut self,
+        batch_to_solve: U256,
+        account_state: AccountState,
+        orders: Vec<Order>,
+    ) -> Result<()> {
         let solution = if orders.is_empty() {
             info!("No orders in batch {}", batch_to_solve);
             Solution::trivial()
@@ -156,7 +132,22 @@ impl<'a> StableXDriver<'a> {
         if !submitted {
             self.metrics.auction_skipped(batch_to_solve);
         };
-        Ok(submitted)
+
+        Ok(())
+    }
+}
+
+impl<'a> StableXDriver for StableXDriverImpl<'a> {
+    fn run(&mut self, batch_to_solve: U256) -> DriverResult {
+        self.metrics.auction_processing_started(&Ok(batch_to_solve));
+        let (account_state, orders) = match self.get_orderbook(batch_to_solve) {
+            Ok(ok) => ok,
+            Err(err) => return DriverResult::Retry(err),
+        };
+        match self.solve(batch_to_solve, account_state, orders) {
+            Ok(()) => DriverResult::Ok,
+            Err(err) => DriverResult::Skip(err),
+        }
     }
 }
 
@@ -172,6 +163,29 @@ mod tests {
     use anyhow::anyhow;
     use mockall::predicate::*;
 
+    impl DriverResult {
+        fn is_ok(&self) -> bool {
+            match self {
+                DriverResult::Ok => true,
+                _ => false,
+            }
+        }
+
+        fn is_retry(&self) -> bool {
+            match self {
+                DriverResult::Retry(_) => true,
+                _ => false,
+            }
+        }
+
+        fn is_skip(&self) -> bool {
+            match self {
+                DriverResult::Skip(_) => true,
+                _ => false,
+            }
+        }
+    }
+
     #[test]
     fn invokes_solver_with_reader_data_for_unprocessed_auction() {
         let mut reader = MockStableXOrderBookReading::default();
@@ -183,9 +197,6 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader
-            .expect_get_auction_index()
-            .return_once(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
@@ -216,78 +227,8 @@ mod tests {
             .withf(move |o, s| o == orders.as_slice() && *s == state)
             .return_once(move |_, _| Ok(solution));
 
-        let mut driver = StableXDriver::with_past_auction(&mut pf, &reader, &submitter, metrics);
-        assert!(driver.run().unwrap());
-    }
-
-    #[test]
-    fn does_not_process_previously_processed_auction_again() {
-        let mut reader = MockStableXOrderBookReading::default();
-        let mut submitter = MockStableXSolutionSubmitting::default();
-        let mut pf = MockPriceFinding::default();
-        let metrics = StableXMetrics::default();
-
-        let orders = vec![create_order_for_test(), create_order_for_test()];
-        let state = AccountState::with_balance_for(&orders);
-
-        let batch = U256::from(42);
-        reader
-            .expect_get_auction_index()
-            .returning(move || Ok(batch));
-
-        reader
-            .expect_get_auction_data()
-            .with(eq(batch))
-            .return_once({
-                let result = (state.clone(), orders.clone());
-                |_| Ok(result)
-            });
-
-        submitter
-            .expect_get_solution_objective_value()
-            .with(eq(batch), always())
-            .returning(|_, _| Ok(U256::from(1337)));
-
-        submitter
-            .expect_submit_solution()
-            .with(eq(batch), always(), eq(U256::from(1337)))
-            .returning(|_, _, _| Ok(()));
-
-        let solution = Solution {
-            prices: map_from_slice(&[(0, 1), (1, 2)]),
-            executed_orders: vec![
-                order_to_executed_order(&orders[0], 0, 0),
-                order_to_executed_order(&orders[1], 2, 2),
-            ],
-        };
-        pf.expect_find_prices()
-            .withf(move |o, s| o == orders.as_slice() && *s == state)
-            .return_once(move |_, _| Ok(solution));
-
-        let mut driver = StableXDriver::with_past_auction(&mut pf, &reader, &submitter, metrics);
-
-        // First auction
-        assert_eq!(driver.run().unwrap(), true);
-
-        //Second auction
-        assert_eq!(driver.run().unwrap(), false);
-    }
-
-    #[test]
-    fn skips_first_batch() {
-        let mut reader = MockStableXOrderBookReading::default();
-        let submitter = MockStableXSolutionSubmitting::default();
-        let mut pf = MockPriceFinding::default();
-        let metrics = StableXMetrics::default();
-
-        let batch = U256::from(42);
-        reader
-            .expect_get_auction_index()
-            .returning(move || Ok(batch));
-
-        let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
-
-        assert_eq!(driver.run().unwrap(), false);
+        let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
+        assert!(driver.run(batch).is_ok());
     }
 
     #[test]
@@ -298,12 +239,12 @@ mod tests {
         let metrics = StableXMetrics::default();
 
         reader
-            .expect_get_auction_index()
-            .returning(|| Err(anyhow!("Error")));
+            .expect_get_auction_data()
+            .returning(|_| Err(anyhow!("Error")));
 
-        let mut driver = StableXDriver::with_past_auction(&mut pf, &reader, &submitter, metrics);
+        let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
 
-        assert!(driver.run().is_err())
+        assert!(driver.run(U256::from(42)).is_retry())
     }
 
     #[test]
@@ -317,9 +258,6 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader
-            .expect_get_auction_index()
-            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
@@ -342,9 +280,9 @@ mod tests {
         pf.expect_find_prices()
             .returning(|_, _| Err(anyhow!("Error")));
 
-        let mut driver = StableXDriver::with_past_auction(&mut pf, &reader, &submitter, metrics);
+        let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
 
-        assert!(driver.run().is_err());
+        assert!(driver.run(batch).is_skip());
     }
 
     #[test]
@@ -358,49 +296,14 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader
-            .expect_get_auction_index()
-            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
             .with(eq(batch))
             .return_once(move |_| Ok((state, orders)));
 
-        let mut driver = StableXDriver::with_past_auction(&mut pf, &reader, &submitter, metrics);
-        assert!(driver.run().is_ok());
-    }
-
-    #[test]
-    fn test_do_not_invoke_solver_when_previously_failed() {
-        let mut reader = MockStableXOrderBookReading::default();
-        let submitter = MockStableXSolutionSubmitting::default();
-        let mut pf = MockPriceFinding::default();
-        let metrics = StableXMetrics::default();
-
-        let orders = vec![create_order_for_test(), create_order_for_test()];
-        let state = AccountState::with_balance_for(&orders);
-
-        let batch = U256::from(42);
-        reader
-            .expect_get_auction_index()
-            .returning(move || Ok(batch));
-
-        reader
-            .expect_get_auction_data()
-            .with(eq(batch))
-            .return_once(move |_| Ok((state, orders)));
-
-        pf.expect_find_prices()
-            .returning(|_, _| Err(anyhow!("Error")));
-
-        let mut driver = StableXDriver::with_past_auction(&mut pf, &reader, &submitter, metrics);
-
-        // First run fails
-        assert!(driver.run().is_err());
-
-        // Second run is skipped
-        assert_eq!(driver.run().expect("should have succeeded"), false);
+        let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
+        assert!(driver.run(batch).is_ok());
     }
 
     #[test]
@@ -414,9 +317,6 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader
-            .expect_get_auction_index()
-            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
@@ -433,8 +333,8 @@ mod tests {
 
         submitter.expect_submit_solution().times(0);
 
-        let mut driver = StableXDriver::with_past_auction(&mut pf, &reader, &submitter, metrics);
-        assert!(driver.run().is_ok());
+        let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
+        assert!(driver.run(batch).is_ok());
     }
 
     #[test]
@@ -448,9 +348,6 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader
-            .expect_get_auction_index()
-            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
@@ -481,117 +378,8 @@ mod tests {
             .withf(move |o, s| o == orders.as_slice() && *s == state)
             .return_once(move |_, _| Ok(solution));
 
-        let mut driver = StableXDriver::with_past_auction(&mut pf, &reader, &submitter, metrics);
-        assert!(driver.run().is_err());
-    }
-
-    #[test]
-    fn test_do_not_invoke_solver_when_validation_previously_failed() {
-        let mut reader = MockStableXOrderBookReading::default();
-        let mut submitter = MockStableXSolutionSubmitting::default();
-        let mut pf = MockPriceFinding::default();
-        let metrics = StableXMetrics::default();
-
-        let orders = vec![create_order_for_test(), create_order_for_test()];
-        let state = AccountState::with_balance_for(&orders);
-
-        let batch = U256::from(42);
-        reader
-            .expect_get_auction_index()
-            .returning(move || Ok(batch));
-
-        reader
-            .expect_get_auction_data()
-            .with(eq(batch))
-            .return_once({
-                let result = (state.clone(), orders.clone());
-                |_| Ok(result)
-            });
-
-        submitter
-            .expect_get_solution_objective_value()
-            .with(eq(batch), always())
-            .returning(|_, _| {
-                Err(SolutionSubmissionError::Unexpected(anyhow!(
-                    "get_solution_objective_value failed"
-                )))
-            });
-
-        let solution = Solution {
-            prices: map_from_slice(&[(0, 1), (1, 2)]),
-            executed_orders: vec![
-                order_to_executed_order(&orders[0], 0, 0),
-                order_to_executed_order(&orders[1], 2, 2),
-            ],
-        };
-        pf.expect_find_prices()
-            .withf(move |o, s| o == orders.as_slice() && *s == state)
-            .return_once(move |_, _| Ok(solution));
-
-        let mut driver = StableXDriver::with_past_auction(&mut pf, &reader, &submitter, metrics);
-
-        // First run fails
-        assert!(driver.run().is_err());
-
-        // Second run is skipped
-        assert_eq!(driver.run().expect("should have succeeded"), false);
-    }
-
-    #[test]
-    fn test_do_not_invoke_solver_when_submission_previously_failed() {
-        let mut reader = MockStableXOrderBookReading::default();
-        let mut submitter = MockStableXSolutionSubmitting::default();
-        let mut pf = MockPriceFinding::default();
-        let metrics = StableXMetrics::default();
-
-        let orders = vec![create_order_for_test(), create_order_for_test()];
-        let state = AccountState::with_balance_for(&orders);
-
-        let batch = U256::from(42);
-        reader
-            .expect_get_auction_index()
-            .returning(move || Ok(batch));
-
-        reader
-            .expect_get_auction_data()
-            .with(eq(batch))
-            .return_once({
-                let result = (state.clone(), orders.clone());
-                |_| Ok(result)
-            });
-
-        submitter
-            .expect_get_solution_objective_value()
-            .with(eq(batch), always())
-            .returning(|_, _| Ok(U256::from(1337)));
-
-        submitter
-            .expect_submit_solution()
-            .with(eq(batch), always(), eq(U256::from(1337)))
-            .returning(|_, _, _| {
-                Err(SolutionSubmissionError::Unexpected(anyhow!(
-                    "submit_solution failed"
-                )))
-            });
-
-        let solution = Solution {
-            prices: map_from_slice(&[(0, 1), (1, 2)]),
-            executed_orders: vec![
-                order_to_executed_order(&orders[0], 0, 0),
-                order_to_executed_order(&orders[1], 2, 2),
-            ],
-        };
-        pf.expect_find_prices()
-            .withf(move |o, s| o == orders.as_slice() && *s == state)
-            .return_once(move |_, _| Ok(solution));
-
-        let mut driver = StableXDriver::with_past_auction(&mut pf, &reader, &submitter, metrics);
-
-        // First run fails
-        assert!(driver.run().is_err());
-
-        // Second run is skipped
-        assert_eq!(driver.run().expect("should have succeeded"), false);
+        let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
+        assert!(driver.run(batch).is_skip());
     }
 
     #[test]
@@ -605,9 +393,6 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader
-            .expect_get_auction_index()
-            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
@@ -634,8 +419,8 @@ mod tests {
             .withf(move |o, s| o == orders.as_slice() && *s == state)
             .return_once(move |_, _| Ok(solution));
 
-        let mut driver = StableXDriver::with_past_auction(&mut pf, &reader, &submitter, metrics);
-        assert!(driver.run().is_ok());
+        let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
+        assert!(driver.run(batch).is_ok());
     }
 
     #[test]
@@ -649,9 +434,6 @@ mod tests {
         let state = AccountState::with_balance_for(&orders);
 
         let batch = U256::from(42);
-        reader
-            .expect_get_auction_index()
-            .returning(move || Ok(batch));
 
         reader
             .expect_get_auction_data()
@@ -681,7 +463,7 @@ mod tests {
             .withf(move |o, s| o == orders.as_slice() && *s == state)
             .return_once(move |_, _| Ok(solution));
 
-        let mut driver = StableXDriver::new(&mut pf, &reader, &submitter, metrics);
-        assert!(driver.run().is_ok());
+        let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
+        assert!(driver.run(batch).is_ok());
     }
 }

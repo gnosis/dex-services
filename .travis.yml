@@ -38,10 +38,10 @@ matrix:
         # StableX e2e Tests (Ganache)
         - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d stablex
         - cargo test -p e2e ganache -- --nocapture
+        - docker-compose logs
         # StableX e2e Tests (Rinkeby)
         - docker-compose down && docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.yml up -d stablex
         - cargo test -p e2e rinkeby -- --nocapture
-      after_script:
         - docker-compose logs
       deploy:
         - provider: script

@@ -17,7 +17,10 @@ mod transport;
 mod util;
 
 use crate::contracts::{stablex_contract::StableXContractImpl, web3_provider};
-use crate::driver::stablex_driver::StableXDriver;
+use crate::driver::{
+    scheduler::{AuctionTimingConfiguration, Scheduler},
+    stablex_driver::StableXDriverImpl,
+};
 use crate::eth_rpc::Web3EthRpc;
 use crate::gas_station::GnosisSafeGasStation;
 use crate::http::HttpFactory;
@@ -28,7 +31,7 @@ use crate::price_finding::{Fee, SolverConfig};
 use crate::solution_submission::StableXSolutionSubmitter;
 
 use ethcontract::PrivateKey;
-use log::{error, info};
+use log::info;
 use prometheus::Registry;
 use std::num::ParseIntError;
 use std::sync::Arc;
@@ -129,6 +132,26 @@ struct Options {
     )]
     http_timeout: Duration,
 
+    /// The offset from the start of a batch in seconds at which point we
+    /// should start solving.
+    #[structopt(
+        long,
+        env = "TARGET_START_SOLVE_TIME",
+        default_value = "30",
+        parse(try_from_str = duration_secs),
+    )]
+    target_start_solve_time: Duration,
+
+    /// The offset from the start of the batch in seconds at which point there
+    /// is not enough time left to attempt to solve.
+    #[structopt(
+        long,
+        env = "LATEST_SOLVE_ATTEMPT_TIME",
+        default_value = "180",
+        parse(try_from_str = duration_secs),
+    )]
+    latest_solve_attempt_time: Duration,
+
     /// Time interval in seconds in which price sources should be updated.
     #[structopt(
         long,
@@ -194,18 +217,20 @@ fn main() {
     let solution_submitter = StableXSolutionSubmitter::new(&contract, &eth_rpc);
 
     // Set up the driver and start the run-loop.
-    let mut driver = StableXDriver::new(
+    let mut driver = StableXDriverImpl::new(
         &mut *price_finder,
         &filtered_orderbook,
         &solution_submitter,
-        stablex_metrics,
+        &stablex_metrics,
     );
-    loop {
-        if let Err(e) = driver.run() {
-            error!("StableXDriver error: {}", e);
-        }
-        thread::sleep(Duration::from_secs(5));
-    }
+    let mut scheduler = Scheduler::new(
+        &mut driver,
+        AuctionTimingConfiguration {
+            target_start_solve_time: options.target_start_solve_time,
+            latest_solve_attempt_time: options.latest_solve_attempt_time,
+        },
+    );
+    scheduler.run_forever();
 }
 
 fn duration_millis(s: &str) -> Result<Duration, ParseIntError> {
