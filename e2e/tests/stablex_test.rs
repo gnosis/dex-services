@@ -6,11 +6,11 @@ use ethcontract::{Account, PrivateKey, U256};
 use futures::future::join_all;
 
 use e2e::common::{wait_for_condition, FutureBuilderExt, FutureWaitExt};
+use e2e::docker_logs;
 use e2e::stablex::{close_auction, setup_stablex};
 use e2e::{BatchExchange, IERC20};
 
 use std::env;
-use std::process::Command;
 use std::time::{Duration, Instant};
 
 #[test]
@@ -212,12 +212,5 @@ fn test_rinkeby() {
     println!("Sleeping {} seconds...", sleep_time);
     std::thread::sleep(Duration::from_secs(sleep_time));
 
-    // Make sure there was no error
-    let output = Command::new("docker-compose")
-        .arg("logs")
-        .output()
-        .expect("failed to execute process");
-    let logs = String::from_utf8(output.stdout).expect("failed to read logs");
-    // Our logger prints log level with four characters, thus searching for ERRO
-    assert!(!logs.to_lowercase().contains("erro"));
+    docker_logs::assert_no_errors_logged("dex-services_stablex_1");
 }

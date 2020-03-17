@@ -1,3 +1,4 @@
+use slog::Level;
 use slog::{o, Drain, Logger, OwnedKVList, Record};
 use slog_async::Async;
 use slog_envlogger::LogBuilder;
@@ -9,7 +10,12 @@ const BUFFER_SIZE: usize = 1024;
 
 /// Initialize driver logging.
 pub fn init(filter: impl AsRef<str>) -> (Logger, GlobalLoggerGuard) {
-    let format = CustomFormatter::new(TermDecorator::new().stderr().build()).fuse();
+    // Log errors to stderr and lower severities to stdout.
+    let format = CustomFormatter::new(
+        TermDecorator::new().stderr().build(),
+        TermDecorator::new().stdout().build(),
+    )
+    .fuse();
     let drain = Async::new(LogBuilder::new(format).parse(filter.as_ref()).build())
         .chan_size(BUFFER_SIZE)
         .build();
@@ -21,17 +27,25 @@ pub fn init(filter: impl AsRef<str>) -> (Logger, GlobalLoggerGuard) {
     (logger, guard)
 }
 
-pub struct CustomFormatter<D: Decorator> {
-    decorator: D,
+/// Uses one decorator for `Error` and `Critical` log messages and the other for
+/// the rest.
+pub struct CustomFormatter<ErrDecorator, RestDecorator> {
+    err_decorator: ErrDecorator,
+    rest_decorator: RestDecorator,
 }
 
-impl<D: Decorator> CustomFormatter<D> {
-    fn new(decorator: D) -> Self {
-        Self { decorator }
+impl<ErrDecorator, RestDecorator> CustomFormatter<ErrDecorator, RestDecorator> {
+    fn new(err_decorator: ErrDecorator, rest_decorator: RestDecorator) -> Self {
+        Self {
+            err_decorator,
+            rest_decorator,
+        }
     }
 }
 
-impl<D: Decorator> Drain for CustomFormatter<D> {
+impl<ErrDecorator: Decorator, RestDecorator: Decorator> Drain
+    for CustomFormatter<ErrDecorator, RestDecorator>
+{
     type Ok = ();
     type Err = std::io::Error;
     fn log(
@@ -39,29 +53,40 @@ impl<D: Decorator> Drain for CustomFormatter<D> {
         record: &Record,
         values: &OwnedKVList,
     ) -> std::result::Result<Self::Ok, Self::Err> {
-        self.decorator.with_record(record, values, |mut decorator| {
-            decorator.start_timestamp()?;
-            slog_term::timestamp_utc(&mut decorator)?;
-
-            decorator.start_whitespace()?;
-            write!(decorator, " ")?;
-
-            decorator.start_level()?;
-            write!(decorator, "{}", record.level())?;
-
-            decorator.start_whitespace()?;
-            write!(decorator, " ")?;
-
-            write!(decorator, "[{}]", record.module())?;
-
-            decorator.start_whitespace()?;
-            write!(decorator, " ")?;
-
-            decorator.start_msg()?;
-            writeln!(decorator, "{}", record.msg())?;
-            decorator.flush()?;
-
-            Ok(())
-        })
+        match record.level() {
+            Level::Error | Level::Critical => log_to_decorator(&self.err_decorator, record, values),
+            _ => log_to_decorator(&self.rest_decorator, record, values),
+        }
     }
+}
+
+fn log_to_decorator(
+    decorator: &impl Decorator,
+    record: &Record,
+    values: &OwnedKVList,
+) -> std::result::Result<(), std::io::Error> {
+    decorator.with_record(record, values, |mut decorator| {
+        decorator.start_timestamp()?;
+        slog_term::timestamp_utc(&mut decorator)?;
+
+        decorator.start_whitespace()?;
+        write!(decorator, " ")?;
+
+        decorator.start_level()?;
+        write!(decorator, "{}", record.level())?;
+
+        decorator.start_whitespace()?;
+        write!(decorator, " ")?;
+
+        write!(decorator, "[{}]", record.module())?;
+
+        decorator.start_whitespace()?;
+        write!(decorator, " ")?;
+
+        decorator.start_msg()?;
+        writeln!(decorator, "{}", record.msg())?;
+        decorator.flush()?;
+
+        Ok(())
+    })
 }
