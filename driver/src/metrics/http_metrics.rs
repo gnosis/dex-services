@@ -223,7 +223,7 @@ macro_rules! subsystem {
 }
 
 subsystem! {
-    /// A label for `web3` HTTP request. This subsystem is used by the HTTP
+    /// A label for `web3` HTTP requests. This subsystem is used by the HTTP
     /// transport implementation.
     pub enum Web3Label as "web3" {
         Call => "call",
@@ -233,13 +233,19 @@ subsystem! {
 }
 
 subsystem! {
-    /// A label for Kraken HTTP API request. This subsystem is used by the
+    /// A label for Kraken HTTP API requests. This subsystem is used by the
     /// Kraken API implementation.
     pub enum KrakenLabel as "kraken" {
         Assets => "assets",
         AssetPairs => "asset_pairs",
         TickerInfos => "ticker_infos",
     }
+}
+
+subsystem! {
+    /// A label for Dexag HTTP API requests. This subsystem is used by the Dexag
+    /// API implementation.
+    pub struct DexagLabel as "dexag";
 }
 
 subsystem! {

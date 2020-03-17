@@ -8,7 +8,6 @@ use isahc::prelude::{Configurable, Request};
 use isahc::{HttpClientBuilder, ResponseExt};
 use serde::de::DeserializeOwned;
 use std::convert::TryFrom;
-use std::time::Duration;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -47,13 +46,6 @@ impl HttpFactory {
             metrics,
             _subsystem: PhantomData,
         })
-    }
-}
-
-#[cfg(test)]
-impl Default for HttpFactory {
-    fn default() -> Self {
-        HttpFactory::new(Duration::from_secs(10))
     }
 }
 
@@ -103,11 +95,27 @@ impl HttpClientInner {
     /// Standard HTTP GET request that parses the result as JSON.
     fn get_json<U, T>(&self, url: U) -> Result<(T, Duration, usize)>
     where
-        Uri: HttpTryFrom<U>,
+        Uri: TryFrom<U>,
+        <Uri as TryFrom<U>>::Error: Into<HttpError>,
         T: DeserializeOwned,
     {
         let start = Instant::now();
         let json = self.inner.get(url)?.text()?;
+        let size = json.len();
+        let result = serde_json::from_str(&json)?;
+
+        Ok((result, start.elapsed(), size))
+    }
+
+    /// Standard HTTP GET request that parses the result as JSON.
+    async fn get_json_async<U, T>(&self, url: U) -> Result<(T, Duration, usize)>
+    where
+        Uri: TryFrom<U>,
+        <Uri as TryFrom<U>>::Error: Into<HttpError>,
+        T: DeserializeOwned,
+    {
+        let start = Instant::now();
+        let json = self.inner.get_async(url).await?.text()?;
         let size = json.len();
         let result = serde_json::from_str(&json)?;
 
@@ -133,7 +141,8 @@ impl<Subsystem: LabeledSubsystem + 'static> HttpClient<Subsystem> {
         label: Subsystem,
     ) -> Result<String>
     where
-        Uri: HttpTryFrom<U>,
+        Uri: TryFrom<U>,
+        <Uri as TryFrom<U>>::Error: Into<HttpError>,
     {
         let (value, latency) = self.inner.post_raw_json_async(url, data).await?;
         self.metrics.request_labeled(label, latency, value.len());
@@ -159,7 +168,8 @@ impl<Subsystem: UnlabeledSubsystem + 'static> HttpClient<Subsystem> {
     /// Standard HTTP GET request that parses the result as JSON.
     pub fn get_json_unlabeled<U, T>(&self, url: U) -> Result<T>
     where
-        Uri: HttpTryFrom<U>,
+        Uri: TryFrom<U>,
+        <Uri as TryFrom<U>>::Error: Into<HttpError>,
         T: DeserializeOwned,
     {
         let (value, latency, size) = self.inner.get_json(url)?;
@@ -175,6 +185,9 @@ impl<Subsystem: UnlabeledSubsystem + 'static> HttpClient<Subsystem> {
         <Uri as TryFrom<U>>::Error: Into<HttpError>,
         T: DeserializeOwned,
     {
-        Ok(self.inner.get_async(url).await?.json()?)
+        let (value, latency, size) = self.inner.get_json_async(url).await?;
+        self.metrics.request_unlabeled::<Subsystem>(latency, size);
+
+        Ok(value)
     }
 }

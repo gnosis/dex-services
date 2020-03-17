@@ -3,7 +3,8 @@ mod metrics_server;
 mod stablex_metrics;
 
 pub use http_metrics::{
-    GasStationLabel, HttpMetrics, KrakenLabel, LabeledSubsystem, UnlabeledSubsystem, Web3Label,
+    DexagLabel, GasStationLabel, HttpMetrics, KrakenLabel, LabeledSubsystem, UnlabeledSubsystem,
+    Web3Label,
 };
 pub use metrics_server::MetricsServer;
 pub use stablex_metrics::StableXMetrics;
