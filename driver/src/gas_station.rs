@@ -1,4 +1,4 @@
-use crate::http::{HttpClient, HttpFactory};
+use crate::http::{HttpClient, HttpFactory, UnlabeledHttpClient};
 use crate::metrics::GasStationLabel;
 use anyhow::Result;
 use ethcontract::U256;
@@ -47,7 +47,7 @@ impl GnosisSafeGasStation {
 
 impl GasPriceEstimating for GnosisSafeGasStation {
     fn estimate_gas_price(&self) -> Result<GasPrice> {
-        self.client.get_json_unlabeled(&self.uri)
+        self.client.get_json(&self.uri)
     }
 }
 

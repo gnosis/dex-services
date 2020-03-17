@@ -1,4 +1,4 @@
-use crate::http::{HttpClient, HttpFactory};
+use crate::http::{HttpClient, HttpFactory, UnlabeledHttpClient};
 use crate::metrics::KrakenLabel;
 use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
@@ -49,20 +49,14 @@ impl KrakenHttpApi {
 impl KrakenApi for KrakenHttpApi {
     fn assets(&self) -> Result<HashMap<String, Asset>> {
         self.client
-            .get_json_labeled::<_, KrakenResult<_>>(
-                format!("{}/Assets", self.base_url),
-                KrakenLabel::Assets,
-            )
+            .get_json::<_, KrakenResult<_>>(format!("{}/Assets", self.base_url))
             .context("failed to parse assets JSON")?
             .into_result()
     }
 
     fn asset_pairs(&self) -> Result<HashMap<String, AssetPair>> {
         self.client
-            .get_json_labeled::<_, KrakenResult<_>>(
-                format!("{}/AssetPairs", self.base_url),
-                KrakenLabel::AssetPairs,
-            )
+            .get_json::<_, KrakenResult<_>>(format!("{}/AssetPairs", self.base_url))
             .context("failed to parse asset pairs JSON")?
             .into_result()
     }
@@ -73,10 +67,11 @@ impl KrakenApi for KrakenHttpApi {
         }
 
         self.client
-            .get_json_labeled::<_, KrakenResult<_>>(
-                format!("{}/Ticker?pair={}", self.base_url, pairs.join(",")),
-                KrakenLabel::TickerInfos,
-            )
+            .get_json::<_, KrakenResult<_>>(format!(
+                "{}/Ticker?pair={}",
+                self.base_url,
+                pairs.join(",")
+            ))
             .context("failed to parse ticker JSON")?
             .into_result()
     }

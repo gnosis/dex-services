@@ -1,144 +1,70 @@
 use anyhow::Result;
-use prometheus::{IntGauge, IntGaugeVec, Opts, Registry};
-use std::any::{Any, TypeId};
-use std::collections::HashMap;
-use std::fmt::{self, Debug, Formatter};
+use prometheus::{HistogramOpts, HistogramVec, Registry};
 use std::sync::Arc;
 use std::time::Duration;
 
 /// A registry for all HTTP related metrics.
 #[derive(Debug)]
 pub struct HttpMetrics {
-    labeled: HashMap<TypeId, SubsystemMetrics<IntGaugeVec>>,
-    unlabeled: HashMap<TypeId, SubsystemMetrics<IntGauge>>,
-}
-
-/// Metrics related to a single HTTP subsystem. Subsystems are grouped based on
-/// what the HTTP client is used for.
-pub struct SubsystemMetrics<Gauge> {
-    latency: Gauge,
-    size: Gauge,
-}
-
-impl<Gauge> Debug for SubsystemMetrics<Gauge> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        f.debug_struct("SubsystemMetrics").finish()
-    }
+    latency: HistogramVec,
+    size: HistogramVec,
 }
 
 impl HttpMetrics {
     /// Create a new HTTP metrics registry.
     pub fn new(registry: &Arc<Registry>) -> Result<Self> {
-        let mut metrics = HttpMetrics {
-            labeled: HashMap::new(),
-            unlabeled: HashMap::new(),
-        };
+        let latency = HttpMetrics::initialize_histogram(
+            registry,
+            "dfusion_service_http_latency",
+            "Latency in seconds for HTTP request",
+            vec![0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0],
+        )?;
+        let size = HttpMetrics::initialize_histogram(
+            registry,
+            "dfusion_service_http_size",
+            "Size in bytes for HTTP response bodies",
+            vec![
+                1_000.0,
+                10_000.0,
+                100_000.0,
+                1_000_000.0,
+                10_000_000.0,
+                100_000_000.0,
+            ],
+        )?;
 
-        metrics.initialize_labeled_subsystem::<Web3Label>(registry)?;
-        metrics.initialize_labeled_subsystem::<KrakenLabel>(registry)?;
-        metrics.initialize_unlabeled_subsystem::<GasStationLabel>(registry)?;
+        Ok(HttpMetrics { latency, size })
+    }
 
-        Ok(metrics)
+    /// Initializes a histogram with for all the labels.
+    fn initialize_histogram(
+        registry: &Arc<Registry>,
+        name: &str,
+        description: &str,
+        buckets: Vec<f64>,
+    ) -> Result<HistogramVec> {
+        let options = HistogramOpts::new(name, description).buckets(buckets);
+        let histogram = HistogramVec::new(options, &["client", "request"])?;
+
+        Web3Label::initialize_histogram_labels(&histogram);
+        KrakenLabel::initialize_histogram_labels(&histogram);
+        DexagLabel::initialize_histogram_labels(&histogram);
+        GasStationLabel::initialize_histogram_labels(&histogram);
+
+        registry.register(Box::new(histogram.clone()))?;
+
+        Ok(histogram)
     }
 
     /// Add a request latency and size measurement to the current HTTP metrics
-    /// registry for the specified label.
-    pub fn request_labeled<L: LabeledSubsystem + Any>(
-        &self,
-        label: L,
-        latency: Duration,
-        size: usize,
-    ) {
-        let subsystem = self
-            .labeled
-            .get(&TypeId::of::<L>())
-            .expect("all labeled subsystems have registered metrics");
-
-        subsystem
-            .latency
-            .with_label_values(&[label.label()])
-            .set(latency.as_millis() as _);
-
-        subsystem
-            .size
-            .with_label_values(&[label.label()])
-            .set(size as _);
-    }
-
-    /// Add a request latency and size measurement to the current HTTP metrics
-    /// registry.
-    pub fn request_unlabeled<L: UnlabeledSubsystem + Any>(&self, latency: Duration, size: usize) {
-        let subsystem = self
-            .unlabeled
-            .get(&TypeId::of::<L>())
-            .expect("all labeled subsystems have registered metrics");
-
-        subsystem.latency.set(latency.as_millis() as _);
-        subsystem.size.set(size as _);
-    }
-
-    /// Initialize the metrics for a labeled subsystem.
-    fn initialize_labeled_subsystem<L: LabeledSubsystem + Any>(
-        &mut self,
-        registry: &Arc<Registry>,
-    ) -> Result<()> {
-        let name = L::name();
-
-        let latency = {
-            let opts = Opts::new(
-                format!("dfusion_service_http_{}_latency", name),
-                format!("Latency in milliseconds for {} HTTP requests", name),
-            );
-            L::initialize_gauges(opts)?
-        };
-        registry.register(Box::new(latency.clone()))?;
-
-        let size = {
-            let opts = Opts::new(
-                format!("dfusion_service_http_{}_size", name),
-                format!("Size in bytes of {} HTTP responses", name),
-            );
-            L::initialize_gauges(opts)?
-        };
-        registry.register(Box::new(size.clone()))?;
-
-        self.labeled
-            .insert(TypeId::of::<L>(), SubsystemMetrics { latency, size });
-        Ok(())
-    }
-
-    /// Initialize metrics for an unlabeled subsystem.
-    fn initialize_unlabeled_subsystem<L: UnlabeledSubsystem + Any>(
-        &mut self,
-        registry: &Arc<Registry>,
-    ) -> Result<()> {
-        let name = L::name();
-
-        let latency = {
-            let opts = Opts::new(
-                format!("dfusion_service_http_{}_latency", name),
-                format!("Latency for {} HTTP requests", name),
-            );
-            let gauge = IntGauge::with_opts(opts)?;
-            gauge.set(0);
-            gauge
-        };
-        registry.register(Box::new(latency.clone()))?;
-
-        let size = {
-            let opts = Opts::new(
-                format!("dfusion_service_http_{}_size", name),
-                format!("Size of {} HTTP responses", name),
-            );
-            let gauge = IntGauge::with_opts(opts)?;
-            gauge.set(0);
-            gauge
-        };
-        registry.register(Box::new(size.clone()))?;
-
-        self.unlabeled
-            .insert(TypeId::of::<L>(), SubsystemMetrics { latency, size });
-        Ok(())
+    /// registry for the specified label values.
+    pub fn request<L: LabelValues>(&self, label: L, latency: Duration, size: usize) {
+        self.latency
+            .with_label_values(&label.label_values())
+            .observe(latency.as_secs_f64());
+        self.size
+            .with_label_values(&label.label_values())
+            .observe(size as _);
     }
 }
 
@@ -148,26 +74,24 @@ impl Default for HttpMetrics {
     }
 }
 
+/// A common trait shared between labeled and unlabeled subsystems for getting
+/// the label values to use for metrics.
+pub trait LabelValues {
+    fn label_values(&self) -> [&'static str; 2];
+    fn initialize_histogram_labels(histograms: &HistogramVec);
+}
+
 /// A trait abstracting a labeled subsystem, that is a specific use of an HTTP
 /// client where the HTTP requests should be differenciated.
-pub trait LabeledSubsystem {
+pub trait LabeledSubsystem: LabelValues + Sized {
     fn name() -> &'static str;
-    fn all_labels() -> &'static [&'static str];
+    fn all_labels() -> &'static [Self];
     fn label(&self) -> &'static str;
-
-    fn initialize_gauges(opts: Opts) -> Result<IntGaugeVec> {
-        let gauges = IntGaugeVec::new(opts, &["request"])?;
-        for label in Self::all_labels() {
-            gauges.with_label_values(&[label]).set(0);
-        }
-
-        Ok(gauges)
-    }
 }
 
 /// A trait abstracting a labeled subsystem, that is a specific use of an HTTP
 /// client where the HTTP requests should not be differenciated.
-pub trait UnlabeledSubsystem {
+pub trait UnlabeledSubsystem: Default + LabelValues {
     fn name() -> &'static str;
 }
 
@@ -186,14 +110,26 @@ macro_rules! subsystem {
             )*
         }
 
+        impl LabelValues for $name {
+            fn label_values(&self) -> [&'static str; 2] {
+                [Self::name(), self.label()]
+            }
+
+            fn initialize_histogram_labels(histograms: &HistogramVec) {
+                for label in Self::all_labels() {
+                    histograms.with_label_values(&label.label_values());
+                }
+            }
+        }
+
         impl LabeledSubsystem for $name {
             fn name() -> &'static str {
                 $n
             }
 
-            fn all_labels() -> &'static [&'static str] {
-                const ALL: &[&str] = &[$($label),*];
-                &ALL
+            fn all_labels() -> &'static [Self] {
+                const ALL: &[$name] = &[$($name::$variant),*];
+                ALL
             }
 
             fn label(&self) -> &'static str {
@@ -213,6 +149,16 @@ macro_rules! subsystem {
         $(#[$attr])*
         #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
         pub struct $name;
+
+        impl LabelValues for $name {
+            fn label_values(&self) -> [&'static str; 2] {
+                [Self::name(), ""]
+            }
+
+            fn initialize_histogram_labels(histograms: &HistogramVec) {
+                histograms.with_label_values(&Self::default().label_values());
+            }
+        }
 
         impl UnlabeledSubsystem for $name {
             fn name() -> &'static str {
@@ -235,11 +181,7 @@ subsystem! {
 subsystem! {
     /// A label for Kraken HTTP API requests. This subsystem is used by the
     /// Kraken API implementation.
-    pub enum KrakenLabel as "kraken" {
-        Assets => "assets",
-        AssetPairs => "asset_pairs",
-        TickerInfos => "ticker_infos",
-    }
+    pub struct KrakenLabel as "kraken";
 }
 
 subsystem! {

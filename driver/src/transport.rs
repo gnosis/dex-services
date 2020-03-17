@@ -1,4 +1,4 @@
-use crate::http::{HttpClient, HttpFactory};
+use crate::http::{HttpClient, HttpFactory, LabeledHttpClient};
 use crate::metrics::Web3Label;
 use anyhow::Error;
 use ethcontract::jsonrpc::types::{Call, Output};
@@ -67,7 +67,7 @@ impl HttpTransportInner {
 
         let content = self
             .client
-            .post_raw_json_async_labeled(&self.url, request, label)
+            .post_raw_json_async(&self.url, request, label)
             .await
             .map_err(|err| {
                 warn!("[id:{}] returned an error: '{}'", id, err.to_string());

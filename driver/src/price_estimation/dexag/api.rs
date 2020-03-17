@@ -1,4 +1,4 @@
-use crate::http::{HttpClient, HttpFactory};
+use crate::http::{HttpClient, HttpFactory, UnlabeledHttpClient};
 use crate::metrics::DexagLabel;
 use anyhow::{Context, Result};
 use ethcontract::Address;
@@ -60,7 +60,7 @@ impl DexagApi for DexagHttpApi {
         let mut url = self.base_url.clone();
         url.set_path("token-list-full");
         self.client
-            .get_json_unlabeled(url.to_string())
+            .get_json(url.to_string())
             .context("failed to parse token list json from dexag response")
     }
 
