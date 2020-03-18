@@ -102,9 +102,9 @@ impl HttpClient {
 
         let json = self.inner.get(url)?.text()?;
         let size = json.len();
-        let result = serde_json::from_str(&json)?;
-
         self.metrics.request(label, start.elapsed(), size);
+
+        let result = serde_json::from_str(&json)?;
         Ok(result)
     }
 
@@ -119,9 +119,9 @@ impl HttpClient {
 
         let json = self.inner.get_async(url).await?.text()?;
         let size = json.len();
-        let result = serde_json::from_str(&json)?;
-
         self.metrics.request(label, start.elapsed(), size);
+
+        let result = serde_json::from_str(&json)?;
         Ok(result)
     }
 }
