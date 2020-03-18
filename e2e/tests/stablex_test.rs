@@ -73,7 +73,7 @@ fn test_with_ganache() {
     let batch_id = instance
         .get_current_batch_id()
         .wait_and_expect("Failed to query batch ID");
-    let wait_time = Duration::from_secs(340);
+    let wait_time = Duration::from_secs(640);
     println!(
         "Waiting {}s for the solver to submit a solution for batch {}",
         wait_time.as_secs(),
