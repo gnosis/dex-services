@@ -484,7 +484,7 @@ dependencies = [
  "chrono",
  "crossbeam-utils 0.7.2",
  "ethcontract",
- "ethcontract-generate 0.4.2",
+ "ethcontract-generate",
  "futures 0.3.4",
  "isahc",
  "lazy_static",
@@ -590,7 +590,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0beb0833dea2e98c76212214ed1b3b313c4654b093557a1db4d9846bb13ffd4"
 dependencies = [
  "ethabi 9.0.1",
- "ethcontract-common 0.5.0",
+ "ethcontract-common",
  "ethcontract-derive",
  "futures 0.3.4",
  "futures-timer",
@@ -605,22 +605,6 @@ dependencies = [
  "thiserror",
  "web3",
  "zeroize",
-]
-
-[[package]]
-name = "ethcontract-common"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6e280ec895cc575c094305272df7dec92db7e4d947ab6f6ac10a95187a83ad3"
-dependencies = [
- "ethabi 9.0.1",
- "hex",
- "serde",
- "serde_derive",
- "serde_json",
- "thiserror",
- "tiny-keccak 2.0.1",
- "web3",
 ]
 
 [[package]]
@@ -645,22 +629,8 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "35c082df9c592925fd9bd4a6a0ef4156741da0a400e20c3ad1b5efbc132f8f90"
 dependencies = [
- "ethcontract-generate 0.5.0",
+ "ethcontract-generate",
  "proc-macro2",
- "syn",
-]
-
-[[package]]
-name = "ethcontract-generate"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e70704f727dd8ba16783cc052cc812cf5f68c0c37cfed1d48a5430829420c21"
-dependencies = [
- "Inflector",
- "anyhow",
- "ethcontract-common 0.4.2",
- "proc-macro2",
- "quote",
  "syn",
 ]
 
@@ -673,7 +643,7 @@ dependencies = [
  "Inflector",
  "anyhow",
  "curl",
- "ethcontract-common 0.5.0",
+ "ethcontract-common",
  "proc-macro2",
  "quote",
  "syn",
