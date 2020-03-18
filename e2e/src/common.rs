@@ -98,15 +98,42 @@ pub fn wait_for(web3: &Web3<Http>, seconds: u32) {
         .expect("Cannot mine to increase time");
 }
 
-pub fn wait_for_condition<C>(mut condition: C, deadline: Instant) -> Result<(), Error>
+fn is_connected_to_ganache(web3: &Web3<Http>) -> bool {
+    const GANACHE_CHAIN_ID: u64 = 5777;
+
+    let chain_id = web3
+        .eth()
+        .chain_id()
+        .wait()
+        .expect("Failed to determine chain ID");
+    chain_id.low_u64() == GANACHE_CHAIN_ID
+}
+
+pub fn wait_for_condition<C>(
+    web3: &Web3<Http>,
+    mut condition: C,
+    deadline: Instant,
+) -> Result<(), Error>
 where
     C: FnMut() -> bool,
 {
+    // NOTE: For Ganache, we need to make sure that that we periodically mine so
+    //   that the EVM time periodically updates and so that balances are up to
+    //   date when retrieving the orderbook, as they are calculated on-chain.
+    let should_mine = is_connected_to_ganache(web3);
+
     while Instant::now() < deadline {
         if condition() {
             return Ok(());
         }
+
         std::thread::sleep(Duration::from_secs(1));
+        if should_mine {
+            web3.transport()
+                .execute("evm_mine", vec![])
+                .wait()
+                .expect("Cannot mine to update current time");
+        }
     }
     Err(Error::new(
         ErrorKind::TimedOut,
@@ -150,12 +177,4 @@ pub fn approve(tokens: &[IERC20], address: Address, accounts: &[Address], approv
                 .unwrap_or_else(|_| panic!("Cannot approve token {:x}", token.address()));
         }
     }
-}
-
-/// Mine a new block so the current EVM timestamp changes.
-pub fn update_evm_time(web3: &Web3<Http>) {
-    web3.transport()
-        .execute("evm_mine", vec![])
-        .wait()
-        .expect("Cannot mine to update current time");
 }
