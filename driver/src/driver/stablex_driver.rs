@@ -3,10 +3,10 @@ use crate::models::{account_state::AccountState, order::Order, Solution};
 use crate::orderbook::StableXOrderBookReading;
 use crate::price_finding::PriceFinding;
 use crate::solution_submission::{SolutionSubmissionError, StableXSolutionSubmitting};
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Error, Result};
 use ethcontract::U256;
 use log::info;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[derive(Debug)]
 pub enum DriverResult {
@@ -143,12 +143,23 @@ impl<'a> StableXDriverImpl<'a> {
 
 impl<'a> StableXDriver for StableXDriverImpl<'a> {
     fn run(&self, batch_to_solve: U256, time_limit: Duration) -> DriverResult {
+        let deadline = Instant::now() + time_limit;
+
         self.metrics.auction_processing_started(&Ok(batch_to_solve));
         let (account_state, orders) = match self.get_orderbook(batch_to_solve) {
             Ok(ok) => ok,
             Err(err) => return DriverResult::Retry(err),
         };
-        match self.solve(batch_to_solve, time_limit, account_state, orders) {
+
+        let actual_time_limit = match deadline.checked_duration_since(Instant::now()) {
+            Some(time_limit) => time_limit,
+            None => {
+                self.metrics.auction_skipped(batch_to_solve);
+                return DriverResult::Skip(anyhow!("account retrieval exceeded time limit"));
+            }
+        };
+
+        match self.solve(batch_to_solve, actual_time_limit, account_state, orders) {
             Ok(()) => DriverResult::Ok,
             Err(err) => DriverResult::Skip(err),
         }
@@ -166,6 +177,7 @@ mod tests {
     use crate::util::test_util::map_from_slice;
     use anyhow::anyhow;
     use mockall::predicate::*;
+    use std::thread;
 
     impl DriverResult {
         fn is_ok(&self) -> bool {
@@ -229,7 +241,7 @@ mod tests {
             ],
         };
         pf.expect_find_prices()
-            .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t == time_limit)
+            .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
             .return_once(move |_, _, _| Ok(solution));
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
@@ -336,7 +348,7 @@ mod tests {
 
         let solution = Solution::trivial();
         pf.expect_find_prices()
-            .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t == time_limit)
+            .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
             .return_once(move |_, _, _| Ok(solution));
 
         submitter.expect_submit_solution().times(0);
@@ -384,7 +396,7 @@ mod tests {
             ],
         };
         pf.expect_find_prices()
-            .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t == time_limit)
+            .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
             .return_once(move |_, _, _| Ok(solution));
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
@@ -426,7 +438,7 @@ mod tests {
             ],
         };
         pf.expect_find_prices()
-            .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t == time_limit)
+            .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
             .return_once(move |_, _, _| Ok(solution));
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
@@ -471,10 +483,40 @@ mod tests {
             ],
         };
         pf.expect_find_prices()
-            .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t == time_limit)
+            .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
             .return_once(move |_, _, _| Ok(solution));
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
         assert!(driver.run(batch, time_limit).is_ok());
+    }
+
+    #[test]
+    fn skips_solving_when_orderbook_retrieval_exceedes_time_limit() {
+        let mut reader = MockStableXOrderBookReading::default();
+        let submitter = MockStableXSolutionSubmitting::default();
+        let pf = MockPriceFinding::default();
+        let metrics = StableXMetrics::default();
+
+        let orders = vec![create_order_for_test(), create_order_for_test()];
+        let state = AccountState::with_balance_for(&orders);
+
+        let batch = U256::from(42);
+        let time_limit = Duration::from_secs(0);
+
+        reader
+            .expect_get_auction_data()
+            .with(eq(batch))
+            .return_once(move |_| {
+                // NOTE: Wait for an epsilon to go by so that the time limit
+                //   is exceeded.
+                let start = Instant::now();
+                while start.elapsed() == time_limit {
+                    thread::yield_now();
+                }
+                Ok((state, orders))
+            });
+
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
+        assert!(driver.run(batch, time_limit).is_skip());
     }
 }
