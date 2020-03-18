@@ -1,7 +1,7 @@
 //! Implementation of an EVM-based scheduler that retrieves current batch and
 //! batch duration information directly from the EVM instead of system time.
 
-use super::{Scheduler, AuctionTimingConfiguration, BATCH_DURATION};
+use super::{AuctionTimingConfiguration, Scheduler, BATCH_DURATION};
 use crate::contracts::stablex_contract::StableXContract;
 use crate::driver::stablex_driver::{DriverResult, StableXDriver};
 use anyhow::Result;
@@ -37,10 +37,7 @@ impl<'a> EvmScheduler<'a> {
 
     /// Creates a new scheduler with the default configuration.
     #[cfg(test)]
-    pub fn with_defaults(
-        exchange: &'a dyn StableXContract,
-        driver: &'a dyn StableXDriver,
-    ) -> Self {
+    pub fn with_defaults(exchange: &'a dyn StableXContract, driver: &'a dyn StableXDriver) -> Self {
         EvmScheduler::new(exchange, driver, AuctionTimingConfiguration::default())
     }
 
