@@ -2,7 +2,7 @@ use super::*;
 
 use crate::models::{AccountState, Order};
 use anyhow::Error;
-use ethcontract::{Address, U256};
+use ethcontract::Address;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
@@ -48,7 +48,7 @@ impl<'a> FilteredOrderbookReader<'a> {
 }
 
 impl<'a> StableXOrderBookReading for FilteredOrderbookReader<'a> {
-    fn get_auction_index(&self) -> Result<U256> {
+    fn get_auction_index(&self) -> Result<u32> {
         self.orderbook.get_auction_index()
     }
 

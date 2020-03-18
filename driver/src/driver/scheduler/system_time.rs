@@ -1,12 +1,10 @@
-use super::stablex_driver::{DriverResult, StableXDriver};
+use super::{AuctionTimingConfiguration, Scheduler, BATCH_DURATION};
+use crate::driver::stablex_driver::{DriverResult, StableXDriver};
 use anyhow::{Context, Result};
 use log::error;
 use log::info;
 use std::thread;
 use std::time::{Duration, SystemTime, SystemTimeError};
-
-const BATCH_DURATION: Duration = Duration::from_secs(300);
-const SOLVING_WINDOW: Duration = Duration::from_secs(240);
 
 /// Wraps a batch id as in the smart contract to add functionality related to
 /// the current time.
@@ -40,22 +38,7 @@ impl BatchId {
     }
 }
 
-#[derive(Debug)]
-pub struct AuctionTimingConfiguration {
-    /// The offset from the start of a batch at which point we should start
-    /// solving.
-    pub target_start_solve_time: Duration,
-
-    /// The offset from the start of the batch at which point there is not
-    /// enough time left to attempt to solve.
-    pub latest_solve_attempt_time: Duration,
-
-    /// The offset from the start of the batch to cap the solver's execution
-    /// time.
-    pub solver_time_limit: Duration,
-}
-
-pub struct Scheduler<'a> {
+pub struct SystemScheduler<'a> {
     driver: &'a (dyn StableXDriver + Sync),
     auction_timing_configuration: AuctionTimingConfiguration,
     last_solved_batch: Option<BatchId>,
@@ -67,36 +50,15 @@ enum Action {
     Sleep(Duration),
 }
 
-impl<'a> Scheduler<'a> {
+impl<'a> SystemScheduler<'a> {
     pub fn new(
         driver: &'a (dyn StableXDriver + Sync),
         auction_timing_configuration: AuctionTimingConfiguration,
     ) -> Self {
-        assert!(
-            auction_timing_configuration.solver_time_limit < SOLVING_WINDOW,
-            "The solver time limit must be within the solving window",
-        );
-        assert!(
-            auction_timing_configuration.latest_solve_attempt_time
-                < auction_timing_configuration.solver_time_limit,
-            "The latest solve attempt time must be earlier than the solver time limit",
-        );
-        assert!(
-            auction_timing_configuration.target_start_solve_time
-                < auction_timing_configuration.latest_solve_attempt_time,
-            "the target solve start time must be earlier than the latest solve time",
-        );
-
         Self {
             driver,
             auction_timing_configuration,
             last_solved_batch: None,
-        }
-    }
-
-    pub fn run_forever(&mut self) {
-        loop {
-            thread::sleep(self.run_once(SystemTime::now()));
         }
     }
 
@@ -171,6 +133,14 @@ impl<'a> Scheduler<'a> {
     }
 }
 
+impl Scheduler for SystemScheduler<'_> {
+    fn start(&mut self) -> ! {
+        loop {
+            thread::sleep(self.run_once(SystemTime::now()));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,7 +180,8 @@ mod tests {
             latest_solve_attempt_time: Duration::from_secs(20),
             solver_time_limit: Duration::from_secs(30),
         };
-        let scheduler = Scheduler::new(&driver, auction_timing_configuration);
+
+        let scheduler = SystemScheduler::new(&driver, auction_timing_configuration);
 
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
 
@@ -265,7 +236,7 @@ mod tests {
             latest_solve_attempt_time: Duration::from_secs(20),
             solver_time_limit: Duration::from_secs(30),
         };
-        let mut scheduler = Scheduler::new(&driver, auction_timing_configuration);
+        let mut scheduler = SystemScheduler::new(&driver, auction_timing_configuration);
         scheduler.last_solved_batch = Some(BatchId(0));
 
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
@@ -332,7 +303,7 @@ mod tests {
             latest_solve_attempt_time: Duration::from_secs(20),
             solver_time_limit: Duration::from_secs(30),
         };
-        let mut scheduler = Scheduler::new(&driver, auction_timing_configuration);
+        let mut scheduler = SystemScheduler::new(&driver, auction_timing_configuration);
 
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
 

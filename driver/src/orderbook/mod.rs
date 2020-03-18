@@ -17,7 +17,7 @@ pub use filtered_orderbook::OrderbookFilter;
 pub trait StableXOrderBookReading {
     /// Returns the index of the auction that is currently being solved
     /// or an error in case it cannot get this information.
-    fn get_auction_index(&self) -> Result<U256>;
+    fn get_auction_index(&self) -> Result<u32>;
 
     /// Returns the current state of the order book, including account balances
     /// and open orders or an error in case it cannot get this information.
@@ -45,7 +45,7 @@ impl<'a> PaginatedStableXOrderBookReader<'a> {
 }
 
 impl<'a> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a> {
-    fn get_auction_index(&self) -> Result<U256> {
+    fn get_auction_index(&self) -> Result<u32> {
         self.contract
             .get_current_auction_index()
             .map(|batch_collecting_orders| batch_collecting_orders - 1)

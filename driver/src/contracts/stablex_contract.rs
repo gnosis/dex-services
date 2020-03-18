@@ -1,6 +1,8 @@
-#![allow(clippy::ptr_arg)] // required for automock
+// NOTE: Required for automock.
+#![cfg_attr(test, allow(clippy::ptr_arg))]
 
 use std::collections::HashMap;
+use std::time::Duration;
 
 use anyhow::Result;
 use ethcontract::transaction::GasPrice;
@@ -61,7 +63,13 @@ impl<'a> StableXContractImpl<'a> {
 
 #[cfg_attr(test, automock)]
 pub trait StableXContract {
-    fn get_current_auction_index(&self) -> Result<U256>;
+    /// Retrieve the current batch ID that is accepting orders. Note that this
+    /// is always `1` greater than the batch ID that is accepting solutions.
+    fn get_current_auction_index(&self) -> Result<u32>;
+
+    /// Retrieve the time remaining in the batch.
+    fn get_current_auction_remaining_time(&self) -> Result<Duration>;
+
     /// Retrieve one page of auction data.
     /// `block` is needed because the state of the smart contract could change
     /// between blocks which would make the returned auction data inconsistent
@@ -72,12 +80,14 @@ pub trait StableXContract {
         previous_page_user: Address,
         previous_page_user_offset: u16,
     ) -> Result<Vec<u8>>;
+
     fn get_solution_objective_value(
         &self,
         batch_index: U256,
         solution: Solution,
         block_number: Option<BlockNumber>,
     ) -> Result<U256>;
+
     fn submit_solution(
         &self,
         batch_index: U256,
@@ -87,9 +97,18 @@ pub trait StableXContract {
 }
 
 impl<'a> StableXContract for StableXContractImpl<'a> {
-    fn get_current_auction_index(&self) -> Result<U256> {
+    fn get_current_auction_index(&self) -> Result<u32> {
         let auction_index = self.instance.get_current_batch_id().call().wait()?;
-        Ok(auction_index.into())
+        Ok(auction_index)
+    }
+
+    fn get_current_auction_remaining_time(&self) -> Result<Duration> {
+        let remaining_seconds = self
+            .instance
+            .get_seconds_remaining_in_batch()
+            .call()
+            .wait()?;
+        Ok(Duration::from_secs(remaining_seconds.as_u64()))
     }
 
     fn get_auction_data_paginated(
