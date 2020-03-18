@@ -162,7 +162,7 @@ mod solver_input {
 }
 
 #[cfg_attr(test, mockall::automock)]
-trait IoMethods {
+trait Io {
     fn write_input(&self, input_file: &str, input: &str) -> std::io::Result<()>;
     fn run_solver(
         &self,
@@ -175,7 +175,7 @@ trait IoMethods {
 }
 
 pub struct OptimisationPriceFinder {
-    io_methods: Box<dyn IoMethods>,
+    io_methods: Box<dyn Io>,
     fee: Option<Fee>,
     solver_type: SolverType,
     price_oracle: Box<dyn PriceEstimating>,
@@ -188,7 +188,7 @@ impl OptimisationPriceFinder {
         price_oracle: impl PriceEstimating + 'static,
     ) -> Self {
         OptimisationPriceFinder {
-            io_methods: Box::new(DefaultIoMethods),
+            io_methods: Box::new(DefaultIo),
             fee,
             solver_type,
             price_oracle: Box::new(price_oracle),
@@ -264,9 +264,9 @@ impl PriceFinding for OptimisationPriceFinder {
     }
 }
 
-pub struct DefaultIoMethods;
+pub struct DefaultIo;
 
-impl IoMethods for DefaultIoMethods {
+impl Io for DefaultIo {
     fn write_input(&self, input_file: &str, input: &str) -> std::io::Result<()> {
         let file = File::create(&input_file)?;
         let mut writer = BufWriter::new(file);
@@ -577,7 +577,7 @@ pub mod tests {
                 }
             });
 
-        let mut io_methods = MockIoMethods::new();
+        let mut io_methods = MockIo::new();
         io_methods
             .expect_write_input()
             .times(1)
