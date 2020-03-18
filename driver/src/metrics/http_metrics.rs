@@ -46,12 +46,10 @@ impl HttpMetrics {
         buckets: Vec<f64>,
     ) -> Result<HistogramVec> {
         let options = HistogramOpts::new(name, description).buckets(buckets);
-        let histogram = HistogramVec::new(options, &["client", "request"])?;
-
-        Web3Label::initialize_histogram_labels(&histogram);
-        KrakenLabel::initialize_histogram_labels(&histogram);
-        DexagLabel::initialize_histogram_labels(&histogram);
-        GasStationLabel::initialize_histogram_labels(&histogram);
+        let histogram = HistogramVec::new(options, &["request"])?;
+        for label in HttpLabel::all_labels() {
+            histogram.with_label_values(&label.values());
+        }
 
         registry.register(Box::new(histogram.clone()))?;
 
@@ -59,13 +57,13 @@ impl HttpMetrics {
     }
 
     /// Add a request latency and size measurement to the current HTTP metrics
-    /// registry for the specified label values.
-    pub fn request<L: LabelValues>(&self, label: L, latency: Duration, size: usize) {
+    /// registry for the specified label value.
+    pub fn request(&self, label: HttpLabel, latency: Duration, size: usize) {
         self.latency
-            .with_label_values(&label.label_values())
+            .with_label_values(&label.values())
             .observe(latency.as_secs_f64());
         self.size
-            .with_label_values(&label.label_values())
+            .with_label_values(&label.values())
             .observe(size as _);
     }
 }
@@ -76,124 +74,47 @@ impl Default for HttpMetrics {
     }
 }
 
-/// A common trait shared between labeled and unlabeled subsystems for getting
-/// the label values to use for metrics.
-pub trait LabelValues {
-    fn label_values(&self) -> [&'static str; 2];
-    fn initialize_histogram_labels(histograms: &HistogramVec);
-}
-
-/// A trait abstracting a labeled subsystem, that is a specific use of an HTTP
-/// client where the HTTP requests should be differenciated.
-pub trait LabeledSubsystem: LabelValues + Sized {
-    fn name() -> &'static str;
-    fn all_labels() -> &'static [Self];
-    fn label(&self) -> &'static str;
-}
-
-/// A trait abstracting a labeled subsystem, that is a specific use of an HTTP
-/// client where the HTTP requests should not be differenciated.
-pub trait UnlabeledSubsystem: Default + LabelValues {
-    fn name() -> &'static str;
-}
-
-macro_rules! subsystem {
+macro_rules! labels {
     (
         $(#[$attr:meta])*
-        pub enum $name:ident as $n:tt {
+        pub enum $name:ident {
             $($variant:ident => $label:tt,)*
         }
     ) => {
         $(#[$attr])*
-        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
         pub enum $name {
             $(
                 $variant,
             )*
         }
 
-        impl LabelValues for $name {
-            fn label_values(&self) -> [&'static str; 2] {
-                [Self::name(), self.label()]
-            }
-
-            fn initialize_histogram_labels(histograms: &HistogramVec) {
-                for label in Self::all_labels() {
-                    histograms.with_label_values(&label.label_values());
-                }
-            }
-        }
-
-        impl LabeledSubsystem for $name {
-            fn name() -> &'static str {
-                $n
-            }
-
+        impl $name {
             fn all_labels() -> &'static [Self] {
                 const ALL: &[$name] = &[$($name::$variant),*];
                 ALL
             }
 
-            fn label(&self) -> &'static str {
+            fn values(&self) -> &[&str] {
                 match self {
                     $(
-                        $name::$variant => $label,
+                        $name::$variant => &[$label],
                     )*
                 }
             }
         }
     };
-
-    (
-        $(#[$attr:meta])*
-        pub struct $name:ident as $n:tt;
-    ) => {
-        $(#[$attr])*
-        #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-        pub struct $name;
-
-        impl LabelValues for $name {
-            fn label_values(&self) -> [&'static str; 2] {
-                [Self::name(), ""]
-            }
-
-            fn initialize_histogram_labels(histograms: &HistogramVec) {
-                histograms.with_label_values(&Self::default().label_values());
-            }
-        }
-
-        impl UnlabeledSubsystem for $name {
-            fn name() -> &'static str {
-                $n
-            }
-        }
-    };
 }
 
-subsystem! {
-    /// A label for `web3` HTTP requests. This subsystem is used by the HTTP
-    /// transport implementation.
-    pub enum Web3Label as "web3" {
-        Call => "call",
-        EstimateGas => "estimate_gas",
-        Other => "other",
+labels! {
+    /// An enum representing possible HTTP requests for which metrics are being
+    /// recorded.
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum HttpLabel {
+        EthCall => "eth_call",
+        EthEstimateGas => "eth_estimate_gas",
+        EthRpc => "eth_rpc",
+        Kraken => "kraken",
+        Dexag => "dexag",
+        GasStation => "gas_station",
     }
-}
-
-subsystem! {
-    /// A label for Kraken HTTP API requests. This subsystem is used by the
-    /// Kraken API implementation.
-    pub struct KrakenLabel as "kraken";
-}
-
-subsystem! {
-    /// A label for Dexag HTTP API requests. This subsystem is used by the Dexag
-    /// API implementation.
-    pub struct DexagLabel as "dexag";
-}
-
-subsystem! {
-    /// A label for Gnosis Safe gas station HTTP API request. This subsystem is
-    /// used by the gas station client implementation.
-    pub struct GasStationLabel as "gas_station";
 }
