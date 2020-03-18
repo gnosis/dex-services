@@ -73,7 +73,7 @@ impl<'a> EvmScheduler<'a> {
         }
 
         let current_batch_time = BATCH_DURATION - time_remaining;
-        if current_batch_time > self.config.target_start_solve_time {
+        if current_batch_time > self.config.latest_solve_attempt_time {
             // TODO(nlordell): This should probably be reflected in a metric.
             //   For now we just log an warning.
             warn!("skipping batch {}", batch_id);
@@ -164,7 +164,7 @@ mod tests {
             .returning(|| Ok(42));
         exchange
             .expect_get_current_auction_remaining_time()
-            .returning(|| Ok(Duration::from_secs(270)));
+            .returning(|| Ok(Duration::from_secs(240)));
 
         let mut driver = MockStableXDriver::new();
         driver.expect_run().returning(|_, _| DriverResult::Ok);
