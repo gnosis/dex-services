@@ -5,15 +5,15 @@ pub mod price_finder_interface;
 use crate::price_estimation::PriceEstimating;
 pub use crate::price_finding::naive_solver::NaiveSolver;
 pub use crate::price_finding::optimization_price_finder::OptimisationPriceFinder;
-pub use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverConfig};
+pub use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverType};
 use log::info;
 
 pub fn create_price_finder(
     fee: Option<Fee>,
-    solver_type: SolverConfig,
+    solver_type: SolverType,
     price_oracle: impl PriceEstimating + 'static,
 ) -> Box<dyn PriceFinding> {
-    if solver_type == SolverConfig::NaiveSolver {
+    if solver_type == SolverType::NaiveSolver {
         info!("Using naive price finder");
         Box::new(NaiveSolver::new(fee))
     } else {
