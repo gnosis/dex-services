@@ -1,5 +1,5 @@
 use anyhow::Result;
-use prometheus::{HistogramOpts, HistogramVec, Registry};
+use prometheus::{HistogramOpts, HistogramVec, Registry, DEFAULT_BUCKETS};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -17,19 +17,21 @@ impl HttpMetrics {
             registry,
             "dfusion_service_http_latency",
             "Latency in seconds for HTTP request",
-            vec![0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0],
+            Vec::from(&DEFAULT_BUCKETS[..]),
         )?;
         let size = HttpMetrics::initialize_histogram(
             registry,
             "dfusion_service_http_size",
             "Size in bytes for HTTP response bodies",
             vec![
+                100.0,
                 1_000.0,
                 10_000.0,
                 100_000.0,
                 1_000_000.0,
                 10_000_000.0,
                 100_000_000.0,
+                1_000_000_000.0,
             ],
         )?;
 
