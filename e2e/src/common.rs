@@ -99,7 +99,7 @@ pub fn wait_for(web3: &Web3<Http>, seconds: u32) {
 }
 
 fn is_connected_to_ganache(web3: &Web3<Http>) -> bool {
-    const GANACHE_CHAIN_ID: u64 = 5777;
+    const GANACHE_CHAIN_ID: u64 = 1337;
 
     let chain_id = web3
         .eth()
