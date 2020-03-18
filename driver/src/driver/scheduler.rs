@@ -173,11 +173,11 @@ impl<'a> Scheduler<'a> {
 
 #[cfg(test)]
 mod tests {
-    use anyhow::anyhow;
-    use ethcontract::U256;
-
     use super::*;
     use crate::driver::stablex_driver::MockStableXDriver;
+    use anyhow::anyhow;
+    use ethcontract::U256;
+    use mockall::predicate::eq;
 
     #[test]
     fn batch_id_current() {
@@ -316,15 +316,15 @@ mod tests {
         let mut driver = MockStableXDriver::new();
         driver
             .expect_run()
-            .withf(|b, t| *b == U256::from(0) && *t == Duration::from_secs(20))
+            .with(eq(U256::from(0)), eq(Duration::from_secs(20)))
             .returning(|_, _| DriverResult::Ok);
         driver
             .expect_run()
-            .withf(|b, t| *b == U256::from(1) && *t == Duration::from_secs(20))
+            .with(eq(U256::from(1)), eq(Duration::from_secs(20)))
             .returning(|_, _| DriverResult::Retry(anyhow!("")));
         driver
             .expect_run()
-            .withf(|b, t| *b == U256::from(2) && *t == Duration::from_secs(20))
+            .with(eq(U256::from(2)), eq(Duration::from_secs(20)))
             .returning(|_, _| DriverResult::Skip(anyhow!("")));
 
         let auction_timing_configuration = AuctionTimingConfiguration {
