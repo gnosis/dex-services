@@ -45,9 +45,7 @@ impl SolverType {
     pub fn to_args(self) -> Vec<String> {
         match self {
             SolverType::StandardSolver => vec![],
-            SolverType::FallbackSolver => vec![
-                String::from("--useExternalPrices"),
-            ],
+            SolverType::FallbackSolver => vec![String::from("--useExternalPrices")],
             SolverType::NaiveSolver => {
                 panic!("OptimizationSolver should not be called with naive solver")
             }
