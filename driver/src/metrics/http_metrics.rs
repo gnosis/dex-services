@@ -17,22 +17,13 @@ impl HttpMetrics {
             registry,
             "dfusion_service_http_latency",
             "Latency in seconds for HTTP request",
-            Vec::from(&DEFAULT_BUCKETS[..]),
+            DEFAULT_BUCKETS.to_vec(),
         )?;
         let size = HttpMetrics::initialize_histogram(
             registry,
             "dfusion_service_http_size",
             "Size in bytes for HTTP response bodies",
-            vec![
-                100.0,
-                1_000.0,
-                10_000.0,
-                100_000.0,
-                1_000_000.0,
-                10_000_000.0,
-                100_000_000.0,
-                1_000_000_000.0,
-            ],
+            prometheus::exponential_buckets(100.0, 10.0, 8)?,
         )?;
 
         Ok(HttpMetrics { latency, size })
