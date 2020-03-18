@@ -99,14 +99,14 @@ pub fn wait_for(web3: &Web3<Http>, seconds: u32) {
 }
 
 fn is_connected_to_ganache(web3: &Web3<Http>) -> bool {
-    const GANACHE_CHAIN_ID: u64 = 1337;
+    const GANACHE_NETWORK_ID: &str = "5777";
 
-    let chain_id = web3
-        .eth()
-        .chain_id()
+    let network_id = web3
+        .net()
+        .version()
         .wait()
-        .expect("Failed to determine chain ID");
-    chain_id.low_u64() == GANACHE_CHAIN_ID
+        .expect("Failed to determine network ID");
+    network_id == "5777"
 }
 
 pub fn wait_for_condition<C>(
