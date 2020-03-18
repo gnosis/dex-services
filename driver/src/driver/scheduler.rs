@@ -1,8 +1,8 @@
 mod evm;
-mod system_time;
+mod system;
 
 use self::evm::EvmScheduler;
-use self::system_time::SystemScheduler;
+use self::system::SystemScheduler;
 use crate::contracts::stablex_contract::StableXContract;
 use crate::driver::stablex_driver::StableXDriver;
 use anyhow::{anyhow, Error, Result};
