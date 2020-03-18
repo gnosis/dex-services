@@ -180,7 +180,6 @@ mod tests {
             latest_solve_attempt_time: Duration::from_secs(20),
             solver_time_limit: Duration::from_secs(30),
         };
-
         let scheduler = SystemScheduler::new(&driver, auction_timing_configuration);
 
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
