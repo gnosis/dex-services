@@ -106,7 +106,7 @@ fn is_connected_to_ganache(web3: &Web3<Http>) -> bool {
         .version()
         .wait()
         .expect("Failed to determine network ID");
-    network_id == "5777"
+    network_id == GANACHE_NETWORK_ID
 }
 
 pub fn wait_for_condition<C>(
