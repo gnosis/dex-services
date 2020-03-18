@@ -46,7 +46,6 @@ impl SolverType {
         match self {
             SolverType::StandardSolver => vec![],
             SolverType::FallbackSolver => vec![
-                String::from("--tokenInfo=/app/batchauctions/scripts/token_info_mainnet.json"),
                 String::from("--useExternalPrices"),
             ],
             SolverType::NaiveSolver => {
