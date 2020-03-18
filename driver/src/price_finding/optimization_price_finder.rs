@@ -1,6 +1,6 @@
 use crate::models::{self, TokenId, TokenInfo};
 use crate::price_estimation::PriceEstimating;
-use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverConfig};
+use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverType};
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::process::Command;
+use std::time::Duration;
 
 /// A number wrapper type that correctly serializes large u128`s to strings to
 /// avoid precision loss.
@@ -160,26 +161,34 @@ mod solver_input {
     }
 }
 
+#[cfg_attr(test, mockall::automock)]
+trait Io {
+    fn write_input(&self, input_file: &str, input: &str) -> std::io::Result<()>;
+    fn run_solver(
+        &self,
+        input_file: &str,
+        result_folder: &str,
+        solver_type: SolverType,
+        time_limit: Duration,
+    ) -> Result<()>;
+    fn read_output(&self, result_folder: &str) -> std::io::Result<String>;
+}
+
 pub struct OptimisationPriceFinder {
-    // default IO methods can be replaced for unit testing
-    write_input: fn(&str, &str) -> std::io::Result<()>,
-    run_solver: fn(&str, &str, SolverConfig) -> Result<()>,
-    read_output: fn(&str) -> std::io::Result<String>,
+    io_methods: Box<dyn Io + Sync>,
     fee: Option<Fee>,
-    solver_type: SolverConfig,
-    price_oracle: Box<dyn PriceEstimating>,
+    solver_type: SolverType,
+    price_oracle: Box<dyn PriceEstimating + Sync>,
 }
 
 impl OptimisationPriceFinder {
     pub fn new(
         fee: Option<Fee>,
-        solver_type: SolverConfig,
-        price_oracle: impl PriceEstimating + 'static,
+        solver_type: SolverType,
+        price_oracle: impl PriceEstimating + Sync + 'static,
     ) -> Self {
         OptimisationPriceFinder {
-            write_input,
-            run_solver,
-            read_output,
+            io_methods: Box::new(DefaultIo),
             fee,
             solver_type,
             price_oracle: Box::new(price_oracle),
@@ -214,6 +223,7 @@ impl PriceFinding for OptimisationPriceFinder {
         &self,
         orders: &[models::Order],
         state: &models::AccountState,
+        time_limit: Duration,
     ) -> Result<models::Solution> {
         let input = solver_input::Input {
             tokens: self.price_oracle.get_token_prices(&orders),
@@ -244,47 +254,60 @@ impl PriceFinding for OptimisationPriceFinder {
             &now.to_rfc3339()
         );
 
-        (self.write_input)(&input_file, &serde_json::to_string(&input)?)?;
-        (self.run_solver)(&input_file, &result_folder, self.solver_type)?;
-        let result = (self.read_output)(&result_folder)?;
+        self.io_methods
+            .write_input(&input_file, &serde_json::to_string(&input)?)?;
+        self.io_methods
+            .run_solver(&input_file, &result_folder, self.solver_type, time_limit)?;
+        let result = self.io_methods.read_output(&result_folder)?;
         let solution = deserialize_result(result)?;
         Ok(solution)
     }
 }
 
-fn write_input(input_file: &str, input: &str) -> std::io::Result<()> {
-    let file = File::create(&input_file)?;
-    let mut writer = BufWriter::new(file);
-    writer.write_all(input.as_bytes())?;
-    debug!("Solver input: {}", input);
-    Ok(())
-}
+pub struct DefaultIo;
 
-fn run_solver(input_file: &str, result_folder: &str, solver_config: SolverConfig) -> Result<()> {
-    let output = Command::new("python")
-        .args(&["-m", "batchauctions.scripts.e2e._run"])
-        .arg(result_folder)
-        .args(&["--jsonFile", input_file])
-        .args(solver_config.to_args())
-        .output()?;
-    if !output.status.success() {
-        error!(
-            "Solver failed - stdout: {}, error: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-        return Err(anyhow!("Solver execution failed"));
+impl Io for DefaultIo {
+    fn write_input(&self, input_file: &str, input: &str) -> std::io::Result<()> {
+        let file = File::create(&input_file)?;
+        let mut writer = BufWriter::new(file);
+        writer.write_all(input.as_bytes())?;
+        debug!("Solver input: {}", input);
+        Ok(())
     }
-    Ok(())
-}
 
-fn read_output(result_folder: &str) -> std::io::Result<String> {
-    let file = File::open(format!("{}{}", result_folder, "06_solution_int_valid.json"))?;
-    let mut reader = BufReader::new(file);
-    let mut result = String::new();
-    reader.read_to_string(&mut result)?;
-    debug!("Solver result: {}", &result);
-    Ok(result)
+    fn run_solver(
+        &self,
+        input_file: &str,
+        result_folder: &str,
+        solver_type: SolverType,
+        time_limit: Duration,
+    ) -> Result<()> {
+        let output = Command::new("python")
+            .args(&["-m", "batchauctions.scripts.e2e._run"])
+            .arg(result_folder)
+            .args(&["--jsonFile", input_file])
+            .arg(format!("--solverTimeLimit={:}", time_limit.as_secs()))
+            .args(solver_type.to_args())
+            .output()?;
+        if !output.status.success() {
+            error!(
+                "Solver failed - stdout: {}, error: {}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return Err(anyhow!("Solver execution failed"));
+        }
+        Ok(())
+    }
+
+    fn read_output(&self, result_folder: &str) -> std::io::Result<String> {
+        let file = File::open(format!("{}{}", result_folder, "06_solution_int_valid.json"))?;
+        let mut reader = BufReader::new(file);
+        let mut result = String::new();
+        reader.read_to_string(&mut result)?;
+        debug!("Solver result: {}", &result);
+        Ok(result)
+    }
 }
 
 #[cfg(test)]
@@ -554,29 +577,40 @@ pub mod tests {
                 }
             });
 
-        let solver = OptimisationPriceFinder {
-            write_input: |_, content: &str| {
+        let mut io_methods = MockIo::new();
+        io_methods
+            .expect_write_input()
+            .times(1)
+            .withf(|_, content: &str| {
                 let json: serde_json::value::Value = serde_json::from_str(content).unwrap();
-                assert_eq!(
-                    json["fee"],
-                    json!({
+                json["fee"]
+                    == json!({
                         "token": "T0000",
                         "ratio": 0.001
                     })
-                );
-                Ok(())
-            },
-            run_solver: |_, _, _| Ok(()),
-            read_output: |_| Err(std::io::Error::last_os_error()),
+            })
+            .returning(|_, _| Ok(()));
+        io_methods
+            .expect_run_solver()
+            .times(1)
+            .returning(|_, _, _, _| Ok(()));
+        io_methods
+            .expect_read_output()
+            .times(1)
+            .returning(|_| Err(std::io::Error::last_os_error()));
+        let solver = OptimisationPriceFinder {
+            io_methods: Box::new(io_methods),
             fee: Some(fee),
-            solver_type: SolverConfig::StandardSolver {
-                solver_time_limit: 180,
-            },
+            solver_type: SolverType::StandardSolver,
             price_oracle: Box::new(price_oracle),
         };
         let orders = vec![];
         assert!(solver
-            .find_prices(&orders, &AccountState::with_balance_for(&orders))
+            .find_prices(
+                &orders,
+                &AccountState::with_balance_for(&orders),
+                Duration::from_secs(180)
+            )
             .is_err());
     }
 

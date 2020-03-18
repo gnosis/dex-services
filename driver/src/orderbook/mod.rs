@@ -31,12 +31,12 @@ pub trait StableXOrderBookReading {
 /// contract in a paginated way.
 /// This avoid hitting gas limits when the total amount of orders is large.
 pub struct PaginatedStableXOrderBookReader<'a> {
-    contract: &'a dyn StableXContract,
+    contract: &'a (dyn StableXContract + Sync),
     page_size: u16,
 }
 
 impl<'a> PaginatedStableXOrderBookReader<'a> {
-    pub fn new(contract: &'a dyn StableXContract, page_size: u16) -> Self {
+    pub fn new(contract: &'a (dyn StableXContract + Sync), page_size: u16) -> Self {
         Self {
             contract,
             page_size,

@@ -2,6 +2,8 @@ use crate::models;
 use anyhow::{anyhow, Error, Result};
 #[cfg(test)]
 use mockall::automock;
+use std::str::FromStr;
+use std::time::Duration;
 
 #[derive(Clone)]
 pub struct Fee {
@@ -20,34 +22,31 @@ impl Default for Fee {
 }
 
 #[derive(Clone, Debug, Copy, PartialEq)]
-pub enum SolverConfig {
+pub enum SolverType {
     NaiveSolver,
-    StandardSolver { solver_time_limit: u32 },
-    FallbackSolver { solver_time_limit: u32 },
+    StandardSolver,
+    FallbackSolver,
 }
 
-impl SolverConfig {
-    pub fn new(solver_type_str: &str, solver_time_limit: u32) -> Result<Self> {
+impl FromStr for SolverType {
+    type Err = Error;
+
+    fn from_str(solver_type_str: &str) -> Result<Self> {
         match solver_type_str.to_lowercase().as_str() {
-            "standard-solver" => Ok(SolverConfig::StandardSolver { solver_time_limit }),
-            "fallback-solver" => Ok(SolverConfig::FallbackSolver { solver_time_limit }),
-            "naive-solver" => Ok(SolverConfig::NaiveSolver),
+            "standard-solver" => Ok(SolverType::StandardSolver),
+            "fallback-solver" => Ok(SolverType::FallbackSolver),
+            "naive-solver" => Ok(SolverType::NaiveSolver),
             _ => Err(anyhow!("solver type does not exit")),
         }
     }
 }
 
-impl SolverConfig {
+impl SolverType {
     pub fn to_args(self) -> Vec<String> {
         match self {
-            SolverConfig::StandardSolver { solver_time_limit } => {
-                vec![format!("--solverTimeLimit={:}", solver_time_limit)]
-            }
-            SolverConfig::FallbackSolver { solver_time_limit } => vec![
-                format!("--solverTimeLimit={:}", solver_time_limit),
-                String::from("--useExternalPrices"),
-            ],
-            SolverConfig::NaiveSolver => {
+            SolverType::StandardSolver => vec![],
+            SolverType::FallbackSolver => vec![String::from("--useExternalPrices")],
+            SolverType::NaiveSolver => {
                 panic!("OptimizationSolver should not be called with naive solver")
             }
         }
@@ -60,5 +59,6 @@ pub trait PriceFinding {
         &self,
         orders: &[models::Order],
         state: &models::AccountState,
+        time_limit: Duration,
     ) -> Result<models::Solution, Error>;
 }

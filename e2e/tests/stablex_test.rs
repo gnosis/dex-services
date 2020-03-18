@@ -70,9 +70,10 @@ fn test_with_ganache() {
         .from(Account::Local(accounts[1], None))
         .wait_and_expect("Cannot place first order");
 
-    let batch_id = instance.get_current_batch_id().call().wait().unwrap();
-    close_auction(&web3, &instance);
-    let wait_time = Duration::from_secs(310);
+    let batch_id = instance
+        .get_current_batch_id()
+        .wait_and_expect("Failed to query batch ID");
+    let wait_time = Duration::from_secs(340);
     println!(
         "Waiting {}s for the solver to submit a solution for batch {}",
         wait_time.as_secs(),
@@ -80,6 +81,7 @@ fn test_with_ganache() {
     );
     // wait for solver to submit solution
     wait_for_condition(
+        &web3,
         || {
             instance
                 .get_current_objective_value()

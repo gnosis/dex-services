@@ -557,6 +557,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethabi"
+version = "11.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97652a7d1f2504d6c885c87e242a06ccef5bd3054093d3fb742d8fb64806231a"
+dependencies = [
+ "ethereum-types",
+ "rustc-hex",
+ "serde",
+ "serde_json",
+ "tiny-keccak 1.5.0",
+ "uint",
+]
+
+[[package]]
 name = "ethbloom"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -571,10 +585,11 @@ dependencies = [
 
 [[package]]
 name = "ethcontract"
-version = "0.4.2"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5716f785500aa4cf3c4825892f737d97742c87c4c9a0b6111f17c87b3afa13db"
+checksum = "b0beb0833dea2e98c76212214ed1b3b313c4654b093557a1db4d9846bb13ffd4"
 dependencies = [
+ "ethabi 9.0.1",
  "ethcontract-common",
  "ethcontract-derive",
  "futures 0.3.4",
@@ -594,11 +609,11 @@ dependencies = [
 
 [[package]]
 name = "ethcontract-common"
-version = "0.4.2"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6e280ec895cc575c094305272df7dec92db7e4d947ab6f6ac10a95187a83ad3"
+checksum = "6b7c86ec634abf31651f2c9f88c6c97a08eba59db085f74fb135756615764aaa"
 dependencies = [
- "ethabi",
+ "ethabi 11.0.0",
  "hex",
  "serde",
  "serde_derive",
@@ -610,9 +625,9 @@ dependencies = [
 
 [[package]]
 name = "ethcontract-derive"
-version = "0.4.2"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d1539eac2fe2b1dad6fedc98a59eca937816358dce20690c307a107ba8aa937"
+checksum = "35c082df9c592925fd9bd4a6a0ef4156741da0a400e20c3ad1b5efbc132f8f90"
 dependencies = [
  "ethcontract-generate",
  "proc-macro2",
@@ -621,16 +636,18 @@ dependencies = [
 
 [[package]]
 name = "ethcontract-generate"
-version = "0.4.2"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e70704f727dd8ba16783cc052cc812cf5f68c0c37cfed1d48a5430829420c21"
+checksum = "2e6bf510ff3f62c8a0e2421ddaa8578dfb565af267bfaa3a22ddedde027779f5"
 dependencies = [
  "Inflector",
  "anyhow",
+ "curl",
  "ethcontract-common",
  "proc-macro2",
  "quote",
  "syn",
+ "url 2.1.1",
 ]
 
 [[package]]
@@ -2911,7 +2928,7 @@ dependencies = [
  "arrayvec",
  "base64 0.11.0",
  "derive_more",
- "ethabi",
+ "ethabi 9.0.1",
  "ethereum-types",
  "futures 0.1.29",
  "hyper 0.12.35",
