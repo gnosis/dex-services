@@ -5,7 +5,7 @@ use ethcontract::{Account, PrivateKey, U256};
 
 use futures::future::join_all;
 
-use e2e::common::{wait_for_condition, FutureBuilderExt, FutureWaitExt};
+use e2e::common::{update_evm_time, wait_for_condition, FutureBuilderExt, FutureWaitExt};
 use e2e::docker_logs;
 use e2e::stablex::{close_auction, setup_stablex};
 use e2e::{BatchExchange, IERC20};
@@ -73,7 +73,7 @@ fn test_with_ganache() {
     let batch_id = instance
         .get_current_batch_id()
         .wait_and_expect("Failed to query batch ID");
-    let wait_time = Duration::from_secs(640);
+    let wait_time = Duration::from_secs(340);
     println!(
         "Waiting {}s for the solver to submit a solution for batch {}",
         wait_time.as_secs(),
@@ -82,6 +82,10 @@ fn test_with_ganache() {
     // wait for solver to submit solution
     wait_for_condition(
         || {
+            // NOTE: Make sure that we periodically update the EVM time, as no
+            //   new blocks are being mined to update the EVM timestamp.
+            update_evm_time(&web3);
+
             instance
                 .get_current_objective_value()
                 .wait_and_expect("Cannot get objective value")

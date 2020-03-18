@@ -151,3 +151,11 @@ pub fn approve(tokens: &[IERC20], address: Address, accounts: &[Address], approv
         }
     }
 }
+
+/// Mine a new block so the current EVM timestamp changes.
+pub fn update_evm_time(web3: &Web3<Http>) {
+    web3.transport()
+        .execute("evm_mine", vec![])
+        .wait()
+        .expect("Cannot mine to update current time");
+}
