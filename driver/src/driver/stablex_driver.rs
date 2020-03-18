@@ -17,21 +17,21 @@ pub enum DriverResult {
 
 #[cfg_attr(test, mockall::automock)]
 pub trait StableXDriver {
-    fn run(&mut self, batch_to_solve: U256, time_limit: Duration) -> DriverResult;
+    fn run(&self, batch_to_solve: U256, time_limit: Duration) -> DriverResult;
 }
 
 pub struct StableXDriverImpl<'a> {
-    price_finder: &'a mut dyn PriceFinding,
-    orderbook_reader: &'a dyn StableXOrderBookReading,
-    solution_submitter: &'a dyn StableXSolutionSubmitting,
+    price_finder: &'a (dyn PriceFinding + Sync),
+    orderbook_reader: &'a (dyn StableXOrderBookReading + Sync),
+    solution_submitter: &'a (dyn StableXSolutionSubmitting + Sync),
     metrics: &'a StableXMetrics,
 }
 
 impl<'a> StableXDriverImpl<'a> {
     pub fn new(
-        price_finder: &'a mut dyn PriceFinding,
-        orderbook_reader: &'a dyn StableXOrderBookReading,
-        solution_submitter: &'a dyn StableXSolutionSubmitting,
+        price_finder: &'a (dyn PriceFinding + Sync),
+        orderbook_reader: &'a (dyn StableXOrderBookReading + Sync),
+        solution_submitter: &'a (dyn StableXSolutionSubmitting + Sync),
         metrics: &'a StableXMetrics,
     ) -> Self {
         Self {
@@ -42,7 +42,7 @@ impl<'a> StableXDriverImpl<'a> {
         }
     }
 
-    fn get_orderbook(&mut self, batch_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
+    fn get_orderbook(&self, batch_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
         let get_auction_data_result = self.orderbook_reader.get_auction_data(batch_to_solve);
         self.metrics
             .auction_orders_fetched(batch_to_solve, &get_auction_data_result);
@@ -50,7 +50,7 @@ impl<'a> StableXDriverImpl<'a> {
     }
 
     fn solve(
-        &mut self,
+        &self,
         batch_to_solve: U256,
         time_limit: Duration,
         account_state: AccountState,
@@ -142,7 +142,7 @@ impl<'a> StableXDriverImpl<'a> {
 }
 
 impl<'a> StableXDriver for StableXDriverImpl<'a> {
-    fn run(&mut self, batch_to_solve: U256, time_limit: Duration) -> DriverResult {
+    fn run(&self, batch_to_solve: U256, time_limit: Duration) -> DriverResult {
         self.metrics.auction_processing_started(&Ok(batch_to_solve));
         let (account_state, orders) = match self.get_orderbook(batch_to_solve) {
             Ok(ok) => ok,
@@ -232,7 +232,7 @@ mod tests {
             .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t == time_limit)
             .return_once(move |_, _, _| Ok(solution));
 
-        let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
         assert!(driver.run(batch, time_limit).is_ok());
     }
 
@@ -240,14 +240,14 @@ mod tests {
     fn test_errors_on_failing_reader() {
         let mut reader = MockStableXOrderBookReading::default();
         let submitter = MockStableXSolutionSubmitting::default();
-        let mut pf = MockPriceFinding::default();
+        let pf = MockPriceFinding::default();
         let metrics = StableXMetrics::default();
 
         reader
             .expect_get_auction_data()
             .returning(|_| Err(anyhow!("Error")));
 
-        let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
 
         assert!(driver.run(U256::from(42), Duration::default()).is_retry())
     }
@@ -286,7 +286,7 @@ mod tests {
         pf.expect_find_prices()
             .returning(|_, _, _| Err(anyhow!("Error")));
 
-        let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
 
         assert!(driver.run(batch, time_limit).is_skip());
     }
@@ -295,7 +295,7 @@ mod tests {
     fn test_do_not_invoke_solver_when_no_orders() {
         let mut reader = MockStableXOrderBookReading::default();
         let submitter = MockStableXSolutionSubmitting::default();
-        let mut pf = MockPriceFinding::default();
+        let pf = MockPriceFinding::default();
         let metrics = StableXMetrics::default();
 
         let orders = vec![];
@@ -309,7 +309,7 @@ mod tests {
             .with(eq(batch))
             .return_once(move |_| Ok((state, orders)));
 
-        let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
         assert!(driver.run(batch, time_limit).is_ok());
     }
 
@@ -341,7 +341,7 @@ mod tests {
 
         submitter.expect_submit_solution().times(0);
 
-        let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
         assert!(driver.run(batch, time_limit).is_ok());
     }
 
@@ -387,7 +387,7 @@ mod tests {
             .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t == time_limit)
             .return_once(move |_, _, _| Ok(solution));
 
-        let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
         assert!(driver.run(batch, time_limit).is_skip());
     }
 
@@ -429,7 +429,7 @@ mod tests {
             .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t == time_limit)
             .return_once(move |_, _, _| Ok(solution));
 
-        let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
         assert!(driver.run(batch, time_limit).is_ok());
     }
 
@@ -474,7 +474,7 @@ mod tests {
             .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t == time_limit)
             .return_once(move |_, _, _| Ok(solution));
 
-        let mut driver = StableXDriverImpl::new(&mut pf, &reader, &submitter, &metrics);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
         assert!(driver.run(batch, time_limit).is_ok());
     }
 }

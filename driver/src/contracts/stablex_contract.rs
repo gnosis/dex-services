@@ -24,7 +24,7 @@ include!(concat!(env!("OUT_DIR"), "/batch_exchange.rs"));
 
 pub struct StableXContractImpl<'a> {
     instance: BatchExchange,
-    gas_price_estimating: &'a dyn GasPriceEstimating,
+    gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
 }
 
 impl<'a> StableXContractImpl<'a> {
@@ -32,7 +32,7 @@ impl<'a> StableXContractImpl<'a> {
         web3: &contracts::Web3,
         key: PrivateKey,
         network_id: u64,
-        gas_price_estimating: &'a dyn GasPriceEstimating,
+        gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
     ) -> Result<Self> {
         let defaults = contracts::method_defaults(key, network_id)?;
 

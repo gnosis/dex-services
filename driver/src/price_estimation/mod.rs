@@ -37,7 +37,7 @@ pub struct PriceOracle {
     /// whitelisted tokens get their prices estimated.
     tokens: TokenData,
     /// The price source to use.
-    source: Box<dyn PriceSource>,
+    source: Box<dyn PriceSource + Sync>,
 }
 
 impl PriceOracle {
@@ -47,7 +47,7 @@ impl PriceOracle {
         tokens: TokenData,
         update_interval: Duration,
     ) -> Result<Self> {
-        let source: Box<dyn PriceSource> = if tokens.is_empty() {
+        let source: Box<dyn PriceSource + Sync> = if tokens.is_empty() {
             Box::new(NoopPriceSource)
         } else {
             let source = AveragePriceSource::new(
@@ -66,7 +66,7 @@ impl PriceOracle {
     }
 
     #[cfg(test)]
-    fn with_source(tokens: TokenData, source: impl PriceSource + 'static) -> Self {
+    fn with_source(tokens: TokenData, source: impl PriceSource + Sync + 'static) -> Self {
         PriceOracle {
             tokens,
             source: Box::new(source),

@@ -56,7 +56,7 @@ pub struct AuctionTimingConfiguration {
 }
 
 pub struct Scheduler<'a> {
-    driver: &'a mut dyn StableXDriver,
+    driver: &'a (dyn StableXDriver + Sync),
     auction_timing_configuration: AuctionTimingConfiguration,
     last_solved_batch: Option<BatchId>,
 }
@@ -69,7 +69,7 @@ enum Action {
 
 impl<'a> Scheduler<'a> {
     pub fn new(
-        driver: &'a mut dyn StableXDriver,
+        driver: &'a (dyn StableXDriver + Sync),
         auction_timing_configuration: AuctionTimingConfiguration,
     ) -> Self {
         assert!(
@@ -204,13 +204,13 @@ mod tests {
 
     #[test]
     fn determine_action_without_matching_last_solved_batch() {
-        let mut driver = MockStableXDriver::new();
+        let driver = MockStableXDriver::new();
         let auction_timing_configuration = AuctionTimingConfiguration {
             target_start_solve_time: Duration::from_secs(10),
             latest_solve_attempt_time: Duration::from_secs(20),
             solver_time_limit: Duration::from_secs(30),
         };
-        let scheduler = Scheduler::new(&mut driver, auction_timing_configuration);
+        let scheduler = Scheduler::new(&driver, auction_timing_configuration);
 
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
 
@@ -259,13 +259,13 @@ mod tests {
 
     #[test]
     fn determine_action_with_matching_last_solved_batch() {
-        let mut driver = MockStableXDriver::new();
+        let driver = MockStableXDriver::new();
         let auction_timing_configuration = AuctionTimingConfiguration {
             target_start_solve_time: Duration::from_secs(10),
             latest_solve_attempt_time: Duration::from_secs(20),
             solver_time_limit: Duration::from_secs(30),
         };
-        let mut scheduler = Scheduler::new(&mut driver, auction_timing_configuration);
+        let mut scheduler = Scheduler::new(&driver, auction_timing_configuration);
         scheduler.last_solved_batch = Some(BatchId(0));
 
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
@@ -332,7 +332,7 @@ mod tests {
             latest_solve_attempt_time: Duration::from_secs(20),
             solver_time_limit: Duration::from_secs(30),
         };
-        let mut scheduler = Scheduler::new(&mut driver, auction_timing_configuration);
+        let mut scheduler = Scheduler::new(&driver, auction_timing_configuration);
 
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
 

@@ -175,17 +175,17 @@ trait Io {
 }
 
 pub struct OptimisationPriceFinder {
-    io_methods: Box<dyn Io>,
+    io_methods: Box<dyn Io + Sync>,
     fee: Option<Fee>,
     solver_type: SolverType,
-    price_oracle: Box<dyn PriceEstimating>,
+    price_oracle: Box<dyn PriceEstimating + Sync>,
 }
 
 impl OptimisationPriceFinder {
     pub fn new(
         fee: Option<Fee>,
         solver_type: SolverType,
-        price_oracle: impl PriceEstimating + 'static,
+        price_oracle: impl PriceEstimating + Sync + 'static,
     ) -> Self {
         OptimisationPriceFinder {
             io_methods: Box::new(DefaultIo),
