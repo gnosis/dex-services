@@ -46,10 +46,6 @@ pub struct AuctionTimingConfiguration {
     /// solving.
     pub target_start_solve_time: Duration,
 
-    /// The offset from the start of the batch at which point there is not
-    /// enough time left to attempt to solve.
-    pub latest_solve_attempt_time: Duration,
-
     /// The offset from the start of the batch to cap the solver's execution
     /// time.
     pub solver_time_limit: Duration,
@@ -77,14 +73,9 @@ impl<'a> Scheduler<'a> {
             "The solver time limit must be within the solving window",
         );
         assert!(
-            auction_timing_configuration.latest_solve_attempt_time
-                < auction_timing_configuration.solver_time_limit,
-            "The latest solve attempt time must be earlier than the solver time limit",
-        );
-        assert!(
             auction_timing_configuration.target_start_solve_time
-                < auction_timing_configuration.latest_solve_attempt_time,
-            "the target solve start time must be earlier than the latest solve time",
+                < auction_timing_configuration.solver_time_limit,
+            "the target solve start time must be earlier than the solver time limit",
         );
 
         Self {
@@ -151,7 +142,7 @@ impl<'a> Scheduler<'a> {
             .unwrap();
 
         let action = if self.last_solved_batch == Some(solving_batch)
-            || elapsed_time > self.auction_timing_configuration.latest_solve_attempt_time
+            || elapsed_time >= self.auction_timing_configuration.solver_time_limit
         {
             let next = solving_batch.next();
             let duration = (next.solve_start_time()
@@ -207,8 +198,7 @@ mod tests {
         let driver = MockStableXDriver::new();
         let auction_timing_configuration = AuctionTimingConfiguration {
             target_start_solve_time: Duration::from_secs(10),
-            latest_solve_attempt_time: Duration::from_secs(20),
-            solver_time_limit: Duration::from_secs(30),
+            solver_time_limit: Duration::from_secs(20),
         };
         let scheduler = Scheduler::new(&driver, auction_timing_configuration);
 
@@ -230,23 +220,23 @@ mod tests {
             scheduler
                 .determine_action(base_time + Duration::from_secs(10))
                 .unwrap(),
-            Action::Solve(BatchId(0), Duration::from_secs(20))
+            Action::Solve(BatchId(0), Duration::from_secs(10))
         );
 
         assert_eq!(
             scheduler
                 .determine_action(base_time + Duration::from_secs(19))
                 .unwrap(),
-            Action::Solve(BatchId(0), Duration::from_secs(11))
+            Action::Solve(BatchId(0), Duration::from_secs(1))
         );
 
-        // Sleep because we are behind latest_solve_attempt_time:
+        // Sleep because we are behind solver_time_limit
 
         assert_eq!(
             scheduler
-                .determine_action(base_time + Duration::from_secs(21))
+                .determine_action(base_time + Duration::from_secs(20))
                 .unwrap(),
-            Action::Sleep(Duration::from_secs(289))
+            Action::Sleep(Duration::from_secs(290))
         );
 
         assert_eq!(
@@ -262,8 +252,7 @@ mod tests {
         let driver = MockStableXDriver::new();
         let auction_timing_configuration = AuctionTimingConfiguration {
             target_start_solve_time: Duration::from_secs(10),
-            latest_solve_attempt_time: Duration::from_secs(20),
-            solver_time_limit: Duration::from_secs(30),
+            solver_time_limit: Duration::from_secs(20),
         };
         let mut scheduler = Scheduler::new(&driver, auction_timing_configuration);
         scheduler.last_solved_batch = Some(BatchId(0));
@@ -316,21 +305,20 @@ mod tests {
         let mut driver = MockStableXDriver::new();
         driver
             .expect_run()
-            .with(eq(U256::from(0)), eq(Duration::from_secs(20)))
+            .with(eq(U256::from(0)), eq(Duration::from_secs(10)))
             .returning(|_, _| DriverResult::Ok);
         driver
             .expect_run()
-            .with(eq(U256::from(1)), eq(Duration::from_secs(20)))
+            .with(eq(U256::from(1)), eq(Duration::from_secs(10)))
             .returning(|_, _| DriverResult::Retry(anyhow!("")));
         driver
             .expect_run()
-            .with(eq(U256::from(2)), eq(Duration::from_secs(20)))
+            .with(eq(U256::from(2)), eq(Duration::from_secs(10)))
             .returning(|_, _| DriverResult::Skip(anyhow!("")));
 
         let auction_timing_configuration = AuctionTimingConfiguration {
             target_start_solve_time: Duration::from_secs(10),
-            latest_solve_attempt_time: Duration::from_secs(20),
-            solver_time_limit: Duration::from_secs(30),
+            solver_time_limit: Duration::from_secs(20),
         };
         let mut scheduler = Scheduler::new(&driver, auction_timing_configuration);
 

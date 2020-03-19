@@ -138,16 +138,6 @@ struct Options {
     )]
     target_start_solve_time: Duration,
 
-    /// The offset from the start of the batch in seconds at which point there
-    /// is not enough time left to attempt to solve.
-    #[structopt(
-        long,
-        env = "LATEST_SOLVE_ATTEMPT_TIME",
-        default_value = "180",
-        parse(try_from_str = duration_secs),
-    )]
-    latest_solve_attempt_time: Duration,
-
     /// The offset from the start of the batch to cap the solver's execution
     /// time.
     #[structopt(
@@ -233,7 +223,6 @@ fn main() {
         &driver,
         AuctionTimingConfiguration {
             target_start_solve_time: options.target_start_solve_time,
-            latest_solve_attempt_time: options.latest_solve_attempt_time,
             solver_time_limit: options.solver_time_limit,
         },
     );
