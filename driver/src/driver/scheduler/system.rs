@@ -1,10 +1,13 @@
 use super::{AuctionTimingConfiguration, Scheduler, BATCH_DURATION};
 use crate::driver::stablex_driver::{DriverResult, StableXDriver};
 use anyhow::{Context, Result};
+use crossbeam_utils::thread::Scope;
 use log::error;
 use log::info;
 use std::thread;
 use std::time::{Duration, SystemTime, SystemTimeError};
+
+const RETRY_SLEEP_DURATION: Duration = Duration::from_secs(10);
 
 /// Wraps a batch id as in the smart contract to add functionality related to
 /// the current time.
@@ -62,92 +65,131 @@ impl<'a> SystemScheduler<'a> {
         }
     }
 
-    /// Returns how long to sleep before starting the next iteration.
-    fn run_once(&mut self, now: SystemTime) -> Duration {
-        const RETRY_TIMEOUT: Duration = Duration::from_secs(10);
-        match self.determine_action(now) {
-            Ok(Action::Sleep(duration)) => {
-                info!("Sleeping {}s.", duration.as_secs());
-                duration
+    fn start_solving_in_thread<'b>(
+        &self,
+        batch_id: BatchId,
+        solver_time_limit: Duration,
+        scope: &Scope<'b>,
+    ) where
+        'a: 'b,
+    {
+        let driver = self.driver;
+        let auction_timing_configuration = self.auction_timing_configuration;
+        scope.spawn(move |_| loop {
+            let driver_result = driver.run(batch_id.0.into(), solver_time_limit);
+            log_driver_result(batch_id, &driver_result);
+            if should_attempt_to_solve_again(
+                auction_timing_configuration,
+                SystemTime::now(),
+                batch_id,
+                &driver_result,
+            ) {
+                thread::sleep(RETRY_SLEEP_DURATION);
+            } else {
+                break;
             }
-            Ok(Action::Solve(batch_id, time_limit)) => {
-                info!(
-                    "Starting to solve batch {} with time limit {}s.",
-                    batch_id.0,
-                    time_limit.as_secs_f64()
-                );
-                match self.driver.run(batch_id.0.into(), time_limit) {
-                    DriverResult::Ok => {
-                        info!("Batch {} solved successfully.", batch_id.0);
-                        self.last_solved_batch.replace(batch_id);
-                        Duration::from_secs(0)
-                    }
-                    DriverResult::Retry(err) => {
-                        error!("StableXDriver retryable error: {}", err);
-                        RETRY_TIMEOUT
-                    }
-                    DriverResult::Skip(err) => {
-                        error!("StableXDriver unretryable error: {}", err);
-                        self.last_solved_batch.replace(batch_id);
-                        Duration::from_secs(0)
-                    }
-                }
-            }
-            Err(err) => {
-                error!("Scheduler error: {}", err);
-                RETRY_TIMEOUT
-            }
-        }
-    }
-
-    /// Return current batch id and what to do with it.
-    fn determine_action(&self, now: SystemTime) -> Result<Action> {
-        let solving_batch = BatchId::currently_being_solved(now)
-            .context("failed to get batch id currently being solved")?;
-        let intended_solve_start_time = solving_batch.solve_start_time()
-            + self.auction_timing_configuration.target_start_solve_time;
-        // unwrap here because this cannot fail because the `solving_batch`'s
-        // start time is always before `now`.
-        let elapsed_time = now
-            .duration_since(solving_batch.solve_start_time())
-            .unwrap();
-
-        let action = if self.last_solved_batch == Some(solving_batch)
-            || elapsed_time >= self.auction_timing_configuration.solver_time_limit
-        {
-            let next = solving_batch.next();
-            let duration = (next.solve_start_time()
-                + self.auction_timing_configuration.target_start_solve_time)
-                .duration_since(now)
-                .unwrap();
-            Action::Sleep(duration)
-        } else if now < intended_solve_start_time {
-            let duration = intended_solve_start_time.duration_since(now).unwrap();
-            Action::Sleep(duration)
-        } else {
-            let time_limit = self.auction_timing_configuration.solver_time_limit - elapsed_time;
-            Action::Solve(solving_batch, time_limit)
-        };
-
-        Ok(action)
+        });
     }
 }
 
-impl Scheduler for SystemScheduler<'_> {
-    fn start(&mut self) -> ! {
-        loop {
-            thread::sleep(self.run_once(SystemTime::now()));
+/// Return current batch id and what to do with it.
+fn determine_action(
+    auction_timing_configuration: AuctionTimingConfiguration,
+    last_solved_batch: Option<BatchId>,
+    now: SystemTime,
+) -> Result<Action> {
+    let solving_batch = BatchId::currently_being_solved(now)
+        .context("failed to get batch id currently being solved")?;
+    let intended_solve_start_time =
+        solving_batch.solve_start_time() + auction_timing_configuration.target_start_solve_time;
+    // unwrap here because this cannot fail because the `solving_batch`'s
+    // start time is always before `now`.
+    let elapsed_time = now
+        .duration_since(solving_batch.solve_start_time())
+        .unwrap();
+
+    let action = if last_solved_batch == Some(solving_batch)
+        || elapsed_time >= auction_timing_configuration.solver_time_limit
+    {
+        let next = solving_batch.next();
+        let duration = (next.solve_start_time()
+            + auction_timing_configuration.target_start_solve_time)
+            .duration_since(now)
+            .unwrap();
+        Action::Sleep(duration)
+    } else if now < intended_solve_start_time {
+        let duration = intended_solve_start_time.duration_since(now).unwrap();
+        Action::Sleep(duration)
+    } else {
+        let time_limit = auction_timing_configuration.solver_time_limit - elapsed_time;
+        Action::Solve(solving_batch, time_limit)
+    };
+
+    Ok(action)
+}
+
+fn should_attempt_to_solve_again(
+    auction_timing_configuration: AuctionTimingConfiguration,
+    now: SystemTime,
+    batch_id: BatchId,
+    driver_result: &DriverResult,
+) -> bool {
+    match driver_result {
+        DriverResult::Ok => false,
+        DriverResult::Retry(_) => match determine_action(auction_timing_configuration, None, now) {
+            Ok(Action::Solve(batch_id_, _)) if batch_id_ == batch_id => true,
+            _ => false,
+        },
+        DriverResult::Skip(_) => false,
+    }
+}
+
+fn log_driver_result(batch_id: BatchId, driver_result: &DriverResult) {
+    match driver_result {
+        DriverResult::Ok => info!("Batch {} solved without error.", batch_id.0),
+        DriverResult::Retry(err) => {
+            error!("Batch {} failed with retryable error: {}", batch_id.0, err)
         }
+        DriverResult::Skip(err) => error!(
+            "Batch {} failed with unretryable error: {}",
+            batch_id.0, err
+        ),
+    }
+}
+
+impl<'a> Scheduler for SystemScheduler<'a> {
+    fn start(&mut self) -> ! {
+        crossbeam_utils::thread::scope(|scope| -> ! {
+            loop {
+                match determine_action(
+                    self.auction_timing_configuration,
+                    self.last_solved_batch,
+                    SystemTime::now(),
+                ) {
+                    Ok(Action::Sleep(duration)) => {
+                        info!("Sleeping {}s.", duration.as_secs());
+                        thread::sleep(duration);
+                    }
+                    Ok(Action::Solve(batch_id, duration)) => {
+                        info!("Starting to solve batch {}.", batch_id.0);
+                        self.last_solved_batch = Some(batch_id);
+                        self.start_solving_in_thread(batch_id, duration, scope)
+                    }
+                    Err(err) => {
+                        error!("Scheduler error: {}", err);
+                        thread::sleep(RETRY_SLEEP_DURATION);
+                    }
+                };
+            }
+        })
+        .unwrap();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::driver::stablex_driver::MockStableXDriver;
     use anyhow::anyhow;
-    use ethcontract::U256;
-    use mockall::predicate::eq;
 
     #[test]
     fn batch_id_current() {
@@ -174,166 +216,249 @@ mod tests {
 
     #[test]
     fn determine_action_without_matching_last_solved_batch() {
-        let driver = MockStableXDriver::new();
         let auction_timing_configuration = AuctionTimingConfiguration {
             target_start_solve_time: Duration::from_secs(10),
             solver_time_limit: Duration::from_secs(20),
         };
-        let scheduler = SystemScheduler::new(&driver, auction_timing_configuration);
 
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
 
         assert_eq!(
-            scheduler.determine_action(base_time).unwrap(),
+            determine_action(auction_timing_configuration, None, base_time).unwrap(),
             Action::Sleep(Duration::from_secs(10))
         );
 
         assert_eq!(
-            scheduler
-                .determine_action(base_time + Duration::from_secs(9))
-                .unwrap(),
+            determine_action(
+                auction_timing_configuration,
+                None,
+                base_time + Duration::from_secs(9)
+            )
+            .unwrap(),
             Action::Sleep(Duration::from_secs(1))
         );
 
         assert_eq!(
-            scheduler
-                .determine_action(base_time + Duration::from_secs(10))
-                .unwrap(),
+            determine_action(
+                auction_timing_configuration,
+                None,
+                base_time + Duration::from_secs(10)
+            )
+            .unwrap(),
             Action::Solve(BatchId(0), Duration::from_secs(10))
         );
 
         assert_eq!(
-            scheduler
-                .determine_action(base_time + Duration::from_secs(19))
-                .unwrap(),
+            determine_action(
+                auction_timing_configuration,
+                None,
+                base_time + Duration::from_secs(19)
+            )
+            .unwrap(),
             Action::Solve(BatchId(0), Duration::from_secs(1))
         );
 
         // Sleep because we are behind latest_solve_attempt_time:
 
         assert_eq!(
-            scheduler
-                .determine_action(base_time + Duration::from_secs(20))
-                .unwrap(),
+            determine_action(
+                auction_timing_configuration,
+                None,
+                base_time + Duration::from_secs(20)
+            )
+            .unwrap(),
             Action::Sleep(Duration::from_secs(290))
         );
 
         assert_eq!(
-            scheduler
-                .determine_action(base_time + Duration::from_secs(299))
-                .unwrap(),
+            determine_action(
+                auction_timing_configuration,
+                None,
+                base_time + Duration::from_secs(299)
+            )
+            .unwrap(),
             Action::Sleep(Duration::from_secs(11))
         );
     }
 
     #[test]
     fn determine_action_with_matching_last_solved_batch() {
-        let driver = MockStableXDriver::new();
         let auction_timing_configuration = AuctionTimingConfiguration {
             target_start_solve_time: Duration::from_secs(10),
             solver_time_limit: Duration::from_secs(20),
         };
-        let mut scheduler = SystemScheduler::new(&driver, auction_timing_configuration);
-        scheduler.last_solved_batch = Some(BatchId(0));
 
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
+        let batch_id = Some(BatchId(0));
 
         assert_eq!(
-            scheduler.determine_action(base_time).unwrap(),
+            determine_action(auction_timing_configuration, batch_id, base_time).unwrap(),
             Action::Sleep(Duration::from_secs(310))
         );
 
         assert_eq!(
-            scheduler
-                .determine_action(base_time + Duration::from_secs(9))
-                .unwrap(),
+            determine_action(
+                auction_timing_configuration,
+                batch_id,
+                base_time + Duration::from_secs(9)
+            )
+            .unwrap(),
             Action::Sleep(Duration::from_secs(301))
         );
 
         assert_eq!(
-            scheduler
-                .determine_action(base_time + Duration::from_secs(10))
-                .unwrap(),
+            determine_action(
+                auction_timing_configuration,
+                batch_id,
+                base_time + Duration::from_secs(10)
+            )
+            .unwrap(),
             Action::Sleep(Duration::from_secs(300))
         );
 
         assert_eq!(
-            scheduler
-                .determine_action(base_time + Duration::from_secs(19))
-                .unwrap(),
+            determine_action(
+                auction_timing_configuration,
+                batch_id,
+                base_time + Duration::from_secs(19)
+            )
+            .unwrap(),
             Action::Sleep(Duration::from_secs(291))
         );
 
         assert_eq!(
-            scheduler
-                .determine_action(base_time + Duration::from_secs(21))
-                .unwrap(),
+            determine_action(
+                auction_timing_configuration,
+                batch_id,
+                base_time + Duration::from_secs(21)
+            )
+            .unwrap(),
             Action::Sleep(Duration::from_secs(289))
         );
 
         assert_eq!(
-            scheduler
-                .determine_action(base_time + Duration::from_secs(299))
-                .unwrap(),
+            determine_action(
+                auction_timing_configuration,
+                batch_id,
+                base_time + Duration::from_secs(299)
+            )
+            .unwrap(),
             Action::Sleep(Duration::from_secs(11))
         );
     }
 
     #[test]
-    fn run_forever_single_iteration() {
-        let mut driver = MockStableXDriver::new();
-        driver
-            .expect_run()
-            .with(eq(U256::from(0)), eq(Duration::from_secs(10)))
-            .returning(|_, _| DriverResult::Ok);
-        driver
-            .expect_run()
-            .with(eq(U256::from(1)), eq(Duration::from_secs(10)))
-            .returning(|_, _| DriverResult::Retry(anyhow!("")));
-        driver
-            .expect_run()
-            .with(eq(U256::from(2)), eq(Duration::from_secs(10)))
-            .returning(|_, _| DriverResult::Skip(anyhow!("")));
-
+    fn should_attempt_to_solve_again_() {
         let auction_timing_configuration = AuctionTimingConfiguration {
             target_start_solve_time: Duration::from_secs(10),
             solver_time_limit: Duration::from_secs(20),
         };
-        let mut scheduler = SystemScheduler::new(&driver, auction_timing_configuration);
 
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
 
-        // Driver not invoked
-        assert_eq!(scheduler.run_once(base_time), Duration::from_secs(10));
-
-        // Ok
         assert_eq!(
-            scheduler.run_once(base_time + Duration::from_secs(10)),
-            Duration::from_secs(0)
+            should_attempt_to_solve_again(
+                auction_timing_configuration,
+                base_time + Duration::from_secs(10),
+                BatchId(0),
+                &DriverResult::Ok
+            ),
+            false
         );
 
-        // Batch already handled
         assert_eq!(
-            scheduler.run_once(base_time + Duration::from_secs(10)),
-            Duration::from_secs(300)
+            should_attempt_to_solve_again(
+                auction_timing_configuration,
+                base_time + Duration::from_secs(10),
+                BatchId(0),
+                &DriverResult::Skip(anyhow!("")),
+            ),
+            false
         );
 
-        // Retry
         assert_eq!(
-            scheduler.run_once(base_time + Duration::from_secs(310)),
-            Duration::from_secs(10)
+            should_attempt_to_solve_again(
+                auction_timing_configuration,
+                base_time + Duration::from_secs(10),
+                BatchId(0),
+                &DriverResult::Retry(anyhow!("")),
+            ),
+            true
         );
 
-        // Skip
         assert_eq!(
-            scheduler.run_once(base_time + Duration::from_secs(610)),
-            Duration::from_secs(0)
+            should_attempt_to_solve_again(
+                auction_timing_configuration,
+                base_time + Duration::from_secs(19),
+                BatchId(0),
+                &DriverResult::Retry(anyhow!("")),
+            ),
+            true
         );
 
-        // Batch already handled
         assert_eq!(
-            scheduler.run_once(base_time + Duration::from_secs(610)),
-            Duration::from_secs(300)
+            should_attempt_to_solve_again(
+                auction_timing_configuration,
+                base_time + Duration::from_secs(20),
+                BatchId(0),
+                &DriverResult::Retry(anyhow!("")),
+            ),
+            false
         );
+
+        assert_eq!(
+            should_attempt_to_solve_again(
+                auction_timing_configuration,
+                base_time + Duration::from_secs(310),
+                BatchId(0),
+                &DriverResult::Retry(anyhow!("")),
+            ),
+            false
+        );
+
+        assert_eq!(
+            should_attempt_to_solve_again(
+                auction_timing_configuration,
+                base_time + Duration::from_secs(310),
+                BatchId(1),
+                &DriverResult::Retry(anyhow!("")),
+            ),
+            true
+        );
+    }
+
+    // Allows observing real behavior by looking at the log output.
+    #[test]
+    #[ignore]
+    fn test_real() {
+        use crate::driver::stablex_driver::{DriverResult, MockStableXDriver};
+        let (_, _guard) = crate::logging::init("info");
+
+        let mut driver = MockStableXDriver::new();
+
+        let mut counter = 0;
+        driver.expect_run().returning(move |batch, time_limit| {
+            log::info!(
+                "driver run called for the {}. time with batch {} time_limit {}",
+                counter,
+                batch.low_u64(),
+                time_limit.as_secs(),
+            );
+            counter += 1;
+            match counter % 3 {
+                0 => DriverResult::Ok,
+                1 => DriverResult::Retry(anyhow!("")),
+                2 => DriverResult::Skip(anyhow!("")),
+                _ => unreachable!(),
+            }
+        });
+
+        let auction_timing_configuration = AuctionTimingConfiguration {
+            target_start_solve_time: Duration::from_secs(10),
+            solver_time_limit: Duration::from_secs(290),
+        };
+        let mut scheduler = SystemScheduler::new(&driver, auction_timing_configuration);
+
+        scheduler.start();
     }
 }

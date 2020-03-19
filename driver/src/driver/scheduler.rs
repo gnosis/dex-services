@@ -21,7 +21,7 @@ pub trait Scheduler {
     fn start(&mut self) -> !;
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct AuctionTimingConfiguration {
     /// The offset from the start of a batch at which point we should start
     /// solving.
