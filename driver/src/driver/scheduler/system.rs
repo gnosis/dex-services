@@ -7,7 +7,7 @@ use log::info;
 use std::thread;
 use std::time::{Duration, SystemTime, SystemTimeError};
 
-const RETRY_SLEEP_DURATION: Duration = Duration::from_secs(10);
+const RETRY_SLEEP_DURATION: Duration = Duration::from_secs(1);
 
 /// Wraps a batch id as in the smart contract to add functionality related to
 /// the current time.
