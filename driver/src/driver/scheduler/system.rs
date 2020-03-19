@@ -136,10 +136,9 @@ fn should_attempt_to_solve_again(
 ) -> bool {
     match driver_result {
         DriverResult::Ok => false,
-        DriverResult::Retry(_) => match determine_action(auction_timing_configuration, None, now) {
-            Ok(Action::Solve(batch_id_, _)) if batch_id_ == batch_id => true,
-            _ => false,
-        },
+        DriverResult::Retry(_) => {
+            now < (batch_id.solve_start_time() + auction_timing_configuration.solver_time_limit)
+        }
         DriverResult::Skip(_) => false,
     }
 }
