@@ -48,10 +48,6 @@ impl<'a> FilteredOrderbookReader<'a> {
 }
 
 impl<'a> StableXOrderBookReading for FilteredOrderbookReader<'a> {
-    fn get_auction_index(&self) -> Result<u32> {
-        self.orderbook.get_auction_index()
-    }
-
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
         let (state, orders) = self.orderbook.get_auction_data(index)?;
         let filtered = orders

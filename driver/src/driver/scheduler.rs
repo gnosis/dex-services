@@ -27,10 +27,6 @@ pub struct AuctionTimingConfiguration {
     /// solving.
     target_start_solve_time: Duration,
 
-    /// The offset from the start of the batch at which point there is not
-    /// enough time left to attempt to solve.
-    latest_solve_attempt_time: Duration,
-
     /// The offset from the start of the batch to cap the solver's execution
     /// time.
     solver_time_limit: Duration,
@@ -43,8 +39,7 @@ impl AuctionTimingConfiguration {
     ///
     /// Panics if the configuration is invalid. Specifically the following
     /// invariants must hold:
-    /// - `target_start_solve_time < latest_solve_attempt_time`
-    /// - `latest_solve_attempt_time < solver_time_limit`
+    /// - `target_start_solve_time < solver_time_limit`
     /// - `solver_time_limit < SOLVING_WINDOW`
     ///
     /// Where `SOLVING_WINDOW` represents the amount of time within a batch in
@@ -52,27 +47,18 @@ impl AuctionTimingConfiguration {
     /// batch where solutions are no longer accepted, this is done to allow
     /// traders time to make decisions after the previous batch has already
     /// finalized.
-    pub fn new(
-        target_start_solve_time: Duration,
-        latest_solve_attempt_time: Duration,
-        solver_time_limit: Duration,
-    ) -> Self {
+    pub fn new(target_start_solve_time: Duration, solver_time_limit: Duration) -> Self {
         assert!(
             solver_time_limit < SOLVING_WINDOW,
             "The solver time limit must be within the solving window",
         );
         assert!(
-            latest_solve_attempt_time < solver_time_limit,
-            "The latest solve attempt time must be earlier than the solver time limit",
-        );
-        assert!(
-            target_start_solve_time < latest_solve_attempt_time,
-            "the target solve start time must be earlier than the latest solve time",
+            target_start_solve_time < solver_time_limit,
+            "the target solve start time must be earlier than the solver time limit",
         );
 
         AuctionTimingConfiguration {
             target_start_solve_time,
-            latest_solve_attempt_time,
             solver_time_limit,
         }
     }
@@ -80,11 +66,7 @@ impl AuctionTimingConfiguration {
 
 impl Default for AuctionTimingConfiguration {
     fn default() -> Self {
-        AuctionTimingConfiguration::new(
-            Duration::from_secs(30),
-            Duration::from_secs(150),
-            Duration::from_secs(180),
-        )
+        AuctionTimingConfiguration::new(Duration::from_secs(30), Duration::from_secs(180))
     }
 }
 

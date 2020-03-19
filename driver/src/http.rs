@@ -1,24 +1,31 @@
 //! Module contains the implementation for a shared HTTP client for various
 //! driver components.
 
+pub use crate::metrics::HttpLabel;
+use crate::metrics::HttpMetrics;
 use anyhow::{anyhow, Result};
 use isahc::http::{Error as HttpError, Uri};
 use isahc::prelude::{Configurable, Request};
 use isahc::{HttpClientBuilder, ResponseExt};
 use serde::de::DeserializeOwned;
 use std::convert::TryFrom;
-use std::time::Duration;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 /// A factory type for creating HTTP clients.
 #[derive(Debug)]
 pub struct HttpFactory {
     default_timeout: Duration,
+    metrics: Arc<HttpMetrics>,
 }
 
 impl HttpFactory {
     /// Creates a new HTTP client factory.
-    pub fn new(default_timeout: Duration) -> Self {
-        HttpFactory { default_timeout }
+    pub fn new(default_timeout: Duration, metrics: HttpMetrics) -> Self {
+        HttpFactory {
+            default_timeout,
+            metrics: Arc::new(metrics),
+        }
     }
 
     /// Creates a new HTTP client with the default configuration.
@@ -32,31 +39,40 @@ impl HttpFactory {
         configure: impl FnOnce(HttpClientBuilder) -> HttpClientBuilder,
     ) -> Result<HttpClient> {
         let inner = configure(isahc::HttpClient::builder()).build()?;
-        Ok(HttpClient { inner })
+        let metrics = self.metrics.clone();
+
+        Ok(HttpClient { inner, metrics })
     }
 }
 
 #[cfg(test)]
 impl Default for HttpFactory {
     fn default() -> Self {
-        HttpFactory::new(Duration::from_secs(10))
+        HttpFactory::new(Duration::from_secs(10), HttpMetrics::default())
     }
 }
 
-/// An HTTP client instance.
+/// An HTTP client instance with metrics.
 #[derive(Debug)]
 pub struct HttpClient {
     inner: isahc::HttpClient,
+    metrics: Arc<HttpMetrics>,
 }
 
 impl HttpClient {
     /// Post raw JSON data and return a future that resolves once the HTTP
     /// request has been completed.
-    pub async fn post_raw_json_async<U>(&self, url: U, data: impl Into<String>) -> Result<String>
+    pub async fn post_raw_json_async<U>(
+        &self,
+        url: U,
+        data: impl Into<String>,
+        label: HttpLabel,
+    ) -> Result<String>
     where
         Uri: TryFrom<U>,
         <Uri as TryFrom<U>>::Error: Into<HttpError>,
     {
+        let start = Instant::now();
         let http_request = Request::post(url)
             .header("Content-Type", "application/json")
             .body(data.into())?;
@@ -64,6 +80,7 @@ impl HttpClient {
         let content = response.text()?;
 
         if response.status().is_success() {
+            self.metrics.request(label, start.elapsed(), content.len());
             Ok(content)
         } else {
             Err(anyhow!(
@@ -75,22 +92,36 @@ impl HttpClient {
     }
 
     /// Standard HTTP GET request that parses the result as JSON.
-    pub fn get_json<U, T>(&self, url: U) -> Result<T>
+    pub fn get_json<U, T>(&self, url: U, label: HttpLabel) -> Result<T>
     where
         Uri: TryFrom<U>,
         <Uri as TryFrom<U>>::Error: Into<HttpError>,
         T: DeserializeOwned,
     {
-        Ok(self.inner.get(url)?.json()?)
+        let start = Instant::now();
+
+        let json = self.inner.get(url)?.text()?;
+        let size = json.len();
+        self.metrics.request(label, start.elapsed(), size);
+
+        let result = serde_json::from_str(&json)?;
+        Ok(result)
     }
 
-    /// Async HTTP GET request that parses the result as JSON.
-    pub async fn get_json_async<U, T>(&self, url: U) -> Result<T>
+    /// Standard HTTP GET request that parses the result as JSON.
+    pub async fn get_json_async<U, T>(&self, url: U, label: HttpLabel) -> Result<T>
     where
         Uri: TryFrom<U>,
         <Uri as TryFrom<U>>::Error: Into<HttpError>,
         T: DeserializeOwned,
     {
-        Ok(self.inner.get_async(url).await?.json()?)
+        let start = Instant::now();
+
+        let json = self.inner.get_async(url).await?.text()?;
+        let size = json.len();
+        self.metrics.request(label, start.elapsed(), size);
+
+        let result = serde_json::from_str(&json)?;
+        Ok(result)
     }
 }

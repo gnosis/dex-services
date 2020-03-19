@@ -1,4 +1,4 @@
-use crate::http::{HttpClient, HttpFactory};
+use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::Error;
 use ethcontract::jsonrpc::types::{Call, Output};
 use ethcontract::web3::helpers;
@@ -55,12 +55,18 @@ impl HttpTransportInner {
         id: RequestId,
         request: Call,
     ) -> Result<Value, Web3Error> {
+        let label = match &request {
+            Call::MethodCall(call) if call.method == "eth_call" => HttpLabel::EthCall,
+            Call::MethodCall(call) if call.method == "eth_estimateGas" => HttpLabel::EthEstimateGas,
+            _ => HttpLabel::EthRpc,
+        };
+
         let request = serde_json::to_string(&request)?;
         debug!("[id:{}] sending request: '{}'", id, &request);
 
         let content = self
             .client
-            .post_raw_json_async(&self.url, request)
+            .post_raw_json_async(&self.url, request, label)
             .await
             .map_err(|err| {
                 warn!("[id:{}] returned an error: '{}'", id, err.to_string());

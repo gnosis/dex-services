@@ -24,7 +24,7 @@ use crate::driver::{
 use crate::eth_rpc::Web3EthRpc;
 use crate::gas_station::GnosisSafeGasStation;
 use crate::http::HttpFactory;
-use crate::metrics::{MetricsServer, StableXMetrics};
+use crate::metrics::{HttpMetrics, MetricsServer, StableXMetrics};
 use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
 use crate::price_estimation::{PriceOracle, TokenData};
 use crate::price_finding::{Fee, SolverType};
@@ -138,16 +138,6 @@ struct Options {
     )]
     target_start_solve_time: Duration,
 
-    /// The offset from the start of the batch in seconds at which point there
-    /// is not enough time left to attempt to solve.
-    #[structopt(
-        long,
-        env = "LATEST_SOLVE_ATTEMPT_TIME",
-        default_value = "180",
-        parse(try_from_str = duration_secs),
-    )]
-    latest_solve_attempt_time: Duration,
-
     /// The offset from the start of the batch to cap the solver's execution
     /// time.
     #[structopt(
@@ -180,13 +170,14 @@ fn main() {
     // Set up metrics and serve in separate thread.
     let prometheus_registry = Arc::new(Registry::new());
     let stablex_metrics = StableXMetrics::new(prometheus_registry.clone());
+    let http_metrics = HttpMetrics::new(&prometheus_registry).unwrap();
     let metric_server = MetricsServer::new(prometheus_registry);
     thread::spawn(move || {
         metric_server.serve(9586);
     });
 
     // Set up shared HTTP client and HTTP services.
-    let http_factory = HttpFactory::new(options.http_timeout);
+    let http_factory = HttpFactory::new(options.http_timeout, http_metrics);
     let web3 = web3_provider(
         &http_factory,
         options.node_url.as_str(),
@@ -235,7 +226,6 @@ fn main() {
 
     let scheduler_config = AuctionTimingConfiguration::new(
         options.target_start_solve_time,
-        options.latest_solve_attempt_time,
         options.solver_time_limit,
     );
 

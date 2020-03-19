@@ -73,7 +73,7 @@ impl<'a> EvmScheduler<'a> {
         }
 
         let current_batch_time = BATCH_DURATION - time_remaining;
-        if current_batch_time > self.config.latest_solve_attempt_time {
+        if current_batch_time > self.config.solver_time_limit {
             // TODO(nlordell): This should probably be reflected in a metric.
             //   For now we just log an warning.
             warn!("skipping batch {}", batch_id);
