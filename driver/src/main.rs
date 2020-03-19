@@ -224,10 +224,8 @@ fn main() {
         &stablex_metrics,
     );
 
-    let scheduler_config = AuctionTimingConfiguration::new(
-        options.target_start_solve_time,
-        options.solver_time_limit,
-    );
+    let scheduler_config =
+        AuctionTimingConfiguration::new(options.target_start_solve_time, options.solver_time_limit);
 
     let mut scheduler = options
         .scheduler
