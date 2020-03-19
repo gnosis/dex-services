@@ -84,7 +84,12 @@ impl<'a> SystemScheduler<'a> {
                 batch_id,
                 &driver_result,
             ) {
-                SolveAgain::Yes { time_limit } => solver_time_limit = time_limit,
+                SolveAgain::Yes { time_limit } => {
+                    if time_limit > RETRY_SLEEP_DURATION {
+                        thread::sleep(RETRY_SLEEP_DURATION);
+                    }
+                    solver_time_limit = time_limit - RETRY_SLEEP_DURATION;
+                }
                 SolveAgain::No => break,
             }
         });
