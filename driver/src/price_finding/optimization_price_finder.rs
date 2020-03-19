@@ -237,22 +237,24 @@ impl PriceFinding for OptimisationPriceFinder {
         // We are solving the batch before the current one
         let batch_id = (now.timestamp() / 300) - 1;
         let date = now.format("%Y-%m-%d");
-        // We only need to create the folder for the input, the output
-        // folder is created by the python script
+
         let input_folder = format!("instances/{}", &date);
-        create_dir_all(&input_folder)?;
         let input_file = format!(
             "{}/instance_{}_{}.json",
             &input_folder,
             &batch_id,
             &now.to_rfc3339()
         );
+
         let result_folder = format!(
             "results/{}/instance_{}_{}/",
             &date,
             &batch_id,
             &now.to_rfc3339()
         );
+
+        create_dir_all(&input_folder)?;
+        create_dir_all(&result_folder)?;
 
         self.io_methods
             .write_input(&input_file, &serde_json::to_string(&input)?)?;
@@ -282,11 +284,12 @@ impl Io for DefaultIo {
         solver_type: SolverType,
         time_limit: Duration,
     ) -> Result<()> {
+        let time_limit = (time_limit.as_secs_f64().round() as u64).to_string();
         let output = Command::new("python")
             .args(&["-m", "batchauctions.scripts.e2e._run"])
-            .arg(result_folder)
-            .args(&["--jsonFile", input_file])
-            .arg(format!("--solverTimeLimit={:}", time_limit.as_secs()))
+            .arg(input_file)
+            .args(&["--outputDir", result_folder])
+            .args(&["--solverTimeLimit", &time_limit])
             .args(solver_type.to_args())
             .output()?;
         if !output.status.success() {
