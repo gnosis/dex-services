@@ -200,7 +200,7 @@ fn test_rinkeby() {
         .get_seconds_remaining_in_batch()
         .wait_and_expect("Cannot get seconds remaining in batch")
         .low_u64()
-        + 30;
+        + 60;
 
     println!("Sleeping {} seconds...", sleep_time);
     std::thread::sleep(Duration::from_secs(sleep_time));
