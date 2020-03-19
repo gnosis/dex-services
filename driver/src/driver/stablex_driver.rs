@@ -510,7 +510,7 @@ mod tests {
                 // NOTE: Wait for an epsilon to go by so that the time limit
                 //   is exceeded.
                 let start = Instant::now();
-                while start.elapsed() == time_limit {
+                while start.elapsed() <= time_limit {
                     thread::yield_now();
                 }
                 Ok((state, orders))
