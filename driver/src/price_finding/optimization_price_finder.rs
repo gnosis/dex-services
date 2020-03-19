@@ -282,11 +282,12 @@ impl Io for DefaultIo {
         solver_type: SolverType,
         time_limit: Duration,
     ) -> Result<()> {
+        let time_limit = (time_limit.as_secs_f64().round() as u64).to_string();
         let output = Command::new("python")
             .args(&["-m", "batchauctions.scripts.e2e._run"])
-            .arg(result_folder)
-            .args(&["--jsonFile", input_file])
-            .arg(format!("--solverTimeLimit={:}", time_limit.as_secs()))
+            .arg(input_file)
+            .args(&["--outputDir", result_folder])
+            .args(&["--solverTimeLimit", &time_limit])
             .args(solver_type.to_args())
             .output()?;
         if !output.status.success() {
