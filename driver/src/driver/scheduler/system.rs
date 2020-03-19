@@ -435,10 +435,10 @@ mod tests {
             );
             counter += 1;
             match counter % 3 {
-                //0 => DriverResult::Ok,
-                _ => DriverResult::Retry(anyhow!("")),
-                //2 => DriverResult::Skip(anyhow!("")),
-                //_ => unreachable!(),
+                0 => DriverResult::Ok,
+                1 => DriverResult::Retry(anyhow!("")),
+                2 => DriverResult::Skip(anyhow!("")),
+                _ => unreachable!(),
             }
         });
 
