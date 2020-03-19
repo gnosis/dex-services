@@ -18,7 +18,7 @@ mod util;
 
 use crate::contracts::{stablex_contract::StableXContractImpl, web3_provider};
 use crate::driver::{
-    scheduler::{AuctionTimingConfiguration, Scheduler},
+    scheduler::{AuctionTimingConfiguration, SchedulerKind},
     stablex_driver::StableXDriverImpl,
 };
 use crate::eth_rpc::Web3EthRpc;
@@ -148,6 +148,10 @@ struct Options {
     )]
     solver_time_limit: Duration,
 
+    /// The kind of scheduler to use.
+    #[structopt(long, env = "SCHEDULER", default_value = "system")]
+    scheduler: SchedulerKind,
+
     /// Time interval in seconds in which price sources should be updated.
     #[structopt(
         long,
@@ -219,14 +223,14 @@ fn main() {
         &solution_submitter,
         &stablex_metrics,
     );
-    let mut scheduler = Scheduler::new(
-        &driver,
-        AuctionTimingConfiguration {
-            target_start_solve_time: options.target_start_solve_time,
-            solver_time_limit: options.solver_time_limit,
-        },
-    );
-    scheduler.run_forever();
+
+    let scheduler_config =
+        AuctionTimingConfiguration::new(options.target_start_solve_time, options.solver_time_limit);
+
+    let mut scheduler = options
+        .scheduler
+        .create(&contract, &driver, scheduler_config);
+    scheduler.start();
 }
 
 fn duration_millis(s: &str) -> Result<Duration, ParseIntError> {

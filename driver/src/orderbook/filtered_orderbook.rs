@@ -2,7 +2,7 @@ use super::*;
 
 use crate::models::{AccountState, Order};
 use anyhow::Error;
-use ethcontract::{Address, U256};
+use ethcontract::Address;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;

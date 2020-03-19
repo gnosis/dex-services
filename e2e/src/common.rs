@@ -98,42 +98,15 @@ pub fn wait_for(web3: &Web3<Http>, seconds: u32) {
         .expect("Cannot mine to increase time");
 }
 
-fn is_connected_to_ganache(web3: &Web3<Http>) -> bool {
-    const GANACHE_NETWORK_ID: &str = "5777";
-
-    let network_id = web3
-        .net()
-        .version()
-        .wait()
-        .expect("Failed to determine network ID");
-    network_id == GANACHE_NETWORK_ID
-}
-
-pub fn wait_for_condition<C>(
-    web3: &Web3<Http>,
-    mut condition: C,
-    deadline: Instant,
-) -> Result<(), Error>
+pub fn wait_for_condition<C>(mut condition: C, deadline: Instant) -> Result<(), Error>
 where
     C: FnMut() -> bool,
 {
-    // NOTE: For Ganache, we need to make sure that that we periodically mine so
-    //   that the EVM time periodically updates and so that balances are up to
-    //   date when retrieving the orderbook, as they are calculated on-chain.
-    let should_mine = is_connected_to_ganache(web3);
-
     while Instant::now() < deadline {
         if condition() {
             return Ok(());
         }
-
         std::thread::sleep(Duration::from_secs(1));
-        if should_mine {
-            web3.transport()
-                .execute("evm_mine", vec![])
-                .wait()
-                .expect("Cannot mine to update current time");
-        }
     }
     Err(Error::new(
         ErrorKind::TimedOut,

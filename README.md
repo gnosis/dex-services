@@ -155,8 +155,9 @@ The following environment variables can be used to configure the behavior of the
 - *PRIVATE_KEY*: The key with which to sign transactions
 - *WEB3_RPC_TIMEOUT*: The timeout in milliseconds of web3 JSON RPC calls, defaults to 10000ms
 - *TOKEN_DATA*: Allows to set token data - i.e symbol name, decimals, a default external price and a flag for indicating whether updated external prices should be fetched.
-- *TARGET_START_SOLVE_TIME*: The offset from the start of a batch in seconds at which point we should start solving.
+- *TARGET_START_SOLVE_TIME*: The offset from the start of a batch in seconds at which point we should start solving when using the `system` scheduler.
 - *SOLVER_TIME_LIMIT*: The offset from the start of the batch to cap the solver's execution time in seconds.
+- *SCHEDULER*: The scheduling method to use for solving batches. Can be either `system` (default) to use system time to schedule solving batches, or `evm` to use data read from the EVM in order to schedule solving batches.
 - *PRICE_SOURCE_UPDATE_INTERVAL*: Time interval in seconds in which price sources should be updated.
 
 ### Orderbook Filter Example
