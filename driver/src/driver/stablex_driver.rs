@@ -151,7 +151,7 @@ impl<'a> StableXDriver for StableXDriverImpl<'a> {
             Err(err) => return DriverResult::Retry(err),
         };
 
-        let actual_time_limit = match deadline.checked_duration_since(Instant::now()) {
+        let price_finding_time_limit = match deadline.checked_duration_since(Instant::now()) {
             Some(time_limit) => time_limit,
             None => {
                 self.metrics.auction_skipped(batch_to_solve);
@@ -159,7 +159,12 @@ impl<'a> StableXDriver for StableXDriverImpl<'a> {
             }
         };
 
-        match self.solve(batch_to_solve, actual_time_limit, account_state, orders) {
+        match self.solve(
+            batch_to_solve,
+            price_finding_time_limit,
+            account_state,
+            orders,
+        ) {
             Ok(()) => DriverResult::Ok,
             Err(err) => DriverResult::Skip(err),
         }
