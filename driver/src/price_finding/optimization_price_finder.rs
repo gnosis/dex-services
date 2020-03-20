@@ -316,7 +316,7 @@ pub mod tests {
     use crate::models::AccountState;
     use crate::price_estimation::MockPriceEstimating;
     use crate::util::test_util::map_from_slice;
-    use ethcontract::{Address, H256, U256};
+    use ethcontract::Address;
     use serde_json::json;
     use std::collections::BTreeMap;
 
@@ -521,12 +521,7 @@ pub mod tests {
 
     #[test]
     fn test_serialize_balances() {
-        let state = models::AccountState::new(
-            H256::zero(),
-            U256::zero(),
-            vec![100, 200, 300, 400, 500, 600],
-            3,
-        );
+        let state = models::AccountState::new(vec![100, 200, 300, 400, 500, 600], 3);
         let orders = [
             models::Order {
                 id: 0,
