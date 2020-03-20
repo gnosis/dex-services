@@ -5,7 +5,7 @@ use crossbeam_utils::thread::Scope;
 use log::error;
 use log::info;
 use std::thread;
-use std::time::{Duration, SystemTime, SystemTimeError};
+use std::time::{Duration, Instant, SystemTime, SystemTimeError};
 
 const RETRY_SLEEP_DURATION: Duration = Duration::from_secs(1);
 
@@ -68,29 +68,22 @@ impl<'a> SystemScheduler<'a> {
     fn start_solving_in_thread<'b>(
         &self,
         batch_id: BatchId,
-        mut solver_time_limit: Duration,
+        solver_time_limit: Instant,
         scope: &Scope<'b>,
     ) where
         'a: 'b,
     {
         let driver = self.driver;
-        let auction_timing_configuration = self.auction_timing_configuration;
         scope.spawn(move |_| loop {
-            let driver_result = driver.run(batch_id.0.into(), solver_time_limit);
+            let now = Instant::now();
+            if now >= solver_time_limit {
+                break;
+            }
+            let driver_result = driver.run(batch_id.0.into(), solver_time_limit - now);
             log_driver_result(batch_id, &driver_result);
-            match should_attempt_to_solve_again(
-                auction_timing_configuration,
-                SystemTime::now(),
-                batch_id,
-                &driver_result,
-            ) {
-                SolveAgain::Yes { time_limit } => {
-                    if time_limit > RETRY_SLEEP_DURATION {
-                        thread::sleep(RETRY_SLEEP_DURATION);
-                    }
-                    solver_time_limit = time_limit - RETRY_SLEEP_DURATION;
-                }
-                SolveAgain::No => break,
+            match driver_result {
+                DriverResult::Retry(_) => thread::sleep(RETRY_SLEEP_DURATION),
+                DriverResult::Ok | DriverResult::Skip(_) => break,
             }
         });
     }
@@ -128,34 +121,6 @@ impl<'a> SystemScheduler<'a> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-enum SolveAgain {
-    Yes { time_limit: Duration },
-    No,
-}
-
-fn should_attempt_to_solve_again(
-    auction_timing_configuration: AuctionTimingConfiguration,
-    now: SystemTime,
-    batch_id: BatchId,
-    driver_result: &DriverResult,
-) -> SolveAgain {
-    match driver_result {
-        DriverResult::Ok => SolveAgain::No,
-        DriverResult::Retry(_) => {
-            let deadline =
-                batch_id.solve_start_time() + auction_timing_configuration.solver_time_limit;
-            match deadline.duration_since(now) {
-                Ok(time_limit) if time_limit > Duration::from_secs(0) => {
-                    SolveAgain::Yes { time_limit }
-                }
-                _ => SolveAgain::No,
-            }
-        }
-        DriverResult::Skip(_) => SolveAgain::No,
-    }
-}
-
 fn log_driver_result(batch_id: BatchId, driver_result: &DriverResult) {
     match driver_result {
         DriverResult::Ok => info!("Batch {} solved without error.", batch_id.0),
@@ -181,7 +146,7 @@ impl<'a> Scheduler for SystemScheduler<'a> {
                     Ok(Action::Solve(batch_id, duration)) => {
                         info!("Starting to solve batch {}.", batch_id.0);
                         self.last_solved_batch = Some(batch_id);
-                        self.start_solving_in_thread(batch_id, duration, scope)
+                        self.start_solving_in_thread(batch_id, Instant::now() + duration, scope)
                     }
                     Err(err) => {
                         error!("Scheduler error: {}", err);
@@ -327,92 +292,6 @@ mod tests {
                 .determine_action(base_time + Duration::from_secs(299))
                 .unwrap(),
             Action::Sleep(Duration::from_secs(11))
-        );
-    }
-
-    #[test]
-    fn should_attempt_to_solve_again_() {
-        let auction_timing_configuration = AuctionTimingConfiguration {
-            target_start_solve_time: Duration::from_secs(10),
-            solver_time_limit: Duration::from_secs(20),
-        };
-
-        let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
-
-        assert_eq!(
-            should_attempt_to_solve_again(
-                auction_timing_configuration,
-                base_time + Duration::from_secs(10),
-                BatchId(0),
-                &DriverResult::Ok
-            ),
-            SolveAgain::No,
-        );
-
-        assert_eq!(
-            should_attempt_to_solve_again(
-                auction_timing_configuration,
-                base_time + Duration::from_secs(10),
-                BatchId(0),
-                &DriverResult::Skip(anyhow!("")),
-            ),
-            SolveAgain::No,
-        );
-
-        assert_eq!(
-            should_attempt_to_solve_again(
-                auction_timing_configuration,
-                base_time + Duration::from_secs(10),
-                BatchId(0),
-                &DriverResult::Retry(anyhow!("")),
-            ),
-            SolveAgain::Yes {
-                time_limit: Duration::from_secs(10)
-            },
-        );
-
-        assert_eq!(
-            should_attempt_to_solve_again(
-                auction_timing_configuration,
-                base_time + Duration::from_secs(19),
-                BatchId(0),
-                &DriverResult::Retry(anyhow!("")),
-            ),
-            SolveAgain::Yes {
-                time_limit: Duration::from_secs(1)
-            },
-        );
-
-        assert_eq!(
-            should_attempt_to_solve_again(
-                auction_timing_configuration,
-                base_time + Duration::from_secs(20),
-                BatchId(0),
-                &DriverResult::Retry(anyhow!("")),
-            ),
-            SolveAgain::No,
-        );
-
-        assert_eq!(
-            should_attempt_to_solve_again(
-                auction_timing_configuration,
-                base_time + Duration::from_secs(310),
-                BatchId(0),
-                &DriverResult::Retry(anyhow!("")),
-            ),
-            SolveAgain::No,
-        );
-
-        assert_eq!(
-            should_attempt_to_solve_again(
-                auction_timing_configuration,
-                base_time + Duration::from_secs(310),
-                BatchId(1),
-                &DriverResult::Retry(anyhow!("")),
-            ),
-            SolveAgain::Yes {
-                time_limit: Duration::from_secs(10)
-            },
         );
     }
 
