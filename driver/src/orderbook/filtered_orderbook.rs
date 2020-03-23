@@ -49,6 +49,46 @@ impl FromStr for WhitelistOrderbookFilter {
     }
 }
 
+pub trait OrderbookFilter {
+    fn filter(&self, orders: Vec<Order>) -> Vec<Order>;
+}
+
+impl OrderbookFilter for BlacklistOrderbookFilter {
+    fn filter(&self, orders: Vec<Order>) -> Vec<Order> {
+        orders
+            .into_iter()
+            .filter(|o| {
+                let user_filter = if let Some(user_filter) = self.users.get(&o.account_id) {
+                    match user_filter {
+                        UserOrderFilter::All => true,
+                        UserOrderFilter::OrderIds(ids) => ids.contains(&o.id),
+                    }
+                } else {
+                    false
+                };
+                !self.tokens.contains(&o.buy_token)
+                    && !self.tokens.contains(&o.sell_token)
+                    && !user_filter
+            })
+            .collect()
+    }
+}
+
+impl OrderbookFilter for WhitelistOrderbookFilter {
+    fn filter(&self, orders: Vec<Order>) -> Vec<Order> {
+        if !self.tokens.is_empty() {
+            orders
+                .into_iter()
+                .filter(|o| {
+                    self.tokens.contains(&o.buy_token) && self.tokens.contains(&o.sell_token)
+                })
+                .collect()
+        } else {
+            orders
+        }
+    }
+}
+
 pub struct FilteredOrderbookReader<'a> {
     orderbook: &'a (dyn StableXOrderBookReading + Sync),
     whitelist_filter: WhitelistOrderbookFilter,
@@ -72,32 +112,8 @@ impl<'a> FilteredOrderbookReader<'a> {
 impl<'a> StableXOrderBookReading for FilteredOrderbookReader<'a> {
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
         let (state, orders) = self.orderbook.get_auction_data(index)?;
-        let mut filtered: Vec<Order> = orders
-            .into_iter()
-            .filter(|o| {
-                let user_filter =
-                    if let Some(user_filter) = self.blacklist_filter.users.get(&o.account_id) {
-                        match user_filter {
-                            UserOrderFilter::All => true,
-                            UserOrderFilter::OrderIds(ids) => ids.contains(&o.id),
-                        }
-                    } else {
-                        false
-                    };
-                !self.blacklist_filter.tokens.contains(&o.buy_token)
-                    && !self.blacklist_filter.tokens.contains(&o.sell_token)
-                    && !user_filter
-            })
-            .collect();
-        if !self.whitelist_filter.tokens.is_empty() {
-            filtered = filtered
-                .into_iter()
-                .filter(|o| {
-                    self.whitelist_filter.tokens.contains(&o.buy_token)
-                        && self.whitelist_filter.tokens.contains(&o.sell_token)
-                })
-                .collect();
-        };
+        let filtered = self.blacklist_filter.filter(orders);
+        let filtered = self.whitelist_filter.filter(filtered);
         Ok((state, filtered))
     }
 }
