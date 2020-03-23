@@ -155,7 +155,7 @@ impl<'a> StableXDriver for StableXDriverImpl<'a> {
             Some(time_limit) => time_limit,
             None => {
                 self.metrics.auction_skipped(batch_to_solve);
-                warn!("account retrieval exceeded time limit");
+                warn!("orderbook retrieval exceeded time limit");
                 return DriverResult::Ok;
             }
         };
