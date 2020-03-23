@@ -104,25 +104,21 @@ impl PaginatedAuctionDataReader {
         Iter: Iterator<Item = &'a StableXAuctionElement>,
     {
         for element in auction_elements.into_iter() {
-            self.account_state.modify_balance(
-                element.order.account_id,
-                element.order.sell_token,
-                |x| {
-                    if *x == 0 {
-                        *x = element.sell_token_balance
-                    } else if *x != element.sell_token_balance {
-                        log::warn!(
-                            "got order which sets user {}'s sell token {} \
-                             balance to {} but sell_token_balance has already \
-                             been set to {}",
-                            element.order.account_id,
-                            element.order.sell_token,
-                            element.sell_token_balance,
-                            *x
-                        );
-                    }
-                },
-            );
+            match self.account_state.0.insert(
+                (element.order.account_id, element.order.sell_token),
+                element.sell_token_balance,
+            ) {
+                Some(old_balance) if old_balance != element.sell_token_balance => log::warn!(
+                    "got order which sets user {}'s sell token {} \
+                     balance to {} but sell_token_balance has already \
+                     been set to {}",
+                    element.order.account_id,
+                    element.order.sell_token,
+                    element.sell_token_balance,
+                    old_balance,
+                ),
+                _ => (),
+            }
         }
     }
 
@@ -232,8 +228,8 @@ pub mod tests {
         assert_eq!(reader.apply_page(&bytes), 2);
 
         let mut account_state = AccountState::default();
-        account_state.modify_balance(Address::from_low_u64_be(1), 257, |x| *x = 4);
-        account_state.modify_balance(Address::from_low_u64_be(1), 258, |x| *x = 5);
+        account_state.increase_balance(Address::from_low_u64_be(1), 257, 4);
+        account_state.increase_balance(Address::from_low_u64_be(1), 258, 5);
 
         assert_eq!(reader.account_state, account_state);
         assert_eq!(reader.orders, [ORDER_1.clone(), ORDER_2.clone()]);
@@ -249,7 +245,7 @@ pub mod tests {
 
         bytes.extend(ORDER_1_BYTES);
         assert_eq!(reader.apply_page(&bytes), 1);
-        account_state.modify_balance(Address::from_low_u64_be(1), 257, |x| *x = 4);
+        account_state.increase_balance(Address::from_low_u64_be(1), 257, 4);
         assert_eq!(reader.account_state, account_state);
         assert_eq!(reader.orders, [ORDER_1.clone()]);
         assert_eq!(reader.pagination.previous_page_user, ORDER_1.account_id);
@@ -258,7 +254,7 @@ pub mod tests {
         bytes.clear();
         bytes.extend(ORDER_2_BYTES);
         assert_eq!(reader.apply_page(&bytes), 1);
-        account_state.modify_balance(Address::from_low_u64_be(1), 258, |x| *x = 5);
+        account_state.increase_balance(Address::from_low_u64_be(1), 258, 5);
         assert_eq!(reader.account_state, account_state);
         assert_eq!(reader.orders, [ORDER_1.clone(), ORDER_2.clone()]);
         assert_eq!(reader.pagination.previous_page_user, ORDER_1.account_id);
@@ -267,7 +263,7 @@ pub mod tests {
         bytes.clear();
         bytes.extend(ORDER_3_BYTES);
         assert_eq!(reader.apply_page(&bytes), 1);
-        account_state.modify_balance(Address::from_low_u64_be(2), 257, |x| *x = 6);
+        account_state.increase_balance(Address::from_low_u64_be(2), 257, 6);
         assert_eq!(reader.account_state, account_state);
         assert_eq!(
             reader.pagination.previous_page_user,
@@ -284,7 +280,7 @@ pub mod tests {
 
         bytes.extend(ORDER_1_BYTES);
         assert_eq!(reader.apply_page(&bytes), 1);
-        account_state.modify_balance(Address::from_low_u64_be(1), 257, |x| *x = 4);
+        account_state.increase_balance(Address::from_low_u64_be(1), 257, 4);
         assert_eq!(reader.account_state, account_state);
         assert_eq!(reader.orders, [ORDER_1.clone()]);
         assert_eq!(reader.pagination.previous_page_user, ORDER_1.account_id);
@@ -294,8 +290,8 @@ pub mod tests {
         bytes.extend(ORDER_2_BYTES);
         bytes.extend(ORDER_3_BYTES);
         assert_eq!(reader.apply_page(&bytes), 2);
-        account_state.modify_balance(Address::from_low_u64_be(1), 258, |x| *x = 5);
-        account_state.modify_balance(Address::from_low_u64_be(2), 257, |x| *x = 6);
+        account_state.increase_balance(Address::from_low_u64_be(1), 258, 5);
+        account_state.increase_balance(Address::from_low_u64_be(2), 257, 6);
         assert_eq!(reader.account_state, account_state);
         assert_eq!(
             reader.pagination.previous_page_user,
@@ -314,8 +310,8 @@ pub mod tests {
         assert_eq!(reader.apply_page(&bytes), 2);
 
         let mut account_state = AccountState::default();
-        account_state.modify_balance(Address::from_low_u64_be(1), 257, |x| *x = 4);
-        account_state.modify_balance(Address::from_low_u64_be(1), 258, |x| *x = 5);
+        account_state.increase_balance(Address::from_low_u64_be(1), 257, 4);
+        account_state.increase_balance(Address::from_low_u64_be(1), 258, 5);
 
         assert_eq!(reader.account_state, account_state);
         // orders is empty because `index` does not match

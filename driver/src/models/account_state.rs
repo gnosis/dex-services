@@ -1,32 +1,13 @@
-use ethcontract::{Address, H256, U256};
-use serde::{Deserialize, Serialize};
+use ethcontract::Address;
 use std::collections::HashMap;
 
-#[derive(Serialize, Default, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountState {
-    pub state_hash: H256,
-    pub state_index: U256,
-    balances: HashMap<Address, HashMap<u16, u128>>, // UserId => (TokenId => balance)
-    pub num_tokens: u16,
-}
+/// Maps a user and a token id to the balance the user has of this token.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AccountState(pub HashMap<(Address, u16), u128>);
 
 impl AccountState {
     pub fn read_balance(&self, token_id: u16, account_id: Address) -> u128 {
-        *self
-            .balances
-            .get(&account_id)
-            .and_then(|token_balance| token_balance.get(&token_id))
-            .unwrap_or(&0)
-    }
-
-    pub fn modify_balance<F>(&mut self, account_id: Address, token_id: u16, func: F)
-    where
-        F: FnOnce(&mut u128),
-    {
-        let account: &mut HashMap<u16, u128> =
-            self.balances.entry(account_id).or_insert_with(HashMap::new);
-        func(account.entry(token_id).or_insert(0));
+        self.0.get(&(account_id, token_id)).cloned().unwrap_or(0)
     }
 }
 
@@ -36,53 +17,42 @@ mod test_util {
     use crate::models::Order;
 
     impl AccountState {
-        pub fn new(
-            state_hash: H256,
-            state_index: U256,
-            balances: Vec<u128>,
-            num_tokens: u16,
-        ) -> Self {
+        pub fn new(balances: Vec<u128>, num_tokens: u16) -> Self {
             assert_eq!(
                 balances.len() % (num_tokens as usize),
                 0,
                 "Elements in balance vector needs to be a multiple of num_tokens"
             );
-            AccountState {
-                state_hash,
-                state_index,
-                balances: balances
-                    .chunks(num_tokens as usize)
-                    .enumerate()
-                    .map(|(account, token_balances)| {
-                        (
-                            Address::from_low_u64_be(account as u64), // TODO - these are not accurate addresses.
-                            token_balances
-                                .iter()
-                                .enumerate()
-                                .map(|(token, balance)| (token as u16, *balance))
-                                .collect(),
-                        )
-                    })
-                    .collect(),
-                num_tokens,
-            }
+            let balances = balances
+                .chunks(num_tokens as usize)
+                .enumerate()
+                .flat_map(|(account, token_balances)| {
+                    token_balances
+                        .iter()
+                        .enumerate()
+                        .map(move |(token, balance)| {
+                            let key = (Address::from_low_u64_be(account as u64), token as u16);
+                            (key, *balance)
+                        })
+                })
+                .collect();
+            AccountState(balances)
         }
 
         pub fn with_balance_for(orders: &[Order]) -> Self {
-            let mut state = AccountState {
-                state_index: U256::zero(),
-                state_hash: H256::zero(),
-                balances: HashMap::new(),
-                num_tokens: std::u16::MAX,
-            };
+            let mut account_state = AccountState::default();
             for order in orders {
-                state.increment_balance(order.sell_token, order.account_id, order.sell_amount);
+                account_state.increase_balance(
+                    order.account_id,
+                    order.sell_token,
+                    order.sell_amount,
+                );
             }
-            state
+            account_state
         }
 
-        pub fn increment_balance(&mut self, token_id: u16, account_id: Address, amount: u128) {
-            self.modify_balance(account_id, token_id, |balance| *balance += amount);
+        pub fn increase_balance(&mut self, account_id: Address, token_id: u16, amount: u128) {
+            *self.0.entry((account_id, token_id)).or_default() += amount;
         }
     }
 }
@@ -90,11 +60,10 @@ mod test_util {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use ethcontract::H256;
 
     #[test]
     #[should_panic]
     fn test_cannot_create_with_bad_balance_length() {
-        AccountState::new(H256::zero(), U256::zero(), vec![100, 200], 30);
+        AccountState::new(vec![100, 200], 30);
     }
 }

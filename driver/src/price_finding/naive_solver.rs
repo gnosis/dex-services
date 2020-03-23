@@ -316,7 +316,7 @@ pub mod tests {
     use crate::models::order::test_util::order_to_executed_order;
     use crate::models::AccountState;
 
-    use ethcontract::{Address, H256, U256};
+    use ethcontract::{Address, U256};
     use std::collections::HashMap;
 
     #[test]
@@ -512,12 +512,7 @@ pub mod tests {
     #[test]
     fn test_insufficient_balance() {
         const NUM_TOKENS: u16 = 10;
-        let state = AccountState::new(
-            H256::zero(),
-            U256::zero(),
-            vec![0; (NUM_TOKENS * 2) as usize],
-            NUM_TOKENS,
-        );
+        let state = AccountState::new(vec![0; (NUM_TOKENS * 2) as usize], NUM_TOKENS);
         let orders = vec![
             Order {
                 id: 0,
@@ -622,9 +617,8 @@ pub mod tests {
         let users = [Address::from_low_u64_be(0), Address::from_low_u64_be(1)];
         let state = {
             let mut state = AccountState::default();
-            state.num_tokens = u16::max_value();
-            state.increment_balance(0, users[0], 3000 * BASE_UNIT);
-            state.increment_balance(1, users[1], 3000 * BASE_UNIT);
+            state.increase_balance(users[0], 0, 3000 * BASE_UNIT);
+            state.increase_balance(users[1], 1, 3000 * BASE_UNIT);
             state
         };
         let orders = vec![
