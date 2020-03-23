@@ -3,9 +3,9 @@ use crate::models::{account_state::AccountState, order::Order, Solution};
 use crate::orderbook::StableXOrderBookReading;
 use crate::price_finding::PriceFinding;
 use crate::solution_submission::{SolutionSubmissionError, StableXSolutionSubmitting};
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result};
 use ethcontract::U256;
-use log::info;
+use log::{info, warn};
 use std::time::{Duration, Instant};
 
 #[derive(Debug)]
@@ -155,7 +155,8 @@ impl<'a> StableXDriver for StableXDriverImpl<'a> {
             Some(time_limit) => time_limit,
             None => {
                 self.metrics.auction_skipped(batch_to_solve);
-                return DriverResult::Skip(anyhow!("account retrieval exceeded time limit"));
+                warn!("orderbook retrieval exceeded time limit");
+                return DriverResult::Ok;
             }
         };
 
@@ -496,7 +497,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_solving_when_orderbook_retrieval_exceedes_time_limit() {
+    fn does_not_invoke_price_finder_when_orderbook_retrieval_exceedes_time_limit() {
         let mut reader = MockStableXOrderBookReading::default();
         let submitter = MockStableXSolutionSubmitting::default();
         let pf = MockPriceFinding::default();
@@ -522,6 +523,6 @@ mod tests {
             });
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
-        assert!(driver.run(batch, time_limit).is_skip());
+        assert!(driver.run(batch, time_limit).is_ok());
     }
 }
