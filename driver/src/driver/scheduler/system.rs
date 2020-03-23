@@ -68,22 +68,20 @@ impl<'a> SystemScheduler<'a> {
     fn start_solving_in_thread<'b>(
         &self,
         batch_id: BatchId,
-        solver_time_limit: Instant,
+        solver_deadline: Instant,
         scope: &Scope<'b>,
     ) where
         'a: 'b,
     {
         let driver = self.driver;
-        scope.spawn(move |_| loop {
-            let now = Instant::now();
-            if now >= solver_time_limit {
-                break;
-            }
-            let driver_result = driver.run(batch_id.0.into(), solver_time_limit - now);
-            log_driver_result(batch_id, &driver_result);
-            match driver_result {
-                DriverResult::Retry(_) => thread::sleep(RETRY_SLEEP_DURATION),
-                DriverResult::Ok | DriverResult::Skip(_) => break,
+        scope.spawn(move |_| {
+            while let Some(time_limit) = solver_deadline.checked_duration_since(Instant::now()) {
+                let driver_result = driver.run(batch_id.0.into(), time_limit);
+                log_driver_result(batch_id, &driver_result);
+                match driver_result {
+                    DriverResult::Retry(_) => thread::sleep(RETRY_SLEEP_DURATION),
+                    DriverResult::Ok | DriverResult::Skip(_) => break,
+                }
             }
         });
     }
@@ -295,7 +293,10 @@ mod tests {
         );
     }
 
-    // Allows observing real behavior by looking at the log output.
+    // Allows a human to observe real behavior by looking at the log output.
+    // You should see the log messages from `impl Scheduler for SystemScheduler`
+    // and from `log_driver_result`.
+    // To test different cases change `expect_run`.
     #[test]
     #[ignore]
     fn test_real() {
