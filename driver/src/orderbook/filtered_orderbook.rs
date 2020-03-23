@@ -89,7 +89,7 @@ impl<'a> StableXOrderBookReading for FilteredOrderbookReader<'a> {
                     && !user_filter
             })
             .collect();
-        if self.whitelist_filter.tokens.len() != 0 {
+        if !self.whitelist_filter.tokens.is_empty() {
             filtered = filtered
                 .into_iter()
                 .filter(|o| {
@@ -226,11 +226,7 @@ mod test {
         inner.expect_get_auction_data().return_once({
             let result = (
                 AccountState::default(),
-                vec![
-                    bad_buy_token.clone(),
-                    bad_sell_token.clone(),
-                    good_order.clone(),
-                ],
+                vec![bad_buy_token, bad_sell_token, good_order.clone()],
             );
             move |_| Ok(result)
         });
