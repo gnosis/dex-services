@@ -208,7 +208,7 @@ fn main() {
 
     // Create the orderbook reader.
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
-    info!("Blacklist Orderbook filter: {:?}", options.orderbook_filter);
+    info!("Orderbook filter: {:?}", options.orderbook_filter);
 
     let filtered_orderbook = FilteredOrderbookReader::new(&orderbook, options.orderbook_filter);
 

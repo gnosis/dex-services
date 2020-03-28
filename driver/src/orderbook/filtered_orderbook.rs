@@ -19,7 +19,7 @@ impl Default for TokenFilter {
     }
 }
 
-/// Data structure to specify token filter
+/// Data structure to specify what type of orders to filter
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 pub struct OrderbookFilter {
     /// The token ids that should be filtered/
