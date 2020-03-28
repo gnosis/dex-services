@@ -6,7 +6,7 @@ use crate::models::Solution;
 
 use anyhow::{Error, Result};
 use ethcontract::errors::{ExecutionError, MethodError};
-use ethcontract::{H256, U256};
+use ethcontract::{BlockNumber, H256, U256};
 #[cfg(test)]
 use mockall::automock;
 use thiserror::Error;
@@ -93,7 +93,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
         solution: Solution,
     ) -> Result<U256, SolutionSubmissionError> {
         self.contract
-            .get_solution_objective_value(batch_index, solution, None)
+            .get_solution_objective_value(batch_index, solution, Some(BlockNumber::Pending))
             .map_err(SolutionSubmissionError::from)
     }
 
