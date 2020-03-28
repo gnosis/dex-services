@@ -7,24 +7,28 @@ use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
-/// Data structure to specify what type of orders to blacklist
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+enum TokenFilter {
+    Whitelist(HashSet<u16>),
+    Blacklist(HashSet<u16>),
+}
+
+impl Default for TokenFilter {
+    fn default() -> Self {
+        TokenFilter::Whitelist(HashSet::new())
+    }
+}
+
+/// Data structure to specify token filter
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
-pub struct BlacklistOrderbookFilter {
+pub struct OrderbookFilter {
     /// The token ids that should be filtered/
     #[serde(default)]
-    tokens: HashSet<u16>,
+    tokens: TokenFilter,
 
     /// User addresses mapped to which of their orders to filter
     #[serde(default)]
     users: HashMap<Address, UserOrderFilter>,
-}
-
-/// Data structure to specify what type of orders to whitelist
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
-pub struct WhitelistOrderbookFilter {
-    /// The token ids that should be allowed/
-    #[serde(default)]
-    tokens: HashSet<u16>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
@@ -33,88 +37,65 @@ enum UserOrderFilter {
     OrderIds(HashSet<u16>),
 }
 
-impl FromStr for BlacklistOrderbookFilter {
+impl FromStr for OrderbookFilter {
     type Err = Error;
 
     fn from_str(value: &str) -> Result<Self> {
         Ok(serde_json::from_str(value)?)
-    }
-}
-
-impl FromStr for WhitelistOrderbookFilter {
-    type Err = Error;
-
-    fn from_str(value: &str) -> Result<Self> {
-        Ok(serde_json::from_str(value)?)
-    }
-}
-
-pub trait OrderbookFilter {
-    fn filter(&self, orders: Vec<Order>) -> Vec<Order>;
-}
-
-impl OrderbookFilter for BlacklistOrderbookFilter {
-    fn filter(&self, orders: Vec<Order>) -> Vec<Order> {
-        orders
-            .into_iter()
-            .filter(|o| {
-                let user_filter = if let Some(user_filter) = self.users.get(&o.account_id) {
-                    match user_filter {
-                        UserOrderFilter::All => true,
-                        UserOrderFilter::OrderIds(ids) => ids.contains(&o.id),
-                    }
-                } else {
-                    false
-                };
-                !self.tokens.contains(&o.buy_token)
-                    && !self.tokens.contains(&o.sell_token)
-                    && !user_filter
-            })
-            .collect()
-    }
-}
-
-impl OrderbookFilter for WhitelistOrderbookFilter {
-    fn filter(&self, orders: Vec<Order>) -> Vec<Order> {
-        if !self.tokens.is_empty() {
-            orders
-                .into_iter()
-                .filter(|o| {
-                    self.tokens.contains(&o.buy_token) && self.tokens.contains(&o.sell_token)
-                })
-                .collect()
-        } else {
-            orders
-        }
     }
 }
 
 pub struct FilteredOrderbookReader<'a> {
     orderbook: &'a (dyn StableXOrderBookReading + Sync),
-    whitelist_filter: WhitelistOrderbookFilter,
-    blacklist_filter: BlacklistOrderbookFilter,
+    filter: OrderbookFilter,
 }
 
 impl<'a> FilteredOrderbookReader<'a> {
     pub fn new(
         orderbook: &'a (dyn StableXOrderBookReading + Sync),
-        whitelist_filter: WhitelistOrderbookFilter,
-        blacklist_filter: BlacklistOrderbookFilter,
+        filter: OrderbookFilter,
     ) -> Self {
-        Self {
-            orderbook,
-            whitelist_filter,
-            blacklist_filter,
-        }
+        Self { orderbook, filter }
     }
 }
 
 impl<'a> StableXOrderBookReading for FilteredOrderbookReader<'a> {
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
         let (state, orders) = self.orderbook.get_auction_data(index)?;
-        let filtered = self.blacklist_filter.filter(orders);
-        let filtered = self.whitelist_filter.filter(filtered);
-        Ok((state, filtered))
+        let token_filtered_orders = match &self.filter.tokens {
+            TokenFilter::Whitelist(token_list) => {
+                if !token_list.is_empty() {
+                    orders
+                        .into_iter()
+                        .filter(|o| {
+                            token_list.contains(&o.buy_token) && token_list.contains(&o.sell_token)
+                        })
+                        .collect()
+                } else {
+                    orders
+                }
+            }
+            TokenFilter::Blacklist(token_list) => orders
+                .into_iter()
+                .filter(|o| {
+                    !token_list.contains(&o.buy_token) && !token_list.contains(&o.sell_token)
+                })
+                .collect(),
+        };
+        let user_filtered_orders = token_filtered_orders
+            .into_iter()
+            .filter(|o| {
+                if let Some(user_filter) = self.filter.users.get(&o.account_id) {
+                    match user_filter {
+                        UserOrderFilter::All => false,
+                        UserOrderFilter::OrderIds(ids) => !ids.contains(&o.id),
+                    }
+                } else {
+                    true
+                }
+            })
+            .collect();
+        Ok((state, user_filtered_orders))
     }
 }
 
@@ -127,14 +108,14 @@ mod test {
     #[test]
     fn test_blacklist_filter_deserialization() {
         let json = r#"{
-            "tokens": [1,2],
+            "tokens": { "Blacklist": [1,2] },
             "users": {
                 "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A": {"OrderIds": [0,1]},
                 "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B": "All"
             }
         }"#;
-        let blacklist_filter = BlacklistOrderbookFilter {
-            tokens: [1, 2].iter().copied().collect(),
+        let blacklist_filter = OrderbookFilter {
+            tokens: TokenFilter::Blacklist([1, 2].iter().copied().collect()),
             users: [
                 (
                     Address::from_str("7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B").unwrap(),
@@ -158,10 +139,11 @@ mod test {
     #[test]
     fn test_whitelist_filter_deserialization() {
         let json = r#"{
-            "tokens": [1,2]
+            "tokens": { "Whitelist": [1,2] }
         }"#;
-        let whitelist_filter = WhitelistOrderbookFilter {
-            tokens: [1, 2].iter().copied().collect(),
+        let whitelist_filter = OrderbookFilter {
+            tokens: TokenFilter::Whitelist([1, 2].iter().copied().collect()),
+            users: HashMap::new(),
         };
         assert_eq!(
             whitelist_filter,
@@ -203,11 +185,13 @@ mod test {
             move |_| Ok(result)
         });
 
-        let blacklist_filter = BlacklistOrderbookFilter {
-            tokens: [bad_sell_token.sell_token, bad_buy_token.buy_token]
-                .iter()
-                .copied()
-                .collect(),
+        let filter = OrderbookFilter {
+            tokens: TokenFilter::Blacklist(
+                [bad_sell_token.sell_token, bad_buy_token.buy_token]
+                    .iter()
+                    .copied()
+                    .collect(),
+            ),
             users: [
                 (bad_user.account_id, UserOrderFilter::All),
                 (
@@ -219,11 +203,8 @@ mod test {
             .cloned()
             .collect(),
         };
-        let whitelist_filter = WhitelistOrderbookFilter {
-            tokens: HashSet::new(),
-        };
 
-        let reader = FilteredOrderbookReader::new(&inner, whitelist_filter, blacklist_filter);
+        let reader = FilteredOrderbookReader::new(&inner, filter);
 
         let (_, filtered_orders) = reader.get_auction_data(U256::zero()).unwrap();
         assert_eq!(filtered_orders, vec![mixed_user_good_order]);
@@ -247,15 +228,12 @@ mod test {
             move |_| Ok(result)
         });
 
-        let blacklist_filter = BlacklistOrderbookFilter {
-            tokens: HashSet::new(),
+        let filter = OrderbookFilter {
+            tokens: TokenFilter::Whitelist([2, 3].iter().copied().collect()),
             users: HashMap::new(),
         };
-        let whitelist_filter = WhitelistOrderbookFilter {
-            tokens: [2, 3].iter().copied().collect(),
-        };
 
-        let reader = FilteredOrderbookReader::new(&inner, whitelist_filter, blacklist_filter);
+        let reader = FilteredOrderbookReader::new(&inner, filter);
 
         let (_, filtered_orders) = reader.get_auction_data(U256::zero()).unwrap();
         assert_eq!(filtered_orders, vec![good_order]);
@@ -271,15 +249,12 @@ mod test {
             move |_| Ok(result)
         });
 
-        let blacklist_filter = BlacklistOrderbookFilter {
-            tokens: HashSet::new(),
+        let filter = OrderbookFilter {
+            tokens: TokenFilter::Whitelist(HashSet::new()),
             users: HashMap::new(),
         };
-        let whitelist_filter = WhitelistOrderbookFilter {
-            tokens: HashSet::new(),
-        };
 
-        let reader = FilteredOrderbookReader::new(&inner, whitelist_filter, blacklist_filter);
+        let reader = FilteredOrderbookReader::new(&inner, filter);
 
         let (_, filtered_orders) = reader.get_auction_data(U256::zero()).unwrap();
         assert_eq!(filtered_orders, vec![good_order]);

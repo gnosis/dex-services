@@ -10,9 +10,7 @@ use std::convert::TryInto;
 
 mod filtered_orderbook;
 mod paginated_auction_data_reader;
-pub use filtered_orderbook::{
-    BlacklistOrderbookFilter, FilteredOrderbookReader, WhitelistOrderbookFilter,
-};
+pub use filtered_orderbook::{FilteredOrderbookReader, OrderbookFilter};
 
 #[cfg_attr(test, automock)]
 pub trait StableXOrderBookReading {

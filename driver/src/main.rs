@@ -25,10 +25,7 @@ use crate::eth_rpc::Web3EthRpc;
 use crate::gas_station::GnosisSafeGasStation;
 use crate::http::HttpFactory;
 use crate::metrics::{HttpMetrics, MetricsServer, StableXMetrics};
-use crate::orderbook::{
-    BlacklistOrderbookFilter, FilteredOrderbookReader, PaginatedStableXOrderBookReader,
-    WhitelistOrderbookFilter,
-};
+use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
 use crate::price_estimation::{PriceOracle, TokenData};
 use crate::price_finding::{Fee, SolverType};
 use crate::solution_submission::StableXSolutionSubmitter;
@@ -94,22 +91,13 @@ struct Options {
     /// JSON encoded object of which tokens/orders to ignore.
     ///
     /// For example: '{
-    ///   "tokens": [1, 2],
+    ///   "tokens": {"Whitelist": [1, 2]},
     ///   "users": {
     ///     "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A": { "OrderIds": [0, 1] },
     ///     "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B": "All"
     ///   }
-    /// }'
-    #[structopt(long, env = "ORDERBOOK_BLACKLIST_FILTER", default_value = "{}")]
-    blacklist_orderbook_filter: BlacklistOrderbookFilter,
-
-    /// JSON encoded object of which tokens/orders to ignore.
-    ///
-    /// For example: '{
-    ///   "tokens": [1, 2],
-    /// }'
-    #[structopt(long, env = "ORDERBOOK_WHITELIST_FILTER", default_value = "{}")]
-    whitelist_orderbook_filter: WhitelistOrderbookFilter,
+    #[structopt(long, env = "ORDERBOOK_FILTER", default_value = "{}")]
+    orderbook_filter: OrderbookFilter,
 
     /// The private key used by the driver to sign transactions.
     #[structopt(short = "k", long, env = "PRIVATE_KEY", hide_env_values = true)]
@@ -220,20 +208,9 @@ fn main() {
 
     // Create the orderbook reader.
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
-    info!(
-        "Blacklist Orderbook filter: {:?}",
-        options.blacklist_orderbook_filter
-    );
-    info!(
-        "Whitelist Orderbook filter: {:?}",
-        options.whitelist_orderbook_filter
-    );
+    info!("Blacklist Orderbook filter: {:?}", options.orderbook_filter);
 
-    let filtered_orderbook = FilteredOrderbookReader::new(
-        &orderbook,
-        options.whitelist_orderbook_filter,
-        options.blacklist_orderbook_filter,
-    );
+    let filtered_orderbook = FilteredOrderbookReader::new(&orderbook, options.orderbook_filter);
 
     // Set up solution submitter.
     let eth_rpc = Web3EthRpc::new(&web3);
