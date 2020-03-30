@@ -161,49 +161,49 @@ FLAGS:
 
 
 OPTIONS:
-        --auction-data-page-size <auction-data-page-size>
+        --auction-data-page-size
             The page size with which to read orders from the smart contract [env: AUCTION_DATA_PAGE_SIZE=]  [default:
             100]
-        --http-timeout <http-timeout>
+        --http-timeout
             The default timeout in milliseconds of HTTP requests to remote services such as the Gnosis Safe gas station
             and exchange REST APIs for fetching price estimates [env: HTTP_TIMEOUT=]  [default: 10000]
-        --log-filter <log-filter>
+        --log-filter
             The log fiter to use.
 
             This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug'). [env: DFUSION_LOG=]  [default: info]
-    -i, --network-id <network-id>
+    -i, --network-id
             The network ID used for signing transactions (e.g. 1 for mainnet, 4 for rinkeby, 5777 for ganache) [env:
             NETWORK_ID=]
-    -n, --node-url <node-url>
+    -n, --node-url
             The Ethereum node URL to connect to. Make sure that the node allows for queries witout a gas limit to be
             able to fetch the orderbook [env: ETHEREUM_NODE_URL=]
-        --orderbook-filter <orderbook-filter>
+        --orderbook-filter
             JSON encoded object of which tokens/orders to ignore.
 
             For example: '{ "tokens": [1, 2], "users": { "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A": { "OrderIds": [0,
             1] }, "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B": "All" } }' [env: ORDERBOOK_FILTER=]  [default: {}]
-        --price-source-update-interval <price-source-update-interval>
+        --price-source-update-interval
             Time interval in seconds in which price sources should be updated [env: PRICE_SOURCE_UPDATE_INTERVAL=]
             [default: 300]
-    -k, --private-key <private-key>
+    -k, --private-key
             The private key used by the driver to sign transactions [env: PRIVATE_KEY]
 
-        --rpc-timeout <rpc-timeout>
+        --rpc-timeout
             The timeout in milliseconds of web3 JSON RPC calls, defaults to 10000ms [env: WEB3_RPC_TIMEOUT=]  [default:
             10000]
-        --scheduler <scheduler>
+        --scheduler
             The kind of scheduler to use [env: SCHEDULER=]  [default: system]
 
-        --solver-time-limit <solver-time-limit>
+        --solver-time-limit
             The offset from the start of the batch to cap the solver's execution time [env: SOLVER_TIME_LIMIT=]
             [default: 210]
-        --solver-type <solver-type>
+        --solver-type
             Which style of solver to use. Can be one of: 'NAIVE' for the naive solver; 'MIP' for mixed integer
             programming solver; 'NLP' for non-linear programming solver [env: SOLVER_TYPE=]  [default: naive-solver]
-        --target-start-solve-time <target-start-solve-time>
+        --target-start-solve-time
             The offset from the start of a batch in seconds at which point we should start solving [env:
             TARGET_START_SOLVE_TIME=]  [default: 30]
-        --token-data <token-data>
+        --token-data
             JSON encoded backup token information to provide to the solver.
 
             For example: '{ "T0001": { "alias": "WETH", "decimals": 18, "externalPrice": 200000000000000000000,
