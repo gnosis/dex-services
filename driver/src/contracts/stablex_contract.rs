@@ -117,11 +117,10 @@ impl<'a> StableXContract for StableXContractImpl<'a> {
         previous_page_user: Address,
         previous_page_user_offset: u16,
     ) -> Result<Vec<u8>> {
-        let mut orders_builder = self.instance.get_encoded_users_paginated(
-            previous_page_user,
-            previous_page_user_offset,
-            page_size,
-        );
+        let mut orders_builder = self
+            .instance
+            .get_encoded_users_paginated(previous_page_user, previous_page_user_offset, page_size)
+            .block(BlockNumber::Pending);
         orders_builder.m.tx.gas = None;
         orders_builder.call().wait().map_err(From::from)
     }
