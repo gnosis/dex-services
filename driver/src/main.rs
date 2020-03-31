@@ -96,6 +96,8 @@ struct Options {
     ///     "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A": { "OrderIds": [0, 1] },
     ///     "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B": "All"
     ///   }
+    ///  }'
+    /// More examples can be found in the tests of orderbook/filtered_orderboook.rs
     #[structopt(long, env = "ORDERBOOK_FILTER", default_value = "{}")]
     orderbook_filter: OrderbookFilter,
 

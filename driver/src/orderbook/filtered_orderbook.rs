@@ -15,7 +15,7 @@ enum TokenFilter {
 
 impl Default for TokenFilter {
     fn default() -> Self {
-        TokenFilter::Whitelist(HashSet::new())
+        TokenFilter::Blacklist(HashSet::new())
     }
 }
 
@@ -62,19 +62,11 @@ impl<'a> FilteredOrderbookReader<'a> {
 impl<'a> StableXOrderBookReading for FilteredOrderbookReader<'a> {
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
         let (state, orders) = self.orderbook.get_auction_data(index)?;
-        let token_filtered_orders = match &self.filter.tokens {
-            TokenFilter::Whitelist(token_list) => {
-                if !token_list.is_empty() {
-                    orders
-                        .into_iter()
-                        .filter(|o| {
-                            token_list.contains(&o.buy_token) && token_list.contains(&o.sell_token)
-                        })
-                        .collect()
-                } else {
-                    orders
-                }
-            }
+        let token_filtered_orders: Vec<Order> = match &self.filter.tokens {
+            TokenFilter::Whitelist(token_list) => orders
+                .into_iter()
+                .filter(|o| token_list.contains(&o.buy_token) && token_list.contains(&o.sell_token))
+                .collect(),
             TokenFilter::Blacklist(token_list) => orders
                 .into_iter()
                 .filter(|o| {
@@ -230,27 +222,6 @@ mod test {
 
         let filter = OrderbookFilter {
             tokens: TokenFilter::Whitelist([2, 3].iter().copied().collect()),
-            users: HashMap::new(),
-        };
-
-        let reader = FilteredOrderbookReader::new(&inner, filter);
-
-        let (_, filtered_orders) = reader.get_auction_data(U256::zero()).unwrap();
-        assert_eq!(filtered_orders, vec![good_order]);
-    }
-
-    #[test]
-    fn test_empty_whitelist_orderbook_filter() {
-        let good_order = create_order_for_test();
-
-        let mut inner = MockStableXOrderBookReading::default();
-        inner.expect_get_auction_data().return_once({
-            let result = (AccountState::default(), vec![good_order.clone()]);
-            move |_| Ok(result)
-        });
-
-        let filter = OrderbookFilter {
-            tokens: TokenFilter::Whitelist(HashSet::new()),
             users: HashMap::new(),
         };
 
