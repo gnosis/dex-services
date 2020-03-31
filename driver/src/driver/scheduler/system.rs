@@ -121,7 +121,7 @@ impl<'a> SystemScheduler<'a> {
 
 fn log_driver_result(batch_id: BatchId, driver_result: &DriverResult) {
     match driver_result {
-        DriverResult::Ok => info!("Batch {} solved without error.", batch_id.0),
+        DriverResult::Ok => info!("Batch {} successfully solved.", batch_id.0),
         DriverResult::Retry(err) => {
             error!("Batch {} failed with retryable error: {}", batch_id.0, err)
         }
