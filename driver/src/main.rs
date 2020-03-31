@@ -91,12 +91,13 @@ struct Options {
     /// JSON encoded object of which tokens/orders to ignore.
     ///
     /// For example: '{
-    ///   "tokens": [1, 2],
+    ///   "tokens": {"Whitelist": [1, 2]},
     ///   "users": {
     ///     "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A": { "OrderIds": [0, 1] },
     ///     "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B": "All"
     ///   }
-    /// }'
+    ///  }'
+    /// More examples can be found in the tests of orderbook/filtered_orderboook.rs
     #[structopt(long, env = "ORDERBOOK_FILTER", default_value = "{}")]
     orderbook_filter: OrderbookFilter,
 
@@ -210,6 +211,7 @@ fn main() {
     // Create the orderbook reader.
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
     info!("Orderbook filter: {:?}", options.orderbook_filter);
+
     let filtered_orderbook = FilteredOrderbookReader::new(&orderbook, options.orderbook_filter);
 
     // Set up solution submitter.
