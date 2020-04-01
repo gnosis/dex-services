@@ -7,6 +7,6 @@ services:
       dockerfile: docker/rust/Dockerfile
       args:
         - RUST_BASE=rust-binary
-    image: stablex-binary
+    image: stablex-binary-public
     environment:
       - RUST_BACKTRACE=1

@@ -285,13 +285,26 @@ impl Io for DefaultIo {
         time_limit: Duration,
     ) -> Result<()> {
         let time_limit = (time_limit.as_secs_f64().round() as u64).to_string();
-        let output = Command::new("python")
-            .args(&["-m", "batchauctions.scripts.e2e._run"])
-            .arg(input_file)
-            .args(&["--outputDir", result_folder])
-            .args(&["--solverTimeLimit", &time_limit])
-            .args(solver_type.to_args())
-            .output()?;
+        let output = match solver_type {
+            SolverType::OpenSolver => Command::new("python3")
+                .args(&["-m", "src.match"])
+                .arg(input_file)
+                .arg(&format!(
+                    "--solution={}{}",
+                    result_folder, "06_solution_int_valid.json",
+                ))
+                .arg(&"token-pair")
+                .arg(&"T0000")
+                .arg(&"T0001")
+                .output()?,
+            _ => Command::new("python")
+                .args(&["-m", "batchauctions.scripts.e2e._run"])
+                .arg(input_file)
+                .args(&["--outputDir", result_folder])
+                .args(&["--solverTimeLimit", &time_limit])
+                .args(solver_type.to_args())
+                .output()?,
+        };
         if !output.status.success() {
             error!(
                 "Solver failed - stdout: {}, error: {}",

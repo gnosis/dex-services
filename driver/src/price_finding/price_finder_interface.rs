@@ -26,6 +26,7 @@ pub enum SolverType {
     NaiveSolver,
     StandardSolver,
     FallbackSolver,
+    OpenSolver,
 }
 
 impl FromStr for SolverType {
@@ -36,6 +37,7 @@ impl FromStr for SolverType {
             "standard-solver" => Ok(SolverType::StandardSolver),
             "fallback-solver" => Ok(SolverType::FallbackSolver),
             "naive-solver" => Ok(SolverType::NaiveSolver),
+            "open-solver" => Ok(SolverType::OpenSolver),
             _ => Err(anyhow!("solver type does not exit")),
         }
     }
@@ -44,6 +46,7 @@ impl FromStr for SolverType {
 impl SolverType {
     pub fn to_args(self) -> Vec<String> {
         match self {
+            SolverType::OpenSolver => vec![],
             SolverType::StandardSolver => vec![],
             SolverType::FallbackSolver => vec![String::from("--useExternalPrices")],
             SolverType::NaiveSolver => {
