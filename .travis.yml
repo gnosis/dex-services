@@ -40,7 +40,9 @@ matrix:
         - cargo test -p e2e ganache -- --nocapture
         - docker-compose logs
         # StableX e2e Tests (Ganache) - naive solver
-        - docker-compose down && docker-compose -f docker-compose.yml -f docker-compose.binary.public.yml up -d stablex
+        - docker-compose down
+        - ./scripts/setup_contracts.sh
+        - docker-compose -f docker-compose.yml -f docker-compose.binary.public.yml up -d stablex
         - cargo test -p e2e ganache -- --nocapture
         - docker-compose logs
         # Build and publish compact image with compiled binary
