@@ -47,14 +47,14 @@ use url::Url;
     rename_all = "kebab"
 )]
 struct Options {
-    /// The log fiter to use.
+    /// The log filter to use.
     ///
     /// This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug').
     #[structopt(long, env = "DFUSION_LOG", default_value = "info")]
     log_filter: String,
 
     /// The Ethereum node URL to connect to. Make sure that the node allows for
-    /// queries witout a gas limit to be able to fetch the orderbook.
+    /// queries without a gas limit to be able to fetch the orderbook.
     #[structopt(short, long, env = "ETHEREUM_NODE_URL")]
     node_url: Url,
 
