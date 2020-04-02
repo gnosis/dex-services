@@ -49,8 +49,8 @@ impl SolverType {
             String::from("-m"),
             String::from("batchauctions.scripts.e2e._run"),
             input_file.to_owned(),
-            format!("--outputDir {}", result_folder),
-            format!("--solverTimeLimit {}", time_limit),
+            format!("--outputDir={}", result_folder),
+            format!("--solverTimeLimit={}", time_limit),
         ];
         let fallback_solver_command: Vec<String> = vec![
             // lots of duplication. Can't do anything about it right now,
@@ -65,8 +65,8 @@ impl SolverType {
             String::from("-m"),
             String::from("batchauctions.scripts.e2e._run"),
             input_file.to_owned(),
-            format!("--outputDir {}", result_folder),
-            format!("--solverTimeLimit {}", time_limit),
+            format!("--outputDir={}", result_folder),
+            format!("--solverTimeLimit={}", time_limit),
             String::from("--useExternalPrices"),
         ];
         let open_solver_command = vec![
