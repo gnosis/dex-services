@@ -19,7 +19,7 @@ pub fn create_price_finder(
     } else {
         info!(
             "Using optimization price finder with the args {:?}",
-            solver_type.to_args()
+            solver_type.to_args("result folder", "input folder", String::from("time_limit"))
         );
         Box::new(OptimisationPriceFinder::new(fee, solver_type, price_oracle))
     }

@@ -44,11 +44,45 @@ impl FromStr for SolverType {
 }
 
 impl SolverType {
-    pub fn to_args(self) -> Vec<String> {
+    pub fn to_args(self, result_folder: &str, input_file: &str, time_limit: String) -> Vec<String> {
+        let standard_solver_command: Vec<String> = vec![
+            String::from("-m"),
+            String::from("batchauctions.scripts.e2e._run"),
+            format!("--outputDir {}", result_folder),
+            format!("--solverTimeLimit {}", time_limit),
+        ];
+        let fallback_solver_command: Vec<String> = vec![
+            // lots of duplication. Can't do anything about it right now,
+            // due tothread::spawn(move || {
+            //    |         let fallback_solver_command: Vec<String> =
+            //    |                                      ----------- expected due to this
+            // 55 |             standard_solver_command.append(vec![String::from("--useExternalPrices")]);
+            //    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected struct `std::vec::Vec`, found `()`
+            //    |
+            //    = note: expected struct `std::vec::Vec<std::string::String>`
+            //            found unit type `()`
+            String::from("-m"),
+            String::from("batchauctions.scripts.e2e._run"),
+            format!("--outputDir {}", result_folder),
+            format!("--solverTimeLimit {}", time_limit),
+            String::from("--useExternalPrices"),
+        ];
         match self {
-            SolverType::OpenSolver => vec![],
-            SolverType::StandardSolver => vec![],
-            SolverType::FallbackSolver => vec![String::from("--useExternalPrices")],
+            SolverType::OpenSolver => vec![
+                String::from("-m"),
+                String::from("src.match"),
+                input_file.to_owned(),
+                format!(
+                    "--solution={}{}",
+                    result_folder.to_owned(),
+                    "06_solution_int_valid.json",
+                ),
+                String::from("token-pair"),
+                String::from("T0000"),
+                String::from("T0001"),
+            ],
+            SolverType::StandardSolver => standard_solver_command,
+            SolverType::FallbackSolver => fallback_solver_command,
             SolverType::NaiveSolver => {
                 panic!("OptimizationSolver should not be called with naive solver")
             }
