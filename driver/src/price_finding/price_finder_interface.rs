@@ -48,6 +48,7 @@ impl SolverType {
         let standard_solver_command: Vec<String> = vec![
             String::from("-m"),
             String::from("batchauctions.scripts.e2e._run"),
+            input_file.to_owned(),
             format!("--outputDir {}", result_folder),
             format!("--solverTimeLimit {}", time_limit),
         ];
@@ -63,6 +64,7 @@ impl SolverType {
             //            found unit type `()`
             String::from("-m"),
             String::from("batchauctions.scripts.e2e._run"),
+            input_file.to_owned(),
             format!("--outputDir {}", result_folder),
             format!("--solverTimeLimit {}", time_limit),
             String::from("--useExternalPrices"),
