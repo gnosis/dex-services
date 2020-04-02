@@ -67,20 +67,19 @@ impl SolverType {
             format!("--solverTimeLimit {}", time_limit),
             String::from("--useExternalPrices"),
         ];
+        let open_solver_command = vec![
+            String::from("-m"),
+            String::from("open-solver.src.match"),
+            input_file.to_owned(),
+            format!(
+                "--solution={}{}",
+                result_folder.to_owned(),
+                "06_solution_int_valid.json",
+            ),
+            String::from("best-token-pair"),
+        ];
         match self {
-            SolverType::OpenSolver => vec![
-                String::from("-m"),
-                String::from("src.match"),
-                input_file.to_owned(),
-                format!(
-                    "--solution={}{}",
-                    result_folder.to_owned(),
-                    "06_solution_int_valid.json",
-                ),
-                String::from("token-pair"),
-                String::from("T0000"),
-                String::from("T0001"),
-            ],
+            SolverType::OpenSolver => open_solver_command,
             SolverType::StandardSolver => standard_solver_command,
             SolverType::FallbackSolver => fallback_solver_command,
             SolverType::NaiveSolver => {
