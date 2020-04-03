@@ -77,9 +77,9 @@ impl SolverType {
     }
     pub fn folder(self) -> String {
         match self {
-            SolverType::OpenSolver => String::from("./open_solver"),
-            SolverType::StandardSolver => String::from("./batchauctions"),
-            SolverType::FallbackSolver => String::from("./batchauctions"),
+            SolverType::OpenSolver => String::from("/app/open_solver"),
+            SolverType::StandardSolver => String::from("/app/batchauctions"),
+            SolverType::FallbackSolver => String::from("/app/batchauctions"),
             SolverType::NaiveSolver => {
                 panic!("OptimizationSolver should not be called with naive solver")
             }
