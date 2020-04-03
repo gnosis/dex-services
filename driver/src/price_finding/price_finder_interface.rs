@@ -77,7 +77,7 @@ impl SolverType {
     }
     pub fn folder(self) -> String {
         match self {
-            SolverType::OpenSolver => String::from("./open-solver"),
+            SolverType::OpenSolver => String::from("./open_solver"),
             SolverType::StandardSolver => String::from("./batchauctions"),
             SolverType::FallbackSolver => String::from("./batchauctions"),
             SolverType::NaiveSolver => {
