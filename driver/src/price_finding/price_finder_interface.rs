@@ -47,14 +47,14 @@ impl SolverType {
     pub fn to_args(self, result_folder: &str, input_file: &str, time_limit: String) -> Vec<String> {
         let mut standard_solver_command: Vec<String> = vec![
             String::from("-m"),
-            String::from("batchauctions.scripts.e2e._run"),
+            String::from("scripts.e2e._run"),
             input_file.to_owned(),
             format!("--outputDir={}", result_folder),
             format!("--solverTimeLimit={}", time_limit),
         ];
         let open_solver_command = vec![
             String::from("-m"),
-            String::from("open-solver.src.match"),
+            String::from("src.match"),
             input_file.to_owned(),
             format!(
                 "--solution={}{}",
@@ -70,6 +70,16 @@ impl SolverType {
                 standard_solver_command.extend(vec![String::from("--useExternalPrices")]);
                 standard_solver_command
             }
+            SolverType::NaiveSolver => {
+                panic!("OptimizationSolver should not be called with naive solver")
+            }
+        }
+    }
+    pub fn folder(self) -> String {
+        match self {
+            SolverType::OpenSolver => String::from("./open-solver"),
+            SolverType::StandardSolver => String::from("./batchauctions"),
+            SolverType::FallbackSolver => String::from("./batchauctions"),
             SolverType::NaiveSolver => {
                 panic!("OptimizationSolver should not be called with naive solver")
             }

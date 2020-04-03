@@ -286,6 +286,7 @@ impl Io for DefaultIo {
     ) -> Result<()> {
         let time_limit = (time_limit.as_secs_f64().round() as u64).to_string();
         let output = Command::new("python")
+            .env("PATH", solver.folder())
             .args(solver.to_args(result_folder, input_file, time_limit))
             .output()?;
         if !output.status.success() {
