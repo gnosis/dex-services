@@ -45,29 +45,12 @@ impl FromStr for SolverType {
 
 impl SolverType {
     pub fn to_args(self, result_folder: &str, input_file: &str, time_limit: String) -> Vec<String> {
-        let standard_solver_command: Vec<String> = vec![
+        let mut standard_solver_command: Vec<String> = vec![
             String::from("-m"),
             String::from("batchauctions.scripts.e2e._run"),
             input_file.to_owned(),
             format!("--outputDir={}", result_folder),
             format!("--solverTimeLimit={}", time_limit),
-        ];
-        let fallback_solver_command: Vec<String> = vec![
-            // lots of duplication. Can't do anything about it right now,
-            // due tothread::spawn(move || {
-            //    |         let fallback_solver_command: Vec<String> =
-            //    |                                      ----------- expected due to this
-            // 55 |             standard_solver_command.append(vec![String::from("--useExternalPrices")]);
-            //    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected struct `std::vec::Vec`, found `()`
-            //    |
-            //    = note: expected struct `std::vec::Vec<std::string::String>`
-            //            found unit type `()`
-            String::from("-m"),
-            String::from("batchauctions.scripts.e2e._run"),
-            input_file.to_owned(),
-            format!("--outputDir={}", result_folder),
-            format!("--solverTimeLimit={}", time_limit),
-            String::from("--useExternalPrices"),
         ];
         let open_solver_command = vec![
             String::from("-m"),
@@ -83,7 +66,10 @@ impl SolverType {
         match self {
             SolverType::OpenSolver => open_solver_command,
             SolverType::StandardSolver => standard_solver_command,
-            SolverType::FallbackSolver => fallback_solver_command,
+            SolverType::FallbackSolver => {
+                standard_solver_command.extend(vec![String::from("--useExternalPrices")]);
+                standard_solver_command
+            }
             SolverType::NaiveSolver => {
                 panic!("OptimizationSolver should not be called with naive solver")
             }
