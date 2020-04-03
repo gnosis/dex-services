@@ -48,16 +48,17 @@ impl SolverType {
         let mut standard_solver_command: Vec<String> = vec![
             String::from("-m"),
             String::from("scripts.e2e._run"),
-            input_file.to_owned(),
-            format!("--outputDir={}", result_folder),
+            format!("{}{}", "../", input_file.to_owned()),
+            format!("--outputDir={}{}", "../", result_folder),
             format!("--solverTimeLimit={}", time_limit),
         ];
         let open_solver_command = vec![
             String::from("-m"),
             String::from("src.match"),
-            input_file.to_owned(),
+            format!("{}{}", "../", input_file.to_owned()),
             format!(
-                "--solution={}{}",
+                "--solution={}{}{}",
+                "../",
                 result_folder.to_owned(),
                 "06_solution_int_valid.json",
             ),
