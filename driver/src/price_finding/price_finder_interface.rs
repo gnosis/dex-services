@@ -26,6 +26,7 @@ pub enum SolverType {
     NaiveSolver,
     StandardSolver,
     FallbackSolver,
+    OpenSolver,
 }
 
 impl FromStr for SolverType {
@@ -36,16 +37,50 @@ impl FromStr for SolverType {
             "standard-solver" => Ok(SolverType::StandardSolver),
             "fallback-solver" => Ok(SolverType::FallbackSolver),
             "naive-solver" => Ok(SolverType::NaiveSolver),
+            "open-solver" => Ok(SolverType::OpenSolver),
             _ => Err(anyhow!("solver type does not exit")),
         }
     }
 }
 
 impl SolverType {
-    pub fn to_args(self) -> Vec<String> {
+    pub fn to_args(self, result_folder: &str, input_file: &str, time_limit: String) -> Vec<String> {
+        let mut standard_solver_args: Vec<String> = vec![
+            String::from("-m"),
+            String::from("scripts.e2e._run"),
+            format!("{}{}", "/app/", input_file.to_owned()),
+            format!("--outputDir={}{}", "/app/", result_folder),
+            format!("--solverTimeLimit={}", time_limit),
+        ];
+        let open_solver_args = vec![
+            String::from("-m"),
+            String::from("src.match"),
+            format!("{}{}", "/app/", input_file.to_owned()),
+            format!(
+                "--solution={}{}{}",
+                "/app/",
+                result_folder.to_owned(),
+                "06_solution_int_valid.json",
+            ),
+            String::from("best-token-pair"),
+        ];
         match self {
-            SolverType::StandardSolver => vec![],
-            SolverType::FallbackSolver => vec![String::from("--useExternalPrices")],
+            SolverType::OpenSolver => open_solver_args,
+            SolverType::StandardSolver => standard_solver_args,
+            SolverType::FallbackSolver => {
+                standard_solver_args.extend(vec![String::from("--useExternalPrices")]);
+                standard_solver_args
+            }
+            SolverType::NaiveSolver => {
+                panic!("OptimizationSolver should not be called with naive solver")
+            }
+        }
+    }
+    pub fn dir(self) -> String {
+        match self {
+            SolverType::OpenSolver => String::from("/app/open_solver"),
+            SolverType::StandardSolver => String::from("/app/batchauctions"),
+            SolverType::FallbackSolver => String::from("/app/batchauctions"),
             SolverType::NaiveSolver => {
                 panic!("OptimizationSolver should not be called with naive solver")
             }

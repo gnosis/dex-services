@@ -34,13 +34,21 @@ matrix:
         - cargo clippy --all --all-targets -- -D warnings
         - cargo fmt --all -- --check
         # Build and publish compact image with compiled binary
-        - docker build --tag stablex-binary --build-arg SOLVER_BASE=163030813197.dkr.ecr.us-east-1.amazonaws.com/dex-solver:v0.6.0 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
-        # StableX e2e Tests (Ganache)
-        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml up -d stablex
+        - docker build --tag stablex-binary-public --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
+        # StableX e2e Tests (Ganache) - open solver
+        - docker-compose -f docker-compose.yml -f docker-compose.open-solver.yml -f docker-compose.binary.public.yml  up -d stablex
         - cargo test -p e2e ganache -- --nocapture
         - docker-compose logs
+        # StableX e2e Tests (Ganache) - naive solver
+        - docker-compose down
+        - ./scripts/setup_contracts.sh
+        - docker-compose -f docker-compose.yml -f docker-compose.binary.public.yml up -d stablex
+        - cargo test -p e2e ganache -- --nocapture
+        - docker-compose logs
+        # Build and publish compact image with compiled binary
+        - docker build --tag stablex-binary-private --build-arg SOLVER_BASE=163030813197.dkr.ecr.us-east-1.amazonaws.com/dex-solver:v0.6.0 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
         # StableX e2e Tests (Rinkeby)
-        - docker-compose down && docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.yml up -d stablex
+        - docker-compose down && docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.private.yml up -d stablex
         - cargo test -p e2e rinkeby -- --nocapture
         - docker-compose logs
       deploy:

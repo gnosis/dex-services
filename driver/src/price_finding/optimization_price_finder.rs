@@ -281,16 +281,13 @@ impl Io for DefaultIo {
         &self,
         input_file: &str,
         result_folder: &str,
-        solver_type: SolverType,
+        solver: SolverType,
         time_limit: Duration,
     ) -> Result<()> {
         let time_limit = (time_limit.as_secs_f64().round() as u64).to_string();
         let output = Command::new("python")
-            .args(&["-m", "batchauctions.scripts.e2e._run"])
-            .arg(input_file)
-            .args(&["--outputDir", result_folder])
-            .args(&["--solverTimeLimit", &time_limit])
-            .args(solver_type.to_args())
+            .current_dir(solver.dir())
+            .args(solver.to_args(result_folder, input_file, time_limit))
             .output()?;
         if !output.status.success() {
             error!(
