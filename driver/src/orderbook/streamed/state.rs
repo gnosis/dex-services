@@ -121,14 +121,10 @@ impl State {
     }
 
     fn withdraw(&mut self, event: &Withdraw, block_batch_id: BatchId) -> Result<(), Error> {
-        let balance = self.balances.entry((event.user, event.token)).or_default();
-        balance.update_deposit_balance(block_batch_id);
-        balance.pending_withdraw = None;
-        balance.balance = balance
-            .balance
-            .checked_sub(event.amount)
-            .ok_or(Error::MathUnderflow)?;
-        Ok(())
+        self.balances
+            .entry((event.user, event.token))
+            .or_default()
+            .withdraw(event.amount, block_batch_id)
     }
 
     fn token_listing(&mut self, event: &TokenListing) -> Result<(), Error> {
@@ -279,6 +275,17 @@ impl Balance {
             None => self.pending_deposit = Some(new_deposit),
         }
     }
+
+    fn withdraw(&mut self, amount: U256, current_batch_id: BatchId) -> Result<(), Error> {
+        self.update_deposit_balance(current_batch_id);
+        self.pending_withdraw = None;
+        self.balance = self
+            .balance
+            .checked_sub(amount)
+            .ok_or(Error::MathUnderflow)?;
+        Ok(())
+    }
+
     fn update_deposit_balance(&mut self, current_batch_id: BatchId) {
         match self.pending_deposit {
             Some(ref deposit) if deposit.batch_id < current_batch_id => {
@@ -288,6 +295,7 @@ impl Balance {
             _ => (),
         };
     }
+
     fn current_balance(&self, current_batch_id: BatchId) -> U256 {
         let mut balance = self.balance;
         if let Some(ref flux) = self.pending_deposit {
