@@ -93,7 +93,7 @@ impl State {
             Event::OrderDeletion(event) => self.order_deletion(event),
             Event::Trade(_event) => unimplemented!(),
             Event::TradeReversion(_event) => unimplemented!(),
-            Event::SolutionSubmission(event) => self.solution_submission(event, block_batch_id),
+            Event::SolutionSubmission(_event) => unimplemented!(),
         }
     }
 
@@ -161,24 +161,6 @@ impl State {
     fn order_deletion(&mut self, event: &OrderDeletion) -> Result<(), Error> {
         // Orders are allowed to be deleted multiple times.
         self.orders.remove(&(event.owner, event.id));
-        Ok(())
-    }
-
-    fn solution_submission(
-        &mut self,
-        event: &SolutionSubmission,
-        block_batch_id: BatchId,
-    ) -> Result<(), Error> {
-        let fee_token = self
-            .tokens
-            .get_address_by_id(0)
-            .ok_or(Error::UnknownToken)?;
-        let balance = self
-            .balances
-            .entry((event.submitter, fee_token))
-            .or_default();
-        balance.update_deposit_balance(block_batch_id);
-        balance.balance += event.burnt_fees;
         Ok(())
     }
 }
@@ -558,21 +540,5 @@ mod tests {
         assert_eq!(state.orders(1).next(), None);
         assert_eq!(state.orders(2).next(), None);
         assert_eq!(state.orders(3).next(), None);
-    }
-
-    #[test]
-    fn solution_submission() {
-        let mut state = state_with_fee();
-        let event = SolutionSubmission {
-            submitter: address(1),
-            burnt_fees: 1.into(),
-            ..Default::default()
-        };
-        state
-            .apply_event(&Event::SolutionSubmission(event), 0)
-            .unwrap();
-
-        let account_state_ = account_state(&state, 0);
-        assert_eq!(account_state_.read_balance(0, address(1)), 1);
     }
 }
