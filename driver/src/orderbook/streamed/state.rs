@@ -40,7 +40,7 @@ impl State {
             .filter_map(move |((user_id, token_address), balance)| {
                 // It is possible that a user has a balance for a token that hasn't been added to
                 // the exchange because tokens can be deposited anyway.
-                let token_id = self.tokens.id(*token_address)?;
+                let token_id = self.tokens.get_id_by_address(*token_address)?;
                 Some((
                     (*user_id, token_id),
                     balance.current_balance(batch_id).low_u128(),
@@ -82,7 +82,7 @@ impl State {
     ///
     /// `block_batch_id` is the current batch based on the timestamp of the block that contains the
     ///  event.
-    pub fn event(&mut self, event: &Event, block_batch_id: BatchId) -> Result<(), Error> {
+    pub fn apply_event(&mut self, event: &Event, block_batch_id: BatchId) -> Result<(), Error> {
         match event {
             Event::Deposit(event) => self.deposit(event, block_batch_id),
             Event::WithdrawRequest(event) => self.withdraw_request(event),
@@ -177,7 +177,10 @@ impl State {
         event: &SolutionSubmission,
         block_batch_id: BatchId,
     ) -> Result<(), Error> {
-        let fee_token = self.tokens.address(0).ok_or(Error::UnknownToken)?;
+        let fee_token = self
+            .tokens
+            .get_address_by_id(0)
+            .ok_or(Error::UnknownToken)?;
         let balance = self
             .balances
             .entry((event.submitter, fee_token))
@@ -220,14 +223,14 @@ impl std::error::Error for Error {}
 struct Tokens(Vec<(TokenId, TokenAddress)>);
 
 impl Tokens {
-    fn address(&self, id: TokenId) -> Option<Address> {
+    fn get_address_by_id(&self, id: TokenId) -> Option<Address> {
         self.0
             .iter()
             .find(|(id_, _)| *id_ == id)
             .map(|(_, address)| *address)
     }
 
-    fn id(&self, address: TokenAddress) -> Option<TokenId> {
+    fn get_id_by_address(&self, address: TokenAddress) -> Option<TokenId> {
         self.0
             .iter()
             .find(|(_, address_)| *address_ == address)
@@ -316,7 +319,7 @@ mod tests {
             token: address(0),
             id: 0,
         };
-        state.event(&Event::TokenListing(event), 0).unwrap();
+        state.apply_event(&Event::TokenListing(event), 0).unwrap();
         state
     }
 
@@ -333,7 +336,7 @@ mod tests {
             amount: 1.into(),
             batch_id: 0,
         };
-        state.event(&Event::Deposit(event), 0).unwrap();
+        state.apply_event(&Event::Deposit(event), 0).unwrap();
         let account_state_ = account_state(&state, 0);
         assert_eq!(account_state_.read_balance(0, address(3)), 0);
         let account_state_ = account_state(&state, 1);
@@ -351,7 +354,7 @@ mod tests {
                 amount: 1.into(),
                 batch_id: 0,
             };
-            state.event(&Event::Deposit(event), 0).unwrap();
+            state.apply_event(&Event::Deposit(event), 0).unwrap();
         }
 
         let account_state_ = account_state(&state, 1);
@@ -361,7 +364,7 @@ mod tests {
             token: address(1),
             id: 1,
         };
-        state.event(&Event::TokenListing(event), 0).unwrap();
+        state.apply_event(&Event::TokenListing(event), 0).unwrap();
 
         let account_state_ = account_state(&state, 1);
         assert_eq!(account_state_.read_balance(0, address(3)), 1);
@@ -378,7 +381,7 @@ mod tests {
                 amount: 1.into(),
                 batch_id: i + 1,
             };
-            state.event(&Event::Deposit(event), i).unwrap();
+            state.apply_event(&Event::Deposit(event), i).unwrap();
 
             let account_state_ = account_state(&state, i + 2);
             assert_eq!(account_state_.read_balance(0, address(1)), i as u128 + 1);
@@ -395,7 +398,7 @@ mod tests {
                 amount: 1.into(),
                 batch_id: 1,
             };
-            state.event(&Event::Deposit(event), 0).unwrap();
+            state.apply_event(&Event::Deposit(event), 0).unwrap();
 
             let account_state_ = account_state(&state, 1);
             assert_eq!(account_state_.read_balance(0, address(1)), 0);
@@ -413,14 +416,16 @@ mod tests {
             amount: 2.into(),
             batch_id: 0,
         };
-        state.event(&Event::Deposit(event), 0).unwrap();
+        state.apply_event(&Event::Deposit(event), 0).unwrap();
         let event = WithdrawRequest {
             user: address(1),
             token: address(0),
             amount: 1.into(),
             batch_id: 0,
         };
-        state.event(&Event::WithdrawRequest(event), 0).unwrap();
+        state
+            .apply_event(&Event::WithdrawRequest(event), 0)
+            .unwrap();
         let account_state_ = account_state(&state, 1);
         assert_eq!(account_state_.read_balance(0, address(1)), 1);
     }
@@ -434,14 +439,16 @@ mod tests {
             amount: 2.into(),
             batch_id: 0,
         };
-        state.event(&Event::Deposit(event), 0).unwrap();
+        state.apply_event(&Event::Deposit(event), 0).unwrap();
         let event = WithdrawRequest {
             user: address(1),
             token: address(0),
             amount: 3.into(),
             batch_id: 2,
         };
-        state.event(&Event::WithdrawRequest(event), 1).unwrap();
+        state
+            .apply_event(&Event::WithdrawRequest(event), 1)
+            .unwrap();
         let account_state_ = account_state(&state, 3);
         assert_eq!(account_state_.read_balance(0, address(1)), 0);
     }
@@ -455,13 +462,13 @@ mod tests {
             amount: 2.into(),
             batch_id: 0,
         };
-        state.event(&Event::Deposit(event), 0).unwrap();
+        state.apply_event(&Event::Deposit(event), 0).unwrap();
         let event = Withdraw {
             user: address(1),
             token: address(0),
             amount: 1.into(),
         };
-        state.event(&Event::Withdraw(event), 1).unwrap();
+        state.apply_event(&Event::Withdraw(event), 1).unwrap();
         let account_state_ = account_state(&state, 2);
         assert_eq!(account_state_.read_balance(0, address(1)), 1);
     }
@@ -475,20 +482,22 @@ mod tests {
             amount: 3.into(),
             batch_id: 0,
         };
-        state.event(&Event::Deposit(event), 0).unwrap();
+        state.apply_event(&Event::Deposit(event), 0).unwrap();
         let event = WithdrawRequest {
             user: address(1),
             token: address(0),
             amount: 1.into(),
             batch_id: 1,
         };
-        state.event(&Event::WithdrawRequest(event), 1).unwrap();
+        state
+            .apply_event(&Event::WithdrawRequest(event), 1)
+            .unwrap();
         let event = Withdraw {
             user: address(1),
             token: address(0),
             amount: 2.into(),
         };
-        state.event(&Event::Withdraw(event), 1).unwrap();
+        state.apply_event(&Event::Withdraw(event), 1).unwrap();
         let account_state_ = account_state(&state, 2);
         // If the pending withdraw was still active the balance would be 0.
         assert_eq!(account_state_.read_balance(0, address(1)), 1);
@@ -508,7 +517,7 @@ mod tests {
             price_numerator: 3,
             price_denominator: 4,
         };
-        state.event(&Event::OrderPlacement(event), 0).unwrap();
+        state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
 
         assert_eq!(state.orders(0).next(), None);
         let expected_orders = vec![ModelOrder {
@@ -527,7 +536,9 @@ mod tests {
             owner: address(2),
             id: 0,
         };
-        state.event(&Event::OrderCancellation(event), 2).unwrap();
+        state
+            .apply_event(&Event::OrderCancellation(event), 2)
+            .unwrap();
 
         assert_eq!(state.orders(0).next(), None);
         assert_eq!(state.orders(1).collect::<Vec<_>>(), expected_orders);
@@ -538,7 +549,7 @@ mod tests {
             owner: address(2),
             id: 0,
         };
-        state.event(&Event::OrderDeletion(event), 2).unwrap();
+        state.apply_event(&Event::OrderDeletion(event), 2).unwrap();
         assert_eq!(state.orders(0).next(), None);
         assert_eq!(state.orders(1).next(), None);
         assert_eq!(state.orders(2).next(), None);
@@ -553,7 +564,9 @@ mod tests {
             burnt_fees: 1.into(),
             ..Default::default()
         };
-        state.event(&Event::SolutionSubmission(event), 0).unwrap();
+        state
+            .apply_event(&Event::SolutionSubmission(event), 0)
+            .unwrap();
 
         let account_state_ = account_state(&state, 0);
         assert_eq!(account_state_.read_balance(0, address(1)), 1);
