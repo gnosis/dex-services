@@ -91,8 +91,8 @@ impl State {
             Event::OrderPlacement(event) => self.order_placement(event),
             Event::OrderCancellation(event) => self.order_cancellation(event, block_batch_id),
             Event::OrderDeletion(event) => self.order_deletion(event),
-            Event::Trade(event) => unimplemented!(),
-            Event::TradeReversion(event) => unimplemented!(),
+            Event::Trade(_event) => unimplemented!(),
+            Event::TradeReversion(_event) => unimplemented!(),
             Event::SolutionSubmission(event) => self.solution_submission(event, block_batch_id),
         }
     }
