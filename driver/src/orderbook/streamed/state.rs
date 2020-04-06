@@ -8,8 +8,8 @@ use ethcontract::U256;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::fmt;
 use std::iter::Iterator;
+use thiserror::Error;
 
 // TODO: Should we handle https://github.com/gnosis/dex-contracts/issues/620 ?
 // There is a workaround detailed in the issue it hasn't been implemented.
@@ -165,30 +165,17 @@ impl State {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Error)]
 pub enum Error {
+    #[error("unknown token")]
     UnknownToken,
+    #[error("unknown order")]
     UnknownOrder,
+    #[error("order already exists")]
     OrderAlreadyExists,
+    #[error("math underflow")]
     MathUnderflow,
 }
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Error::UnknownToken => "unknown token",
-                Error::UnknownOrder => "unknown order",
-                Error::OrderAlreadyExists => "order already exists",
-                Error::MathUnderflow => "math underflow",
-            }
-        )
-    }
-}
-
-impl std::error::Error for Error {}
 
 /// Bidirectional map between token id and token address.
 ///
