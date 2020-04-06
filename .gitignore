@@ -8,3 +8,6 @@ target/
 
 # MacOS
 .DS_Store
+
+# NodeJS
+pricegraph/data/node_modules/
