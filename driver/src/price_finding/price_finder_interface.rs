@@ -68,7 +68,7 @@ impl SolverType {
             SolverType::OpenSolver => open_solver_args,
             SolverType::StandardSolver => standard_solver_args,
             SolverType::FallbackSolver => {
-                standard_solver_args.extend(vec![String::from("--useExternalPrices")]);
+                standard_solver_args.push(String::from("--useExternalPrices"));
                 standard_solver_args
             }
             SolverType::NaiveSolver => {

@@ -1,4 +1,13 @@
 version: "3.6"
 services:
   stablex:
-    env_file: common-open-solver.env
+    command: ./stablex
+    build:
+      context: .
+      dockerfile: docker/rust/Dockerfile
+      args:
+        - RUST_BASE=rust-binary
+    image: stablex-binary-public
+    environment:
+      - SOLVER_TYPE=open-solver
+      - RUST_BACKTRACE=1
