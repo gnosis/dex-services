@@ -98,16 +98,14 @@ impl State {
     }
 
     fn deposit(&mut self, event: &Deposit, block_batch_id: BatchId) -> Result<(), Error> {
-        self.balances
-            .entry((event.user, event.token))
-            .or_default()
-            .deposit(
-                Flux {
-                    amount: event.amount,
-                    batch_id: event.batch_id,
-                },
-                block_batch_id,
-            );
+        let balance = self.balances.entry((event.user, event.token)).or_default();
+        balance.deposit(
+            Flux {
+                amount: event.amount,
+                batch_id: event.batch_id,
+            },
+            block_batch_id,
+        );
         Ok(())
     }
 
@@ -121,10 +119,8 @@ impl State {
     }
 
     fn withdraw(&mut self, event: &Withdraw, block_batch_id: BatchId) -> Result<(), Error> {
-        self.balances
-            .entry((event.user, event.token))
-            .or_default()
-            .withdraw(event.amount, block_batch_id)
+        let balance = self.balances.entry((event.user, event.token)).or_default();
+        balance.withdraw(event.amount, block_batch_id)
     }
 
     fn token_listing(&mut self, event: &TokenListing) -> Result<(), Error> {
