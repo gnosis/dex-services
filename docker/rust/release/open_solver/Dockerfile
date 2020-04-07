@@ -1,6 +1,5 @@
-ARG BINARY_BASE=stablex-binary-public
+FROM stablex-binary-public
 
-FROM ${BINARY_BASE}
-
+ENV SOLVER_TYPE=open-solver
 # Copy smart contract build artifacts
 COPY dex-contracts/build dex-contracts/build
