@@ -53,15 +53,22 @@ impl SolverType {
         input_file: &str,
         time_limit: String,
     ) -> Result<Output> {
+        match self {
+            SolverType::OpenSolver => self.execute_open_solver(result_folder, input_file),
+            SolverType::StandardSolver => {
+                self.execute_private_solver(result_folder, input_file, time_limit)
+            }
+            SolverType::FallbackSolver => {
+                self.execute_private_solver(result_folder, input_file, time_limit)
+            }
+            SolverType::NaiveSolver => {
+                panic!("fn execute should not be called by the naive solver")
+            }
+        }
+    }
+    pub fn execute_open_solver(self, result_folder: &str, input_file: &str) -> Result<Output> {
         let mut command = Command::new("python");
-        let command_standard_solver = command
-            .current_dir("/app/batchauctions")
-            .args(&["-m", "scripts.e2e._run"])
-            .arg(format!("{}{}", "/app/", input_file.to_owned()))
-            .arg(format!("--outputDir={}{}", "/app/", result_folder))
-            .args(&["--solverTimeLimit", &time_limit]);
-        let mut command = Command::new("python");
-        let command_open_solver = command
+        let open_solver_command = command
             .current_dir("/app/open_solver")
             .args(&["-m", "src.match"])
             .arg(format!("{}{}", "/app/", input_file.to_owned()))
@@ -72,19 +79,36 @@ impl SolverType {
                 "06_solution_int_valid.json",
             ))
             .arg(String::from("best-token-pair"));
-        let solver_command = match self {
-            SolverType::OpenSolver => command_open_solver,
-            SolverType::StandardSolver => command_standard_solver,
+        debug!("Using open-solver command `{:?}`", open_solver_command);
+        Ok(open_solver_command.output()?)
+    }
+
+    pub fn execute_private_solver(
+        self,
+        result_folder: &str,
+        input_file: &str,
+        time_limit: String,
+    ) -> Result<Output> {
+        let mut command = Command::new("python");
+        let standard_solver_command = command
+            .current_dir("/app/batchauctions")
+            .args(&["-m", "scripts.e2e._run"])
+            .arg(format!("{}{}", "/app/", input_file.to_owned()))
+            .arg(format!("--outputDir={}{}", "/app/", result_folder))
+            .args(&["--solverTimeLimit", &time_limit]);
+        let private_solver_command = match self {
+            SolverType::StandardSolver => standard_solver_command,
             SolverType::FallbackSolver => {
-                command_standard_solver.arg(String::from("--useExternalPrices"));
-                command_standard_solver
+                standard_solver_command.arg(String::from("--useExternalPrices"));
+                standard_solver_command
             }
-            SolverType::NaiveSolver => {
-                panic!("fn to_args should not be called by the naive solver")
-            }
+            _ => panic!("{:?} is not a private solver", self),
         };
-        debug!("Using solver command `{:?}`", solver_command);
-        Ok(solver_command.output()?)
+        debug!(
+            "Using private-solver command `{:?}`",
+            private_solver_command
+        );
+        Ok(private_solver_command.output()?)
     }
 }
 
