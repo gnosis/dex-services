@@ -1,7 +1,10 @@
 use crate::models;
 use anyhow::{anyhow, Error, Result};
+use log::debug;
 #[cfg(test)]
 use mockall::automock;
+use std::process::Command;
+use std::process::Output;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -44,45 +47,44 @@ impl FromStr for SolverType {
 }
 
 impl SolverType {
-    pub fn to_args(self, result_folder: &str, input_file: &str, time_limit: String) -> Vec<String> {
-        let mut standard_solver_args: Vec<String> = vec![
-            String::from("-m"),
-            String::from("scripts.e2e._run"),
-            format!("{}{}", "/app/", input_file.to_owned()),
-            format!("--outputDir={}{}", "/app/", result_folder),
-            format!("--solverTimeLimit={}", time_limit),
-        ];
-        let open_solver_args = vec![
-            String::from("-m"),
-            String::from("src.match"),
-            format!("{}{}", "/app/", input_file.to_owned()),
-            format!(
+    pub fn execute(
+        self,
+        result_folder: &str,
+        input_file: &str,
+        time_limit: String,
+    ) -> Result<Output> {
+        let mut command = Command::new("python");
+        let command_standard_solver = command
+            .current_dir("/app/batchauctions")
+            .args(&["-m", "scripts.e2e._run"])
+            .arg(format!("{}{}", "/app/", input_file.to_owned()))
+            .arg(format!("--outputDir={}{}", "/app/", result_folder))
+            .args(&["--solverTimeLimit", &time_limit]);
+        let mut command = Command::new("python");
+        let command_open_solver = command
+            .current_dir("/app/open_solver")
+            .args(&["-m", "src.match"])
+            .arg(format!("{}{}", "/app/", input_file.to_owned()))
+            .arg(format!(
                 "--solution={}{}{}",
                 "/app/",
                 result_folder.to_owned(),
                 "06_solution_int_valid.json",
-            ),
-            String::from("best-token-pair"),
-        ];
-        match self {
-            SolverType::OpenSolver => open_solver_args,
-            SolverType::StandardSolver => standard_solver_args,
+            ))
+            .arg(String::from("best-token-pair"));
+        let solver_command = match self {
+            SolverType::OpenSolver => command_open_solver,
+            SolverType::StandardSolver => command_standard_solver,
             SolverType::FallbackSolver => {
-                standard_solver_args.push(String::from("--useExternalPrices"));
-                standard_solver_args
+                command_standard_solver.arg(String::from("--useExternalPrices"));
+                command_standard_solver
             }
             SolverType::NaiveSolver => {
                 panic!("fn to_args should not be called by the naive solver")
             }
-        }
-    }
-    pub fn dir(self) -> String {
-        match self {
-            SolverType::OpenSolver => String::from("/app/open_solver"),
-            SolverType::StandardSolver => String::from("/app/batchauctions"),
-            SolverType::FallbackSolver => String::from("/app/batchauctions"),
-            SolverType::NaiveSolver => panic!("fn dir should not be called by naive solver"),
-        }
+        };
+        debug!("Using solver command `{:?}`", solver_command);
+        Ok(solver_command.output()?)
     }
 }
 
