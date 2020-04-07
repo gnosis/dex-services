@@ -1,12 +1,12 @@
 #![allow(clippy::ptr_arg)] // required for automock
 
 use crate::contracts::stablex_contract::StableXContract;
-use crate::eth_rpc::EthRpc;
 use crate::models::Solution;
 
 use anyhow::{Error, Result};
 use ethcontract::errors::{ExecutionError, MethodError};
-use ethcontract::{BlockNumber, H256, U256};
+use ethcontract::web3::types::TransactionReceipt;
+use ethcontract::{BlockNumber, U256};
 #[cfg(test)]
 use mockall::automock;
 use thiserror::Error;
@@ -77,12 +77,11 @@ impl From<Error> for SolutionSubmissionError {
 
 pub struct StableXSolutionSubmitter<'a> {
     contract: &'a (dyn StableXContract + Sync),
-    rpc: &'a (dyn EthRpc + Sync),
 }
 
 impl<'a> StableXSolutionSubmitter<'a> {
-    pub fn new(contract: &'a (dyn StableXContract + Sync), rpc: &'a (dyn EthRpc + Sync)) -> Self {
-        Self { contract, rpc }
+    pub fn new(contract: &'a (dyn StableXContract + Sync)) -> Self {
+        Self { contract }
     }
 }
 
@@ -110,10 +109,9 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
                 claimed_objective_value,
             )
             .map_err(|err| {
-                extract_transaction_hash(&err)
-                    .and_then(|hash| {
-                        let receipt = self.rpc.get_transaction_receipts(hash).ok()??;
-                        let block_number = receipt.block_number?;
+                extract_transaction_receipt(&err)
+                    .and_then(|tx| {
+                        let block_number = tx.block_number?;
                         match self.contract.get_solution_objective_value(
                             batch_index,
                             solution,
@@ -128,10 +126,10 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
     }
 }
 
-fn extract_transaction_hash(err: &Error) -> Option<H256> {
+fn extract_transaction_receipt(err: &Error) -> Option<&TransactionReceipt> {
     err.downcast_ref::<MethodError>()
         .and_then(|method_error| match &method_error.inner {
-            ExecutionError::Failure(tx) => Some(tx.transaction_hash),
+            ExecutionError::Failure(tx) => Some(tx.as_ref()),
             _ => None,
         })
 }
@@ -140,28 +138,27 @@ fn extract_transaction_hash(err: &Error) -> Option<H256> {
 mod tests {
     use super::*;
     use crate::contracts::stablex_contract::MockStableXContract;
-    use crate::eth_rpc::MockEthRpc;
 
     use anyhow::anyhow;
-    use ethcontract::web3::types::{TransactionReceipt, H2048};
+    use ethcontract::web3::types::H2048;
+    use ethcontract::H256;
     use mockall::predicate::{always, eq};
 
     #[test]
     fn test_benign_verification_failure() {
-        let eth_rpc = MockEthRpc::new();
         let mut contract = MockStableXContract::new();
 
         contract
             .expect_get_solution_objective_value()
             .return_once(move |_, _, _| {
                 Err(anyhow!(MethodError::from_parts(
-                "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
-                    .to_owned(),
-                ExecutionError::Revert(Some("SafeMath: subtraction overflow".to_owned())),
-            )))
+                    "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
+                        .to_owned(),
+                    ExecutionError::Revert(Some("SafeMath: subtraction overflow".to_owned())),
+                )))
             });
 
-        let submitter = StableXSolutionSubmitter::new(&contract, &eth_rpc);
+        let submitter = StableXSolutionSubmitter::new(&contract);
         let result = submitter.get_solution_objective_value(U256::zero(), Solution::trivial());
 
         match result.expect_err("Should have errored") {
@@ -174,7 +171,6 @@ mod tests {
 
     #[test]
     fn test_benign_solution_submission_failure() {
-        let mut eth_rpc = MockEthRpc::new();
         let mut contract = MockStableXContract::new();
 
         let tx_hash = H256::zero();
@@ -192,11 +188,6 @@ mod tests {
             logs_bloom: H2048::zero(),
         };
 
-        eth_rpc
-            .expect_get_transaction_receipts()
-            .with(eq(tx_hash))
-            .return_const(Ok(Some(receipt)));
-
         // Submit Solution returns failed tx
         contract
             .expect_submit_solution()
@@ -204,10 +195,7 @@ mod tests {
                 Err(anyhow!(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
                         .to_owned(),
-                    ExecutionError::Failure(Box::new(TransactionReceipt {
-                        transaction_hash: tx_hash,
-                        ..Default::default()
-                    })),
+                    ExecutionError::Failure(Box::new(receipt)),
                 )))
             });
         // Get objective value on old block number returns revert reason
@@ -222,7 +210,7 @@ mod tests {
             )))
             });
 
-        let submitter = StableXSolutionSubmitter::new(&contract, &eth_rpc);
+        let submitter = StableXSolutionSubmitter::new(&contract);
         let result = submitter.submit_solution(U256::zero(), Solution::trivial(), U256::zero());
 
         match result.expect_err("Should have errored") {
