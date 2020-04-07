@@ -33,8 +33,8 @@ pub struct State {
     pending_solution: PendingSolution,
 }
 
-impl State {
-    pub fn new() -> Self {
+impl Default for State {
+    fn default() -> Self {
         Self {
             orders: HashMap::new(),
             balances: HashMap::new(),
@@ -42,7 +42,9 @@ impl State {
             pending_solution: PendingSolution::AccumulatingTrades(Vec::new()),
         }
     }
+}
 
+impl State {
     /// Can be used to create a `crate::models::AccountState`.
     pub fn account_state(
         &mut self,
