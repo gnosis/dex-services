@@ -72,7 +72,7 @@ impl SolverType {
                 standard_solver_args
             }
             SolverType::NaiveSolver => {
-                panic!("OptimizationSolver should not be called with naive solver")
+                panic!("fn to_args should not be called by the naive solver")
             }
         }
     }
@@ -81,9 +81,7 @@ impl SolverType {
             SolverType::OpenSolver => String::from("/app/open_solver"),
             SolverType::StandardSolver => String::from("/app/batchauctions"),
             SolverType::FallbackSolver => String::from("/app/batchauctions"),
-            SolverType::NaiveSolver => {
-                panic!("OptimizationSolver should not be called with naive solver")
-            }
+            SolverType::NaiveSolver => panic!("fn dir should not be called by naive solver"),
         }
     }
 }

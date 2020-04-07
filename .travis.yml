@@ -36,7 +36,7 @@ matrix:
         # Build and publish compact image with compiled binary
         - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:v0.0.9-dev --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
         # StableX e2e Tests (Ganache) - open solver
-        - docker-compose -f docker-compose.yml -f docker-compose.open-solver.yml  up -d stablex
+        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml -f docker-compose.open-solver.yml  up -d stablex
         - cargo test -p e2e ganache -- --nocapture
         - docker-compose logs
         # Build and publish compact image with compiled binary
@@ -44,11 +44,11 @@ matrix:
         # StableX e2e Tests (Ganache) - naive solver
         - docker-compose down
         - ./scripts/setup_contracts.sh
-        - docker-compose -f docker-compose.yml -f docker-compose.private-solver.yml up -d stablex
+        - docker-compose -f docker-compose.yml -f docker-compose.binary.yml -f docker-compose.private-solver.yml up -d stablex
         - cargo test -p e2e ganache -- --nocapture
         - docker-compose logs
         # StableX e2e Tests (Rinkeby)
-        - docker-compose down && docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.private-solver.yml up -d stablex
+        - docker-compose down && docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.binary.yml -f docker-compose.private-solver.yml up -d stablex
         - cargo test -p e2e rinkeby -- --nocapture
         - docker-compose logs
       deploy:

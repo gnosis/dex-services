@@ -1,5 +1,5 @@
-# With this image, only the naive and open solver will work
-ARG SOLVER_BASE=gnosispm/dex-open-solver:v0.0.9-dev
+# With this image, only the naive solver will work
+ARG SOLVER_BASE=ubuntu:bionic
 
 ARG RUST_BASE=rust-compile
 
