@@ -22,7 +22,7 @@ echo "Docker login"
 echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin;
 
 echo "Pushing public image to Docker-hub";
-docker build --tag gnosispm/dex-services:$image_name --build-arg BINARY_BASE=stablex-binary-public -f docker/rust/release/open_solver/Dockerfile .
+docker build --tag gnosispm/dex-services:$image_name -f docker/rust/release/open_solver/Dockerfile .
 
 echo "Pushing public image"
 docker push gnosispm/dex-services:$image_name;
