@@ -7,7 +7,7 @@ use crate::models::Solution;
 use anyhow::{Error, Result};
 use ethcontract::errors::{ExecutionError, MethodError};
 use ethcontract::{H256, U256};
-use log::debug;
+use log::info;
 #[cfg(test)]
 use mockall::automock;
 use std::thread;
@@ -106,7 +106,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
         // NOTE: Compare with `>=` as the exchange's current batch index is the
         //   one accepting orders and does not yet accept solutions.
         while batch_index.as_u32() >= self.contract.get_current_auction_index()? {
-            debug!("Solved batch is not yet accepting solutions, waiting for next batch.");
+            info!("Solved batch is not yet accepting solutions, waiting for next batch.");
             thread::sleep(POLL_TIMEOUT);
         }
 
