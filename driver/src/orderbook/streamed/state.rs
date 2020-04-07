@@ -47,27 +47,37 @@ impl Default for State {
 impl State {
     /// Can be used to create a `crate::models::AccountState`.
     pub fn account_state(
-        &mut self,
+        &self,
         batch_id: BatchId,
-    ) -> impl Iterator<Item = ((UserId, TokenId), u128)> + '_ {
-        self.apply_pending_solution_if_needed(batch_id);
+    ) -> Result<impl Iterator<Item = ((UserId, TokenId), u128)> + '_, Error> {
+        if self.needs_to_apply_solution(batch_id) {
+            return Err(Error::NeedsToApplySolution);
+        }
         let tokens = &self.tokens;
-        self.balances
-            .iter()
-            .filter_map(move |((user_id, token_address), balance)| {
-                // It is possible that a user has a balance for a token that hasn't been added to
-                // the exchange because tokens can be deposited anyway.
-                let token_id = tokens.get_id_by_address(*token_address)?;
-                Some((
-                    (*user_id, token_id),
-                    balance.current_balance(batch_id).low_u128(),
-                ))
-            })
+        let balances =
+            self.balances
+                .iter()
+                .filter_map(move |((user_id, token_address), balance)| {
+                    // It is possible that a user has a balance for a token that hasn't been added to
+                    // the exchange because tokens can be deposited anyway.
+                    let token_id = tokens.get_id_by_address(*token_address)?;
+                    Some((
+                        (*user_id, token_id),
+                        balance.current_balance(batch_id).low_u128(),
+                    ))
+                });
+        Ok(balances)
     }
 
-    pub fn orders(&mut self, batch_id: BatchId) -> impl Iterator<Item = ModelOrder> + '_ {
-        self.apply_pending_solution_if_needed(batch_id);
-        self.orders
+    pub fn orders(
+        &self,
+        batch_id: BatchId,
+    ) -> Result<impl Iterator<Item = ModelOrder> + '_, Error> {
+        if self.needs_to_apply_solution(batch_id) {
+            return Err(Error::NeedsToApplySolution);
+        }
+        let orders = self
+            .orders
             .iter()
             .filter(move |(_, order)| order.is_valid_in_batch(batch_id))
             .map(|((user_id, order_id), order)| {
@@ -84,7 +94,19 @@ impl State {
                     buy_amount,
                     sell_amount,
                 }
-            })
+            });
+        Ok(orders)
+    }
+
+    /// Returns whether the state needs to be updated with a pending solution that becomes the
+    /// accepted solution because the batch id has incremented. In this case
+    /// `apply_pending_solution_if_needed` has to be called before `account_state` and `orders` can
+    /// be used.
+    pub fn needs_to_apply_solution(&self, batch_id_: BatchId) -> bool {
+        match self.pending_solution {
+            PendingSolution::Submitted { batch_id, .. } if batch_id < batch_id_ => true,
+            _ => false,
+        }
     }
 
     /// Reset the state to the default state in which no events have been applied.
@@ -239,7 +261,7 @@ impl State {
         Ok(())
     }
 
-    fn apply_pending_solution_if_needed(&mut self, block_batch_id: BatchId) {
+    pub fn apply_pending_solution_if_needed(&mut self, block_batch_id: BatchId) {
         let trades = match &mut self.pending_solution {
             PendingSolution::Submitted {
                 batch_id,
@@ -339,6 +361,8 @@ pub enum Error {
     SolutionWithoutFeeToken,
     #[error("attempt to delete an order that is still valid")]
     DeletingValidOrder,
+    #[error("getting orders or account state failed because there is a pending solution that needs to beapplied")]
+    NeedsToApplySolution,
 }
 
 /// Bidirectional map between token id and token address.
@@ -470,7 +494,7 @@ mod tests {
     }
 
     fn state_with_fee() -> State {
-        let mut state = State::new();
+        let mut state = State::default();
         let event = TokenListing {
             token: address(0),
             id: 0,
@@ -480,7 +504,7 @@ mod tests {
     }
 
     fn account_state(state: &mut State, batch_id: BatchId) -> AccountState {
-        AccountState(state.account_state(batch_id).collect())
+        AccountState(state.account_state(batch_id).unwrap().collect())
     }
 
     #[test]
@@ -662,7 +686,7 @@ mod tests {
     #[test]
     fn order_placement_cancellation_deletion() {
         let mut state = state_with_fee();
-        assert_eq!(state.orders(0).next(), None);
+        assert_eq!(state.orders(0).unwrap().next(), None);
         let event = OrderPlacement {
             owner: address(2),
             index: 0,
@@ -675,7 +699,7 @@ mod tests {
         };
         state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
 
-        assert_eq!(state.orders(0).next(), None);
+        assert_eq!(state.orders(0).unwrap().next(), None);
         let expected_orders = vec![ModelOrder {
             id: 0,
             account_id: address(2),
@@ -684,9 +708,15 @@ mod tests {
             buy_amount: 3,
             sell_amount: 4,
         }];
-        assert_eq!(state.orders(1).collect::<Vec<_>>(), expected_orders);
-        assert_eq!(state.orders(2).collect::<Vec<_>>(), expected_orders);
-        assert_eq!(state.orders(3).next(), None);
+        assert_eq!(
+            state.orders(1).unwrap().collect::<Vec<_>>(),
+            expected_orders
+        );
+        assert_eq!(
+            state.orders(2).unwrap().collect::<Vec<_>>(),
+            expected_orders
+        );
+        assert_eq!(state.orders(3).unwrap().next(), None);
 
         let event = OrderCancellation {
             owner: address(2),
@@ -696,10 +726,13 @@ mod tests {
             .apply_event(&Event::OrderCancellation(event), 2)
             .unwrap();
 
-        assert_eq!(state.orders(0).next(), None);
-        assert_eq!(state.orders(1).collect::<Vec<_>>(), expected_orders);
-        assert_eq!(state.orders(2).next(), None);
-        assert_eq!(state.orders(3).next(), None);
+        assert_eq!(state.orders(0).unwrap().next(), None);
+        assert_eq!(
+            state.orders(1).unwrap().collect::<Vec<_>>(),
+            expected_orders
+        );
+        assert_eq!(state.orders(2).unwrap().next(), None);
+        assert_eq!(state.orders(3).unwrap().next(), None);
 
         let event = Event::OrderDeletion(OrderDeletion {
             owner: address(2),
@@ -707,10 +740,10 @@ mod tests {
         });
         assert!(state.apply_event(&event, 2).is_err());
         state.apply_event(&event, 3).unwrap();
-        assert_eq!(state.orders(0).next(), None);
-        assert_eq!(state.orders(1).next(), None);
-        assert_eq!(state.orders(2).next(), None);
-        assert_eq!(state.orders(3).next(), None);
+        assert_eq!(state.orders(0).unwrap().next(), None);
+        assert_eq!(state.orders(1).unwrap().next(), None);
+        assert_eq!(state.orders(2).unwrap().next(), None);
+        assert_eq!(state.orders(3).unwrap().next(), None);
     }
 
     #[test]
@@ -776,6 +809,7 @@ mod tests {
         state
             .apply_event(&Event::SolutionSubmission(SolutionSubmission::default()), 1)
             .unwrap();
+        state.apply_pending_solution_if_needed(2);
 
         let account_state_ = account_state(&mut state, 2);
         assert_eq!(account_state_.read_balance(0, address(2)), 12);
@@ -797,6 +831,9 @@ mod tests {
         state
             .apply_event(&Event::SolutionSubmission(event), 0)
             .unwrap();
+        assert!(!state.needs_to_apply_solution(0));
+        assert!(state.needs_to_apply_solution(1));
+        state.apply_pending_solution_if_needed(1);
 
         let account_state_ = account_state(&mut state, 1);
         assert_eq!(account_state_.read_balance(0, address(1)), 1);
