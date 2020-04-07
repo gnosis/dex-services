@@ -3,7 +3,6 @@ mod macros;
 
 mod contracts;
 mod driver;
-mod eth_rpc;
 mod gas_station;
 mod http;
 mod logging;
@@ -21,7 +20,6 @@ use crate::driver::{
     scheduler::{AuctionTimingConfiguration, SchedulerKind},
     stablex_driver::StableXDriverImpl,
 };
-use crate::eth_rpc::Web3EthRpc;
 use crate::gas_station::GnosisSafeGasStation;
 use crate::http::HttpFactory;
 use crate::metrics::{HttpMetrics, MetricsServer, StableXMetrics};
@@ -215,8 +213,7 @@ fn main() {
     let filtered_orderbook = FilteredOrderbookReader::new(&orderbook, options.orderbook_filter);
 
     // Set up solution submitter.
-    let eth_rpc = Web3EthRpc::new(&web3);
-    let solution_submitter = StableXSolutionSubmitter::new(&contract, &eth_rpc);
+    let solution_submitter = StableXSolutionSubmitter::new(&contract);
 
     // Set up the driver and start the run-loop.
     let driver = StableXDriverImpl::new(
