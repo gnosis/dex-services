@@ -131,7 +131,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
 fn extract_transaction_hash(err: &Error) -> Option<H256> {
     err.downcast_ref::<MethodError>()
         .and_then(|method_error| match &method_error.inner {
-            ExecutionError::Failure(tx_hash) => Some(*tx_hash),
+            ExecutionError::Failure(tx) => Some(tx.transaction_hash),
             _ => None,
         })
 }
@@ -202,10 +202,13 @@ mod tests {
             .expect_submit_solution()
             .return_once(move |_, _, _| {
                 Err(anyhow!(MethodError::from_parts(
-                "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
-                    .to_owned(),
-                ExecutionError::Failure(tx_hash),
-            )))
+                    "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
+                        .to_owned(),
+                    ExecutionError::Failure(Box::new(TransactionReceipt {
+                        transaction_hash: tx_hash,
+                        ..Default::default()
+                    })),
+                )))
             });
         // Get objective value on old block number returns revert reason
         contract
