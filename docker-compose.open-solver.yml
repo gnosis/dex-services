@@ -1,0 +1,6 @@
+version: "3.6"
+services:
+  stablex:
+    image: stablex-binary-public
+    environment:
+      - SOLVER_TYPE=open-solver

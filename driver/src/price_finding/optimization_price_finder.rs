@@ -10,7 +10,6 @@ use serde_with::rust::display_fromstr;
 use std::collections::BTreeMap;
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
-use std::process::Command;
 use std::time::Duration;
 
 /// A number wrapper type that correctly serializes large u128`s to strings to
@@ -286,24 +285,12 @@ impl Io for DefaultIo {
         &self,
         input_file: &str,
         result_folder: &str,
-        solver_type: SolverType,
+        solver: SolverType,
         time_limit: Duration,
     ) -> Result<()> {
-        let mut command = {
-            let time_limit = (time_limit.as_secs_f64().round() as u64).to_string();
-            let mut command = Command::new("python");
-            command
-                .args(&["-m", "batchauctions.scripts.e2e._run"])
-                .arg(input_file)
-                .args(&["--outputDir", result_folder])
-                .args(&["--solverTimeLimit", &time_limit])
-                .args(solver_type.to_args());
+        let time_limit = (time_limit.as_secs_f64().round() as u64).to_string();
+        let output = solver.execute(result_folder, input_file, time_limit)?;
 
-            debug!("Using solver command `{:?}`", command);
-            command
-        };
-
-        let output = command.output()?;
         if !output.status.success() {
             error!(
                 "Solver failed - stdout: {}, error: {}",
