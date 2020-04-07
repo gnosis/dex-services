@@ -1,0 +1,16 @@
+[package]
+name = "pricegraph"
+version = "0.1.0"
+authors = ["Nicholas Rodrigues Lordello <nicholas.lordello@gnosis.pm>"]
+edition = "2018"
+
+[[bench]]
+name = "main"
+harness = false
+
+[dependencies]
+primitive-types = "0.7"
+
+[dev-dependencies]
+criterion = "0.3"
+data-encoding = "2"

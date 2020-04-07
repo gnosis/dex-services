@@ -17,10 +17,7 @@ pub fn create_price_finder(
         info!("Using naive price finder");
         Box::new(NaiveSolver::new(fee))
     } else {
-        info!(
-            "Using optimization price finder with the type: {:?}",
-            solver_type
-        );
+        info!("Using {:?} optimization price finder", solver_type);
         Box::new(OptimisationPriceFinder::new(fee, solver_type, price_oracle))
     }
 }
