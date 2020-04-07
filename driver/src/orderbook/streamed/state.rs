@@ -196,7 +196,7 @@ impl State {
         let order = self
             .orders
             .get_mut(&(event.owner, event.id))
-            .ok_or(Error::UnknownOrder)?;
+            .ok_or(Error::UnknownOrder(event.id))?;
         order.valid_until = block_batch_id - 1;
         Ok(())
     }
@@ -218,14 +218,13 @@ impl State {
     }
 
     fn trade(&mut self, event: &Trade) -> Result<(), Error> {
-        if [event.sell_token, event.buy_token]
-            .iter()
-            .any(|token| self.tokens.get_address_by_id(*token).is_none())
-        {
-            return Err(Error::UnknownToken);
+        for token in &[event.sell_token, event.buy_token] {
+            if self.tokens.get_address_by_id(*token).is_none() {
+                return Err(Error::UnknownToken(*token));
+            }
         }
         if self.orders.get(&(event.owner, event.order_id)).is_none() {
-            return Err(Error::UnknownOrder);
+            return Err(Error::UnknownOrder(event.order_id));
         }
         match &mut self.pending_solution {
             PendingSolution::AccumulatingTrades(trades) => trades.push(event.clone()),
@@ -308,15 +307,15 @@ impl State {
         let order = self
             .orders
             .get_mut(&(user, order))
-            .ok_or(Error::UnknownOrder)?;
+            .ok_or(Error::UnknownOrder(order))?;
         let sell_token = self
             .tokens
             .get_address_by_id(order.sell_token)
-            .ok_or(Error::UnknownToken)?;
+            .ok_or(Error::UnknownToken(order.sell_token))?;
         let buy_token = self
             .tokens
             .get_address_by_id(order.buy_token)
-            .ok_or(Error::UnknownToken)?;
+            .ok_or(Error::UnknownToken(order.buy_token))?;
 
         if order.has_limited_amount() {
             order.used_amount += executed_sell_amount;
@@ -349,10 +348,10 @@ impl State {
 
 #[derive(Clone, Copy, Debug, Error)]
 pub enum Error {
-    #[error("unknown token")]
-    UnknownToken,
-    #[error("unknown order")]
-    UnknownOrder,
+    #[error("unknown token {0}")]
+    UnknownToken(TokenId),
+    #[error("unknown order {0}")]
+    UnknownOrder(OrderId),
     #[error("order already exists")]
     OrderAlreadyExists,
     #[error("math underflow")]
