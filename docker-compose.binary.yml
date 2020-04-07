@@ -3,9 +3,5 @@ services:
   stablex:
     command: ./stablex
     build:
-      context: .
-      dockerfile: docker/rust/Dockerfile
       args:
         - RUST_BASE=rust-binary
-    environment:
-      - RUST_BACKTRACE=1
