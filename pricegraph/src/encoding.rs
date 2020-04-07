@@ -54,9 +54,6 @@ pub struct Element {
     /// The validity of the order.
     pub valid: Validity,
     /// The price fraction for the order.
-    ///
-    /// Note that if one of the prices is `UNBOUNDED_AMOUNT` then that signals
-    /// that the order is an unbounded order and has no amount limit.
     pub price: Price,
     /// The remaining sell amount available to this order.
     pub remaining_sell_amount: u128,

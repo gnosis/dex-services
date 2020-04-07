@@ -1,7 +1,6 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use pricegraph::Orderbook;
 
-/// Module containing test orderbook data.
 #[path = "../data/mod.rs"]
 pub mod data;
 
@@ -15,7 +14,7 @@ pub fn orderbook_is_overlapping(c: &mut Criterion) {
     let orderbook = Orderbook::read(&data::ORDERBOOKS[0]).expect("error reading orderbook");
 
     c.bench_function("Orderbook::is_overlapping", |b| {
-        b.iter(|| black_box(&orderbook).is_overlapping())
+        b.iter(|| orderbook.is_overlapping())
     });
 }
 
