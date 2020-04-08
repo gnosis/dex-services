@@ -55,7 +55,7 @@ impl Orderbook {
         // a token pair in `O(1)`, and it can simply be `pop`-ed once its amount
         // is used up and removed from the graph in `O(1)` as well.
         for (_, pair_orders) in orders.all_pairs_mut() {
-            pair_orders.sort_unstable_by(Order::cmp_decending_prices);
+            pair_orders.sort_unstable_by(Order::cmp_descending_prices);
         }
 
         let mut projection = DiGraph::new();
@@ -67,14 +67,16 @@ impl Orderbook {
             // be.
             debug_assert_eq!(token_node, node_index(token_id));
         }
-        projection.extend_with_edges(orders.all_pairs().filter_map({
+        projection.extend_with_edges(orders.all_pairs().map({
             |(pair, orders)| {
-                let cheapest_order = orders.last()?;
-                Some((
+                let cheapest_order = orders
+                    .last()
+                    .expect("unexpected token pair in orders map without any orders");
+                (
                     node_index(pair.sell),
                     node_index(pair.buy),
                     cheapest_order.weight(),
-                ))
+                )
             }
         }));
 
