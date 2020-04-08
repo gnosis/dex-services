@@ -90,18 +90,13 @@ impl SolverType {
         time_limit: String,
     ) -> Result<Output> {
         let mut command = Command::new("python");
-        let standard_solver_command = command
+        let private_solver_command = command
             .current_dir("/app/batchauctions")
             .args(&["-m", "scripts.e2e._run"])
             .arg(format!("{}{}", "/app/", input_file.to_owned()))
             .arg(format!("--outputDir={}{}", "/app/", result_folder))
             .args(&["--solverTimeLimit", &time_limit])
             .arg(String::from("--useExternalPrices"));
-        let private_solver_command = match self {
-            SolverType::StandardSolver => standard_solver_command,
-            SolverType::FallbackSolver => standard_solver_command,
-            _ => panic!("{:?} is not a private solver", self),
-        };
         debug!(
             "Using private-solver command `{:?}`",
             private_solver_command
