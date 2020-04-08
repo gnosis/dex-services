@@ -1,4 +1,5 @@
 version: "3.6"
 services:
   stablex:
+    command: ./stablex
     image: stablex-binary-private
