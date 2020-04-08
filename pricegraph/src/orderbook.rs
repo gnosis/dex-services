@@ -6,7 +6,7 @@
 //! (i.e. orders) connecting a token pair.
 
 use crate::encoding::{Element, InvalidLength, Price, TokenId, TokenPair, UserId};
-use crate::graph::bellman_ford::{self, NegativeCycle};
+use crate::graph::bellman_ford;
 use petgraph::graph::{DiGraph, NodeIndex};
 use primitive_types::U256;
 use std::cmp;
@@ -90,161 +90,23 @@ impl Orderbook {
         self.orders.all_pairs().map(|(_, o)| o.len()).sum()
     }
 
-    /// Reduces an orderbook by filling ring trades along all negative cycles.
-    ///
-    /// Returns a vector with paths for all overlapping ring trades that are
-    /// connected to the fee token, removing them from `self`.
+    /// Detects whether or not a solution can be found by finding negative
+    /// cycles in the projection graph starting from the fee token.
     ///
     /// Conceptually, a negative cycle is a trading path starting and ending at
     /// a token (going through an arbitrary number of other distinct tokens)
     /// where the total weight is less than `0`, i.e. the effective sell price
     /// is less than `1`. This means that there is a price overlap along this
-    /// ring trade. Since negative cycles are detected starting from token 0,
-    /// then the discovered negative cycles additionally are connected to the
-    /// fee token.
-    pub fn reduce(&mut self) -> Vec<Vec<TokenId>> {
-        // NOTE: First update the projection graph edges and removing all dust
-        // and unfillable orders.
-        self.update_projection_graph();
-
-        let mut paths = Vec::new();
-
+    /// ring trade and it is connected to the fee token.
+    pub fn is_overlapping(&self) -> bool {
         let fee_token = node_index(0);
-        while let Err(NegativeCycle(path)) = bellman_ford::search(&self.projection, fee_token) {
-            if self.fill_path(&path) {
-                paths.push(path.into_iter().map(|node| node.index() as _).collect());
-            }
-        }
-
-        paths
-    }
-
-    /// Updates the projection graph for every token pair.
-    fn update_projection_graph(&mut self) {
-        let pairs = self
-            .orders
-            .all_pairs()
-            .map(|(pair, _)| pair)
-            .collect::<Vec<_>>();
-        for pair in pairs {
-            self.update_projection_graph_edge(pair);
-        }
-    }
-
-    /// Updates the projection graph edge between a token pair. This is done by
-    /// removing all filled and "dust" orders (i.e. orders whose effective
-    /// amount is less than the `MIN_AMOUNT` threshold) and then either updates
-    /// the projection graph edge with the weight of the new cheapest order or
-    /// removes the edge entirely if no orders remain for the given token pair.
-    fn update_projection_graph_edge(&mut self, pair: TokenPair) {
-        let Self {
-            ref mut orders,
-            users,
-            ref mut projection,
-            ..
-        } = self;
-
-        let pair_orders = match orders.pair_orders_mut(pair) {
-            Some(orders) => orders,
-            None => return,
-        };
-
-        // NOTE: The orderbook structure ensures that `OrderMap` entries only
-        // exist when there is at least one order between the token pair.
-        debug_assert!(!pair_orders.is_empty(), "encountered empty OrderMap entry");
-
-        // NOTE: Orders are sorted, so the last order is always the one with
-        // the smallest price.
-        while pair_orders
-            .last()
-            .map(|order| order.get_effective_amount(&users) < MIN_AMOUNT)
-            == Some(true)
-        {
-            pair_orders.pop();
-        }
-
-        let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
-        let edge = projection
-            .find_edge(sell, buy)
-            .expect("missing edge between token pair with orders");
-
-        if let Some(order) = pair_orders.last() {
-            projection[edge] = order.weight;
-        } else {
-            // No remaining orders, the edge can be removed from the order map
-            // and the projection graph.
-            orders.remove_pair(pair);
-            projection.remove_edge(edge);
-        }
-    }
-
-    /// Fills orders along a path updating order remaining amounts as well as
-    /// deducting from user balances. Returns `true` if all filled amounts are
-    /// above the minimum `MIN_AMOUNT` threadhold.
-    ///
-    /// Note that we do not increase the balance of user's buy token for orders
-    /// as this can lead to overlapping pairs trading with eachother
-    /// indefinitely.
-    fn fill_path(&mut self, path: &[NodeIndex]) -> bool {
-        let Self {
-            ref mut orders,
-            users,
-            ..
-        } = self;
-
-        // First determine the capacity of the path expressed in the first and
-        // final token of the path.
-        let mut capacity = f64::INFINITY;
-        let mut transient_price = 1.0;
-        for pair in pairs_on_path(path) {
-            let order = orders.cheapest_order(pair).expect("missing order on path");
-            capacity = min(
-                capacity,
-                order.get_effective_amount(users) / transient_price,
-            );
-            transient_price *= order.price;
-        }
-
-        // Now that the capacity of the path has been determined, push the flow
-        // around the orderbook deducting from the order amounts and user
-        // balances.
-        let mut transient_price = 1.0;
-        let mut smallest_fill_amount = f64::INFINITY;
-        for pair in pairs_on_path(path) {
-            let order = orders
-                .cheapest_order_mut(pair)
-                .expect("missing order on path");
-            let fill_amount = capacity / transient_price;
-            order.amount -= fill_amount;
-            users
-                .get_mut(&order.user)
-                .expect("missing user with order")
-                .deduct_from_balance(order.pair.sell, fill_amount);
-            transient_price *= order.price;
-            smallest_fill_amount = min(smallest_fill_amount, fill_amount);
-        }
-
-        // Finally, update the projected graph considering the newly filled
-        // orders.
-        for pair in pairs_on_path(path) {
-            self.update_projection_graph_edge(pair);
-        }
-
-        smallest_fill_amount >= MIN_AMOUNT
+        bellman_ford::search(&self.projection, fee_token).is_err()
     }
 }
 
 /// Create a node index from a token ID.
 fn node_index(token: TokenId) -> NodeIndex {
     NodeIndex::new(token.into())
-}
-
-/// Returns an iterator with all pairs on a path.
-fn pairs_on_path(path: &[NodeIndex]) -> impl Iterator<Item = TokenPair> + '_ {
-    path.windows(2).map(|segment| TokenPair {
-        sell: segment[0].index() as _,
-        buy: segment[1].index() as _,
-    })
 }
 
 /// Type definition for a mapping of orders between buy and sell tokens.
@@ -276,39 +138,6 @@ impl OrderMap {
             o.iter_mut()
                 .map(move |(&buy, o)| (TokenPair { sell, buy }, o))
         })
-    }
-
-    /// Returns the orders for an order pair. Returns `None` if that pair has
-    /// no orders.
-    fn pair_orders(&self, pair: TokenPair) -> Option<&'_ [Order]> {
-        Some(self.0.get(&pair.sell)?.get(&pair.buy)?.as_slice())
-    }
-
-    /// Returns a mutable reference to the orders for an order pair. Returns
-    /// `None` if that pair has no orders.
-    fn pair_orders_mut(&mut self, pair: TokenPair) -> Option<&'_ mut Vec<Order>> {
-        self.0.get_mut(&pair.sell)?.get_mut(&pair.buy)
-    }
-
-    /// Returns a reference to the cheapest order given an order pair.
-    fn cheapest_order(&self, pair: TokenPair) -> Option<&'_ Order> {
-        self.pair_orders(pair)?.last()
-    }
-
-    /// Returns a mutable reference to the cheapest order given an order pair.
-    fn cheapest_order_mut(&mut self, pair: TokenPair) -> Option<&'_ mut Order> {
-        self.pair_orders_mut(pair)?.last_mut()
-    }
-
-    /// Removes a token pair and orders from the mapping.
-    fn remove_pair(&mut self, pair: TokenPair) -> Option<Vec<Order>> {
-        let sell_orders = self.0.get_mut(&pair.sell)?;
-        let removed = sell_orders.remove(&pair.buy)?;
-        if sell_orders.is_empty() {
-            self.0.remove(&pair.sell);
-        }
-
-        Some(removed)
     }
 }
 
@@ -390,16 +219,6 @@ impl From<Element> for Order {
             .partial_cmp(&a.price)
             .expect("orders cannot have NaN prices")
     }
-
-    /// Retrieves the effective remaining amount for this order based on user
-    /// balances. This is the minimum between the remaining order amount and
-    /// the user's sell token balance.
-    ///
-    /// We can't use `std::cmp::min` here because floats don't implement `Ord`.
-    pub fn get_effective_amount(&self, users: &UserMap) -> f64 {
-        let balance = users[&self.user].balance_of(self.pair.sell);
-        min(self.amount, balance)
-    }
 }
 
 /// Returns `true` if the order is unbounded, that is it has an unlimited sell
@@ -413,22 +232,6 @@ fn is_unbounded(element: &Element) -> bool {
 fn as_effective_sell_price(price: &Price) -> f64 {
     const FEE_FACTOR: f64 = 1.0 / 0.999;
     FEE_FACTOR * (price.denominator as f64) / (price.numerator as f64)
-}
-
-/// Calculates the minimum of two floats. Note that we cannot use the standard
-/// library `std::cmp::min` here since `f64` does not implement `Ord`.
-///
-/// # Panics
-///
-/// If any of the two floats are NaN.
-fn min(a: f64, b: f64) -> f64 {
-    match a
-        .partial_cmp(&b)
-        .expect("orderbooks cannot have NaN quantities")
-    {
-        cmp::Ordering::Less => a,
-        _ => b,
-    }
 }
 
 /// A type definiton for a mapping between user IDs to user data.
@@ -459,22 +262,6 @@ impl User {
 
         order_id
     }
-
-    /// Retrieves the user's balance for a token
-    fn balance_of(&self, token: TokenId) -> f64 {
-        self.balances.get(&token).copied().unwrap_or(0.0)
-    }
-
-    /// Deducts an amount from the balance.
-    fn deduct_from_balance(&mut self, token: TokenId, amount: f64) {
-        if let hash_map::Entry::Occupied(mut entry) = self.balances.entry(token) {
-            let balance = entry.get_mut();
-            *balance -= amount;
-            if *balance < MIN_AMOUNT {
-                entry.remove_entry();
-            }
-        }
-    }
 }
 
 /// Convert an unsigned 256-bit integer into a `f64`.
@@ -504,11 +291,8 @@ mod tests {
             .decode(include_bytes!("../data/orderbook-5287195.hex"))
             .expect("orderbook contains invalid hex");
 
-        let mut orderbook = Orderbook::read(&encoded_orderbook).expect("error reading orderbook");
+        let orderbook = Orderbook::read(&encoded_orderbook).expect("error reading orderbook");
         assert_eq!(orderbook.num_orders(), 896);
-
-        let overlapping_cycles = orderbook.reduce();
-        assert!(!overlapping_cycles.is_empty());
-        assert!(orderbook.reduce().is_empty());
+        assert!(orderbook.is_overlapping());
     }
 }
