@@ -10,11 +10,8 @@ use crate::graph::bellman_ford;
 use petgraph::graph::{DiGraph, NodeIndex};
 use primitive_types::U256;
 use std::cmp;
-use std::collections::{hash_map, HashMap};
+use std::collections::HashMap;
 use std::f64;
-
-/// The minimum trading amount as defined by the smart contract.
-const MIN_AMOUNT: f64 = 10000.0;
 
 /// A graph representation of a complete orderbook.
 #[derive(Debug)]
@@ -254,12 +251,9 @@ impl User {
     fn include_order(&mut self, element: &Element) -> usize {
         let order_id = self.num_orders;
 
-        if let hash_map::Entry::Vacant(entry) = self.balances.entry(element.pair.sell) {
-            let balance = u256_to_f64(element.balance);
-            if balance >= MIN_AMOUNT {
-                entry.insert(balance);
-            }
-        }
+        self.balances
+            .entry(element.pair.sell)
+            .or_insert_with(|| u256_to_f64(element.balance));
         self.num_orders += 1;
 
         order_id
