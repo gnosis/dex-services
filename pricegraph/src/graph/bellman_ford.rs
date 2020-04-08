@@ -19,8 +19,7 @@ pub type Paths<G> = (
 pub struct NegativeCycle<G: Data>(pub Vec<G::NodeId>);
 
 /// This implementation is taken from the `petgraph` crate with a small
-/// modification to return the predecessors vector and node ID where the
-/// negative cycle was detected so that it can be removed from the graph.
+/// modification to return the path when a negative cycle is detected.
 ///
 /// The orginal source can be found here:
 /// https://docs.rs/petgraph/0.5.0/src/petgraph/algo/mod.rs.html#745-792
@@ -61,7 +60,7 @@ where
             let j = edge.target();
             let w = *edge.weight();
             if distance[ix(i)] + w < distance[ix(j)] {
-                // NOTE: The following two lines are the only modifications made
+                // NOTE: The following 4 lines are the only modifications made
                 // to the original algorithm and where originally:
                 // ```diff
                 // -//println!("neg cycle, detected from {} to {}, weight={}", i, j, w);
