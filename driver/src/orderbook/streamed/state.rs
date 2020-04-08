@@ -125,22 +125,24 @@ impl State {
     pub fn apply_event(&mut self, event: &Event, block_batch_id: BatchId) -> Result<(), Error> {
         self.apply_pending_solution_if_needed(block_batch_id);
         match event {
-            Event::Deposit(event) => self.deposit(event, block_batch_id),
-            Event::WithdrawRequest(event) => self.withdraw_request(event),
-            Event::Withdraw(event) => self.withdraw(event, block_batch_id),
-            Event::TokenListing(event) => self.token_listing(event),
-            Event::OrderPlacement(event) => self.order_placement(event),
-            Event::OrderCancellation(event) => self.order_cancellation(event, block_batch_id),
-            Event::OrderDeletion(event) => self.order_deletion(event, block_batch_id),
-            Event::Trade(event) => self.trade(event),
+            Event::Deposit(event) => self.apply_deposit(event, block_batch_id),
+            Event::WithdrawRequest(event) => self.apply_withdraw_request(event),
+            Event::Withdraw(event) => self.apply_withdraw(event, block_batch_id),
+            Event::TokenListing(event) => self.apply_token_listing(event),
+            Event::OrderPlacement(event) => self.apply_order_placement(event),
+            Event::OrderCancellation(event) => self.apply_order_cancellation(event, block_batch_id),
+            Event::OrderDeletion(event) => self.apply_order_deletion(event, block_batch_id),
+            Event::Trade(event) => self.apply_trade(event),
             // No need to do anything. The solution will be reverted by the first trade of the next
             // solution.
             Event::TradeReversion(_) => Ok(()),
-            Event::SolutionSubmission(event) => self.solution_submission(event, block_batch_id),
+            Event::SolutionSubmission(event) => {
+                self.apply_solution_submission(event, block_batch_id)
+            }
         }
     }
 
-    fn deposit(&mut self, event: &Deposit, block_batch_id: BatchId) -> Result<(), Error> {
+    fn apply_deposit(&mut self, event: &Deposit, block_batch_id: BatchId) -> Result<(), Error> {
         let balance = self.balances.entry((event.user, event.token)).or_default();
         balance.deposit(
             Flux {
@@ -152,7 +154,7 @@ impl State {
         Ok(())
     }
 
-    fn withdraw_request(&mut self, event: &WithdrawRequest) -> Result<(), Error> {
+    fn apply_withdraw_request(&mut self, event: &WithdrawRequest) -> Result<(), Error> {
         let balance = self.balances.entry((event.user, event.token)).or_default();
         balance.pending_withdraw = Some(Flux {
             amount: event.amount,
@@ -161,17 +163,17 @@ impl State {
         Ok(())
     }
 
-    fn withdraw(&mut self, event: &Withdraw, block_batch_id: BatchId) -> Result<(), Error> {
+    fn apply_withdraw(&mut self, event: &Withdraw, block_batch_id: BatchId) -> Result<(), Error> {
         let balance = self.balances.entry((event.user, event.token)).or_default();
         balance.withdraw(event.amount, block_batch_id)
     }
 
-    fn token_listing(&mut self, event: &TokenListing) -> Result<(), Error> {
+    fn apply_token_listing(&mut self, event: &TokenListing) -> Result<(), Error> {
         self.tokens.0.push((event.id, event.token));
         Ok(())
     }
 
-    fn order_placement(&mut self, event: &OrderPlacement) -> Result<(), Error> {
+    fn apply_order_placement(&mut self, event: &OrderPlacement) -> Result<(), Error> {
         let order = Order {
             buy_token: event.buy_token,
             sell_token: event.sell_token,
@@ -188,7 +190,7 @@ impl State {
         Ok(())
     }
 
-    fn order_cancellation(
+    fn apply_order_cancellation(
         &mut self,
         event: &OrderCancellation,
         block_batch_id: BatchId,
@@ -201,7 +203,7 @@ impl State {
         Ok(())
     }
 
-    fn order_deletion(
+    fn apply_order_deletion(
         &mut self,
         event: &OrderDeletion,
         block_batch_id: BatchId,
@@ -217,7 +219,7 @@ impl State {
         Ok(())
     }
 
-    fn trade(&mut self, event: &Trade) -> Result<(), Error> {
+    fn apply_trade(&mut self, event: &Trade) -> Result<(), Error> {
         for token in &[event.sell_token, event.buy_token] {
             if self.tokens.get_address_by_id(*token).is_none() {
                 return Err(Error::UnknownToken(*token));
@@ -237,7 +239,7 @@ impl State {
         Ok(())
     }
 
-    fn solution_submission(
+    fn apply_solution_submission(
         &mut self,
         event: &SolutionSubmission,
         block_batch_id: BatchId,
@@ -284,7 +286,7 @@ impl State {
         for trade in trades {
             // Cannot fail because we ensure that the tokens exist when a trade event is
             // received and that the order exists and doesn't get removed while it is valid.
-            self.apply_trade(
+            self.apply_solution_trade(
                 trade.owner,
                 trade.order_id,
                 trade.executed_sell_amount,
@@ -296,7 +298,7 @@ impl State {
     }
 
     /// Fails if any tokens or order don't exist.
-    fn apply_trade(
+    fn apply_solution_trade(
         &mut self,
         user: UserId,
         order: OrderId,
