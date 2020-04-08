@@ -16,7 +16,7 @@ pub type TokenId = u16;
 pub type UserId = H160;
 
 /// A struct representing a buy/sell token pair.
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct TokenPair {
     /// The buy token.
     pub buy: TokenId,
@@ -25,7 +25,7 @@ pub struct TokenPair {
 }
 
 /// A struct representing the validity of an order.
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[derive(Debug, PartialEq)]
 pub struct Validity {
     /// The batch starting from which the order is valid.
     pub from: BatchId,
@@ -34,7 +34,7 @@ pub struct Validity {
 }
 
 /// A price expressed as a fraction of buy and sell amounts.
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[derive(Debug, PartialEq)]
 pub struct Price {
     /// The price numerator, or the buy amount.
     pub numerator: u128,
@@ -43,7 +43,7 @@ pub struct Price {
 }
 
 /// An orderbook element that is retrieved from the smart contract.
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[derive(Debug, PartialEq)]
 pub struct Element {
     /// The user that placed the order.
     pub user: UserId,
