@@ -6,7 +6,10 @@ use std::time::Duration;
 
 use anyhow::Result;
 use ethcontract::transaction::GasPrice;
-use ethcontract::{Address, BlockNumber, PrivateKey, U256};
+use ethcontract::{
+    contract::Event, errors::ExecutionError, Address, BlockNumber, PrivateKey, U256,
+};
+use futures::stream::BoxStream;
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
@@ -16,13 +19,13 @@ use crate::gas_station::GasPriceEstimating;
 use crate::models::{ExecutedOrder, Solution};
 use crate::util::FutureWaitExt;
 
+include!(concat!(env!("OUT_DIR"), "/batch_exchange.rs"));
+
 lazy_static! {
     // In the BatchExchange smart contract, the objective value will be multiplied by
     // 1 + IMPROVEMENT_DENOMINATOR = 101. Hence, the maximal possible objective value is:
     static ref MAX_OBJECTIVE_VALUE: U256 = U256::max_value() / (U256::from(101));
 }
-
-include!(concat!(env!("OUT_DIR"), "/batch_exchange.rs"));
 
 pub struct StableXContractImpl<'a> {
     instance: BatchExchange,
@@ -36,10 +39,11 @@ impl<'a> StableXContractImpl<'a> {
         network_id: u64,
         gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
     ) -> Result<Self> {
-        let defaults = contracts::method_defaults(key, network_id)?;
+        // TODO: uncomment
+        let _/*defaults*/ = contracts::method_defaults(key, network_id)?;
 
-        let mut instance = BatchExchange::deployed(&web3).wait()?;
-        *instance.defaults_mut() = defaults;
+        let /*mut*/ instance = BatchExchange::deployed(&web3).wait()?;
+        //*instance.defaults_mut() = defaults;
 
         Ok(StableXContractImpl {
             instance,
@@ -94,6 +98,13 @@ pub trait StableXContract {
         solution: Solution,
         claimed_objective_value: U256,
     ) -> Result<()>;
+
+    fn past_events(&self) -> Result<Vec<Event<batch_exchange::Event>>, ExecutionError>;
+
+    /// A stream of all past and future events.
+    fn stream_events(
+        &self,
+    ) -> BoxStream<'static, Result<Event<batch_exchange::Event>, ExecutionError>>;
 }
 
 impl<'a> StableXContract for StableXContractImpl<'a> {
@@ -188,6 +199,26 @@ impl<'a> StableXContract for StableXContractImpl<'a> {
             .wait()?;
 
         Ok(())
+    }
+
+    fn stream_events(
+        &self,
+    ) -> BoxStream<'static, Result<Event<batch_exchange::Event>, ExecutionError>> {
+        Box::pin(
+            self.instance
+                .all_events()
+                .from_block(BlockNumber::Earliest)
+                .stream(),
+        )
+    }
+
+    fn past_events(&self) -> Result<Vec<Event<batch_exchange::Event>>, ExecutionError> {
+        self.instance
+            .all_events()
+            .from_block(ethcontract::BlockNumber::Earliest)
+            .to_block(ethcontract::BlockNumber::Latest)
+            .query()
+            .wait()
     }
 }
 

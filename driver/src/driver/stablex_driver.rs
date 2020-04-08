@@ -67,10 +67,7 @@ impl<'a> StableXDriverImpl<'a> {
                 .auction_solution_computed(batch_to_solve, &price_finder_result);
 
             let solution = price_finder_result?;
-            info!(
-                "Computed solution for batch {}: {:?}",
-                batch_to_solve, &solution
-            );
+            info!("Computed solution: {:?}", &solution);
 
             solution
         };

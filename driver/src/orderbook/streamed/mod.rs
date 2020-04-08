@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+mod orderbook;
 mod state;
 
 use ethcontract::Address;
