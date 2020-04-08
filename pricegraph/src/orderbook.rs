@@ -104,6 +104,7 @@ impl Orderbook {
         bellman_ford::search(&self.projection, fee_token).is_err()
     }
 
+<<<<<<< HEAD
     /// Updates the projection graph for every token pair.
     pub fn update_projection_graph(&mut self) {
         let pairs = self
