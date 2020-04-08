@@ -95,13 +95,11 @@ impl SolverType {
             .args(&["-m", "scripts.e2e._run"])
             .arg(format!("{}{}", "/app/", input_file.to_owned()))
             .arg(format!("--outputDir={}{}", "/app/", result_folder))
-            .args(&["--solverTimeLimit", &time_limit]);
+            .args(&["--solverTimeLimit", &time_limit])
+            .arg(String::from("--useExternalPrices"));
         let private_solver_command = match self {
             SolverType::StandardSolver => standard_solver_command,
-            SolverType::FallbackSolver => {
-                standard_solver_command.arg(String::from("--useExternalPrices"));
-                standard_solver_command
-            }
+            SolverType::FallbackSolver => standard_solver_command,
             _ => panic!("{:?} is not a private solver", self),
         };
         debug!(
