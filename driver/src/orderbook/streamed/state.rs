@@ -4,12 +4,14 @@ use crate::contracts::{
     stablex_contract::batch_exchange::{event_data::*, Event},
 };
 use crate::models::Order as ModelOrder;
-use ethcontract::U256;
+use balance::Balance;
+use error::Error;
+use order::Order;
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::iter::Iterator;
-use thiserror::Error;
 
 // Most types, fields, functions in this module mirror the smart contract because we need to
 // emulate what it does based on the events it emits.
@@ -25,23 +27,13 @@ use thiserror::Error;
 /// Note that there is no way to revert an event. The order in which events are received matters
 /// Applying events `A B` does not always result in the same state as `B A`. For example, a Trade
 /// can only be processed if the OrderPlacement for the traded order has previously been observed.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct State {
     orders: HashMap<(UserId, OrderId), Order>,
     balances: HashMap<(UserId, TokenAddress), Balance>,
     tokens: Tokens,
-    pending_solution: PendingSolution,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            orders: HashMap::new(),
-            balances: HashMap::new(),
-            tokens: Tokens(Vec::new()),
-            pending_solution: PendingSolution::AccumulatingTrades(Vec::new()),
-        }
-    }
+    // TODO?: is_inconsistent_because_solution_not_fully_received: bool
+    last_solution: LastSolution,
 }
 
 impl State {
@@ -49,42 +41,46 @@ impl State {
     pub fn account_state(
         &self,
         batch_id: BatchId,
-    ) -> Result<impl Iterator<Item = ((UserId, TokenId), u128)> + '_, Error> {
-        if self.needs_to_apply_solution(batch_id) {
-            return Err(Error::NeedsToApplySolution);
-        }
+    ) -> impl Iterator<Item = ((UserId, TokenId), u128)> + '_ {
         let tokens = &self.tokens;
-        let balances =
-            self.balances
-                .iter()
-                .filter_map(move |((user_id, token_address), balance)| {
-                    // It is possible that a user has a balance for a token that hasn't been added to
-                    // the exchange because tokens can be deposited anyway.
-                    let token_id = tokens.get_id_by_address(*token_address)?;
-                    Some((
-                        (*user_id, token_id),
-                        balance.current_balance(batch_id).low_u128(),
-                    ))
-                });
-        Ok(balances)
+        let extra_balance_from_last_solution = if dbg!(self.last_solution.batch_id) < batch_id {
+            Some((
+                self.last_solution.submitter,
+                dbg!(self.last_solution.burnt_fees),
+            ))
+        } else {
+            None
+        };
+        self.balances
+            .iter()
+            .filter_map(move |((user_id, token_address), balance)| {
+                // It is possible that a user has a balance for a token that hasn't been added to
+                // the exchange because tokens can be deposited anyway.
+                let token_id = tokens.get_id_by_address(*token_address)?;
+                let extra_balance = match extra_balance_from_last_solution {
+                    Some((submitter, burnt_fees)) if dbg!(submitter) == dbg!(*user_id) => {
+                        burnt_fees
+                    }
+                    _ => 0.into(),
+                };
+                Some((
+                    (*user_id, token_id),
+                    // TODO unwrap
+                    (balance.get_balance(batch_id).unwrap() + extra_balance).low_u128(),
+                ))
+            })
     }
 
-    pub fn orders(
-        &self,
-        batch_id: BatchId,
-    ) -> Result<impl Iterator<Item = ModelOrder> + '_, Error> {
-        if self.needs_to_apply_solution(batch_id) {
-            return Err(Error::NeedsToApplySolution);
-        }
-        let orders = self
-            .orders
+    pub fn orders(&self, batch_id: BatchId) -> impl Iterator<Item = ModelOrder> + '_ {
+        self.orders
             .iter()
             .filter(move |(_, order)| order.is_valid_in_batch(batch_id))
-            .map(|((user_id, order_id), order)| {
+            .map(move |((user_id, order_id), order)| {
                 let (buy_amount, sell_amount) = stablex_auction_element::compute_buy_sell_amounts(
                     order.price_numerator,
                     order.price_denominator,
-                    order.price_denominator - order.used_amount,
+                    // TODO unwrap
+                    order.price_denominator - order.get_used_amount(batch_id).unwrap(),
                 );
                 ModelOrder {
                     id: *order_id,
@@ -94,19 +90,7 @@ impl State {
                     buy_amount,
                     sell_amount,
                 }
-            });
-        Ok(orders)
-    }
-
-    /// Returns whether the state needs to be updated with a pending solution that becomes the
-    /// accepted solution because the batch id has incremented. In this case
-    /// `apply_pending_solution_if_needed` has to be called before `account_state` and `orders` can
-    /// be used.
-    pub fn needs_to_apply_solution(&self, batch_id_: BatchId) -> bool {
-        match self.pending_solution {
-            PendingSolution::Submitted { batch_id, .. } if batch_id < batch_id_ => true,
-            _ => false,
-        }
+            })
     }
 
     /// Reset the state to the default state in which no events have been applied.
@@ -123,7 +107,6 @@ impl State {
     /// `block_batch_id` is the current batch based on the timestamp of the block that contains the
     ///  event.
     pub fn apply_event(&mut self, event: &Event, block_batch_id: BatchId) -> Result<(), Error> {
-        self.apply_pending_solution_if_needed(block_batch_id);
         match event {
             Event::Deposit(event) => self.apply_deposit(event, block_batch_id),
             Event::WithdrawRequest(event) => self.apply_withdraw_request(event),
@@ -132,10 +115,8 @@ impl State {
             Event::OrderPlacement(event) => self.apply_order_placement(event),
             Event::OrderCancellation(event) => self.apply_order_cancellation(event, block_batch_id),
             Event::OrderDeletion(event) => self.apply_order_deletion(event, block_batch_id),
-            Event::Trade(event) => self.apply_trade(event),
-            // No need to do anything. The solution will be reverted by the first trade of the next
-            // solution.
-            Event::TradeReversion(_) => Ok(()),
+            Event::Trade(event) => self.apply_trade(event, block_batch_id),
+            Event::TradeReversion(event) => self.apply_trade_reversion(event, block_batch_id),
             Event::SolutionSubmission(event) => {
                 self.apply_solution_submission(event, block_batch_id)
             }
@@ -144,22 +125,12 @@ impl State {
 
     fn apply_deposit(&mut self, event: &Deposit, block_batch_id: BatchId) -> Result<(), Error> {
         let balance = self.balances.entry((event.user, event.token)).or_default();
-        balance.deposit(
-            Flux {
-                amount: event.amount,
-                batch_id: event.batch_id,
-            },
-            block_batch_id,
-        );
-        Ok(())
+        balance.deposit(event.amount, event.batch_id, block_batch_id)
     }
 
     fn apply_withdraw_request(&mut self, event: &WithdrawRequest) -> Result<(), Error> {
         let balance = self.balances.entry((event.user, event.token)).or_default();
-        balance.pending_withdraw = Some(Flux {
-            amount: event.amount,
-            batch_id: event.batch_id,
-        });
+        balance.withdraw_request(event.amount, event.batch_id);
         Ok(())
     }
 
@@ -174,15 +145,14 @@ impl State {
     }
 
     fn apply_order_placement(&mut self, event: &OrderPlacement) -> Result<(), Error> {
-        let order = Order {
-            buy_token: event.buy_token,
-            sell_token: event.sell_token,
-            valid_from: event.valid_from,
-            valid_until: event.valid_until,
-            price_numerator: event.price_numerator,
-            price_denominator: event.price_denominator,
-            used_amount: 0,
-        };
+        let order = Order::new(
+            event.buy_token,
+            event.sell_token,
+            event.valid_from,
+            event.valid_until,
+            event.price_numerator,
+            event.price_denominator,
+        );
         match self.orders.entry((event.owner, event.index)) {
             Entry::Vacant(entry) => entry.insert(order),
             Entry::Occupied(_) => return Err(Error::OrderAlreadyExists),
@@ -219,97 +189,11 @@ impl State {
         Ok(())
     }
 
-    fn apply_trade(&mut self, event: &Trade) -> Result<(), Error> {
-        for token in &[event.sell_token, event.buy_token] {
-            if self.tokens.get_address_by_id(*token).is_none() {
-                return Err(Error::UnknownToken(*token));
-            }
-        }
-        if self.orders.get(&(event.owner, event.order_id)).is_none() {
-            return Err(Error::UnknownOrder(event.order_id));
-        }
-        match &mut self.pending_solution {
-            PendingSolution::AccumulatingTrades(trades) => trades.push(event.clone()),
-            // If there has been a solution before and we get a new trade then the previous solution
-            // must have been reverted.
-            PendingSolution::Submitted { .. } => {
-                self.pending_solution = PendingSolution::AccumulatingTrades(vec![event.clone()])
-            }
-        };
-        Ok(())
-    }
-
-    fn apply_solution_submission(
-        &mut self,
-        event: &SolutionSubmission,
-        block_batch_id: BatchId,
-    ) -> Result<(), Error> {
-        if self.tokens.get_address_by_id(0).is_none() {
-            return Err(Error::SolutionWithoutFeeToken);
-        }
-        let trades = match &mut self.pending_solution {
-            PendingSolution::AccumulatingTrades(trades) => std::mem::replace(trades, Vec::new()),
-            // This would be weird because it means that the previous solution had no trades. Not
-            // sure if we should error.
-            PendingSolution::Submitted { .. } => Vec::new(),
-        };
-        self.pending_solution = PendingSolution::Submitted {
-            batch_id: block_batch_id,
-            submitter: event.submitter,
-            burnt_fees: event.burnt_fees,
-            trades,
-        };
-        Ok(())
-    }
-
-    pub fn apply_pending_solution_if_needed(&mut self, block_batch_id: BatchId) {
-        let trades = match &mut self.pending_solution {
-            PendingSolution::Submitted {
-                batch_id,
-                submitter,
-                burnt_fees,
-                trades,
-            } if *batch_id < block_batch_id => {
-                // Cannot fail because we ensure there is a fee token when a solution event is
-                // received.
-                let fee_token = self.tokens.get_address_by_id(0).unwrap();
-                let balance = self.balances.entry((*submitter, fee_token)).or_default();
-                balance.balance += *burnt_fees;
-                // This looks weird but we need to call self.apply_trade outside of the match to
-                // prevent multiple mut self borrows.
-                let trades = std::mem::replace(trades, Vec::new());
-                self.pending_solution = PendingSolution::AccumulatingTrades(Vec::new());
-                trades
-            }
-            _ => return,
-        };
-        for trade in trades {
-            // Cannot fail because we ensure that the tokens exist when a trade event is
-            // received and that the order exists and doesn't get removed while it is valid.
-            self.apply_solution_trade(
-                trade.owner,
-                trade.order_id,
-                trade.executed_sell_amount,
-                trade.executed_buy_amount,
-                block_batch_id,
-            )
-            .unwrap();
-        }
-    }
-
-    /// Fails if any tokens or order don't exist.
-    fn apply_solution_trade(
-        &mut self,
-        user: UserId,
-        order: OrderId,
-        executed_sell_amount: u128,
-        executed_buy_amount: u128,
-        batch_id: BatchId,
-    ) -> Result<(), Error> {
+    fn apply_trade(&mut self, event: &Trade, block_batch_id: BatchId) -> Result<(), Error> {
         let order = self
             .orders
-            .get_mut(&(user, order))
-            .ok_or(Error::UnknownOrder(order))?;
+            .get_mut(&(event.owner, event.order_id))
+            .ok_or(Error::UnknownOrder(event.order_id))?;
         let sell_token = self
             .tokens
             .get_address_by_id(order.sell_token)
@@ -319,51 +203,109 @@ impl State {
             .get_address_by_id(order.buy_token)
             .ok_or(Error::UnknownToken(order.buy_token))?;
 
-        if order.has_limited_amount() {
-            order.used_amount += executed_sell_amount;
-        }
-        self.apply_balance_from_trade(user, sell_token, executed_sell_amount, batch_id, true);
-        self.apply_balance_from_trade(user, buy_token, executed_buy_amount, batch_id, false);
+        // This looks awkward because we make sure that no modifications take place if an error
+        // occurs.
+
+        let mut new_order = *order;
+        let sell_balance_key = (event.owner, sell_token);
+        let mut sell_balance = self
+            .balances
+            .get(&sell_balance_key)
+            .cloned()
+            .unwrap_or_default();
+        let buy_balance_key = (event.owner, buy_token);
+        let mut buy_balance = self
+            .balances
+            .get(&buy_balance_key)
+            .cloned()
+            .unwrap_or_default();
+
+        new_order.trade(event.executed_sell_amount, block_batch_id)?;
+        sell_balance.sell(event.executed_sell_amount, block_batch_id)?;
+        buy_balance.buy(event.executed_buy_amount, block_batch_id)?;
+
+        *order = new_order;
+        self.balances.insert(sell_balance_key, sell_balance);
+        self.balances.insert(buy_balance_key, buy_balance);
+
         Ok(())
     }
 
-    fn apply_balance_from_trade(
+    fn apply_trade_reversion(
         &mut self,
-        user: UserId,
-        token: TokenAddress,
-        executed_amount: u128,
-        batch_id: BatchId,
-        subtract: bool,
-    ) {
-        let balance = self.balances.entry((user, token)).or_default();
-        balance.update_deposit_balance(batch_id);
-        // It possible that we get an underflow here because the user did not have enough
-        // deposited for the sale but in the same batch filled another order that increased their
-        // balance but whose trade event we have not yet processed.
-        balance.balance = if subtract {
-            balance.balance.overflowing_sub(executed_amount.into()).0
-        } else {
-            balance.balance.overflowing_add(executed_amount.into()).0
-        };
-    }
-}
+        event: &TradeReversion,
+        block_batch_id: BatchId,
+    ) -> Result<(), Error> {
+        let order = self
+            .orders
+            .get_mut(&(event.owner, event.order_id))
+            .ok_or(Error::UnknownOrder(event.order_id))?;
+        let sell_token = self
+            .tokens
+            .get_address_by_id(order.sell_token)
+            .ok_or(Error::UnknownToken(order.sell_token))?;
+        let buy_token = self
+            .tokens
+            .get_address_by_id(order.buy_token)
+            .ok_or(Error::UnknownToken(order.buy_token))?;
 
-#[derive(Clone, Copy, Debug, Error)]
-pub enum Error {
-    #[error("unknown token {0}")]
-    UnknownToken(TokenId),
-    #[error("unknown order {0}")]
-    UnknownOrder(OrderId),
-    #[error("order already exists")]
-    OrderAlreadyExists,
-    #[error("math underflow")]
-    MathUnderflow,
-    #[error("solution submitted but there is no fee token")]
-    SolutionWithoutFeeToken,
-    #[error("attempt to delete an order that is still valid")]
-    DeletingValidOrder,
-    #[error("getting orders or account state failed because there is a pending solution that needs to beapplied")]
-    NeedsToApplySolution,
+        let mut new_order = *order;
+        let sell_balance_key = (event.owner, sell_token);
+        let mut sell_balance = *self
+            .balances
+            .get(&sell_balance_key)
+            .ok_or(Error::RevertingNonExistentTrade)?;
+        let buy_balance_key = (event.owner, buy_token);
+        let mut buy_balance = *self
+            .balances
+            .get(&buy_balance_key)
+            .ok_or(Error::RevertingNonExistentTrade)?;
+
+        new_order.trade(event.executed_sell_amount, block_batch_id)?;
+        sell_balance.revert_sell(event.executed_sell_amount, block_batch_id)?;
+        buy_balance.buy(event.executed_buy_amount, block_batch_id)?;
+
+        *order = new_order;
+        self.balances.insert(sell_balance_key, sell_balance);
+        self.balances.insert(buy_balance_key, buy_balance);
+
+        Ok(())
+    }
+
+    fn apply_solution_submission(
+        &mut self,
+        event: &SolutionSubmission,
+        block_batch_id: BatchId,
+    ) -> Result<(), Error> {
+        let fee_token = self
+            .tokens
+            .get_address_by_id(0)
+            .ok_or(Error::SolutionWithoutFeeToken)?;
+        match self.last_solution.batch_id.cmp(&block_batch_id) {
+            Ordering::Less => {
+                let balance = self
+                    .balances
+                    .entry((self.last_solution.submitter, fee_token))
+                    .or_default();
+                balance.add_balance(self.last_solution.burnt_fees)?;
+            }
+            Ordering::Equal => (),
+            Ordering::Greater => return Err(Error::SolutionForPastBatch),
+        }
+
+        // Make sure that the submitter gets an entry an balances so their balance shows up when
+        // place an order for the fee token. Otherwise this would not happen because we only create
+        // balances on trades.
+        self.balances
+            .entry((event.submitter, fee_token))
+            .or_default();
+
+        self.last_solution.batch_id = block_batch_id;
+        self.last_solution.submitter = event.submitter;
+        self.last_solution.burnt_fees = event.burnt_fees;
+
+        Ok(())
+    }
 }
 
 /// Bidirectional map between token id and token address.
@@ -388,101 +330,11 @@ impl Tokens {
     }
 }
 
-#[derive(Copy, Clone, Debug, Deserialize, Serialize)]
-struct Order {
-    buy_token: TokenId,
-    sell_token: TokenId,
-    valid_from: BatchId,
-    valid_until: BatchId,
-    price_numerator: u128,
-    price_denominator: u128,
-    used_amount: u128,
-}
-
-impl Order {
-    fn has_limited_amount(&self) -> bool {
-        self.price_numerator != std::u128::MAX && self.price_denominator != std::u128::MAX
-    }
-
-    fn is_valid_in_batch(&self, batch_id: BatchId) -> bool {
-        self.valid_from <= batch_id && batch_id <= self.valid_until
-    }
-}
-
-#[derive(Copy, Clone, Debug, Deserialize, Serialize)]
-struct Flux {
-    amount: U256,
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+struct LastSolution {
     batch_id: BatchId,
-}
-
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
-struct Balance {
-    balance: U256,
-    pending_deposit: Option<Flux>,
-    pending_withdraw: Option<Flux>,
-}
-
-impl Balance {
-    fn deposit(&mut self, new_deposit: Flux, current_batch_id: BatchId) {
-        self.update_deposit_balance(current_batch_id);
-        match self.pending_deposit.as_mut() {
-            Some(deposit) => {
-                deposit.amount += new_deposit.amount;
-                deposit.batch_id = new_deposit.batch_id
-            }
-            None => self.pending_deposit = Some(new_deposit),
-        }
-    }
-
-    fn withdraw(&mut self, amount: U256, current_batch_id: BatchId) -> Result<(), Error> {
-        self.update_deposit_balance(current_batch_id);
-        self.pending_withdraw = None;
-        self.balance = self
-            .balance
-            .checked_sub(amount)
-            .ok_or(Error::MathUnderflow)?;
-        Ok(())
-    }
-
-    fn update_deposit_balance(&mut self, current_batch_id: BatchId) {
-        match self.pending_deposit {
-            Some(ref deposit) if deposit.batch_id < current_batch_id => {
-                self.balance += deposit.amount;
-                self.pending_deposit = None;
-            }
-            _ => (),
-        };
-    }
-
-    fn current_balance(&self, current_batch_id: BatchId) -> U256 {
-        let mut balance = self.balance;
-        if let Some(ref flux) = self.pending_deposit {
-            if flux.batch_id < current_batch_id {
-                balance = balance.saturating_add(flux.amount);
-            }
-        }
-        if let Some(ref flux) = self.pending_withdraw {
-            if flux.batch_id < current_batch_id {
-                balance = balance.saturating_sub(flux.amount);
-            }
-        }
-        balance
-    }
-}
-
-/// The current solution for the batch but not yet finale as it can still be replaced by a better
-/// solution.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-enum PendingSolution {
-    /// We observed Trade events but no SolutionSubmission.
-    AccumulatingTrades(Vec<Trade>),
-    /// We observed SolutionSubmission.
-    Submitted {
-        batch_id: BatchId,
-        submitter: UserId,
-        burnt_fees: U256,
-        trades: Vec<Trade>,
-    },
+    submitter: UserId,
+    burnt_fees: U256,
 }
 
 #[cfg(test)]
@@ -504,8 +356,8 @@ mod tests {
         state
     }
 
-    fn account_state(state: &mut State, batch_id: BatchId) -> AccountState {
-        AccountState(state.account_state(batch_id).unwrap().collect())
+    fn account_state(state: &State, batch_id: BatchId) -> AccountState {
+        AccountState(state.account_state(batch_id).collect())
     }
 
     #[test]
@@ -518,9 +370,9 @@ mod tests {
             batch_id: 0,
         };
         state.apply_event(&Event::Deposit(event), 0).unwrap();
-        let account_state_ = account_state(&mut state, 0);
+        let account_state_ = account_state(&state, 0);
         assert_eq!(account_state_.read_balance(0, address(3)), 0);
-        let account_state_ = account_state(&mut state, 1);
+        let account_state_ = account_state(&state, 1);
         assert_eq!(account_state_.read_balance(0, address(3)), 1);
     }
 
@@ -538,7 +390,7 @@ mod tests {
             state.apply_event(&Event::Deposit(event), 0).unwrap();
         }
 
-        let account_state_ = account_state(&mut state, 1);
+        let account_state_ = account_state(&state, 1);
         assert_eq!(account_state_.read_balance(0, address(3)), 1);
 
         let event = TokenListing {
@@ -547,7 +399,7 @@ mod tests {
         };
         state.apply_event(&Event::TokenListing(event), 0).unwrap();
 
-        let account_state_ = account_state(&mut state, 1);
+        let account_state_ = account_state(&state, 1);
         assert_eq!(account_state_.read_balance(0, address(3)), 1);
         assert_eq!(account_state_.read_balance(1, address(3)), 1);
     }
@@ -564,7 +416,7 @@ mod tests {
             };
             state.apply_event(&Event::Deposit(event), i).unwrap();
 
-            let account_state_ = account_state(&mut state, i + 2);
+            let account_state_ = account_state(&state, i + 2);
             assert_eq!(account_state_.read_balance(0, address(1)), i as u128 + 1);
         }
     }
@@ -581,9 +433,9 @@ mod tests {
             };
             state.apply_event(&Event::Deposit(event), 0).unwrap();
 
-            let account_state_ = account_state(&mut state, 1);
+            let account_state_ = account_state(&state, 1);
             assert_eq!(account_state_.read_balance(0, address(1)), 0);
-            let account_state_ = account_state(&mut state, 2);
+            let account_state_ = account_state(&state, 2);
             assert_eq!(account_state_.read_balance(0, address(1)), i + 1);
         }
     }
@@ -607,7 +459,7 @@ mod tests {
         state
             .apply_event(&Event::WithdrawRequest(event), 0)
             .unwrap();
-        let account_state_ = account_state(&mut state, 1);
+        let account_state_ = account_state(&state, 1);
         assert_eq!(account_state_.read_balance(0, address(1)), 1);
     }
 
@@ -630,7 +482,7 @@ mod tests {
         state
             .apply_event(&Event::WithdrawRequest(event), 1)
             .unwrap();
-        let account_state_ = account_state(&mut state, 3);
+        let account_state_ = account_state(&state, 3);
         assert_eq!(account_state_.read_balance(0, address(1)), 0);
     }
 
@@ -644,13 +496,22 @@ mod tests {
             batch_id: 0,
         };
         state.apply_event(&Event::Deposit(event), 0).unwrap();
+        let event = WithdrawRequest {
+            user: address(1),
+            token: address(0),
+            amount: 2.into(),
+            batch_id: 0,
+        };
+        state
+            .apply_event(&Event::WithdrawRequest(event), 0)
+            .unwrap();
         let event = Withdraw {
             user: address(1),
             token: address(0),
             amount: 1.into(),
         };
         state.apply_event(&Event::Withdraw(event), 1).unwrap();
-        let account_state_ = account_state(&mut state, 2);
+        let account_state_ = account_state(&state, 1);
         assert_eq!(account_state_.read_balance(0, address(1)), 1);
     }
 
@@ -667,27 +528,28 @@ mod tests {
         let event = WithdrawRequest {
             user: address(1),
             token: address(0),
-            amount: 1.into(),
-            batch_id: 1,
+            amount: 2.into(),
+            batch_id: 0,
         };
         state
             .apply_event(&Event::WithdrawRequest(event), 1)
             .unwrap();
+        let account_state_ = account_state(&state, 1);
+        assert_eq!(account_state_.read_balance(0, address(1)), 1);
         let event = Withdraw {
             user: address(1),
             token: address(0),
-            amount: 2.into(),
+            amount: 1.into(),
         };
         state.apply_event(&Event::Withdraw(event), 1).unwrap();
-        let account_state_ = account_state(&mut state, 2);
-        // If the pending withdraw was still active the balance would be 0.
-        assert_eq!(account_state_.read_balance(0, address(1)), 1);
+        let account_state_ = account_state(&state, 2);
+        assert_eq!(account_state_.read_balance(0, address(1)), 2);
     }
 
     #[test]
     fn order_placement_cancellation_deletion() {
         let mut state = state_with_fee();
-        assert_eq!(state.orders(0).unwrap().next(), None);
+        assert_eq!(state.orders(0).next(), None);
         let event = OrderPlacement {
             owner: address(2),
             index: 0,
@@ -700,7 +562,7 @@ mod tests {
         };
         state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
 
-        assert_eq!(state.orders(0).unwrap().next(), None);
+        assert_eq!(state.orders(0).next(), None);
         let expected_orders = vec![ModelOrder {
             id: 0,
             account_id: address(2),
@@ -709,15 +571,9 @@ mod tests {
             buy_amount: 3,
             sell_amount: 4,
         }];
-        assert_eq!(
-            state.orders(1).unwrap().collect::<Vec<_>>(),
-            expected_orders
-        );
-        assert_eq!(
-            state.orders(2).unwrap().collect::<Vec<_>>(),
-            expected_orders
-        );
-        assert_eq!(state.orders(3).unwrap().next(), None);
+        assert_eq!(state.orders(1).collect::<Vec<_>>(), expected_orders);
+        assert_eq!(state.orders(2).collect::<Vec<_>>(), expected_orders);
+        assert_eq!(state.orders(3).next(), None);
 
         let event = OrderCancellation {
             owner: address(2),
@@ -727,13 +583,10 @@ mod tests {
             .apply_event(&Event::OrderCancellation(event), 2)
             .unwrap();
 
-        assert_eq!(state.orders(0).unwrap().next(), None);
-        assert_eq!(
-            state.orders(1).unwrap().collect::<Vec<_>>(),
-            expected_orders
-        );
-        assert_eq!(state.orders(2).unwrap().next(), None);
-        assert_eq!(state.orders(3).unwrap().next(), None);
+        assert_eq!(state.orders(0).next(), None);
+        assert_eq!(state.orders(1).collect::<Vec<_>>(), expected_orders);
+        assert_eq!(state.orders(2).next(), None);
+        assert_eq!(state.orders(3).next(), None);
 
         let event = Event::OrderDeletion(OrderDeletion {
             owner: address(2),
@@ -741,10 +594,10 @@ mod tests {
         });
         assert!(state.apply_event(&event, 2).is_err());
         state.apply_event(&event, 3).unwrap();
-        assert_eq!(state.orders(0).unwrap().next(), None);
-        assert_eq!(state.orders(1).unwrap().next(), None);
-        assert_eq!(state.orders(2).unwrap().next(), None);
-        assert_eq!(state.orders(3).unwrap().next(), None);
+        assert_eq!(state.orders(0).next(), None);
+        assert_eq!(state.orders(1).next(), None);
+        assert_eq!(state.orders(2).next(), None);
+        assert_eq!(state.orders(3).next(), None);
     }
 
     #[test]
@@ -808,35 +661,39 @@ mod tests {
         };
         state.apply_event(&Event::Trade(event), 1).unwrap();
         state
-            .apply_event(&Event::SolutionSubmission(SolutionSubmission::default()), 1)
+            .apply_event(
+                &Event::SolutionSubmission(SolutionSubmission {
+                    submitter: address(4),
+                    burnt_fees: 42.into(),
+                    ..Default::default()
+                }),
+                1,
+            )
             .unwrap();
-        state.apply_pending_solution_if_needed(2);
 
-        let account_state_ = account_state(&mut state, 2);
+        let account_state_ = account_state(&state, 2);
         assert_eq!(account_state_.read_balance(0, address(2)), 12);
         assert_eq!(account_state_.read_balance(1, address(2)), 9);
         assert_eq!(account_state_.read_balance(0, address(3)), 8);
         assert_eq!(account_state_.read_balance(1, address(3)), 11);
-        assert_eq!(state.orders.get(&(address(2), 0)).unwrap().used_amount, 1);
-        assert_eq!(state.orders.get(&(address(3), 0)).unwrap().used_amount, 2);
-    }
-
-    #[test]
-    fn solution_submission_fee() {
-        let mut state = state_with_fee();
-        let event = SolutionSubmission {
-            submitter: address(1),
-            burnt_fees: 1.into(),
-            ..Default::default()
-        };
-        state
-            .apply_event(&Event::SolutionSubmission(event), 0)
-            .unwrap();
-        assert!(!state.needs_to_apply_solution(0));
-        assert!(state.needs_to_apply_solution(1));
-        state.apply_pending_solution_if_needed(1);
-
-        let account_state_ = account_state(&mut state, 1);
-        assert_eq!(account_state_.read_balance(0, address(1)), 1);
+        assert_eq!(account_state_.read_balance(0, address(4)), 42);
+        assert_eq!(
+            state
+                .orders
+                .get(&(address(2), 0))
+                .unwrap()
+                .get_used_amount(2)
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            state
+                .orders
+                .get(&(address(3), 0))
+                .unwrap()
+                .get_used_amount(2)
+                .unwrap(),
+            2
+        );
     }
 }

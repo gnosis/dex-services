@@ -1,8 +1,12 @@
 #![allow(dead_code)]
 
+mod balance;
+mod error;
+mod order;
 mod state;
 
 use ethcontract::Address;
+use ethcontract::U256;
 
 type UserId = Address;
 type TokenAddress = Address;
