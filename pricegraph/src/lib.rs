@@ -1,4 +1,5 @@
 mod encoding;
+mod graph;
 mod orderbook;
 
 pub use orderbook::Orderbook;
