@@ -2,6 +2,7 @@
 members = [
     "driver",
     "e2e",
+    "pricegraph",
 ]
 default-members = [
     "driver",

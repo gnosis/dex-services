@@ -2,7 +2,7 @@ use crate::models::{self, TokenId, TokenInfo};
 use crate::price_estimation::PriceEstimating;
 use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverType};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,6 @@ use serde_with::rust::display_fromstr;
 use std::collections::BTreeMap;
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
-use std::process::Command;
 use std::time::Duration;
 
 /// A number wrapper type that correctly serializes large u128`s to strings to
@@ -257,11 +256,16 @@ impl PriceFinding for OptimisationPriceFinder {
         create_dir_all(&result_folder)?;
 
         self.io_methods
-            .write_input(&input_file, &serde_json::to_string(&input)?)?;
+            .write_input(&input_file, &serde_json::to_string(&input)?)
+            .with_context(|| format!("error writing instance to {}", input_file))?;
         self.io_methods
-            .run_solver(&input_file, &result_folder, self.solver_type, time_limit)?;
-        let result = self.io_methods.read_output(&result_folder)?;
-        let solution = deserialize_result(result)?;
+            .run_solver(&input_file, &result_folder, self.solver_type, time_limit)
+            .with_context(|| format!("error running {:?} solver", self.solver_type))?;
+        let result = self
+            .io_methods
+            .read_output(&result_folder)
+            .with_context(|| format!("error reading solver output from {}", &result_folder))?;
+        let solution = deserialize_result(result).context("error deserializing solver output")?;
         Ok(solution)
     }
 }
@@ -281,17 +285,12 @@ impl Io for DefaultIo {
         &self,
         input_file: &str,
         result_folder: &str,
-        solver_type: SolverType,
+        solver: SolverType,
         time_limit: Duration,
     ) -> Result<()> {
         let time_limit = (time_limit.as_secs_f64().round() as u64).to_string();
-        let output = Command::new("python")
-            .args(&["-m", "batchauctions.scripts.e2e._run"])
-            .arg(input_file)
-            .args(&["--outputDir", result_folder])
-            .args(&["--solverTimeLimit", &time_limit])
-            .args(solver_type.to_args())
-            .output()?;
+        let output = solver.execute(result_folder, input_file, time_limit)?;
+
         if !output.status.success() {
             error!(
                 "Solver failed - stdout: {}, error: {}",

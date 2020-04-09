@@ -1,0 +1,11 @@
+{
+  "name": "pricegraph",
+  "private": true,
+  "scripts": {
+    "fetch": "node ./fetch.js"
+  },
+  "dependencies": {
+    "@gnosis.pm/dex-contracts": "^0.2.8",
+    "web3": "^1.2.6"
+  }
+}
