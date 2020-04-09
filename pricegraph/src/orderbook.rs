@@ -11,7 +11,7 @@ mod user;
 use self::order::{Order, OrderCollector, OrderMap};
 use self::user::{User, UserMap};
 use crate::encoding::{Element, InvalidLength, TokenId, TokenPair};
-use crate::graph::bellman_ford;
+use crate::graph::bellman_ford::{self, NegativeCycle};
 use crate::num;
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use std::cmp;
@@ -105,8 +105,24 @@ impl Orderbook {
         bellman_ford::search(&self.projection, fee_token).is_err()
     }
 
+    /// Reduces the orderbook by matching all overlapping ring trades.
+    pub fn reduce_overlapping_ring_trades(&mut self) {
+        self.update_projection_graph();
+
+        let fee_token = node_index(0);
+        while let Err(NegativeCycle(mut path)) = bellman_ford::search(&self.projection, fee_token) {
+            path.push(path[0]);
+            self.fill_path(&path).unwrap_or_else(|| {
+                panic!(
+                    "failed to fill path along detected negative cycle {}",
+                    format_path(&path),
+                )
+            });
+        }
+    }
+
     /// Updates the projection graph for every token pair.
-    pub fn update_projection_graph(&mut self) {
+    fn update_projection_graph(&mut self) {
         let pairs = self
             .orders
             .all_pairs()
@@ -172,16 +188,13 @@ impl Orderbook {
     ///
     /// Note that currently, user buy token balances are not incremented as a
     /// result of filling orders along a path.
-    pub fn fill_path(&mut self, path: &[TokenId]) -> Option<f64> {
+    fn fill_path(&mut self, path: &[NodeIndex]) -> Option<f64> {
         let capacity = self.find_maximum_capacity(path)?;
         self.fill_path_with_capacity(path, capacity)
             .unwrap_or_else(|_| {
                 panic!(
                     "failed to fill with capacity along detected path {}",
-                    path.iter()
-                        .map(|token| token.to_string())
-                        .collect::<Vec<_>>()
-                        .join("->")
+                    format_path(path),
                 )
             });
 
@@ -190,7 +203,7 @@ impl Orderbook {
 
     /// Gets the maximum capacity of a path expressed in an amount of the
     /// starting token. Returns `None` if the path doesn't exist.
-    fn find_maximum_capacity(&self, path: &[TokenId]) -> Option<f64> {
+    fn find_maximum_capacity(&self, path: &[NodeIndex]) -> Option<f64> {
         let mut capacity = f64::INFINITY;
         let mut transient_price = 1.0;
         for pair in pairs_on_path(path) {
@@ -212,7 +225,7 @@ impl Orderbook {
     /// result of filling orders along a path.
     fn fill_path_with_capacity(
         &mut self,
-        path: &[TokenId],
+        path: &[NodeIndex],
         capacity: f64,
     ) -> Result<(), IncompletePathError> {
         let mut transient_price = 1.0;
@@ -263,12 +276,25 @@ fn node_index(token: TokenId) -> NodeIndex {
     NodeIndex::new(token.into())
 }
 
+/// Create a token ID from a node index.
+fn token_id(node: NodeIndex) -> TokenId {
+    node.index() as _
+}
+
 /// Returns an iterator with all pairs on a path.
-fn pairs_on_path(path: &[TokenId]) -> impl Iterator<Item = TokenPair> + '_ {
+fn pairs_on_path(path: &[NodeIndex]) -> impl Iterator<Item = TokenPair> + '_ {
     path.windows(2).map(|segment| TokenPair {
-        buy: segment[0],
-        sell: segment[1],
+        buy: token_id(segment[0]),
+        sell: token_id(segment[1]),
     })
+}
+
+/// Formats a token path into a string.
+fn format_path(path: &[NodeIndex]) -> String {
+    path.iter()
+        .map(|segment| segment.index().to_string())
+        .collect::<Vec<_>>()
+        .join("->")
 }
 
 /// An error indicating that an operation over a path failed because of a
@@ -352,10 +378,52 @@ mod tests {
     }
 
     #[test]
-    fn reads_real_orderbook() {
-        let orderbook = data::read_default_orderbook();
-        assert_eq!(orderbook.num_orders(), 896);
-        assert!(orderbook.is_overlapping());
+    fn reads_real_orderbooks() {
+        for (batch_id, raw_orderbook) in data::ORDERBOOKS.iter() {
+            assert!(
+                Orderbook::read(raw_orderbook).is_ok(),
+                "failed to read orderbook for batch {}",
+                batch_id
+            );
+        }
+    }
+
+    #[test]
+    fn reduces_overlapping_orders() {
+        //             /---0.5---v
+        // 0 --1.0--> 1          2 --1.0--> 3 --1.0--> 4 --1.0--> 5
+        //            ^---1.0---/           ^                    /
+        //                                   \--------0.5-------/
+        let mut orderbook = orderbook! {
+            users {
+                @1 {
+                    token 1 => 20_000_000,
+                    token 2 => 10_000_000,
+                    token 3 => 10_000_000,
+                    token 4 => 10_000_000,
+                    token 5 => 20_000_000,
+                }
+                @2 {
+                    token 2 => 1_000_000_000,
+                    token 3 => 1_000_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 0 [10_000_000] selling 1 [10_000_000],
+                owner @1 buying 2 [10_000_000] selling 1 [10_000_000] (1_000_000),
+                owner @1 buying 2 [10_000_000] selling 3 [10_000_000],
+                owner @1 buying 3 [10_000_000] selling 4 [10_000_000],
+                owner @1 buying 4 [10_000_000] selling 5 [10_000_000],
+
+                owner @2 buying 1 [5_000_000] selling 2 [10_000_000],
+                owner @2 buying 5 [5_000_000] selling 3 [10_000_000],
+            }
+        };
+
+        orderbook.reduce_overlapping_ring_trades();
+        // NOTE: We expect user 1's 2->1 order to be completely filled as well
+        // as user 2's 5->3 order.
+        assert_eq!(orderbook.num_orders(), 5);
     }
 
     #[test]
@@ -399,8 +467,6 @@ mod tests {
         // 0 --1.0--> 1          2 --1.0--> 3 --1.0--> 4
         //             \---2.0---^                    /
         //                        \--------1.0-------/
-        //
-        // NOTE: Higher prices are worse.
         let mut orderbook = orderbook! {
             users {
                 @1 {
@@ -429,7 +495,11 @@ mod tests {
             }
         };
 
-        let path = vec![0, 1, 2, 3, 4];
+        let path = [0, 1, 2, 3, 4]
+            .iter()
+            .copied()
+            .map(node_index)
+            .collect::<Vec<_>>();
 
         let capacity = orderbook.find_maximum_capacity(&path).unwrap();
         assert_approx_eq!(
