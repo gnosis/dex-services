@@ -46,7 +46,7 @@ impl Orderbook {
         // a token pair in `O(1)`, and it can simply be `pop`-ed once its amount
         // is used up and removed from the graph in `O(1)` as well.
         for pair_orders in orders.values_mut().flat_map(|o| o.values_mut()) {
-            pair_orders.sort_unstable_by(Order::cmp_decending_prices);
+            pair_orders.sort_unstable_by(Order::cmp_descending_prices);
         }
 
         let mut projection = DiGraph::new();
@@ -62,7 +62,7 @@ impl Orderbook {
                     let weight = orders
                         .last()
                         .expect("unexpected empty pair orders collection in map")
-                        .weight;
+                        .weight();
                     (sell_node, buy_node, weight)
                 }
             })
@@ -130,10 +130,6 @@ struct Order {
     /// denominator over price numerator, which is the inverse price as
     /// expressed by the exchange.
     pub price: f64,
-    /// The weight of the order in the graph. This is the base-2 logarithm of
-    /// the price including fees. This enables transitive prices to be computed
-    /// using addition.
-    pub weight: f64,
 }
 
 impl Order {
@@ -144,10 +140,17 @@ impl Order {
     /// be used for sorting. This be because there is no real ordering for
     /// `NaN`s and `NaN < 0 == false` and `NaN >= 0 == false` (cf. IEEE 754-2008
     /// section 5.11), which can cause serious problems with sorting.
-    fn cmp_decending_prices(a: &Order, b: &Order) -> cmp::Ordering {
+    fn cmp_descending_prices(a: &Order, b: &Order) -> cmp::Ordering {
         b.price
             .partial_cmp(&a.price)
             .expect("orders cannot have NaN prices")
+    }
+
+    /// The weight of the order in the graph. This is the base-2 logarithm of
+    /// the price including fees. This enables transitive prices to be computed
+    /// using addition.
+    pub fn weight(&self) -> f64 {
+        self.price.log2()
     }
 }
 
@@ -159,13 +162,11 @@ impl From<Element> for Order {
             element.price.denominator as _
         };
         let price = as_effective_sell_price(&element.price);
-        let weight = price.log2();
 
         Order {
             user: element.user,
             amount,
             price,
-            weight,
         }
     }
 }
