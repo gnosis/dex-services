@@ -6,6 +6,7 @@
 //! (i.e. orders) connecting a token pair.
 
 use crate::encoding::{Element, InvalidLength, Price, TokenId, TokenPair, UserId};
+use crate::graph::bellman_ford;
 use petgraph::graph::DiGraph;
 use std::cmp;
 use std::collections::HashMap;
@@ -103,7 +104,7 @@ impl Orderbook {
             }
         };
 
-        petgraph::algo::bellman_ford(&self.projection, fee_token).is_err()
+        bellman_ford::search(&self.projection, fee_token).is_err()
     }
 }
 
