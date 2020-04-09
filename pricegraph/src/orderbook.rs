@@ -163,33 +163,12 @@ struct Order {
     /// Specifically, this is the sell amount over the buy amount or price
     /// denominator over price numerator, which is the inverse price as
     /// expressed by the exchange.
-    pub price: f64,
+    price: f64,
 }
 
 impl Order {
-    /// Compare two orders by descending price order.
-    ///
-    /// This method is used for sorting orders, instead of just sorting by key
-    /// on `price` field because `f64`s don't implement `Ord` and as such cannot
-    /// be used for sorting. This be because there is no real ordering for
-    /// `NaN`s and `NaN < 0 == false` and `NaN >= 0 == false` (cf. IEEE 754-2008
-    /// section 5.11), which can cause serious problems with sorting.
-    fn cmp_descending_prices(a: &Order, b: &Order) -> cmp::Ordering {
-        b.price
-            .partial_cmp(&a.price)
-            .expect("orders cannot have NaN prices")
-    }
-
-    /// The weight of the order in the graph. This is the base-2 logarithm of
-    /// the price including fees. This enables transitive prices to be computed
-    /// using addition.
-    pub fn weight(&self) -> f64 {
-        self.price.log2()
-    }
-}
-
-impl From<Element> for Order {
-    fn from(element: Element) -> Self {
+    /// Creates a new order from an ID and an orderbook element.
+    fn new(element: Element, index: usize) -> Self {
         let amount = if is_unbounded(&element) {
             f64::INFINITY
         } else {
@@ -213,10 +192,17 @@ impl From<Element> for Order {
     /// be used for sorting. This be because there is no real ordering for
     /// `NaN`s and `NaN < 0 == false` and `NaN >= 0 == false` (cf. IEEE 754-2008
     /// section 5.11), which can cause serious problems with sorting.
-    fn cmp_decending_prices(a: &Order, b: &Order) -> cmp::Ordering {
+    fn cmp_descending_prices(a: &Order, b: &Order) -> cmp::Ordering {
         b.price
             .partial_cmp(&a.price)
             .expect("orders cannot have NaN prices")
+    }
+
+    /// The weight of the order in the graph. This is the base-2 logarithm of
+    /// the price including fees. This enables transitive prices to be computed
+    /// using addition.
+    pub fn weight(&self) -> f64 {
+        self.price.log2()
     }
 }
 
