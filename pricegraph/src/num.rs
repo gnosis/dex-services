@@ -31,13 +31,3 @@ pub fn min(a: f64, b: f64) -> f64 {
         _ => b,
     }
 }
-
-/// Checks for equality comparison between floats allowing for an `EPSILON`
-/// margin of error.
-///
-/// For more information, see the clippy lint:
-/// https://rust-lang.github.io/rust-clippy/master/index.html#float_cmp
-#[cfg(test)]
-pub fn eq(a: f64, b: f64) -> bool {
-    (a - b).abs() <= f64::EPSILON
-}
