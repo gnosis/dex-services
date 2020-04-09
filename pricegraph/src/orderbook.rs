@@ -145,9 +145,12 @@ impl Orderbook {
             self.orders.remove_pair_order(pair);
         }
 
-        let edge = self
-            .get_pair_edge(pair)
-            .expect("missing edge between token pair with orders");
+        let edge = self.get_pair_edge(pair).unwrap_or_else(|| {
+            panic!(
+                "missing edge between token pair {}->{} with orders",
+                pair.buy, pair.sell
+            )
+        });
         if let Some(order) = self.orders.best_order_for_pair(pair) {
             self.projection[edge] = order.weight();
         } else {
@@ -172,7 +175,15 @@ impl Orderbook {
     pub fn fill_path(&mut self, path: &[TokenId]) -> Option<f64> {
         let capacity = self.find_maximum_capacity(path)?;
         self.fill_path_with_capacity(path, capacity)
-            .expect("failed to fill detected path with capacity");
+            .unwrap_or_else(|_| {
+                panic!(
+                    "failed to fill with capacity along detected path {}",
+                    path.iter()
+                        .map(|token| token.to_string())
+                        .collect::<Vec<_>>()
+                        .join("->")
+                )
+            });
 
         Some(capacity)
     }
@@ -241,7 +252,7 @@ impl Orderbook {
         let order = orders.best_order_for_pair_mut(pair)?;
         let user = users
             .get_mut(&order.user)
-            .expect("missing user for existing order");
+            .unwrap_or_else(|| panic!("missing user {:?} for existing order", order.user));
 
         Some((order, user))
     }
