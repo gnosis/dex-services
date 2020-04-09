@@ -8,11 +8,11 @@
 mod order;
 mod user;
 
-use self::order::{Order, OrderMap};
+use self::order::{Order, OrderCollector, OrderMap};
 use self::user::UserMap;
 use crate::encoding::{Element, InvalidLength, TokenId, TokenPair};
 use crate::graph::bellman_ford;
-use petgraph::graph::{DiGraph, NodeIndex};
+use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use std::cmp;
 use std::f64;
 
@@ -42,7 +42,7 @@ impl Orderbook {
     /// Creates an orderbook from an iterator over decoded auction elements.
     fn from_elements(elements: impl IntoIterator<Item = Element>) -> Orderbook {
         let mut max_token = 0;
-        let mut orders = OrderMap::default();
+        let mut orders = OrderCollector::default();
         let mut users = UserMap::default();
 
         for element in elements {
@@ -56,14 +56,7 @@ impl Orderbook {
             orders.insert_order(Order::new(element, order_id));
         }
 
-        // NOTE: Sort the orders per token pair in descending order, this makes
-        // it so the last order is the cheapest one and can be determined given
-        // a token pair in `O(1)`, and it can simply be `pop`-ed once its amount
-        // is used up and removed from the graph in `O(1)` as well.
-        for (_, pair_orders) in orders.all_pairs_mut() {
-            pair_orders.sort_unstable_by(Order::cmp_descending_prices);
-        }
-
+        let orders = orders.collect();
         let mut projection = DiGraph::new();
         for token_id in 0..=max_token {
             let token_node = projection.add_node(token_id);
@@ -79,8 +72,8 @@ impl Orderbook {
                     .last()
                     .expect("unexpected token pair in orders map without any orders");
                 (
-                    node_index(pair.sell),
                     node_index(pair.buy),
+                    node_index(pair.sell),
                     cheapest_order.weight(),
                 )
             }
@@ -110,6 +103,59 @@ impl Orderbook {
         let fee_token = node_index(0);
         bellman_ford::search(&self.projection, fee_token).is_err()
     }
+
+    /// Updates the projection graph for every token pair.
+    pub fn update_projection_graph(&mut self) {
+        let pairs = self
+            .orders
+            .all_pairs()
+            .map(|(pair, _)| pair)
+            .collect::<Vec<_>>();
+        for pair in pairs {
+            self.update_projection_graph_edge(pair);
+        }
+    }
+
+    /// Updates the projection graph edge between a token pair.
+    ///
+    /// This is done by removing all "dust" orders, i.e. orders whose remaining
+    /// amount or whose users remaining balance is zero, and then either
+    /// updating the projection graph edge with the weight of the new cheapest
+    /// order or removing the edge entirely if no orders remain for the given
+    /// token pair.
+    fn update_projection_graph_edge(&mut self, pair: TokenPair) {
+        while let Some(true) = self
+            .orders
+            .best_order_for_pair(pair)
+            .map(|order| order.get_effective_amount(&self.users) <= 0.0)
+        {
+            self.orders.remove_pair_order(pair);
+        }
+
+        let edge = self
+            .get_pair_edge(pair)
+            .expect("missing edge between token pair with orders");
+        if let Some(order) = self.orders.best_order_for_pair(pair) {
+            self.projection[edge] = order.weight();
+        } else {
+            self.projection.remove_edge(edge);
+        }
+    }
+
+    /// Retrieve the edge index in the projection graph for a token pair,
+    /// returning `None` when the edge does not exist.
+    fn get_pair_edge(&self, pair: TokenPair) -> Option<EdgeIndex> {
+        let (buy, sell) = (node_index(pair.buy), node_index(pair.sell));
+        self.projection.find_edge(buy, sell)
+    }
+
+    /// Retrieve the weight of an edge in the projection graph. This is used for
+    /// testing that the projection graph is in sync with the order map.
+    #[cfg(test)]
+    fn get_projected_pair_weight(&self, pair: TokenPair) -> f64 {
+        let edge = self.get_pair_edge(pair).unwrap();
+        self.projection[edge]
+    }
 }
 
 /// Create a node index from a token ID.
@@ -120,22 +166,107 @@ fn node_index(token: TokenId) -> NodeIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use data_encoding::Specification;
+    use crate::data;
+    use crate::encoding::UserId;
+    use crate::num;
+
+    /// Returns a `UserId` for a test user index.
+    ///
+    /// This method is meant to be used in conjunction with orderbooks created
+    /// with the `orderbook` macro.
+    fn user_id(id: u8) -> UserId {
+        UserId::repeat_byte(id)
+    }
+
+    /// Macro for constructing an orderbook using a DSL for testing purposes.
+    macro_rules! orderbook {
+        (
+            users {$(
+                @ $user:tt {$(
+                    token $token:tt => $balance:expr,
+                )*}
+            )*}
+            orders {$(
+                owner @ $owner:tt
+                buying $buy:tt [ $buy_amount:expr ]
+                selling $sell:tt [ $sell_amount:expr ] $( ($remaining:expr) )?
+            ,)*}
+        ) => {{
+            let mut balances = std::collections::HashMap::new();
+            $($(
+                balances.insert(($user, $token), primitive_types::U256::from($balance));
+            )*)*
+            let elements = vec![$(
+                $crate::encoding::Element {
+                    user: user_id($owner),
+                    balance: balances[&($owner, $sell)],
+                    pair: $crate::encoding::TokenPair {
+                        buy: $buy,
+                        sell: $sell,
+                    },
+                    valid: $crate::encoding::Validity {
+                        from: 0,
+                        to: u32::max_value(),
+                    },
+                    price: $crate::encoding::Price {
+                        numerator: $buy_amount,
+                        denominator: $sell_amount,
+                    },
+                    remaining_sell_amount: match &[$sell_amount, $($remaining)?][..] {
+                        [_, remaining] => *remaining,
+                        _ => $sell_amount,
+                    },
+                },
+            )*];
+            Orderbook::from_elements(elements)
+        }};
+    }
 
     #[test]
     fn reads_real_orderbook() {
-        let hex = {
-            let mut spec = Specification::new();
-            spec.symbols.push_str("0123456789abcdef");
-            spec.ignore.push_str(" \n");
-            spec.encoding().unwrap()
-        };
-        let encoded_orderbook = hex
-            .decode(include_bytes!("../data/orderbook-5287195.hex"))
-            .expect("orderbook contains invalid hex");
-
-        let orderbook = Orderbook::read(&encoded_orderbook).expect("error reading orderbook");
+        let orderbook = data::read_default_orderbook();
         assert_eq!(orderbook.num_orders(), 896);
         assert!(orderbook.is_overlapping());
+    }
+
+    #[test]
+    fn removes_drained_and_balanceless_orders() {
+        let mut orderbook = orderbook! {
+            users {
+                @1 {
+                    token 0 => 5_000_000,
+                }
+                @2 {
+                    token 0 => 1_000_000_000,
+                }
+                @3 {
+                    token 0 => 0,
+                }
+            }
+            orders {
+                owner @1 buying 1 [1_000_000_000] selling 0 [1_000_000_000],
+                owner @2 buying 1 [1_000_000_000] selling 0 [2_000_000_000] (0),
+                owner @3 buying 1 [1_000_000_000] selling 0 [3_000_000_000],
+            }
+        };
+
+        let pair = TokenPair { buy: 1, sell: 0 };
+
+        let order = orderbook.orders.best_order_for_pair(pair).unwrap();
+        assert_eq!(orderbook.num_orders(), 3);
+        assert_eq!(order.user, user_id(3));
+        assert!(num::eq(
+            order.weight(),
+            orderbook.get_projected_pair_weight(pair),
+        ));
+
+        orderbook.update_projection_graph();
+        let order = orderbook.orders.best_order_for_pair(pair).unwrap();
+        assert_eq!(orderbook.num_orders(), 1);
+        assert_eq!(order.user, user_id(1));
+        assert!(num::eq(
+            order.weight(),
+            orderbook.get_projected_pair_weight(pair),
+        ));
     }
 }
