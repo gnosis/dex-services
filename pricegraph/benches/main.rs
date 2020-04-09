@@ -1,22 +1,22 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use data_encoding::Specification;
 use pricegraph::Orderbook;
 
-pub fn orderbook_read(c: &mut Criterion) {
-    let hex = {
-        let mut spec = Specification::new();
-        spec.symbols.push_str("0123456789abcdef");
-        spec.ignore.push_str(" \n");
-        spec.encoding().unwrap()
-    };
-    let encoded_orderbook = hex
-        .decode(include_bytes!("../data/orderbook-5287195.hex"))
-        .expect("orderbook contains invalid hex");
+#[path = "../data/mod.rs"]
+pub mod data;
 
+pub fn orderbook_read(c: &mut Criterion) {
     c.bench_function("Orderbook::read", |b| {
-        b.iter(|| Orderbook::read(&encoded_orderbook).expect("error reading orderbook"))
+        b.iter(|| Orderbook::read(&data::ORDERBOOKS[0]).expect("error reading orderbook"))
     });
 }
 
-criterion_group!(benches, orderbook_read);
+pub fn orderbook_is_overlapping(c: &mut Criterion) {
+    let orderbook = Orderbook::read(&data::ORDERBOOKS[0]).expect("error reading orderbook");
+
+    c.bench_function("Orderbook::is_overlapping", |b| {
+        b.iter(|| orderbook.is_overlapping())
+    });
+}
+
+criterion_group!(benches, orderbook_read, orderbook_is_overlapping);
 criterion_main!(benches);
