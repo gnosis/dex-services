@@ -171,7 +171,7 @@ impl Orderbook {
     /// result of filling orders along a path.
     pub fn fill_path(&mut self, path: &[TokenId]) -> Option<f64> {
         let capacity = self.find_maximum_capacity(path)?;
-        self.fill_path_capacity(path, capacity)
+        self.fill_path_with_capacity(path, capacity)
             .expect("failed to fill detected path with capacity");
 
         Some(capacity)
@@ -180,8 +180,6 @@ impl Orderbook {
     /// Gets the maximum capacity of a path expressed in an amount of the
     /// starting token. Returns `None` if the path doesn't exist.
     fn find_maximum_capacity(&self, path: &[TokenId]) -> Option<f64> {
-        // First determine the capacity of the path expressed in the first and
-        // final token of the path.
         let mut capacity = f64::INFINITY;
         let mut transient_price = 1.0;
         for pair in pairs_on_path(path) {
@@ -201,7 +199,7 @@ impl Orderbook {
     ///
     /// Note that currently, user buy token balances are not incremented as a
     /// result of filling orders along a path.
-    fn fill_path_capacity(
+    fn fill_path_with_capacity(
         &mut self,
         path: &[TokenId],
         capacity: f64,
@@ -209,7 +207,7 @@ impl Orderbook {
         let mut transient_price = 1.0;
         for pair in pairs_on_path(path) {
             let (order, user) = self
-                .pair_order_with_user_mut(pair)
+                .best_order_with_user_for_pair_mut(pair)
                 .ok_or_else(|| IncompletePathError(pair))?;
 
             transient_price *= order.price;
@@ -234,7 +232,7 @@ impl Orderbook {
     /// Gets a mutable reference to the cheapest order for a given token pair
     /// along with the user that placed the order. Returns `None` if there are
     /// no orders for that token pair.
-    fn pair_order_with_user_mut(
+    fn best_order_with_user_for_pair_mut(
         &mut self,
         pair: TokenPair,
     ) -> Option<(&'_ mut Order, &'_ mut User)> {
