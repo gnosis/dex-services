@@ -61,7 +61,7 @@ where
             let w = *edge.weight();
             if distance[ix(i)] + w < distance[ix(j)] {
                 // NOTE: The following 4 lines are the only modifications made
-                // to the original algorithm and where originally:
+                // to the original algorithm and were originally:
                 // ```diff
                 // -//println!("neg cycle, detected from {} to {}, weight={}", i, j, w);
                 // -return Err(NegativeCycle(()));
@@ -98,12 +98,11 @@ where
     let mut current = start;
     visited[ix(current)] = true;
     loop {
-        let next = predecessor[ix(current)]?;
-        if visited[ix(next)] {
+        current = predecessor[ix(current)]?;
+        if visited[ix(current)] {
             break;
         }
-        visited[ix(next)] = true;
-        current = next;
+        visited[ix(current)] = true;
     }
 
     // NOTE: `current` is now guaranteed to be on the cycle, so just walk
@@ -144,6 +143,6 @@ pub mod tests {
 
         let NegativeCycle(path) = search(&graph, 0.into()).unwrap_err();
 
-        assert_eq!(path, &[2.into(), 3.into(), 1.into()]);
+        assert_eq!(path, &[1.into(), 2.into(), 3.into()]);
     }
 }
