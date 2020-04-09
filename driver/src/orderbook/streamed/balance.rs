@@ -89,7 +89,8 @@ impl Balance {
             .checked_sub(amount)
             .ok_or(Error::WithdrawMoreThanBalance(balance))?;
         self.balance = new_balance;
-        self.clear_fluxes_and_pending_solution_if_possible(batch_id);
+        self.clear_pending_deposit_and_solution_if_possible(batch_id);
+        self.withdraw.amount = 0.into();
         Ok(())
     }
 
@@ -139,12 +140,9 @@ impl Balance {
         Ok(balance)
     }
 
-    fn clear_fluxes_and_pending_solution_if_possible(&mut self, batch_id: BatchId) {
+    fn clear_pending_deposit_and_solution_if_possible(&mut self, batch_id: BatchId) {
         if self.deposit.batch_id < batch_id {
             self.deposit.amount = 0.into();
-        }
-        if self.withdraw.batch_id < batch_id {
-            self.withdraw.amount = 0.into();
         }
         if self.pending_solution.batch_id < batch_id {
             self.pending_solution.increase = 0.into();
@@ -162,7 +160,7 @@ impl Balance {
         match self.pending_solution.batch_id.cmp(&batch_id) {
             Ordering::Less => {
                 self.balance = new_balance;
-                self.clear_fluxes_and_pending_solution_if_possible(batch_id);
+                self.clear_pending_deposit_and_solution_if_possible(batch_id);
                 self.pending_solution.batch_id = batch_id;
                 *self.pending_solution.get_field(operation) = amount.into();
             }
