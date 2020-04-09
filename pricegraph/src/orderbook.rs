@@ -368,4 +368,38 @@ mod tests {
             orderbook.get_projected_pair_weight(pair),
         ));
     }
+
+    #[test]
+    fn fills_path_and_updates_projection() {
+        let mut orderbook = orderbook! {
+            users {
+                @1 {
+                    token 1 => 1_000_000,
+                }
+                @2 {
+                    token 2 => 500_000,
+                }
+                @3 {
+                    token 3 => 1_000_000,
+                }
+                @4 {
+                    token 4 => 1_000_000,
+                }
+                @5 {
+                    token 2 => 1_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 0 [1_000_000] selling 1 [1_000_000],
+                owner @2 buying 1 [1_000_000] selling 2 [1_000_000],
+                owner @2 buying 4 [1_000_000] selling 2 [1_000_000],
+                owner @3 buying 2 [1_000_000] selling 3 [1_000_000] (500_000),
+                owner @4 buying 3 [1_000_000] selling 4 [1_000_000],
+                owner @5 buying 1 [2_000_000] selling 2 [1_000_000],
+            }
+        };
+
+        dbg!(&orderbook);
+        assert!(false);
+    }
 }
