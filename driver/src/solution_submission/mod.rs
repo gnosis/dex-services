@@ -164,7 +164,6 @@ mod tests {
 
     #[test]
     fn solution_submitter_waits_for_solving_batch() {
-        let eth_rpc = MockEthRpc::new();
         let mut contract = MockStableXContract::new();
 
         contract
@@ -180,7 +179,7 @@ mod tests {
             .expect_get_solution_objective_value()
             .return_once(move |_, _, _| Ok(U256::from(42)));
 
-        let submitter = StableXSolutionSubmitter::new(&contract, &eth_rpc);
+        let submitter = StableXSolutionSubmitter::new(&contract);
         let result = submitter.get_solution_objective_value(U256::zero(), Solution::trivial());
 
         contract.checkpoint();
