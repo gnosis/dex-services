@@ -9,7 +9,7 @@ mod order;
 mod user;
 
 use self::order::{Order, OrderCollector, OrderMap};
-use self::user::UserMap;
+use self::user::{User, UserMap};
 use crate::encoding::{Element, InvalidLength, TokenId, TokenPair};
 use crate::graph::bellman_ford;
 use crate::num;
@@ -158,43 +158,78 @@ impl Orderbook {
     /// Note that currently, user buy token balances are not incremented as a
     /// result of filling orders along a path.
     pub fn fill_path(&mut self, path: &[TokenId]) -> Option<f64> {
-        let Self {
-            ref mut orders,
-            users,
-            ..
-        } = self;
+        let capacity = self.find_maximum_capacity(path)?;
+        self.fill_path_capacity(path, capacity)
+            .expect("failed to fill detected path with capacity");
 
+        Some(capacity)
+    }
+
+    /// Gets the maximum capacity of a path expressed in an amount of the
+    /// starting token. Returns `None` if the path doesn't exist.
+    fn find_maximum_capacity(&self, path: &[TokenId]) -> Option<f64> {
         // First determine the capacity of the path expressed in the first and
         // final token of the path.
         let mut capacity = f64::INFINITY;
         let mut transient_price = 1.0;
         for pair in pairs_on_path(path) {
-            let order = orders.pair_order(pair)?;
+            let order = self.orders.pair_order(pair)?;
             capacity = num::min(
                 capacity,
-                order.get_effective_amount(users) / transient_price,
+                order.get_effective_amount(&self.users) / transient_price,
             );
             transient_price *= order.price;
         }
 
-        // Now that the capacity of the path has been determined, push the flow
-        // around the orderbook deducting from the order amounts and user
-        // balances.
+        Some(capacity)
+    }
+
+    /// Pushes flow through a path of orders reducing order amounts and user
+    /// balances as well as updating the projection graph by updating the
+    /// weights to reflect the new graph.
+    ///
+    /// Note that currently, user buy token balances are not incremented as a
+    /// result of filling orders along a path.
+    fn fill_path_capacity(
+        &mut self,
+        path: &[TokenId],
+        capacity: f64,
+    ) -> Result<(), IncompletePathError> {
         let mut transient_price = 1.0;
-        let mut smallest_fill_amount = f64::INFINITY;
         for pair in pairs_on_path(path) {
-            let order = orders.pair_order_mut(pair).expect("missing order on path");
             let fill_amount = capacity / transient_price;
+
+            let (order, user) = self
+                .pair_order_with_user_mut(pair)
+                .ok_or_else(|| IncompletePathError(pair))?;
+
             order.amount -= fill_amount;
-            users
-                .get_mut(&order.user)
-                .expect("missing user with order")
-                .deduct_from_balance(order.pair.sell, fill_amount);
+            user.deduct_from_balance(order.pair.sell, fill_amount);
+
             transient_price *= order.price;
-            smallest_fill_amount = num::min(smallest_fill_amount, fill_amount);
+            if order.amount <= 0.0 {
+                self.orders.remove_pair_order(pair);
+            }
         }
 
-        Some(smallest_fill_amount)
+        Ok(())
+    }
+
+    /// Gets a mutable reference to the cheapest order for a given token pair
+    /// along with the user that placed the order. Returns `None` if there are
+    /// no orders for that token pair.
+    fn pair_order_with_user_mut(
+        &mut self,
+        pair: TokenPair,
+    ) -> Option<(&'_ mut Order, &'_ mut User)> {
+        let Self { orders, users, .. } = self;
+
+        let order = orders.pair_order_mut(pair)?;
+        let user = users
+            .get_mut(&order.user)
+            .expect("missing user for existing order");
+
+        Some((order, user))
     }
 
     /// Retrieve the weight of an edge in the projection graph. This is used for
@@ -218,6 +253,14 @@ fn pairs_on_path(path: &[TokenId]) -> impl Iterator<Item = TokenPair> + '_ {
         buy: segment[1],
     })
 }
+
+/// An error indicating that an operation over a path failed because of a
+/// missing connection between a token pair.
+///
+/// This error usually signifies that the `Orderbook` might be in an unsound
+/// state as parts of a path were updated but other parts were not.
+#[derive(Debug)]
+pub struct IncompletePathError(pub TokenPair);
 
 #[cfg(test)]
 mod tests {

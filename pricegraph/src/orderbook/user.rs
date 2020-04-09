@@ -35,14 +35,18 @@ impl User {
         self.balances.get(&token).copied().unwrap_or(0.0)
     }
 
-    /// Deducts an amount from the balance for the given token.
-    pub fn deduct_from_balance(&mut self, token: TokenId, amount: f64) {
+    /// Deducts an amount from the balance for the given token. Returns the new
+    /// balance or `None` if the user no longer has any balance.
+    pub fn deduct_from_balance(&mut self, token: TokenId, amount: f64) -> Option<f64> {
         if let hash_map::Entry::Occupied(mut entry) = self.balances.entry(token) {
             let balance = entry.get_mut();
             *balance -= amount;
-            if *balance <= 0.0 {
-                entry.remove_entry();
+
+            if *balance > 0.0 {
+                return Some(*balance);
             }
+            entry.remove_entry();
         }
+        None
     }
 }
