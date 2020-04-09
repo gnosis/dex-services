@@ -65,24 +65,24 @@ impl OrderMap {
 
     /// Returns the orders for an order pair. Returns `None` if that pair has
     /// no orders.
-    fn pair_orders(&self, pair: TokenPair) -> Option<&[Order]> {
+    fn orders_for_pair(&self, pair: TokenPair) -> Option<&[Order]> {
         Some(self.0.get(&pair.sell)?.get(&pair.buy)?.as_slice())
     }
 
     /// Returns a mutable reference to orders for an order pair. Returns `None`
     /// if that pair has no orders.
-    fn pair_orders_mut(&mut self, pair: TokenPair) -> Option<&mut Vec<Order>> {
+    fn orders_for_pair_mut(&mut self, pair: TokenPair) -> Option<&mut Vec<Order>> {
         self.0.get_mut(&pair.sell)?.get_mut(&pair.buy)
     }
 
     /// Returns a reference to the cheapest order given an order pair.
-    pub fn pair_order(&self, pair: TokenPair) -> Option<&Order> {
-        self.pair_orders(pair)?.last()
+    pub fn best_order_for_pair(&self, pair: TokenPair) -> Option<&Order> {
+        self.orders_for_pair(pair)?.last()
     }
 
     /// Returns a mutable reference to the cheapest order given an order pair.
-    pub fn pair_order_mut(&mut self, pair: TokenPair) -> Option<&mut Order> {
-        self.pair_orders_mut(pair)?.last_mut()
+    pub fn best_order_for_pair_mut(&mut self, pair: TokenPair) -> Option<&mut Order> {
+        self.orders_for_pair_mut(pair)?.last_mut()
     }
 
     /// Removes the current cheapest order pair from the mapping.

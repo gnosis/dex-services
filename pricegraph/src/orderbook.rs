@@ -126,7 +126,7 @@ impl Orderbook {
     fn update_projection_graph_edge(&mut self, pair: TokenPair) {
         while let Some(true) = self
             .orders
-            .pair_order(pair)
+            .best_order_for_pair(pair)
             .map(|order| order.get_effective_amount(&self.users) <= 0.0)
         {
             self.orders.remove_pair_order(pair);
@@ -135,7 +135,7 @@ impl Orderbook {
         let edge = self
             .get_pair_edge(pair)
             .expect("missing edge between token pair with orders");
-        if let Some(order) = self.orders.pair_order(pair) {
+        if let Some(order) = self.orders.best_order_for_pair(pair) {
             self.projection[edge] = order.weight();
         } else {
             self.projection.remove_edge(edge);
@@ -252,7 +252,7 @@ mod tests {
 
         let pair = TokenPair { buy: 1, sell: 0 };
 
-        let order = orderbook.orders.pair_order(pair).unwrap();
+        let order = orderbook.orders.best_order_for_pair(pair).unwrap();
         assert_eq!(orderbook.num_orders(), 3);
         assert_eq!(order.user, user_id(3));
         assert!(num::eq(
@@ -261,7 +261,7 @@ mod tests {
         ));
 
         orderbook.update_projection_graph();
-        let order = orderbook.orders.pair_order(pair).unwrap();
+        let order = orderbook.orders.best_order_for_pair(pair).unwrap();
         assert_eq!(orderbook.num_orders(), 1);
         assert_eq!(order.user, user_id(1));
         assert!(num::eq(
