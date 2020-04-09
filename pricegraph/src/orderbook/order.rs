@@ -1,7 +1,5 @@
 //! Data and logic related to token pair order management.
 
-#![allow(dead_code)]
-
 use super::UserMap;
 use crate::encoding::{Element, Price, TokenId, TokenPair, UserId};
 use crate::num;

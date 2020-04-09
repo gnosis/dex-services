@@ -12,6 +12,7 @@ use self::order::{Order, OrderCollector, OrderMap};
 use self::user::UserMap;
 use crate::encoding::{Element, InvalidLength, TokenId, TokenPair};
 use crate::graph::bellman_ford;
+use crate::num;
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use std::cmp;
 use std::f64;
@@ -104,7 +105,6 @@ impl Orderbook {
         bellman_ford::search(&self.projection, fee_token).is_err()
     }
 
-<<<<<<< HEAD
     /// Updates the projection graph for every token pair.
     pub fn update_projection_graph(&mut self) {
         let pairs = self
@@ -150,6 +150,53 @@ impl Orderbook {
         self.projection.find_edge(buy, sell)
     }
 
+    /// Fills a trading path through the orderbook to maximum capacity, reducing
+    /// the remaining order amounts and user balances along the way, returning
+    /// the amount of flow that left the first node in the path or `None` if the
+    /// path was invalid.
+    ///
+    /// Note that currently, user buy token balances are not incremented as a
+    /// result of filling orders along a path.
+    pub fn fill_path(&mut self, path: &[TokenId]) -> Option<f64> {
+        let Self {
+            ref mut orders,
+            users,
+            ..
+        } = self;
+
+        // First determine the capacity of the path expressed in the first and
+        // final token of the path.
+        let mut capacity = f64::INFINITY;
+        let mut transient_price = 1.0;
+        for pair in pairs_on_path(path) {
+            let order = orders.pair_order(pair)?;
+            capacity = num::min(
+                capacity,
+                order.get_effective_amount(users) / transient_price,
+            );
+            transient_price *= order.price;
+        }
+
+        // Now that the capacity of the path has been determined, push the flow
+        // around the orderbook deducting from the order amounts and user
+        // balances.
+        let mut transient_price = 1.0;
+        let mut smallest_fill_amount = f64::INFINITY;
+        for pair in pairs_on_path(path) {
+            let order = orders.pair_order_mut(pair).expect("missing order on path");
+            let fill_amount = capacity / transient_price;
+            order.amount -= fill_amount;
+            users
+                .get_mut(&order.user)
+                .expect("missing user with order")
+                .deduct_from_balance(order.pair.sell, fill_amount);
+            transient_price *= order.price;
+            smallest_fill_amount = num::min(smallest_fill_amount, fill_amount);
+        }
+
+        Some(smallest_fill_amount)
+    }
+
     /// Retrieve the weight of an edge in the projection graph. This is used for
     /// testing that the projection graph is in sync with the order map.
     #[cfg(test)]
@@ -162,6 +209,14 @@ impl Orderbook {
 /// Create a node index from a token ID.
 fn node_index(token: TokenId) -> NodeIndex {
     NodeIndex::new(token.into())
+}
+
+/// Returns an iterator with all pairs on a path.
+fn pairs_on_path(path: &[TokenId]) -> impl Iterator<Item = TokenPair> + '_ {
+    path.windows(2).map(|segment| TokenPair {
+        sell: segment[0],
+        buy: segment[1],
+    })
 }
 
 #[cfg(test)]
