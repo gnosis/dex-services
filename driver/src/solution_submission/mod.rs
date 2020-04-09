@@ -6,10 +6,21 @@ use crate::models::Solution;
 use anyhow::{Error, Result};
 use ethcontract::errors::{ExecutionError, MethodError};
 use ethcontract::web3::types::TransactionReceipt;
-use ethcontract::{BlockNumber, U256};
+use ethcontract::U256;
+use log::info;
 #[cfg(test)]
 use mockall::automock;
+use std::thread;
+use std::time::Duration;
 use thiserror::Error;
+
+/// The amount of time the solution submitter should wait between polling the
+/// current batch ID to wait for a block to be mined after the solving batch
+/// stops accepting orders.
+#[cfg(not(test))]
+const POLL_TIMEOUT: Duration = Duration::from_secs(5);
+#[cfg(test)]
+const POLL_TIMEOUT: Duration = Duration::from_secs(0);
 
 #[cfg_attr(test, automock)]
 pub trait StableXSolutionSubmitting {
@@ -91,8 +102,15 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
         batch_index: U256,
         solution: Solution,
     ) -> Result<U256, SolutionSubmissionError> {
+        // NOTE: Compare with `>=` as the exchange's current batch index is the
+        //   one accepting orders and does not yet accept solutions.
+        while batch_index.as_u32() >= self.contract.get_current_auction_index()? {
+            info!("Solved batch is not yet accepting solutions, waiting for next batch.");
+            thread::sleep(POLL_TIMEOUT);
+        }
+
         self.contract
-            .get_solution_objective_value(batch_index, solution, Some(BlockNumber::Pending))
+            .get_solution_objective_value(batch_index, solution, None)
             .map_err(SolutionSubmissionError::from)
     }
 
@@ -145,9 +163,36 @@ mod tests {
     use mockall::predicate::{always, eq};
 
     #[test]
+    fn solution_submitter_waits_for_solving_batch() {
+        let mut contract = MockStableXContract::new();
+
+        contract
+            .expect_get_current_auction_index()
+            .times(2)
+            .returning(|| Ok(0));
+        contract
+            .expect_get_current_auction_index()
+            .times(1)
+            .returning(|| Ok(1));
+
+        contract
+            .expect_get_solution_objective_value()
+            .return_once(move |_, _, _| Ok(U256::from(42)));
+
+        let submitter = StableXSolutionSubmitter::new(&contract);
+        let result = submitter.get_solution_objective_value(U256::zero(), Solution::trivial());
+
+        contract.checkpoint();
+        assert_eq!(result.unwrap(), U256::from(42));
+    }
+
+    #[test]
     fn test_benign_verification_failure() {
         let mut contract = MockStableXContract::new();
 
+        contract
+            .expect_get_current_auction_index()
+            .return_once(|| Ok(1));
         contract
             .expect_get_solution_objective_value()
             .return_once(move |_, _, _| {
@@ -204,10 +249,10 @@ mod tests {
             .with(always(), always(), eq(Some(block_number.into())))
             .return_once(move |_, _, _| {
                 Err(anyhow!(MethodError::from_parts(
-                "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
-                    .to_owned(),
-                ExecutionError::Revert(Some("Claimed objective doesn't sufficiently improve current solution".to_owned())),
-            )))
+                    "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
+                        .to_owned(),
+                    ExecutionError::Revert(Some("Claimed objective doesn't sufficiently improve current solution".to_owned())),
+                )))
             });
 
         let submitter = StableXSolutionSubmitter::new(&contract);
