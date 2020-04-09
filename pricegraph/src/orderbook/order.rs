@@ -1,9 +1,9 @@
 //! Data and logic related to token pair order management.
 
 use crate::encoding::{Element, Price, TokenId, TokenPair, UserId};
+use std::cmp;
 use std::collections::HashMap;
 use std::f64;
-use std::cmp;
 
 /// Type definition for a mapping of orders between buy and sell tokens.
 #[derive(Debug, Default)]
@@ -61,10 +61,6 @@ pub struct Order {
     /// denominator over price numerator, which is the inverse price as
     /// expressed by the exchange.
     pub price: f64,
-    /// The weight of the order in the graph. This is the base-2 logarithm of
-    /// the price including fees. This enables transitive prices to be computed
-    /// using addition.
-    pub weight: f64,
 }
 
 impl Order {
@@ -76,7 +72,6 @@ impl Order {
             element.price.denominator as _
         };
         let price = as_effective_sell_price(&element.price);
-        let weight = price.log2();
 
         Order {
             user: element.user,
@@ -84,7 +79,6 @@ impl Order {
             pair: element.pair,
             amount,
             price,
-            weight,
         }
     }
 
@@ -95,10 +89,17 @@ impl Order {
     /// be used for sorting. This be because there is no real ordering for
     /// `NaN`s and `NaN < 0 == false` and `NaN >= 0 == false` (cf. IEEE 754-2008
     /// section 5.11), which can cause serious problems with sorting.
-    pub fn cmp_decending_prices(a: &Order, b: &Order) -> cmp::Ordering {
+    pub fn cmp_descending_prices(a: &Order, b: &Order) -> cmp::Ordering {
         b.price
             .partial_cmp(&a.price)
             .expect("orders cannot have NaN prices")
+    }
+
+    /// The weight of the order in the graph. This is the base-2 logarithm of
+    /// the price including fees. This enables transitive prices to be computed
+    /// using addition.
+    pub fn weight(&self) -> f64 {
+        self.price.log2()
     }
 }
 
