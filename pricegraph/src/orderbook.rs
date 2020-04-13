@@ -426,14 +426,19 @@ mod tests {
     #[test]
     fn reduces_overlapping_orders() {
         //             /---0.5---v
-        // 0 --1.0--> 1          2 --1.0--> 3 --1.0--> 4 --1.0--> 5
+        // 0 <--1.0-- 1          2 --1.0--> 3 --1.0--> 4 --1.0--> 5
         //            ^---1.0---/           ^                    /
         //                                   \--------0.5-------/
+        //             /---0.1---v
+        //            6          7
+        //            ^---1.0---/
         let mut orderbook = orderbook! {
             users {
+                @0 {
+                    token 0 => 10_000_000,
+                }
                 @1 {
                     token 1 => 20_000_000,
-                    token 2 => 10_000_000,
                     token 3 => 10_000_000,
                     token 4 => 10_000_000,
                     token 5 => 20_000_000,
@@ -442,9 +447,17 @@ mod tests {
                     token 2 => 1_000_000_000,
                     token 3 => 1_000_000_000,
                 }
+
+                @3 {
+                    token 6 => 1_000_000,
+                }
+                @4 {
+                    token 7 => 1_000_000,
+                }
             }
             orders {
-                owner @1 buying 0 [10_000_000] selling 1 [10_000_000],
+                owner @0 buying 1 [10_000_000] selling 0 [10_000_000],
+
                 owner @1 buying 2 [10_000_000] selling 1 [10_000_000] (1_000_000),
                 owner @1 buying 2 [10_000_000] selling 3 [10_000_000],
                 owner @1 buying 3 [10_000_000] selling 4 [10_000_000],
@@ -452,13 +465,17 @@ mod tests {
 
                 owner @2 buying 1 [5_000_000] selling 2 [10_000_000],
                 owner @2 buying 5 [5_000_000] selling 3 [10_000_000],
+
+                owner @3 buying 7 [10_000_000] selling 6 [10_000_000],
+                owner @4 buying 6 [1_000_000] selling 7 [10_000_000],
             }
         };
 
         orderbook.reduce_overlapping_orders();
         // NOTE: We expect user 1's 2->1 order to be completely filled as well
-        // as user 2's 5->3 order.
-        assert_eq!(orderbook.num_orders(), 5);
+        // as user 2's 5->3 order and user 4's 6->7 order.
+        assert_eq!(orderbook.num_orders(), 6);
+        assert!(!orderbook.is_overlapping());
     }
 
     #[test]
