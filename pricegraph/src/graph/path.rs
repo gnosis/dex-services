@@ -84,4 +84,31 @@ pub mod tests {
 
         assert_eq!(cycle, &[1.into(), 2.into(), 3.into()]);
     }
+
+    #[test]
+    fn search_finds_shortest_path() {
+        //  0 --2.0-> 1 --1.0-> 2
+        //  |         |         |
+        // 4.0       7.0        |
+        //  v         v         |
+        //  3         5        5.0
+        //  |         ^         |
+        // 1.0       1.0        |
+        //  |         |         |
+        //  \-------> 4 <-------/
+        let graph = Graph::<(), f64>::from_edges(&[
+            (0, 1, 2.0),
+            (0, 3, 4.0),
+            (1, 2, 1.0),
+            (1, 5, 7.0),
+            (2, 4, 5.0),
+            (4, 5, 1.0),
+            (3, 4, 1.0),
+        ]);
+
+        let (_, predecessor) = bellman_ford::search(&graph, 0.into()).unwrap();
+        let path = find_path(&predecessor, 0.into(), 5.into()).unwrap();
+
+        assert_eq!(path, &[0.into(), 3.into(), 4.into(), 5.into()]);
+    }
 }
