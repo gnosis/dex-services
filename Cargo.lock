@@ -518,6 +518,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "dex-pricegraph"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "data-encoding",
+ "lazy_static",
+ "pricegraph",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "difference"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1804,18 +1816,6 @@ dependencies = [
  "petgraph",
  "primitive-types 0.7.0",
  "thiserror",
-]
-
-[[package]]
-name = "pricegraph-wasm"
-version = "0.1.0"
-dependencies = [
- "console_error_panic_hook",
- "data-encoding",
- "lazy_static",
- "pricegraph",
- "wasm-bindgen",
- "wasm-bindgen-test",
 ]
 
 [[package]]

@@ -1,5 +1,5 @@
 [package]
-name = "pricegraph-wasm"
+name = "dex-pricegraph"
 version = "0.1.0"
 authors = ["Nicholas Rodrigues Lordello <nicholas.lordello@gnosis.pm>"]
 edition = "2018"
