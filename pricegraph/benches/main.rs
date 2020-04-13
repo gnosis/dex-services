@@ -30,15 +30,7 @@ pub fn orderbook_reduce_overlapping_orders(c: &mut Criterion) {
 pub fn orderbook_fill_market_order(c: &mut Criterion) {
     let dai_weth = TokenPair { buy: 7, sell: 1 };
     let eth = 10.0f64.powi(18);
-    let volumes = &[
-        0.1 * eth,
-        0.2 * eth,
-        0.5 * eth,
-        eth,
-        2.0 * eth,
-        5.0 * eth,
-        10.0 * eth,
-    ];
+    let volumes = &[0.1 * eth, eth, 10.0 * eth, 100.0 * eth, 1000.0 * eth];
 
     let mut group = c.benchmark_group("Orderbook::fill_market_order");
     for volume in volumes {
