@@ -16,11 +16,11 @@ pub fn orderbook_is_overlapping(c: &mut Criterion) {
     });
 }
 
-pub fn orderbook_reduce_overlapping_ring_trades(c: &mut Criterion) {
-    c.bench_function("Orderbook::reduce_overlapping_ring_trades", |b| {
+pub fn orderbook_reduce_overlapping_orders(c: &mut Criterion) {
+    c.bench_function("Orderbook::reduce_overlapping_orders", |b| {
         b.iter_batched(
             data::read_default_orderbook,
-            |mut orderbook| orderbook.reduce_overlapping_ring_trades(),
+            |mut orderbook| orderbook.reduce_overlapping_orders(),
             BatchSize::SmallInput,
         )
     });
@@ -30,6 +30,6 @@ criterion_group!(
     benches,
     orderbook_read,
     orderbook_is_overlapping,
-    orderbook_reduce_overlapping_ring_trades,
+    orderbook_reduce_overlapping_orders,
 );
 criterion_main!(benches);
