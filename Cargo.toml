@@ -3,7 +3,12 @@ members = [
     "driver",
     "e2e",
     "pricegraph",
+    "pricegraph/wasm",
 ]
 default-members = [
     "driver",
+    "pricegraph",
 ]
+
+[profile.release]
+opt-level = "s"
