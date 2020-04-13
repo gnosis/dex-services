@@ -38,13 +38,13 @@ pub struct Orderbook {
 impl Orderbook {
     /// Reads an orderbook from encoded bytes returning an error if the encoded
     /// orders are invalid.
-    pub fn read(bytes: impl AsRef<[u8]>) -> Result<Orderbook, InvalidLength> {
+    pub fn read(bytes: impl AsRef<[u8]>) -> Result<Self, InvalidLength> {
         let elements = Element::read_all(bytes.as_ref())?;
         Ok(Orderbook::from_elements(elements))
     }
 
     /// Creates an orderbook from an iterator over decoded auction elements.
-    fn from_elements(elements: impl IntoIterator<Item = Element>) -> Orderbook {
+    fn from_elements(elements: impl IntoIterator<Item = Element>) -> Self {
         let mut max_token = 0;
         let mut orders = OrderCollector::default();
         let mut users = UserMap::default();
@@ -501,7 +501,7 @@ mod tests {
         for (batch_id, raw_orderbook) in data::ORDERBOOKS.iter() {
             let mut orderbook = Orderbook::read(raw_orderbook).unwrap();
             println!(
-                "#{}: estimated price of DAI when selling 10 eth: {}",
+                "#{}: estimated price for selling 10 WETH at {} DAI/WETH",
                 batch_id,
                 orderbook.fill_market_order(dai_weth, volume).unwrap(),
             );
