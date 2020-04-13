@@ -12,6 +12,8 @@ use self::order::{Order, OrderCollector, OrderMap};
 use self::user::{User, UserMap};
 use crate::encoding::{Element, InvalidLength, TokenId, TokenPair};
 use crate::graph::bellman_ford::{self, NegativeCycle};
+use crate::graph::path;
+use crate::graph::subgraph::{ControlFlow, Subgraphs};
 use crate::num;
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use std::cmp;
@@ -93,32 +95,65 @@ impl Orderbook {
     }
 
     /// Detects whether or not a solution can be found by finding negative
-    /// cycles in the projection graph starting from the fee token.
+    /// cycles in the projection graph.
     ///
     /// Conceptually, a negative cycle is a trading path starting and ending at
     /// a token (going through an arbitrary number of other distinct tokens)
     /// where the total weight is less than `0`, i.e. the effective sell price
     /// is less than `1`. This means that there is a price overlap along this
-    /// ring trade and it is connected to the fee token.
+    /// ring trade.
     pub fn is_overlapping(&self) -> bool {
-        let fee_token = node_index(0);
-        bellman_ford::search(&self.projection, fee_token).is_err()
+        // NOTE: We detect negative cycles from each disconnected subgraph. This
+        // is because for a ring trade to be actually usable, one of the nodes
+        // along the path must be connected to the fee token, but the reciprocal
+        // is not necessarily true and the fee token does not need to be
+        // connected to the cycle (since an order selling the fee token is
+        // required for a batch to be solvable, but not the other way around).
+
+        Subgraphs::new(self.projection.node_indices().skip(1))
+            .for_each_until(
+                |token| match bellman_ford::search(&self.projection, token) {
+                    Ok((_, predecessor)) => ControlFlow::Continue(predecessor),
+                    Err(NegativeCycle(predecessor, _)) => {
+                        if predecessor[0].is_some() {
+                            // The negative cycle is connected to the fee token.
+                            ControlFlow::Break(true)
+                        } else {
+                            ControlFlow::Continue(predecessor)
+                        }
+                    }
+                },
+            )
+            .unwrap_or(false)
     }
 
     /// Reduces the orderbook by matching all overlapping ring trades.
-    pub fn reduce_overlapping_ring_trades(&mut self) {
+    pub fn reduce_overlapping_orders(&mut self) {
         self.update_projection_graph();
 
-        let fee_token = node_index(0);
-        while let Err(NegativeCycle(mut path)) = bellman_ford::search(&self.projection, fee_token) {
-            path.push(path[0]);
-            self.fill_path(&path).unwrap_or_else(|| {
-                panic!(
-                    "failed to fill path along detected negative cycle {}",
-                    format_path(&path),
-                )
-            });
-        }
+        Subgraphs::new(self.projection.node_indices()).for_each(|token| loop {
+            let mut negative_cycle_predecessor = None;
+            match bellman_ford::search(&self.projection, token) {
+                Ok((_, predecessor)) => break negative_cycle_predecessor.unwrap_or(predecessor),
+                Err(NegativeCycle(predecessor, start)) => {
+                    let path = {
+                        let mut cycle = path::find_cycle(&predecessor, start)
+                            .expect("negative cycle not found after being detected");
+                        cycle.push(cycle[0]);
+                        cycle
+                    };
+
+                    self.fill_path(&path).unwrap_or_else(|| {
+                        panic!(
+                            "failed to fill path along detected negative cycle {}",
+                            format_path(&path),
+                        )
+                    });
+
+                    negative_cycle_predecessor.get_or_insert(predecessor);
+                }
+            }
+        });
     }
 
     /// Updates the projection graph for every token pair.
@@ -420,7 +455,7 @@ mod tests {
             }
         };
 
-        orderbook.reduce_overlapping_ring_trades();
+        orderbook.reduce_overlapping_orders();
         // NOTE: We expect user 1's 2->1 order to be completely filled as well
         // as user 2's 5->3 order.
         assert_eq!(orderbook.num_orders(), 5);

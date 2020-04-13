@@ -6,6 +6,7 @@ use petgraph::algo::FloatMeasure;
 use petgraph::visit::{
     Data, EdgeRef, GraphBase, IntoEdges, IntoNodeIdentifiers, NodeCount, NodeIndexable,
 };
+use std::fmt;
 
 /// A type definition for the result of a Bellman-Ford shortest path search
 /// containing the weight of the shortest paths and the predecessor vector for
@@ -15,8 +16,22 @@ pub type Paths<G> = (
     Vec<Option<<G as GraphBase>::NodeId>>,
 );
 
-/// A negative cycle error with a path representing the cycle.
-pub struct NegativeCycle<G: Data>(pub Vec<G::NodeId>);
+/// A negative cycle error with the node on which it was detected along with the
+/// predecessor vector that can be used to re-create the cycle path.
+pub struct NegativeCycle<G: Data>(pub Vec<Option<G::NodeId>>, pub G::NodeId);
+
+impl<G> fmt::Debug for NegativeCycle<G>
+where
+    G: Data,
+    G::NodeId: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_tuple("NegativeCycle")
+            .field(&self.0)
+            .field(&self.1)
+            .finish()
+    }
+}
 
 /// This implementation is taken from the `petgraph` crate with a small
 /// modification to return the path when a negative cycle is detected.
@@ -67,82 +82,10 @@ where
                 // -return Err(NegativeCycle(()));
                 // ```
                 predecessor[ix(j)] = Some(i);
-                let cycle = find_cycle::<G>(g, j, &predecessor)
-                    .expect("negative cycle not found after being detected");
-                return Err(NegativeCycle(cycle));
+                return Err(NegativeCycle(predecessor, j));
             }
         }
     }
 
     Ok((distance, predecessor))
-}
-
-/// Finds a cycle and returns a vector representing a path along the cycle,
-/// ending that is the predecessor of the starting node.
-///
-/// Returns `None` if no such cycle can be found.
-fn find_cycle<G>(
-    g: G,
-    start: G::NodeId,
-    predecessor: &[Option<G::NodeId>],
-) -> Option<Vec<G::NodeId>>
-where
-    G: NodeCount + NodeIndexable,
-{
-    let ix = |i| g.to_index(i);
-
-    // NOTE: First find a node that is actually on the cycle, this is done
-    // because a negative cycle can be detected on any node connected to the
-    // cycle and not just nodes on the cycle itself.
-    let mut visited = vec![false; g.node_bound()];
-    let mut current = start;
-    visited[ix(current)] = true;
-    loop {
-        current = predecessor[ix(current)]?;
-        if visited[ix(current)] {
-            break;
-        }
-        visited[ix(current)] = true;
-    }
-
-    // NOTE: `current` is now guaranteed to be on the cycle, so just walk
-    // backwards until we reach `current` again.
-    let start = current;
-    let mut path = Vec::with_capacity(g.node_bound());
-    loop {
-        current = predecessor[ix(current)]?;
-        path.push(current);
-        if current == start {
-            break;
-        }
-    }
-
-    // NOTE: `path` is in reverse order, since it was built by walking the cycle
-    // backwards, so reverse it and done!
-    path.reverse();
-    Some(path)
-}
-
-#[cfg(test)]
-pub mod tests {
-    use super::*;
-    use petgraph::Graph;
-
-    #[test]
-    fn search_finds_negative_cycle() {
-        // NOTE: There is a negative cycle from 1 -> 2 -> 3 -> 1 with a
-        // transient weight of -1.
-        let graph = Graph::<(), f64>::from_edges(&[
-            (0, 1, 1.0),
-            (1, 2, 2.0),
-            (1, 4, -100.0),
-            (2, 3, 3.0),
-            (3, 1, -6.0),
-            (4, 3, 200.0),
-        ]);
-
-        let NegativeCycle(path) = search(&graph, 0.into()).unwrap_err();
-
-        assert_eq!(path, &[1.into(), 2.into(), 3.into()]);
-    }
 }
