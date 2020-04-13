@@ -21,7 +21,7 @@ use std::f64;
 use thiserror::Error;
 
 /// A graph representation of a complete orderbook.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Orderbook {
     /// A map of sell tokens to a mapping of buy tokens to orders such that
     /// `orders[sell][buy]` is a vector of orders selling token `sell` and
@@ -479,12 +479,21 @@ mod tests {
     }
 
     #[test]
-    fn reads_real_orderbooks() {
+    fn real_orderbooks() {
+        // The output of this test can be seen with:
+        // ```
+        // cargo test -p pricegraph real_orderbooks -- --nocapture
+        // ```
+
+        let dai_weth = TokenPair { buy: 7, sell: 1 };
+        let volume = 10.0f64.powi(18);
+
         for (batch_id, raw_orderbook) in data::ORDERBOOKS.iter() {
-            assert!(
-                Orderbook::read(raw_orderbook).is_ok(),
-                "failed to read orderbook for batch {}",
-                batch_id
+            let mut orderbook = Orderbook::read(raw_orderbook).unwrap();
+            println!(
+                "#{}: estimated price of DAI when selling 10 eth: {}",
+                batch_id,
+                orderbook.fill_market_order(dai_weth, volume).unwrap(),
             );
         }
     }
@@ -546,47 +555,93 @@ mod tests {
 
     #[test]
     fn fills_market_order_with_correct_price() {
-/*
- *     const orderbook = new Orderbook("ETH", "DAI", new Fraction(0, 1));
-
-    orderbook.addBid(new Offer(new Fraction(90, 1), 3));
-    orderbook.addBid(new Offer(new Fraction(95, 1), 2));
-    orderbook.addBid(new Offer(new Fraction(99, 1), 1));
-
-    orderbook.addAsk(new Offer(new Fraction(101, 1), 2));
-    orderbook.addAsk(new Offer(new Fraction(105, 1), 1));
-    orderbook.addAsk(new Offer(new Fraction(110, 1), 3));
-    */
-        //  /---0.5---v
-        // 1          2
-        // ^---1.0---/
+        //    /-101.0--v
+        //   /--105.0--v
+        //  /---111.0--v
+        // 1           2
+        // ^--.0101---/
+        // ^--.0105--/
+        // ^--.0110-/
         let mut orderbook = orderbook! {
             users {
                 @1 {
-                    token 1 => 20_000_000,
-                    token 2 => 10_000_000,
-                    token 3 => 10_000_000,
-                    token 4 => 10_000_000,
-                    token 5 => 20_000_000,
+                    token 1 => 1_000_000,
+                    token 2 => 100_000_000,
                 }
                 @2 {
-                    token 2 => 1_000_000_000,
-                    token 3 => 1_000_000_000,
+                    token 1 => 1_000_000,
+                    token 2 => 100_000_000,
+                }
+                @3 {
+                    token 1 => 1_000_000,
+                    token 2 => 100_000_000,
                 }
             }
             orders {
-                owner @1 buying 0 [10_000_000] selling 1 [10_000_000],
-                owner @1 buying 2 [10_000_000] selling 1 [10_000_000] (1_000_000),
-                owner @1 buying 2 [10_000_000] selling 3 [10_000_000],
-                owner @1 buying 3 [10_000_000] selling 4 [10_000_000],
-                owner @1 buying 4 [10_000_000] selling 5 [10_000_000],
+                owner @1 buying 1 [1_000_000] selling 2 [99_000_000],
+                owner @2 buying 1 [1_000_000] selling 2 [95_000_000],
+                owner @3 buying 1 [1_000_000] selling 2 [90_000_000],
 
-                owner @2 buying 1 [5_000_000] selling 2 [10_000_000],
-                owner @2 buying 5 [5_000_000] selling 3 [10_000_000],
+                owner @2 buying 2 [101_000_000] selling 1 [1_000_000],
+                owner @1 buying 2 [105_000_000] selling 1 [1_000_000],
+                owner @3 buying 2 [110_000_000] selling 1 [1_000_000],
             }
         };
 
-        assert!(orderbook.is_overlapping());
+        assert!(!orderbook.is_overlapping());
+
+        assert_approx_eq!(
+            orderbook
+                .clone()
+                .fill_market_order(TokenPair { buy: 2, sell: 1 }, 500_000.0)
+                .unwrap(),
+            99.0 / FEE_FACTOR.powi(2)
+        );
+        assert_approx_eq!(
+            orderbook
+                .clone()
+                .fill_market_order(TokenPair { buy: 1, sell: 2 }, 50_000_000.0)
+                .unwrap(),
+            1.0 / (101.0 * FEE_FACTOR.powi(2))
+        );
+
+        assert_approx_eq!(
+            orderbook
+                .clone()
+                .fill_market_order(TokenPair { buy: 2, sell: 1 }, 1_500_000.0)
+                .unwrap(),
+            95.0 / FEE_FACTOR.powi(2)
+        );
+        assert_approx_eq!(
+            orderbook
+                .clone()
+                .fill_market_order(TokenPair { buy: 1, sell: 2 }, 150_000_000.0)
+                .unwrap(),
+            1.0 / (105.0 * FEE_FACTOR.powi(2))
+        );
+
+        assert_approx_eq!(
+            orderbook
+                .clone()
+                .fill_market_order(TokenPair { buy: 2, sell: 1 }, 2_500_000.0)
+                .unwrap(),
+            90.0 / FEE_FACTOR.powi(2)
+        );
+        assert_approx_eq!(
+            orderbook
+                .clone()
+                .fill_market_order(TokenPair { buy: 1, sell: 2 }, 250_000_000.0)
+                .unwrap(),
+            1.0 / (110.0 * FEE_FACTOR.powi(2))
+        );
+
+        let price = orderbook.fill_market_order(TokenPair { buy: 2, sell: 1 }, 10_000_000.0);
+        assert!(price.is_none());
+
+        let price = orderbook.fill_market_order(TokenPair { buy: 1, sell: 2 }, 1_000_000_000.0);
+        assert!(price.is_none());
+
+        assert_eq!(orderbook.num_orders(), 0);
     }
 
     #[test]

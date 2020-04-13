@@ -41,7 +41,7 @@ impl OrderCollector {
 /// Type definition for a mapping of orders between buy and sell tokens. Token
 /// pair orders are garanteed to be in order, so that the cheapest order is
 /// always at the end of the token pair order vector.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct OrderMap(HashMap<TokenId, HashMap<TokenId, Vec<Order>>>);
 
 impl OrderMap {
@@ -117,7 +117,7 @@ impl OrderMap {
 /// Note that we approximate amounts and prices with floating point numbers.
 /// While this can lead to rounding errors it greatly simplifies the graph
 /// computations and still leads to acceptable estimates.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Order {
     /// The user owning the order.
     pub user: UserId,
