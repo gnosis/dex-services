@@ -39,6 +39,27 @@ pub fn find_cycle(predecessor: &[Option<NodeIndex>], start: NodeIndex) -> Option
     Some(path)
 }
 
+/// Finds a path between two tokens. Returns `None` if no such path exists.
+pub fn find_path(
+    predecessor: &[Option<NodeIndex>],
+    start: NodeIndex,
+    end: NodeIndex,
+) -> Option<Vec<NodeIndex>> {
+    let mut path = Vec::with_capacity(predecessor.len());
+
+    let mut current = end;
+    while current != start {
+        path.push(current);
+        current = predecessor[current.index()]?;
+    }
+    path.push(start);
+
+    // NOTE: `path` is in reverse order, since it was built by walking the path
+    // backwards, so reverse it and done!
+    path.reverse();
+    Some(path)
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;

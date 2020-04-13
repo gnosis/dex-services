@@ -8,7 +8,7 @@
 mod order;
 mod user;
 
-use self::order::{Order, OrderCollector, OrderMap};
+use self::order::{Order, OrderCollector, OrderMap, FEE_FACTOR};
 use self::user::{User, UserMap};
 use crate::encoding::{Element, InvalidLength, TokenId, TokenPair};
 use crate::graph::bellman_ford::{self, NegativeCycle};
@@ -18,6 +18,7 @@ use crate::num;
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use std::cmp;
 use std::f64;
+use thiserror::Error;
 
 /// A graph representation of a complete orderbook.
 #[derive(Debug)]
@@ -129,15 +130,80 @@ impl Orderbook {
 
     /// Reduces the orderbook by matching all overlapping ring trades.
     pub fn reduce_overlapping_orders(&mut self) {
+        Subgraphs::new(self.projection.node_indices())
+            .for_each(|token| self.reduced_shortest_paths(token));
+    }
+
+    /// Fill a market order in the current orderbook graph returning the maximum
+    /// price the order can have while overlapping with existing orders. Returns
+    /// `None` if the order cannot be filled because the token pair is not
+    /// connected, or the connection cannot support enough capacity to fully
+    /// fill the specified volume.
+    ///
+    /// This is done by pushing the specified volume as a flow through the graph
+    /// and finding the min-cost paths that have enough capacity to carry the
+    /// flow from the sell token to the buy token. The min-cost is calculated
+    /// using the successive shortest path algorithm with Bellman-Ford.
+    ///
+    /// Note that this method is not idempotent, successive calls with the same
+    /// token pair and volume yield different results as orders get filled with
+    /// each match changing the orderbook.
+    pub fn fill_market_order(&mut self, pair: TokenPair, volume: f64) -> Option<f64> {
         self.update_projection_graph();
 
-        Subgraphs::new(self.projection.node_indices()).for_each(|token| loop {
-            let mut negative_cycle_predecessor = None;
-            match bellman_ford::search(&self.projection, token) {
-                Ok((_, predecessor)) => break negative_cycle_predecessor.unwrap_or(predecessor),
-                Err(NegativeCycle(predecessor, start)) => {
+        let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
+        let predecessors = self.reduced_shortest_paths(sell);
+        let mut path = path::find_path(&predecessors, sell, buy)?;
+
+        if volume == 0.0 {
+            // NOTE: Intuitively an infinite price can be used for a 0 volume
+            // since it is always filled. This check is performed after finding
+            // the shortest path between to token pair to make sure that even
+            // when a volume of 0 is specified, `None` is returned if the tokens
+            // aren't connected.
+            return Some(f64::INFINITY);
+        }
+
+        let mut remaining_volume = volume;
+        let mut last_transient_price: f64;
+        while {
+            let (capacity, transient_price) = self.fill_path(&path).unwrap_or_else(|| {
+                panic!(
+                    "failed to fill detected shortest path {}",
+                    format_path(&path),
+                )
+            });
+            remaining_volume -= capacity;
+            last_transient_price = transient_price;
+
+            remaining_volume > 0.0
+        } {
+            let (_, predecessors) = bellman_ford::search(&self.projection, sell)
+                .expect("unexpected negative cycle in reduced graph");
+            path = path::find_path(&predecessors, sell, buy)?;
+        }
+
+        // NOTE: The transient price is the price of the sell token in terms of
+        // the buy token. Since we are trying to find an order that would create
+        // a cycle of weight 0 that starts at the sell token and ends at the buy
+        // token, we want the inverse price with fees removed.
+        Some(1.0 / (last_transient_price * FEE_FACTOR))
+    }
+
+    /// Calculates the shortest paths from the start token to all other tokens
+    /// using Bellman-Ford path finding algorithm after removing all filled
+    /// orders and negative cycles. Returns a vector of predecessors for each,
+    /// that allows the shortest path to each node be recontructed.
+    ///
+    /// Note that while this method does update the graph, it is idempotent and
+    /// multiple calls with the same starting token will yield the same paths.
+    fn reduced_shortest_paths(&mut self, start: NodeIndex) -> Vec<Option<NodeIndex>> {
+        loop {
+            match bellman_ford::search(&self.projection, start) {
+                Ok((_, predecessors)) => return predecessors,
+                Err(NegativeCycle(predecessors, node)) => {
                     let path = {
-                        let mut cycle = path::find_cycle(&predecessor, start)
+                        let mut cycle = path::find_cycle(&predecessors, node)
                             .expect("negative cycle not found after being detected");
                         cycle.push(cycle[0]);
                         cycle
@@ -149,11 +215,9 @@ impl Orderbook {
                             format_path(&path),
                         )
                     });
-
-                    negative_cycle_predecessor.get_or_insert(predecessor);
                 }
             }
-        });
+        }
     }
 
     /// Updates the projection graph for every token pair.
@@ -218,13 +282,14 @@ impl Orderbook {
 
     /// Fills a trading path through the orderbook to maximum capacity, reducing
     /// the remaining order amounts and user balances along the way, returning
-    /// the amount of flow that left the first node in the path or `None` if the
-    /// path was invalid.
+    /// the amount of flow that left the first node in the path and the final
+    /// transient price (i.e. the final price of the last node as a result of
+    /// trading along the path) or `None` if the path was invalid.
     ///
     /// Note that currently, user buy token balances are not incremented as a
     /// result of filling orders along a path.
-    fn fill_path(&mut self, path: &[NodeIndex]) -> Option<f64> {
-        let capacity = self.find_maximum_capacity(path)?;
+    fn fill_path(&mut self, path: &[NodeIndex]) -> Option<(f64, f64)> {
+        let (capacity, price) = self.find_transient_trade(path)?;
         self.fill_path_with_capacity(path, capacity)
             .unwrap_or_else(|_| {
                 panic!(
@@ -233,12 +298,13 @@ impl Orderbook {
                 )
             });
 
-        Some(capacity)
+        Some((capacity, price))
     }
 
-    /// Gets the maximum capacity of a path expressed in an amount of the
-    /// starting token. Returns `None` if the path doesn't exist.
-    fn find_maximum_capacity(&self, path: &[NodeIndex]) -> Option<f64> {
+    /// Finds a transient trade along a path and returns the maximum capacity of
+    /// the path expressed in an amount of the starting token and the transient
+    /// price. Returns `None` if the path doesn't exist.
+    fn find_transient_trade(&self, path: &[NodeIndex]) -> Option<(f64, f64)> {
         let mut capacity = f64::INFINITY;
         let mut transient_price = 1.0;
         for pair in pairs_on_path(path) {
@@ -249,7 +315,7 @@ impl Orderbook {
             capacity = num::min(capacity, sell_amount * transient_price);
         }
 
-        Some(capacity)
+        Some((capacity, transient_price))
     }
 
     /// Pushes flow through a path of orders reducing order amounts and user
@@ -337,12 +403,12 @@ fn format_path(path: &[NodeIndex]) -> String {
 ///
 /// This error usually signifies that the `Orderbook` might be in an unsound
 /// state as parts of a path were updated but other parts were not.
-#[derive(Debug)]
+#[derive(Debug, Error)]
+#[error("incomplete path in orderbook from {} to {}", .0.buy, 0)]
 pub struct IncompletePathError(pub TokenPair);
 
 #[cfg(test)]
 mod tests {
-    use super::order::FEE_FACTOR;
     use super::*;
     use crate::data;
     use crate::encoding::UserId;
@@ -516,7 +582,7 @@ mod tests {
     #[test]
     fn fills_path_and_updates_projection() {
         //             /---1.0---v
-        // 0 --1.0--> 1          2 --1.0--> 3 --1.0--> 4
+        // 0 --1.0--> 1          2 --1.0--> 3 --0.5--> 4
         //             \---2.0---^                    /
         //                        \--------1.0-------/
         let mut orderbook = orderbook! {
@@ -553,16 +619,17 @@ mod tests {
             .map(node_index)
             .collect::<Vec<_>>();
 
-        let capacity = orderbook.find_maximum_capacity(&path).unwrap();
+        let (capacity, transient_price) = orderbook.find_transient_trade(&path).unwrap();
         assert_approx_eq!(
             capacity,
             // NOTE: We can send a little more than the balance limit of user 2
             // because some of it gets eaten up by the fees along the way.
             500_000.0 * FEE_FACTOR.powi(2)
         );
+        assert_approx_eq!(transient_price, 0.5 * FEE_FACTOR.powi(4));
 
         let filled = orderbook.fill_path(&path).unwrap();
-        assert_approx_eq!(capacity, filled);
+        assert_eq!(filled, (capacity, transient_price));
 
         assert_approx_eq!(
             orderbook.get_projected_pair_weight(TokenPair { buy: 1, sell: 2 }),
@@ -612,18 +679,17 @@ mod tests {
             1_000_000.0 - capacity / transient_price_0_1
         );
 
-        let transient_price_0_4 = 0.5 * FEE_FACTOR.powi(4);
         assert_approx_eq!(
             orderbook
                 .orders
                 .best_order_for_pair(TokenPair { buy: 3, sell: 4 })
                 .unwrap()
                 .amount,
-            2_000_000.0 - capacity / transient_price_0_4
+            2_000_000.0 - capacity / transient_price
         );
         assert_approx_eq!(
             orderbook.users[&user_id(4)].balance_of(4),
-            10_000_000.0 - capacity / transient_price_0_4
+            10_000_000.0 - capacity / transient_price
         );
     }
 }
