@@ -185,7 +185,7 @@ impl Orderbook {
 
         // NOTE: The transient price is the price of the sell token in terms of
         // the buy token. Since we are trying to find an order that would create
-        // a cycle of weight 0 that starts at the sell token and ends at the buy
+        // a cycle of weight 0 that starts at the buy token and ends at the sell
         // token, we want the inverse price with fees removed.
         Some(1.0 / (last_transient_price * FEE_FACTOR))
     }
@@ -542,6 +542,51 @@ mod tests {
         // as user 2's 5->3 order and user 4's 6->7 order.
         assert_eq!(orderbook.num_orders(), 6);
         assert!(!orderbook.is_overlapping());
+    }
+
+    #[test]
+    fn fills_market_order_with_correct_price() {
+/*
+ *     const orderbook = new Orderbook("ETH", "DAI", new Fraction(0, 1));
+
+    orderbook.addBid(new Offer(new Fraction(90, 1), 3));
+    orderbook.addBid(new Offer(new Fraction(95, 1), 2));
+    orderbook.addBid(new Offer(new Fraction(99, 1), 1));
+
+    orderbook.addAsk(new Offer(new Fraction(101, 1), 2));
+    orderbook.addAsk(new Offer(new Fraction(105, 1), 1));
+    orderbook.addAsk(new Offer(new Fraction(110, 1), 3));
+    */
+        //  /---0.5---v
+        // 1          2
+        // ^---1.0---/
+        let mut orderbook = orderbook! {
+            users {
+                @1 {
+                    token 1 => 20_000_000,
+                    token 2 => 10_000_000,
+                    token 3 => 10_000_000,
+                    token 4 => 10_000_000,
+                    token 5 => 20_000_000,
+                }
+                @2 {
+                    token 2 => 1_000_000_000,
+                    token 3 => 1_000_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 0 [10_000_000] selling 1 [10_000_000],
+                owner @1 buying 2 [10_000_000] selling 1 [10_000_000] (1_000_000),
+                owner @1 buying 2 [10_000_000] selling 3 [10_000_000],
+                owner @1 buying 3 [10_000_000] selling 4 [10_000_000],
+                owner @1 buying 4 [10_000_000] selling 5 [10_000_000],
+
+                owner @2 buying 1 [5_000_000] selling 2 [10_000_000],
+                owner @2 buying 5 [5_000_000] selling 3 [10_000_000],
+            }
+        };
+
+        assert!(orderbook.is_overlapping());
     }
 
     #[test]
