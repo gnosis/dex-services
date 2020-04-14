@@ -192,13 +192,8 @@ fn main() {
     .unwrap();
 
     // Set up web3 and contract connection.
-    let contract = StableXContractImpl::new(
-        &web3,
-        options.private_key.clone(),
-        options.network_id,
-        &gas_station,
-    )
-    .unwrap();
+    let contract =
+        StableXContractImpl::new(&web3, options.private_key.clone(), options.network_id).unwrap();
     info!("Using contract at {:?}", contract.address());
     info!("Using account {:?}", contract.account());
 
@@ -213,7 +208,7 @@ fn main() {
     let filtered_orderbook = FilteredOrderbookReader::new(&orderbook, options.orderbook_filter);
 
     // Set up solution submitter.
-    let solution_submitter = StableXSolutionSubmitter::new(&contract);
+    let solution_submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
 
     // Set up the driver and start the run-loop.
     let driver = StableXDriverImpl::new(
