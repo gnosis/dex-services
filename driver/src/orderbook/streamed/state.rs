@@ -54,7 +54,8 @@ impl State {
 
                 Some((
                     (*user_id, token_id),
-                    // TODO unwrap
+                    // TODO: Remove unwrap. Can fail while not all trades of a solution have been
+                    // received.
                     (balance.get_balance(batch_id).unwrap() + extra_balance).low_u128(),
                 ))
             })
