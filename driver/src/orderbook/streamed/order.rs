@@ -57,7 +57,7 @@ impl Order {
         };
         // Make sure the invariant still holds.
         if new_pending_used_amount > self.price_denominator {
-            return Err(Error::TradeByMoreThanOrderLimit);
+            return Err(Error::TradeByMoreThanOrderLimit(self.price_denominator));
         }
         self.pending_used_amount = (batch_id, new_pending_used_amount);
         self.used_amount = new_used_amount;

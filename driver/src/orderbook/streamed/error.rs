@@ -27,6 +27,6 @@ pub enum Error {
     TradeForPastBatch,
     #[error("solution for batch that no longer accepts solutions")]
     SolutionForPastBatch,
-    #[error("trade increases used amount of order by more than the order's limit")]
-    TradeByMoreThanOrderLimit,
+    #[error("trade increases used amount of order by more than the order's limit {0}")]
+    TradeByMoreThanOrderLimit(u128),
 }
