@@ -9,7 +9,7 @@ use uint::FromDecStrErr;
 pub const DEFAULT_URI: &str = "https://safe-relay.gnosis.io/api/v1/gas-station/";
 
 /// Result of the api call. Prices are in wei.
-#[derive(Deserialize, Debug, Eq, PartialEq)]
+#[derive(Deserialize, Debug, Default, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GasPrice {
     pub last_update: String,
