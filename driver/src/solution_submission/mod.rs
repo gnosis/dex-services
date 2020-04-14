@@ -167,22 +167,24 @@ fn retry_with_gas_price_increase(
     const BLOCK_TIMEOUT: usize = 2;
     const DEFAULT_GAS_PRICE: u64 = 15_000_000_000;
 
-    let mut gas_price = match gas_price_estimating.estimate_gas_price() {
-        Ok(gas_estimate) => gas_estimate.fast,
-        Err(ref err) => {
-            log::warn!(
-                "failed to get gas price from gnosis safe gas station: {}",
-                err
-            );
-            U256::from(DEFAULT_GAS_PRICE)
-        }
-    };
-    // Never exceed the gas cap.
-    gas_price = std::cmp::min(gas_price, gas_cap);
-
+    let mut gas_price_estimate = U256::from(DEFAULT_GAS_PRICE);
+    let mut gas_price_factor = 1;
     let mut result;
     // the following block emulates a do-while loop
     while {
+        gas_price_estimate = match gas_price_estimating.estimate_gas_price() {
+            Ok(gas_estimate) => gas_estimate.fast,
+            Err(ref err) => {
+                log::warn!(
+                    "failed to get gas price from gnosis safe gas station: {}",
+                    err
+                );
+                gas_price_estimate
+            }
+        };
+        // Never exceed the gas cap.
+        let gas_price = std::cmp::min(gas_price_estimate * gas_price_factor, gas_cap);
+
         // Submit solution at estimated gas price (not exceeding the cap)
         result = contract.submit_solution(
             batch_index,
@@ -195,6 +197,7 @@ fn retry_with_gas_price_increase(
                 Some(BLOCK_TIMEOUT)
             },
         );
+
         // Breaking condition for our loop
         gas_price < gas_cap
             && matches!(
@@ -206,10 +209,10 @@ fn retry_with_gas_price_increase(
             )
     } {
         // Increase gas
-        gas_price = std::cmp::min(gas_price * INCREASE_FACTOR, gas_cap);
+        gas_price_factor *= INCREASE_FACTOR;
         info!(
-            "retrying solution submission with increased gas price {}",
-            gas_price,
+            "retrying solution submission with increased gas price factor of {}",
+            gas_price_factor,
         );
     }
 
@@ -266,7 +269,7 @@ mod tests {
         contract
             .expect_submit_solution()
             .times(1)
-            .with(always(), always(), always(), eq(U256::from(5)), eq(Some(1)))
+            .with(always(), always(), always(), eq(U256::from(5)), eq(Some(2)))
             .return_once(|_, _, _, _, _| {
                 Err(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
@@ -280,7 +283,7 @@ mod tests {
             .return_once(|_, _, _, _, _| Ok(()));
 
         let mut gas_station = MockGasPriceEstimating::new();
-        gas_station.expect_estimate_gas_price().return_once(|| {
+        gas_station.expect_estimate_gas_price().returning(|| {
             Ok(GasPrice {
                 fast: 5.into(),
                 ..Default::default()
@@ -304,7 +307,7 @@ mod tests {
         contract
             .expect_submit_solution()
             .times(1)
-            .with(always(), always(), always(), eq(U256::from(5)), eq(Some(1)))
+            .with(always(), always(), always(), eq(U256::from(5)), eq(Some(2)))
             .return_once(|_, _, _, _, _| {
                 Err(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
@@ -314,7 +317,24 @@ mod tests {
             });
         contract
             .expect_submit_solution()
-            .with(always(), always(), always(), eq(U256::from(9)), eq(None))
+            .times(1)
+            .with(
+                always(),
+                always(),
+                always(),
+                eq(U256::from(12)),
+                eq(Some(2)),
+            )
+            .return_once(|_, _, _, _, _| {
+                Err(MethodError::from_parts(
+                    "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
+                        .to_owned(),
+                    ExecutionError::ConfirmTimeout,
+                ))
+            });
+        contract
+            .expect_submit_solution()
+            .with(always(), always(), always(), eq(U256::from(15)), eq(None))
             .return_once(|_, _, _, _, _| {
                 Err(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
@@ -324,19 +344,29 @@ mod tests {
             });
 
         let mut gas_station = MockGasPriceEstimating::new();
-        gas_station.expect_estimate_gas_price().return_once(|| {
+        gas_station
+            .expect_estimate_gas_price()
+            .times(1)
+            .return_once(|| {
+                Ok(GasPrice {
+                    fast: 5.into(),
+                    ..Default::default()
+                })
+            });
+        gas_station.expect_estimate_gas_price().returning(|| {
             Ok(GasPrice {
-                fast: 5.into(),
+                fast: 6.into(),
                 ..Default::default()
             })
         });
+
         assert!(retry_with_gas_price_increase(
             &contract,
             1.into(),
             Solution::trivial(),
             1.into(),
             &gas_station,
-            9.into(),
+            15.into(),
         )
         .is_err())
     }
