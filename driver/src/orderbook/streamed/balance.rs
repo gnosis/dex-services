@@ -59,6 +59,7 @@ impl Balance {
                 .checked_add(self.deposit.amount)
                 .ok_or(Error::MathOverflow)?;
             self.balance = new_balance;
+            self.deposit.batch_id = deposit_batch_id;
             self.deposit.amount = amount;
         } else {
             let new_deposit_amount = self
@@ -156,9 +157,9 @@ impl Balance {
         batch_id: BatchId,
         operation: Operation,
     ) -> Result<(), Error> {
-        let new_balance = self.get_balance(batch_id)?;
         match self.pending_solution.batch_id.cmp(&batch_id) {
             Ordering::Less => {
+                let new_balance = self.get_balance_internal(batch_id, false)?;
                 self.balance = new_balance;
                 self.clear_pending_deposit_and_solution_if_possible(batch_id);
                 self.pending_solution.batch_id = batch_id;

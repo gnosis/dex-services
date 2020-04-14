@@ -43,11 +43,8 @@ impl State {
         batch_id: BatchId,
     ) -> impl Iterator<Item = ((UserId, TokenId), u128)> + '_ {
         let tokens = &self.tokens;
-        let extra_balance_from_last_solution = if dbg!(self.last_solution.batch_id) < batch_id {
-            Some((
-                self.last_solution.submitter,
-                dbg!(self.last_solution.burnt_fees),
-            ))
+        let extra_balance_from_last_solution = if self.last_solution.batch_id < batch_id {
+            Some((self.last_solution.submitter, self.last_solution.burnt_fees))
         } else {
             None
         };
@@ -58,11 +55,12 @@ impl State {
                 // the exchange because tokens can be deposited anyway.
                 let token_id = tokens.get_id_by_address(*token_address)?;
                 let extra_balance = match extra_balance_from_last_solution {
-                    Some((submitter, burnt_fees)) if dbg!(submitter) == dbg!(*user_id) => {
+                    Some((submitter, burnt_fees)) if submitter == *user_id && token_id == 0 => {
                         burnt_fees
                     }
                     _ => 0.into(),
                 };
+
                 Some((
                     (*user_id, token_id),
                     // TODO unwrap
@@ -261,9 +259,9 @@ impl State {
             .get(&buy_balance_key)
             .ok_or(Error::RevertingNonExistentTrade)?;
 
-        new_order.trade(event.executed_sell_amount, block_batch_id)?;
+        new_order.revert_trade(event.executed_sell_amount, block_batch_id)?;
         sell_balance.revert_sell(event.executed_sell_amount, block_batch_id)?;
-        buy_balance.buy(event.executed_buy_amount, block_batch_id)?;
+        buy_balance.revert_buy(event.executed_buy_amount, block_batch_id)?;
 
         *order = new_order;
         self.balances.insert(sell_balance_key, sell_balance);
