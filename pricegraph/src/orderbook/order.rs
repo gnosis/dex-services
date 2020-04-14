@@ -62,7 +62,7 @@ impl OrderMap {
     }
 
     /// Returns an iterator over the orders matching a given sell token.
-    pub fn pairs_for_sell_token(
+    pub fn pairs_and_orders_for_sell_token(
         &self,
         sell: TokenId,
     ) -> impl Iterator<Item = (TokenPair, &'_ [Order])> + '_ {

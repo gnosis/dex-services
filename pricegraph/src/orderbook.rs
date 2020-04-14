@@ -121,7 +121,7 @@ impl Orderbook {
     fn update_projection_graph_node(&mut self, sell: TokenId) {
         let pairs = self
             .orders
-            .pairs_for_sell_token(sell)
+            .pairs_and_orders_for_sell_token(sell)
             .map(|(pair, _)| pair)
             .collect::<Vec<_>>();
         for pair in pairs {
