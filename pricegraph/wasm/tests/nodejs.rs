@@ -13,20 +13,25 @@ extern "C" {
     fn now() -> f64;
 }
 
+fn time<T>(f: impl FnOnce() -> T) -> (T, f64) {
+    let start = now();
+    let result = f();
+    (result, now() - start)
+}
+
 #[wasm_bindgen_test]
 fn estimate_price() {
-    let start = now();
-
-    let estimator = PriceEstimator::new(&*data::DEFAULT_ORDERBOOK).unwrap();
-    let price = estimator
-        .estimate_price(7, 1, 100.0 * 10.0f64.powi(18))
-        .unwrap();
-
-    let elapsed = now() - start;
+    let (estimator, load_time) = time(|| PriceEstimator::new(&*data::DEFAULT_ORDERBOOK).unwrap());
+    let (price, estimate_time) = time(|| {
+        estimator
+            .estimate_price(7, 1, 100.0 * 10.0f64.powi(18))
+            .unwrap()
+    });
 
     console_log!(
-        "DAI-WETH price for selling 100 WETH: 1 WETH = {} DAI ({}ms)",
+        "DAI-WETH price for selling 100 WETH: 1 WETH = {} DAI (load {}ms, estimate {}ms)",
         price,
-        elapsed,
+        load_time,
+        estimate_time,
     );
 }
