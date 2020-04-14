@@ -155,10 +155,10 @@ impl Orderbook {
         let predecessors = self.reduced_shortest_paths(sell);
         let mut path = path::find_path(&predecessors, sell, buy)?;
 
-        if volume == 0.0 {
+        if volume <= 0.0 {
             // NOTE: Intuitively an infinite price can be used for a 0 volume
             // since it is always filled. This check is performed after finding
-            // the shortest path between to token pair to make sure that even
+            // the shortest path between a token pair to make sure that even
             // when a volume of 0 is specified, `None` is returned if the tokens
             // aren't connected.
             return Some(f64::INFINITY);
@@ -289,7 +289,7 @@ impl Orderbook {
     /// Note that currently, user buy token balances are not incremented as a
     /// result of filling orders along a path.
     fn fill_path(&mut self, path: &[NodeIndex]) -> Option<(f64, f64)> {
-        let (capacity, price) = self.find_transient_trade(path)?;
+        let (capacity, price) = self.find_path_capacity_and_price(path)?;
         self.fill_path_with_capacity(path, capacity)
             .unwrap_or_else(|_| {
                 panic!(
@@ -304,7 +304,7 @@ impl Orderbook {
     /// Finds a transient trade along a path and returns the maximum capacity of
     /// the path expressed in an amount of the starting token and the transient
     /// price. Returns `None` if the path doesn't exist.
-    fn find_transient_trade(&self, path: &[NodeIndex]) -> Option<(f64, f64)> {
+    fn find_path_capacity_and_price(&self, path: &[NodeIndex]) -> Option<(f64, f64)> {
         let mut capacity = f64::INFINITY;
         let mut transient_price = 1.0;
         for pair in pairs_on_path(path) {
@@ -719,7 +719,7 @@ mod tests {
             .map(node_index)
             .collect::<Vec<_>>();
 
-        let (capacity, transient_price) = orderbook.find_transient_trade(&path).unwrap();
+        let (capacity, transient_price) = orderbook.find_path_capacity_and_price(&path).unwrap();
         assert_approx_eq!(
             capacity,
             // NOTE: We can send a little more than the balance limit of user 2
