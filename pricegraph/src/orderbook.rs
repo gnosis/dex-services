@@ -113,13 +113,13 @@ impl Orderbook {
         Subgraphs::new(self.projection.node_indices().skip(1))
             .for_each_until(
                 |token| match bellman_ford::search(&self.projection, token) {
-                    Ok((_, predecessor)) => ControlFlow::Continue(predecessor),
-                    Err(NegativeCycle(predecessor, _)) => {
-                        if predecessor[0].is_some() {
+                    Ok((_, predecessors)) => ControlFlow::Continue(predecessors),
+                    Err(NegativeCycle(predecessors, _)) => {
+                        if predecessors[0].is_some() {
                             // The negative cycle is connected to the fee token.
                             ControlFlow::Break(true)
                         } else {
-                            ControlFlow::Continue(predecessor)
+                            ControlFlow::Continue(predecessors)
                         }
                     }
                 },
@@ -132,12 +132,11 @@ impl Orderbook {
         self.update_projection_graph();
 
         Subgraphs::new(self.projection.node_indices()).for_each(|token| loop {
-            let mut negative_cycle_predecessor = None;
             match bellman_ford::search(&self.projection, token) {
-                Ok((_, predecessor)) => break negative_cycle_predecessor.unwrap_or(predecessor),
-                Err(NegativeCycle(predecessor, start)) => {
+                Ok((_, predecessors)) => break predecessors,
+                Err(NegativeCycle(predecessors, start)) => {
                     let path = {
-                        let mut cycle = path::find_cycle(&predecessor, start)
+                        let mut cycle = path::find_cycle(&predecessors, start)
                             .expect("negative cycle not found after being detected");
                         cycle.push(cycle[0]);
                         cycle
@@ -149,8 +148,6 @@ impl Orderbook {
                             format_path(&path),
                         )
                     });
-
-                    negative_cycle_predecessor.get_or_insert(predecessor);
                 }
             }
         });

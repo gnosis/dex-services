@@ -29,15 +29,15 @@ impl Subgraphs {
         let Self(mut remaining_tokens) = self;
         while let Some(&token) = remaining_tokens.iter().next() {
             remaining_tokens.remove(&token);
-            let predecessor = match f(token) {
-                ControlFlow::Continue(predecessor) => predecessor,
+            let predecessors = match f(token) {
+                ControlFlow::Continue(predecessors) => predecessors,
                 ControlFlow::Break(result) => return Some(result),
             };
 
-            for connected in predecessor
-                .iter()
+            for connected in predecessors
+                .into_iter()
                 .enumerate()
-                .filter_map(|(i, &pre)| pre.map(|_| NodeIndex::new(i)))
+                .filter_map(|(i, pre)| pre.map(|_| NodeIndex::new(i)))
             {
                 remaining_tokens.remove(&connected);
             }

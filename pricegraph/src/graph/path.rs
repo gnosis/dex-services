@@ -6,15 +6,15 @@ use petgraph::graph::NodeIndex;
 /// ending that is the predecessor of the starting node.
 ///
 /// Returns `None` if no such cycle can be found.
-pub fn find_cycle(predecessor: &[Option<NodeIndex>], start: NodeIndex) -> Option<Vec<NodeIndex>> {
+pub fn find_cycle(predecessors: &[Option<NodeIndex>], start: NodeIndex) -> Option<Vec<NodeIndex>> {
     // NOTE: First find a node that is actually on the cycle, this is done
     // because a negative cycle can be detected on any node connected to the
     // cycle and not just nodes on the cycle itself.
-    let mut visited = vec![false; predecessor.len()];
+    let mut visited = vec![false; predecessors.len()];
     let mut current = start;
     visited[current.index()] = true;
     loop {
-        current = predecessor[current.index()]?;
+        current = predecessors[current.index()]?;
         if visited[current.index()] {
             break;
         }
@@ -24,9 +24,9 @@ pub fn find_cycle(predecessor: &[Option<NodeIndex>], start: NodeIndex) -> Option
     // NOTE: `current` is now guaranteed to be on the cycle, so just walk
     // backwards until we reach `current` again.
     let start = current;
-    let mut path = Vec::with_capacity(predecessor.len());
+    let mut path = Vec::with_capacity(predecessors.len());
     loop {
-        current = predecessor[current.index()]?;
+        current = predecessors[current.index()]?;
         path.push(current);
         if current == start {
             break;
@@ -58,8 +58,8 @@ pub mod tests {
             (4, 3, 200.0),
         ]);
 
-        let NegativeCycle(predecessor, node) = bellman_ford::search(&graph, 0.into()).unwrap_err();
-        let cycle = find_cycle(&predecessor, node).unwrap();
+        let NegativeCycle(predecessors, node) = bellman_ford::search(&graph, 0.into()).unwrap_err();
+        let cycle = find_cycle(&predecessors, node).unwrap();
 
         assert_eq!(cycle, &[1.into(), 2.into(), 3.into()]);
     }
