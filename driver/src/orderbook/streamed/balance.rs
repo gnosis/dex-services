@@ -8,7 +8,7 @@ pub struct Balance {
     balance: U256,
     deposit: Flux,
     withdraw: Flux,
-    pending_solution: PendingSolutionBalance,
+    pending_proceeds: PendingProceeds,
 }
 
 #[derive(Copy, Clone, Debug, Default, Deserialize, Serialize)]
@@ -17,14 +17,16 @@ struct Flux {
     amount: U256,
 }
 
+/// Balance change from a potential solution that might still get replaced by a better solution in
+/// the same batch.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
-struct PendingSolutionBalance {
+struct PendingProceeds {
     batch_id: BatchId,
     increase: U256,
     decrease: U256,
 }
 
-impl PendingSolutionBalance {
+impl PendingProceeds {
     fn get_field(&mut self, operation: Operation) -> &mut U256 {
         match operation {
             Operation::Sell => &mut self.decrease,
@@ -127,11 +129,11 @@ impl Balance {
                 .ok_or(Error::MathOverflow)?;
         }
         // TODO: this could temporarily fail while not all trades for solution have been received.
-        if self.pending_solution.batch_id < batch_id {
+        if self.pending_proceeds.batch_id < batch_id {
             balance = balance
-                .checked_add(self.pending_solution.increase)
+                .checked_add(self.pending_proceeds.increase)
                 .ok_or(Error::MathOverflow)?
-                .checked_sub(self.pending_solution.decrease)
+                .checked_sub(self.pending_proceeds.decrease)
                 .ok_or(Error::MathOverflow)?;
         }
         if include_withdraw && self.withdraw.batch_id < batch_id {
@@ -145,9 +147,9 @@ impl Balance {
         if self.deposit.batch_id < batch_id {
             self.deposit.amount = 0.into();
         }
-        if self.pending_solution.batch_id < batch_id {
-            self.pending_solution.increase = 0.into();
-            self.pending_solution.decrease = 0.into();
+        if self.pending_proceeds.batch_id < batch_id {
+            self.pending_proceeds.increase = 0.into();
+            self.pending_proceeds.decrease = 0.into();
         }
     }
 
@@ -157,16 +159,16 @@ impl Balance {
         batch_id: BatchId,
         operation: Operation,
     ) -> Result<(), Error> {
-        match self.pending_solution.batch_id.cmp(&batch_id) {
+        match self.pending_proceeds.batch_id.cmp(&batch_id) {
             Ordering::Less => {
                 let new_balance = self.get_balance_internal(batch_id, false)?;
                 self.balance = new_balance;
                 self.clear_pending_deposit_and_solution_if_possible(batch_id);
-                self.pending_solution.batch_id = batch_id;
-                *self.pending_solution.get_field(operation) = amount.into();
+                self.pending_proceeds.batch_id = batch_id;
+                *self.pending_proceeds.get_field(operation) = amount.into();
             }
             Ordering::Equal => {
-                let field = self.pending_solution.get_field(operation);
+                let field = self.pending_proceeds.get_field(operation);
                 *field = field
                     .checked_add(amount.into())
                     .ok_or(Error::MathOverflow)?
@@ -182,12 +184,12 @@ impl Balance {
         batch_id: BatchId,
         operation: Operation,
     ) -> Result<(), Error> {
-        if self.pending_solution.batch_id != batch_id {
+        if self.pending_proceeds.batch_id != batch_id {
             return Err(Error::RevertingNonExistentTrade);
         }
         let field = match operation {
-            Operation::Sell => &mut self.pending_solution.decrease,
-            Operation::Buy => &mut self.pending_solution.increase,
+            Operation::Sell => &mut self.pending_proceeds.decrease,
+            Operation::Buy => &mut self.pending_proceeds.increase,
         };
         *field = field
             .checked_sub(amount.into())
