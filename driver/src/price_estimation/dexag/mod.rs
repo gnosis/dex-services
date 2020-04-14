@@ -10,7 +10,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 struct ApiTokens {
-    // Maps Token::symbol to Token.
+    // Maps uppercased Token::symbol to Token.
     // This is cached in the struct because we don't expect it to change often.
     tokens: HashMap<String, api::Token>,
     stable_coin: api::Token,
@@ -46,7 +46,7 @@ where
         let tokens = self.api.get_token_list()?;
         let mut tokens: HashMap<String, api::Token> = tokens
             .into_iter()
-            .map(|token| (token.symbol.clone(), token))
+            .map(|token| (token.symbol.to_uppercase(), token))
             .collect();
 
         // We need to return prices in OWL but Dexag does not track it. OWL
@@ -90,9 +90,11 @@ where
         let (tokens_, futures): (Vec<_>, Vec<_>) = tokens
             .iter()
             .filter_map(|token| -> Option<(&Token, BoxFuture<Result<f64>>)> {
-                if token.symbol() == api_tokens.stable_coin.symbol {
+                // api_tokens symbols are uppercased to disambiguate
+                let symbol = token.symbol().to_uppercase();
+                if symbol == api_tokens.stable_coin.symbol {
                     Some((token, Box::pin(future::ready(Ok(1.0)))))
-                } else if let Some(api_token) = api_tokens.tokens.get(token.symbol()) {
+                } else if let Some(api_token) = api_tokens.tokens.get(&symbol) {
                     Some((
                         token,
                         self.api.get_price(api_token, &api_tokens.stable_coin),
@@ -257,6 +259,54 @@ mod tests {
             prices,
             hash_map! {
                 // No TokenId(1) because we made the price error above.
+                TokenId(6) => tokens[0].get_owl_price(1.0) as u128,
+            }
+        );
+    }
+
+    #[test]
+    fn test_case_insensitivity() {
+        let mut api = MockDexagApi::new();
+
+        let tokens = [
+            Token::new(6, "dai", 18),
+            Token::new(1, "ETH", 18),
+            Token::new(4, "sUSD", 6),
+        ];
+
+        let api_tokens = [
+            super::api::Token {
+                name: String::new(),
+                symbol: "DAI".to_string(),
+                address: None,
+            },
+            super::api::Token {
+                name: String::new(),
+                symbol: "eth".to_string(),
+                address: None,
+            },
+            super::api::Token {
+                name: String::new(),
+                symbol: "Susd".to_string(),
+                address: None,
+            },
+        ];
+
+        api.expect_get_token_list().returning({
+            let api_tokens = api_tokens.clone();
+            move || Ok(api_tokens.to_vec())
+        });
+
+        api.expect_get_price()
+            .returning(|_, _| Box::pin(future::ready(Ok(1.0))));
+
+        let client = DexagClient::with_api(api);
+        let prices = client.get_prices(&tokens).unwrap();
+        assert_eq!(
+            prices,
+            hash_map! {
+                TokenId(1) => tokens[1].get_owl_price(1.0) as u128,
+                TokenId(4) => tokens[2].get_owl_price(1.0) as u128,
                 TokenId(6) => tokens[0].get_owl_price(1.0) as u128,
             }
         );
