@@ -164,7 +164,7 @@ fn retry_with_gas_price_increase(
     gas_cap: U256,
 ) -> Result<(), MethodError> {
     const INCREASE_FACTOR: u32 = 2;
-    const BLOCK_TIMEOUT: usize = 1;
+    const BLOCK_TIMEOUT: usize = 2;
     const DEFAULT_GAS_PRICE: u64 = 15_000_000_000;
 
     let mut gas_price = match gas_price_estimating.estimate_gas_price() {
