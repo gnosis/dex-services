@@ -86,7 +86,7 @@ pub trait StableXContract {
         solution: Solution,
         claimed_objective_value: U256,
         gas_price: U256,
-        timeout: Option<usize>,
+        block_timeout: Option<usize>,
     ) -> Result<(), MethodError>;
 }
 
@@ -150,7 +150,7 @@ impl StableXContract for StableXContractImpl {
         solution: Solution,
         claimed_objective_value: U256,
         gas_price: U256,
-        timeout: Option<usize>,
+        block_timeout: Option<usize>,
     ) -> Result<(), MethodError> {
         let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
         let (owners, order_ids, volumes) = encode_execution_for_contract(&solution.executed_orders);
@@ -172,7 +172,7 @@ impl StableXContract for StableXContractImpl {
             .gas(5_500_000.into());
 
         method.tx.resolve = Some(ResolveCondition::Confirmed(ConfirmParams {
-            block_timeout: timeout,
+            block_timeout,
             ..Default::default()
         }));
         method.send().wait()?;

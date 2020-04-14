@@ -207,6 +207,10 @@ fn retry_with_gas_price_increase(
     } {
         // Increase gas
         gas_price = std::cmp::min(gas_price * INCREASE_FACTOR, gas_cap);
+        info!(
+            "retrying solution submission with increased gas price {}",
+            gas_price,
+        );
     }
 
     result
