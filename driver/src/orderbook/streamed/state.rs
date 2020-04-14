@@ -1,8 +1,5 @@
 use super::*;
-use crate::contracts::{
-    stablex_auction_element,
-    stablex_contract::batch_exchange::{event_data::*, Event},
-};
+use crate::contracts::stablex_contract::batch_exchange::{event_data::*, Event};
 use crate::models::Order as ModelOrder;
 use balance::Balance;
 use error::Error;
@@ -15,12 +12,6 @@ use std::iter::Iterator;
 
 // Most types, fields, functions in this module mirror the smart contract because we need to
 // emulate what it does based on the events it emits.
-//
-// We keep track of the pending solution for the batch separately instead of applying the trades
-// immediately. This ensures that orders and balances have correctly *not* been updated by the
-// pending solution until the solution becomes the real solution.
-// This has the side effect of simplifying solution revert logic by allowing us to replace the whole
-// pending solution instead of having to revert individual trades.
 
 /// The orderbook state as built from received events.
 ///
@@ -32,7 +23,7 @@ pub struct State {
     orders: HashMap<(UserId, OrderId), Order>,
     balances: HashMap<(UserId, TokenAddress), Balance>,
     tokens: Tokens,
-    // TODO?: is_inconsistent_because_solution_not_fully_received: bool
+    // TODO: is_inconsistent_because_solution_not_fully_received: bool
     last_solution: LastSolution,
 }
 
@@ -74,20 +65,7 @@ impl State {
             .iter()
             .filter(move |(_, order)| order.is_valid_in_batch(batch_id))
             .map(move |((user_id, order_id), order)| {
-                let (buy_amount, sell_amount) = stablex_auction_element::compute_buy_sell_amounts(
-                    order.price_numerator,
-                    order.price_denominator,
-                    // TODO unwrap
-                    order.price_denominator - order.get_used_amount(batch_id).unwrap(),
-                );
-                ModelOrder {
-                    id: *order_id,
-                    account_id: *user_id,
-                    buy_token: order.buy_token,
-                    sell_token: order.sell_token,
-                    buy_amount,
-                    sell_amount,
-                }
+                order.as_model_order(batch_id, *user_id, *order_id)
             })
     }
 
@@ -680,8 +658,7 @@ mod tests {
                 .orders
                 .get(&(address(2), 0))
                 .unwrap()
-                .get_used_amount(2)
-                .unwrap(),
+                .get_used_amount(2),
             1
         );
         assert_eq!(
@@ -689,8 +666,7 @@ mod tests {
                 .orders
                 .get(&(address(3), 0))
                 .unwrap()
-                .get_used_amount(2)
-                .unwrap(),
+                .get_used_amount(2),
             2
         );
     }
