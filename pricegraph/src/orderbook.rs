@@ -145,9 +145,9 @@ impl Orderbook {
     /// flow from the sell token to the buy token. The min-cost is calculated
     /// using the successive shortest path algorithm with Bellman-Ford.
     ///
-    /// Note that this method is not idempotent, successive calls with the same
-    /// token pair and volume yield different results as orders get filled with
-    /// each match changing the orderbook.
+    /// Note that in general this method is not idempotent, successive calls
+    /// with the same token pair and volume may yield different results as
+    /// orders get filled with each match changing the orderbook.
     pub fn fill_market_order(&mut self, pair: TokenPair, volume: f64) -> Option<f64> {
         self.update_projection_graph();
 
@@ -155,13 +155,27 @@ impl Orderbook {
         let predecessors = self.reduced_shortest_paths(sell);
         let mut path = path::find_path(&predecessors, sell, buy)?;
 
+        // NOTE: The transient price of a path is the price of the sell token
+        // (i.e. `sell_amount / buy_amount`). Since we are trying to find the
+        // best price for an order for the specified token pair (i.e. and order
+        // that would create a cycle of weight 0 going from the speicifed sell
+        // token to the buy token over `path` and then directly back to the sell
+        // token), we need to invert the price and account for the fees required
+        // for the final order in the cycle for the specified token pair.
+        fn invert_price(price: f64) -> f64 {
+            1.0 / (price * FEE_FACTOR)
+        }
+
         if volume <= 0.0 {
-            // NOTE: Intuitively an infinite price can be used for a 0 volume
-            // since it is always filled. This check is performed after finding
-            // the shortest path between a token pair to make sure that even
-            // when a volume of 0 is specified, `None` is returned if the tokens
-            // aren't connected.
-            return Some(f64::INFINITY);
+            // NOTE: For a 0 volume we simulate sending an tiny epsilon of value
+            // through the network without actually filling any orders.
+            let (_, price) = self.find_path_capacity_and_price(&path).unwrap_or_else(|| {
+                panic!(
+                    "failed to fill detected shortest path {}",
+                    format_path(&path),
+                )
+            });
+            return Some(invert_price(price));
         }
 
         let mut remaining_volume = volume;
@@ -183,11 +197,7 @@ impl Orderbook {
             path = path::find_path(&predecessors, sell, buy)?;
         }
 
-        // NOTE: The transient price is the price of the sell token in terms of
-        // the buy token. Since we are trying to find an order that would create
-        // a cycle of weight 0 that starts at the buy token and ends at the sell
-        // token, we want the inverse price with fees removed.
-        Some(1.0 / (last_transient_price * FEE_FACTOR))
+        Some(invert_price(last_transient_price))
     }
 
     /// Calculates the shortest paths from the start token to all other tokens
