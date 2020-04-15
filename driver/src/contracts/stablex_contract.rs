@@ -24,19 +24,22 @@ lazy_static! {
 }
 
 include!(concat!(env!("OUT_DIR"), "/batch_exchange.rs"));
+include!(concat!(env!("OUT_DIR"), "/batch_exchange_viewer.rs"));
 
 pub struct StableXContractImpl {
     instance: BatchExchange,
+    viewer: BatchExchangeViewer,
 }
 
 impl StableXContractImpl {
     pub fn new(web3: &contracts::Web3, key: PrivateKey, network_id: u64) -> Result<Self> {
         let defaults = contracts::method_defaults(key, network_id)?;
 
+        let viewer = BatchExchangeViewer::deployed(&web3).wait()?;
         let mut instance = BatchExchange::deployed(&web3).wait()?;
         *instance.defaults_mut() = defaults;
 
-        Ok(StableXContractImpl { instance })
+        Ok(StableXContractImpl { instance, viewer })
     }
 
     pub fn account(&self) -> Address {
@@ -112,8 +115,12 @@ impl StableXContract for StableXContractImpl {
         previous_page_user_offset: u16,
     ) -> Result<Vec<u8>> {
         let mut orders_builder = self
-            .instance
-            .get_encoded_users_paginated(previous_page_user, previous_page_user_offset, page_size)
+            .viewer
+            .get_encoded_orders_paginated(
+                previous_page_user,
+                previous_page_user_offset,
+                U256::from(page_size),
+            )
             .block(BlockNumber::Pending);
         orders_builder.m.tx.gas = None;
         orders_builder.call().wait().map_err(From::from)
