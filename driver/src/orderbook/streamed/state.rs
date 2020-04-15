@@ -4,12 +4,12 @@ use crate::contracts::{
     stablex_contract::batch_exchange::{event_data::*, Event},
 };
 use crate::models::Order as ModelOrder;
+use error::Error;
 use ethcontract::U256;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::iter::Iterator;
-use thiserror::Error;
 
 // TODO: Should we handle https://github.com/gnosis/dex-contracts/issues/620 ?
 // There is a workaround detailed in the issue it hasn't been implemented.
@@ -163,18 +163,6 @@ impl State {
         self.orders.remove(&(event.owner, event.id));
         Ok(())
     }
-}
-
-#[derive(Clone, Copy, Debug, Error)]
-pub enum Error {
-    #[error("unknown token")]
-    UnknownToken,
-    #[error("unknown order")]
-    UnknownOrder,
-    #[error("order already exists")]
-    OrderAlreadyExists,
-    #[error("math underflow")]
-    MathUnderflow,
 }
 
 /// Bidirectional map between token id and token address.
