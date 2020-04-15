@@ -2,6 +2,7 @@
 //! encoded orders.
 
 use primitive_types::{H160, U256};
+use thiserror::Error;
 
 /// The stride of an orderbook element in bytes.
 pub const ELEMENT_STRIDE: usize = 112;
@@ -112,7 +113,8 @@ impl Element {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
+#[error("invalid encoded order elements byte length {0}")]
 pub struct InvalidLength(usize);
 
 #[cfg(test)]

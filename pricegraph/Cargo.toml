@@ -5,7 +5,7 @@ authors = ["Nicholas Rodrigues Lordello <nicholas.lordello@gnosis.pm>"]
 edition = "2018"
 
 [[bench]]
-name = "main"
+name = "orderbook"
 harness = false
 
 [dependencies]

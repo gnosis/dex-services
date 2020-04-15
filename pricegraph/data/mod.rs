@@ -1,6 +1,5 @@
 //! Module containing test orderbook data.
 
-use super::Orderbook;
 use data_encoding::{Encoding, Specification};
 use lazy_static::lazy_static;
 use std::collections::BTreeMap;
@@ -32,14 +31,7 @@ lazy_static! {
 
         orderbooks
     };
-}
 
-/// Reads a test orderbook by batch ID.
-pub fn read_orderbook(batch_id: usize) -> Orderbook {
-    Orderbook::read(&ORDERBOOKS[&batch_id]).expect("error reading orderbook")
-}
-
-/// Reads the default test orderbook.
-pub fn read_default_orderbook() -> Orderbook {
-    read_orderbook(5_287_195)
+    /// The default orderbook used for testing and benchmarking.
+    pub static ref DEFAULT_ORDERBOOK: &'static [u8] = &*ORDERBOOKS[&5_287_195];
 }
