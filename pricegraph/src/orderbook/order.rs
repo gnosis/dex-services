@@ -1,7 +1,5 @@
 //! Data and logic related to token pair order management.
 
-#![allow(dead_code)]
-
 use super::UserMap;
 use crate::encoding::{Element, Price, TokenId, TokenPair, UserId};
 use crate::num;
@@ -63,6 +61,17 @@ impl OrderMap {
         })
     }
 
+    /// Returns an iterator over the orders matching a given sell token.
+    pub fn pairs_and_orders_for_sell_token(
+        &self,
+        sell: TokenId,
+    ) -> impl Iterator<Item = (TokenPair, &'_ [Order])> + '_ {
+        self.0.get(&sell).into_iter().flat_map(move |o| {
+            o.iter()
+                .map(move |(&buy, o)| (TokenPair { sell, buy }, o.as_slice()))
+        })
+    }
+
     /// Returns the orders for an order pair. Returns `None` if that pair has
     /// no orders.
     fn orders_for_pair(&self, pair: TokenPair) -> Option<&[Order]> {
@@ -120,12 +129,14 @@ pub struct Order {
     /// remaining sell amount. Note that orders are also limited by their user's
     /// balance.
     pub amount: f64,
-    /// The effective sell price for this order, that is price for this order
-    /// including fees of the sell token expressed in the buy token.
+    /// The effective buy price for this order, that is price for this order
+    /// including fees of the buy token expressed in the sell token.
     ///
-    /// Specifically, this is the sell amount over the buy amount or price
-    /// denominator over price numerator, which is the inverse price as
-    /// expressed by the exchange.
+    /// Specifically, this is the buy amount over the sell amount or price
+    /// numerator over price denominator.
+    ///
+    /// When using this price to calculate amounts the equation to use is:
+    /// `sold_amount = buy_amount / price`.
     pub price: f64,
 }
 
@@ -184,8 +195,10 @@ fn is_unbounded(element: &Element) -> bool {
     element.price.numerator == UNBOUNDED_AMOUNT || element.price.denominator == UNBOUNDED_AMOUNT
 }
 
+/// The fee factor that is applied to each order's buy price.
+pub const FEE_FACTOR: f64 = 1.0 / 0.999;
+
 /// Calculates an effective price as a `f64` from a price fraction.
 fn as_effective_sell_price(price: &Price) -> f64 {
-    const FEE_FACTOR: f64 = 1.0 / 0.999;
     FEE_FACTOR * (price.numerator as f64) / (price.denominator as f64)
 }

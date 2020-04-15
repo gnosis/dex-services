@@ -13,6 +13,7 @@ petgraph = "0.5"
 primitive-types = "0.7"
 
 [dev-dependencies]
+assert_approx_eq = "1"
 criterion = "0.3"
 data-encoding = "2"
 lazy_static = "1"
