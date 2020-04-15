@@ -292,10 +292,8 @@ mod tests {
             },
         ];
 
-        api.expect_get_token_list().returning({
-            let api_tokens = api_tokens.clone();
-            move || Ok(api_tokens.to_vec())
-        });
+        api.expect_get_token_list()
+            .returning(move || Ok(api_tokens.to_vec()));
 
         api.expect_get_price()
             .returning(|_, _| Box::pin(future::ready(Ok(1.0))));
