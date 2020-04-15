@@ -12,6 +12,7 @@ fn generate_contract(name: &str, out: &str) {
     let dest = env::var("OUT_DIR").unwrap();
     println!("cargo:rerun-if-changed={}", artifact);
     Builder::new(artifact)
+        .with_visibility_modifier(Some("pub"))
         .generate()
         .unwrap()
         .write_to_file(Path::new(&dest).join(out))
