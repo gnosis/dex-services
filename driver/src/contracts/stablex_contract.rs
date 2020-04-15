@@ -5,16 +5,17 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use anyhow::Result;
-use ethcontract::transaction::GasPrice;
+use ethcontract::transaction::{GasPrice, ResolveCondition};
 use ethcontract::{Address, BlockNumber, PrivateKey, U256};
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
 
 use crate::contracts;
-use crate::gas_station::GasPriceEstimating;
 use crate::models::{ExecutedOrder, Solution};
 use crate::util::FutureWaitExt;
+use ethcontract::errors::MethodError;
+use ethcontract::transaction::confirm::ConfirmParams;
 
 lazy_static! {
     // In the BatchExchange smart contract, the objective value will be multiplied by
@@ -24,27 +25,18 @@ lazy_static! {
 
 include!(concat!(env!("OUT_DIR"), "/batch_exchange.rs"));
 
-pub struct StableXContractImpl<'a> {
+pub struct StableXContractImpl {
     instance: BatchExchange,
-    gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
 }
 
-impl<'a> StableXContractImpl<'a> {
-    pub fn new(
-        web3: &contracts::Web3,
-        key: PrivateKey,
-        network_id: u64,
-        gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
-    ) -> Result<Self> {
+impl StableXContractImpl {
+    pub fn new(web3: &contracts::Web3, key: PrivateKey, network_id: u64) -> Result<Self> {
         let defaults = contracts::method_defaults(key, network_id)?;
 
         let mut instance = BatchExchange::deployed(&web3).wait()?;
         *instance.defaults_mut() = defaults;
 
-        Ok(StableXContractImpl {
-            instance,
-            gas_price_estimating,
-        })
+        Ok(StableXContractImpl { instance })
     }
 
     pub fn account(&self) -> Address {
@@ -93,10 +85,12 @@ pub trait StableXContract {
         batch_index: U256,
         solution: Solution,
         claimed_objective_value: U256,
-    ) -> Result<()>;
+        gas_price: U256,
+        block_timeout: Option<usize>,
+    ) -> Result<(), MethodError>;
 }
 
-impl<'a> StableXContract for StableXContractImpl<'a> {
+impl StableXContract for StableXContractImpl {
     fn get_current_auction_index(&self) -> Result<u32> {
         let auction_index = self.instance.get_current_batch_id().call().wait()?;
         Ok(auction_index)
@@ -155,17 +149,13 @@ impl<'a> StableXContract for StableXContractImpl<'a> {
         batch_index: U256,
         solution: Solution,
         claimed_objective_value: U256,
-    ) -> Result<()> {
+        gas_price: U256,
+        block_timeout: Option<usize>,
+    ) -> Result<(), MethodError> {
         let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
         let (owners, order_ids, volumes) = encode_execution_for_contract(&solution.executed_orders);
-        let gas_price = self.gas_price_estimating.estimate_gas_price();
-        if let Err(ref err) = gas_price {
-            log::warn!(
-                "failed to get gas price from gnosis safe gas station: {}",
-                err
-            );
-        }
-        self.instance
+        let mut method = self
+            .instance
             .submit_solution(
                 batch_index.low_u32(),
                 claimed_objective_value,
@@ -175,17 +165,17 @@ impl<'a> StableXContract for StableXContractImpl<'a> {
                 prices,
                 token_ids_for_price,
             )
-            .gas_price(
-                gas_price
-                    .map(|gas_price| GasPrice::Value(gas_price.fast))
-                    .unwrap_or(GasPrice::Scaled(3.0)),
-            )
+            .gas_price(GasPrice::Value(gas_price))
             // NOTE: Gas estimate might be off, as we race with other solution
             //   submissions and thus might have to revert trades which costs
             //   more gas than expected.
-            .gas(5_500_000.into())
-            .send()
-            .wait()?;
+            .gas(5_500_000.into());
+
+        method.tx.resolve = Some(ResolveCondition::Confirmed(ConfirmParams {
+            block_timeout,
+            ..Default::default()
+        }));
+        method.send().wait()?;
 
         Ok(())
     }

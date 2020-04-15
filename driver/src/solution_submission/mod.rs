@@ -3,6 +3,7 @@
 use crate::contracts::stablex_contract::StableXContract;
 use crate::models::Solution;
 
+use crate::gas_station::GasPriceEstimating;
 use anyhow::{Error, Result};
 use ethcontract::errors::{ExecutionError, MethodError};
 use ethcontract::web3::types::TransactionReceipt;
@@ -88,11 +89,18 @@ impl From<Error> for SolutionSubmissionError {
 
 pub struct StableXSolutionSubmitter<'a> {
     contract: &'a (dyn StableXContract + Sync),
+    gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
 }
 
 impl<'a> StableXSolutionSubmitter<'a> {
-    pub fn new(contract: &'a (dyn StableXContract + Sync)) -> Self {
-        Self { contract }
+    pub fn new(
+        contract: &'a (dyn StableXContract + Sync),
+        gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
+    ) -> Self {
+        Self {
+            contract,
+            gas_price_estimating,
+        }
     }
 }
 
@@ -120,42 +128,109 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
         solution: Solution,
         claimed_objective_value: U256,
     ) -> Result<(), SolutionSubmissionError> {
-        self.contract
-            .submit_solution(
-                batch_index.clone(),
-                solution.clone(),
-                claimed_objective_value,
-            )
-            .map_err(|err| {
-                extract_transaction_receipt(&err)
-                    .and_then(|tx| {
-                        let block_number = tx.block_number?;
-                        match self.contract.get_solution_objective_value(
-                            batch_index,
-                            solution,
-                            Some(block_number.into()),
-                        ) {
-                            Ok(_) => None,
-                            Err(e) => Some(SolutionSubmissionError::from(e)),
-                        }
-                    })
-                    .unwrap_or_else(|| SolutionSubmissionError::Unexpected(err))
-            })
+        retry_with_gas_price_increase(
+            self.contract,
+            batch_index,
+            solution.clone(),
+            claimed_objective_value,
+            self.gas_price_estimating,
+            60_000_000_000u64.into(),
+        )
+        .map_err(|err| {
+            extract_transaction_receipt(&err)
+                .and_then(|tx| {
+                    let block_number = tx.block_number?;
+                    match self.contract.get_solution_objective_value(
+                        batch_index,
+                        solution,
+                        Some(block_number.into()),
+                    ) {
+                        Ok(_) => None,
+                        Err(e) => Some(SolutionSubmissionError::from(e)),
+                    }
+                })
+                .unwrap_or_else(|| SolutionSubmissionError::Unexpected(err.into()))
+        })
+        .map(|_| ())
     }
 }
 
-fn extract_transaction_receipt(err: &Error) -> Option<&TransactionReceipt> {
-    err.downcast_ref::<MethodError>()
-        .and_then(|method_error| match &method_error.inner {
-            ExecutionError::Failure(tx) => Some(tx.as_ref()),
-            _ => None,
-        })
+fn retry_with_gas_price_increase(
+    contract: &dyn StableXContract,
+    batch_index: U256,
+    solution: Solution,
+    claimed_objective_value: U256,
+    gas_price_estimating: &dyn GasPriceEstimating,
+    gas_cap: U256,
+) -> Result<(), MethodError> {
+    const INCREASE_FACTOR: u32 = 2;
+    const BLOCK_TIMEOUT: usize = 2;
+    const DEFAULT_GAS_PRICE: u64 = 15_000_000_000;
+
+    let mut gas_price_estimate = U256::from(DEFAULT_GAS_PRICE);
+    let mut gas_price_factor = 1;
+    let mut result;
+    // the following block emulates a do-while loop
+    while {
+        gas_price_estimate = match gas_price_estimating.estimate_gas_price() {
+            Ok(gas_estimate) => gas_estimate.fast,
+            Err(ref err) => {
+                log::warn!(
+                    "failed to get gas price from gnosis safe gas station: {}",
+                    err
+                );
+                gas_price_estimate
+            }
+        };
+        // Never exceed the gas cap.
+        let gas_price = std::cmp::min(gas_price_estimate * gas_price_factor, gas_cap);
+
+        // Submit solution at estimated gas price (not exceeding the cap)
+        result = contract.submit_solution(
+            batch_index,
+            solution.clone(),
+            claimed_objective_value,
+            gas_price,
+            if gas_price == gas_cap {
+                None
+            } else {
+                Some(BLOCK_TIMEOUT)
+            },
+        );
+
+        // Breaking condition for our loop
+        gas_price < gas_cap
+            && matches!(
+                result,
+                Err(MethodError {
+                    inner: ExecutionError::ConfirmTimeout,
+                    ..
+                })
+            )
+    } {
+        // Increase gas
+        gas_price_factor *= INCREASE_FACTOR;
+        info!(
+            "retrying solution submission with increased gas price factor of {}",
+            gas_price_factor,
+        );
+    }
+
+    result
+}
+
+fn extract_transaction_receipt(err: &MethodError) -> Option<&TransactionReceipt> {
+    match &err.inner {
+        ExecutionError::Failure(tx) => Some(tx.as_ref()),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::contracts::stablex_contract::MockStableXContract;
+    use crate::gas_station::{GasPrice, MockGasPriceEstimating};
 
     use anyhow::anyhow;
     use ethcontract::web3::types::H2048;
@@ -179,11 +254,121 @@ mod tests {
             .expect_get_solution_objective_value()
             .return_once(move |_, _, _| Ok(U256::from(42)));
 
-        let submitter = StableXSolutionSubmitter::new(&contract);
+        let gas_station = MockGasPriceEstimating::new();
+
+        let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
         let result = submitter.get_solution_objective_value(U256::zero(), Solution::trivial());
 
         contract.checkpoint();
         assert_eq!(result.unwrap(), U256::from(42));
+    }
+
+    #[test]
+    fn test_retry_with_gas_price_increase_once() {
+        let mut contract = MockStableXContract::new();
+        contract
+            .expect_submit_solution()
+            .times(1)
+            .with(always(), always(), always(), eq(U256::from(5)), eq(Some(2)))
+            .return_once(|_, _, _, _, _| {
+                Err(MethodError::from_parts(
+                    "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
+                        .to_owned(),
+                    ExecutionError::ConfirmTimeout,
+                ))
+            });
+        contract
+            .expect_submit_solution()
+            .with(always(), always(), always(), eq(U256::from(9)), eq(None))
+            .return_once(|_, _, _, _, _| Ok(()));
+
+        let mut gas_station = MockGasPriceEstimating::new();
+        gas_station.expect_estimate_gas_price().returning(|| {
+            Ok(GasPrice {
+                fast: 5.into(),
+                ..Default::default()
+            })
+        });
+
+        retry_with_gas_price_increase(
+            &contract,
+            1.into(),
+            Solution::trivial(),
+            1.into(),
+            &gas_station,
+            9.into(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_retry_with_gas_price_increase_timeout() {
+        let mut contract = MockStableXContract::new();
+        contract
+            .expect_submit_solution()
+            .times(1)
+            .with(always(), always(), always(), eq(U256::from(5)), eq(Some(2)))
+            .return_once(|_, _, _, _, _| {
+                Err(MethodError::from_parts(
+                    "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
+                        .to_owned(),
+                    ExecutionError::ConfirmTimeout,
+                ))
+            });
+        contract
+            .expect_submit_solution()
+            .times(1)
+            .with(
+                always(),
+                always(),
+                always(),
+                eq(U256::from(12)),
+                eq(Some(2)),
+            )
+            .return_once(|_, _, _, _, _| {
+                Err(MethodError::from_parts(
+                    "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
+                        .to_owned(),
+                    ExecutionError::ConfirmTimeout,
+                ))
+            });
+        contract
+            .expect_submit_solution()
+            .with(always(), always(), always(), eq(U256::from(15)), eq(None))
+            .return_once(|_, _, _, _, _| {
+                Err(MethodError::from_parts(
+                    "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
+                        .to_owned(),
+                    ExecutionError::ConfirmTimeout,
+                ))
+            });
+
+        let mut gas_station = MockGasPriceEstimating::new();
+        gas_station
+            .expect_estimate_gas_price()
+            .times(1)
+            .return_once(|| {
+                Ok(GasPrice {
+                    fast: 5.into(),
+                    ..Default::default()
+                })
+            });
+        gas_station.expect_estimate_gas_price().returning(|| {
+            Ok(GasPrice {
+                fast: 6.into(),
+                ..Default::default()
+            })
+        });
+
+        assert!(retry_with_gas_price_increase(
+            &contract,
+            1.into(),
+            Solution::trivial(),
+            1.into(),
+            &gas_station,
+            15.into(),
+        )
+        .is_err())
     }
 
     #[test]
@@ -202,8 +387,9 @@ mod tests {
                     ExecutionError::Revert(Some("SafeMath: subtraction overflow".to_owned())),
                 )))
             });
+        let gas_station = MockGasPriceEstimating::new();
 
-        let submitter = StableXSolutionSubmitter::new(&contract);
+        let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
         let result = submitter.get_solution_objective_value(U256::zero(), Solution::trivial());
 
         match result.expect_err("Should have errored") {
@@ -236,12 +422,12 @@ mod tests {
         // Submit Solution returns failed tx
         contract
             .expect_submit_solution()
-            .return_once(move |_, _, _| {
-                Err(anyhow!(MethodError::from_parts(
+            .return_once(move |_, _, _, _, _| {
+                Err(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
                         .to_owned(),
                     ExecutionError::Failure(Box::new(receipt)),
-                )))
+                ))
             });
         // Get objective value on old block number returns revert reason
         contract
@@ -254,8 +440,15 @@ mod tests {
                     ExecutionError::Revert(Some("Claimed objective doesn't sufficiently improve current solution".to_owned())),
                 )))
             });
+        let mut gas_station = MockGasPriceEstimating::new();
+        gas_station.expect_estimate_gas_price().return_once(|| {
+            Ok(GasPrice {
+                fast: 5.into(),
+                ..Default::default()
+            })
+        });
 
-        let submitter = StableXSolutionSubmitter::new(&contract);
+        let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
         let result = submitter.submit_solution(U256::zero(), Solution::trivial(), U256::zero());
 
         match result.expect_err("Should have errored") {
