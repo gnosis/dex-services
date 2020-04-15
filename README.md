@@ -23,7 +23,7 @@
 
 ## Introduction
 
-This repository contains the backend logic for the dfusion exchange based on [this specification](https://github.com/gnosis/dex-research).
+This repository contains the backend logic for the Gnosis Protocol based on [this specification](https://github.com/gnosis/dex-research).
 
 It contains two sub-projects that both implement the market mechanism described above in different ways. An fully on-chain solution with instant finality but limited scalability (referred to as "BatchExchange") and a preliminary version that intends to achieves scalability by offloading computation and data-storage off-chain using an [optimistic roll-up](https://medium.com/plasma-group/ethereum-smart-contracts-in-l2-optimistic-rollup-2c1cef2ec537) approach. The latter is in early development stage and not yet ready for use.
 
