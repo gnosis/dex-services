@@ -1,0 +1,18 @@
+[package]
+name = "dex-pricegraph"
+version = "0.0.1"
+authors = ["Nicholas Rodrigues Lordello <nicholas.lordello@gnosis.pm>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+console_error_panic_hook = "0.1"
+pricegraph = { version = "0.1.0", path = ".." }
+wasm-bindgen = "0.2"
+
+[dev-dependencies]
+data-encoding = "2"
+lazy_static = "1"
+wasm-bindgen-test = "0.3"

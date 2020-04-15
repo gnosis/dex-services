@@ -1,0 +1,37 @@
+extern crate wasm_bindgen_test;
+
+#[path = "../../data/mod.rs"]
+mod data;
+
+use dex_pricegraph::PriceEstimator;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen_test::*;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = Date)]
+    fn now() -> f64;
+}
+
+fn time<T>(f: impl FnOnce() -> T) -> (T, f64) {
+    let start = now();
+    let result = f();
+    (result, now() - start)
+}
+
+#[wasm_bindgen_test]
+fn estimate_price() {
+    let (estimator, load_time) = time(|| PriceEstimator::new(&*data::DEFAULT_ORDERBOOK).unwrap());
+    let (price, estimate_time) = time(|| {
+        estimator
+            .estimate_price(7, 1, 100.0 * 10.0f64.powi(18))
+            .unwrap()
+    });
+
+    console_log!(
+        "DAI-WETH price for selling 100 WETH: 1 WETH = {} DAI (load {}ms, estimate {}ms)",
+        price,
+        load_time,
+        estimate_time,
+    );
+}
