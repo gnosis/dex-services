@@ -11,6 +11,7 @@ harness = false
 [dependencies]
 petgraph = "0.5"
 primitive-types = "0.7"
+thiserror = "1"
 
 [dev-dependencies]
 assert_approx_eq = "1"

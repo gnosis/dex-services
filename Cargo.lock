@@ -1793,6 +1793,7 @@ dependencies = [
  "lazy_static",
  "petgraph",
  "primitive-types 0.7.0",
+ "thiserror",
 ]
 
 [[package]]

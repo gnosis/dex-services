@@ -8,7 +8,7 @@ use std::collections::{hash_map, HashMap};
 pub type UserMap = HashMap<UserId, User>;
 
 /// User data containing balances and number of orders.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default)]
 pub struct User {
     /// User balances per token.
     balances: HashMap<TokenId, f64>,
