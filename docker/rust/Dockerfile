@@ -20,6 +20,7 @@ ONBUILD RUN apt-get update \
 ONBUILD COPY dex-contracts/build ./dex-contracts/build
 ONBUILD COPY driver ./driver
 ONBUILD COPY e2e ./e2e
+ONBUILD COPY pricegraph ./pricegraph
 
 ONBUILD COPY Cargo.* ./
 ONBUILD RUN cargo build
