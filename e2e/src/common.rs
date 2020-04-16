@@ -1,11 +1,10 @@
 use crate::*;
 
 use ethcontract::contract::{
-    CallFuture, Deploy, DeployBuilder, DeployFuture, MethodBuilder, MethodSendFuture,
-    ViewMethodBuilder,
+    CallFuture, Deploy, DeployBuilder, DeployFuture, Detokenizable, MethodBuilder,
+    MethodSendFuture, ViewMethodBuilder,
 };
 use ethcontract::web3::api::Web3;
-use ethcontract::web3::contract::tokens::Detokenize;
 use ethcontract::web3::futures::Future as F;
 use ethcontract::web3::transports::Http;
 use ethcontract::web3::Transport;
@@ -55,6 +54,7 @@ pub trait FutureBuilderExt: Sized {
 impl<T, R> FutureBuilderExt for MethodBuilder<T, R>
 where
     T: Transport,
+    R: Detokenizable,
 {
     type Future = MethodSendFuture<T>;
 
@@ -66,7 +66,7 @@ where
 impl<T, R> FutureBuilderExt for ViewMethodBuilder<T, R>
 where
     T: Transport,
-    R: Detokenize,
+    R: Detokenizable,
 {
     type Future = CallFuture<T, R>;
 
