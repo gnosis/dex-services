@@ -78,6 +78,9 @@ impl From<Error> for SolutionSubmissionError {
                         "SafeMath: subtraction overflow" => {
                             Some(SolutionSubmissionError::Benign(reason.clone()))
                         }
+                        "Amount exceeds user\'s balance." => {
+                            Some(SolutionSubmissionError::Benign(reason.clone()))
+                        }
                         _ => None,
                     }
                 }
