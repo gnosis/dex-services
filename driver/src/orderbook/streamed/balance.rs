@@ -2,63 +2,104 @@ use super::*;
 use error::Error;
 use serde::{Deserialize, Serialize};
 
+/// The balance of a token for a user.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
 pub struct Balance {
     balance: U256,
-    pub pending_deposit: Option<Flux>,
-    pub pending_withdraw: Option<Flux>,
+    deposit: Flux,
+    withdraw: Flux,
 }
 
 impl Balance {
-    pub fn deposit(&mut self, new_deposit: Flux, current_batch_id: BatchId) {
-        self.update_deposit_balance(current_batch_id);
-        match self.pending_deposit.as_mut() {
-            Some(deposit) => {
-                deposit.amount += new_deposit.amount;
-                deposit.batch_id = new_deposit.batch_id
-            }
-            None => self.pending_deposit = Some(new_deposit),
-        }
-    }
-
-    pub fn withdraw(&mut self, amount: U256, current_batch_id: BatchId) -> Result<(), Error> {
-        self.update_deposit_balance(current_batch_id);
-        self.pending_withdraw = None;
-        self.balance = self
-            .balance
-            .checked_sub(amount)
-            .ok_or(Error::MathUnderflow)?;
+    pub fn deposit(
+        &mut self,
+        amount: U256,
+        deposit_batch_id: BatchId,
+        current_batch_id: BatchId,
+    ) -> Result<(), Error> {
+        self.apply_existing_deposit(current_batch_id)?;
+        // Works like in the smart contract: If there is an existing deposit we override the
+        // batch id and add to the amount. If there is no existing deposit then amount is already 0.
+        let deposit_amount_including_this_deposit = self
+            .deposit
+            .amount
+            .checked_add(amount)
+            .ok_or(Error::MathOverflow)?;
+        self.deposit.batch_id = deposit_batch_id;
+        self.deposit.amount = deposit_amount_including_this_deposit;
         Ok(())
     }
 
-    pub fn update_deposit_balance(&mut self, current_batch_id: BatchId) {
-        match self.pending_deposit {
-            Some(ref deposit) if deposit.batch_id < current_batch_id => {
-                self.balance += deposit.amount;
-                self.pending_deposit = None;
-            }
-            _ => (),
-        };
+    pub fn withdraw_request(&mut self, amount: U256, batch_id: BatchId) {
+        self.withdraw.batch_id = batch_id;
+        self.withdraw.amount = amount;
     }
 
-    pub fn current_balance(&self, current_batch_id: BatchId) -> U256 {
+    pub fn withdraw(&mut self, amount: U256, batch_id: BatchId) -> Result<(), Error> {
+        if self.withdraw.batch_id >= batch_id {
+            return Err(Error::WithdrawEarlierThanRequested(self.withdraw.batch_id));
+        }
+        if self.withdraw.amount < amount {
+            return Err(Error::WithdrawMoreThanRequested(self.withdraw.amount));
+        }
+        let balance_excluding_withdraw = self.get_balance_internal(batch_id, false)?;
+        let new_balance = balance_excluding_withdraw
+            .checked_sub(amount)
+            .ok_or(Error::WithdrawMoreThanBalance(balance_excluding_withdraw))?;
+        self.balance = new_balance;
+        // If there is a valid deposit then new_balance already includes it so we need to clear it
+        // now.
+        self.clear_pending_deposit_if_possible(batch_id);
+        // Works like in the smart contract: Any withdraw unconditionally removes the withdraw
+        // request even if the amount is smaller than requested.
+        self.withdraw.amount = 0.into();
+        Ok(())
+    }
+
+    pub fn get_balance(&self, batch_id: BatchId) -> Result<U256, Error> {
+        self.get_balance_internal(batch_id, true)
+    }
+
+    fn get_balance_internal(
+        &self,
+        batch_id: BatchId,
+        include_withdraw: bool,
+    ) -> Result<U256, Error> {
         let mut balance = self.balance;
-        if let Some(ref flux) = self.pending_deposit {
-            if flux.batch_id < current_batch_id {
-                balance = balance.saturating_add(flux.amount);
-            }
+        if self.deposit.batch_id < batch_id {
+            balance = balance
+                .checked_add(self.deposit.amount)
+                .ok_or(Error::MathOverflow)?;
         }
-        if let Some(ref flux) = self.pending_withdraw {
-            if flux.batch_id < current_batch_id {
-                balance = balance.saturating_sub(flux.amount);
-            }
+        if include_withdraw && self.withdraw.batch_id < batch_id {
+            // Saturating because withdraw requests can be for amounts larger than balance.
+            balance = balance.saturating_sub(self.withdraw.amount);
         }
-        balance
+        Ok(balance)
+    }
+
+    fn apply_existing_deposit(&mut self, current_batch_id: BatchId) -> Result<(), Error> {
+        if self.deposit.batch_id < current_batch_id {
+            let new_balance = self
+                .balance
+                .checked_add(self.deposit.amount)
+                .ok_or(Error::MathOverflow)?;
+            self.balance = new_balance;
+            self.deposit.amount = U256::zero();
+        }
+        Ok(())
+    }
+
+    fn clear_pending_deposit_if_possible(&mut self, batch_id: BatchId) {
+        if self.deposit.batch_id < batch_id {
+            self.deposit.amount = 0.into();
+        }
     }
 }
 
-#[derive(Copy, Clone, Debug, Deserialize, Serialize)]
-pub struct Flux {
-    pub amount: U256,
-    pub batch_id: BatchId,
+/// A change in balance starting at some batch id.
+#[derive(Copy, Clone, Debug, Default, Deserialize, Serialize)]
+struct Flux {
+    batch_id: BatchId,
+    amount: U256,
 }

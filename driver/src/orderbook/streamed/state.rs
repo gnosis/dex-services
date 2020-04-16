@@ -4,7 +4,7 @@ use crate::contracts::{
     stablex_contract::batch_exchange::{event_data::*, Event},
 };
 use crate::models::Order as ModelOrder;
-use balance::{Balance, Flux};
+use balance::Balance;
 use error::Error;
 use order::Order;
 use serde::{Deserialize, Serialize};
@@ -44,7 +44,9 @@ impl State {
                 let token_id = self.tokens.get_id_by_address(*token_address)?;
                 Some((
                     (*user_id, token_id),
-                    balance.current_balance(batch_id).low_u128(),
+                    // TODO: Remove unwrap. Can fail while not all trades of a solution have been
+                    // received. Can fail if user's balance exceeds U256::max.
+                    balance.get_balance(batch_id).unwrap().low_u128(),
                 ))
             })
     }
@@ -100,22 +102,12 @@ impl State {
 
     fn deposit(&mut self, event: &Deposit, block_batch_id: BatchId) -> Result<(), Error> {
         let balance = self.balances.entry((event.user, event.token)).or_default();
-        balance.deposit(
-            Flux {
-                amount: event.amount,
-                batch_id: event.batch_id,
-            },
-            block_batch_id,
-        );
-        Ok(())
+        balance.deposit(event.amount, event.batch_id, block_batch_id)
     }
 
     fn withdraw_request(&mut self, event: &WithdrawRequest) -> Result<(), Error> {
         let balance = self.balances.entry((event.user, event.token)).or_default();
-        balance.pending_withdraw = Some(Flux {
-            amount: event.amount,
-            batch_id: event.batch_id,
-        });
+        balance.withdraw_request(event.amount, event.batch_id);
         Ok(())
     }
 
@@ -347,13 +339,22 @@ mod tests {
             batch_id: 0,
         };
         state.apply_event(&Event::Deposit(event), 0).unwrap();
+        let event = WithdrawRequest {
+            user: address(1),
+            token: address(0),
+            amount: 2.into(),
+            batch_id: 0,
+        };
+        state
+            .apply_event(&Event::WithdrawRequest(event), 0)
+            .unwrap();
         let event = Withdraw {
             user: address(1),
             token: address(0),
             amount: 1.into(),
         };
         state.apply_event(&Event::Withdraw(event), 1).unwrap();
-        let account_state_ = account_state(&state, 2);
+        let account_state_ = account_state(&state, 1);
         assert_eq!(account_state_.read_balance(0, address(1)), 1);
     }
 
@@ -370,21 +371,22 @@ mod tests {
         let event = WithdrawRequest {
             user: address(1),
             token: address(0),
-            amount: 1.into(),
-            batch_id: 1,
+            amount: 2.into(),
+            batch_id: 0,
         };
         state
             .apply_event(&Event::WithdrawRequest(event), 1)
             .unwrap();
+        let account_state_ = account_state(&state, 1);
+        assert_eq!(account_state_.read_balance(0, address(1)), 1);
         let event = Withdraw {
             user: address(1),
             token: address(0),
-            amount: 2.into(),
+            amount: 1.into(),
         };
         state.apply_event(&Event::Withdraw(event), 1).unwrap();
         let account_state_ = account_state(&state, 2);
-        // If the pending withdraw was still active the balance would be 0.
-        assert_eq!(account_state_.read_balance(0, address(1)), 1);
+        assert_eq!(account_state_.read_balance(0, address(1)), 2);
     }
 
     #[test]
