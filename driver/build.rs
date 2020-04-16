@@ -4,6 +4,7 @@ use std::path::Path;
 
 fn main() {
     generate_contract("BatchExchange", "batch_exchange.rs");
+    generate_contract("BatchExchangeViewer", "batch_exchange_viewer.rs");
 }
 
 fn generate_contract(name: &str, out: &str) {
