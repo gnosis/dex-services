@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+mod error;
 mod state;
 
 use ethcontract::Address;
