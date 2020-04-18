@@ -67,17 +67,6 @@ pub struct FilteredOrderPage {
     pub next_page_user_offset: u16,
 }
 
-/// An enum representing the state of a batch.
-pub enum BatchState {
-    /// The batch is either the current batch or a future batch and has not yet
-    /// been finilized, meaning that data retrieved for this batch may become
-    /// invalid from future changes to the exchange (such as deposits or placed
-    /// orders).
-    Pending,
-    /// The batch is finalized and can no longer change.
-    Finalized,
-}
-
 #[cfg_attr(test, automock)]
 pub trait StableXContract {
     /// Retrieve the current batch ID that is accepting orders. Note that this
@@ -98,14 +87,10 @@ pub trait StableXContract {
         previous_page_user_offset: u16,
     ) -> Result<FilteredOrderPage>;
 
-    /// Searches for the last block of the given batch and returns its block
-    /// number and a `BatchState` representing whether or not the batch has been
-    /// finalized.
-    ///
-    /// Note that In the case the batch has not yet been finalized (i.e. no
-    /// blocks have been mined in the following batch), then the current block
-    /// number is used as the last block of the batch.
-    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<(u64, BatchState)>;
+    /// Searches for the block number of the last block of the given batch. If
+    /// the batch has not yet been finalized, the current block number is
+    /// returned.
+    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<u64>;
 
     /// Retrieve one page of auction data.
     /// `block` is needed because the state of the smart contract could change
@@ -178,7 +163,8 @@ impl StableXContract for StableXContractImpl {
             next_page_user_offset,
         })
     }
-    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<(u64, BatchState)> {
+
+    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<u64> {
         const BATCH_DURATION: u64 = 300;
 
         let web3 = self.instance.raw_instance().web3();
@@ -189,15 +175,13 @@ impl StableXContract for StableXContractImpl {
                 .ok_or_else(|| anyhow!("block {:?} is missing", block_number))
         };
 
-        let mut batch_state = BatchState::Pending;
         let mut current_block = get_block(BlockNumber::Latest)?;
         while (batch_id as u64) < current_block.timestamp.as_u64() / BATCH_DURATION {
-            batch_state = BatchState::Finalized;
             let previous_block_number = current_block.number.ok_or_else(|| anyhow!(""))? - 1;
             current_block = get_block(previous_block_number.into())?;
         }
 
-        Ok((current_block.timestamp.as_u64(), batch_state))
+        Ok(current_block.timestamp.as_u64())
     }
 
     fn get_auction_data_paginated(
