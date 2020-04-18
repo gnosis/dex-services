@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use ethcontract::transaction::{GasPrice, ResolveCondition};
 use ethcontract::{Address, BlockNumber, PrivateKey, U256};
 use lazy_static::lazy_static;
@@ -16,6 +16,7 @@ use crate::models::{ExecutedOrder, Solution};
 use crate::util::FutureWaitExt;
 use ethcontract::errors::MethodError;
 use ethcontract::transaction::confirm::ConfirmParams;
+use ethcontract::web3::futures::Future as _;
 
 lazy_static! {
     // In the BatchExchange smart contract, the objective value will be multiplied by
@@ -57,11 +58,24 @@ impl StableXContractImpl {
     }
 }
 
+/// Information about an order page that where filtered
+/// was applied inside the smart contract.
 pub struct FilteredOrderPage {
     pub indexed_elements: Vec<u8>,
     pub has_next_page: bool,
     pub next_page_user: Address,
     pub next_page_user_offset: u16,
+}
+
+/// An enum representing the state of a batch.
+pub enum BatchState {
+    /// The batch is either the current batch or a future batch and has not yet
+    /// been finilized, meaning that data retrieved for this batch may become
+    /// invalid from future changes to the exchange (such as deposits or placed
+    /// orders).
+    Pending,
+    /// The batch is finalized and can no longer change.
+    Finalized,
 }
 
 #[cfg_attr(test, automock)]
@@ -84,6 +98,15 @@ pub trait StableXContract {
         previous_page_user_offset: u16,
     ) -> Result<FilteredOrderPage>;
 
+    /// Searches for the last block of the given batch and returns its block
+    /// number and a `BatchState` representing whether or not the batch has been
+    /// finalized.
+    ///
+    /// Note that In the case the batch has not yet been finalized (i.e. no
+    /// blocks have been mined in the following batch), then the current block
+    /// number is used as the last block of the batch.
+    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<(u64, BatchState)>;
+
     /// Retrieve one page of auction data.
     /// `block` is needed because the state of the smart contract could change
     /// between blocks which would make the returned auction data inconsistent
@@ -93,6 +116,7 @@ pub trait StableXContract {
         page_size: u16,
         previous_page_user: Address,
         previous_page_user_offset: u16,
+        block_number: Option<BlockNumber>,
     ) -> Result<Vec<u8>>;
 
     fn get_solution_objective_value(
@@ -154,21 +178,41 @@ impl StableXContract for StableXContractImpl {
             next_page_user_offset,
         })
     }
+    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<(u64, BatchState)> {
+        const BATCH_DURATION: u64 = 300;
+
+        let web3 = self.instance.raw_instance().web3();
+        let get_block = |block_number: BlockNumber| -> Result<_> {
+            web3.eth()
+                .block(block_number.into())
+                .wait()?
+                .ok_or_else(|| anyhow!("block {:?} is missing", block_number))
+        };
+
+        let mut batch_state = BatchState::Pending;
+        let mut current_block = get_block(BlockNumber::Latest)?;
+        while (batch_id as u64) < current_block.timestamp.as_u64() / BATCH_DURATION {
+            batch_state = BatchState::Finalized;
+            let previous_block_number = current_block.number.ok_or_else(|| anyhow!(""))? - 1;
+            current_block = get_block(previous_block_number.into())?;
+        }
+
+        Ok((current_block.timestamp.as_u64(), batch_state))
+    }
 
     fn get_auction_data_paginated(
         &self,
         page_size: u16,
         previous_page_user: Address,
         previous_page_user_offset: u16,
+        block_number: Option<BlockNumber>,
     ) -> Result<Vec<u8>> {
-        let mut orders_builder = self
-            .viewer
-            .get_encoded_orders_paginated(
-                previous_page_user,
-                previous_page_user_offset,
-                U256::from(page_size),
-            )
-            .block(BlockNumber::Pending);
+        let mut orders_builder = self.viewer.get_encoded_orders_paginated(
+            previous_page_user,
+            previous_page_user_offset,
+            U256::from(page_size),
+        );
+        orders_builder.block = block_number.or(Some(BlockNumber::Pending));
         orders_builder.m.tx.gas = None;
         orders_builder.call().wait().map_err(From::from)
     }
