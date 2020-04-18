@@ -174,10 +174,14 @@ impl StableXContract for StableXContractImpl {
                 .ok_or_else(|| anyhow!("block {:?} is missing", block_number))
         };
 
-        let mut block_number = None;
         let mut current_block = get_block(BlockNumber::Latest)?;
-        while (batch_id as u64) < current_block.timestamp.as_u64() / BATCH_DURATION {
-            let previous_block_number = current_block.number.ok_or_else(|| anyhow!(""))? - 1;
+        let mut block_number = None;
+        while (batch_id as u64) < current_block.timestamp.as_u64() / BATCH_DURATION
+            && current_block.number != Some(0.into())
+        {
+            let previous_block_number = current_block.number.ok_or_else(|| {
+                anyhow!("block {:?} has a missing block number", current_block.hash)
+            })? - 1;
             current_block = get_block(previous_block_number.into())?;
             block_number = Some(previous_block_number.as_u64());
         }
