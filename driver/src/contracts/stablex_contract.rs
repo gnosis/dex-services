@@ -88,9 +88,8 @@ pub trait StableXContract {
     ) -> Result<FilteredOrderPage>;
 
     /// Searches for the block number of the last block of the given batch. If
-    /// the batch has not yet been finalized, the current block number is
-    /// returned.
-    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<u64>;
+    /// the batch has not yet been finalized, then `None` is returned.
+    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<Option<u64>>;
 
     /// Retrieve one page of auction data.
     /// `block` is needed because the state of the smart contract could change
@@ -164,7 +163,7 @@ impl StableXContract for StableXContractImpl {
         })
     }
 
-    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<u64> {
+    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<Option<u64>> {
         const BATCH_DURATION: u64 = 300;
 
         let web3 = self.instance.raw_instance().web3();
@@ -175,13 +174,15 @@ impl StableXContract for StableXContractImpl {
                 .ok_or_else(|| anyhow!("block {:?} is missing", block_number))
         };
 
+        let mut block_number = None;
         let mut current_block = get_block(BlockNumber::Latest)?;
         while (batch_id as u64) < current_block.timestamp.as_u64() / BATCH_DURATION {
             let previous_block_number = current_block.number.ok_or_else(|| anyhow!(""))? - 1;
             current_block = get_block(previous_block_number.into())?;
+            block_number = Some(previous_block_number.as_u64());
         }
 
-        Ok(current_block.timestamp.as_u64())
+        Ok(block_number)
     }
 
     fn get_auction_data_paginated(
