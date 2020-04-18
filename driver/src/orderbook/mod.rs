@@ -1,18 +1,16 @@
-use crate::contracts::stablex_contract::StableXContract;
-use crate::models::{AccountState, Order};
-
-use anyhow::Result;
-use ethcontract::U256;
-#[cfg(test)]
-use mockall::automock;
-use paginated_auction_data_reader::PaginatedAuctionDataReader;
-use std::convert::TryInto;
-
 mod filtered_orderbook;
 mod paginated_auction_data_reader;
 mod retrying_retrieval;
 
-pub use filtered_orderbook::{FilteredOrderbookReader, OrderbookFilter};
+pub use self::filtered_orderbook::{FilteredOrderbookReader, OrderbookFilter};
+use self::paginated_auction_data_reader::PaginatedAuctionDataReader;
+use crate::contracts::stablex_contract::StableXContract;
+use crate::models::{AccountState, Order};
+use anyhow::Result;
+use ethcontract::U256;
+#[cfg(test)]
+use mockall::automock;
+use std::convert::TryInto;
 
 #[cfg_attr(test, automock)]
 pub trait StableXOrderBookReading {
