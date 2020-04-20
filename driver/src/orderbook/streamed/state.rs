@@ -81,6 +81,7 @@ impl State {
 
     /// Apply an event to the state, modifying it.
     ///
+    /// // TODO: remove this, make code easier
     /// In case of error no modifications take place.
     ///
     /// `block_batch_id` is the current batch based on the timestamp of the block that contains the

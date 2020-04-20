@@ -1,6 +1,7 @@
 use super::*;
 use thiserror::Error;
 
+// TODO: into anyhow
 #[derive(Clone, Copy, Debug, Error)]
 pub enum Error {
     #[error("unknown token")]
