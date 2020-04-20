@@ -4,8 +4,8 @@ use crate::contracts::{
     stablex_contract::batch_exchange::{event_data::*, Event},
 };
 use crate::models::Order as ModelOrder;
+use anyhow::{anyhow, Result};
 use balance::Balance;
-use error::Error;
 use order::Order;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::Entry;
@@ -86,7 +86,7 @@ impl State {
     ///
     /// `block_batch_id` is the current batch based on the timestamp of the block that contains the
     ///  event.
-    pub fn apply_event(&mut self, event: &Event, block_batch_id: BatchId) -> Result<(), Error> {
+    pub fn apply_event(&mut self, event: &Event, block_batch_id: BatchId) -> Result<()> {
         match event {
             Event::Deposit(event) => self.deposit(event, block_batch_id),
             Event::WithdrawRequest(event) => self.withdraw_request(event),
@@ -101,28 +101,28 @@ impl State {
         }
     }
 
-    fn deposit(&mut self, event: &Deposit, block_batch_id: BatchId) -> Result<(), Error> {
+    fn deposit(&mut self, event: &Deposit, block_batch_id: BatchId) -> Result<()> {
         let balance = self.balances.entry((event.user, event.token)).or_default();
         balance.deposit(event.amount, event.batch_id, block_batch_id)
     }
 
-    fn withdraw_request(&mut self, event: &WithdrawRequest) -> Result<(), Error> {
+    fn withdraw_request(&mut self, event: &WithdrawRequest) -> Result<()> {
         let balance = self.balances.entry((event.user, event.token)).or_default();
         balance.withdraw_request(event.amount, event.batch_id);
         Ok(())
     }
 
-    fn withdraw(&mut self, event: &Withdraw, block_batch_id: BatchId) -> Result<(), Error> {
+    fn withdraw(&mut self, event: &Withdraw, block_batch_id: BatchId) -> Result<()> {
         let balance = self.balances.entry((event.user, event.token)).or_default();
         balance.withdraw(event.amount, block_batch_id)
     }
 
-    fn token_listing(&mut self, event: &TokenListing) -> Result<(), Error> {
+    fn token_listing(&mut self, event: &TokenListing) -> Result<()> {
         self.tokens.0.push((event.id, event.token));
         Ok(())
     }
 
-    fn order_placement(&mut self, event: &OrderPlacement) -> Result<(), Error> {
+    fn order_placement(&mut self, event: &OrderPlacement) -> Result<()> {
         let order = Order {
             buy_token: event.buy_token,
             sell_token: event.sell_token,
@@ -134,7 +134,7 @@ impl State {
         };
         match self.orders.entry((event.owner, event.index)) {
             Entry::Vacant(entry) => entry.insert(order),
-            Entry::Occupied(_) => return Err(Error::OrderAlreadyExists),
+            Entry::Occupied(_) => return Err(anyhow!("order already exists")),
         };
         Ok(())
     }
@@ -143,16 +143,16 @@ impl State {
         &mut self,
         event: &OrderCancellation,
         block_batch_id: BatchId,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let order = self
             .orders
             .get_mut(&(event.owner, event.id))
-            .ok_or(Error::UnknownOrder)?;
+            .ok_or_else(|| anyhow!("unknown order"))?;
         order.valid_until = block_batch_id - 1;
         Ok(())
     }
 
-    fn order_deletion(&mut self, event: &OrderDeletion) -> Result<(), Error> {
+    fn order_deletion(&mut self, event: &OrderDeletion) -> Result<()> {
         // Orders are allowed to be deleted multiple times.
         self.orders.remove(&(event.owner, event.id));
         Ok(())

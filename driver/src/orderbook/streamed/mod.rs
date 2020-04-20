@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 mod balance;
-mod error;
 mod order;
 mod state;
 
