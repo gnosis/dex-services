@@ -74,12 +74,7 @@ impl Balance {
     }
 
     pub fn get_balance(&self, batch_id: BatchId) -> Result<U256> {
-        let mut balance = self.balance;
-        if self.deposit.batch_id < batch_id {
-            balance = balance
-                .checked_add(self.deposit.amount)
-                .ok_or_else(|| anyhow!("math overflow"))?;
-        }
+        let mut balance = self.balance_with_deposit(batch_id)?;
         if self.withdraw.batch_id < batch_id {
             // Saturating because withdraw requests can be for amounts larger than balance.
             balance = balance.saturating_sub(self.withdraw.amount);
@@ -87,12 +82,19 @@ impl Balance {
         Ok(balance)
     }
 
-    fn apply_existing_deposit(&mut self, current_batch_id: BatchId) -> Result<()> {
+    fn balance_with_deposit(&self, current_batch_id: BatchId) -> Result<U256> {
+        let mut balance = self.balance;
         if self.deposit.batch_id < current_batch_id {
-            self.balance = self
-                .balance
+            balance = balance
                 .checked_add(self.deposit.amount)
                 .ok_or_else(|| anyhow!("math overflow"))?;
+        }
+        Ok(balance)
+    }
+
+    fn apply_existing_deposit(&mut self, current_batch_id: BatchId) -> Result<()> {
+        if self.deposit.batch_id < current_batch_id {
+            self.balance = self.balance_with_deposit(current_batch_id)?;
             self.deposit.amount = U256::zero();
         }
         Ok(())
