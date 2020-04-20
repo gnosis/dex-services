@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use ethcontract::transaction::{GasPrice, ResolveCondition};
+use ethcontract::web3::types::Block;
 use ethcontract::{Address, BlockNumber, PrivateKey, U256};
 use lazy_static::lazy_static;
 #[cfg(test)]
@@ -164,8 +165,6 @@ impl StableXContract for StableXContractImpl {
     }
 
     fn get_last_block_for_batch(&self, batch_id: u32) -> Result<Option<u64>> {
-        const BATCH_DURATION: u64 = 300;
-
         let web3 = self.instance.raw_instance().web3();
         let get_block = |block_number: BlockNumber| -> Result<_> {
             web3.eth()
@@ -176,9 +175,15 @@ impl StableXContract for StableXContractImpl {
 
         let mut current_block = get_block(BlockNumber::Latest)?;
         let mut block_number = None;
-        while (batch_id as u64) < current_block.timestamp.as_u64() / BATCH_DURATION
-            && current_block.number != Some(0.into())
-        {
+        while batch_id < get_block_batch_id(&current_block) {
+            if current_block.number == Some(0.into()) {
+                // NOTE: We reached the genesis block, this happens with Ganache
+                //   tests and means that the current batch being solved started
+                //   before the contract was deployed, as such there is no last
+                //   block for the solving batch.
+                return Ok(None);
+            }
+
             let previous_block_number = current_block.number.ok_or_else(|| {
                 anyhow!("block {:?} has a missing block number", current_block.hash)
             })? - 1;
@@ -300,6 +305,11 @@ fn encode_execution_for_contract(
         }
     }
     (owners, order_ids, volumes)
+}
+
+fn get_block_batch_id<T>(block: &Block<T>) -> u32 {
+    const BATCH_DURATION: u64 = 300;
+    (block.timestamp.as_u64() / BATCH_DURATION) as _
 }
 
 #[cfg(test)]
