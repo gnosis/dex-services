@@ -7,12 +7,142 @@
 
 #![allow(dead_code)]
 
+use super::StableXOrderBookReading;
 use crate::models::{AccountState, Order, TokenId};
-use ethcontract::Address;
+use anyhow::Result;
+use ethcontract::{Address, U256};
 use std::collections::{HashMap, HashSet};
+use std::sync::mpsc::{self, Receiver, SyncSender};
+use std::thread::{self, JoinHandle};
 
 /// A type definition representing a complete orderbook.
 type Orderbook = (AccountState, Vec<Order>);
+
+/// A shadowed orderbook reader where two orderbook reading implementations
+/// compare results.
+pub struct ShadowedOrderbookReader<'a> {
+    primary: &'a dyn StableXOrderBookReading,
+    shadow_thread: JoinHandle<()>,
+    shadow_channel: SyncSender<(u32, Orderbook)>,
+}
+
+impl<'a> ShadowedOrderbookReader<'a> {
+    /// Create a new instance of a shadowed orderbook reader that starts a
+    /// background thread
+    pub fn new(
+        primary: &'a dyn StableXOrderBookReading,
+        shadow: Box<dyn StableXOrderBookReading + Send + 'static>,
+    ) -> Self {
+        // NOTE: Create a bounded channel with a 0-sized buffer, this makes it
+        //   if the primary orderbook is read and the shadow is still reading,
+        //   the diff for that specific orderbook is skipped.
+        let (shadow_channel_tx, shadow_channel_rx) = mpsc::sync_channel(0);
+        let shadow_thread =
+            thread::spawn(move || background_shadow_reader(&*shadow, shadow_channel_rx));
+
+        ShadowedOrderbookReader {
+            primary,
+            shadow_thread,
+            shadow_channel: shadow_channel_tx,
+        }
+    }
+
+    /// Eplicitely stop the shadowed orderbook reader returning an error if the
+    /// inner shadow reader thread panicked.
+    ///
+    /// Note this method does not need to be called as the shadow thread will
+    /// automatically get cleaned up once the reader is dropped.
+    pub fn stop(self) -> thread::Result<()> {
+        let Self {
+            shadow_thread,
+            shadow_channel,
+            ..
+        } = self;
+
+        drop(shadow_channel);
+        shadow_thread.join()?;
+
+        Ok(())
+    }
+}
+
+impl<'a> StableXOrderBookReading for ShadowedOrderbookReader<'a> {
+    fn get_auction_data(&self, batch_id: U256) -> Result<Orderbook> {
+        let orderbook = self.primary.get_auction_data(batch_id)?;
+
+        // NOTE: Ignore errors here as they indicate that the shadow reader is
+        //   already reading an orderbook.
+        let _ = self
+            .shadow_channel
+            .try_send((batch_id.low_u32(), orderbook.clone()));
+
+        Ok(orderbook)
+    }
+}
+
+/// Background shadow thread that receives orders from the order channel,
+/// queries the exact same account state with the shadow reader, and then
+/// compares its results the ones from the primary reader.
+///
+/// Exits once the channel has been closed indicating that the shadow
+/// thread should exit.
+fn background_shadow_reader(
+    reader: &dyn StableXOrderBookReading,
+    channel: Receiver<(u32, Orderbook)>,
+) {
+    while let Ok((batch_id, orderbook)) = channel.recv() {
+        let diff = match Diff::compare_to_reader(&orderbook, reader, batch_id) {
+            Ok(diff) if diff.is_empty() => continue,
+            Ok(diff) => diff,
+            Err(err) => {
+                log::error!(
+                    "encountered an error reading the orderbook with the shadow reader: {:?}",
+                    err
+                );
+                continue;
+            }
+        };
+
+        let Diff(balance_changes, order_changes) = diff;
+        for balance_change in balance_changes {
+            log::error!(
+                "user {:?} token {} primary balance of {} different than shadow {}",
+                balance_change.user,
+                balance_change.token.0,
+                balance_change.primary,
+                balance_change.shadow,
+            );
+        }
+        for order_change in order_changes {
+            match order_change {
+                OrderChange::Added(order) => log::error!(
+                    "user {:?} order {} in primary but missing from shadow",
+                    order.account_id,
+                    order.id,
+                ),
+                OrderChange::Removed(order) => log::error!(
+                    "user {:?} order {} missing from primary but in shadow",
+                    order.account_id,
+                    order.id,
+                ),
+                OrderChange::Modified {
+                    user,
+                    id,
+                    primary,
+                    shadow,
+                } => {
+                    log::error!(
+                        "user {:?} order {} with primary values {:?} but shadow values {:?}",
+                        user,
+                        id,
+                        primary,
+                        shadow,
+                    );
+                }
+            }
+        }
+    }
+}
 
 /// A struct representing a diffs in two queried orderbooks.
 #[derive(Debug, PartialEq)]
