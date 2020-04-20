@@ -1,5 +1,5 @@
 use super::*;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
 use serde::{Deserialize, Serialize};
 
 /// The balance of a token for a user.
@@ -11,7 +11,16 @@ pub struct Balance {
 }
 
 impl Balance {
-    pub fn deposit(&mut self, amount: U256, current_batch_id: BatchId) -> Result<()> {
+    pub fn deposit(
+        &mut self,
+        amount: U256,
+        batch_id: BatchId,
+        current_batch_id: BatchId,
+    ) -> Result<()> {
+        ensure!(
+            batch_id == current_batch_id,
+            "deposit batch id does not match current batch id"
+        );
         self.apply_existing_deposit(current_batch_id)?;
         // Works like in the smart contract: If there is an existing deposit we override the
         // batch id and add to the amount. If there is no existing deposit then amount is already 0.
@@ -25,24 +34,34 @@ impl Balance {
         Ok(())
     }
 
-    pub fn withdraw_request(&mut self, amount: U256, batch_id: BatchId) {
+    pub fn withdraw_request(
+        &mut self,
+        amount: U256,
+        batch_id: BatchId,
+        current_batch_id: BatchId,
+    ) -> Result<()> {
+        ensure!(batch_id >= current_batch_id, "withdraw request in the past");
+        // It is not possible to get a new withdraw request when there already is an existing valid
+        // withdraw request because the smart contract should have emitted a withdraw event for the
+        // previous one first.
+        ensure!(
+            self.withdraw.batch_id >= current_batch_id || self.withdraw.amount == U256::zero(),
+            "new withdraw request before clearing of previous withdraw request"
+        );
         self.withdraw.batch_id = batch_id;
         self.withdraw.amount = amount;
+        Ok(())
     }
 
     pub fn withdraw(&mut self, amount: U256, batch_id: BatchId) -> Result<()> {
-        if self.withdraw.batch_id >= batch_id {
-            return Err(anyhow!(
-                "withdraw earlier than requested {}",
-                self.withdraw.batch_id
-            ));
-        }
-        if self.withdraw.amount < amount {
-            return Err(anyhow!(
-                "withdraw more than requested {}",
-                self.withdraw.amount
-            ));
-        }
+        ensure!(
+            self.withdraw.batch_id < batch_id,
+            anyhow!("withdraw earlier than requested {}", self.withdraw.batch_id)
+        );
+        ensure!(
+            self.withdraw.amount >= amount,
+            anyhow!("withdraw more than requested {}", self.withdraw.amount)
+        );
         // Works like in the smart contract: Any withdraw unconditionally removes the withdraw
         // request even if the amount is smaller than requested.
         self.withdraw.amount = 0.into();

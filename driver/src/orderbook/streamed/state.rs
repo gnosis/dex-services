@@ -4,7 +4,7 @@ use crate::contracts::{
     stablex_contract::batch_exchange::{event_data::*, Event},
 };
 use crate::models::Order as ModelOrder;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use balance::Balance;
 use order::Order;
 use serde::{Deserialize, Serialize};
@@ -88,7 +88,7 @@ impl State {
     pub fn apply_event(mut self, event: &Event, block_batch_id: BatchId) -> Result<Self> {
         match event {
             Event::Deposit(event) => self.deposit(event, block_batch_id)?,
-            Event::WithdrawRequest(event) => self.withdraw_request(event)?,
+            Event::WithdrawRequest(event) => self.withdraw_request(event, block_batch_id)?,
             Event::Withdraw(event) => self.withdraw(event, block_batch_id)?,
             Event::TokenListing(event) => self.token_listing(event)?,
             Event::OrderPlacement(event) => self.order_placement(event)?,
@@ -103,16 +103,12 @@ impl State {
 
     fn deposit(&mut self, event: &Deposit, block_batch_id: BatchId) -> Result<()> {
         let balance = self.balances.entry((event.user, event.token)).or_default();
-        if event.batch_id != block_batch_id {
-            return Err(anyhow!("deposit batch id does not match current batch id"));
-        }
-        balance.deposit(event.amount, block_batch_id)
+        balance.deposit(event.amount, event.batch_id, block_batch_id)
     }
 
-    fn withdraw_request(&mut self, event: &WithdrawRequest) -> Result<()> {
+    fn withdraw_request(&mut self, event: &WithdrawRequest, block_batch_id: BatchId) -> Result<()> {
         let balance = self.balances.entry((event.user, event.token)).or_default();
-        balance.withdraw_request(event.amount, event.batch_id);
-        Ok(())
+        balance.withdraw_request(event.amount, event.batch_id, block_batch_id)
     }
 
     fn withdraw(&mut self, event: &Withdraw, block_batch_id: BatchId) -> Result<()> {
@@ -137,7 +133,7 @@ impl State {
         };
         match self.orders.entry((event.owner, event.index)) {
             Entry::Vacant(entry) => entry.insert(order),
-            Entry::Occupied(_) => return Err(anyhow!("order already exists")),
+            Entry::Occupied(_) => bail!("order already exists"),
         };
         Ok(())
     }
@@ -379,7 +375,7 @@ mod tests {
             batch_id: 0,
         };
         state = state
-            .apply_event(&Event::WithdrawRequest(event), 1)
+            .apply_event(&Event::WithdrawRequest(event), 0)
             .unwrap();
         let account_state_ = account_state(&state, 1);
         assert_eq!(account_state_.read_balance(0, address(1)), 1);
