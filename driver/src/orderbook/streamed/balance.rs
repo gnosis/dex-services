@@ -23,14 +23,13 @@ impl Balance {
         );
         self.apply_existing_deposit(current_batch_id)?;
         // Works like in the smart contract: If there is an existing deposit we override the
-        // batch id and add to the amount. If there is no existing deposit then amount is already 0.
-        let deposit_amount_including_this_deposit = self
+        // batch id and add to the amount.
+        self.deposit.batch_id = current_batch_id;
+        self.deposit.amount = self
             .deposit
             .amount
             .checked_add(amount)
             .ok_or_else(|| anyhow!("overflow"))?;
-        self.deposit.batch_id = current_batch_id;
-        self.deposit.amount = deposit_amount_including_this_deposit;
         Ok(())
     }
 
