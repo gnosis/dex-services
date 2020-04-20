@@ -173,7 +173,7 @@ impl StableXContract for StableXContractImpl {
                 .ok_or_else(|| anyhow!("block {:?} is missing", block_number))
         };
 
-        let mut current_block = get_block(BlockNumber::Latest)?;
+        let mut current_block = get_block(BlockNumber::Pending)?;
         let mut block_number = None;
         while batch_id < get_block_batch_id(&current_block) {
             if current_block.number == Some(0.into()) {
