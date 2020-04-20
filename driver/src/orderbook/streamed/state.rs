@@ -81,24 +81,24 @@ impl State {
 
     /// Apply an event to the state, modifying it.
     ///
-    /// // TODO: remove this, make code easier
-    /// In case of error no modifications take place.
+    /// Consumes and returns back `self` because it cannot be reused in case of error.
     ///
     /// `block_batch_id` is the current batch based on the timestamp of the block that contains the
     ///  event.
-    pub fn apply_event(&mut self, event: &Event, block_batch_id: BatchId) -> Result<()> {
+    pub fn apply_event(mut self, event: &Event, block_batch_id: BatchId) -> Result<Self> {
         match event {
-            Event::Deposit(event) => self.deposit(event, block_batch_id),
-            Event::WithdrawRequest(event) => self.withdraw_request(event),
-            Event::Withdraw(event) => self.withdraw(event, block_batch_id),
-            Event::TokenListing(event) => self.token_listing(event),
-            Event::OrderPlacement(event) => self.order_placement(event),
-            Event::OrderCancellation(event) => self.order_cancellation(event, block_batch_id),
-            Event::OrderDeletion(event) => self.order_deletion(event),
+            Event::Deposit(event) => self.deposit(event, block_batch_id)?,
+            Event::WithdrawRequest(event) => self.withdraw_request(event)?,
+            Event::Withdraw(event) => self.withdraw(event, block_batch_id)?,
+            Event::TokenListing(event) => self.token_listing(event)?,
+            Event::OrderPlacement(event) => self.order_placement(event)?,
+            Event::OrderCancellation(event) => self.order_cancellation(event, block_batch_id)?,
+            Event::OrderDeletion(event) => self.order_deletion(event)?,
             Event::Trade(_event) => unimplemented!(),
             Event::TradeReversion(_event) => unimplemented!(),
             Event::SolutionSubmission(_event) => unimplemented!(),
-        }
+        };
+        Ok(self)
     }
 
     fn deposit(&mut self, event: &Deposit, block_batch_id: BatchId) -> Result<()> {
@@ -196,7 +196,7 @@ mod tests {
             token: address(0),
             id: 0,
         };
-        state.apply_event(&Event::TokenListing(event), 0).unwrap();
+        state = state.apply_event(&Event::TokenListing(event), 0).unwrap();
         state
     }
 
@@ -213,7 +213,7 @@ mod tests {
             amount: 1.into(),
             batch_id: 0,
         };
-        state.apply_event(&Event::Deposit(event), 0).unwrap();
+        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
         let account_state_ = account_state(&state, 0);
         assert_eq!(account_state_.read_balance(0, address(3)), 0);
         let account_state_ = account_state(&state, 1);
@@ -231,7 +231,7 @@ mod tests {
                 amount: 1.into(),
                 batch_id: 0,
             };
-            state.apply_event(&Event::Deposit(event), 0).unwrap();
+            state = state.apply_event(&Event::Deposit(event), 0).unwrap();
         }
 
         let account_state_ = account_state(&state, 1);
@@ -241,7 +241,7 @@ mod tests {
             token: address(1),
             id: 1,
         };
-        state.apply_event(&Event::TokenListing(event), 0).unwrap();
+        state = state.apply_event(&Event::TokenListing(event), 0).unwrap();
 
         let account_state_ = account_state(&state, 1);
         assert_eq!(account_state_.read_balance(0, address(3)), 1);
@@ -258,7 +258,7 @@ mod tests {
                 amount: 1.into(),
                 batch_id: i + 1,
             };
-            state.apply_event(&Event::Deposit(event), i).unwrap();
+            state = state.apply_event(&Event::Deposit(event), i).unwrap();
 
             let account_state_ = account_state(&state, i + 2);
             assert_eq!(account_state_.read_balance(0, address(1)), i as u128 + 1);
@@ -275,7 +275,7 @@ mod tests {
                 amount: 1.into(),
                 batch_id: 1,
             };
-            state.apply_event(&Event::Deposit(event), 0).unwrap();
+            state = state.apply_event(&Event::Deposit(event), 0).unwrap();
 
             let account_state_ = account_state(&state, 1);
             assert_eq!(account_state_.read_balance(0, address(1)), 0);
@@ -293,14 +293,14 @@ mod tests {
             amount: 2.into(),
             batch_id: 0,
         };
-        state.apply_event(&Event::Deposit(event), 0).unwrap();
+        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
         let event = WithdrawRequest {
             user: address(1),
             token: address(0),
             amount: 1.into(),
             batch_id: 0,
         };
-        state
+        state = state
             .apply_event(&Event::WithdrawRequest(event), 0)
             .unwrap();
         let account_state_ = account_state(&state, 1);
@@ -316,14 +316,14 @@ mod tests {
             amount: 2.into(),
             batch_id: 0,
         };
-        state.apply_event(&Event::Deposit(event), 0).unwrap();
+        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
         let event = WithdrawRequest {
             user: address(1),
             token: address(0),
             amount: 3.into(),
             batch_id: 2,
         };
-        state
+        state = state
             .apply_event(&Event::WithdrawRequest(event), 1)
             .unwrap();
         let account_state_ = account_state(&state, 3);
@@ -339,14 +339,14 @@ mod tests {
             amount: 2.into(),
             batch_id: 0,
         };
-        state.apply_event(&Event::Deposit(event), 0).unwrap();
+        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
         let event = WithdrawRequest {
             user: address(1),
             token: address(0),
             amount: 2.into(),
             batch_id: 0,
         };
-        state
+        state = state
             .apply_event(&Event::WithdrawRequest(event), 0)
             .unwrap();
         let event = Withdraw {
@@ -354,7 +354,7 @@ mod tests {
             token: address(0),
             amount: 1.into(),
         };
-        state.apply_event(&Event::Withdraw(event), 1).unwrap();
+        state = state.apply_event(&Event::Withdraw(event), 1).unwrap();
         let account_state_ = account_state(&state, 1);
         assert_eq!(account_state_.read_balance(0, address(1)), 1);
     }
@@ -368,14 +368,14 @@ mod tests {
             amount: 3.into(),
             batch_id: 0,
         };
-        state.apply_event(&Event::Deposit(event), 0).unwrap();
+        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
         let event = WithdrawRequest {
             user: address(1),
             token: address(0),
             amount: 2.into(),
             batch_id: 0,
         };
-        state
+        state = state
             .apply_event(&Event::WithdrawRequest(event), 1)
             .unwrap();
         let account_state_ = account_state(&state, 1);
@@ -385,7 +385,7 @@ mod tests {
             token: address(0),
             amount: 1.into(),
         };
-        state.apply_event(&Event::Withdraw(event), 1).unwrap();
+        state = state.apply_event(&Event::Withdraw(event), 1).unwrap();
         let account_state_ = account_state(&state, 2);
         assert_eq!(account_state_.read_balance(0, address(1)), 2);
     }
@@ -404,7 +404,7 @@ mod tests {
             price_numerator: 3,
             price_denominator: 4,
         };
-        state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
+        state = state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
 
         assert_eq!(state.orders(0).next(), None);
         let expected_orders = vec![ModelOrder {
@@ -423,7 +423,7 @@ mod tests {
             owner: address(2),
             id: 0,
         };
-        state
+        state = state
             .apply_event(&Event::OrderCancellation(event), 2)
             .unwrap();
 
@@ -436,7 +436,7 @@ mod tests {
             owner: address(2),
             id: 0,
         };
-        state.apply_event(&Event::OrderDeletion(event), 2).unwrap();
+        state = state.apply_event(&Event::OrderDeletion(event), 2).unwrap();
         assert_eq!(state.orders(0).next(), None);
         assert_eq!(state.orders(1).next(), None);
         assert_eq!(state.orders(2).next(), None);
