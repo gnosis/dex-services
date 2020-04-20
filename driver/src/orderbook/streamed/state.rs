@@ -103,7 +103,10 @@ impl State {
 
     fn deposit(&mut self, event: &Deposit, block_batch_id: BatchId) -> Result<()> {
         let balance = self.balances.entry((event.user, event.token)).or_default();
-        balance.deposit(event.amount, event.batch_id, block_batch_id)
+        if event.batch_id != block_batch_id {
+            return Err(anyhow!("deposit batch id does not match current batch id"));
+        }
+        balance.deposit(event.amount, block_batch_id)
     }
 
     fn withdraw_request(&mut self, event: &WithdrawRequest) -> Result<()> {
@@ -256,7 +259,7 @@ mod tests {
                 user: address(1),
                 token: address(0),
                 amount: 1.into(),
-                batch_id: i + 1,
+                batch_id: i,
             };
             state = state.apply_event(&Event::Deposit(event), i).unwrap();
 
@@ -273,13 +276,13 @@ mod tests {
                 user: address(1),
                 token: address(0),
                 amount: 1.into(),
-                batch_id: 1,
+                batch_id: 0,
             };
             state = state.apply_event(&Event::Deposit(event), 0).unwrap();
 
-            let account_state_ = account_state(&state, 1);
+            let account_state_ = account_state(&state, 0);
             assert_eq!(account_state_.read_balance(0, address(1)), 0);
-            let account_state_ = account_state(&state, 2);
+            let account_state_ = account_state(&state, 1);
             assert_eq!(account_state_.read_balance(0, address(1)), i + 1);
         }
     }

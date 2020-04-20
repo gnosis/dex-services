@@ -11,12 +11,7 @@ pub struct Balance {
 }
 
 impl Balance {
-    pub fn deposit(
-        &mut self,
-        amount: U256,
-        deposit_batch_id: BatchId,
-        current_batch_id: BatchId,
-    ) -> Result<()> {
+    pub fn deposit(&mut self, amount: U256, current_batch_id: BatchId) -> Result<()> {
         self.apply_existing_deposit(current_batch_id)?;
         // Works like in the smart contract: If there is an existing deposit we override the
         // batch id and add to the amount. If there is no existing deposit then amount is already 0.
@@ -25,7 +20,7 @@ impl Balance {
             .amount
             .checked_add(amount)
             .ok_or_else(|| anyhow!("overflow"))?;
-        self.deposit.batch_id = deposit_batch_id;
+        self.deposit.batch_id = current_batch_id;
         self.deposit.amount = deposit_amount_including_this_deposit;
         Ok(())
     }
@@ -75,11 +70,10 @@ impl Balance {
 
     fn apply_existing_deposit(&mut self, current_batch_id: BatchId) -> Result<()> {
         if self.deposit.batch_id < current_batch_id {
-            let new_balance = self
+            self.balance = self
                 .balance
                 .checked_add(self.deposit.amount)
                 .ok_or_else(|| anyhow!("math overflow"))?;
-            self.balance = new_balance;
             self.deposit.amount = U256::zero();
         }
         Ok(())
