@@ -5,6 +5,8 @@ use ethcontract::{Address, U256};
 use crate::util::CeiledDiv;
 
 pub const AUCTION_ELEMENT_WIDTH: usize = 112;
+// Indexed auction elements have the orderId appened at the end
+pub const INDEXED_AUCTION_ELEMENT_WIDTH: usize = AUCTION_ELEMENT_WIDTH + 2;
 
 #[derive(Debug, PartialEq)]
 pub struct StableXAuctionElement {
@@ -24,6 +26,14 @@ impl StableXAuctionElement {
     /// Sets `id` to `0` because this information is not contained in the
     /// serialized information.
     pub fn from_bytes(bytes: &[u8; AUCTION_ELEMENT_WIDTH]) -> Self {
+        let mut indexed_bytes = [0u8; INDEXED_AUCTION_ELEMENT_WIDTH];
+        indexed_bytes.copy_from_slice(bytes);
+        Self::from_indexed_bytes(&indexed_bytes)
+    }
+
+    /// Deserialize an auction element that has been serialized by the smart
+    /// contract's `getFilteredOrdersPaginated` function.
+    pub fn from_indexed_bytes(bytes: &[u8; INDEXED_AUCTION_ELEMENT_WIDTH]) -> Self {
         let account_id = Address::from_slice(&bytes[0..20]);
 
         // these go together (since sell_token_balance is emitted as u256 and treated as u128
@@ -45,13 +55,14 @@ impl StableXAuctionElement {
         let numerator = BigEndian::read_u128(&bytes[64..80]);
         let denominator = BigEndian::read_u128(&bytes[80..96]);
         let remaining = BigEndian::read_u128(&bytes[96..112]);
+        let id = u16::from_le_bytes([bytes[112], bytes[113]]);
         let (buy_amount, sell_amount) = compute_buy_sell_amounts(numerator, denominator, remaining);
         StableXAuctionElement {
             valid_from,
             valid_until,
             sell_token_balance,
             order: Order {
-                id: 0,
+                id,
                 account_id,
                 buy_token,
                 sell_token,

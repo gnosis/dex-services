@@ -1,9 +1,11 @@
 mod auction_data_reader;
 mod filtered_orderbook;
+mod onchain_filtered_orderbook;
 mod shadow_orderbook;
 
 use self::auction_data_reader::PaginatedAuctionDataReader;
 pub use self::filtered_orderbook::{FilteredOrderbookReader, OrderbookFilter};
+pub use self::onchain_filtered_orderbook::OnchainFilteredOrderBookReader;
 pub use self::shadow_orderbook::ShadowedOrderbookReader;
 use crate::contracts::stablex_contract::StableXContract;
 use crate::models::{AccountState, Order};

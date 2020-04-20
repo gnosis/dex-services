@@ -1,4 +1,6 @@
-use crate::contracts::stablex_auction_element::{StableXAuctionElement, AUCTION_ELEMENT_WIDTH};
+use crate::contracts::stablex_auction_element::{
+    StableXAuctionElement, AUCTION_ELEMENT_WIDTH, INDEXED_AUCTION_ELEMENT_WIDTH,
+};
 use crate::models::{AccountState, Order};
 use ethcontract::{Address, U256};
 use std::collections::HashMap;
@@ -183,10 +185,56 @@ impl PaginatedAuctionDataReader {
     }
 }
 
+pub struct IndexedAuctionDataReader(AuctionDataReader);
+
+impl IndexedAuctionDataReader {
+    pub fn new(index: U256) -> Self {
+        Self(AuctionDataReader::new(index))
+    }
+
+    /// Signal that no more data will be read and return the result consuming
+    /// self.
+    pub fn get_auction_data(self) -> (AccountState, Vec<Order>) {
+        self.0.get_auction_data()
+    }
+
+    /// Applies one batch of data.
+    ///
+    /// A batch can come from `getFinalizedOrderBook`, `getOpenOrderBook` or
+    /// `getFilteredOrdersPaginated`.
+    ///
+    /// Panics if length of `packed_auction_bytes` is not a multiple of
+    /// `INDEXED_AUCTION_ELEMENT_WIDTH`.
+    pub fn apply_page(&mut self, packed_auction_bytes: &[u8]) {
+        let auction_elements = parse_indexed_auction_elements(packed_auction_bytes);
+        self.0.apply_auction_data(auction_elements);
+    }
+}
+
+fn parse_indexed_auction_elements(indexed_auction_bytes: &[u8]) -> Vec<StableXAuctionElement> {
+    assert_eq!(
+        indexed_auction_bytes.len() % INDEXED_AUCTION_ELEMENT_WIDTH,
+        0,
+        "Each auction should be packed in {} bytes",
+        INDEXED_AUCTION_ELEMENT_WIDTH
+    );
+
+    indexed_auction_bytes
+        .chunks(INDEXED_AUCTION_ELEMENT_WIDTH)
+        .map(auction_element_from_indexed_slice)
+        .collect()
+}
+
 fn auction_element_from_slice(chunk: &[u8]) -> StableXAuctionElement {
     let mut chunk_array = [0u8; AUCTION_ELEMENT_WIDTH];
     chunk_array.copy_from_slice(chunk);
     StableXAuctionElement::from_bytes(&chunk_array)
+}
+
+fn auction_element_from_indexed_slice(chunk: &[u8]) -> StableXAuctionElement {
+    let mut chunk_array = [0u8; INDEXED_AUCTION_ELEMENT_WIDTH];
+    chunk_array.copy_from_slice(chunk);
+    StableXAuctionElement::from_indexed_bytes(&chunk_array)
 }
 
 #[cfg(test)]

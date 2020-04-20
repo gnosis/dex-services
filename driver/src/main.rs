@@ -24,8 +24,8 @@ use crate::gas_station::GnosisSafeGasStation;
 use crate::http::HttpFactory;
 use crate::metrics::{HttpMetrics, MetricsServer, StableXMetrics};
 use crate::orderbook::{
-    FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader,
-    ShadowedOrderbookReader, StableXOrderBookReading,
+    FilteredOrderbookReader, OnchainFilteredOrderBookReader, OrderbookFilter,
+    PaginatedStableXOrderBookReader, ShadowedOrderbookReader, StableXOrderBookReading,
 };
 use crate::price_estimation::{PriceOracle, TokenData};
 use crate::price_finding::{Fee, SolverType};
@@ -221,7 +221,7 @@ fn main() {
         .use_shadowed_orderbook
     {
         let shadow_orderbook =
-            PaginatedStableXOrderBookReader::new(contract.clone(), options.auction_data_page_size);
+            OnchainFilteredOrderBookReader::new(contract.clone(), options.auction_data_page_size);
         let shadowed_orderbook = ShadowedOrderbookReader::new(&primary_orderbook, shadow_orderbook);
         Box::new(shadowed_orderbook)
     } else {

@@ -57,6 +57,13 @@ impl StableXContractImpl {
     }
 }
 
+pub struct FilteredAuctionData {
+    pub indexed_elements: Vec<u8>,
+    pub has_next_page: bool,
+    pub next_page_user: Address,
+    pub next_page_user_offset: u16,
+}
+
 #[cfg_attr(test, automock)]
 pub trait StableXContract {
     /// Retrieve the current batch ID that is accepting orders. Note that this
@@ -65,6 +72,16 @@ pub trait StableXContract {
 
     /// Retrieve the time remaining in the batch.
     fn get_current_auction_remaining_time(&self) -> Result<Duration>;
+
+    /// Retrieve one page of indexed auction data that is filtered on chain
+    /// to only include orders valid at the given batchId.
+    fn get_filtered_auction_data_paginated(
+        &self,
+        batch_index: U256,
+        page_size: u16,
+        previous_page_user: Address,
+        previous_page_user_offset: u16,
+    ) -> Result<FilteredAuctionData>;
 
     /// Retrieve one page of auction data.
     /// `block` is needed because the state of the smart contract could change
@@ -107,6 +124,38 @@ impl StableXContract for StableXContractImpl {
             .call()
             .wait()?;
         Ok(Duration::from_secs(remaining_seconds.as_u64()))
+    }
+
+    fn get_filtered_auction_data_paginated(
+        &self,
+        batch_index: U256,
+        page_size: u16,
+        previous_page_user: Address,
+        previous_page_user_offset: u16,
+    ) -> Result<FilteredAuctionData> {
+        let target_batch = batch_index.low_u32();
+        let mut builder = self.viewer.get_filtered_orders_paginated(
+            [target_batch, target_batch, target_batch],
+            vec![],
+            previous_page_user,
+            previous_page_user_offset,
+            page_size,
+        );
+        builder.m.tx.gas = None;
+        builder
+            .call()
+            .wait()
+            .map(
+                |(indexed_elements, has_next_page, next_page_user, next_page_user_offset)| {
+                    FilteredAuctionData {
+                        indexed_elements,
+                        has_next_page,
+                        next_page_user,
+                        next_page_user_offset,
+                    }
+                },
+            )
+            .map_err(From::from)
     }
 
     fn get_auction_data_paginated(
