@@ -114,7 +114,7 @@ pub struct PaginatedAuctionDataReader {
     reader: AuctionDataReader,
     /// Used when reading data from the smart contract in batches. None, when there is
     /// no next page.
-    pagination: Option<Pagination>,
+    next_page: Option<Pagination>,
     page_size: usize,
 }
 
@@ -134,7 +134,7 @@ impl PaginatedAuctionDataReader {
     pub fn new(index: U256, page_size: usize) -> PaginatedAuctionDataReader {
         PaginatedAuctionDataReader {
             reader: AuctionDataReader::new(index),
-            pagination: Some(Pagination {
+            next_page: Some(Pagination {
                 previous_page_user: Address::zero(),
                 previous_page_user_offset: 0,
             }),
@@ -142,10 +142,8 @@ impl PaginatedAuctionDataReader {
         }
     }
 
-    /// The pagination data used when reading data from the smart contract in
-    /// batches.
-    pub fn pagination(&self) -> Option<&Pagination> {
-        self.pagination.as_ref()
+    pub fn next_page(&self) -> Option<&Pagination> {
+        self.next_page.as_ref()
     }
 
     pub fn get_auction_data(self) -> (AccountState, Vec<Order>) {
@@ -156,7 +154,7 @@ impl PaginatedAuctionDataReader {
     pub fn apply_page(&mut self, packed_auction_bytes: &[u8]) {
         let number_of_orders = packed_auction_bytes.len() / AUCTION_ELEMENT_WIDTH;
         if number_of_orders == 0 {
-            self.pagination = None;
+            self.next_page = None;
             return;
         }
 
@@ -168,7 +166,7 @@ impl PaginatedAuctionDataReader {
         .account_id;
         self.reader.apply_page(packed_auction_bytes);
 
-        self.pagination = if number_of_orders == self.page_size {
+        self.next_page = if number_of_orders == self.page_size {
             let previous_page_user_offset = *self
                 .reader
                 .user_order_counts
@@ -358,7 +356,7 @@ pub mod tests {
         reader.apply_page(&bytes);
 
         assert_eq!(
-            reader.pagination,
+            reader.next_page,
             Some(Pagination {
                 previous_page_user: ORDER_1.account_id,
                 previous_page_user_offset: 2
@@ -375,7 +373,7 @@ pub mod tests {
         reader.apply_page(&bytes);
 
         assert_eq!(
-            reader.pagination,
+            reader.next_page,
             Some(Pagination {
                 previous_page_user: ORDER_1.account_id,
                 previous_page_user_offset: 1
@@ -386,7 +384,7 @@ pub mod tests {
         bytes.extend(ORDER_2_BYTES);
         reader.apply_page(&bytes);
         assert_eq!(
-            reader.pagination,
+            reader.next_page,
             Some(Pagination {
                 previous_page_user: ORDER_1.account_id,
                 previous_page_user_offset: 2
@@ -397,7 +395,7 @@ pub mod tests {
         bytes.extend(ORDER_3_BYTES);
         reader.apply_page(&bytes);
         assert_eq!(
-            reader.pagination,
+            reader.next_page,
             Some(Pagination {
                 previous_page_user: ORDER_3.account_id,
                 previous_page_user_offset: 1
@@ -405,7 +403,7 @@ pub mod tests {
         );
 
         reader.apply_page(&[]);
-        assert_eq!(reader.pagination, None);
+        assert_eq!(reader.next_page, None);
     }
 
     #[test]
@@ -417,7 +415,7 @@ pub mod tests {
         bytes.extend(ORDER_2_BYTES);
         reader.apply_page(&bytes);
         assert_eq!(
-            reader.pagination,
+            reader.next_page,
             Some(Pagination {
                 previous_page_user: ORDER_2.account_id,
                 previous_page_user_offset: 1
@@ -427,6 +425,6 @@ pub mod tests {
         bytes.clear();
         bytes.extend(ORDER_1_BYTES);
         reader.apply_page(&bytes);
-        assert_eq!(reader.pagination, None);
+        assert_eq!(reader.next_page, None);
     }
 }

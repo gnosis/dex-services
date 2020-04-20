@@ -42,11 +42,11 @@ impl<'a> PaginatedStableXOrderBookReader<'a> {
 impl<'a> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a> {
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
         let mut reader = PaginatedAuctionDataReader::new(index, self.page_size as usize);
-        while let Some(pagination) = reader.pagination() {
+        while let Some(page_info) = reader.next_page() {
             let page = &self.contract.get_auction_data_paginated(
                 self.page_size,
-                pagination.previous_page_user,
-                pagination
+                page_info.previous_page_user,
+                page_info
                     .previous_page_user_offset
                     .try_into()
                     .expect("user cannot have more than u16::MAX orders"),
