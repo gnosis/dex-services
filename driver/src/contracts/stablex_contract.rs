@@ -6,7 +6,10 @@ use std::time::Duration;
 
 use anyhow::Result;
 use ethcontract::transaction::GasPrice;
-use ethcontract::{Address, BlockNumber, PrivateKey, U256};
+use ethcontract::{
+    contract::Event, errors::ExecutionError, Address, BlockNumber, PrivateKey, U256,
+};
+use futures::{future::BoxFuture, stream::BoxStream};
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
@@ -94,6 +97,14 @@ pub trait StableXContract {
         solution: Solution,
         claimed_objective_value: U256,
     ) -> Result<()>;
+
+    fn past_events(
+        &self,
+    ) -> BoxFuture<'static, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>;
+
+    fn stream_events(
+        &self,
+    ) -> BoxStream<'static, Result<Event<batch_exchange::Event>, ExecutionError>>;
 }
 
 impl<'a> StableXContract for StableXContractImpl<'a> {
@@ -188,6 +199,29 @@ impl<'a> StableXContract for StableXContractImpl<'a> {
             .wait()?;
 
         Ok(())
+    }
+
+    fn stream_events(
+        &self,
+    ) -> BoxStream<'static, Result<Event<batch_exchange::Event>, ExecutionError>> {
+        Box::pin(
+            self.instance
+                .all_events()
+                .from_block(BlockNumber::Earliest)
+                .stream(),
+        )
+    }
+
+    fn past_events(
+        &self,
+    ) -> BoxFuture<'static, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>> {
+        Box::pin(
+            self.instance
+                .all_events()
+                .from_block(ethcontract::BlockNumber::Earliest)
+                .to_block(ethcontract::BlockNumber::Latest)
+                .query(),
+        )
     }
 }
 
