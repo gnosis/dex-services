@@ -159,6 +159,38 @@ pub mod tests {
     }
 
     #[test]
+    fn test_index_auction_element() {
+        let bytes: [u8; 114] = [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // user: 20 elements
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 3, // sellTokenBalance: 3, 32 elements
+            1, 2, // buyToken: 256+2,
+            1, 1, // sellToken: 256+1,
+            0, 0, 0, 2, // validFrom: 2
+            0, 0, 1, 5, // validUntil: 256+5
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // remainingAmount: 2**8 + 1 = 257
+            0, 1, // order index
+        ];
+        let res = StableXAuctionElement::from_indexed_bytes(&bytes);
+        let auction_element = StableXAuctionElement {
+            valid_from: U256::from(2),
+            valid_until: U256::from(261),
+            sell_token_balance: 3,
+            order: Order {
+                id: 1,
+                account_id: Address::from_low_u64_be(1),
+                buy_token: 258,
+                sell_token: 257,
+                buy_amount: (258 * 257 + 258) / 259,
+                sell_amount: 257,
+            },
+        };
+        assert_eq!(res, auction_element);
+    }
+
+    #[test]
     #[should_panic]
     fn test_from_bytes_fails_on_hopefully_null() {
         StableXAuctionElement::from_bytes(&[1u8; 112]);
