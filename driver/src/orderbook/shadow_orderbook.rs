@@ -7,9 +7,7 @@
 
 #![allow(dead_code)]
 
-use super::StableXOrderBookReading;
 use crate::models::{AccountState, Order, TokenId};
-use anyhow::Result;
 use ethcontract::Address;
 use std::collections::{HashMap, HashSet};
 
@@ -21,21 +19,6 @@ type Orderbook = (AccountState, Vec<Order>);
 struct Diff(Vec<BalanceChange>, Vec<OrderChange>);
 
 impl Diff {
-    /// Reads an orderbook with the specified reader at the given batch and
-    /// compares its results to the expected orderbook, returing a diff of the
-    /// two.
-    ///
-    /// The diff is expressed in changes in the primary orderbook relative to
-    /// the orderbook read with the reader.
-    fn compare_to_reader(
-        primary_orderbook: &Orderbook,
-        reader: &dyn StableXOrderBookReading,
-        batch_id: u32,
-    ) -> Result<Self> {
-        let shadow = reader.get_auction_data(batch_id.into())?;
-        Ok(Diff::compare(&primary_orderbook, &shadow))
-    }
-
     /// Compares the specified primary orderbook to a shadow orderbook.
     fn compare(primary: &Orderbook, shadow: &Orderbook) -> Self {
         Diff(
