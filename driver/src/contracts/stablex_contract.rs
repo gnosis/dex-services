@@ -26,6 +26,7 @@ lazy_static! {
 include!(concat!(env!("OUT_DIR"), "/batch_exchange.rs"));
 include!(concat!(env!("OUT_DIR"), "/batch_exchange_viewer.rs"));
 
+#[derive(Clone)]
 pub struct StableXContractImpl {
     instance: BatchExchange,
     viewer: BatchExchangeViewer,
