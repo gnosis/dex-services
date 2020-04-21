@@ -1,16 +1,16 @@
+mod auction_data_reader;
+mod filtered_orderbook;
+mod shadow_orderbook;
+
+use self::auction_data_reader::PaginatedAuctionDataReader;
+pub use self::filtered_orderbook::{FilteredOrderbookReader, OrderbookFilter};
 use crate::contracts::stablex_contract::StableXContract;
 use crate::models::{AccountState, Order};
-
 use anyhow::Result;
-use auction_data_reader::PaginatedAuctionDataReader;
 use ethcontract::U256;
 #[cfg(test)]
 use mockall::automock;
 use std::convert::TryInto;
-
-mod auction_data_reader;
-mod filtered_orderbook;
-pub use filtered_orderbook::{FilteredOrderbookReader, OrderbookFilter};
 
 #[cfg_attr(test, automock)]
 pub trait StableXOrderBookReading {

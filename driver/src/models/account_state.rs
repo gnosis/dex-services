@@ -9,6 +9,10 @@ impl AccountState {
     pub fn read_balance(&self, token_id: u16, account_id: Address) -> u128 {
         self.0.get(&(account_id, token_id)).cloned().unwrap_or(0)
     }
+
+    pub fn user_token_pairs(&self) -> impl Iterator<Item = (Address, u16)> + '_ {
+        self.0.iter().map(|(&pair, _)| pair)
+    }
 }
 
 #[cfg(test)]
