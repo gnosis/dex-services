@@ -12,6 +12,7 @@ use crate::models::{AccountState, Order, TokenId};
 use anyhow::Result;
 use ethcontract::{Address, U256};
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread::{self, JoinHandle};
 
@@ -90,10 +91,9 @@ fn background_shadow_reader(
     reader: &dyn StableXOrderBookReading,
     channel: Receiver<(u32, Orderbook)>,
 ) {
-    while let Ok((batch_id, orderbook)) = channel.recv() {
-        let diff = match Diff::compare_to_reader(&orderbook, reader, batch_id) {
-            Ok(diff) if diff.is_empty() => continue,
-            Ok(diff) => diff,
+    while let Ok((batch_id, primary_orderbook)) = channel.recv() {
+        let shadow_orderbook = match reader.get_auction_data(batch_id.into()) {
+            Ok(orderbook) => orderbook,
             Err(err) => {
                 log::error!(
                     "encountered an error reading the orderbook with the shadow reader: {:?}",
@@ -103,42 +103,14 @@ fn background_shadow_reader(
             }
         };
 
-        let Diff(balance_changes, order_changes) = diff;
-        for balance_change in balance_changes {
-            log::error!(
-                "user {:?} token {} primary balance of {} different than shadow {}",
-                balance_change.user,
-                balance_change.token.0,
-                balance_change.primary,
-                balance_change.shadow,
-            );
-        }
-        for order_change in order_changes {
-            match order_change {
-                OrderChange::Added(order) => log::error!(
-                    "user {:?} order {} in primary but missing from shadow",
-                    order.account_id,
-                    order.id,
-                ),
-                OrderChange::Removed(order) => log::error!(
-                    "user {:?} order {} missing from primary but in shadow",
-                    order.account_id,
-                    order.id,
-                ),
-                OrderChange::Modified {
-                    user,
-                    id,
-                    primary,
-                    shadow,
-                } => {
-                    log::error!(
-                        "user {:?} order {} with primary values {:?} but shadow values {:?}",
-                        user,
-                        id,
-                        primary,
-                        shadow,
-                    );
-                }
+        let diff = Diff::compare(&primary_orderbook, &shadow_orderbook);
+        if !diff.is_empty() {
+            let Diff(balance_changes, order_changes) = diff;
+            for balance_change in balance_changes {
+                log::error!("{}", balance_change);
+            }
+            for order_change in order_changes {
+                log::error!("{}", order_change);
             }
         }
     }
@@ -200,6 +172,16 @@ impl BalanceChange {
     }
 }
 
+impl fmt::Display for BalanceChange {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "user {:?} token {} primary balance of {} but shadow balance {}",
+            self.user, self.token.0, self.primary, self.shadow,
+        )
+    }
+}
+
 /// Represents a change in order data between a primary and shadow orderbook.
 #[derive(Debug, PartialEq)]
 enum OrderChange {
@@ -257,6 +239,33 @@ impl OrderChange {
         match self {
             OrderChange::Added(order) | OrderChange::Removed(order) => (order.account_id, order.id),
             OrderChange::Modified { user, id, .. } => (*user, *id),
+        }
+    }
+}
+
+impl fmt::Display for OrderChange {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            OrderChange::Added(order) => write!(
+                f,
+                "user {:?} order {} in primary but missing from shadow",
+                order.account_id, order.id,
+            ),
+            OrderChange::Removed(order) => write!(
+                f,
+                "user {:?} order {} missing from primary but in shadow",
+                order.account_id, order.id,
+            ),
+            OrderChange::Modified {
+                user,
+                id,
+                primary,
+                shadow,
+            } => write!(
+                f,
+                "user {:?} order {} with primary values {:?} but shadow values {:?}",
+                user, id, primary, shadow,
+            ),
         }
     }
 }
