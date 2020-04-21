@@ -12,6 +12,7 @@ use ethcontract::U256;
 #[cfg(test)]
 use mockall::automock;
 use std::convert::TryInto;
+use std::sync::Arc;
 
 #[cfg_attr(test, automock)]
 pub trait StableXOrderBookReading {
@@ -27,14 +28,14 @@ pub trait StableXOrderBookReading {
 /// contract in a paginated way.
 /// This avoid hitting gas limits when the total amount of orders is large.
 pub struct PaginatedStableXOrderBookReader {
-    contract: Box<dyn StableXContract + Send + Sync>,
+    contract: Arc<dyn StableXContract + Send + Sync>,
     page_size: u16,
 }
 
 impl PaginatedStableXOrderBookReader {
-    pub fn new(contract: impl StableXContract + Send + Sync + 'static, page_size: u16) -> Self {
+    pub fn new(contract: Arc<dyn StableXContract + Send + Sync>, page_size: u16) -> Self {
         Self {
-            contract: Box::new(contract),
+            contract,
             page_size,
         }
     }
