@@ -9,9 +9,6 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::iter::Iterator;
 
-// TODO: Should we handle https://github.com/gnosis/dex-contracts/issues/620 ?
-// There is a workaround detailed in the issue it hasn't been implemented.
-
 // Most types, fields, functions in this module mirror the smart contract because we need to
 // emulate what it does based on the events it emits.
 
@@ -25,6 +22,14 @@ pub struct State {
     orders: HashMap<(UserId, OrderId), Order>,
     balances: HashMap<(UserId, TokenAddress), Balance>,
     tokens: Tokens,
+    last_solution: LastSolution,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+struct LastSolution {
+    batch_id: BatchId,
+    user_id: UserId,
+    burnt_fees: U256,
 }
 
 impl State {
@@ -41,8 +46,11 @@ impl State {
                 let token_id = self.tokens.get_id_by_address(*token_address)?;
                 Some((
                     (*user_id, token_id),
-                    // TODO: Remove unwrap. Can fail while not all trades of a solution have been
-                    // received. Can fail if user's balance exceeds U256::max.
+                    // TODO: Remove unwrap.
+                    // Can fail if user's balance exceeds U256::max.
+                    // Can fail while not all trades of a solution have been received and batch_id
+                    // is the next batch_id so that we assume that the current solution won't be be
+                    // reverted.
                     balance.get_balance(batch_id).unwrap(),
                 ))
             })
@@ -81,7 +89,9 @@ impl State {
             Event::OrderDeletion(event) => self.order_deletion(event, block_batch_id)?,
             Event::Trade(event) => self.apply_trade(event, block_batch_id)?,
             Event::TradeReversion(event) => self.apply_trade_reversion(event, block_batch_id)?,
-            Event::SolutionSubmission(_event) => unimplemented!(),
+            Event::SolutionSubmission(event) => {
+                self.apply_solution_submission(event, block_batch_id)?
+            }
         };
         Ok(self)
     }
@@ -206,9 +216,39 @@ impl State {
             .get_address_by_id(order.buy_token)
             .ok_or_else(|| anyhow!("unknown buy token"))?;
         let buy_balance = self.balances.entry((user_id, buy_token)).or_default();
-        buy_balance_fn(buy_balance)?;
+        buy_balance_fn(buy_balance)
+    }
 
-        Ok(())
+    fn apply_solution_submission(
+        &mut self,
+        event: &SolutionSubmission,
+        block_batch_id: BatchId,
+    ) -> Result<()> {
+        let fee_token = self
+            .tokens
+            .get_address_by_id(0)
+            .ok_or_else(|| anyhow!("solution without fee token"))?;
+        self.revert_last_solution(fee_token, block_batch_id);
+        self.last_solution.batch_id = block_batch_id;
+        self.last_solution.user_id = event.submitter;
+        self.last_solution.burnt_fees = event.burnt_fees;
+        self.balances
+            .entry((event.submitter, fee_token))
+            .or_default()
+            .solution_submission(event.burnt_fees, block_batch_id)
+    }
+
+    fn revert_last_solution(&mut self, fee_token: TokenAddress, block_batch_id: BatchId) {
+        if self.last_solution.batch_id == block_batch_id {
+            // Neither unwrap can fail because we must have previously added the fee to the
+            // submitter in which case the balance must exist and be reversible.
+            self.balances
+                .get_mut(&(self.last_solution.user_id, fee_token))
+                .unwrap()
+                .revert_solution_submission(self.last_solution.burnt_fees, block_batch_id)
+                .unwrap();
+            self.last_solution.burnt_fees = U256::zero();
+        }
     }
 }
 
@@ -580,25 +620,21 @@ mod tests {
         };
         state = state.apply_event(&Event::TradeReversion(event), 1).unwrap();
 
-        /* Not yet handled
+        let event = SolutionSubmission {
+            submitter: address(4),
+            burnt_fees: 42.into(),
+            ..Default::default()
+        };
         state = state
-            .apply_event(
-                &Event::SolutionSubmission(SolutionSubmission {
-                    submitter: address(4),
-                    burnt_fees: 42.into(),
-                    ..Default::default()
-                }),
-                1,
-            )
+            .apply_event(&Event::SolutionSubmission(event), 1)
             .unwrap();
-        */
 
         let account_state_ = account_state(&state, 2);
         assert_eq!(account_state_.read_balance(0, address(2)), 12);
         assert_eq!(account_state_.read_balance(1, address(2)), 9);
         assert_eq!(account_state_.read_balance(0, address(3)), 8);
         assert_eq!(account_state_.read_balance(1, address(3)), 11);
-        // assert_eq!(account_state_.read_balance(0, address(4)), 42);
+        assert_eq!(account_state_.read_balance(0, address(4)), 42);
         assert_eq!(
             state
                 .orders
