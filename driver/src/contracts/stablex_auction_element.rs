@@ -55,7 +55,7 @@ impl StableXAuctionElement {
         let numerator = BigEndian::read_u128(&bytes[64..80]);
         let denominator = BigEndian::read_u128(&bytes[80..96]);
         let remaining = BigEndian::read_u128(&bytes[96..112]);
-        let id = u16::from_le_bytes([bytes[112], bytes[113]]);
+        let id = u16::from_le_bytes([bytes[113], bytes[112]]);
         let (buy_amount, sell_amount) = compute_buy_sell_amounts(numerator, denominator, remaining);
         StableXAuctionElement {
             valid_from,
