@@ -22,7 +22,7 @@ type Orderbook = (AccountState, Vec<Order>);
 /// A shadowed orderbook reader where two orderbook reading implementations
 /// compare results.
 pub struct ShadowedOrderbookReader<'a> {
-    primary: &'a dyn StableXOrderBookReading,
+    primary: &'a (dyn StableXOrderBookReading + Sync),
     shadow_thread: JoinHandle<()>,
     shadow_channel: SyncSender<(u32, Orderbook)>,
 }
@@ -31,15 +31,15 @@ impl<'a> ShadowedOrderbookReader<'a> {
     /// Create a new instance of a shadowed orderbook reader that starts a
     /// background thread
     pub fn new(
-        primary: &'a dyn StableXOrderBookReading,
-        shadow: Box<dyn StableXOrderBookReading + Send + 'static>,
+        primary: &'a (dyn StableXOrderBookReading + Sync),
+        shadow: impl StableXOrderBookReading + Send + 'static,
     ) -> Self {
         // NOTE: Create a bounded channel with a 0-sized buffer, this makes it
         //   if the primary orderbook is read and the shadow is still reading,
         //   the diff for that specific orderbook is skipped.
         let (shadow_channel_tx, shadow_channel_rx) = mpsc::sync_channel(0);
         let shadow_thread =
-            thread::spawn(move || background_shadow_reader(&*shadow, shadow_channel_rx));
+            thread::spawn(move || background_shadow_reader(&shadow, shadow_channel_rx));
 
         ShadowedOrderbookReader {
             primary,

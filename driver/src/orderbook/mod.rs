@@ -4,6 +4,7 @@ mod shadow_orderbook;
 
 use self::auction_data_reader::PaginatedAuctionDataReader;
 pub use self::filtered_orderbook::{FilteredOrderbookReader, OrderbookFilter};
+pub use self::shadow_orderbook::ShadowedOrderbookReader;
 use crate::contracts::stablex_contract::StableXContract;
 use crate::models::{AccountState, Order};
 use anyhow::Result;
@@ -25,21 +26,21 @@ pub trait StableXOrderBookReading {
 /// Implements the StableXOrderBookReading trait by using the underlying
 /// contract in a paginated way.
 /// This avoid hitting gas limits when the total amount of orders is large.
-pub struct PaginatedStableXOrderBookReader<'a> {
-    contract: &'a (dyn StableXContract + Sync),
+pub struct PaginatedStableXOrderBookReader {
+    contract: Box<dyn StableXContract + Send + Sync>,
     page_size: u16,
 }
 
-impl<'a> PaginatedStableXOrderBookReader<'a> {
-    pub fn new(contract: &'a (dyn StableXContract + Sync), page_size: u16) -> Self {
+impl PaginatedStableXOrderBookReader {
+    pub fn new(contract: impl StableXContract + Send + Sync + 'static, page_size: u16) -> Self {
         Self {
-            contract,
+            contract: Box::new(contract),
             page_size,
         }
     }
 }
 
-impl<'a> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a> {
+impl StableXOrderBookReading for PaginatedStableXOrderBookReader {
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
         let mut reader = PaginatedAuctionDataReader::new(index, self.page_size as usize);
         while let Some(page_info) = reader.next_page() {

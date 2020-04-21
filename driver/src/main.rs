@@ -23,7 +23,10 @@ use crate::driver::{
 use crate::gas_station::GnosisSafeGasStation;
 use crate::http::HttpFactory;
 use crate::metrics::{HttpMetrics, MetricsServer, StableXMetrics};
-use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
+use crate::orderbook::{
+    FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader,
+    ShadowedOrderbookReader,
+};
 use crate::price_estimation::{PriceOracle, TokenData};
 use crate::price_finding::{Fee, SolverType};
 use crate::solution_submission::StableXSolutionSubmitter;
@@ -202,10 +205,15 @@ fn main() {
     let price_finder = price_finding::create_price_finder(fee, options.solver_type, price_oracle);
 
     // Create the orderbook reader.
-    let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
-    info!("Orderbook filter: {:?}", options.orderbook_filter);
+    let primary_orderbook =
+        PaginatedStableXOrderBookReader::new(contract.clone(), options.auction_data_page_size);
+    let shadow_orderbook =
+        PaginatedStableXOrderBookReader::new(contract.clone(), options.auction_data_page_size);
+    let shadowed_orderbook = ShadowedOrderbookReader::new(&primary_orderbook, shadow_orderbook);
 
-    let filtered_orderbook = FilteredOrderbookReader::new(&orderbook, options.orderbook_filter);
+    info!("Orderbook filter: {:?}", options.orderbook_filter);
+    let filtered_orderbook =
+        FilteredOrderbookReader::new(&shadowed_orderbook, options.orderbook_filter);
 
     // Set up solution submitter.
     let solution_submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
