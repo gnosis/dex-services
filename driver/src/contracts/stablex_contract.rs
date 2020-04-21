@@ -135,7 +135,8 @@ impl StableXContract for StableXContractImpl {
     ) -> Result<FilteredAuctionData> {
         let target_batch = batch_index.low_u32();
         let mut builder = self.viewer.get_filtered_orders_paginated(
-            [target_batch, target_batch, target_batch],
+            // Balances should be valid for the batch at which we are submitting (target batch + 1)
+            [target_batch, target_batch, target_batch + 1],
             vec![],
             previous_page_user,
             previous_page_user_offset,
