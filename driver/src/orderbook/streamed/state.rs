@@ -79,8 +79,8 @@ impl State {
             Event::OrderPlacement(event) => self.order_placement(event)?,
             Event::OrderCancellation(event) => self.order_cancellation(event, block_batch_id)?,
             Event::OrderDeletion(event) => self.order_deletion(event, block_batch_id)?,
-            Event::Trade(_event) => unimplemented!(),
-            Event::TradeReversion(_event) => unimplemented!(),
+            Event::Trade(event) => self.apply_trade(event, block_batch_id)?,
+            Event::TradeReversion(event) => self.apply_trade_reversion(event, block_batch_id)?,
             Event::SolutionSubmission(_event) => unimplemented!(),
         };
         Ok(self)
@@ -153,6 +153,61 @@ impl State {
         }
         // Orders are allowed to be deleted multiple times so it is not an error to not find the
         // order.
+        Ok(())
+    }
+
+    fn apply_trade(&mut self, event: &Trade, block_batch_id: BatchId) -> Result<()> {
+        self.apply_trade_internal(
+            event.owner,
+            event.order_id,
+            |order| order.trade(event.executed_sell_amount, block_batch_id),
+            |sell_balance| sell_balance.sell(event.executed_sell_amount, block_batch_id),
+            |buy_balance| buy_balance.buy(event.executed_buy_amount, block_batch_id),
+        )
+    }
+
+    fn apply_trade_reversion(
+        &mut self,
+        event: &TradeReversion,
+        block_batch_id: BatchId,
+    ) -> Result<()> {
+        self.apply_trade_internal(
+            event.owner,
+            event.order_id,
+            |order| order.revert_trade(event.executed_sell_amount, block_batch_id),
+            |sell_balance| sell_balance.revert_sell(event.executed_sell_amount, block_batch_id),
+            |buy_balance| buy_balance.revert_buy(event.executed_buy_amount, block_batch_id),
+        )
+    }
+
+    fn apply_trade_internal(
+        &mut self,
+        user_id: UserId,
+        order_id: OrderId,
+        order_fn: impl FnOnce(&mut Order) -> Result<()>,
+        sell_balance_fn: impl FnOnce(&mut Balance) -> Result<()>,
+        buy_balance_fn: impl FnOnce(&mut Balance) -> Result<()>,
+    ) -> Result<()> {
+        let order = self
+            .orders
+            .get_mut(&(user_id, order_id))
+            .ok_or_else(|| anyhow!("unknown order"))?;
+        order_fn(order)?;
+
+        let sell_token = self
+            .tokens
+            .get_address_by_id(order.sell_token)
+            .ok_or_else(|| anyhow!("unknown sell token"))?;
+        let sell_balance = self.balances.entry((user_id, sell_token)).or_default();
+        sell_balance_fn(sell_balance)?;
+
+        let buy_token = self
+            .tokens
+            .get_address_by_id(order.buy_token)
+            .ok_or_else(|| anyhow!("unknown buy token"))?;
+        let buy_balance = self.balances.entry((user_id, buy_token)).or_default();
+        buy_balance_fn(buy_balance)?;
+
         Ok(())
     }
 }
@@ -445,5 +500,120 @@ mod tests {
         assert_eq!(state.orders(1).next(), None);
         assert_eq!(state.orders(2).next(), None);
         assert_eq!(state.orders(3).next(), None);
+    }
+
+    #[test]
+    fn trade_and_reversion_and_solution() {
+        let mut state = state_with_fee();
+        let event = TokenListing {
+            token: address(1),
+            id: 1,
+        };
+        state = state.apply_event(&Event::TokenListing(event), 0).unwrap();
+
+        for token in 0..2 {
+            for user in 2..4 {
+                let event = Deposit {
+                    user: address(user),
+                    token: address(token),
+                    amount: 10.into(),
+                    batch_id: 0,
+                };
+                state = state.apply_event(&Event::Deposit(event), 0).unwrap();
+            }
+        }
+
+        let event = OrderPlacement {
+            owner: address(2),
+            index: 0,
+            buy_token: 0,
+            sell_token: 1,
+            valid_from: 0,
+            valid_until: 10,
+            price_numerator: 5,
+            price_denominator: 5,
+        };
+        state = state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
+        let event = OrderPlacement {
+            owner: address(3),
+            index: 0,
+            buy_token: 1,
+            sell_token: 0,
+            valid_from: 0,
+            valid_until: 10,
+            price_numerator: 3,
+            price_denominator: 3,
+        };
+        state = state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
+
+        let event = Trade {
+            owner: address(2),
+            order_id: 0,
+            executed_sell_amount: 1,
+            executed_buy_amount: 2,
+            ..Default::default()
+        };
+        state = state.apply_event(&Event::Trade(event), 1).unwrap();
+        let event = Trade {
+            owner: address(3),
+            order_id: 0,
+            executed_sell_amount: 2,
+            executed_buy_amount: 1,
+            ..Default::default()
+        };
+        state = state.apply_event(&Event::Trade(event), 1).unwrap();
+
+        let event = Trade {
+            owner: address(2),
+            order_id: 0,
+            executed_sell_amount: 4,
+            executed_buy_amount: 3,
+            ..Default::default()
+        };
+        state = state.apply_event(&Event::Trade(event), 1).unwrap();
+        let event = TradeReversion {
+            owner: address(2),
+            order_id: 0,
+            executed_sell_amount: 4,
+            executed_buy_amount: 3,
+            ..Default::default()
+        };
+        state = state.apply_event(&Event::TradeReversion(event), 1).unwrap();
+
+        /* Not yet handled
+        state = state
+            .apply_event(
+                &Event::SolutionSubmission(SolutionSubmission {
+                    submitter: address(4),
+                    burnt_fees: 42.into(),
+                    ..Default::default()
+                }),
+                1,
+            )
+            .unwrap();
+        */
+
+        let account_state_ = account_state(&state, 2);
+        assert_eq!(account_state_.read_balance(0, address(2)), 12);
+        assert_eq!(account_state_.read_balance(1, address(2)), 9);
+        assert_eq!(account_state_.read_balance(0, address(3)), 8);
+        assert_eq!(account_state_.read_balance(1, address(3)), 11);
+        // assert_eq!(account_state_.read_balance(0, address(4)), 42);
+        assert_eq!(
+            state
+                .orders
+                .get(&(address(2), 0))
+                .unwrap()
+                .get_used_amount(2),
+            1
+        );
+        assert_eq!(
+            state
+                .orders
+                .get(&(address(3), 0))
+                .unwrap()
+                .get_used_amount(2),
+            2
+        );
     }
 }
