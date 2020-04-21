@@ -48,7 +48,7 @@ impl<'a> ShadowedOrderbookReader<'a> {
         }
     }
 
-    /// Eplicitely stop the shadowed orderbook reader returning an error if the
+    /// Explicitely stop the shadowed orderbook reader returning an error if the
     /// inner shadow reader thread panicked.
     ///
     /// Note this method does not need to be called as the shadow thread will
