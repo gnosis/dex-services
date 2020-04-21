@@ -25,7 +25,7 @@ use crate::http::HttpFactory;
 use crate::metrics::{HttpMetrics, MetricsServer, StableXMetrics};
 use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
 use crate::price_estimation::{PriceOracle, TokenData};
-use crate::price_finding::{Fee, SolverType};
+use crate::price_finding::{Fee, SolverConfig};
 use crate::solution_submission::StableXSolutionSubmitter;
 
 use ethcontract::PrivateKey;
@@ -61,11 +61,19 @@ struct Options {
     #[structopt(short = "i", long, env = "NETWORK_ID")]
     network_id: u64,
 
-    /// Which style of solver to use. Can be one of: 'NAIVE' for the naive
+    /// Configuration for the solver. The possible solver types are: 'NAIVE' for the naive
     /// solver; 'MIP' for mixed integer programming solver; 'NLP' for non-linear
     /// programming solver.
-    #[structopt(long, env = "SOLVER_TYPE", default_value = "naive-solver")]
-    solver_type: SolverType,
+    ///
+    /// For example: {
+    ///      "StandardSolver": { "min_avg_fee_per_order": 10000000000000000 }
+    ///   }
+    #[structopt(
+        long,
+        env = "SOLVER_CONFIG",
+        default_value = r#"{"NaiveSolver": null }"#
+    )]
+    solver_config: SolverConfig,
 
     /// JSON encoded backup token information to provide to the solver.
     ///
@@ -199,7 +207,7 @@ fn main() {
 
     // Set up solver.
     let fee = Some(Fee::default());
-    let price_finder = price_finding::create_price_finder(fee, options.solver_type, price_oracle);
+    let price_finder = price_finding::create_price_finder(fee, options.solver_config, price_oracle);
 
     // Create the orderbook reader.
     let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);

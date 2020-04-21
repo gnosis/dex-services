@@ -1,6 +1,6 @@
 use crate::models::{self, TokenId, TokenInfo};
 use crate::price_estimation::PriceEstimating;
-use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverType};
+use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverConfig};
 
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
@@ -167,7 +167,7 @@ trait Io {
         &self,
         input_file: &str,
         result_folder: &str,
-        solver_type: SolverType,
+        solver_config: SolverConfig,
         time_limit: Duration,
     ) -> Result<()>;
     fn read_output(&self, result_folder: &str) -> std::io::Result<String>;
@@ -176,20 +176,20 @@ trait Io {
 pub struct OptimisationPriceFinder {
     io_methods: Box<dyn Io + Sync>,
     fee: Option<Fee>,
-    solver_type: SolverType,
+    solver_config: SolverConfig,
     price_oracle: Box<dyn PriceEstimating + Sync>,
 }
 
 impl OptimisationPriceFinder {
     pub fn new(
         fee: Option<Fee>,
-        solver_type: SolverType,
+        solver_config: SolverConfig,
         price_oracle: impl PriceEstimating + Sync + 'static,
     ) -> Self {
         OptimisationPriceFinder {
             io_methods: Box::new(DefaultIo),
             fee,
-            solver_type,
+            solver_config,
             price_oracle: Box::new(price_oracle),
         }
     }
@@ -259,8 +259,8 @@ impl PriceFinding for OptimisationPriceFinder {
             .write_input(&input_file, &serde_json::to_string(&input)?)
             .with_context(|| format!("error writing instance to {}", input_file))?;
         self.io_methods
-            .run_solver(&input_file, &result_folder, self.solver_type, time_limit)
-            .with_context(|| format!("error running {:?} solver", self.solver_type))?;
+            .run_solver(&input_file, &result_folder, self.solver_config, time_limit)
+            .with_context(|| format!("error running {:?} solver", self.solver_config))?;
         let result = self
             .io_methods
             .read_output(&result_folder)
@@ -285,7 +285,7 @@ impl Io for DefaultIo {
         &self,
         input_file: &str,
         result_folder: &str,
-        solver: SolverType,
+        solver: SolverConfig,
         time_limit: Duration,
     ) -> Result<()> {
         let time_limit = (time_limit.as_secs_f64().round() as u64).to_string();
@@ -598,7 +598,9 @@ pub mod tests {
         let solver = OptimisationPriceFinder {
             io_methods: Box::new(io_methods),
             fee: Some(fee),
-            solver_type: SolverType::StandardSolver,
+            solver_config: SolverConfig::StandardSolver {
+                min_avg_fee_per_order: 0,
+            },
             price_oracle: Box::new(price_oracle),
         };
         let orders = vec![];

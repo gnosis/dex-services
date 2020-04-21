@@ -197,9 +197,14 @@ OPTIONS:
         --solver-time-limit <solver-time-limit>
             The offset from the start of the batch to cap the solver's execution time [env: SOLVER_TIME_LIMIT=]
             [default: 210]
-        --solver-type <solver-type>
-            Which style of solver to use. Can be one of: 'NAIVE' for the naive solver; 'MIP' for mixed integer
-            programming solver; 'NLP' for non-linear programming solver [env: SOLVER_TYPE=]  [default: naive-solver]
+        --solver-config <solver-config>
+        Configuration for the solver. The possible solver types are: 'NAIVE' for the naive
+        solver; 'MIP' for mixed integer programming solver; 'NLP' for non-linear
+        programming solver.
+        
+        For example: {
+             "StandardSolver": { "min_avg_fee_per_order": 10000000000000000 }
+        }
         --target-start-solve-time <target-start-solve-time>
             The offset from the start of a batch in seconds at which point we should start solving [env:
             TARGET_START_SOLVE_TIME=]  [default: 30]

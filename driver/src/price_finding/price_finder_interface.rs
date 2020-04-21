@@ -1,6 +1,8 @@
 use crate::models;
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Context, Error, Result};
 use log::debug;
+use serde::Deserialize;
+
 #[cfg(test)]
 use mockall::automock;
 use std::process::Command;
@@ -24,29 +26,30 @@ impl Default for Fee {
     }
 }
 
-#[derive(Clone, Debug, Copy, PartialEq)]
-pub enum SolverType {
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+pub enum SolverConfig {
     NaiveSolver,
-    StandardSolver,
-    FallbackSolver,
-    OpenSolver,
+    StandardSolver { min_avg_fee_per_order: u128 },
+    FallbackSolver { min_avg_fee_per_order: u128 },
+    OpenSolver { min_avg_fee_per_order: u128 },
 }
 
-impl FromStr for SolverType {
+impl FromStr for SolverConfig {
     type Err = Error;
 
-    fn from_str(solver_type_str: &str) -> Result<Self> {
-        match solver_type_str.to_lowercase().as_str() {
-            "standard-solver" => Ok(SolverType::StandardSolver),
-            "fallback-solver" => Ok(SolverType::FallbackSolver),
-            "naive-solver" => Ok(SolverType::NaiveSolver),
-            "open-solver" => Ok(SolverType::OpenSolver),
-            _ => Err(anyhow!("solver type does not exit")),
-        }
+    fn from_str(solver_config: &str) -> Result<Self> {
+        Ok(serde_json::from_str(solver_config)
+            .context("failed to parse solver_config from JSON string")?)
     }
 }
 
-impl SolverType {
+impl Default for SolverConfig {
+    fn default() -> Self {
+        SolverConfig::NaiveSolver
+    }
+}
+
+impl SolverConfig {
     pub fn execute(
         self,
         result_folder: &str,
@@ -54,21 +57,31 @@ impl SolverType {
         time_limit: String,
     ) -> Result<Output> {
         match self {
-            SolverType::OpenSolver => execute_open_solver(result_folder, input_file),
-            SolverType::StandardSolver => {
-                execute_private_solver(result_folder, input_file, time_limit)
+            SolverConfig::OpenSolver {
+                min_avg_fee_per_order,
+            } => execute_open_solver(result_folder, input_file, min_avg_fee_per_order),
+            SolverConfig::StandardSolver {
+                min_avg_fee_per_order,
+            } => {
+                execute_private_solver(result_folder, input_file, time_limit, min_avg_fee_per_order)
             }
-            SolverType::FallbackSolver => {
-                execute_private_solver(result_folder, input_file, time_limit)
+            SolverConfig::FallbackSolver {
+                min_avg_fee_per_order,
+            } => {
+                execute_private_solver(result_folder, input_file, time_limit, min_avg_fee_per_order)
             }
-            SolverType::NaiveSolver => {
+            SolverConfig::NaiveSolver => {
                 panic!("fn execute should not be called by the naive solver")
             }
         }
     }
 }
 
-pub fn execute_open_solver(result_folder: &str, input_file: &str) -> Result<Output> {
+pub fn execute_open_solver(
+    result_folder: &str,
+    input_file: &str,
+    min_avg_fee_per_order: u128,
+) -> Result<Output> {
     let mut command = Command::new("python");
     let open_solver_command = command
         .current_dir("/app/open_solver")
@@ -80,6 +93,7 @@ pub fn execute_open_solver(result_folder: &str, input_file: &str) -> Result<Outp
             result_folder.to_owned(),
             "06_solution_int_valid.json",
         ))
+        .arg(format!("--minAvgFeePerOrder={}", min_avg_fee_per_order))
         .arg(String::from("best-token-pair"));
     debug!("Using open-solver command `{:?}`", open_solver_command);
     Ok(open_solver_command.output()?)
@@ -89,6 +103,7 @@ pub fn execute_private_solver(
     result_folder: &str,
     input_file: &str,
     time_limit: String,
+    min_avg_fee_per_order: u128,
 ) -> Result<Output> {
     let mut command = Command::new("python");
     let private_solver_command = command
@@ -97,6 +112,7 @@ pub fn execute_private_solver(
         .arg(format!("{}{}", "/app/", input_file.to_owned()))
         .arg(format!("--outputDir={}{}", "/app/", result_folder))
         .args(&["--solverTimeLimit", &time_limit])
+        .arg(format!("--minAvgFeePerOrder={}", min_avg_fee_per_order))
         .arg(String::from("--useExternalPrices"));
     debug!(
         "Using private-solver command `{:?}`",
@@ -113,4 +129,35 @@ pub trait PriceFinding {
         state: &models::AccountState,
         time_limit: Duration,
     ) -> Result<models::Solution, Error>;
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn read_open_solver_config() {
+        let json = r#"{
+            "StandardSolver": { "min_avg_fee_per_order": 180 }
+        }"#;
+        let solver_config = SolverConfig::StandardSolver {
+            min_avg_fee_per_order: 180,
+        };
+        assert_eq!(
+            solver_config,
+            serde_json::from_str(json).expect("Failed to parse")
+        );
+    }
+
+    #[test]
+    fn read_naive_solver_config() {
+        let json = r#"{
+            "NaiveSolver": null
+        }"#;
+        let solver_config = SolverConfig::NaiveSolver;
+        assert_eq!(
+            solver_config,
+            serde_json::from_str(json).expect("Failed to parse")
+        );
+    }
 }
