@@ -95,7 +95,7 @@ impl AuctionDataReader {
         packed_auction_bytes
             .chunks(AUCTION_ELEMENT_WIDTH)
             .map(|chunk| {
-                let mut result = auction_element_from_chunk(chunk);
+                let mut result = auction_element_from_slice(chunk);
                 let order_counter = self
                     .user_order_counts
                     .entry(result.order.account_id)
@@ -158,7 +158,7 @@ impl PaginatedAuctionDataReader {
             return;
         }
 
-        let previous_page_user = auction_element_from_chunk(
+        let previous_page_user = auction_element_from_slice(
             &packed_auction_bytes
                 [packed_auction_bytes.len() - AUCTION_ELEMENT_WIDTH..packed_auction_bytes.len()],
         )
@@ -183,7 +183,7 @@ impl PaginatedAuctionDataReader {
     }
 }
 
-fn auction_element_from_chunk(chunk: &[u8]) -> StableXAuctionElement {
+fn auction_element_from_slice(chunk: &[u8]) -> StableXAuctionElement {
     let mut chunk_array = [0u8; AUCTION_ELEMENT_WIDTH];
     chunk_array.copy_from_slice(chunk);
     StableXAuctionElement::from_bytes(&chunk_array)
