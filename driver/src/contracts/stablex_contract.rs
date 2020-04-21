@@ -78,6 +78,7 @@ pub trait StableXContract {
     fn get_filtered_auction_data_paginated(
         &self,
         batch_index: U256,
+        token_whitelist: Vec<u16>,
         page_size: u16,
         previous_page_user: Address,
         previous_page_user_offset: u16,
@@ -129,6 +130,7 @@ impl StableXContract for StableXContractImpl {
     fn get_filtered_auction_data_paginated(
         &self,
         batch_index: U256,
+        token_whitelist: Vec<u16>,
         page_size: u16,
         previous_page_user: Address,
         previous_page_user_offset: u16,
@@ -137,7 +139,7 @@ impl StableXContract for StableXContractImpl {
         let mut builder = self.viewer.get_filtered_orders_paginated(
             // Balances should be valid for the batch at which we are submitting (target batch + 1)
             [target_batch, target_batch, target_batch + 1],
-            vec![],
+            token_whitelist,
             previous_page_user,
             previous_page_user_offset,
             page_size,

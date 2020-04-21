@@ -220,8 +220,11 @@ fn main() {
     let unfiltered_orderbook: Box<dyn StableXOrderBookReading + Sync> = if options
         .use_shadowed_orderbook
     {
-        let shadow_orderbook =
-            OnchainFilteredOrderBookReader::new(contract.clone(), options.auction_data_page_size);
+        let shadow_orderbook = OnchainFilteredOrderBookReader::new(
+            contract.clone(),
+            options.auction_data_page_size,
+            &options.orderbook_filter,
+        );
         let shadowed_orderbook = ShadowedOrderbookReader::new(&primary_orderbook, shadow_orderbook);
         Box::new(shadowed_orderbook)
     } else {
