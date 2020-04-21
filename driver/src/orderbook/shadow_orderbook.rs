@@ -5,8 +5,6 @@
 //! This is useful for validating alternate account retrieval methods during
 //! development.
 
-#![allow(dead_code)]
-
 use super::StableXOrderBookReading;
 use crate::models::{AccountState, Order, TokenId};
 use anyhow::Result;
@@ -23,7 +21,7 @@ type Orderbook = (AccountState, Vec<Order>);
 /// compare results.
 pub struct ShadowedOrderbookReader<'a> {
     primary: &'a (dyn StableXOrderBookReading + Sync),
-    shadow_thread: JoinHandle<()>,
+    _shadow_thread: JoinHandle<()>,
     shadow_channel: SyncSender<(u32, Orderbook)>,
 }
 
@@ -43,27 +41,9 @@ impl<'a> ShadowedOrderbookReader<'a> {
 
         ShadowedOrderbookReader {
             primary,
-            shadow_thread,
+            _shadow_thread: shadow_thread,
             shadow_channel: shadow_channel_tx,
         }
-    }
-
-    /// Explicitely stop the shadowed orderbook reader returning an error if the
-    /// inner shadow reader thread panicked.
-    ///
-    /// Note this method does not need to be called as the shadow thread will
-    /// automatically get cleaned up once the reader is dropped.
-    pub fn stop(self) -> thread::Result<()> {
-        let Self {
-            shadow_thread,
-            shadow_channel,
-            ..
-        } = self;
-
-        drop(shadow_channel);
-        shadow_thread.join()?;
-
-        Ok(())
     }
 }
 
