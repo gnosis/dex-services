@@ -1,7 +1,7 @@
 use super::*;
 use crate::contracts::stablex_auction_element;
 use crate::models::Order as ModelOrder;
-use anyhow::Result;
+use anyhow::{anyhow, ensure, Result};
 use serde::{Deserialize, Serialize};
 
 /// Change from a potential solution that might still get replaced by a better solution in the same
@@ -75,12 +75,37 @@ impl Order {
             .unwrap()
     }
 
-    pub fn trade(&mut self, _used_amount: u128, _batch_id: BatchId) -> Result<()> {
-        unimplemented!();
+    pub fn trade(&mut self, used_amount: u128, batch_id: BatchId) -> Result<()> {
+        if !self.has_limited_amount() {
+            return Ok(());
+        }
+        self.apply_pending_used_amount(batch_id);
+        // Now a potential previous used amount has been cleared. If there is an existing used
+        // amount for this batch then setting the batch_id does nothing and we add to the amount.
+        self.pending_used_amount.batch_id = batch_id;
+        self.pending_used_amount.amount = self
+            .pending_used_amount
+            .amount
+            .checked_add(used_amount)
+            .ok_or_else(|| anyhow!("math overflow"))?;
+        self.ensure_used_amount_invariant()
     }
 
-    pub fn revert_trade(&mut self, _used_amount: u128, _batch_id: BatchId) -> Result<()> {
-        unimplemented!();
+    pub fn revert_trade(&mut self, used_amount: u128, batch_id: BatchId) -> Result<()> {
+        ensure!(
+            self.pending_used_amount.batch_id == batch_id,
+            "reverting non existent trade"
+        );
+        if !self.has_limited_amount() {
+            return Ok(());
+        }
+        self.pending_used_amount.amount = self
+            .pending_used_amount
+            .amount
+            .checked_sub(used_amount)
+            .ok_or_else(|| anyhow!("math underflow"))?;
+        // The invariant hasn't been changed because the total used amount decreased.
+        Ok(())
     }
 
     pub fn as_model_order(
@@ -102,5 +127,25 @@ impl Order {
             buy_amount,
             sell_amount,
         }
+    }
+
+    fn apply_pending_used_amount(&mut self, batch_id: BatchId) {
+        self.used_amount = self.get_used_amount(batch_id);
+        if self.pending_used_amount.batch_id < batch_id {
+            self.pending_used_amount.amount = 0;
+        }
+        // The invariant hasn't been changed because the total used amount stayed the same.
+    }
+
+    fn ensure_used_amount_invariant(&self) -> Result<()> {
+        let total_used_amount = self
+            .used_amount
+            .checked_add(self.pending_used_amount.amount)
+            .ok_or_else(|| anyhow!("math overflow"))?;
+        ensure!(
+            total_used_amount <= self.price_denominator,
+            "trade by more than order limit"
+        );
+        Ok(())
     }
 }
