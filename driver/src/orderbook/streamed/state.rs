@@ -1,8 +1,5 @@
 use super::*;
-use crate::contracts::{
-    stablex_auction_element,
-    stablex_contract::batch_exchange::{event_data::*, Event},
-};
+use crate::contracts::stablex_contract::batch_exchange::{event_data::*, Event};
 use crate::models::Order as ModelOrder;
 use anyhow::{anyhow, bail, ensure, Result};
 use balance::Balance;
@@ -54,21 +51,9 @@ impl State {
     pub fn orders(&self, batch_id: BatchId) -> impl Iterator<Item = ModelOrder> + '_ {
         self.orders
             .iter()
-            .filter(move |(_, order)| order.valid_from <= batch_id && batch_id <= order.valid_until)
-            .map(|((user_id, order_id), order)| {
-                let (buy_amount, sell_amount) = stablex_auction_element::compute_buy_sell_amounts(
-                    order.price_numerator,
-                    order.price_denominator,
-                    order.price_denominator - order.used_amount,
-                );
-                ModelOrder {
-                    id: *order_id,
-                    account_id: *user_id,
-                    buy_token: order.buy_token,
-                    sell_token: order.sell_token,
-                    buy_amount,
-                    sell_amount,
-                }
+            .filter(move |(_, order)| order.is_valid_in_batch(batch_id))
+            .map(move |((user_id, order_id), order)| {
+                order.as_model_order(batch_id, *user_id, *order_id)
             })
     }
 
@@ -93,7 +78,7 @@ impl State {
             Event::TokenListing(event) => self.token_listing(event)?,
             Event::OrderPlacement(event) => self.order_placement(event)?,
             Event::OrderCancellation(event) => self.order_cancellation(event, block_batch_id)?,
-            Event::OrderDeletion(event) => self.order_deletion(event)?,
+            Event::OrderDeletion(event) => self.order_deletion(event, block_batch_id)?,
             Event::Trade(_event) => unimplemented!(),
             Event::TradeReversion(_event) => unimplemented!(),
             Event::SolutionSubmission(_event) => unimplemented!(),
@@ -130,15 +115,14 @@ impl State {
     }
 
     fn order_placement(&mut self, event: &OrderPlacement) -> Result<()> {
-        let order = Order {
-            buy_token: event.buy_token,
-            sell_token: event.sell_token,
-            valid_from: event.valid_from,
-            valid_until: event.valid_until,
-            price_numerator: event.price_numerator,
-            price_denominator: event.price_denominator,
-            used_amount: 0,
-        };
+        let order = Order::new(
+            event.buy_token,
+            event.sell_token,
+            event.valid_from,
+            event.valid_until,
+            event.price_numerator,
+            event.price_denominator,
+        );
         match self.orders.entry((event.owner, event.index)) {
             Entry::Vacant(entry) => entry.insert(order),
             Entry::Occupied(_) => bail!("order already exists"),
@@ -159,9 +143,16 @@ impl State {
         Ok(())
     }
 
-    fn order_deletion(&mut self, event: &OrderDeletion) -> Result<()> {
-        // Orders are allowed to be deleted multiple times.
-        self.orders.remove(&(event.owner, event.id));
+    fn order_deletion(&mut self, event: &OrderDeletion, block_batch_id: BatchId) -> Result<()> {
+        if let Some(order) = self.orders.get(&(event.owner, event.id)) {
+            ensure!(
+                !order.is_valid_in_batch(block_batch_id - 1),
+                "deleting valid order"
+            );
+            self.orders.remove(&(event.owner, event.id));
+        }
+        // Orders are allowed to be deleted multiple times so it is not an error to not find the
+        // order.
         Ok(())
     }
 }
@@ -444,11 +435,12 @@ mod tests {
         assert_eq!(state.orders(2).next(), None);
         assert_eq!(state.orders(3).next(), None);
 
-        let event = OrderDeletion {
+        let event = Event::OrderDeletion(OrderDeletion {
             owner: address(2),
             id: 0,
-        };
-        state = state.apply_event(&Event::OrderDeletion(event), 2).unwrap();
+        });
+        assert!(state.clone().apply_event(&event, 2).is_err());
+        state = state.apply_event(&event, 3).unwrap();
         assert_eq!(state.orders(0).next(), None);
         assert_eq!(state.orders(1).next(), None);
         assert_eq!(state.orders(2).next(), None);
