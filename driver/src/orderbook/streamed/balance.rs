@@ -98,24 +98,34 @@ impl Balance {
     }
 
     pub fn sell(&mut self, amount: u128, batch_id: BatchId) -> Result<()> {
-        self.sell_buy_internal(amount, batch_id, TradeType::Sell)
+        self.sell_buy_internal(amount.into(), batch_id, TradeType::Sell)
     }
 
     pub fn buy(&mut self, amount: u128, batch_id: BatchId) -> Result<()> {
-        self.sell_buy_internal(amount, batch_id, TradeType::Buy)
+        self.sell_buy_internal(amount.into(), batch_id, TradeType::Buy)
     }
 
     pub fn revert_sell(&mut self, amount: u128, batch_id: BatchId) -> Result<()> {
-        self.revert_sell_buy_internal(amount, batch_id, TradeType::Sell)
+        self.revert_sell_buy_internal(amount.into(), batch_id, TradeType::Sell)
     }
 
     pub fn revert_buy(&mut self, amount: u128, batch_id: BatchId) -> Result<()> {
-        self.revert_sell_buy_internal(amount, batch_id, TradeType::Buy)
+        self.revert_sell_buy_internal(amount.into(), batch_id, TradeType::Buy)
+    }
+
+    pub fn solution_submission(&mut self, fee: U256, batch_id: BatchId) -> Result<()> {
+        // We are reusing the `Proceeds` machinery here because the extra balance from a solution
+        // submission behaves the same way.
+        self.sell_buy_internal(fee, batch_id, TradeType::Buy)
+    }
+
+    pub fn revert_solution_submission(&mut self, fee: U256, batch_id: BatchId) -> Result<()> {
+        self.revert_sell_buy_internal(fee, batch_id, TradeType::Buy)
     }
 
     fn sell_buy_internal(
         &mut self,
-        amount: u128,
+        amount: U256,
         batch_id: BatchId,
         operation: TradeType,
     ) -> Result<()> {
@@ -126,14 +136,14 @@ impl Balance {
         self.proceeds.batch_id = batch_id;
         let field = self.proceeds.get_field(operation);
         *field = field
-            .checked_add(amount.into())
+            .checked_add(amount)
             .ok_or_else(|| anyhow!("math overflow"))?;
         Ok(())
     }
 
     fn revert_sell_buy_internal(
         &mut self,
-        amount: u128,
+        amount: U256,
         batch_id: BatchId,
         operation: TradeType,
     ) -> Result<()> {
@@ -143,7 +153,7 @@ impl Balance {
         );
         let field = self.proceeds.get_field(operation);
         *field = field
-            .checked_sub(amount.into())
+            .checked_sub(amount)
             .ok_or_else(|| anyhow!("math underflow"))?;
         Ok(())
     }
