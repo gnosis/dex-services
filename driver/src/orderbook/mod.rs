@@ -1,9 +1,9 @@
+mod auction_data_reader;
 mod filtered_orderbook;
-mod paginated_auction_data_reader;
 mod shadow_orderbook;
 
+use self::auction_data_reader::PaginatedAuctionDataReader;
 pub use self::filtered_orderbook::{FilteredOrderbookReader, OrderbookFilter};
-use self::paginated_auction_data_reader::PaginatedAuctionDataReader;
 use crate::contracts::stablex_contract::StableXContract;
 use crate::models::{AccountState, Order};
 use anyhow::Result;
@@ -41,25 +41,18 @@ impl<'a> PaginatedStableXOrderBookReader<'a> {
 
 impl<'a> StableXOrderBookReading for PaginatedStableXOrderBookReader<'a> {
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
-        let mut reader = PaginatedAuctionDataReader::new(index);
-        loop {
-            let number_of_orders: u16 = reader
-                .apply_page(
-                    &self.contract.get_auction_data_paginated(
-                        self.page_size,
-                        reader.pagination().previous_page_user,
-                        reader
-                            .pagination()
-                            .previous_page_user_offset
-                            .try_into()
-                            .expect("user cannot have more than u16::MAX orders"),
-                    )?,
-                )
-                .try_into()
-                .expect("number of orders per page should never overflow a u16");
-            if number_of_orders < self.page_size {
-                return Ok(reader.get_auction_data());
-            }
+        let mut reader = PaginatedAuctionDataReader::new(index, self.page_size as usize);
+        while let Some(page_info) = reader.next_page() {
+            let page = &self.contract.get_auction_data_paginated(
+                self.page_size,
+                page_info.previous_page_user,
+                page_info
+                    .previous_page_user_offset
+                    .try_into()
+                    .expect("user cannot have more than u16::MAX orders"),
+            )?;
+            reader.apply_page(page);
         }
+        Ok(reader.get_auction_data())
     }
 }
