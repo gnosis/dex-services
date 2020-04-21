@@ -4,7 +4,7 @@ use crate::contracts::{
     stablex_contract::batch_exchange::{event_data::*, Event},
 };
 use crate::models::Order as ModelOrder;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use balance::Balance;
 use order::Order;
 use serde::{Deserialize, Serialize};
@@ -35,7 +35,7 @@ impl State {
     pub fn account_state(
         &self,
         batch_id: BatchId,
-    ) -> impl Iterator<Item = ((UserId, TokenId), u128)> + '_ {
+    ) -> impl Iterator<Item = ((UserId, TokenId), U256)> + '_ {
         self.balances
             .iter()
             .filter_map(move |((user_id, token_address), balance)| {
@@ -46,7 +46,7 @@ impl State {
                     (*user_id, token_id),
                     // TODO: Remove unwrap. Can fail while not all trades of a solution have been
                     // received. Can fail if user's balance exceeds U256::max.
-                    balance.get_balance(batch_id).unwrap().low_u128(),
+                    balance.get_balance(batch_id).unwrap(),
                 ))
             })
     }
@@ -102,11 +102,19 @@ impl State {
     }
 
     fn deposit(&mut self, event: &Deposit, block_batch_id: BatchId) -> Result<()> {
+        ensure!(
+            event.batch_id == block_batch_id,
+            "deposit batch id does not match current batch id"
+        );
         let balance = self.balances.entry((event.user, event.token)).or_default();
-        balance.deposit(event.amount, event.batch_id, block_batch_id)
+        balance.deposit(event.amount, event.batch_id)
     }
 
     fn withdraw_request(&mut self, event: &WithdrawRequest, block_batch_id: BatchId) -> Result<()> {
+        ensure!(
+            event.batch_id >= block_batch_id,
+            "withdraw request in the past"
+        );
         let balance = self.balances.entry((event.user, event.token)).or_default();
         balance.withdraw_request(event.amount, event.batch_id, block_batch_id)
     }
@@ -200,7 +208,12 @@ mod tests {
     }
 
     fn account_state(state: &State, batch_id: BatchId) -> AccountState {
-        AccountState(state.account_state(batch_id).collect())
+        AccountState(
+            state
+                .account_state(batch_id)
+                .map(|(key, balance)| (key, balance.low_u128()))
+                .collect(),
+        )
     }
 
     #[test]

@@ -11,20 +11,11 @@ pub struct Balance {
 }
 
 impl Balance {
-    pub fn deposit(
-        &mut self,
-        amount: U256,
-        batch_id: BatchId,
-        current_batch_id: BatchId,
-    ) -> Result<()> {
-        ensure!(
-            batch_id == current_batch_id,
-            "deposit batch id does not match current batch id"
-        );
-        self.apply_existing_deposit(current_batch_id)?;
+    pub fn deposit(&mut self, amount: U256, batch_id: BatchId) -> Result<()> {
+        self.apply_existing_deposit(batch_id)?;
         // Works like in the smart contract: If there is an existing deposit we override the
         // batch id and add to the amount.
-        self.deposit.batch_id = current_batch_id;
+        self.deposit.batch_id = batch_id;
         self.deposit.amount = self
             .deposit
             .amount
@@ -39,7 +30,6 @@ impl Balance {
         batch_id: BatchId,
         current_batch_id: BatchId,
     ) -> Result<()> {
-        ensure!(batch_id >= current_batch_id, "withdraw request in the past");
         // It is not possible to get a new withdraw request when there already is an existing valid
         // withdraw request because the smart contract should have emitted a withdraw event for the
         // previous one first.
