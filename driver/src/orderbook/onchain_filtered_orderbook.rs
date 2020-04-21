@@ -1,4 +1,4 @@
-use crate::contracts::stablex_contract::{FilteredAuctionData, StableXContract};
+use crate::contracts::stablex_contract::{FilteredOrderPage, StableXContract};
 use crate::models::{AccountState, Order};
 
 use super::auction_data_reader::IndexedAuctionDataReader;
@@ -25,7 +25,7 @@ impl OnchainFilteredOrderBookReader {
 impl StableXOrderBookReading for OnchainFilteredOrderBookReader {
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
         let mut reader = IndexedAuctionDataReader::new(index);
-        let mut auction_data = FilteredAuctionData {
+        let mut auction_data = FilteredOrderPage {
             indexed_elements: vec![],
             has_next_page: true,
             next_page_user: Address::zero(),

@@ -57,7 +57,7 @@ impl StableXContractImpl {
     }
 }
 
-pub struct FilteredAuctionData {
+pub struct FilteredOrderPage {
     pub indexed_elements: Vec<u8>,
     pub has_next_page: bool,
     pub next_page_user: Address,
@@ -81,7 +81,7 @@ pub trait StableXContract {
         page_size: u16,
         previous_page_user: Address,
         previous_page_user_offset: u16,
-    ) -> Result<FilteredAuctionData>;
+    ) -> Result<FilteredOrderPage>;
 
     /// Retrieve one page of auction data.
     /// `block` is needed because the state of the smart contract could change
@@ -132,7 +132,7 @@ impl StableXContract for StableXContractImpl {
         page_size: u16,
         previous_page_user: Address,
         previous_page_user_offset: u16,
-    ) -> Result<FilteredAuctionData> {
+    ) -> Result<FilteredOrderPage> {
         let target_batch = batch_index.low_u32();
         let mut builder = self.viewer.get_filtered_orders_paginated(
             // Balances should be valid for the batch at which we are submitting (target batch + 1)
@@ -143,20 +143,14 @@ impl StableXContract for StableXContractImpl {
             page_size,
         );
         builder.m.tx.gas = None;
-        builder
-            .call()
-            .wait()
-            .map(
-                |(indexed_elements, has_next_page, next_page_user, next_page_user_offset)| {
-                    FilteredAuctionData {
-                        indexed_elements,
-                        has_next_page,
-                        next_page_user,
-                        next_page_user_offset,
-                    }
-                },
-            )
-            .map_err(From::from)
+        let (indexed_elements, has_next_page, next_page_user, next_page_user_offset) =
+            builder.call().wait()?;
+        Ok(FilteredOrderPage {
+            indexed_elements,
+            has_next_page,
+            next_page_user,
+            next_page_user_offset,
+        })
     }
 
     fn get_auction_data_paginated(

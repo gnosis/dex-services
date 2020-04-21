@@ -5,7 +5,7 @@ use ethcontract::{Address, U256};
 use crate::util::CeiledDiv;
 
 pub const AUCTION_ELEMENT_WIDTH: usize = 112;
-// Indexed auction elements have the orderId appened at the end
+/// Indexed auction elements have the orderId appended at the end
 pub const INDEXED_AUCTION_ELEMENT_WIDTH: usize = AUCTION_ELEMENT_WIDTH + 2;
 
 #[derive(Debug, PartialEq)]
