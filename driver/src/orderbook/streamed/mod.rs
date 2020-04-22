@@ -2,6 +2,7 @@
 
 mod balance;
 mod order;
+mod orderbook;
 mod state;
 
 use ethcontract::Address;
