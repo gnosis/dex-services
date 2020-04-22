@@ -62,9 +62,9 @@ impl State {
                 // We allow the bach ids being equal to prevent race conditions where the State gets
                 // a new event right before we want to get the orderbook.
                 ensure!(self.last_batch_id <= batch_id, "batch is in the past");
-                // This only needs to be ensured for future batches because the current batch cannot
-                // be inconsistent as it does not incorporate pending trades.
-                ensure!(!self.solution_partially_received, "partial solution");
+                // TODO: in the future we might want to handle the case where
+                // solution_partially_received is true and react in some way like erroring or
+                // excluding pending balances.
                 batch_id
             }
         };
