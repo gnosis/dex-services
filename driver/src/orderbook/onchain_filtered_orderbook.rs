@@ -6,7 +6,7 @@ use super::filtered_orderbook::OrderbookFilter;
 use super::StableXOrderBookReading;
 
 use anyhow::Result;
-use ethcontract::{Address, U256};
+use ethcontract::{Address, BlockNumber, U256};
 use std::sync::Arc;
 
 pub struct OnchainFilteredOrderBookReader {
@@ -34,6 +34,7 @@ impl OnchainFilteredOrderBookReader {
 
 impl StableXOrderBookReading for OnchainFilteredOrderBookReader {
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
+        let last_block = self.contract.get_last_block_for_batch(index.as_u32())?;
         let mut reader = IndexedAuctionDataReader::new(index);
         let mut auction_data = FilteredOrderPage {
             indexed_elements: vec![],
@@ -48,6 +49,7 @@ impl StableXOrderBookReading for OnchainFilteredOrderBookReader {
                 self.page_size,
                 auction_data.next_page_user,
                 auction_data.next_page_user_offset,
+                last_block.map(BlockNumber::from),
             )?;
             reader.apply_page(&auction_data.indexed_elements);
         }
@@ -94,9 +96,12 @@ mod tests {
         let mut contract = MockStableXContract::new();
 
         contract
+            .expect_get_last_block_for_batch()
+            .returning(|_| Ok(Some(42)));
+        contract
             .expect_get_filtered_auction_data_paginated()
             .times(1)
-            .returning(|_, _, _, _, _| {
+            .returning(|_, _, _, _, _, _| {
                 Ok(FilteredOrderPage {
                     indexed_elements: vec![],
                     has_next_page: false,
@@ -121,9 +126,12 @@ mod tests {
         let mut contract = MockStableXContract::new();
 
         contract
+            .expect_get_last_block_for_batch()
+            .returning(|_| Ok(Some(42)));
+        contract
             .expect_get_filtered_auction_data_paginated()
             .times(1)
-            .returning(|_, _, _, _, _| {
+            .returning(|_, _, _, _, _, _| {
                 Ok(FilteredOrderPage {
                     indexed_elements: FIRST_ORDER.to_vec(),
                     has_next_page: false,
@@ -161,10 +169,13 @@ mod tests {
         let mut seq = Sequence::new();
 
         contract
+            .expect_get_last_block_for_batch()
+            .returning(|_| Ok(Some(42)));
+        contract
             .expect_get_filtered_auction_data_paginated()
             .times(1)
             .in_sequence(&mut seq)
-            .returning(|_, _, _, _, _| {
+            .returning(|_, _, _, _, _, _| {
                 Ok(FilteredOrderPage {
                     indexed_elements: FIRST_ORDER.to_vec(),
                     has_next_page: true,
@@ -177,7 +188,7 @@ mod tests {
             .expect_get_filtered_auction_data_paginated()
             .times(1)
             .in_sequence(&mut seq)
-            .returning(|_, _, _, _, _| {
+            .returning(|_, _, _, _, _, _| {
                 Ok(FilteredOrderPage {
                     indexed_elements: SECOND_ORDER.to_vec(),
                     has_next_page: false,
