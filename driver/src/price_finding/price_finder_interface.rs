@@ -93,7 +93,7 @@ pub fn execute_open_solver(
             result_folder.to_owned(),
             "06_solution_int_valid.json",
         ))
-        .arg(format!("--minAvgFeePerOrder={}", min_avg_fee_per_order))
+        .arg(format!("--min-avg-fee-per-order={}", min_avg_fee_per_order))
         .arg(String::from("best-token-pair"));
     debug!("Using open-solver command `{:?}`", open_solver_command);
     Ok(open_solver_command.output()?)
