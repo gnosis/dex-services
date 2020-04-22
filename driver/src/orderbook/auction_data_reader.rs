@@ -47,17 +47,16 @@ impl AuctionDataReader {
     }
 
     fn apply_auction_data(&mut self, auction_elements: Vec<StableXAuctionElement>) {
-        self.apply_auction_elements_to_account_state(auction_elements.iter());
         // Workaround for borrow checker that would complain that `extend`
         // borrows self as mutable while at the same time the filter
         // closure borrows self as immutable because of using `self.index`.
         let index = self.index;
-        self.orders.extend(
-            auction_elements
-                .into_iter()
-                .filter(|x| x.in_auction(index) && x.order.sell_amount > 0)
-                .map(|auction_element| auction_element.order),
-        );
+        let auction_elements = auction_elements
+            .iter()
+            .filter(|x| x.in_auction(index) && x.order.sell_amount > 0);
+        self.apply_auction_elements_to_account_state(auction_elements.clone());
+        self.orders
+            .extend(auction_elements.map(|auction_element| auction_element.order.clone()));
     }
 
     fn apply_auction_elements_to_account_state<'a, Iter>(&mut self, auction_elements: Iter)
@@ -386,11 +385,8 @@ pub mod tests {
         // the bytes contain two orders
         reader.apply_page(&bytes);
 
-        let mut account_state = AccountState::default();
-        account_state.increase_balance(Address::from_low_u64_be(1), 257, 4);
-        account_state.increase_balance(Address::from_low_u64_be(1), 258, 5);
-
-        assert_eq!(reader.account_state, account_state);
+        // We don't include balances for orders that were filtered out
+        assert_eq!(reader.account_state, AccountState::default());
         // orders is empty because `index` does not match
         assert_eq!(reader.orders, []);
     }
