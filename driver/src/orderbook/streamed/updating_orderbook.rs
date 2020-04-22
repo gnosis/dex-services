@@ -6,10 +6,10 @@ use ethcontract::{contract::Event, errors::ExecutionError};
 use futures::stream::{BoxStream, StreamExt as _};
 use orderbook::Orderbook;
 use std::future::Future;
-use std::sync::{mpsc, Arc, RwLock};
+use std::sync::{mpsc, Arc, Mutex};
 
 // TODO:
-// `pub struct UpdatingOrderbook` that also owns an `Arc<RwLock<Orderbook>>` and creates a
+// `pub struct UpdatingOrderbook` that also owns an `Arc<Mutex<Orderbook>>` and creates a
 // background thread running `UpdatingOrderbookThread::update_with_events`.
 // This way `UpdatingOrderbookThread` is independently testable.
 
@@ -18,7 +18,7 @@ use std::sync::{mpsc, Arc, RwLock};
 /// Returns Ok when exit_indicator is dropped.
 /// Returns Err if the stream ends.
 async fn update_with_events_forever(
-    orderbook: Arc<RwLock<Orderbook>>,
+    orderbook: Arc<Mutex<Orderbook>>,
     mut block_timestamp: impl BlockTimestamp,
     exit_indicator: mpsc::Receiver<()>,
     past_events: impl Future<Output = Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>,
@@ -48,7 +48,7 @@ async fn update_with_events_forever(
 
 /// Apply a single event to the orderbook.
 async fn handle_event(
-    orderbook: &RwLock<Orderbook>,
+    orderbook: &Mutex<Orderbook>,
     block_timestamp: &mut impl BlockTimestamp,
     event: Event<batch_exchange::Event>,
 ) -> Result<()> {
@@ -59,7 +59,7 @@ async fn handle_event(
         } => {
             let block_timestamp = block_timestamp.block_timestamp(meta.block_hash).await?;
             orderbook
-                .write()
+                .lock()
                 .map_err(|e| anyhow!("poison error: {}", e))?
                 .handle_event_data(
                     data,
