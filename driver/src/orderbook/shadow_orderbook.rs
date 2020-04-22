@@ -92,6 +92,8 @@ fn background_shadow_reader(
             for order_change in order_changes {
                 log::error!("{}", order_change);
             }
+        } else {
+            log::info!("Primary and shadow orderbook are consistent");
         }
     }
 }
