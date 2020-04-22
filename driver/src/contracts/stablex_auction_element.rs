@@ -27,9 +27,7 @@ impl StableXAuctionElement {
     /// serialized information.
     pub fn from_bytes(bytes: &[u8; AUCTION_ELEMENT_WIDTH]) -> Self {
         let mut indexed_bytes = [0u8; INDEXED_AUCTION_ELEMENT_WIDTH];
-        for (index, bit) in bytes.iter().enumerate() {
-            indexed_bytes[index] = *bit;
-        }
+        indexed_bytes[0..AUCTION_ELEMENT_WIDTH].copy_from_slice(bytes);
         Self::from_indexed_bytes(&indexed_bytes)
     }
 
