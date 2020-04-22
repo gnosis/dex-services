@@ -49,7 +49,7 @@ impl State {
     /// inconsistent.
     /// Errors if the batch is `Future` but is not actually in the future.
     /// Account balances that overflow a U256 are skipped.
-    pub fn orderbook(
+    pub fn orderbook_for_batch(
         &self,
         batch: Batch,
     ) -> Result<(
@@ -704,11 +704,17 @@ mod tests {
             batch_id: 0,
         };
         state = state.apply_event(&Event::Deposit(event), 0).unwrap();
-        let balance = state.orderbook(Batch::Current).unwrap().0.next().unwrap().1;
-        assert_eq!(balance, U256::zero());
-        assert!(state.orderbook(Batch::Future(0)).is_err());
         let balance = state
-            .orderbook(Batch::Future(1))
+            .orderbook_for_batch(Batch::Current)
+            .unwrap()
+            .0
+            .next()
+            .unwrap()
+            .1;
+        assert_eq!(balance, U256::zero());
+        assert!(state.orderbook_for_batch(Batch::Future(0)).is_err());
+        let balance = state
+            .orderbook_for_batch(Batch::Future(1))
             .unwrap()
             .0
             .next()
@@ -755,7 +761,7 @@ mod tests {
         state = state.apply_event(&Event::Trade(event), 1).unwrap();
 
         let balance = state
-            .orderbook(Batch::Current)
+            .orderbook_for_batch(Batch::Current)
             .unwrap()
             .0
             .collect::<HashMap<_, _>>();
@@ -763,7 +769,7 @@ mod tests {
         assert_eq!(balance.get(&(address(2), 1)), Some(&10.into()));
 
         // Error because the solution is not complete.
-        assert!(state.orderbook(Batch::Future(2)).is_err());
+        assert!(state.orderbook_for_batch(Batch::Future(2)).is_err());
 
         let event = SolutionSubmission {
             submitter: address(4),
@@ -775,7 +781,7 @@ mod tests {
             .unwrap();
 
         let balance = state
-            .orderbook(Batch::Future(2))
+            .orderbook_for_batch(Batch::Future(2))
             .unwrap()
             .0
             .collect::<HashMap<_, _>>();
