@@ -59,7 +59,7 @@ impl State {
         let batch_id = match batch {
             Batch::Current => self.last_batch_id,
             Batch::Future(batch_id) => {
-                // We allow the bach ids being equal to prevent race conditions where the State gets
+                // We allow the batch ids being equal to prevent race conditions where the State gets
                 // a new event right before we want to get the orderbook.
                 ensure!(self.last_batch_id <= batch_id, "batch is in the past");
                 // TODO: in the future we might want to handle the case where
@@ -712,7 +712,6 @@ mod tests {
             .unwrap()
             .1;
         assert_eq!(balance, U256::zero());
-        assert!(state.orderbook_for_batch(Batch::Future(0)).is_err());
         let balance = state
             .orderbook_for_batch(Batch::Future(1))
             .unwrap()
@@ -767,9 +766,6 @@ mod tests {
             .collect::<HashMap<_, _>>();
         assert_eq!(balance.get(&(address(2), 0)), Some(&10.into()));
         assert_eq!(balance.get(&(address(2), 1)), Some(&10.into()));
-
-        // Error because the solution is not complete.
-        assert!(state.orderbook_for_batch(Batch::Future(2)).is_err());
 
         let event = SolutionSubmission {
             submitter: address(4),
