@@ -27,7 +27,7 @@ impl OnchainFilteredOrderBookReader {
             filter: filter
                 .whitelist()
                 .map(|set| set.iter().cloned().collect())
-                .unwrap_or(vec![]),
+                .unwrap_or_else(|| vec![]),
         }
     }
 }
@@ -51,7 +51,7 @@ impl StableXOrderBookReading for OnchainFilteredOrderBookReader {
             )?;
             reader.apply_page(&auction_data.indexed_elements);
         }
-        return Ok(reader.get_auction_data());
+        Ok(reader.get_auction_data())
     }
 }
 
