@@ -14,9 +14,8 @@ use std::collections::BTreeMap;
 // However, the orderbook state (`State`) cannot remove events. To support this, we keep an ordered
 // list of all events based on which the state is built.
 
-/// The key by which events are sorted.
 #[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
-struct Key {
+struct EventSortKey {
     block_number: u64,
     /// Is included to differentiate events from the same block number but different blocks which
     /// can happen during reorgs.
@@ -32,7 +31,7 @@ struct Value {
 }
 
 pub struct Orderbook {
-    events: BTreeMap<Key, Value>,
+    events: BTreeMap<EventSortKey, Value>,
 }
 
 impl Orderbook {
@@ -50,7 +49,7 @@ impl Orderbook {
         block_timestamp: u64,
     ) {
         let batch_id = block_timestamp as BatchId / 300;
-        let key = Key {
+        let key = EventSortKey {
             block_number,
             block_hash,
             log_index,
