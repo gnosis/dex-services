@@ -209,7 +209,7 @@ impl StableXContract for StableXContractImpl {
             previous_page_user_offset,
             U256::from(page_size),
         );
-        orders_builder.block = block_number.or(Some(BlockNumber::Pending));
+        orders_builder.block = block_number;
         orders_builder.m.tx.gas = None;
         orders_builder.call().wait().map_err(From::from)
     }
