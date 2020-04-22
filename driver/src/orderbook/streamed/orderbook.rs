@@ -30,17 +30,13 @@ struct Value {
     batch_id: BatchId,
 }
 
+#[derive(Debug, Default)]
 pub struct Orderbook {
     events: BTreeMap<EventSortKey, Value>,
 }
 
 impl Orderbook {
-    pub fn new() -> Self {
-        // TODO: Set up a thread that applies past events and listens for new events.
-        unimplemented!();
-    }
-
-    fn handle_event_data(
+    pub fn handle_event_data(
         &mut self,
         event_data: EventData<batch_exchange::Event>,
         block_number: u64,
