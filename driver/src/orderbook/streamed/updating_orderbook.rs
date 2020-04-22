@@ -3,10 +3,14 @@ use crate::contracts::stablex_contract::batch_exchange;
 use anyhow::{anyhow, bail, Result};
 use block_timestamp::BlockTimestamp;
 use ethcontract::{contract::Event, errors::ExecutionError};
-use futures::stream::{BoxStream, StreamExt as _};
+use futures::{
+    channel::oneshot,
+    future::{BoxFuture, FutureExt},
+    select,
+    stream::{BoxStream, StreamExt as _},
+};
 use orderbook::Orderbook;
-use std::future::Future;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 
 // TODO:
 // `pub struct UpdatingOrderbook` that also owns an `Arc<Mutex<Orderbook>>` and creates a
@@ -20,30 +24,33 @@ use std::sync::{mpsc, Arc, Mutex};
 async fn update_with_events_forever(
     orderbook: Arc<Mutex<Orderbook>>,
     mut block_timestamp: impl BlockTimestamp,
-    exit_indicator: mpsc::Receiver<()>,
-    past_events: impl Future<Output = Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>,
-    mut stream: BoxStream<'static, Result<Event<batch_exchange::Event>, ExecutionError>>,
+    exit_indicator: oneshot::Receiver<()>,
+    past_events: BoxFuture<'static, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>,
+    stream: BoxStream<'static, Result<Event<batch_exchange::Event>, ExecutionError>>,
 ) -> Result<()> {
-    let should_exit = || {
-        matches!(
-            exit_indicator.try_recv(),
-            Err(mpsc::TryRecvError::Disconnected)
-        )
+    // `select!` requires the futures to be fused.
+    // By selecting over exit_indicator and the future/stream we make sure to exit immediately when
+    // exit_indicator is dropped without waiting for the future or the stream to produce a value.
+    let mut exit_indicator = exit_indicator.fuse();
+    let mut past_events = past_events.fuse();
+    let mut stream = stream.fuse();
+
+    let past_events = select! {
+        past_events = past_events => past_events?,
+        _ = exit_indicator => return Ok(()),
     };
-
-    for event in past_events.await? {
+    for event in past_events {
         handle_event(&orderbook, &mut block_timestamp, event).await?;
     }
 
-    while !should_exit() {
-        let event = stream
-            .next()
-            .await
-            .ok_or_else(|| anyhow!("stream ended"))??;
+    loop {
+        let event = select! {
+                event = stream.next() =>
+                    event.ok_or(anyhow!("stream ended"))??,
+                _ = exit_indicator => return Ok(()),
+        };
         handle_event(&orderbook, &mut block_timestamp, event).await?;
     }
-
-    Ok(())
 }
 
 /// Apply a single event to the orderbook.
