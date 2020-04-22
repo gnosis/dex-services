@@ -5,7 +5,7 @@ use crate::{
     orderbook::StableXOrderBookReading,
 };
 use anyhow::{anyhow, bail, Result};
-use block_timestamp::BlockTimestamp;
+use block_timestamp::{BlockTimestamp, BlockTimestampCache};
 use ethcontract::{contract::Event, errors::ExecutionError};
 use futures::{
     channel::oneshot,
@@ -40,7 +40,7 @@ impl UpdatingOrderbook {
         std::thread::spawn(move || {
             futures::executor::block_on(update_with_events_forever(
                 orderbook_clone,
-                block_timestamp,
+                BlockTimestampCache::new(block_timestamp),
                 receiver,
                 past_events,
                 stream,
