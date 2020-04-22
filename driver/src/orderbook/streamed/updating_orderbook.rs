@@ -1,5 +1,9 @@
 use super::*;
-use crate::contracts::stablex_contract::batch_exchange;
+use crate::{
+    contracts::stablex_contract::{batch_exchange, StableXContract},
+    models::{AccountState, Order},
+    orderbook::StableXOrderBookReading,
+};
 use anyhow::{anyhow, bail, Result};
 use block_timestamp::BlockTimestamp;
 use ethcontract::{contract::Event, errors::ExecutionError};
@@ -12,10 +16,52 @@ use futures::{
 use orderbook::Orderbook;
 use std::sync::{Arc, Mutex};
 
-// TODO:
-// `pub struct UpdatingOrderbook` that also owns an `Arc<Mutex<Orderbook>>` and creates a
-// background thread running `UpdatingOrderbookThread::update_with_events`.
-// This way `UpdatingOrderbookThread` is independently testable.
+/// An event based orderbook that automatically updates itself with new events from the contract.
+#[derive(Debug)]
+pub struct UpdatingOrderbook {
+    orderbook: Arc<Mutex<Orderbook>>,
+    // When this struct is dropped this sender will be dropped which makes the updater thread stop.
+    _channel: oneshot::Sender<()>,
+}
+
+impl UpdatingOrderbook {
+    pub fn new(
+        _contract: &impl StableXContract,
+        block_timestamp: impl BlockTimestamp + Send + 'static,
+    ) -> Self {
+        let orderbook = Arc::new(Mutex::new(Orderbook::default()));
+        let orderbook_clone = orderbook.clone();
+        let (sender, receiver) = oneshot::channel();
+        // Create stream first to make sure we do not miss any events between it and past events.
+        // TODO: use the real functions once they are implemented
+        let stream = futures::stream::iter(vec![]).boxed(); // contract.stream_events();
+        let past_events = futures::future::ready(Ok(Vec::new())).boxed(); // contract.past_events();
+
+        std::thread::spawn(move || {
+            futures::executor::block_on(update_with_events_forever(
+                orderbook_clone,
+                block_timestamp,
+                receiver,
+                past_events,
+                stream,
+            ))
+        });
+
+        Self {
+            orderbook,
+            _channel: sender,
+        }
+    }
+}
+
+impl StableXOrderBookReading for UpdatingOrderbook {
+    fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
+        self.orderbook
+            .lock()
+            .map_err(|err| anyhow!("poison error: {}", err))?
+            .get_auction_data(index)
+    }
+}
 
 /// Update the orderbook with events from the stream forever or until exit_indicator is dropped.
 ///

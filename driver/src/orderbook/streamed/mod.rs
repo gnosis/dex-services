@@ -15,3 +15,6 @@ type TokenAddress = Address;
 type OrderId = u16;
 type TokenId = u16;
 type BatchId = u32;
+
+pub use block_timestamp::BlockTimestamp;
+pub use updating_orderbook::UpdatingOrderbook as Orderbook;
