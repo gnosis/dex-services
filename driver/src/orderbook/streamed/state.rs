@@ -59,7 +59,9 @@ impl State {
         let batch_id = match batch {
             Batch::Current => self.last_batch_id,
             Batch::Future(batch_id) => {
-                ensure!(self.last_batch_id < batch_id, "batch is not in the future");
+                // We allow the bach ids being equal to prevent race conditions where the State gets
+                // a new event right before we want to get the orderbook.
+                ensure!(self.last_batch_id <= batch_id, "batch is in the past");
                 // This only needs to be ensured for future batches because the current batch cannot
                 // be inconsistent as it does not incorporate pending trades.
                 ensure!(!self.solution_partially_received, "partial solution");
