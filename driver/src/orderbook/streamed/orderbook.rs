@@ -70,10 +70,10 @@ impl Orderbook {
 }
 
 impl StableXOrderBookReading for Orderbook {
-    fn get_auction_data(&self, _index: U256) -> Result<(AccountState, Vec<Order>)> {
+    fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
         // TODO: Handle future batch ids for when we want to do optimistic solving.
         let state = self.create_state()?;
-        let (account_state, orders) = state.orderbook(Batch::Current)?;
+        let (account_state, orders) = state.orderbook_for_batch(Batch::Future(index.low_u32()))?;
         let account_state = account_state
             // TODO: change AccountState to use U256
             .map(|(key, value)| (key, value.low_u128()))
