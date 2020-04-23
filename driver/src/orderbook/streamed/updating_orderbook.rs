@@ -106,6 +106,8 @@ async fn update_with_events_forever(
     pin_mut!(past_events);
     pin_mut!(stream);
 
+    log::info!("Starting event based orderbook updating.");
+
     loop {
         // We select over everything together instead of for example the past events first then the
         // stream to ensure that the stream gets polled at least once which it needs in order to
@@ -117,9 +119,12 @@ async fn update_with_events_forever(
                 handle_event(&orderbook, &mut block_timestamp_reader, event).await?;
             },
             past_events = past_events => {
-                for event in past_events? {
+                let past_events = past_events?;
+                log::info!("Got {} past events.", past_events.len());
+                for event in past_events {
                     handle_event(&orderbook, &mut block_timestamp_reader, event).await?;
                 }
+                log::info!("Finished applying past events");
                 orderbook_ready.store(true, Ordering::SeqCst);
             },
         };
