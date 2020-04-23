@@ -25,27 +25,27 @@ impl BlockTimestamp for Web3 {
 /// A cache for the block timestamp which avoids having to query the node in the case where we
 /// receive multiple events from the same block in a row.
 #[derive(Debug)]
-pub struct BlockTimestampCache<T> {
-    block_timestamp: T,
+pub struct MemoizingBlockTimestamp<T> {
+    inner: T,
     hash: H256,
     timestamp: u64,
 }
 
-impl<T> BlockTimestampCache<T> {
-    pub fn new(block_timestamp: T) -> Self {
+impl<T> MemoizingBlockTimestamp<T> {
+    pub fn new(inner: T) -> Self {
         Self {
-            block_timestamp,
+            inner,
             hash: H256::zero(),
             timestamp: 0,
         }
     }
 }
 
-impl<T: BlockTimestamp + Send> BlockTimestamp for BlockTimestampCache<T> {
+impl<T: BlockTimestamp + Send> BlockTimestamp for MemoizingBlockTimestamp<T> {
     fn block_timestamp(&mut self, block_hash: H256) -> BoxFuture<Result<u64>> {
         async move {
             if self.hash != block_hash {
-                let timestamp = self.block_timestamp.block_timestamp(block_hash).await?;
+                let timestamp = self.inner.block_timestamp(block_hash).await?;
                 self.hash = block_hash;
                 self.timestamp = timestamp;
             }

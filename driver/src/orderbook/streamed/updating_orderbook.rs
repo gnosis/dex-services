@@ -5,7 +5,7 @@ use crate::{
     orderbook::StableXOrderBookReading,
 };
 use anyhow::{anyhow, bail, Result};
-use block_timestamp::{BlockTimestamp, BlockTimestampCache};
+use block_timestamp::{BlockTimestamp, MemoizingBlockTimestamp};
 use ethcontract::{contract::Event, errors::ExecutionError};
 use futures::{
     channel::oneshot,
@@ -27,7 +27,7 @@ pub struct UpdatingOrderbook {
 impl UpdatingOrderbook {
     pub fn new(
         _contract: &impl StableXContract,
-        block_timestamp: impl BlockTimestamp + Send + 'static,
+        block_timestamp_reader: impl BlockTimestamp + Send + 'static,
     ) -> Self {
         let orderbook = Arc::new(Mutex::new(Orderbook::default()));
         let orderbook_clone = orderbook.clone();
@@ -40,7 +40,7 @@ impl UpdatingOrderbook {
         std::thread::spawn(move || {
             futures::executor::block_on(update_with_events_forever(
                 orderbook_clone,
-                BlockTimestampCache::new(block_timestamp),
+                MemoizingBlockTimestamp::new(block_timestamp_reader),
                 receiver,
                 past_events,
                 stream,
@@ -69,7 +69,7 @@ impl StableXOrderBookReading for UpdatingOrderbook {
 /// Returns Err if the stream ends.
 async fn update_with_events_forever(
     orderbook: Arc<Mutex<Orderbook>>,
-    mut block_timestamp: impl BlockTimestamp,
+    mut block_timestamp_reader: impl BlockTimestamp,
     exit_indicator: oneshot::Receiver<()>,
     past_events: BoxFuture<'static, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>,
     stream: BoxStream<'static, Result<Event<batch_exchange::Event>, ExecutionError>>,
@@ -86,7 +86,7 @@ async fn update_with_events_forever(
         _ = exit_indicator => return Ok(()),
     };
     for event in past_events {
-        handle_event(&orderbook, &mut block_timestamp, event).await?;
+        handle_event(&orderbook, &mut block_timestamp_reader, event).await?;
     }
 
     loop {
@@ -95,14 +95,14 @@ async fn update_with_events_forever(
                     event.ok_or(anyhow!("stream ended"))??,
                 _ = exit_indicator => return Ok(()),
         };
-        handle_event(&orderbook, &mut block_timestamp, event).await?;
+        handle_event(&orderbook, &mut block_timestamp_reader, event).await?;
     }
 }
 
 /// Apply a single event to the orderbook.
 async fn handle_event(
     orderbook: &Mutex<Orderbook>,
-    block_timestamp: &mut impl BlockTimestamp,
+    block_timestamp_reader: &mut impl BlockTimestamp,
     event: Event<batch_exchange::Event>,
 ) -> Result<()> {
     match event {
@@ -110,7 +110,9 @@ async fn handle_event(
             data,
             meta: Some(meta),
         } => {
-            let block_timestamp = block_timestamp.block_timestamp(meta.block_hash).await?;
+            let block_timestamp = block_timestamp_reader
+                .block_timestamp(meta.block_hash)
+                .await?;
             orderbook
                 .lock()
                 .map_err(|e| anyhow!("poison error: {}", e))?
