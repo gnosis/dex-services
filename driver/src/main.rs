@@ -61,9 +61,13 @@ struct Options {
     #[structopt(short = "i", long, env = "NETWORK_ID")]
     network_id: u64,
 
-    /// Configuration for the solver. The possible solver types are: 'NAIVE' for the naive
-    /// solver; 'MIP' for mixed integer programming solver; 'NLP' for non-linear
-    /// programming solver.
+    /// Configuration for the solver. The possible solver types are:
+    /// 'NaiveSolver' for the naive matching just two orders
+    /// 'OpenSolver' for solutions on trade-pairs only
+    /// 'StandardSolver' for solutions with ring-trades (mixed integer programming)
+    ///
+    /// min_avg_fee_per_order allows to enforce economical viable solutions by
+    /// setting a minimum fee per order.
     ///
     /// For example: {
     ///      "StandardSolver": { "min_avg_fee_per_order": 10000000000000000 }
