@@ -115,12 +115,13 @@ async fn update_with_events_forever(
         select_biased! {
             _ = exit_indicator => return Ok(()),
             event = stream.next() => {
+                log::info!("Received new event.");
                 let event = event.ok_or(anyhow!("stream ended"))??;
                 handle_event(&orderbook, &mut block_timestamp_reader, event).await?;
             },
             past_events = past_events => {
                 let past_events = past_events?;
-                log::info!("Got {} past events.", past_events.len());
+                log::info!("Received {} past events.", past_events.len());
                 for event in past_events {
                     handle_event(&orderbook, &mut block_timestamp_reader, event).await?;
                 }
