@@ -154,9 +154,12 @@ impl<'a> StableXDriver for StableXDriverImpl<'a> {
             Err(err) => return DriverResult::Retry(err),
         };
 
+        // Make sure the solver has at least some minimal time to run to have a chance for a
+        // solution. This also fixes an assert where the solver fails if the timelimit gets rounded
+        // to 0.
         let price_finding_time_limit = match deadline.checked_duration_since(Instant::now()) {
-            Some(time_limit) => time_limit,
-            None => {
+            Some(time_limit) if time_limit > Duration::from_secs(1) => time_limit,
+            _ => {
                 self.metrics.auction_skipped(batch_to_solve);
                 warn!("orderbook retrieval exceeded time limit");
                 return DriverResult::Ok;
