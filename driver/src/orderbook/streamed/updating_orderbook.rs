@@ -21,7 +21,7 @@ use std::sync::{Arc, Mutex};
 pub struct UpdatingOrderbook {
     orderbook: Arc<Mutex<Orderbook>>,
     // When this struct is dropped this sender will be dropped which makes the updater thread stop.
-    _channel: oneshot::Sender<()>,
+    _exit_tx: oneshot::Sender<()>,
 }
 
 impl UpdatingOrderbook {
@@ -31,7 +31,7 @@ impl UpdatingOrderbook {
     ) -> Self {
         let orderbook = Arc::new(Mutex::new(Orderbook::default()));
         let orderbook_clone = orderbook.clone();
-        let (sender, receiver) = oneshot::channel();
+        let (exit_tx, exit_rx) = oneshot::channel();
         // Create stream first to make sure we do not miss any events between it and past events.
         // TODO: use the real functions once they are implemented
         let stream = futures::stream::iter(vec![]).boxed(); // contract.stream_events();
@@ -41,7 +41,7 @@ impl UpdatingOrderbook {
             futures::executor::block_on(update_with_events_forever(
                 orderbook_clone,
                 block_timestamp,
-                receiver,
+                exit_rx,
                 past_events,
                 stream,
             ))
@@ -49,7 +49,7 @@ impl UpdatingOrderbook {
 
         Self {
             orderbook,
-            _channel: sender,
+            _exit_tx: exit_tx,
         }
     }
 }
