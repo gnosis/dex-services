@@ -55,6 +55,10 @@ impl UpdatingOrderbook {
             ));
             if let Err(err) = result {
                 log::error!("event based orderbook failed: {}", err);
+                // TODO: implement a retry mechanism
+                // For now we crash the program so force a restart of the whole driver because
+                // without a retry we would be stuck with an outdated orderbook forever.
+                std::process::abort();
             }
         });
 
