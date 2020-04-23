@@ -4,7 +4,7 @@ use crate::{
     models::{AccountState, Order},
     orderbook::StableXOrderBookReading,
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use block_timestamp::BlockTimestamp;
 use ethcontract::{contract::Event, errors::ExecutionError};
 use futures::{
@@ -15,12 +15,16 @@ use futures::{
 };
 use orderbook::Orderbook;
 use std::future::Future;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 
 /// An event based orderbook that automatically updates itself with new events from the contract.
 #[derive(Debug)]
 pub struct UpdatingOrderbook {
     orderbook: Arc<Mutex<Orderbook>>,
+    orderbook_ready: Arc<AtomicBool>,
     // When this struct is dropped this sender will be dropped which makes the updater thread stop.
     _exit_tx: oneshot::Sender<()>,
 }
@@ -32,6 +36,8 @@ impl UpdatingOrderbook {
     ) -> Self {
         let orderbook = Arc::new(Mutex::new(Orderbook::default()));
         let orderbook_clone = orderbook.clone();
+        let orderbook_ready = Arc::new(AtomicBool::new(false));
+        let orderbook_ready_clone = orderbook_ready.clone();
         let (exit_tx, exit_rx) = oneshot::channel();
         // Create stream first to make sure we do not miss any events between it and past events.
         // TODO: use the real functions once they are implemented
@@ -39,17 +45,22 @@ impl UpdatingOrderbook {
         let past_events = futures::future::ready(Ok(Vec::new())).boxed(); // contract.past_events();
 
         std::thread::spawn(move || {
-            futures::executor::block_on(update_with_events_forever(
+            let result = futures::executor::block_on(update_with_events_forever(
                 orderbook_clone,
+                orderbook_ready_clone,
                 block_timestamp,
                 exit_rx,
                 past_events,
                 stream,
-            ))
+            ));
+            if let Err(err) = result {
+                log::error!("event based orderbook failed: {}", err);
+            }
         });
 
         Self {
             orderbook,
+            orderbook_ready,
             _exit_tx: exit_tx,
         }
     }
@@ -57,6 +68,10 @@ impl UpdatingOrderbook {
 
 impl StableXOrderBookReading for UpdatingOrderbook {
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
+        ensure!(
+            self.orderbook_ready.load(Ordering::SeqCst),
+            "orderbook not yet ready"
+        );
         self.orderbook
             .lock()
             .map_err(|err| anyhow!("poison error: {}", err))?
@@ -70,6 +85,7 @@ impl StableXOrderBookReading for UpdatingOrderbook {
 /// Returns Err if the stream ends.
 async fn update_with_events_forever(
     orderbook: Arc<Mutex<Orderbook>>,
+    orderbook_ready: Arc<AtomicBool>,
     mut block_timestamp: impl BlockTimestamp,
     exit_indicator: oneshot::Receiver<()>,
     past_events: impl Future<Output = Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>,
@@ -98,6 +114,7 @@ async fn update_with_events_forever(
                 for event in past_events? {
                     handle_event(&orderbook, &mut block_timestamp, event).await?;
                 }
+                orderbook_ready.store(true, Ordering::SeqCst);
             },
         };
     }
