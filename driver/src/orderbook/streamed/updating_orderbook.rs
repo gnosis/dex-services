@@ -4,24 +4,31 @@ use crate::{
     models::{AccountState, Order},
     orderbook::StableXOrderBookReading,
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use block_timestamp_reading::{BlockTimestampReading, MemoizingBlockTimestampReader};
 use ethcontract::{contract::Event, errors::ExecutionError};
 use futures::{
     channel::oneshot,
-    future::{BoxFuture, FutureExt},
-    select,
-    stream::{BoxStream, StreamExt as _},
+    future::FutureExt,
+    pin_mut, select_biased,
+    stream::{Stream, StreamExt as _},
 };
 use orderbook::Orderbook;
-use std::sync::{Arc, Mutex};
+use std::future::Future;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 
 /// An event based orderbook that automatically updates itself with new events from the contract.
 #[derive(Debug)]
 pub struct UpdatingOrderbook {
     orderbook: Arc<Mutex<Orderbook>>,
+    // Indicates whether the background thread has caught up with past events at which point the
+    // orderbook is ready to be read.
+    orderbook_ready: Arc<AtomicBool>,
     // When this struct is dropped this sender will be dropped which makes the updater thread stop.
-    _channel: oneshot::Sender<()>,
+    _exit_tx: oneshot::Sender<()>,
 }
 
 impl UpdatingOrderbook {
@@ -31,31 +38,46 @@ impl UpdatingOrderbook {
     ) -> Self {
         let orderbook = Arc::new(Mutex::new(Orderbook::default()));
         let orderbook_clone = orderbook.clone();
-        let (sender, receiver) = oneshot::channel();
+        let orderbook_ready = Arc::new(AtomicBool::new(false));
+        let orderbook_ready_clone = orderbook_ready.clone();
+        let (exit_tx, exit_rx) = oneshot::channel();
         // Create stream first to make sure we do not miss any events between it and past events.
         // TODO: use the real functions once they are implemented
         let stream = futures::stream::iter(vec![]).boxed(); // contract.stream_events();
         let past_events = futures::future::ready(Ok(Vec::new())).boxed(); // contract.past_events();
 
         std::thread::spawn(move || {
-            futures::executor::block_on(update_with_events_forever(
+            let result = futures::executor::block_on(update_with_events_forever(
                 orderbook_clone,
+                orderbook_ready_clone,
                 MemoizingBlockTimestampReader::new(block_timestamp_reader),
-                receiver,
+                exit_rx,
                 past_events,
                 stream,
-            ))
+            ));
+            if let Err(err) = result {
+                log::error!("event based orderbook failed: {}", err);
+                // TODO: implement a retry mechanism
+                // For now we crash the program so force a restart of the whole driver because
+                // without a retry we would be stuck with an outdated orderbook forever.
+                std::process::abort();
+            }
         });
 
         Self {
             orderbook,
-            _channel: sender,
+            orderbook_ready,
+            _exit_tx: exit_tx,
         }
     }
 }
 
 impl StableXOrderBookReading for UpdatingOrderbook {
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
+        ensure!(
+            self.orderbook_ready.load(Ordering::SeqCst),
+            "orderbook not yet ready"
+        );
         self.orderbook
             .lock()
             .map_err(|err| anyhow!("poison error: {}", err))?
@@ -69,33 +91,38 @@ impl StableXOrderBookReading for UpdatingOrderbook {
 /// Returns Err if the stream ends.
 async fn update_with_events_forever(
     orderbook: Arc<Mutex<Orderbook>>,
+    orderbook_ready: Arc<AtomicBool>,
     mut block_timestamp_reader: impl BlockTimestampReading,
     exit_indicator: oneshot::Receiver<()>,
-    past_events: BoxFuture<'static, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>,
-    stream: BoxStream<'static, Result<Event<batch_exchange::Event>, ExecutionError>>,
+    past_events: impl Future<Output = Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>,
+    stream: impl Stream<Item = Result<Event<batch_exchange::Event>, ExecutionError>>,
 ) -> Result<()> {
-    // `select!` requires the futures to be fused.
-    // By selecting over exit_indicator and the future/stream we make sure to exit immediately when
-    // exit_indicator is dropped without waiting for the future or the stream to produce a value.
-    let mut exit_indicator = exit_indicator.fuse();
-    let mut past_events = past_events.fuse();
-    let mut stream = stream.fuse();
-
-    let past_events = select! {
-        past_events = past_events => past_events?,
-        _ = exit_indicator => return Ok(()),
-    };
-    for event in past_events {
-        handle_event(&orderbook, &mut block_timestamp_reader, event).await?;
-    }
+    // `select!` requires the futures to be fused...
+    let exit_indicator = exit_indicator.fuse();
+    let past_events = past_events.fuse();
+    let stream = stream.fuse();
+    // ...and pinned.
+    pin_mut!(exit_indicator);
+    pin_mut!(past_events);
+    pin_mut!(stream);
 
     loop {
-        let event = select! {
-                event = stream.next() =>
-                    event.ok_or(anyhow!("stream ended"))??,
-                _ = exit_indicator => return Ok(()),
+        // We select over everything together instead of for example the past events first then the
+        // stream to ensure that the stream gets polled at least once which it needs in order to
+        // create the corresponding filter on the node.
+        select_biased! {
+            _ = exit_indicator => return Ok(()),
+            event = stream.next() => {
+                let event = event.ok_or(anyhow!("stream ended"))??;
+                handle_event(&orderbook, &mut block_timestamp_reader, event).await?;
+            },
+            past_events = past_events => {
+                for event in past_events? {
+                    handle_event(&orderbook, &mut block_timestamp_reader, event).await?;
+                }
+                orderbook_ready.store(true, Ordering::SeqCst);
+            },
         };
-        handle_event(&orderbook, &mut block_timestamp_reader, event).await?;
     }
 }
 
