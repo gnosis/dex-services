@@ -23,6 +23,18 @@ pub struct State {
     balances: HashMap<(UserId, TokenAddress), Balance>,
     tokens: Tokens,
     last_solution: LastSolution,
+    /// True when we have received some trades or trade reverts but not yet the final solution
+    /// submission that indiciates all trades have been received.
+    solution_partially_received: bool,
+    last_batch_id: BatchId,
+}
+
+#[derive(Debug)]
+pub enum Batch {
+    /// The current completed batch that can no longer change
+    Current,
+    /// A future potentially still changing batch if a new solution comes in
+    Future(BatchId),
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -33,8 +45,33 @@ struct LastSolution {
 }
 
 impl State {
-    /// Can be used to create a `crate::models::AccountState`.
-    pub fn account_state(
+    /// Errors if State has only received a partial solution which would make the result
+    /// inconsistent.
+    /// Errors if the batch is `Future` but is not actually in the future.
+    /// Account balances that overflow a U256 are skipped.
+    pub fn orderbook_for_batch(
+        &self,
+        batch: Batch,
+    ) -> Result<(
+        impl Iterator<Item = ((UserId, TokenId), U256)> + '_,
+        impl Iterator<Item = ModelOrder> + '_,
+    )> {
+        let batch_id = match batch {
+            Batch::Current => self.last_batch_id,
+            Batch::Future(batch_id) => {
+                // We allow the batch ids being equal to prevent race conditions where the State gets
+                // a new event right before we want to get the orderbook.
+                ensure!(self.last_batch_id <= batch_id, "batch is in the past");
+                // TODO: in the future we might want to handle the case where
+                // solution_partially_received is true and react in some way like erroring or
+                // excluding pending balances.
+                batch_id
+            }
+        };
+        Ok((self.account_state(batch_id), self.orders(batch_id)))
+    }
+
+    fn account_state(
         &self,
         batch_id: BatchId,
     ) -> impl Iterator<Item = ((UserId, TokenId), U256)> + '_ {
@@ -46,17 +83,16 @@ impl State {
                 let token_id = self.tokens.get_id_by_address(*token_address)?;
                 Some((
                     (*user_id, token_id),
-                    // TODO: Remove unwrap.
                     // Can fail if user's balance exceeds U256::max.
                     // Can fail while not all trades of a solution have been received and batch_id
                     // is the next batch_id so that we assume that the current solution won't be be
                     // reverted.
-                    balance.get_balance(batch_id).unwrap(),
+                    balance.get_balance(batch_id).ok()?,
                 ))
             })
     }
 
-    pub fn orders(&self, batch_id: BatchId) -> impl Iterator<Item = ModelOrder> + '_ {
+    fn orders(&self, batch_id: BatchId) -> impl Iterator<Item = ModelOrder> + '_ {
         self.orders
             .iter()
             .filter(move |(_, order)| order.is_valid_in_batch(batch_id))
@@ -79,6 +115,8 @@ impl State {
     /// `block_batch_id` is the current batch based on the timestamp of the block that contains the
     ///  event.
     pub fn apply_event(mut self, event: &Event, block_batch_id: BatchId) -> Result<Self> {
+        ensure!(self.last_batch_id <= block_batch_id, "event in the past");
+        self.last_batch_id = block_batch_id;
         match event {
             Event::Deposit(event) => self.deposit(event, block_batch_id)?,
             Event::WithdrawRequest(event) => self.withdraw_request(event, block_batch_id)?,
@@ -198,6 +236,8 @@ impl State {
         sell_balance_fn: impl FnOnce(&mut Balance) -> Result<()>,
         buy_balance_fn: impl FnOnce(&mut Balance) -> Result<()>,
     ) -> Result<()> {
+        self.solution_partially_received = true;
+
         let order = self
             .orders
             .get_mut(&(user_id, order_id))
@@ -232,6 +272,7 @@ impl State {
         self.last_solution.batch_id = block_batch_id;
         self.last_solution.user_id = event.submitter;
         self.last_solution.burnt_fees = event.burnt_fees;
+        self.solution_partially_received = false;
         self.balances
             .entry((event.submitter, fee_token))
             .or_default()
@@ -651,5 +692,96 @@ mod tests {
                 .get_used_amount(2),
             2
         );
+    }
+
+    #[test]
+    fn orderbook_batch_id() {
+        let mut state = state_with_fee();
+        let event = Deposit {
+            user: address(3),
+            token: address(0),
+            amount: 1.into(),
+            batch_id: 0,
+        };
+        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
+        let balance = state
+            .orderbook_for_batch(Batch::Current)
+            .unwrap()
+            .0
+            .next()
+            .unwrap()
+            .1;
+        assert_eq!(balance, U256::zero());
+        let balance = state
+            .orderbook_for_batch(Batch::Future(1))
+            .unwrap()
+            .0
+            .next()
+            .unwrap()
+            .1;
+        assert_eq!(balance, U256::one());
+    }
+
+    #[test]
+    fn orderbook_partial_solution() {
+        let mut state = state_with_fee();
+        let event = TokenListing {
+            token: address(1),
+            id: 1,
+        };
+        for token in 0..2 {
+            let event = Deposit {
+                user: address(2),
+                token: address(token),
+                amount: 10.into(),
+                batch_id: 0,
+            };
+            state = state.apply_event(&Event::Deposit(event), 0).unwrap();
+        }
+        state = state.apply_event(&Event::TokenListing(event), 0).unwrap();
+        let event = OrderPlacement {
+            owner: address(2),
+            index: 0,
+            buy_token: 0,
+            sell_token: 1,
+            valid_from: 0,
+            valid_until: 10,
+            price_numerator: 5,
+            price_denominator: 5,
+        };
+        state = state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
+        let event = Trade {
+            owner: address(2),
+            order_id: 0,
+            executed_sell_amount: 1,
+            executed_buy_amount: 2,
+            ..Default::default()
+        };
+        state = state.apply_event(&Event::Trade(event), 1).unwrap();
+
+        let balance = state
+            .orderbook_for_batch(Batch::Current)
+            .unwrap()
+            .0
+            .collect::<HashMap<_, _>>();
+        assert_eq!(balance.get(&(address(2), 0)), Some(&10.into()));
+        assert_eq!(balance.get(&(address(2), 1)), Some(&10.into()));
+
+        let event = SolutionSubmission {
+            submitter: address(4),
+            burnt_fees: 42.into(),
+            ..Default::default()
+        };
+        state = state
+            .apply_event(&Event::SolutionSubmission(event), 1)
+            .unwrap();
+
+        let balance = state
+            .orderbook_for_batch(Batch::Future(2))
+            .unwrap()
+            .0
+            .collect::<HashMap<_, _>>();
+        assert_eq!(balance.get(&(address(2), 0)), Some(&12.into()));
+        assert_eq!(balance.get(&(address(2), 1)), Some(&9.into()));
     }
 }
