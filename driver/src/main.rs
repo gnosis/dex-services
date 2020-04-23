@@ -102,6 +102,10 @@ struct Options {
     #[structopt(long, env = "ORDERBOOK_FILTER", default_value = "{}")]
     orderbook_filter: OrderbookFilter,
 
+    /// Primary method for orderbook retrieval ("Paginated" or "OnchainFiltered")
+    #[structopt(long, env = "PRIMARY_ORDERBOOK", default_value = "Paginated")]
+    primary_orderbook: String,
+
     /// The private key used by the driver to sign transactions.
     #[structopt(short = "k", long, env = "PRIVATE_KEY", hide_env_values = true)]
     private_key: PrivateKey,
@@ -212,24 +216,37 @@ fn main() {
     let price_finder = price_finding::create_price_finder(fee, options.solver_type, price_oracle);
 
     // Create the orderbook reader.
-    let primary_orderbook =
-        PaginatedStableXOrderBookReader::new(contract.clone(), options.auction_data_page_size);
+    let primary_orderbook: Box<dyn StableXOrderBookReading + Sync> =
+        if options.primary_orderbook == "Paginated" {
+            Box::new(PaginatedStableXOrderBookReader::new(
+                contract.clone(),
+                options.auction_data_page_size,
+            ))
+        } else if options.primary_orderbook == "OnchainFiltered" {
+            Box::new(OnchainFilteredOrderBookReader::new(
+                contract.clone(),
+                options.auction_data_page_size,
+                &options.orderbook_filter,
+            ))
+        } else {
+            panic!()
+        };
 
     // NOTE: Keep the shadowed orderbook around so it doesn't get dropped and we
     //   can pass a reference to the filtered orderbook reader.
-    let unfiltered_orderbook: Box<dyn StableXOrderBookReading + Sync> = if options
-        .use_shadowed_orderbook
-    {
-        let shadow_orderbook = OnchainFilteredOrderBookReader::new(
-            contract.clone(),
-            options.auction_data_page_size,
-            &options.orderbook_filter,
-        );
-        let shadowed_orderbook = ShadowedOrderbookReader::new(&primary_orderbook, shadow_orderbook);
-        Box::new(shadowed_orderbook)
-    } else {
-        Box::new(primary_orderbook)
-    };
+    let unfiltered_orderbook: Box<dyn StableXOrderBookReading + Sync> =
+        if options.use_shadowed_orderbook {
+            let shadow_orderbook = OnchainFilteredOrderBookReader::new(
+                contract.clone(),
+                options.auction_data_page_size,
+                &options.orderbook_filter,
+            );
+            let shadowed_orderbook =
+                ShadowedOrderbookReader::new(primary_orderbook.as_ref(), shadow_orderbook);
+            Box::new(shadowed_orderbook)
+        } else {
+            primary_orderbook
+        };
 
     info!("Orderbook filter: {:?}", options.orderbook_filter);
     let filtered_orderbook =
