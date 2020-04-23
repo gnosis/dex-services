@@ -4,8 +4,9 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use ethcontract::transaction::{GasPrice, ResolveCondition};
+use ethcontract::web3::types::Block;
 use ethcontract::{Address, BlockNumber, PrivateKey, U256};
 use lazy_static::lazy_static;
 #[cfg(test)]
@@ -16,6 +17,7 @@ use crate::models::{ExecutedOrder, Solution};
 use crate::util::FutureWaitExt;
 use ethcontract::errors::MethodError;
 use ethcontract::transaction::confirm::ConfirmParams;
+use ethcontract::web3::futures::Future as _;
 
 lazy_static! {
     // In the BatchExchange smart contract, the objective value will be multiplied by
@@ -57,6 +59,8 @@ impl StableXContractImpl {
     }
 }
 
+/// Information about an order page that where filtered
+/// was applied inside the smart contract.
 pub struct FilteredOrderPage {
     pub indexed_elements: Vec<u8>,
     pub has_next_page: bool,
@@ -73,6 +77,10 @@ pub trait StableXContract {
     /// Retrieve the time remaining in the batch.
     fn get_current_auction_remaining_time(&self) -> Result<Duration>;
 
+    /// Searches for the block number of the last block of the given batch. If
+    /// the batch has not yet been finalized, then `None` is returned.
+    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<Option<u64>>;
+
     /// Retrieve one page of indexed auction data that is filtered on chain
     /// to only include orders valid at the given batchId.
     fn get_filtered_auction_data_paginated(
@@ -82,6 +90,7 @@ pub trait StableXContract {
         page_size: u16,
         previous_page_user: Address,
         previous_page_user_offset: u16,
+        block_number: Option<BlockNumber>,
     ) -> Result<FilteredOrderPage>;
 
     /// Retrieve one page of auction data.
@@ -93,6 +102,7 @@ pub trait StableXContract {
         page_size: u16,
         previous_page_user: Address,
         previous_page_user_offset: u16,
+        block_number: Option<BlockNumber>,
     ) -> Result<Vec<u8>>;
 
     fn get_solution_objective_value(
@@ -127,6 +137,36 @@ impl StableXContract for StableXContractImpl {
         Ok(Duration::from_secs(remaining_seconds.as_u64()))
     }
 
+    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<Option<u64>> {
+        let web3 = self.instance.raw_instance().web3();
+        let get_block = |block_number: BlockNumber| -> Result<_> {
+            web3.eth()
+                .block(block_number.into())
+                .wait()?
+                .ok_or_else(|| anyhow!("block {:?} is missing", block_number))
+        };
+
+        let mut current_block = get_block(BlockNumber::Latest)?;
+        let mut block_number = None;
+        while batch_id < get_block_batch_id(&current_block) {
+            if current_block.number == Some(0.into()) {
+                // NOTE: We reached the genesis block, this happens with Ganache
+                //   tests and means that the current batch being solved started
+                //   before the contract was deployed, as such there is no last
+                //   block for the solving batch.
+                return Ok(None);
+            }
+
+            let previous_block_number = current_block.number.ok_or_else(|| {
+                anyhow!("block {:?} has a missing block number", current_block.hash)
+            })? - 1;
+            current_block = get_block(previous_block_number.into())?;
+            block_number = Some(previous_block_number.as_u64());
+        }
+
+        Ok(block_number)
+    }
+
     fn get_filtered_auction_data_paginated(
         &self,
         batch_index: U256,
@@ -134,6 +174,7 @@ impl StableXContract for StableXContractImpl {
         page_size: u16,
         previous_page_user: Address,
         previous_page_user_offset: u16,
+        block_number: Option<BlockNumber>,
     ) -> Result<FilteredOrderPage> {
         let target_batch = batch_index.low_u32();
         let mut builder = self.viewer.get_filtered_orders_paginated(
@@ -144,6 +185,7 @@ impl StableXContract for StableXContractImpl {
             previous_page_user_offset,
             page_size,
         );
+        builder.block = block_number;
         builder.m.tx.gas = None;
         let (indexed_elements, has_next_page, next_page_user, next_page_user_offset) =
             builder.call().wait()?;
@@ -160,15 +202,14 @@ impl StableXContract for StableXContractImpl {
         page_size: u16,
         previous_page_user: Address,
         previous_page_user_offset: u16,
+        block_number: Option<BlockNumber>,
     ) -> Result<Vec<u8>> {
-        let mut orders_builder = self
-            .viewer
-            .get_encoded_orders_paginated(
-                previous_page_user,
-                previous_page_user_offset,
-                U256::from(page_size),
-            )
-            .block(BlockNumber::Pending);
+        let mut orders_builder = self.viewer.get_encoded_orders_paginated(
+            previous_page_user,
+            previous_page_user_offset,
+            U256::from(page_size),
+        );
+        orders_builder.block = block_number;
         orders_builder.m.tx.gas = None;
         orders_builder.call().wait().map_err(From::from)
     }
@@ -267,6 +308,11 @@ fn encode_execution_for_contract(
         }
     }
     (owners, order_ids, volumes)
+}
+
+fn get_block_batch_id<T>(block: &Block<T>) -> u32 {
+    const BATCH_DURATION: u64 = 300;
+    (block.timestamp.as_u64() / BATCH_DURATION) as _
 }
 
 #[cfg(test)]

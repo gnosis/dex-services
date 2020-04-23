@@ -10,7 +10,7 @@ pub use self::shadow_orderbook::ShadowedOrderbookReader;
 use crate::contracts::stablex_contract::StableXContract;
 use crate::models::{AccountState, Order};
 use anyhow::Result;
-use ethcontract::U256;
+use ethcontract::{BlockNumber, U256};
 #[cfg(test)]
 use mockall::automock;
 use std::convert::TryInto;
@@ -54,6 +54,7 @@ impl StableXOrderBookReading for PaginatedStableXOrderBookReader {
                     .previous_page_user_offset
                     .try_into()
                     .expect("user cannot have more than u16::MAX orders"),
+                Some(BlockNumber::Pending),
             )?;
             reader.apply_page(page);
         }
