@@ -31,6 +31,15 @@ pub struct OrderbookFilter {
     users: HashMap<Address, UserOrderFilter>,
 }
 
+impl OrderbookFilter {
+    pub fn whitelist(&self) -> Option<&HashSet<u16>> {
+        match &self.tokens {
+            TokenFilter::Whitelist(whitelist) => Some(whitelist),
+            TokenFilter::Blacklist(_) => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 enum UserOrderFilter {
     All,

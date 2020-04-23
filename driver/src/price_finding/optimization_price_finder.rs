@@ -4,7 +4,7 @@ use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverType
 
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
-use log::{debug, error};
+use log::error;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::display_fromstr;
 use std::collections::BTreeMap;
@@ -277,7 +277,6 @@ impl Io for DefaultIo {
         let file = File::create(&input_file)?;
         let mut writer = BufWriter::new(file);
         writer.write_all(input.as_bytes())?;
-        debug!("Solver input: {}", input);
         Ok(())
     }
 
@@ -307,7 +306,6 @@ impl Io for DefaultIo {
         let mut reader = BufReader::new(file);
         let mut result = String::new();
         reader.read_to_string(&mut result)?;
-        debug!("Solver result: {}", &result);
         Ok(result)
     }
 }

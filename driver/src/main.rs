@@ -23,7 +23,10 @@ use crate::driver::{
 use crate::gas_station::GnosisSafeGasStation;
 use crate::http::HttpFactory;
 use crate::metrics::{HttpMetrics, MetricsServer, StableXMetrics};
-use crate::orderbook::{FilteredOrderbookReader, OrderbookFilter, PaginatedStableXOrderBookReader};
+use crate::orderbook::{
+    FilteredOrderbookReader, OnchainFilteredOrderBookReader, OrderbookFilter,
+    PaginatedStableXOrderBookReader, ShadowedOrderbookReader, StableXOrderBookReading,
+};
 use crate::price_estimation::{PriceOracle, TokenData};
 use crate::price_finding::{Fee, SolverType};
 use crate::solution_submission::StableXSolutionSubmitter;
@@ -159,6 +162,12 @@ struct Options {
         parse(try_from_str = duration_secs),
     )]
     price_source_update_interval: Duration,
+
+    /// Use a shadowed orderbook reader along side a primary reader so that the
+    /// queried data can be compared and produce log errors in case they
+    /// disagree.
+    #[structopt(long, env = "USE_SHADOWED_ORDERBOOK")]
+    use_shadowed_orderbook: bool,
 }
 
 fn main() {
@@ -192,8 +201,9 @@ fn main() {
     .unwrap();
 
     // Set up web3 and contract connection.
-    let contract =
-        StableXContractImpl::new(&web3, options.private_key.clone(), options.network_id).unwrap();
+    let contract = Arc::new(
+        StableXContractImpl::new(&web3, options.private_key.clone(), options.network_id).unwrap(),
+    );
     info!("Using contract at {:?}", contract.address());
     info!("Using account {:?}", contract.account());
 
@@ -202,13 +212,31 @@ fn main() {
     let price_finder = price_finding::create_price_finder(fee, options.solver_type, price_oracle);
 
     // Create the orderbook reader.
-    let orderbook = PaginatedStableXOrderBookReader::new(&contract, options.auction_data_page_size);
-    info!("Orderbook filter: {:?}", options.orderbook_filter);
+    let primary_orderbook =
+        PaginatedStableXOrderBookReader::new(contract.clone(), options.auction_data_page_size);
 
-    let filtered_orderbook = FilteredOrderbookReader::new(&orderbook, options.orderbook_filter);
+    // NOTE: Keep the shadowed orderbook around so it doesn't get dropped and we
+    //   can pass a reference to the filtered orderbook reader.
+    let unfiltered_orderbook: Box<dyn StableXOrderBookReading + Sync> = if options
+        .use_shadowed_orderbook
+    {
+        let shadow_orderbook = OnchainFilteredOrderBookReader::new(
+            contract.clone(),
+            options.auction_data_page_size,
+            &options.orderbook_filter,
+        );
+        let shadowed_orderbook = ShadowedOrderbookReader::new(&primary_orderbook, shadow_orderbook);
+        Box::new(shadowed_orderbook)
+    } else {
+        Box::new(primary_orderbook)
+    };
+
+    info!("Orderbook filter: {:?}", options.orderbook_filter);
+    let filtered_orderbook =
+        FilteredOrderbookReader::new(&*unfiltered_orderbook, options.orderbook_filter);
 
     // Set up solution submitter.
-    let solution_submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
+    let solution_submitter = StableXSolutionSubmitter::new(&*contract, &gas_station);
 
     // Set up the driver and start the run-loop.
     let driver = StableXDriverImpl::new(
@@ -223,7 +251,7 @@ fn main() {
 
     let mut scheduler = options
         .scheduler
-        .create(&contract, &driver, scheduler_config);
+        .create(&*contract, &driver, scheduler_config);
     scheduler.start();
 }
 

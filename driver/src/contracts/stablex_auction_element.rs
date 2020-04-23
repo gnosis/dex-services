@@ -5,6 +5,8 @@ use ethcontract::{Address, U256};
 use crate::util::CeiledDiv;
 
 pub const AUCTION_ELEMENT_WIDTH: usize = 112;
+/// Indexed auction elements have the orderId appended at the end
+pub const INDEXED_AUCTION_ELEMENT_WIDTH: usize = AUCTION_ELEMENT_WIDTH + 2;
 
 #[derive(Debug, PartialEq)]
 pub struct StableXAuctionElement {
@@ -24,6 +26,14 @@ impl StableXAuctionElement {
     /// Sets `id` to `0` because this information is not contained in the
     /// serialized information.
     pub fn from_bytes(bytes: &[u8; AUCTION_ELEMENT_WIDTH]) -> Self {
+        let mut indexed_bytes = [0u8; INDEXED_AUCTION_ELEMENT_WIDTH];
+        indexed_bytes[0..AUCTION_ELEMENT_WIDTH].copy_from_slice(bytes);
+        Self::from_indexed_bytes(&indexed_bytes)
+    }
+
+    /// Deserialize an auction element that has been serialized by the smart
+    /// contract's `getFilteredOrdersPaginated` function.
+    pub fn from_indexed_bytes(bytes: &[u8; INDEXED_AUCTION_ELEMENT_WIDTH]) -> Self {
         let account_id = Address::from_slice(&bytes[0..20]);
 
         // these go together (since sell_token_balance is emitted as u256 and treated as u128
@@ -45,13 +55,14 @@ impl StableXAuctionElement {
         let numerator = BigEndian::read_u128(&bytes[64..80]);
         let denominator = BigEndian::read_u128(&bytes[80..96]);
         let remaining = BigEndian::read_u128(&bytes[96..112]);
+        let id = u16::from_le_bytes([bytes[113], bytes[112]]);
         let (buy_amount, sell_amount) = compute_buy_sell_amounts(numerator, denominator, remaining);
         StableXAuctionElement {
             valid_from,
             valid_until,
             sell_token_balance,
             order: Order {
-                id: 0,
+                id,
                 account_id,
                 buy_token,
                 sell_token,
@@ -139,6 +150,38 @@ pub mod tests {
             sell_token_balance: 3,
             order: Order {
                 id: 0,
+                account_id: Address::from_low_u64_be(1),
+                buy_token: 258,
+                sell_token: 257,
+                buy_amount: (258 * 257 + 258) / 259,
+                sell_amount: 257,
+            },
+        };
+        assert_eq!(res, auction_element);
+    }
+
+    #[test]
+    fn test_index_auction_element() {
+        let bytes: [u8; 114] = [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // user: 20 elements
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 3, // sellTokenBalance: 3, 32 elements
+            1, 2, // buyToken: 256+2,
+            1, 1, // sellToken: 256+1,
+            0, 0, 0, 2, // validFrom: 2
+            0, 0, 1, 5, // validUntil: 256+5
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // remainingAmount: 2**8 + 1 = 257
+            0, 1, // order index
+        ];
+        let res = StableXAuctionElement::from_indexed_bytes(&bytes);
+        let auction_element = StableXAuctionElement {
+            valid_from: U256::from(2),
+            valid_until: U256::from(261),
+            sell_token_balance: 3,
+            order: Order {
+                id: 1,
                 account_id: Address::from_low_u64_be(1),
                 buy_token: 258,
                 sell_token: 257,
