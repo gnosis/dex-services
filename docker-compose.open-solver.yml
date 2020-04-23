@@ -1,7 +1,7 @@
 version: "3.6"
 services:
   stablex:
-    command: ./stablex
+    command: ["cargo", "run"]
     image: stablex-binary-public
     environment:
       - SOLVER_TYPE=open-solver
