@@ -24,6 +24,8 @@ use std::sync::{
 #[derive(Debug)]
 pub struct UpdatingOrderbook {
     orderbook: Arc<Mutex<Orderbook>>,
+    // Indicates whether the background thread has caught up with past events at which point the
+    // orderbook is ready to be read.
     orderbook_ready: Arc<AtomicBool>,
     // When this struct is dropped this sender will be dropped which makes the updater thread stop.
     _exit_tx: oneshot::Sender<()>,
