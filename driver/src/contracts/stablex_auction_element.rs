@@ -73,7 +73,11 @@ impl StableXAuctionElement {
     }
 }
 
-fn compute_buy_sell_amounts(numerator: u128, denominator: u128, remaining: u128) -> (u128, u128) {
+pub fn compute_buy_sell_amounts(
+    numerator: u128,
+    denominator: u128,
+    remaining: u128,
+) -> (u128, u128) {
     assert!(
         remaining <= denominator,
         "Smart contract should never allow this inequality"

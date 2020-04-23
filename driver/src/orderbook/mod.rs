@@ -2,6 +2,7 @@ mod auction_data_reader;
 mod filtered_orderbook;
 mod onchain_filtered_orderbook;
 mod shadow_orderbook;
+mod streamed;
 
 use self::auction_data_reader::PaginatedAuctionDataReader;
 pub use self::filtered_orderbook::{FilteredOrderbookReader, OrderbookFilter};
