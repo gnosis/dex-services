@@ -5,7 +5,7 @@ use crate::{
     orderbook::StableXOrderBookReading,
 };
 use anyhow::{anyhow, bail, Result};
-use block_timestamp::{BlockTimestamp, MemoizingBlockTimestamp};
+use block_timestamp_reading::{BlockTimestampReading, MemoizingBlockTimestampReader};
 use ethcontract::{contract::Event, errors::ExecutionError};
 use futures::{
     channel::oneshot,
@@ -27,7 +27,7 @@ pub struct UpdatingOrderbook {
 impl UpdatingOrderbook {
     pub fn new(
         _contract: &impl StableXContract,
-        block_timestamp_reader: impl BlockTimestamp + Send + 'static,
+        block_timestamp_reader: impl BlockTimestampReading + Send + 'static,
     ) -> Self {
         let orderbook = Arc::new(Mutex::new(Orderbook::default()));
         let orderbook_clone = orderbook.clone();
@@ -40,7 +40,7 @@ impl UpdatingOrderbook {
         std::thread::spawn(move || {
             futures::executor::block_on(update_with_events_forever(
                 orderbook_clone,
-                MemoizingBlockTimestamp::new(block_timestamp_reader),
+                MemoizingBlockTimestampReader::new(block_timestamp_reader),
                 receiver,
                 past_events,
                 stream,
@@ -69,7 +69,7 @@ impl StableXOrderBookReading for UpdatingOrderbook {
 /// Returns Err if the stream ends.
 async fn update_with_events_forever(
     orderbook: Arc<Mutex<Orderbook>>,
-    mut block_timestamp_reader: impl BlockTimestamp,
+    mut block_timestamp_reader: impl BlockTimestampReading,
     exit_indicator: oneshot::Receiver<()>,
     past_events: BoxFuture<'static, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>,
     stream: BoxStream<'static, Result<Event<batch_exchange::Event>, ExecutionError>>,
@@ -102,7 +102,7 @@ async fn update_with_events_forever(
 /// Apply a single event to the orderbook.
 async fn handle_event(
     orderbook: &Mutex<Orderbook>,
-    block_timestamp_reader: &mut impl BlockTimestamp,
+    block_timestamp_reader: &mut impl BlockTimestampReading,
     event: Event<batch_exchange::Event>,
 ) -> Result<()> {
     match event {

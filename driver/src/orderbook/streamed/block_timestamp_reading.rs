@@ -4,12 +4,12 @@ use ethcontract::{web3::types::BlockId, H256};
 use futures::{compat::Future01CompatExt as _, future::BoxFuture, FutureExt as _};
 
 /// Helper trait to make this functionality mockable for tests.
-pub trait BlockTimestamp {
+pub trait BlockTimestampReading {
     fn block_timestamp(&mut self, block_hash: H256) -> BoxFuture<Result<u64>>;
 }
 
 /// During normal operation this is implemented by Web3.
-impl BlockTimestamp for Web3 {
+impl BlockTimestampReading for Web3 {
     fn block_timestamp(&mut self, block_hash: H256) -> BoxFuture<Result<u64>> {
         async move {
             let block = self.eth().block(BlockId::Hash(block_hash)).compat().await;
@@ -25,13 +25,13 @@ impl BlockTimestamp for Web3 {
 /// A cache for the block timestamp which avoids having to query the node in the case where we
 /// receive multiple events from the same block in a row.
 #[derive(Debug)]
-pub struct MemoizingBlockTimestamp<T> {
+pub struct MemoizingBlockTimestampReader<T> {
     inner: T,
     hash: H256,
     timestamp: u64,
 }
 
-impl<T> MemoizingBlockTimestamp<T> {
+impl<T> MemoizingBlockTimestampReader<T> {
     pub fn new(inner: T) -> Self {
         Self {
             inner,
@@ -41,7 +41,7 @@ impl<T> MemoizingBlockTimestamp<T> {
     }
 }
 
-impl<T: BlockTimestamp + Send> BlockTimestamp for MemoizingBlockTimestamp<T> {
+impl<T: BlockTimestampReading + Send> BlockTimestampReading for MemoizingBlockTimestampReader<T> {
     fn block_timestamp(&mut self, block_hash: H256) -> BoxFuture<Result<u64>> {
         async move {
             if self.hash != block_hash {
