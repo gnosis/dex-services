@@ -25,8 +25,8 @@ async fn update_with_events_forever(
     orderbook: Arc<Mutex<Orderbook>>,
     mut block_timestamp: impl BlockTimestamp,
     exit_indicator: oneshot::Receiver<()>,
-    past_events: BoxFuture<'static, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>,
-    stream: BoxStream<'static, Result<Event<batch_exchange::Event>, ExecutionError>>,
+    past_events: BoxFuture<'_, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>,
+    stream: BoxStream<'_, Result<Event<batch_exchange::Event>, ExecutionError>>,
 ) -> Result<()> {
     // `select!` requires the futures to be fused.
     // By selecting over exit_indicator and the future/stream we make sure to exit immediately when
