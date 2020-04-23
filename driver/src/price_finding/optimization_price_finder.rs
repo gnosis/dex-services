@@ -4,7 +4,7 @@ use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverType
 
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
-use log::{debug, error};
+use log::error;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::display_fromstr;
 use std::collections::BTreeMap;
