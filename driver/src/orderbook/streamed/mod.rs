@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 mod balance;
-mod block_timestamp;
+mod block_timestamp_reading;
 mod order;
 mod orderbook;
 mod state;
@@ -16,5 +16,5 @@ type OrderId = u16;
 type TokenId = u16;
 type BatchId = u32;
 
-pub use block_timestamp::BlockTimestamp;
+pub use block_timestamp_reading::BlockTimestampReading;
 pub use updating_orderbook::UpdatingOrderbook as Orderbook;

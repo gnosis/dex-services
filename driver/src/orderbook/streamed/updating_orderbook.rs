@@ -5,7 +5,7 @@ use crate::{
     orderbook::StableXOrderBookReading,
 };
 use anyhow::{anyhow, bail, ensure, Result};
-use block_timestamp::BlockTimestamp;
+use block_timestamp_reading::{BlockTimestampReading, MemoizingBlockTimestampReader};
 use ethcontract::{contract::Event, errors::ExecutionError};
 use futures::{
     channel::oneshot,
@@ -34,7 +34,7 @@ pub struct UpdatingOrderbook {
 impl UpdatingOrderbook {
     pub fn new(
         _contract: &impl StableXContract,
-        block_timestamp: impl BlockTimestamp + Send + 'static,
+        block_timestamp_reader: impl BlockTimestampReading + Send + 'static,
     ) -> Self {
         let orderbook = Arc::new(Mutex::new(Orderbook::default()));
         let orderbook_clone = orderbook.clone();
@@ -50,7 +50,7 @@ impl UpdatingOrderbook {
             let result = futures::executor::block_on(update_with_events_forever(
                 orderbook_clone,
                 orderbook_ready_clone,
-                block_timestamp,
+                MemoizingBlockTimestampReader::new(block_timestamp_reader),
                 exit_rx,
                 past_events,
                 stream,
@@ -92,7 +92,7 @@ impl StableXOrderBookReading for UpdatingOrderbook {
 async fn update_with_events_forever(
     orderbook: Arc<Mutex<Orderbook>>,
     orderbook_ready: Arc<AtomicBool>,
-    mut block_timestamp: impl BlockTimestamp,
+    mut block_timestamp_reader: impl BlockTimestampReading,
     exit_indicator: oneshot::Receiver<()>,
     past_events: impl Future<Output = Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>,
     stream: impl Stream<Item = Result<Event<batch_exchange::Event>, ExecutionError>>,
@@ -114,11 +114,11 @@ async fn update_with_events_forever(
             _ = exit_indicator => return Ok(()),
             event = stream.next() => {
                 let event = event.ok_or(anyhow!("stream ended"))??;
-                handle_event(&orderbook, &mut block_timestamp, event).await?;
+                handle_event(&orderbook, &mut block_timestamp_reader, event).await?;
             },
             past_events = past_events => {
                 for event in past_events? {
-                    handle_event(&orderbook, &mut block_timestamp, event).await?;
+                    handle_event(&orderbook, &mut block_timestamp_reader, event).await?;
                 }
                 orderbook_ready.store(true, Ordering::SeqCst);
             },
@@ -129,7 +129,7 @@ async fn update_with_events_forever(
 /// Apply a single event to the orderbook.
 async fn handle_event(
     orderbook: &Mutex<Orderbook>,
-    block_timestamp: &mut impl BlockTimestamp,
+    block_timestamp_reader: &mut impl BlockTimestampReading,
     event: Event<batch_exchange::Event>,
 ) -> Result<()> {
     match event {
@@ -137,7 +137,9 @@ async fn handle_event(
             data,
             meta: Some(meta),
         } => {
-            let block_timestamp = block_timestamp.block_timestamp(meta.block_hash).await?;
+            let block_timestamp = block_timestamp_reader
+                .block_timestamp(meta.block_hash)
+                .await?;
             orderbook
                 .lock()
                 .map_err(|e| anyhow!("poison error: {}", e))?
