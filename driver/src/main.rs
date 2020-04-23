@@ -150,6 +150,11 @@ struct Options {
     )]
     solver_time_limit: Duration,
 
+    /// Solver parameter: minimal average fee per order
+    /// Its unit is [OWL]
+    #[structopt(long, env = "MIN_AVG_FEE_PER_ORDER", default_value = "0")]
+    min_avg_fee_per_order: u128,
+
     /// The kind of scheduler to use.
     #[structopt(long, env = "SCHEDULER", default_value = "system")]
     scheduler: SchedulerKind,
@@ -209,7 +214,12 @@ fn main() {
 
     // Set up solver.
     let fee = Some(Fee::default());
-    let price_finder = price_finding::create_price_finder(fee, options.solver_type, price_oracle);
+    let price_finder = price_finding::create_price_finder(
+        fee,
+        options.solver_type,
+        price_oracle,
+        options.min_avg_fee_per_order,
+    );
 
     // Create the orderbook reader.
     let primary_orderbook =

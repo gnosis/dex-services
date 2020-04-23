@@ -197,6 +197,9 @@ OPTIONS:
         --solver-time-limit <solver-time-limit>
             The offset from the start of the batch to cap the solver's execution time [env: SOLVER_TIME_LIMIT=]
             [default: 210]
+        --min-avg-fee-per-order <min-avg-fee-per-order>
+            Solver parameter: The minimum avg fee per order that allows the solver to run economically viable.
+            [default: 0]
         --solver-type <solver-type>
             Which style of solver to use. Can be one of: 'NAIVE' for the naive solver; 'MIP' for mixed integer
             programming solver; 'NLP' for non-linear programming solver [env: SOLVER_TYPE=]  [default: naive-solver]
