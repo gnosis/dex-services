@@ -9,11 +9,12 @@ use block_timestamp::BlockTimestamp;
 use ethcontract::{contract::Event, errors::ExecutionError};
 use futures::{
     channel::oneshot,
-    future::{BoxFuture, FutureExt},
-    select,
-    stream::{BoxStream, StreamExt as _},
+    future::FutureExt,
+    pin_mut, select_biased,
+    stream::{Stream, StreamExt as _},
 };
 use orderbook::Orderbook;
+use std::future::Future;
 use std::sync::{Arc, Mutex};
 
 /// An event based orderbook that automatically updates itself with new events from the contract.
@@ -71,31 +72,34 @@ async fn update_with_events_forever(
     orderbook: Arc<Mutex<Orderbook>>,
     mut block_timestamp: impl BlockTimestamp,
     exit_indicator: oneshot::Receiver<()>,
-    past_events: BoxFuture<'static, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>,
-    stream: BoxStream<'static, Result<Event<batch_exchange::Event>, ExecutionError>>,
+    past_events: impl Future<Output = Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>,
+    stream: impl Stream<Item = Result<Event<batch_exchange::Event>, ExecutionError>>,
 ) -> Result<()> {
-    // `select!` requires the futures to be fused.
-    // By selecting over exit_indicator and the future/stream we make sure to exit immediately when
-    // exit_indicator is dropped without waiting for the future or the stream to produce a value.
-    let mut exit_indicator = exit_indicator.fuse();
-    let mut past_events = past_events.fuse();
-    let mut stream = stream.fuse();
-
-    let past_events = select! {
-        past_events = past_events => past_events?,
-        _ = exit_indicator => return Ok(()),
-    };
-    for event in past_events {
-        handle_event(&orderbook, &mut block_timestamp, event).await?;
-    }
+    // `select!` requires the futures to be fused...
+    let exit_indicator = exit_indicator.fuse();
+    let past_events = past_events.fuse();
+    let stream = stream.fuse();
+    // ...and pinned.
+    pin_mut!(exit_indicator);
+    pin_mut!(past_events);
+    pin_mut!(stream);
 
     loop {
-        let event = select! {
-                event = stream.next() =>
-                    event.ok_or(anyhow!("stream ended"))??,
-                _ = exit_indicator => return Ok(()),
+        // We select over everything together instead of for example the past events first then the
+        // stream to ensure that the stream gets polled at least once which it needs in order to
+        // create the corresponding filter on the node.
+        select_biased! {
+            _ = exit_indicator => return Ok(()),
+            event = stream.next() => {
+                let event = event.ok_or(anyhow!("stream ended"))??;
+                handle_event(&orderbook, &mut block_timestamp, event).await?;
+            },
+            past_events = past_events => {
+                for event in past_events? {
+                    handle_event(&orderbook, &mut block_timestamp, event).await?;
+                }
+            },
         };
-        handle_event(&orderbook, &mut block_timestamp, event).await?;
     }
 }
 
