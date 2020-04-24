@@ -581,7 +581,7 @@ dependencies = [
  "chrono",
  "crossbeam-utils",
  "ethcontract",
- "ethcontract-generate",
+ "ethcontract-generate 0.7.0",
  "futures 0.3.4",
  "isahc",
  "lazy_static",
@@ -645,7 +645,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "965126c64662832991f5a748893577630b558e47fa94e7f35aefcd20d737cef7"
 dependencies = [
  "error-chain",
- "ethereum-types",
+ "ethereum-types 0.8.0",
  "rustc-hex",
  "serde",
  "serde_derive",
@@ -659,7 +659,21 @@ version = "11.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97652a7d1f2504d6c885c87e242a06ccef5bd3054093d3fb742d8fb64806231a"
 dependencies = [
- "ethereum-types",
+ "ethereum-types 0.8.0",
+ "rustc-hex",
+ "serde",
+ "serde_json",
+ "tiny-keccak 1.5.0",
+ "uint",
+]
+
+[[package]]
+name = "ethabi"
+version = "12.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "052a565e3de82944527d6d10a465697e6bb92476b772ca7141080c901f6a63c6"
+dependencies = [
+ "ethereum-types 0.9.0",
  "rustc-hex",
  "serde",
  "serde_json",
@@ -681,13 +695,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethbloom"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e7abcddbdd5db30aeed4deb586adc4824e6c247e2f7238d1187f752893f096b"
+dependencies = [
+ "crunchy",
+ "fixed-hash 0.6.0",
+ "impl-rlp",
+ "impl-serde 0.3.0",
+ "tiny-keccak 2.0.2",
+]
+
+[[package]]
 name = "ethcontract"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f019278e3a866019e999edc2e17c4aa6806316cf869413f35ee2f2948fec9f9"
 dependencies = [
  "ethabi 9.0.1",
- "ethcontract-common",
+ "ethcontract-common 0.6.1",
  "ethcontract-derive",
  "futures 0.3.4",
  "futures-timer",
@@ -722,13 +749,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethcontract-common"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "31f165fcbd50afa40da9ade1bbc81818031ba5c3f60a6f4aa14c8a55bd9104c5"
+dependencies = [
+ "ethabi 12.0.0",
+ "hex",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "thiserror",
+ "tiny-keccak 2.0.2",
+ "web3",
+]
+
+[[package]]
 name = "ethcontract-derive"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "80be0591248a374fc4e1683636579f5d56b1c3af673fa54c0abc23b390c57b32"
 dependencies = [
- "ethcontract-common",
- "ethcontract-generate",
+ "ethcontract-common 0.6.1",
+ "ethcontract-generate 0.6.1",
  "proc-macro2",
  "quote",
  "syn",
@@ -743,7 +786,23 @@ dependencies = [
  "Inflector",
  "anyhow",
  "curl",
- "ethcontract-common",
+ "ethcontract-common 0.6.1",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "url 2.1.1",
+]
+
+[[package]]
+name = "ethcontract-generate"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea6c02365b0835970c2d9be59eb14fa90baa5aeed4c174a3e46c532ce965a0dc"
+dependencies = [
+ "Inflector",
+ "anyhow",
+ "curl",
+ "ethcontract-common 0.7.0",
  "proc-macro2",
  "quote",
  "syn",
@@ -756,11 +815,25 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba744248e3553a393143d5ebb68939fc3a4ec0c22a269682535f5ffe7fed728c"
 dependencies = [
- "ethbloom",
+ "ethbloom 0.8.1",
  "fixed-hash 0.5.2",
  "impl-rlp",
  "impl-serde 0.2.3",
  "primitive-types 0.6.2",
+ "uint",
+]
+
+[[package]]
+name = "ethereum-types"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "964c23cdee0ca07d5be2a628b46d5c11a2134ce554a8c16d8dbc2db647e4fd4d"
+dependencies = [
+ "ethbloom 0.9.0",
+ "fixed-hash 0.6.0",
+ "impl-rlp",
+ "impl-serde 0.3.0",
+ "primitive-types 0.7.0",
  "uint",
 ]
 
@@ -1837,6 +1910,8 @@ checksum = "e5e4b9943a2da369aec5e96f7c10ebc74fcf434d39590d974b0a3460e6f67fbb"
 dependencies = [
  "fixed-hash 0.6.0",
  "impl-codec",
+ "impl-rlp",
+ "impl-serde 0.3.0",
  "uint",
 ]
 
@@ -3284,7 +3359,7 @@ dependencies = [
  "base64 0.11.0",
  "derive_more",
  "ethabi 9.0.1",
- "ethereum-types",
+ "ethereum-types 0.8.0",
  "futures 0.1.29",
  "hyper 0.12.35",
  "hyper-tls",
