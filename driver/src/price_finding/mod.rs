@@ -12,12 +12,18 @@ pub fn create_price_finder(
     fee: Option<Fee>,
     solver_type: SolverType,
     price_oracle: impl PriceEstimating + Sync + 'static,
+    min_avg_fee_per_order: u128,
 ) -> Box<dyn PriceFinding + Sync> {
     if solver_type == SolverType::NaiveSolver {
         info!("Using naive price finder");
         Box::new(NaiveSolver::new(fee))
     } else {
         info!("Using {:?} optimization price finder", solver_type);
-        Box::new(OptimisationPriceFinder::new(fee, solver_type, price_oracle))
+        Box::new(OptimisationPriceFinder::new(
+            fee,
+            solver_type,
+            price_oracle,
+            min_avg_fee_per_order,
+        ))
     }
 }

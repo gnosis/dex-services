@@ -645,7 +645,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "965126c64662832991f5a748893577630b558e47fa94e7f35aefcd20d737cef7"
 dependencies = [
  "error-chain",
- "ethereum-types",
+ "ethereum-types 0.8.0",
  "rustc-hex",
  "serde",
  "serde_derive",
@@ -655,11 +655,11 @@ dependencies = [
 
 [[package]]
 name = "ethabi"
-version = "11.0.0"
+version = "12.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97652a7d1f2504d6c885c87e242a06ccef5bd3054093d3fb742d8fb64806231a"
+checksum = "052a565e3de82944527d6d10a465697e6bb92476b772ca7141080c901f6a63c6"
 dependencies = [
- "ethereum-types",
+ "ethereum-types 0.9.0",
  "rustc-hex",
  "serde",
  "serde_json",
@@ -681,10 +681,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "ethcontract"
-version = "0.6.1"
+name = "ethbloom"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f019278e3a866019e999edc2e17c4aa6806316cf869413f35ee2f2948fec9f9"
+checksum = "9e7abcddbdd5db30aeed4deb586adc4824e6c247e2f7238d1187f752893f096b"
+dependencies = [
+ "crunchy",
+ "fixed-hash 0.6.0",
+ "impl-rlp",
+ "impl-serde 0.3.0",
+ "tiny-keccak 2.0.2",
+]
+
+[[package]]
+name = "ethcontract"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f2a203f1daee89dc2d9f71c89a5571f615e556ec803ac1d55e0620ab28f1bee"
 dependencies = [
  "ethabi 9.0.1",
  "ethcontract-common",
@@ -707,11 +720,11 @@ dependencies = [
 
 [[package]]
 name = "ethcontract-common"
-version = "0.6.1"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "664e1fc08b1aaea6159787742db14c0f33e8c4d3572e1826c2336cd14fa27525"
+checksum = "7898f63c78b866bc55d62df1a7598b9da9a54e323a3ac056929ec2947b1914aa"
 dependencies = [
- "ethabi 11.0.0",
+ "ethabi 12.0.0",
  "hex",
  "serde",
  "serde_derive",
@@ -723,9 +736,9 @@ dependencies = [
 
 [[package]]
 name = "ethcontract-derive"
-version = "0.6.1"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80be0591248a374fc4e1683636579f5d56b1c3af673fa54c0abc23b390c57b32"
+checksum = "037f6f651ff95c8865e7261a35c3c372ade05aef33ede586ade2e7d51642cdb9"
 dependencies = [
  "ethcontract-common",
  "ethcontract-generate",
@@ -736,9 +749,9 @@ dependencies = [
 
 [[package]]
 name = "ethcontract-generate"
-version = "0.6.1"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bd5f639bb0490656a9d61a5e049b4767efa74eb9e843d750f7db437130d46e9"
+checksum = "fe0e22f4249553b97125610821634fa193da4a301da5100072e238823a247411"
 dependencies = [
  "Inflector",
  "anyhow",
@@ -756,11 +769,25 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba744248e3553a393143d5ebb68939fc3a4ec0c22a269682535f5ffe7fed728c"
 dependencies = [
- "ethbloom",
+ "ethbloom 0.8.1",
  "fixed-hash 0.5.2",
  "impl-rlp",
  "impl-serde 0.2.3",
  "primitive-types 0.6.2",
+ "uint",
+]
+
+[[package]]
+name = "ethereum-types"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "964c23cdee0ca07d5be2a628b46d5c11a2134ce554a8c16d8dbc2db647e4fd4d"
+dependencies = [
+ "ethbloom 0.9.0",
+ "fixed-hash 0.6.0",
+ "impl-rlp",
+ "impl-serde 0.3.0",
+ "primitive-types 0.7.0",
  "uint",
 ]
 
@@ -1837,6 +1864,8 @@ checksum = "e5e4b9943a2da369aec5e96f7c10ebc74fcf434d39590d974b0a3460e6f67fbb"
 dependencies = [
  "fixed-hash 0.6.0",
  "impl-codec",
+ "impl-rlp",
+ "impl-serde 0.3.0",
  "uint",
 ]
 
@@ -3284,7 +3313,7 @@ dependencies = [
  "base64 0.11.0",
  "derive_more",
  "ethabi 9.0.1",
- "ethereum-types",
+ "ethereum-types 0.8.0",
  "futures 0.1.29",
  "hyper 0.12.35",
  "hyper-tls",

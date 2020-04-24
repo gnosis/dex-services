@@ -24,8 +24,8 @@ use crate::gas_station::GnosisSafeGasStation;
 use crate::http::HttpFactory;
 use crate::metrics::{HttpMetrics, MetricsServer, StableXMetrics};
 use crate::orderbook::{
-    FilteredOrderbookReader, OnchainFilteredOrderBookReader, OrderbookFilter,
-    PaginatedStableXOrderBookReader, ShadowedOrderbookReader, StableXOrderBookReading,
+    FilteredOrderbookReader, OnchainFilteredOrderBookReader, OrderbookFilter, OrderbookReaderKind,
+    ShadowedOrderbookReader, StableXOrderBookReading,
 };
 use crate::price_estimation::{PriceOracle, TokenData};
 use crate::price_finding::{Fee, SolverType};
@@ -102,6 +102,10 @@ struct Options {
     #[structopt(long, env = "ORDERBOOK_FILTER", default_value = "{}")]
     orderbook_filter: OrderbookFilter,
 
+    /// Primary method for orderbook retrieval ("Paginated" or "OnchainFiltered")
+    #[structopt(long, env = "PRIMARY_ORDERBOOK", default_value = "paginated")]
+    primary_orderbook: OrderbookReaderKind,
+
     /// The private key used by the driver to sign transactions.
     #[structopt(short = "k", long, env = "PRIVATE_KEY", hide_env_values = true)]
     private_key: PrivateKey,
@@ -150,6 +154,11 @@ struct Options {
     )]
     solver_time_limit: Duration,
 
+    /// Solver parameter: minimal average fee per order
+    /// Its unit is [OWL]
+    #[structopt(long, env = "MIN_AVG_FEE_PER_ORDER", default_value = "0")]
+    min_avg_fee_per_order: u128,
+
     /// The kind of scheduler to use.
     #[structopt(long, env = "SCHEDULER", default_value = "system")]
     scheduler: SchedulerKind,
@@ -166,7 +175,12 @@ struct Options {
     /// Use a shadowed orderbook reader along side a primary reader so that the
     /// queried data can be compared and produce log errors in case they
     /// disagree.
-    #[structopt(long, env = "USE_SHADOWED_ORDERBOOK")]
+    #[structopt(
+        long,
+        env = "USE_SHADOWED_ORDERBOOK",
+        default_value = "false",
+        parse(try_from_str)
+    )]
     use_shadowed_orderbook: bool,
 }
 
@@ -209,27 +223,36 @@ fn main() {
 
     // Set up solver.
     let fee = Some(Fee::default());
-    let price_finder = price_finding::create_price_finder(fee, options.solver_type, price_oracle);
+    let price_finder = price_finding::create_price_finder(
+        fee,
+        options.solver_type,
+        price_oracle,
+        options.min_avg_fee_per_order,
+    );
 
     // Create the orderbook reader.
-    let primary_orderbook =
-        PaginatedStableXOrderBookReader::new(contract.clone(), options.auction_data_page_size);
+    let primary_orderbook = options.primary_orderbook.create(
+        contract.clone(),
+        options.auction_data_page_size,
+        &options.orderbook_filter,
+        web3,
+    );
 
     // NOTE: Keep the shadowed orderbook around so it doesn't get dropped and we
     //   can pass a reference to the filtered orderbook reader.
-    let unfiltered_orderbook: Box<dyn StableXOrderBookReading + Sync> = if options
-        .use_shadowed_orderbook
-    {
-        let shadow_orderbook = OnchainFilteredOrderBookReader::new(
-            contract.clone(),
-            options.auction_data_page_size,
-            &options.orderbook_filter,
-        );
-        let shadowed_orderbook = ShadowedOrderbookReader::new(&primary_orderbook, shadow_orderbook);
-        Box::new(shadowed_orderbook)
-    } else {
-        Box::new(primary_orderbook)
-    };
+    let unfiltered_orderbook: Box<dyn StableXOrderBookReading + Sync> =
+        if options.use_shadowed_orderbook {
+            let shadow_orderbook = OnchainFilteredOrderBookReader::new(
+                contract.clone(),
+                options.auction_data_page_size,
+                &options.orderbook_filter,
+            );
+            let shadowed_orderbook =
+                ShadowedOrderbookReader::new(primary_orderbook.as_ref(), shadow_orderbook);
+            Box::new(shadowed_orderbook)
+        } else {
+            primary_orderbook
+        };
 
     info!("Orderbook filter: {:?}", options.orderbook_filter);
     let filtered_orderbook =

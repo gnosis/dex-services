@@ -52,14 +52,17 @@ impl SolverType {
         result_folder: &str,
         input_file: &str,
         time_limit: String,
+        min_avg_fee_per_order: u128,
     ) -> Result<Output> {
         match self {
-            SolverType::OpenSolver => execute_open_solver(result_folder, input_file),
+            SolverType::OpenSolver => {
+                execute_open_solver(result_folder, input_file, min_avg_fee_per_order)
+            }
             SolverType::StandardSolver => {
-                execute_private_solver(result_folder, input_file, time_limit)
+                execute_private_solver(result_folder, input_file, time_limit, min_avg_fee_per_order)
             }
             SolverType::FallbackSolver => {
-                execute_private_solver(result_folder, input_file, time_limit)
+                execute_private_solver(result_folder, input_file, time_limit, min_avg_fee_per_order)
             }
             SolverType::NaiveSolver => {
                 panic!("fn execute should not be called by the naive solver")
@@ -68,7 +71,11 @@ impl SolverType {
     }
 }
 
-pub fn execute_open_solver(result_folder: &str, input_file: &str) -> Result<Output> {
+pub fn execute_open_solver(
+    result_folder: &str,
+    input_file: &str,
+    min_avg_fee_per_order: u128,
+) -> Result<Output> {
     let mut command = Command::new("python");
     let open_solver_command = command
         .current_dir("/app/open_solver")
@@ -80,6 +87,7 @@ pub fn execute_open_solver(result_folder: &str, input_file: &str) -> Result<Outp
             result_folder.to_owned(),
             "06_solution_int_valid.json",
         ))
+        .arg(format!("--min-avg-fee-per-order={}", min_avg_fee_per_order))
         .arg(String::from("best-token-pair"));
     debug!("Using open-solver command `{:?}`", open_solver_command);
     Ok(open_solver_command.output()?)
@@ -89,6 +97,7 @@ pub fn execute_private_solver(
     result_folder: &str,
     input_file: &str,
     time_limit: String,
+    min_avg_fee_per_order: u128,
 ) -> Result<Output> {
     let mut command = Command::new("python");
     let private_solver_command = command
@@ -97,6 +106,7 @@ pub fn execute_private_solver(
         .arg(format!("{}{}", "/app/", input_file.to_owned()))
         .arg(format!("--outputDir={}{}", "/app/", result_folder))
         .args(&["--solverTimeLimit", &time_limit])
+        .arg(format!("--minAvgFeePerOrder={}", min_avg_fee_per_order))
         .arg(String::from("--useExternalPrices"));
     debug!(
         "Using private-solver command `{:?}`",

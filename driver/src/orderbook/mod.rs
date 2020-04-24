@@ -1,19 +1,25 @@
 mod auction_data_reader;
 mod filtered_orderbook;
 mod onchain_filtered_orderbook;
+mod paginated_orderbook;
 mod shadow_orderbook;
+mod streamed;
 
-use self::auction_data_reader::PaginatedAuctionDataReader;
 pub use self::filtered_orderbook::{FilteredOrderbookReader, OrderbookFilter};
 pub use self::onchain_filtered_orderbook::OnchainFilteredOrderBookReader;
+pub use self::paginated_orderbook::PaginatedStableXOrderBookReader;
 pub use self::shadow_orderbook::ShadowedOrderbookReader;
-use crate::contracts::stablex_contract::StableXContract;
+pub use self::streamed::Orderbook as EventBasedOrderbook;
+
+use crate::contracts::stablex_contract::StableXContractImpl;
 use crate::models::{AccountState, Order};
-use anyhow::Result;
-use ethcontract::{BlockNumber, U256};
+use crate::orderbook::streamed::BlockTimestampReading;
+
+use anyhow::{anyhow, Error, Result};
+use ethcontract::U256;
 #[cfg(test)]
 use mockall::automock;
-use std::convert::TryInto;
+use std::str::FromStr;
 use std::sync::Arc;
 
 #[cfg_attr(test, automock)]
@@ -26,38 +32,53 @@ pub trait StableXOrderBookReading {
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)>;
 }
 
-/// Implements the StableXOrderBookReading trait by using the underlying
-/// contract in a paginated way.
-/// This avoid hitting gas limits when the total amount of orders is large.
-pub struct PaginatedStableXOrderBookReader {
-    contract: Arc<dyn StableXContract + Send + Sync>,
-    page_size: u16,
+/// The different kinds of orderbook readers.
+#[derive(Debug)]
+pub enum OrderbookReaderKind {
+    /// An unfiltered paginated orderbook read directly from the EVM
+    Paginated,
+    /// A paginated orderbook read from and filtered by EVM
+    OnchainFiltered,
+    /// An orderbook reader that is built from subscribing to
+    /// relevant ethereum events emitted by the exchange contract
+    EventBased,
 }
 
-impl PaginatedStableXOrderBookReader {
-    pub fn new(contract: Arc<dyn StableXContract + Send + Sync>, page_size: u16) -> Self {
-        Self {
-            contract,
-            page_size,
+impl OrderbookReaderKind {
+    /// Creates a new Orderbook reader based on the parameters.
+    pub fn create(
+        &self,
+        contract: Arc<StableXContractImpl>,
+        auction_data_page_size: u16,
+        orderbook_filter: &OrderbookFilter,
+        block_timestamp_reader: impl BlockTimestampReading + Send + 'static,
+    ) -> Box<dyn StableXOrderBookReading + Sync> {
+        match self {
+            OrderbookReaderKind::Paginated => Box::new(PaginatedStableXOrderBookReader::new(
+                contract,
+                auction_data_page_size,
+            )),
+            OrderbookReaderKind::OnchainFiltered => Box::new(OnchainFilteredOrderBookReader::new(
+                contract,
+                auction_data_page_size,
+                orderbook_filter,
+            )),
+            OrderbookReaderKind::EventBased => Box::new(EventBasedOrderbook::new(
+                contract.as_ref(),
+                block_timestamp_reader,
+            )),
         }
     }
 }
 
-impl StableXOrderBookReading for PaginatedStableXOrderBookReader {
-    fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
-        let mut reader = PaginatedAuctionDataReader::new(index, self.page_size as usize);
-        while let Some(page_info) = reader.next_page() {
-            let page = &self.contract.get_auction_data_paginated(
-                self.page_size,
-                page_info.previous_page_user,
-                page_info
-                    .previous_page_user_offset
-                    .try_into()
-                    .expect("user cannot have more than u16::MAX orders"),
-                Some(BlockNumber::Pending),
-            )?;
-            reader.apply_page(page);
+impl FromStr for OrderbookReaderKind {
+    type Err = Error;
+    fn from_str(value: &str) -> Result<Self> {
+        match value.to_lowercase().as_str() {
+            "paginated" => Ok(OrderbookReaderKind::Paginated),
+            "onchainfiltered" => Ok(OrderbookReaderKind::OnchainFiltered),
+            "eventbased" => Ok(OrderbookReaderKind::EventBased),
+            _ => Err(anyhow!("unknown orderbook reader kind '{}'", value)),
         }
-        Ok(reader.get_auction_data())
     }
 }
