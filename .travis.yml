@@ -34,13 +34,13 @@ matrix:
         - cargo clippy --all --all-targets -- -D warnings
         - cargo fmt --all -- --check
         # Build and publish compact image with compiled binary
-        - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:v0.0.5 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
+        - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:v0.0.7 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
         # StableX e2e Tests (Ganache) - open solver
         - docker-compose -f docker-compose.yml -f docker-compose.open-solver.yml  up -d stablex
         - cargo test -p e2e ganache -- --nocapture
         - docker-compose logs
         # Build and publish compact image with compiled binary
-        - docker build --tag stablex-binary-private --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:v0.6.2 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
+        - docker build --tag stablex-binary-private --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:v0.6.4 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
         # StableX e2e Tests (Ganache) - naive solver
         - docker-compose down
         - ./scripts/setup_contracts.sh
