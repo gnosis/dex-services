@@ -1,23 +1,28 @@
 // NOTE: Required for automock.
 #![cfg_attr(test, allow(clippy::ptr_arg))]
 
-use std::collections::HashMap;
-use std::time::Duration;
-
+use crate::{
+    contracts,
+    models::{ExecutedOrder, Solution},
+    util::FutureWaitExt,
+};
 use anyhow::{anyhow, Result};
-use ethcontract::transaction::{GasPrice, ResolveCondition};
-use ethcontract::web3::types::Block;
-use ethcontract::{Address, BlockNumber, PrivateKey, U256};
+use ethcontract::{
+    contract::Event,
+    errors::{ExecutionError, MethodError},
+    transaction::{confirm::ConfirmParams, GasPrice, ResolveCondition},
+    web3::{futures::Future as _, types::Block},
+    Address, BlockNumber, PrivateKey, U256,
+};
+use futures::{
+    future::{BoxFuture, FutureExt},
+    stream::{BoxStream, StreamExt},
+};
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
-
-use crate::contracts;
-use crate::models::{ExecutedOrder, Solution};
-use crate::util::FutureWaitExt;
-use ethcontract::errors::MethodError;
-use ethcontract::transaction::confirm::ConfirmParams;
-use ethcontract::web3::futures::Future as _;
+use std::collections::HashMap;
+use std::time::Duration;
 
 lazy_static! {
     // In the BatchExchange smart contract, the objective value will be multiplied by
@@ -120,6 +125,14 @@ pub trait StableXContract {
         gas_price: U256,
         block_timeout: Option<usize>,
     ) -> Result<(), MethodError>;
+
+    fn past_events(
+        &self,
+    ) -> BoxFuture<'static, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>;
+
+    fn stream_events(
+        &self,
+    ) -> BoxStream<'static, Result<Event<batch_exchange::Event>, ExecutionError>>;
 }
 
 impl StableXContract for StableXContractImpl {
@@ -273,6 +286,27 @@ impl StableXContract for StableXContractImpl {
         method.send().wait()?;
 
         Ok(())
+    }
+
+    fn past_events(
+        &self,
+    ) -> BoxFuture<'static, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>> {
+        self.instance
+            .all_events()
+            .from_block(ethcontract::BlockNumber::Earliest)
+            .to_block(ethcontract::BlockNumber::Latest)
+            .query_past_events_paginated()
+            .boxed()
+    }
+
+    fn stream_events(
+        &self,
+    ) -> BoxStream<'static, Result<Event<batch_exchange::Event>, ExecutionError>> {
+        self.instance
+            .all_events()
+            .from_block(BlockNumber::Latest)
+            .stream()
+            .boxed()
     }
 }
 

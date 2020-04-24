@@ -33,7 +33,7 @@ pub struct UpdatingOrderbook {
 
 impl UpdatingOrderbook {
     pub fn new(
-        _contract: &impl StableXContract,
+        contract: &dyn StableXContract,
         block_timestamp_reader: impl BlockTimestampReading + Send + 'static,
     ) -> Self {
         let orderbook = Arc::new(Mutex::new(Orderbook::default()));
@@ -42,9 +42,8 @@ impl UpdatingOrderbook {
         let orderbook_ready_clone = orderbook_ready.clone();
         let (exit_tx, exit_rx) = oneshot::channel();
         // Create stream first to make sure we do not miss any events between it and past events.
-        // TODO: use the real functions once they are implemented
-        let stream = futures::stream::iter(vec![]).boxed(); // contract.stream_events();
-        let past_events = futures::future::ready(Ok(Vec::new())).boxed(); // contract.past_events();
+        let stream = contract.stream_events();
+        let past_events = contract.past_events();
 
         std::thread::spawn(move || {
             let result = futures::executor::block_on(update_with_events_forever(
