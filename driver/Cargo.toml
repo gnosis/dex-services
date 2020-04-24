@@ -35,4 +35,4 @@ url = "2.1.1"
 mockall = "0.7.0"
 
 [build-dependencies]
-ethcontract-generate = "0.6.1"
+ethcontract-generate = "0.7.0"

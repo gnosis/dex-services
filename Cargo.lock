@@ -581,7 +581,7 @@ dependencies = [
  "chrono",
  "crossbeam-utils",
  "ethcontract",
- "ethcontract-generate 0.6.1",
+ "ethcontract-generate",
  "futures 0.3.4",
  "isahc",
  "lazy_static",
@@ -655,20 +655,6 @@ dependencies = [
 
 [[package]]
 name = "ethabi"
-version = "11.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97652a7d1f2504d6c885c87e242a06ccef5bd3054093d3fb742d8fb64806231a"
-dependencies = [
- "ethereum-types 0.8.0",
- "rustc-hex",
- "serde",
- "serde_json",
- "tiny-keccak 1.5.0",
- "uint",
-]
-
-[[package]]
-name = "ethabi"
 version = "12.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "052a565e3de82944527d6d10a465697e6bb92476b772ca7141080c901f6a63c6"
@@ -714,7 +700,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d70cbd3e78c774c344a92be8ac4652e41349b3aee8be02d7196ce7cbe39ac74"
 dependencies = [
  "ethabi 9.0.1",
- "ethcontract-common 0.7.0",
+ "ethcontract-common",
  "ethcontract-derive",
  "futures 0.3.4",
  "futures-timer",
@@ -730,22 +716,6 @@ dependencies = [
  "uint",
  "web3",
  "zeroize",
-]
-
-[[package]]
-name = "ethcontract-common"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "664e1fc08b1aaea6159787742db14c0f33e8c4d3572e1826c2336cd14fa27525"
-dependencies = [
- "ethabi 11.0.0",
- "hex",
- "serde",
- "serde_derive",
- "serde_json",
- "thiserror",
- "tiny-keccak 2.0.2",
- "web3",
 ]
 
 [[package]]
@@ -770,27 +740,11 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d565443e4c359ef7db4957435af3b5171a30ce517620c921a1470eb2104ee45d"
 dependencies = [
- "ethcontract-common 0.7.0",
- "ethcontract-generate 0.7.0",
+ "ethcontract-common",
+ "ethcontract-generate",
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "ethcontract-generate"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bd5f639bb0490656a9d61a5e049b4767efa74eb9e843d750f7db437130d46e9"
-dependencies = [
- "Inflector",
- "anyhow",
- "curl",
- "ethcontract-common 0.6.1",
- "proc-macro2",
- "quote",
- "syn",
- "url 2.1.1",
 ]
 
 [[package]]
@@ -802,7 +756,7 @@ dependencies = [
  "Inflector",
  "anyhow",
  "curl",
- "ethcontract-common 0.7.0",
+ "ethcontract-common",
  "proc-macro2",
  "quote",
  "syn",
