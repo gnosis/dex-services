@@ -92,13 +92,13 @@ impl Order {
     }
 
     pub fn revert_trade(&mut self, used_amount: u128, batch_id: BatchId) -> Result<()> {
+        if !self.has_limited_amount() {
+            return Ok(());
+        }
         ensure!(
             self.pending_used_amount.batch_id == batch_id,
             "reverting non existent trade"
         );
-        if !self.has_limited_amount() {
-            return Ok(());
-        }
         self.pending_used_amount.amount = self
             .pending_used_amount
             .amount
