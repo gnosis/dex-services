@@ -9,9 +9,12 @@ pub use self::filtered_orderbook::{FilteredOrderbookReader, OrderbookFilter};
 pub use self::onchain_filtered_orderbook::OnchainFilteredOrderBookReader;
 pub use self::paginated_orderbook::PaginatedStableXOrderBookReader;
 pub use self::shadow_orderbook::ShadowedOrderbookReader;
+pub use self::streamed::Orderbook as EventBasedOrderbook;
 
 use crate::contracts::stablex_contract::StableXContractImpl;
 use crate::models::{AccountState, Order};
+use crate::orderbook::streamed::BlockTimestampReading;
+
 use anyhow::{anyhow, Error, Result};
 use ethcontract::U256;
 #[cfg(test)]
@@ -34,8 +37,11 @@ pub trait StableXOrderBookReading {
 pub enum OrderbookReaderKind {
     /// An unfiltered paginated orderbook read directly from the EVM
     Paginated,
-    /// A paginated orderbook reader read from and filtered by EVM
+    /// A paginated orderbook read from and filtered by EVM
     OnchainFiltered,
+    /// An orderbook reader that is built from subscribing to
+    /// relevant ethereum events emitted by the exchange contract
+    EventBased,
 }
 
 impl OrderbookReaderKind {
@@ -45,6 +51,7 @@ impl OrderbookReaderKind {
         contract: Arc<StableXContractImpl>,
         auction_data_page_size: u16,
         orderbook_filter: &OrderbookFilter,
+        block_timestamp_reader: impl BlockTimestampReading + Send + 'static,
     ) -> Box<dyn StableXOrderBookReading + Sync> {
         match self {
             OrderbookReaderKind::Paginated => Box::new(PaginatedStableXOrderBookReader::new(
@@ -56,6 +63,10 @@ impl OrderbookReaderKind {
                 auction_data_page_size,
                 orderbook_filter,
             )),
+            OrderbookReaderKind::EventBased => Box::new(EventBasedOrderbook::new(
+                contract.as_ref(),
+                block_timestamp_reader,
+            )),
         }
     }
 }
@@ -66,6 +77,7 @@ impl FromStr for OrderbookReaderKind {
         match value.to_lowercase().as_str() {
             "paginated" => Ok(OrderbookReaderKind::Paginated),
             "onchainfiltered" => Ok(OrderbookReaderKind::OnchainFiltered),
+            "eventbased" => Ok(OrderbookReaderKind::EventBased),
             _ => Err(anyhow!("unknown orderbook reader kind '{}'", value)),
         }
     }

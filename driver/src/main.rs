@@ -235,6 +235,7 @@ fn main() {
         contract.clone(),
         options.auction_data_page_size,
         &options.orderbook_filter,
+        web3,
     );
 
     // NOTE: Keep the shadowed orderbook around so it doesn't get dropped and we
