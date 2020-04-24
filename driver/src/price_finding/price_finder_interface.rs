@@ -74,7 +74,7 @@ impl SolverType {
 pub fn execute_open_solver(
     result_folder: &str,
     input_file: &str,
-    min_avg_fee_per_order: u128,
+    _min_avg_fee_per_order: u128,
 ) -> Result<Output> {
     let mut command = Command::new("python");
     let open_solver_command = command
@@ -87,7 +87,8 @@ pub fn execute_open_solver(
             result_folder.to_owned(),
             "06_solution_int_valid.json",
         ))
-        .arg(format!("--min-avg-fee-per-order={}", min_avg_fee_per_order))
+        // Uncomment when we bump the solver version back to 0.0.6.
+        // .arg(format!("--min-avg-fee-per-order={}", min_avg_fee_per_order))
         .arg(String::from("best-token-pair"));
     debug!("Using open-solver command `{:?}`", open_solver_command);
     Ok(open_solver_command.output()?)
