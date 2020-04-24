@@ -5,5 +5,5 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1"
-ethcontract = "0.6.1"
+ethcontract = "0.7.1"
 futures = { version = "0.3.4", features = ["compat"] }
