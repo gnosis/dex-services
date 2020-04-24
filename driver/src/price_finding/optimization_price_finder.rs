@@ -169,6 +169,7 @@ trait Io {
         result_folder: &str,
         solver_type: SolverType,
         time_limit: Duration,
+        min_avg_fee_per_order: u128,
     ) -> Result<()>;
     fn read_output(&self, result_folder: &str) -> std::io::Result<String>;
 }
@@ -178,6 +179,7 @@ pub struct OptimisationPriceFinder {
     fee: Option<Fee>,
     solver_type: SolverType,
     price_oracle: Box<dyn PriceEstimating + Sync>,
+    min_avg_fee_per_order: u128,
 }
 
 impl OptimisationPriceFinder {
@@ -185,12 +187,14 @@ impl OptimisationPriceFinder {
         fee: Option<Fee>,
         solver_type: SolverType,
         price_oracle: impl PriceEstimating + Sync + 'static,
+        min_avg_fee_per_order: u128,
     ) -> Self {
         OptimisationPriceFinder {
             io_methods: Box::new(DefaultIo),
             fee,
             solver_type,
             price_oracle: Box::new(price_oracle),
+            min_avg_fee_per_order,
         }
     }
 }
@@ -259,7 +263,13 @@ impl PriceFinding for OptimisationPriceFinder {
             .write_input(&input_file, &serde_json::to_string(&input)?)
             .with_context(|| format!("error writing instance to {}", input_file))?;
         self.io_methods
-            .run_solver(&input_file, &result_folder, self.solver_type, time_limit)
+            .run_solver(
+                &input_file,
+                &result_folder,
+                self.solver_type,
+                time_limit,
+                self.min_avg_fee_per_order,
+            )
             .with_context(|| format!("error running {:?} solver", self.solver_type))?;
         let result = self
             .io_methods
@@ -286,9 +296,11 @@ impl Io for DefaultIo {
         result_folder: &str,
         solver: SolverType,
         time_limit: Duration,
+        min_avg_fee_per_order: u128,
     ) -> Result<()> {
         let time_limit = (time_limit.as_secs_f64().round() as u64).to_string();
-        let output = solver.execute(result_folder, input_file, time_limit)?;
+        let output =
+            solver.execute(result_folder, input_file, time_limit, min_avg_fee_per_order)?;
 
         if !output.status.success() {
             error!(
@@ -588,7 +600,7 @@ pub mod tests {
         io_methods
             .expect_run_solver()
             .times(1)
-            .returning(|_, _, _, _| Ok(()));
+            .returning(|_, _, _, _, _| Ok(()));
         io_methods
             .expect_read_output()
             .times(1)
@@ -596,6 +608,7 @@ pub mod tests {
         let solver = OptimisationPriceFinder {
             io_methods: Box::new(io_methods),
             fee: Some(fee),
+            min_avg_fee_per_order: 0,
             solver_type: SolverType::StandardSolver,
             price_oracle: Box::new(price_oracle),
         };
