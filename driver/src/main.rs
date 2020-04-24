@@ -171,7 +171,12 @@ struct Options {
     /// Use a shadowed orderbook reader along side a primary reader so that the
     /// queried data can be compared and produce log errors in case they
     /// disagree.
-    #[structopt(long, env = "USE_SHADOWED_ORDERBOOK")]
+    #[structopt(
+        long,
+        env = "USE_SHADOWED_ORDERBOOK",
+        default_value = "false",
+        parse(try_from_str)
+    )]
     use_shadowed_orderbook: bool,
 }
 
