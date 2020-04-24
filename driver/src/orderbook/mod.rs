@@ -14,6 +14,7 @@ pub use self::streamed::Orderbook as EventBasedOrderbook;
 use crate::contracts::stablex_contract::StableXContractImpl;
 use crate::models::{AccountState, Order};
 use crate::orderbook::streamed::BlockTimestampReading;
+
 use anyhow::{anyhow, Error, Result};
 use ethcontract::U256;
 #[cfg(test)]
