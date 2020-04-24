@@ -9,16 +9,12 @@ use crate::{
 };
 use anyhow::{anyhow, bail, ensure, Result};
 use block_timestamp_reading::{BlockTimestampReading, CachedBlockTimestampReader};
-use ethcontract::{contract::Event, errors::ExecutionError, H256};
+use ethcontract::{contract::Event, BlockNumber, H256};
 use futures::{
-    channel::oneshot,
-    future::FutureExt,
-    pin_mut, select_biased,
-    stream::{Stream, StreamExt as _},
+    channel::oneshot, compat::Future01CompatExt as _, future::FutureExt, pin_mut, select_biased,
 };
 use orderbook::Orderbook;
 use std::collections::HashSet;
-use std::future::Future;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
@@ -37,24 +33,21 @@ pub struct UpdatingOrderbook {
 }
 
 impl UpdatingOrderbook {
-    pub fn new(contract: &dyn StableXContract, web3: Web3) -> Self {
+    pub fn new(contract: Arc<dyn StableXContract + Send + Sync>, web3: Web3) -> Self {
         let orderbook = Arc::new(Mutex::new(Orderbook::default()));
         let orderbook_clone = orderbook.clone();
         let orderbook_ready = Arc::new(AtomicBool::new(false));
         let orderbook_ready_clone = orderbook_ready.clone();
         let (exit_tx, exit_rx) = oneshot::channel();
-        // Create stream first to make sure we do not miss any events between it and past events.
-        let stream = contract.stream_events();
-        let past_events = contract.past_events();
 
         std::thread::spawn(move || {
             let result = futures::executor::block_on(update_with_events_forever(
+                web3.clone(),
+                contract,
                 orderbook_clone,
                 orderbook_ready_clone,
                 CachedBlockTimestampReader::new(web3),
                 exit_rx,
-                past_events,
-                stream,
             ));
             if let Err(err) = result {
                 log::error!("event based orderbook failed: {:?}", err);
@@ -93,56 +86,78 @@ impl StableXOrderBookReading for UpdatingOrderbook {
 /// Returns Ok when exit_indicator is dropped.
 /// Returns Err if the stream ends.
 async fn update_with_events_forever(
+    web3: Web3,
+    contract: Arc<dyn StableXContract>,
     orderbook: Arc<Mutex<Orderbook>>,
     orderbook_ready: Arc<AtomicBool>,
     mut block_timestamp_reader: CachedBlockTimestampReader<Web3>,
     exit_indicator: oneshot::Receiver<()>,
-    past_events: impl Future<Output = Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>,
-    stream: impl Stream<Item = Result<Event<batch_exchange::Event>, ExecutionError>>,
 ) -> Result<()> {
-    // `select!` requires the futures to be fused...
-    let exit_indicator = exit_indicator.fuse();
-    let past_events = past_events.fuse();
-    let stream = stream.fuse();
-    // ...and pinned.
-    pin_mut!(exit_indicator);
-    pin_mut!(past_events);
-    pin_mut!(stream);
+    const POLL_INTERVALL: Duration = Duration::from_secs(15);
+    const BLOCK_RANGE: u64 = 25;
 
     log::info!("Starting event based orderbook updating.");
 
+    // `select!` requires the futures to be fused and pinned.
+    let exit_indicator = exit_indicator.fuse();
+    pin_mut!(exit_indicator);
+
+    let mut last_handled_block = 0u64;
     loop {
-        // We select over everything together instead of for example the past events first then the
-        // stream to ensure that the stream gets polled at least once which it needs in order to
-        // create the corresponding filter on the node.
+        let current_block = web3.eth().block_number().compat().await?;
+        let from_block = last_handled_block.saturating_sub(BLOCK_RANGE);
+        let to_block = BlockNumber::Number(current_block);
         select_biased! {
             _ = exit_indicator => return Ok(()),
-            event = stream.next() => {
-                log::info!("Received new event.");
-                let event = event.ok_or(anyhow!("stream ended"))??;
-                handle_event(&orderbook, &mut block_timestamp_reader, event).await?;
-            },
-            past_events = past_events => {
-                let past_events = past_events?;
-                log::info!("Received {} past events.", past_events.len());
-                let block_hashes = past_events.iter().map(|event| {
-                    let metadata = event.meta.as_ref().ok_or(anyhow!("event without metadata: {:?}", event))?;
-                    Ok(metadata.block_hash)
-                }).collect::<Result<HashSet<H256>>>()?;
-                block_timestamp_reader.prepare_cache(block_hashes).await?;
-                for event in past_events {
-                    handle_event(&orderbook, &mut block_timestamp_reader, event).await?;
-                }
-                log::info!("Finished applying past events");
-                orderbook_ready.store(true, Ordering::SeqCst);
+            events = contract.past_events(BlockNumber::Number(from_block.into()), to_block).fuse() => {
+                handle_events(&orderbook, &mut block_timestamp_reader, events?, from_block).await?;
             },
         };
+        last_handled_block = current_block.as_u64();
+        // This will be set and stay true the first time we reach this point.
+        orderbook_ready.store(true, Ordering::SeqCst);
+        // TODO: This is not optimal because it means we might sleep for some time when exit
+        // indicator triggered. We should create a sleep future that expires after poll interval and
+        // join both together.
+        std::thread::sleep(POLL_INTERVALL);
     }
+}
+
+/// Apply a vector of events to the orderbook.
+async fn handle_events(
+    orderbook: &Mutex<Orderbook>,
+    block_timestamp_reader: &mut CachedBlockTimestampReader<Web3>,
+    events: Vec<Event<batch_exchange::Event>>,
+    delete_events_starting_at_block: u64,
+) -> Result<()> {
+    log::info!("Received {} events.", events.len());
+    let block_hashes = events
+        .iter()
+        .map(|event| {
+            let metadata = event
+                .meta
+                .as_ref()
+                .ok_or_else(|| anyhow!("event without metadata: {:?}", event))?;
+            Ok(metadata.block_hash)
+        })
+        .collect::<Result<HashSet<H256>>>()?;
+    block_timestamp_reader.prepare_cache(block_hashes).await?;
+    // Locking here ensures that the orderbook is not observable after the events have been deleted
+    // but the new events not yet applied.
+    let mut orderbook = orderbook
+        .lock()
+        .map_err(|err| anyhow!("poison error: {}", err))?;
+    orderbook.delete_events_starting_at_block(delete_events_starting_at_block);
+    for event in events {
+        handle_event(&mut orderbook, block_timestamp_reader, event).await?;
+    }
+    log::info!("Finished applying events");
+    Ok(())
 }
 
 /// Apply a single event to the orderbook.
 async fn handle_event(
-    orderbook: &Mutex<Orderbook>,
+    orderbook: &mut Orderbook,
     block_timestamp_reader: &mut impl BlockTimestampReading,
     event: Event<batch_exchange::Event>,
 ) -> Result<()> {
@@ -154,18 +169,15 @@ async fn handle_event(
             let block_timestamp = block_timestamp_reader
                 .block_timestamp(meta.block_hash)
                 .await?;
-            orderbook
-                .lock()
-                .map_err(|e| anyhow!("poison error: {}", e))?
-                .handle_event_data(
-                    data,
-                    meta.block_number,
-                    meta.log_index,
-                    meta.block_hash,
-                    block_timestamp,
-                );
-            Ok(())
+            orderbook.handle_event_data(
+                data,
+                meta.block_number,
+                meta.log_index,
+                meta.block_hash,
+                block_timestamp,
+            );
         }
         Event { meta: None, .. } => bail!("event without metadata"),
     }
+    Ok(())
 }

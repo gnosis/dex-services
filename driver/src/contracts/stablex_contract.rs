@@ -128,6 +128,8 @@ pub trait StableXContract {
 
     fn past_events(
         &self,
+        from_block: BlockNumber,
+        to_block: BlockNumber,
     ) -> BoxFuture<'static, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>;
 
     fn stream_events(
@@ -290,11 +292,13 @@ impl StableXContract for StableXContractImpl {
 
     fn past_events(
         &self,
+        from_block: BlockNumber,
+        to_block: BlockNumber,
     ) -> BoxFuture<'static, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>> {
         self.instance
             .all_events()
-            .from_block(ethcontract::BlockNumber::Earliest)
-            .to_block(ethcontract::BlockNumber::Latest)
+            .from_block(from_block)
+            .to_block(to_block)
             .query_past_events_paginated()
             .boxed()
     }
