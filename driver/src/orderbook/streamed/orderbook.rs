@@ -65,16 +65,54 @@ impl Orderbook {
     }
 }
 
+fn filter_account_state(
+    account_states: impl Iterator<Item = ((UserId, TokenId), U256)>,
+    orders: &[Order],
+) -> AccountState {
+    let account_states = account_states
+        .filter(|((user, token), _)| {
+            orders
+                .iter()
+                .any(|order| order.account_id == *user && order.sell_token == *token)
+        })
+        // TODO: change AccountState to use U256
+        .map(|(key, value)| (key, value.low_u128()))
+        .collect();
+    AccountState(account_states)
+}
+
 impl StableXOrderBookReading for Orderbook {
     fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
         // TODO: Handle future batch ids for when we want to do optimistic solving.
         let state = self.create_state()?;
         let (account_state, orders) = state.orderbook_for_batch(Batch::Future(index.low_u32()))?;
-        let account_state = account_state
-            // TODO: change AccountState to use U256
-            .map(|(key, value)| (key, value.low_u128()))
-            .collect();
-        let orders = orders.collect();
-        Ok((AccountState(account_state), orders))
+        let orders = orders.collect::<Vec<_>>();
+        let account_state = filter_account_state(account_state, &orders);
+        Ok((account_state, orders))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_filter_account_state() {
+        let orders = vec![Order {
+            id: 0,
+            account_id: Address::zero(),
+            buy_token: 0,
+            sell_token: 1,
+            buy_amount: 1,
+            sell_amount: 1,
+        }];
+        let account_states = vec![
+            ((Address::zero(), 0), 3.into()),
+            ((Address::zero(), 1), 4.into()),
+            ((Address::zero(), 2), 5.into()),
+        ];
+        let result = filter_account_state(account_states.into_iter(), &orders);
+        assert_eq!(result.0.len(), 1);
+        assert_eq!(result.read_balance(1, Address::zero()), 4);
     }
 }
