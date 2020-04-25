@@ -79,9 +79,13 @@ impl HttpTransportInner {
             }
         }
 
+        Ok(json)
+    }
+
+    async fn execute_single_rpc(self: Arc<Self>, id: RequestId, call: Call) -> RpcResult {
+        let json = self.execute_rpc(id, Request::Single(call)).await?;
         let output = Output::deserialize(json)?;
         let result = helpers::to_result_from_output(output)?;
-
         Ok(result)
     }
 
@@ -101,7 +105,11 @@ impl HttpTransportInner {
         })?;
         Ok(sub_results
             .iter()
-            .map(|result| Ok(result.clone()))
+            .map(|result| {
+                let output = Output::deserialize(result)?;
+                let result = helpers::to_result_from_output(output)?;
+                Ok(result)
+            })
             .collect())
     }
 }
@@ -125,7 +133,7 @@ impl Transport for HttpTransport {
     fn send(&self, id: RequestId, request: Call) -> Self::Out {
         self.0
             .clone()
-            .execute_rpc(id, Request::Single(request))
+            .execute_single_rpc(id, request)
             .boxed()
             .compat()
     }
