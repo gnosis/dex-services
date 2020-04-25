@@ -1,11 +1,25 @@
 use crate::contracts::Web3;
+use crate::transport::HttpTransport;
 use anyhow::{Context as _, Result};
-use ethcontract::{web3::types::BlockId, H256};
+use ethcontract::web3::transports::Batch;
+use ethcontract::{
+    web3::types::{Block, BlockId},
+    H256,
+};
 use futures::{compat::Future01CompatExt as _, future::BoxFuture, FutureExt as _};
+use std::collections::{HashMap, HashSet};
+use std::iter::FromIterator;
 
 /// Helper trait to make this functionality mockable for tests.
 pub trait BlockTimestampReading {
     fn block_timestamp(&mut self, block_hash: H256) -> BoxFuture<Result<u64>>;
+}
+
+pub trait BlockTimestampBatchReading {
+    fn block_timestamps(
+        &mut self,
+        block_hashes: HashSet<H256>,
+    ) -> BoxFuture<Result<Vec<(H256, u64)>>>;
 }
 
 /// During normal operation this is implemented by Web3.
@@ -22,34 +36,83 @@ impl BlockTimestampReading for Web3 {
     }
 }
 
-/// A cache for the block timestamp which avoids having to query the node in the case where we
-/// receive multiple events from the same block in a row.
+impl BlockTimestampBatchReading for Web3 {
+    fn block_timestamps(
+        &mut self,
+        block_hashes: HashSet<H256>,
+    ) -> BoxFuture<Result<Vec<(H256, u64)>>> {
+        let batched_web3 = ethcontract::web3::Web3::new(Batch::new(self.transport().clone()));
+        async move {
+            let mut result = Vec::with_capacity(block_hashes.len());
+            for chunk in Vec::from_iter(block_hashes.into_iter()).chunks(1000) {
+                let partial_result = query_block_timestamps_batched(&batched_web3, chunk).await?;
+                result.extend(partial_result);
+            }
+            Ok(result)
+        }
+        .boxed()
+    }
+}
+
+type BatchedWeb3 = ethcontract::web3::Web3<Batch<HttpTransport>>;
+async fn query_block_timestamps_batched(
+    batched_web3: &BatchedWeb3,
+    block_hashes: &[H256],
+) -> Result<Vec<(H256, u64)>> {
+    block_hashes.iter().for_each(|hash| {
+        batched_web3.eth().block(BlockId::Hash(*hash));
+    });
+    let result = batched_web3.transport().submit_batch().compat().await;
+    result
+        .with_context(|| "Batch RPC call to get block hashes failed")?
+        .into_iter()
+        .map(|response| {
+            let block: Block<H256> = serde_json::from_value(response?)?;
+            Ok((
+                block
+                    .hash
+                    .expect("blocks queried by hash should contain a hash"),
+                block.timestamp.low_u64(),
+            ))
+        })
+        .collect()
+}
+
+/// A cache for the block timestamp.
 #[derive(Debug)]
 pub struct MemoizingBlockTimestampReader<T> {
     inner: T,
-    hash: H256,
-    timestamp: u64,
+    cache: HashMap<H256, u64>,
 }
 
-impl<T> MemoizingBlockTimestampReader<T> {
+impl<T: BlockTimestampBatchReading + Send> MemoizingBlockTimestampReader<T> {
     pub fn new(inner: T) -> Self {
         Self {
             inner,
-            hash: H256::zero(),
-            timestamp: 0,
+            cache: HashMap::new(),
         }
+    }
+
+    pub fn prepare_cache(&mut self, block_hashes: HashSet<H256>) -> BoxFuture<Result<()>> {
+        async move {
+            self.cache
+                .extend(self.inner.block_timestamps(block_hashes).await?);
+            Ok(())
+        }
+        .boxed()
     }
 }
 
 impl<T: BlockTimestampReading + Send> BlockTimestampReading for MemoizingBlockTimestampReader<T> {
     fn block_timestamp(&mut self, block_hash: H256) -> BoxFuture<Result<u64>> {
         async move {
-            if self.hash != block_hash {
+            if let Some(timestamp) = self.cache.get(&block_hash) {
+                Ok(*timestamp)
+            } else {
                 let timestamp = self.inner.block_timestamp(block_hash).await?;
-                self.hash = block_hash;
-                self.timestamp = timestamp;
+                self.cache.insert(block_hash, timestamp);
+                Ok(timestamp)
             }
-            Ok(self.timestamp)
         }
         .boxed()
     }
