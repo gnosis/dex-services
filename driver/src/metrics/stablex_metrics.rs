@@ -179,8 +179,8 @@ impl StableXMetrics {
         }
     }
 
-    pub fn auction_skipped(&self, batch: U256) {
-        let stage_label = &[ProcessingStage::Skipped.as_ref()];
+    pub fn autcion_processed_but_not_submitted(&self, batch: U256) {
+        let stage_label = &[ProcessingStage::SolutionNotSubmitted.as_ref()];
         self.processing_times
             .with_label_values(stage_label)
             .set(time_elapsed_since_batch_start(batch));
@@ -258,12 +258,19 @@ trait InitializeableMetric: 'static + Sized + AsRef<str> {
 }
 
 enum ProcessingStage {
+    /// The processing of a new batch has started
     Started,
+    /// The orderbook and account state has been fetched
     OrdersFetched,
+    /// A solution for the batch has been produced
     Solved,
+    /// The auction solution has been verified
     Verified,
+    /// The auction solution has been submitted
     Submitted,
-    Skipped,
+    /// Processing was successful, but solution was not submitted
+    /// (e.g. solution did not improve objective value)
+    SolutionNotSubmitted,
 }
 
 impl AsRef<str> for ProcessingStage {
@@ -274,7 +281,7 @@ impl AsRef<str> for ProcessingStage {
             Self::Solved => "solved",
             Self::Verified => "verified",
             Self::Submitted => "submitted",
-            Self::Skipped => "skipped",
+            Self::SolutionNotSubmitted => "skipped",
         }
     }
 }
@@ -287,7 +294,7 @@ impl InitializeableMetric for ProcessingStage {
         Self::Solved,
         Self::Verified,
         Self::Submitted,
-        Self::Skipped,
+        Self::SolutionNotSubmitted,
     ];
 }
 
