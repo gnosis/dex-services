@@ -138,7 +138,7 @@ impl<'a> StableXDriverImpl<'a> {
 
         if !submitted {
             self.metrics
-                .autcion_processed_but_not_submitted(batch_to_solve);
+                .auction_processed_but_not_submitted(batch_to_solve);
         };
 
         Ok(())

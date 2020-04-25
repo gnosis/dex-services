@@ -179,7 +179,7 @@ impl StableXMetrics {
         }
     }
 
-    pub fn autcion_processed_but_not_submitted(&self, batch: U256) {
+    pub fn auction_processed_but_not_submitted(&self, batch: U256) {
         let stage_label = &[ProcessingStage::SolutionNotSubmitted.as_ref()];
         self.processing_times
             .with_label_values(stage_label)
