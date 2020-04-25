@@ -72,7 +72,7 @@ impl UpdatingOrderbook {
 }
 
 impl StableXOrderBookReading for UpdatingOrderbook {
-    fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
+    fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
         ensure!(
             self.orderbook_ready.load(Ordering::SeqCst),
             "orderbook not yet ready"
@@ -80,7 +80,7 @@ impl StableXOrderBookReading for UpdatingOrderbook {
         self.orderbook
             .lock()
             .map_err(|err| anyhow!("poison error: {}", err))?
-            .get_auction_data(index)
+            .get_auction_data(batch_id_to_solve)
     }
 }
 

@@ -68,7 +68,7 @@ impl State {
                 batch_id
             }
         };
-        Ok((self.account_state(batch_id), self.orders(batch_id)))
+        Ok((self.account_state(batch_id), self.orders(batch_id - 1)))
     }
 
     fn account_state(
@@ -701,9 +701,9 @@ mod tests {
             user: address(3),
             token: address(0),
             amount: 1.into(),
-            batch_id: 0,
+            batch_id: 1,
         };
-        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
+        state = state.apply_event(&Event::Deposit(event), 1).unwrap();
         let balance = state
             .orderbook_for_batch(Batch::Current)
             .unwrap()
@@ -713,7 +713,7 @@ mod tests {
             .1;
         assert_eq!(balance, U256::zero());
         let balance = state
-            .orderbook_for_batch(Batch::Future(1))
+            .orderbook_for_batch(Batch::Future(2))
             .unwrap()
             .0
             .next()

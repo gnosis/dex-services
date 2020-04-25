@@ -26,8 +26,9 @@ impl PaginatedStableXOrderBookReader {
 }
 
 impl StableXOrderBookReading for PaginatedStableXOrderBookReader {
-    fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
-        let mut reader = PaginatedAuctionDataReader::new(index, self.page_size as usize);
+    fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
+        let mut reader =
+            PaginatedAuctionDataReader::new(batch_id_to_solve, self.page_size as usize);
         while let Some(page_info) = reader.next_page() {
             let page = &self.contract.get_auction_data_paginated(
                 self.page_size,
