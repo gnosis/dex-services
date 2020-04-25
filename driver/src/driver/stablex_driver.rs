@@ -137,7 +137,8 @@ impl<'a> StableXDriverImpl<'a> {
         };
 
         if !submitted {
-            self.metrics.auction_skipped(batch_to_solve);
+            self.metrics
+                .auction_processed_but_not_submitted(batch_to_solve);
         };
 
         Ok(())
@@ -160,7 +161,6 @@ impl<'a> StableXDriver for StableXDriverImpl<'a> {
         let price_finding_time_limit = match deadline.checked_duration_since(Instant::now()) {
             Some(time_limit) if time_limit > Duration::from_secs(1) => time_limit,
             _ => {
-                self.metrics.auction_skipped(batch_to_solve);
                 warn!("orderbook retrieval exceeded time limit");
                 return DriverResult::Ok;
             }
