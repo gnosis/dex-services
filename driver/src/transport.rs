@@ -1,8 +1,8 @@
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::Error;
-use ethcontract::jsonrpc::types::{Call, Output};
+use ethcontract::jsonrpc::types::{Call, Output, Request};
 use ethcontract::web3::helpers;
-use ethcontract::web3::{Error as Web3Error, RequestId, Transport};
+use ethcontract::web3::{BatchTransport, Error as Web3Error, RequestId, Transport};
 use futures::compat::Compat;
 use futures::future::{BoxFuture, FutureExt, TryFutureExt};
 use isahc::config::{Configurable, VersionNegotiation};
@@ -48,18 +48,12 @@ impl HttpTransport {
     }
 }
 
+type RpcResult = Result<Value, Web3Error>;
+
 impl HttpTransportInner {
     /// Execute an HTTP JSON RPC request.
-    async fn execute_rpc(
-        self: Arc<Self>,
-        id: RequestId,
-        request: Call,
-    ) -> Result<Value, Web3Error> {
-        let label = match &request {
-            Call::MethodCall(call) if call.method == "eth_call" => HttpLabel::EthCall,
-            Call::MethodCall(call) if call.method == "eth_estimateGas" => HttpLabel::EthEstimateGas,
-            _ => HttpLabel::EthRpc,
-        };
+    async fn execute_rpc(self: Arc<Self>, id: RequestId, request: Request) -> RpcResult {
+        let label: HttpLabel = (&request).into();
 
         let request = serde_json::to_string(&request)?;
         debug!("[id:{}] sending request: '{}'", id, &request);
@@ -90,6 +84,26 @@ impl HttpTransportInner {
 
         Ok(result)
     }
+
+    async fn execute_batch_rpc(
+        self: Arc<Self>,
+        id: RequestId,
+        request: Vec<Call>,
+    ) -> Result<Vec<RpcResult>, Web3Error> {
+        let result = self.execute_rpc(id, Request::Batch(request)).await?;
+        let sub_results = result.as_array().ok_or_else(|| {
+            warn!(
+                "[id:{}] Batch request did not return a list of responses: '{}'",
+                id,
+                result.to_string()
+            );
+            Web3Error::InvalidResponse(result.to_string())
+        })?;
+        Ok(sub_results
+            .iter()
+            .map(|result| Ok(result.clone()))
+            .collect())
+    }
 }
 
 impl Debug for HttpTransport {
@@ -99,7 +113,7 @@ impl Debug for HttpTransport {
 }
 
 impl Transport for HttpTransport {
-    type Out = Compat<BoxFuture<'static, Result<Value, Web3Error>>>;
+    type Out = Compat<BoxFuture<'static, RpcResult>>;
 
     fn prepare(&self, method: &str, params: Vec<Value>) -> (RequestId, Call) {
         let id = self.0.id.fetch_add(1, Ordering::SeqCst);
@@ -109,6 +123,27 @@ impl Transport for HttpTransport {
     }
 
     fn send(&self, id: RequestId, request: Call) -> Self::Out {
-        self.0.clone().execute_rpc(id, request).boxed().compat()
+        self.0
+            .clone()
+            .execute_rpc(id, Request::Single(request))
+            .boxed()
+            .compat()
+    }
+}
+
+impl BatchTransport for HttpTransport {
+    type Batch = Compat<BoxFuture<'static, Result<Vec<RpcResult>, Web3Error>>>;
+
+    fn send_batch<T>(&self, requests: T) -> Self::Batch
+    where
+        T: IntoIterator<Item = (RequestId, Call)>,
+    {
+        let id = self.0.id.fetch_add(1, Ordering::SeqCst);
+        let requests = requests.into_iter().map(|r| r.1).collect();
+        self.0
+            .clone()
+            .execute_batch_rpc(id, requests)
+            .boxed()
+            .compat()
     }
 }
