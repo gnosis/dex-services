@@ -56,6 +56,14 @@ impl Orderbook {
         };
     }
 
+    pub fn delete_events_starting_at_block(&mut self, block_number: u64) {
+        self.events.split_off(&EventSortKey {
+            block_number,
+            block_hash: H256::zero(),
+            log_index: 0,
+        });
+    }
+
     fn create_state(&self) -> Result<State> {
         self.events
             .iter()

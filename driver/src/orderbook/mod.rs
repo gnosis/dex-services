@@ -62,9 +62,7 @@ impl OrderbookReaderKind {
                 auction_data_page_size,
                 orderbook_filter,
             )),
-            OrderbookReaderKind::EventBased => {
-                Box::new(EventBasedOrderbook::new(contract.as_ref(), web3))
-            }
+            OrderbookReaderKind::EventBased => Box::new(EventBasedOrderbook::new(contract, web3)),
         }
     }
 }
