@@ -12,7 +12,7 @@ use state::{Batch, State};
 use std::collections::BTreeMap;
 use std::fs;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::Path;
 
 // Ethereum events (logs) can be both created and removed. Removals happen if the chain reorganizes
@@ -29,7 +29,7 @@ struct EventSortKey {
     log_index: usize,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
 struct Value {
     event: batch_exchange::Event,
     /// The batch id is calculated based on the timestamp of the block.
@@ -100,6 +100,38 @@ impl Orderbook {
     }
 }
 
+impl From<&[u8]> for Orderbook {
+    fn from(bytes: &[u8]) -> Orderbook {
+        match ron::de::from_bytes(bytes) {
+            Ok(x) => x,
+            Err(e) => {
+                panic!("Failed to load Orderbook: {}", e);
+            }
+        }
+    }
+}
+
+impl From<File> for Orderbook {
+    fn from(mut file: File) -> Self {
+        let mut contents = String::new();
+        match file.read_to_string(&mut contents) {
+            Ok(value) => println!("Successfully read {} bytes", value),
+            Err(error) => panic!("Failed to read file: {}", error),
+        }
+        Orderbook::from(contents.as_bytes())
+    }
+}
+
+impl From<&Path> for Orderbook {
+    fn from(path: &Path) -> Self {
+        let file = match File::open(path) {
+            Err(why) => panic!("couldn't open {}: {}", path.display(), why.to_string()),
+            Ok(file) => file,
+        };
+        Orderbook::from(file)
+    }
+}
+
 fn filter_auction_data(
     account_states: impl IntoIterator<Item = ((UserId, TokenId), U256)>,
     orders: impl IntoIterator<Item = Order>,
@@ -139,6 +171,8 @@ impl StableXOrderBookReading for Orderbook {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contracts::stablex_contract::batch_exchange::event_data::*;
+    use crate::contracts::stablex_contract::batch_exchange::Event;
 
     #[test]
     fn test_filter_account_state() {
@@ -171,5 +205,31 @@ mod tests {
         assert_eq!(account_state.read_balance(1, Address::zero()), 4);
         assert_eq!(orders.len(), 1);
         assert_eq!(orders[0].account_id, Address::zero());
+    }
+
+    #[test]
+    fn test_io_cycle() {
+        let event_key = EventSortKey {
+            block_number: 0,
+            block_hash: H256::zero(),
+            log_index: 1,
+        };
+        let event = Event::Deposit(Deposit {
+            user: Address::from_low_u64_be(1),
+            token: Address::from_low_u64_be(2),
+            amount: 1.into(),
+            batch_id: 2,
+        });
+        let value = Value { event, batch_id: 0 };
+
+        let mut events = BTreeMap::new();
+        events.insert(event_key, value);
+        let initial_orderbook = super::Orderbook { events };
+
+        let test_path = Path::new("./my_test_orderbook.ron");
+        initial_orderbook.write_to_file(test_path).unwrap();
+
+        let recovered_orderbook = super::Orderbook::from(test_path);
+        assert_eq!(initial_orderbook.events, recovered_orderbook.events);
     }
 }
