@@ -6,15 +6,21 @@ use crate::{
 };
 use anyhow::Result;
 use ethcontract::{contract::EventData, H256, U256};
+use ron;
+use serde::{Deserialize, Serialize};
 use state::{Batch, State};
 use std::collections::BTreeMap;
+use std::fs;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 
 // Ethereum events (logs) can be both created and removed. Removals happen if the chain reorganizes
 // and ends up not including block that was previously thought to be part of the chain.
 // However, the orderbook state (`State`) cannot remove events. To support this, we keep an ordered
 // list of all events based on which the state is built.
 
-#[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 struct EventSortKey {
     block_number: u64,
     /// Is included to differentiate events from the same block number but different blocks which
@@ -23,14 +29,14 @@ struct EventSortKey {
     log_index: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 struct Value {
     event: batch_exchange::Event,
     /// The batch id is calculated based on the timestamp of the block.
     batch_id: BatchId,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Orderbook {
     events: BTreeMap<EventSortKey, Value>,
 }
@@ -62,6 +68,27 @@ impl Orderbook {
             block_hash: H256::zero(),
             log_index: 0,
         });
+    }
+
+    pub fn write_to_file(&self, path: &Path) -> Result<()> {
+        // Write to tmp file until complete and then rename.
+        let temp_path = Path::new("/tmp/orderbook.json");
+
+        // Create temp file to be written completely before rename
+        let mut temp_file = match File::create(&temp_path) {
+            Err(why) => panic!(
+                "couldn't create {}: {}",
+                temp_path.display(),
+                why.to_string()
+            ),
+            Ok(file) => file,
+        };
+        let file_content = ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default());
+        temp_file.write_all(file_content.unwrap().as_bytes())?;
+
+        // Rename the temp file to the originally specified path.
+        fs::rename(temp_path.to_str().unwrap(), path.to_str().unwrap())?;
+        Ok(())
     }
 
     fn create_state(&self) -> Result<State> {
