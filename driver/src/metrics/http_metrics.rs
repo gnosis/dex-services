@@ -1,4 +1,5 @@
 use anyhow::Result;
+use ethcontract::jsonrpc::types::{Call, Request};
 use prometheus::{HistogramOpts, HistogramVec, Registry, DEFAULT_BUCKETS};
 use std::sync::Arc;
 use std::time::Duration;
@@ -104,8 +105,24 @@ labels! {
         EthCall => "eth_call",
         EthEstimateGas => "eth_estimate_gas",
         EthRpc => "eth_rpc",
+        EthBatchRPC => "eth_batch_rpc",
         Kraken => "kraken",
         Dexag => "dexag",
         GasStation => "gas_station",
+    }
+}
+
+impl From<&Request> for HttpLabel {
+    fn from(request: &Request) -> Self {
+        match request {
+            Request::Single(call) => match &call {
+                Call::MethodCall(call) if call.method == "eth_call" => HttpLabel::EthCall,
+                Call::MethodCall(call) if call.method == "eth_estimateGas" => {
+                    HttpLabel::EthEstimateGas
+                }
+                _ => HttpLabel::EthRpc,
+            },
+            Request::Batch(_) => HttpLabel::EthBatchRPC,
+        }
     }
 }
