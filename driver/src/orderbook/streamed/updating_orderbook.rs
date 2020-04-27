@@ -51,6 +51,8 @@ impl UpdatingOrderbook {
         const BLOCK_RANGE: u64 = 25;
         let current_block = self.web3.eth().block_number().compat().await?;
         let from_block = context.last_handled_block.saturating_sub(BLOCK_RANGE);
+        // We cannot use BlockNumber::Pending here because we are not guaranteed to get metadata for
+        // pending blocks but we need the metadata in the functions below.
         let to_block = BlockNumber::Number(current_block);
         log::info!(
             "Updating event based orderbook with from block {} to block {}.",
