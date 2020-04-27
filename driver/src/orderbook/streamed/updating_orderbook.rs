@@ -19,10 +19,12 @@ use std::sync::{Arc, Mutex};
 pub struct UpdatingOrderbook {
     contract: Arc<dyn StableXContract + Send + Sync>,
     web3: Web3,
+    /// We need a mutex because otherwise the struct wouldn't be Sync which is needed because we use
+    /// the orderbook in multiple threads. The mutex is locked in `get_auction_data` while the
+    /// orderbook is updated with new events.
     behind_mutex: Mutex<BehindMutex>,
 }
 
-/// Data that lives behind a mutex locked in `get_auction_data`.
 struct BehindMutex {
     orderbook: Orderbook,
     last_handled_block: u64,
