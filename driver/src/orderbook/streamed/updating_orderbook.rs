@@ -22,10 +22,10 @@ pub struct UpdatingOrderbook {
     /// We need a mutex because otherwise the struct wouldn't be Sync which is needed because we use
     /// the orderbook in multiple threads. The mutex is locked in `get_auction_data` while the
     /// orderbook is updated with new events.
-    behind_mutex: Mutex<BehindMutex>,
+    context: Mutex<Context>,
 }
 
-struct BehindMutex {
+struct Context {
     orderbook: Orderbook,
     last_handled_block: u64,
     block_timestamp_reader: CachedBlockTimestampReader<Web3>,
@@ -38,7 +38,7 @@ impl UpdatingOrderbook {
         let result = Self {
             contract,
             web3: web3.clone(),
-            behind_mutex: Mutex::new(BehindMutex {
+            context: Mutex::new(Context {
                 orderbook: Orderbook::default(),
                 last_handled_block: 0,
                 block_timestamp_reader: CachedBlockTimestampReader::new(web3),
@@ -47,21 +47,21 @@ impl UpdatingOrderbook {
 
         // Perform the initial update.
         {
-            let mut behind_mutex = result
-                .behind_mutex
+            let mut context = result
+                .context
                 .lock()
                 .map_err(|err| anyhow!("poison error: {}", err))?;
-            futures::executor::block_on(result.update_with_events(&mut behind_mutex))?;
+            futures::executor::block_on(result.update_with_events(&mut context))?;
         }
 
         Ok(result)
     }
 
-    async fn update_with_events(&self, behind_mutex: &mut BehindMutex) -> Result<()> {
+    async fn update_with_events(&self, context: &mut Context) -> Result<()> {
         const BLOCK_RANGE: u64 = 25;
         log::info!("Starting event based orderbook updating.");
         let current_block = self.web3.eth().block_number().compat().await?;
-        let from_block = behind_mutex.last_handled_block.saturating_sub(BLOCK_RANGE);
+        let from_block = context.last_handled_block.saturating_sub(BLOCK_RANGE);
         let to_block = BlockNumber::Number(current_block);
         log::info!(
             "The range is from block {} to block {}",
@@ -72,14 +72,14 @@ impl UpdatingOrderbook {
             .contract
             .past_events(BlockNumber::Number(from_block.into()), to_block)
             .await?;
-        self.handle_events(behind_mutex, events, from_block).await?;
-        behind_mutex.last_handled_block = current_block.as_u64();
+        self.handle_events(context, events, from_block).await?;
+        context.last_handled_block = current_block.as_u64();
         Ok(())
     }
 
     async fn handle_events(
         &self,
-        behind_mutex: &mut BehindMutex,
+        context: &mut Context,
         events: Vec<Event<batch_exchange::Event>>,
         delete_events_starting_at_block: u64,
     ) -> Result<()> {
@@ -94,15 +94,15 @@ impl UpdatingOrderbook {
                 Ok(metadata.block_hash)
             })
             .collect::<Result<HashSet<H256>>>()?;
-        behind_mutex
+        context
             .block_timestamp_reader
             .prepare_cache(block_hashes)
             .await?;
-        behind_mutex
+        context
             .orderbook
             .delete_events_starting_at_block(delete_events_starting_at_block);
         for event in events {
-            self.handle_event(behind_mutex, event).await?;
+            self.handle_event(context, event).await?;
         }
         log::info!("Finished applying events");
         Ok(())
@@ -111,7 +111,7 @@ impl UpdatingOrderbook {
     /// Apply a single event to the orderbook.
     async fn handle_event(
         &self,
-        behind_mutex: &mut BehindMutex,
+        context: &mut Context,
         event: Event<batch_exchange::Event>,
     ) -> Result<()> {
         match event {
@@ -119,11 +119,11 @@ impl UpdatingOrderbook {
                 data,
                 meta: Some(meta),
             } => {
-                let block_timestamp = behind_mutex
+                let block_timestamp = context
                     .block_timestamp_reader
                     .block_timestamp(meta.block_hash)
                     .await?;
-                behind_mutex.orderbook.handle_event_data(
+                context.orderbook.handle_event_data(
                     data,
                     meta.block_number,
                     meta.log_index,
@@ -140,11 +140,11 @@ impl UpdatingOrderbook {
 impl StableXOrderBookReading for UpdatingOrderbook {
     /// Blocks on updating the orderbook.
     fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
-        let mut behind_mutex = self
-            .behind_mutex
+        let mut context = self
+            .context
             .lock()
             .map_err(|err| anyhow!("poison error: {}", err))?;
-        futures::executor::block_on(self.update_with_events(&mut behind_mutex))?;
-        behind_mutex.orderbook.get_auction_data(batch_id_to_solve)
+        futures::executor::block_on(self.update_with_events(&mut context))?;
+        context.orderbook.get_auction_data(batch_id_to_solve)
     }
 }
