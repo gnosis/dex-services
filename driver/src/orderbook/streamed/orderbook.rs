@@ -73,11 +73,16 @@ impl Orderbook {
     }
 }
 
-fn filter_account_state(
-    account_states: impl Iterator<Item = ((UserId, TokenId), U256)>,
-    orders: &[Order],
-) -> AccountState {
+fn filter_auction_data(
+    account_states: impl IntoIterator<Item = ((UserId, TokenId), U256)>,
+    orders: impl IntoIterator<Item = Order>,
+) -> (AccountState, Vec<Order>) {
+    let orders = orders
+        .into_iter()
+        .filter(|order| order.sell_amount > 0)
+        .collect::<Vec<_>>();
     let account_states = account_states
+        .into_iter()
         .filter(|((user, token), _)| {
             orders
                 .iter()
@@ -86,7 +91,7 @@ fn filter_account_state(
         // TODO: change AccountState to use U256
         .map(|(key, value)| (key, value.low_u128()))
         .collect();
-    AccountState(account_states)
+    (AccountState(account_states), orders)
 }
 
 impl StableXOrderBookReading for Orderbook {
@@ -99,8 +104,7 @@ impl StableXOrderBookReading for Orderbook {
         // to increment it.
         let (account_state, orders) =
             state.orderbook_for_batch(Batch::Future(batch_id_to_solve.low_u32() + 1))?;
-        let orders = orders.collect::<Vec<_>>();
-        let account_state = filter_account_state(account_state, &orders);
+        let (account_state, orders) = filter_auction_data(account_state, orders);
         Ok((account_state, orders))
     }
 }
@@ -111,21 +115,34 @@ mod tests {
 
     #[test]
     fn test_filter_account_state() {
-        let orders = vec![Order {
-            id: 0,
-            account_id: Address::zero(),
-            buy_token: 0,
-            sell_token: 1,
-            buy_amount: 1,
-            sell_amount: 1,
-        }];
+        let orders = vec![
+            Order {
+                id: 0,
+                account_id: Address::zero(),
+                buy_token: 0,
+                sell_token: 1,
+                buy_amount: 1,
+                sell_amount: 1,
+            },
+            Order {
+                id: 0,
+                account_id: Address::repeat_byte(1),
+                buy_token: 0,
+                sell_token: 2,
+                buy_amount: 0,
+                sell_amount: 0,
+            },
+        ];
         let account_states = vec![
             ((Address::zero(), 0), 3.into()),
             ((Address::zero(), 1), 4.into()),
             ((Address::zero(), 2), 5.into()),
         ];
-        let result = filter_account_state(account_states.into_iter(), &orders);
-        assert_eq!(result.0.len(), 1);
-        assert_eq!(result.read_balance(1, Address::zero()), 4);
+
+        let (account_state, orders) = filter_auction_data(account_states, orders);
+        assert_eq!(account_state.0.len(), 1);
+        assert_eq!(account_state.read_balance(1, Address::zero()), 4);
+        assert_eq!(orders.len(), 1);
+        assert_eq!(orders[0].account_id, Address::zero());
     }
 }
