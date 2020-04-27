@@ -35,8 +35,8 @@ struct Context {
 impl UpdatingOrderbook {
     /// Does not block on initializing the orderbook. This will happen in the first call to
     /// `get_auction_data` which can thus take a long time to complete.
-    pub fn new(contract: Arc<dyn StableXContract + Send + Sync>, web3: Web3) -> Result<Self> {
-        let result = Self {
+    pub fn new(contract: Arc<dyn StableXContract + Send + Sync>, web3: Web3) -> Self {
+        Self {
             contract,
             web3: web3.clone(),
             context: Mutex::new(Context {
@@ -44,8 +44,7 @@ impl UpdatingOrderbook {
                 last_handled_block: 0,
                 block_timestamp_reader: CachedBlockTimestampReader::new(web3),
             }),
-        };
-        Ok(result)
+        }
     }
 
     async fn update_with_events(&self, context: &mut Context) -> Result<()> {
