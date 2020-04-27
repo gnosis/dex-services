@@ -68,7 +68,7 @@ impl State {
                 batch_id
             }
         };
-        Ok((self.account_state(batch_id), self.orders(batch_id - 1)))
+        Ok((self.account_state(batch_id), self.orders(batch_id)))
     }
 
     fn account_state(
@@ -95,7 +95,9 @@ impl State {
     fn orders(&self, batch_id: BatchId) -> impl Iterator<Item = ModelOrder> + '_ {
         self.orders
             .iter()
-            .filter(move |(_, order)| order.is_valid_in_batch(batch_id))
+            // State is returned **excluding** the given `batch_id` however order validity is internally stored
+            // **including** `batch_id`. Thus we need subtract 1 here to get all orders valid for batch_id -1.
+            .filter(move |(_, order)| order.is_valid_in_batch(batch_id - 1))
             .map(move |((user_id, order_id), order)| {
                 order.as_model_order(batch_id, *user_id, *order_id)
             })
