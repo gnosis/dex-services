@@ -33,9 +33,11 @@ impl OnchainFilteredOrderBookReader {
 }
 
 impl StableXOrderBookReading for OnchainFilteredOrderBookReader {
-    fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
-        let last_block = self.contract.get_last_block_for_batch(index.as_u32())?;
-        let mut reader = IndexedAuctionDataReader::new(index);
+    fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
+        let last_block = self
+            .contract
+            .get_last_block_for_batch(batch_id_to_solve.as_u32())?;
+        let mut reader = IndexedAuctionDataReader::new(batch_id_to_solve);
         let mut auction_data = FilteredOrderPage {
             indexed_elements: vec![],
             has_next_page: true,
@@ -44,7 +46,7 @@ impl StableXOrderBookReading for OnchainFilteredOrderBookReader {
         };
         while auction_data.has_next_page {
             auction_data = self.contract.get_filtered_auction_data_paginated(
-                index,
+                batch_id_to_solve,
                 self.filter.clone(),
                 self.page_size,
                 auction_data.next_page_user,

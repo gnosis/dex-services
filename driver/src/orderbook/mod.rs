@@ -28,8 +28,8 @@ pub trait StableXOrderBookReading {
     /// and open orders or an error in case it cannot get this information.
     ///
     /// # Arguments
-    /// * `index` - the auction index for which returned orders should be valid
-    fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)>;
+    /// * `batch_id_to_solve` - the index for which returned orders should be valid
+    fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)>;
 }
 
 /// The different kinds of orderbook readers.
