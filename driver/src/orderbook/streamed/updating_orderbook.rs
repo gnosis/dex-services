@@ -1,12 +1,15 @@
 use super::*;
 use crate::{
-    contracts::stablex_contract::{batch_exchange, StableXContract},
+    contracts::{
+        stablex_contract::{batch_exchange, StableXContract},
+        Web3,
+    },
     models::{AccountState, Order},
     orderbook::StableXOrderBookReading,
 };
 use anyhow::{anyhow, bail, ensure, Result};
-use block_timestamp_reading::{BlockTimestampReading, MemoizingBlockTimestampReader};
-use ethcontract::{contract::Event, errors::ExecutionError};
+use block_timestamp_reading::{BlockTimestampReading, CachedBlockTimestampReader};
+use ethcontract::{contract::Event, errors::ExecutionError, H256};
 use futures::{
     channel::oneshot,
     future::FutureExt,
@@ -14,6 +17,7 @@ use futures::{
     stream::{Stream, StreamExt as _},
 };
 use orderbook::Orderbook;
+use std::collections::HashSet;
 use std::future::Future;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -33,10 +37,7 @@ pub struct UpdatingOrderbook {
 }
 
 impl UpdatingOrderbook {
-    pub fn new(
-        contract: &dyn StableXContract,
-        block_timestamp_reader: impl BlockTimestampReading + Send + 'static,
-    ) -> Self {
+    pub fn new(contract: &dyn StableXContract, web3: Web3) -> Self {
         let orderbook = Arc::new(Mutex::new(Orderbook::default()));
         let orderbook_clone = orderbook.clone();
         let orderbook_ready = Arc::new(AtomicBool::new(false));
@@ -50,7 +51,7 @@ impl UpdatingOrderbook {
             let result = futures::executor::block_on(update_with_events_forever(
                 orderbook_clone,
                 orderbook_ready_clone,
-                MemoizingBlockTimestampReader::new(block_timestamp_reader),
+                CachedBlockTimestampReader::new(web3),
                 exit_rx,
                 past_events,
                 stream,
@@ -94,7 +95,7 @@ impl StableXOrderBookReading for UpdatingOrderbook {
 async fn update_with_events_forever(
     orderbook: Arc<Mutex<Orderbook>>,
     orderbook_ready: Arc<AtomicBool>,
-    mut block_timestamp_reader: impl BlockTimestampReading,
+    mut block_timestamp_reader: CachedBlockTimestampReader<Web3>,
     exit_indicator: oneshot::Receiver<()>,
     past_events: impl Future<Output = Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>,
     stream: impl Stream<Item = Result<Event<batch_exchange::Event>, ExecutionError>>,
@@ -124,6 +125,11 @@ async fn update_with_events_forever(
             past_events = past_events => {
                 let past_events = past_events?;
                 log::info!("Received {} past events.", past_events.len());
+                let block_hashes = past_events.iter().map(|event| {
+                    let metadata = event.meta.as_ref().ok_or(anyhow!("event without metadata: {:?}", event))?;
+                    Ok(metadata.block_hash)
+                }).collect::<Result<HashSet<H256>>>()?;
+                block_timestamp_reader.prepare_cache(block_hashes).await?;
                 for event in past_events {
                     handle_event(&orderbook, &mut block_timestamp_reader, event).await?;
                 }
