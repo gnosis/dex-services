@@ -19,6 +19,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
 };
+use std::{process, thread, time::Duration};
 
 /// An event based orderbook that automatically updates itself with new events from the contract.
 #[derive(Debug)]
@@ -55,11 +56,13 @@ impl UpdatingOrderbook {
                 stream,
             ));
             if let Err(err) = result {
-                log::error!("event based orderbook failed: {}", err);
+                log::error!("event based orderbook failed: {:?}", err);
                 // TODO: implement a retry mechanism
-                // For now we crash the program so force a restart of the whole driver because
+                // For now we error the program so force a restart of the whole driver because
                 // without a retry we would be stuck with an outdated orderbook forever.
-                std::process::abort();
+                // Sleep for one second, so that we have time to flush the logs.
+                thread::sleep(Duration::from_secs(1));
+                process::exit(1);
             }
         });
 
