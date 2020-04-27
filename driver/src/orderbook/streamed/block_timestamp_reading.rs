@@ -94,9 +94,13 @@ impl<T: BlockTimestampBatchReading + Send> MemoizingBlockTimestampReader<T> {
     }
 
     pub fn prepare_cache(&mut self, block_hashes: HashSet<H256>) -> BoxFuture<Result<()>> {
+        let missing_hashes = block_hashes
+            .into_iter()
+            .filter(|hash| self.cache.contains_key(&hash))
+            .collect();
         async move {
             self.cache
-                .extend(self.inner.block_timestamps(block_hashes).await?);
+                .extend(self.inner.block_timestamps(missing_hashes).await?);
             Ok(())
         }
         .boxed()
