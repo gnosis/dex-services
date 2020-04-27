@@ -6,6 +6,7 @@ use crate::{
     },
     models::{AccountState, Order},
     orderbook::StableXOrderBookReading,
+    util::FutureWaitExt as _,
 };
 use anyhow::{anyhow, bail, Result};
 use block_timestamp_reading::{BlockTimestampReading, CachedBlockTimestampReader};
@@ -32,8 +33,8 @@ struct Context {
 }
 
 impl UpdatingOrderbook {
-    /// Blocks on attempting to build the orderbook. After the initial build the orderbook is
-    /// updated every time `get_auction_data` is called.
+    /// Does not block on initializing the orderbook. This will happen in the first call to
+    /// `get_auction_data` which can thus take a long time to complete.
     pub fn new(contract: Arc<dyn StableXContract + Send + Sync>, web3: Web3) -> Result<Self> {
         let result = Self {
             contract,
@@ -44,27 +45,16 @@ impl UpdatingOrderbook {
                 block_timestamp_reader: CachedBlockTimestampReader::new(web3),
             }),
         };
-
-        // Perform the initial update.
-        {
-            let mut context = result
-                .context
-                .lock()
-                .map_err(|err| anyhow!("poison error: {}", err))?;
-            futures::executor::block_on(result.update_with_events(&mut context))?;
-        }
-
         Ok(result)
     }
 
     async fn update_with_events(&self, context: &mut Context) -> Result<()> {
         const BLOCK_RANGE: u64 = 25;
-        log::info!("Updating event based orderbook.");
         let current_block = self.web3.eth().block_number().compat().await?;
         let from_block = context.last_handled_block.saturating_sub(BLOCK_RANGE);
         let to_block = BlockNumber::Number(current_block);
         log::info!(
-            "The range is from block {} to block {}.",
+            "Updating event based orderbook with from block {} to block {}.",
             from_block,
             current_block.as_u64(),
         );
@@ -138,13 +128,14 @@ impl UpdatingOrderbook {
 }
 
 impl StableXOrderBookReading for UpdatingOrderbook {
-    /// Blocks on updating the orderbook.
+    /// Blocks on updating the orderbook. When this is called the first time this can take several
+    /// minutes.
     fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
         let mut context = self
             .context
             .lock()
             .map_err(|err| anyhow!("poison error: {}", err))?;
-        futures::executor::block_on(self.update_with_events(&mut context))?;
+        self.update_with_events(&mut context).wait()?;
         context.orderbook.get_auction_data(batch_id_to_solve)
     }
 }

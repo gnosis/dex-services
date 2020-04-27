@@ -277,6 +277,11 @@ fn main() {
     let mut scheduler = options
         .scheduler
         .create(&*contract, &driver, scheduler_config);
+    // Retrieve the orderbook once because the event based orderbook needs to perform an expensive
+    // initialization step on first call.
+    filtered_orderbook
+        .get_auction_data(ethcontract::U256::zero())
+        .expect("orderbook initialization failed");
     scheduler.start();
 }
 
