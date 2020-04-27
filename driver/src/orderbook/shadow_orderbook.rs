@@ -48,14 +48,14 @@ impl<'a> ShadowedOrderbookReader<'a> {
 }
 
 impl<'a> StableXOrderBookReading for ShadowedOrderbookReader<'a> {
-    fn get_auction_data(&self, batch_id: U256) -> Result<Orderbook> {
-        let orderbook = self.primary.get_auction_data(batch_id)?;
+    fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<Orderbook> {
+        let orderbook = self.primary.get_auction_data(batch_id_to_solve)?;
 
         // NOTE: Ignore errors here as they indicate that the shadow reader is
         //   already reading an orderbook.
         let _ = self
             .shadow_channel
-            .try_send((batch_id.low_u32(), orderbook.clone()));
+            .try_send((batch_id_to_solve.low_u32(), orderbook.clone()));
 
         Ok(orderbook)
     }

@@ -11,9 +11,8 @@ pub use self::paginated_orderbook::PaginatedStableXOrderBookReader;
 pub use self::shadow_orderbook::ShadowedOrderbookReader;
 pub use self::streamed::Orderbook as EventBasedOrderbook;
 
-use crate::contracts::stablex_contract::StableXContractImpl;
+use crate::contracts::{stablex_contract::StableXContractImpl, Web3};
 use crate::models::{AccountState, Order};
-use crate::orderbook::streamed::BlockTimestampReading;
 
 use anyhow::{anyhow, Error, Result};
 use ethcontract::U256;
@@ -28,8 +27,8 @@ pub trait StableXOrderBookReading {
     /// and open orders or an error in case it cannot get this information.
     ///
     /// # Arguments
-    /// * `index` - the auction index for which returned orders should be valid
-    fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)>;
+    /// * `batch_id_to_solve` - the index for which returned orders should be valid
+    fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)>;
 }
 
 /// The different kinds of orderbook readers.
@@ -51,7 +50,7 @@ impl OrderbookReaderKind {
         contract: Arc<StableXContractImpl>,
         auction_data_page_size: u16,
         orderbook_filter: &OrderbookFilter,
-        block_timestamp_reader: impl BlockTimestampReading + Send + 'static,
+        web3: Web3,
     ) -> Box<dyn StableXOrderBookReading + Sync> {
         match self {
             OrderbookReaderKind::Paginated => Box::new(PaginatedStableXOrderBookReader::new(
@@ -63,10 +62,9 @@ impl OrderbookReaderKind {
                 auction_data_page_size,
                 orderbook_filter,
             )),
-            OrderbookReaderKind::EventBased => Box::new(EventBasedOrderbook::new(
-                contract.as_ref(),
-                block_timestamp_reader,
-            )),
+            OrderbookReaderKind::EventBased => {
+                Box::new(EventBasedOrderbook::new(contract.as_ref(), web3))
+            }
         }
     }
 }

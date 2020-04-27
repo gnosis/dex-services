@@ -95,7 +95,9 @@ impl State {
     fn orders(&self, batch_id: BatchId) -> impl Iterator<Item = ModelOrder> + '_ {
         self.orders
             .iter()
-            .filter(move |(_, order)| order.is_valid_in_batch(batch_id))
+            // State is returned **excluding** the given `batch_id` however order validity is internally stored
+            // **including** `batch_id`. Thus we need subtract 1 here to get all orders valid for batch_id -1.
+            .filter(move |(_, order)| order.is_valid_in_batch(batch_id - 1))
             .map(move |((user_id, order_id), order)| {
                 order.as_model_order(batch_id, *user_id, *order_id)
             })
@@ -545,7 +547,7 @@ mod tests {
         };
         state = state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
 
-        assert_eq!(state.orders(0).next(), None);
+        assert_eq!(state.orders(1).next(), None);
         let expected_orders = vec![ModelOrder {
             id: 0,
             account_id: address(2),
@@ -554,9 +556,9 @@ mod tests {
             buy_amount: 3,
             sell_amount: 4,
         }];
-        assert_eq!(state.orders(1).collect::<Vec<_>>(), expected_orders);
         assert_eq!(state.orders(2).collect::<Vec<_>>(), expected_orders);
-        assert_eq!(state.orders(3).next(), None);
+        assert_eq!(state.orders(3).collect::<Vec<_>>(), expected_orders);
+        assert_eq!(state.orders(4).next(), None);
 
         let event = OrderCancellation {
             owner: address(2),
@@ -566,10 +568,10 @@ mod tests {
             .apply_event(&Event::OrderCancellation(event), 2)
             .unwrap();
 
-        assert_eq!(state.orders(0).next(), None);
-        assert_eq!(state.orders(1).collect::<Vec<_>>(), expected_orders);
-        assert_eq!(state.orders(2).next(), None);
+        assert_eq!(state.orders(1).next(), None);
+        assert_eq!(state.orders(2).collect::<Vec<_>>(), expected_orders);
         assert_eq!(state.orders(3).next(), None);
+        assert_eq!(state.orders(4).next(), None);
 
         let event = Event::OrderDeletion(OrderDeletion {
             owner: address(2),
@@ -577,10 +579,10 @@ mod tests {
         });
         assert!(state.clone().apply_event(&event, 2).is_err());
         state = state.apply_event(&event, 3).unwrap();
-        assert_eq!(state.orders(0).next(), None);
         assert_eq!(state.orders(1).next(), None);
         assert_eq!(state.orders(2).next(), None);
         assert_eq!(state.orders(3).next(), None);
+        assert_eq!(state.orders(4).next(), None);
     }
 
     #[test]
@@ -701,9 +703,9 @@ mod tests {
             user: address(3),
             token: address(0),
             amount: 1.into(),
-            batch_id: 0,
+            batch_id: 1,
         };
-        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
+        state = state.apply_event(&Event::Deposit(event), 1).unwrap();
         let balance = state
             .orderbook_for_batch(Batch::Current)
             .unwrap()
@@ -713,7 +715,7 @@ mod tests {
             .1;
         assert_eq!(balance, U256::zero());
         let balance = state
-            .orderbook_for_batch(Batch::Future(1))
+            .orderbook_for_batch(Batch::Future(2))
             .unwrap()
             .0
             .next()

@@ -82,10 +82,15 @@ fn filter_account_state(
 }
 
 impl StableXOrderBookReading for Orderbook {
-    fn get_auction_data(&self, index: U256) -> Result<(AccountState, Vec<Order>)> {
+    fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
         // TODO: Handle future batch ids for when we want to do optimistic solving.
         let state = self.create_state()?;
-        let (account_state, orders) = state.orderbook_for_batch(Batch::Future(index.low_u32()))?;
+        // `orderbook_for_batch` takes the index of the auction that is currently collecting orders and returns
+        // the orderbook for the batch index that is currently being solved. `get_auction_data` passed in the
+        // index for the auction that orders should be valid for (the one currently being solved). Thus we need
+        // to increment it.
+        let (account_state, orders) =
+            state.orderbook_for_batch(Batch::Future(batch_id_to_solve.low_u32() + 1))?;
         let orders = orders.collect::<Vec<_>>();
         let account_state = filter_account_state(account_state, &orders);
         Ok((account_state, orders))
