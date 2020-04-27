@@ -59,12 +59,12 @@ impl UpdatingOrderbook {
 
     async fn update_with_events(&self, context: &mut Context) -> Result<()> {
         const BLOCK_RANGE: u64 = 25;
-        log::info!("Starting event based orderbook updating.");
+        log::info!("Updating event based orderbook.");
         let current_block = self.web3.eth().block_number().compat().await?;
         let from_block = context.last_handled_block.saturating_sub(BLOCK_RANGE);
         let to_block = BlockNumber::Number(current_block);
         log::info!(
-            "The range is from block {} to block {}",
+            "The range is from block {} to block {}.",
             from_block,
             current_block.as_u64(),
         );
