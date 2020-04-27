@@ -80,12 +80,12 @@ async fn query_block_timestamps_batched(
 
 /// A cache for the block timestamp.
 #[derive(Debug)]
-pub struct MemoizingBlockTimestampReader<T> {
+pub struct CachedBlockTimestampReader<T> {
     inner: T,
     cache: HashMap<H256, u64>,
 }
 
-impl<T: BlockTimestampBatchReading + Send> MemoizingBlockTimestampReader<T> {
+impl<T: BlockTimestampBatchReading + Send> CachedBlockTimestampReader<T> {
     pub fn new(inner: T) -> Self {
         Self {
             inner,
@@ -107,7 +107,7 @@ impl<T: BlockTimestampBatchReading + Send> MemoizingBlockTimestampReader<T> {
     }
 }
 
-impl<T: BlockTimestampReading + Send> BlockTimestampReading for MemoizingBlockTimestampReader<T> {
+impl<T: BlockTimestampReading + Send> BlockTimestampReading for CachedBlockTimestampReader<T> {
     fn block_timestamp(&mut self, block_hash: H256) -> BoxFuture<Result<u64>> {
         async move {
             if let Some(timestamp) = self.cache.get(&block_hash) {

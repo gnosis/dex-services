@@ -8,7 +8,7 @@ use crate::{
     orderbook::StableXOrderBookReading,
 };
 use anyhow::{anyhow, bail, ensure, Result};
-use block_timestamp_reading::{BlockTimestampReading, MemoizingBlockTimestampReader};
+use block_timestamp_reading::{BlockTimestampReading, CachedBlockTimestampReader};
 use ethcontract::{contract::Event, errors::ExecutionError, H256};
 use futures::{
     channel::oneshot,
@@ -51,7 +51,7 @@ impl UpdatingOrderbook {
             let result = futures::executor::block_on(update_with_events_forever(
                 orderbook_clone,
                 orderbook_ready_clone,
-                MemoizingBlockTimestampReader::new(web3),
+                CachedBlockTimestampReader::new(web3),
                 exit_rx,
                 past_events,
                 stream,
@@ -95,7 +95,7 @@ impl StableXOrderBookReading for UpdatingOrderbook {
 async fn update_with_events_forever(
     orderbook: Arc<Mutex<Orderbook>>,
     orderbook_ready: Arc<AtomicBool>,
-    mut block_timestamp_reader: MemoizingBlockTimestampReader<Web3>,
+    mut block_timestamp_reader: CachedBlockTimestampReader<Web3>,
     exit_indicator: oneshot::Receiver<()>,
     past_events: impl Future<Output = Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>,
     stream: impl Stream<Item = Result<Event<batch_exchange::Event>, ExecutionError>>,
