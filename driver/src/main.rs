@@ -240,25 +240,24 @@ fn main() {
         web3,
     );
 
-    // NOTE: Keep the shadowed orderbook around so it doesn't get dropped and we
-    //   can pass a reference to the filtered orderbook reader.
-    let unfiltered_orderbook: Box<dyn StableXOrderBookReading + Sync> =
-        if options.use_shadowed_orderbook {
-            let shadow_orderbook = OnchainFilteredOrderBookReader::new(
-                contract.clone(),
-                options.auction_data_page_size,
-                &options.orderbook_filter,
-            );
-            let shadowed_orderbook =
-                ShadowedOrderbookReader::new(primary_orderbook.as_ref(), shadow_orderbook);
-            Box::new(shadowed_orderbook)
-        } else {
-            primary_orderbook
-        };
-
     info!("Orderbook filter: {:?}", options.orderbook_filter);
     let filtered_orderbook =
-        FilteredOrderbookReader::new(&*unfiltered_orderbook, options.orderbook_filter);
+        FilteredOrderbookReader::new(&*primary_orderbook, options.orderbook_filter.clone());
+
+    // NOTE: Keep the shadowed orderbook around so it doesn't get dropped and we
+    //   can pass a reference to the filtered orderbook reader.
+    let orderbook: Box<dyn StableXOrderBookReading + Sync> = if options.use_shadowed_orderbook {
+        let shadow_orderbook = OnchainFilteredOrderBookReader::new(
+            contract.clone(),
+            options.auction_data_page_size,
+            &options.orderbook_filter,
+        );
+        let shadowed_orderbook =
+            ShadowedOrderbookReader::new(&filtered_orderbook, shadow_orderbook);
+        Box::new(shadowed_orderbook)
+    } else {
+        Box::new(filtered_orderbook)
+    };
 
     // Set up solution submitter.
     let solution_submitter = StableXSolutionSubmitter::new(&*contract, &gas_station);
@@ -266,7 +265,7 @@ fn main() {
     // Set up the driver and start the run-loop.
     let driver = StableXDriverImpl::new(
         &*price_finder,
-        &filtered_orderbook,
+        &*orderbook,
         &solution_submitter,
         &stablex_metrics,
     );
