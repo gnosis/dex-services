@@ -37,6 +37,7 @@ use ethcontract::PrivateKey;
 use log::info;
 use prometheus::Registry;
 use std::num::ParseIntError;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -185,12 +186,8 @@ struct Options {
     )]
     use_shadowed_orderbook: bool,
 
-    #[structopt(
-        long,
-        env = "ORDERBOOK_FILEPATH",
-        default_value = "/var/db/stablex_orderbook.ron"
-    )]
-    orderbook_filepath: String,
+    #[structopt(long, env = "ORDERBOOK_FILE", parse(from_os_str))]
+    orderbook_file: Option<PathBuf>,
 }
 
 fn main() {
@@ -245,7 +242,7 @@ fn main() {
         options.auction_data_page_size,
         &options.orderbook_filter,
         web3,
-        options.orderbook_filepath,
+        options.orderbook_file,
     );
 
     // NOTE: Keep the shadowed orderbook around so it doesn't get dropped and we

@@ -12,10 +12,11 @@ use anyhow::{anyhow, bail, Result};
 use block_timestamp_reading::{BlockTimestampReading, CachedBlockTimestampReader};
 use ethcontract::{contract::Event, BlockNumber, H256};
 use futures::compat::Future01CompatExt as _;
+use log::error;
 use orderbook::Orderbook;
 use std::collections::HashSet;
 use std::convert::TryFrom;
-use std::path::Path;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 /// An event based orderbook that automatically updates itself with new events from the contract.
@@ -27,7 +28,7 @@ pub struct UpdatingOrderbook {
     /// orderbook is updated with new events.
     context: Mutex<Context>,
     /// File path where orderbook is written to disk.
-    filestore: String,
+    filestore: Option<PathBuf>,
 }
 
 struct Context {
@@ -42,10 +43,13 @@ impl UpdatingOrderbook {
     pub fn new(
         contract: Arc<dyn StableXContract + Send + Sync>,
         web3: Web3,
-        path_str: String,
+        path: Option<PathBuf>,
     ) -> Self {
         // Recover the orderbook from file (if possible, otherwise use default).
-        let orderbook = Orderbook::try_from(Path::new(&path_str)).unwrap_or_default();
+        let orderbook = match &path {
+            Some(path) => Orderbook::try_from(path.as_path()).unwrap_or_default(),
+            None => Orderbook::default(),
+        };
         let last_handled_block = orderbook.last_handled_block().unwrap_or(0);
         Self {
             contract,
@@ -55,7 +59,7 @@ impl UpdatingOrderbook {
                 last_handled_block,
                 block_timestamp_reader: CachedBlockTimestampReader::new(web3),
             }),
-            filestore: path_str,
+            filestore: path,
         }
     }
 
@@ -76,7 +80,14 @@ impl UpdatingOrderbook {
             .past_events(BlockNumber::Number(from_block.into()), to_block)
             .await?;
         self.handle_events(context, events, from_block).await?;
-        context.orderbook.write_to_file(&self.filestore)?;
+        if self.filestore.is_some() {
+            if let Err(write_error) = context
+                .orderbook
+                .write_to_file(&self.filestore.as_ref().unwrap())
+            {
+                error!("Failed to write to orderbook {}", write_error);
+            }
+        }
         context.last_handled_block = current_block.as_u64();
         Ok(())
     }
