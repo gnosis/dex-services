@@ -10,7 +10,6 @@ use crate::{
 use anyhow::{Context, Result};
 use ethcontract::{contract::EventData, H256, U256};
 use log::info;
-use ron;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
