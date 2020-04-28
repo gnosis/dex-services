@@ -1,20 +1,29 @@
-use super::*;
+use super::{
+    state::{Batch, State},
+    BatchId, TokenId, UserId,
+};
 use crate::{
     contracts::stablex_contract::batch_exchange,
     models::{AccountState, Order},
     orderbook::StableXOrderBookReading,
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use ethcontract::{contract::EventData, H256, U256};
-use state::{Batch, State};
+use log::info;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::convert::TryFrom;
+use std::fs;
+use std::fs::File;
+use std::io::{Read, Write};
+use std::path::Path;
 
 // Ethereum events (logs) can be both created and removed. Removals happen if the chain reorganizes
 // and ends up not including block that was previously thought to be part of the chain.
 // However, the orderbook state (`State`) cannot remove events. To support this, we keep an ordered
 // list of all events based on which the state is built.
 
-#[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 struct EventSortKey {
     block_number: u64,
     /// Is included to differentiate events from the same block number but different blocks which
@@ -23,14 +32,14 @@ struct EventSortKey {
     log_index: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
 struct Value {
     event: batch_exchange::Event,
     /// The batch id is calculated based on the timestamp of the block.
     batch_id: BatchId,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Orderbook {
     events: BTreeMap<EventSortKey, Value>,
 }
@@ -64,12 +73,60 @@ impl Orderbook {
         });
     }
 
+    pub fn write_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
+        // Write to tmp file until complete and then rename.
+        let temp_path = path.as_ref().with_extension(".temp");
+
+        // Create temp file to be written completely before rename
+        let mut temp_file = File::create(&temp_path)
+            .with_context(|| format!("couldn't create {}", temp_path.display()))?;
+        let file_content = ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default())?;
+        temp_file.write_all(file_content.as_bytes())?;
+
+        // Rename the temp file to the originally specified path.
+        fs::rename(temp_path, path)?;
+        Ok(())
+    }
+
     fn create_state(&self) -> Result<State> {
         self.events
             .iter()
             .try_fold(State::default(), |state, (_key, value)| {
                 state.apply_event(&value.event, value.batch_id)
             })
+    }
+}
+
+impl TryFrom<&[u8]> for Orderbook {
+    type Error = anyhow::Error;
+
+    fn try_from(bytes: &[u8]) -> Result<Self> {
+        ron::de::from_bytes(bytes).context("Failed to load Orderbook")
+    }
+}
+
+impl TryFrom<File> for Orderbook {
+    type Error = anyhow::Error;
+
+    fn try_from(mut file: File) -> Result<Self> {
+        let mut contents = String::new();
+        let bytes_read = file
+            .read_to_string(&mut contents)
+            .with_context(|| format!("Failed to read file: {:?}", file))?;
+        info!(
+            "Successfully loaded {} bytes from Orderbook file",
+            bytes_read
+        );
+        Orderbook::try_from(contents.as_bytes())
+    }
+}
+
+impl TryFrom<&Path> for Orderbook {
+    type Error = anyhow::Error;
+
+    fn try_from(path: &Path) -> Result<Self> {
+        let file = File::open(path).with_context(|| format!("couldn't open {}", path.display()))?;
+        Orderbook::try_from(file)
     }
 }
 
@@ -112,6 +169,9 @@ impl StableXOrderBookReading for Orderbook {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contracts::stablex_contract::batch_exchange::event_data::*;
+    use crate::contracts::stablex_contract::batch_exchange::Event;
+    use ethcontract::Address;
 
     #[test]
     fn test_filter_account_state() {
@@ -144,5 +204,60 @@ mod tests {
         assert_eq!(account_state.read_balance(1, Address::zero()), 4);
         assert_eq!(orders.len(), 1);
         assert_eq!(orders[0].account_id, Address::zero());
+    }
+
+    #[test]
+    fn test_serialize_deserialize_orderbook() {
+        let event_key = EventSortKey {
+            block_number: 0,
+            block_hash: H256::zero(),
+            log_index: 1,
+        };
+        let event = Event::Deposit(Deposit {
+            user: Address::from_low_u64_be(1),
+            token: Address::from_low_u64_be(2),
+            amount: 1.into(),
+            batch_id: 2,
+        });
+        let value = Value { event, batch_id: 0 };
+
+        let mut events = BTreeMap::new();
+        events.insert(event_key, value);
+        let orderbook = Orderbook { events };
+
+        let serialized_orderbook =
+            ron::ser::to_string_pretty(&orderbook, ron::ser::PrettyConfig::default()).unwrap();
+        let deserialized_orderbook = Orderbook::try_from(serialized_orderbook.as_bytes()).unwrap();
+        assert_eq!(orderbook.events, deserialized_orderbook.events);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_write_read_recover_full_cycle() {
+        let event_key = EventSortKey {
+            block_number: 0,
+            block_hash: H256::zero(),
+            log_index: 1,
+        };
+        let event = Event::Deposit(Deposit {
+            user: Address::from_low_u64_be(1),
+            token: Address::from_low_u64_be(2),
+            amount: 1.into(),
+            batch_id: 2,
+        });
+        let value = Value { event, batch_id: 0 };
+
+        let mut events = BTreeMap::new();
+        events.insert(event_key, value);
+        let initial_orderbook = Orderbook { events };
+
+        let test_path = Path::new("/tmp/my_test_orderbook.ron");
+        initial_orderbook.write_to_file(test_path).unwrap();
+
+        let recovered_orderbook = Orderbook::try_from(test_path).unwrap();
+        assert_eq!(initial_orderbook.events, recovered_orderbook.events);
+
+        // Cleanup the file created here.
+        assert!(fs::remove_file(test_path).is_ok());
     }
 }
