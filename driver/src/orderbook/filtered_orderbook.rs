@@ -83,20 +83,20 @@ impl<'a> StableXOrderBookReading for FilteredOrderbookReader<'a> {
                 })
                 .collect(),
         };
-        let user_filtered_orders = token_filtered_orders
-            .into_iter()
-            .filter(|o| {
-                if let Some(user_filter) = self.filter.users.get(&o.account_id) {
-                    match user_filter {
-                        UserOrderFilter::All => false,
-                        UserOrderFilter::OrderIds(ids) => !ids.contains(&o.id),
-                    }
-                } else {
-                    true
+        let user_filtered_orders = token_filtered_orders.into_iter().filter(|o| {
+            if let Some(user_filter) = self.filter.users.get(&o.account_id) {
+                match user_filter {
+                    UserOrderFilter::All => false,
+                    UserOrderFilter::OrderIds(ids) => !ids.contains(&o.id),
                 }
-            })
-            .collect();
-        Ok((state, user_filtered_orders))
+            } else {
+                true
+            }
+        });
+        Ok(util::filter_auction_data(
+            state.into_iter(),
+            user_filtered_orders,
+        ))
     }
 }
 
@@ -238,5 +238,26 @@ mod test {
 
         let (_, filtered_orders) = reader.get_auction_data(U256::zero()).unwrap();
         assert_eq!(filtered_orders, vec![good_order]);
+    }
+
+    #[test]
+    fn test_filters_balances_for_which_there_are_no_sell_orders() {
+        let mut state = AccountState::default();
+        state.increase_balance(Address::zero(), 0, 10000);
+        let mut inner = MockStableXOrderBookReading::default();
+        inner
+            .expect_get_auction_data()
+            .return_once({ move |_| Ok((state, vec![])) });
+
+        let filter = OrderbookFilter {
+            tokens: TokenFilter::default(),
+            users: HashMap::new(),
+        };
+
+        let reader = FilteredOrderbookReader::new(&inner, filter);
+
+        let (state, filtered_orders) = reader.get_auction_data(U256::zero()).unwrap();
+        assert_eq!(filtered_orders, vec![]);
+        assert_eq!(state, AccountState::default());
     }
 }

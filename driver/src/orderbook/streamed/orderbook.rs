@@ -5,7 +5,7 @@ use super::{
 use crate::{
     contracts::stablex_contract::batch_exchange,
     models::{AccountState, Order},
-    orderbook::StableXOrderBookReading,
+    orderbook::{util, StableXOrderBookReading},
 };
 use anyhow::{Context, Result};
 use ethcontract::{contract::EventData, H256, U256};
@@ -161,7 +161,10 @@ impl StableXOrderBookReading for Orderbook {
         // to increment it.
         let (account_state, orders) =
             state.orderbook_for_batch(Batch::Future(batch_id_to_solve.low_u32() + 1))?;
-        let (account_state, orders) = filter_auction_data(account_state, orders);
+        let (account_state, orders) = util::filter_auction_data(
+            account_state.map(|(key, balance)| (key, balance.low_u128())),
+            orders,
+        );
         Ok((account_state, orders))
     }
 }
@@ -172,39 +175,6 @@ mod tests {
     use crate::contracts::stablex_contract::batch_exchange::event_data::*;
     use crate::contracts::stablex_contract::batch_exchange::Event;
     use ethcontract::Address;
-
-    #[test]
-    fn test_filter_account_state() {
-        let orders = vec![
-            Order {
-                id: 0,
-                account_id: Address::zero(),
-                buy_token: 0,
-                sell_token: 1,
-                buy_amount: 1,
-                sell_amount: 1,
-            },
-            Order {
-                id: 0,
-                account_id: Address::repeat_byte(1),
-                buy_token: 0,
-                sell_token: 2,
-                buy_amount: 0,
-                sell_amount: 0,
-            },
-        ];
-        let account_states = vec![
-            ((Address::zero(), 0), 3.into()),
-            ((Address::zero(), 1), 4.into()),
-            ((Address::zero(), 2), 5.into()),
-        ];
-
-        let (account_state, orders) = filter_auction_data(account_states, orders);
-        assert_eq!(account_state.0.len(), 1);
-        assert_eq!(account_state.read_balance(1, Address::zero()), 4);
-        assert_eq!(orders.len(), 1);
-        assert_eq!(orders[0].account_id, Address::zero());
-    }
 
     #[test]
     fn test_serialize_deserialize_orderbook() {
