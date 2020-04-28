@@ -787,7 +787,7 @@ dependencies = [
  "fixed-hash 0.6.0",
  "impl-rlp",
  "impl-serde 0.3.0",
- "primitive-types 0.7.0",
+ "primitive-types 0.7.1",
  "uint",
 ]
 
@@ -1839,7 +1839,7 @@ dependencies = [
  "data-encoding",
  "lazy_static",
  "petgraph",
- "primitive-types 0.7.0",
+ "primitive-types 0.7.1",
  "thiserror",
 ]
 
@@ -1858,9 +1858,9 @@ dependencies = [
 
 [[package]]
 name = "primitive-types"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5e4b9943a2da369aec5e96f7c10ebc74fcf434d39590d974b0a3460e6f67fbb"
+checksum = "d3dedac218327b6b55fff5ef05f63ce5127024e1a36342836da7e92cbfac4531"
 dependencies = [
  "fixed-hash 0.6.0",
  "impl-codec",
@@ -3074,9 +3074,9 @@ checksum = "1410f6f91f21d1612654e7cc69193b0334f909dcf2c790c4826254fbb86f8887"
 
 [[package]]
 name = "uint"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e75a4cdd7b87b28840dba13c483b9a88ee6bbf16ba5c951ee1ecfcf723078e0d"
+checksum = "173cd16430c206dc1a430af8a89a0e9c076cf15cb42b4aedb10e8cc8fee73681"
 dependencies = [
  "byteorder",
  "crunchy",
