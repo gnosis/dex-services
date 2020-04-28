@@ -14,6 +14,8 @@ use ethcontract::{contract::Event, BlockNumber, H256};
 use futures::compat::Future01CompatExt as _;
 use orderbook::Orderbook;
 use std::collections::HashSet;
+use std::convert::TryFrom;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 /// An event based orderbook that automatically updates itself with new events from the contract.
@@ -24,6 +26,8 @@ pub struct UpdatingOrderbook {
     /// the orderbook in multiple threads. The mutex is locked in `get_auction_data` while the
     /// orderbook is updated with new events.
     context: Mutex<Context>,
+    /// File path where orderbook is written to disk.
+    filestore: String,
 }
 
 struct Context {
@@ -35,15 +39,23 @@ struct Context {
 impl UpdatingOrderbook {
     /// Does not block on initializing the orderbook. This will happen in the first call to
     /// `get_auction_data` which can thus take a long time to complete.
-    pub fn new(contract: Arc<dyn StableXContract + Send + Sync>, web3: Web3) -> Self {
+    pub fn new(
+        contract: Arc<dyn StableXContract + Send + Sync>,
+        web3: Web3,
+        path_str: String,
+    ) -> Self {
+        // Recover the orderbook from file (if possible, otherwise use default).
+        let orderbook = Orderbook::try_from(Path::new(&path_str)).unwrap_or_default();
+        let last_handled_block = orderbook.last_handled_block().unwrap_or(0);
         Self {
             contract,
             web3: web3.clone(),
             context: Mutex::new(Context {
-                orderbook: Orderbook::default(),
-                last_handled_block: 0,
+                orderbook,
+                last_handled_block,
                 block_timestamp_reader: CachedBlockTimestampReader::new(web3),
             }),
+            filestore: path_str,
         }
     }
 
@@ -64,6 +76,7 @@ impl UpdatingOrderbook {
             .past_events(BlockNumber::Number(from_block.into()), to_block)
             .await?;
         self.handle_events(context, events, from_block).await?;
+        context.orderbook.write_to_file(&self.filestore)?;
         context.last_handled_block = current_block.as_u64();
         Ok(())
     }

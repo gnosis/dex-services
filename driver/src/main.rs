@@ -184,6 +184,13 @@ struct Options {
         parse(try_from_str)
     )]
     use_shadowed_orderbook: bool,
+
+    #[structopt(
+        long,
+        env = "ORDERBOOK_FILEPATH",
+        default_value = "/var/db/stablex_orderbook.ron"
+    )]
+    orderbook_filepath: String,
 }
 
 fn main() {
@@ -238,6 +245,7 @@ fn main() {
         options.auction_data_page_size,
         &options.orderbook_filter,
         web3,
+        options.orderbook_filepath,
     );
 
     // NOTE: Keep the shadowed orderbook around so it doesn't get dropped and we

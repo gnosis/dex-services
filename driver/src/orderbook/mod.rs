@@ -51,6 +51,7 @@ impl OrderbookReaderKind {
         auction_data_page_size: u16,
         orderbook_filter: &OrderbookFilter,
         web3: Web3,
+        file_path: String,
     ) -> Box<dyn StableXOrderBookReading + Sync> {
         match self {
             OrderbookReaderKind::Paginated => Box::new(PaginatedStableXOrderBookReader::new(
@@ -62,7 +63,9 @@ impl OrderbookReaderKind {
                 auction_data_page_size,
                 orderbook_filter,
             )),
-            OrderbookReaderKind::EventBased => Box::new(EventBasedOrderbook::new(contract, web3)),
+            OrderbookReaderKind::EventBased => {
+                Box::new(EventBasedOrderbook::new(contract, web3, file_path))
+            }
         }
     }
 }
