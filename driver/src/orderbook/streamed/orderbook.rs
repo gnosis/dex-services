@@ -1,20 +1,23 @@
-use super::*;
+use super::{
+    state::{Batch, State},
+    BatchId, TokenId, UserId,
+};
 use crate::{
     contracts::stablex_contract::batch_exchange,
     models::{AccountState, Order},
     orderbook::StableXOrderBookReading,
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use ethcontract::{contract::EventData, H256, U256};
 use log::info;
 use ron;
 use serde::{Deserialize, Serialize};
-use state::{Batch, State};
 use std::collections::BTreeMap;
-use std::fs;
+use std::convert::TryFrom;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
+use std::{env, fs};
 
 // Ethereum events (logs) can be both created and removed. Removals happen if the chain reorganizes
 // and ends up not including block that was previously thought to be part of the chain.
@@ -71,24 +74,19 @@ impl Orderbook {
         });
     }
 
-    pub fn write_to_file(&self, path: &Path) -> Result<()> {
+    pub fn write_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
         // Write to tmp file until complete and then rename.
-        let temp_path = Path::new("/tmp/orderbook.json");
+        let mut temp_path = env::temp_dir();
+        temp_path.push("temp_orderbook.ron");
 
         // Create temp file to be written completely before rename
-        let mut temp_file = match File::create(&temp_path) {
-            Err(why) => panic!(
-                "couldn't create {}: {}",
-                temp_path.display(),
-                why.to_string()
-            ),
-            Ok(file) => file,
-        };
-        let file_content = ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default());
-        temp_file.write_all(file_content.unwrap().as_bytes())?;
+        let mut temp_file = File::create(&temp_path)
+            .with_context(|| format!("couldn't create {}", temp_path.display()))?;
+        let file_content = ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default())?;
+        temp_file.write_all(file_content.as_bytes())?;
 
         // Rename the temp file to the originally specified path.
-        fs::rename(temp_path.to_str().unwrap(), path.to_str().unwrap())?;
+        fs::rename(temp_path, path)?;
         Ok(())
     }
 
@@ -101,35 +99,36 @@ impl Orderbook {
     }
 }
 
-impl From<&[u8]> for Orderbook {
-    fn from(bytes: &[u8]) -> Self {
-        match ron::de::from_bytes(bytes) {
-            Ok(x) => x,
-            Err(e) => {
-                panic!("Failed to load Orderbook: {}", e);
-            }
-        }
+impl TryFrom<&[u8]> for Orderbook {
+    type Error = anyhow::Error;
+
+    fn try_from(bytes: &[u8]) -> Result<Self> {
+        ron::de::from_bytes(bytes).context("Failed to load Orderbook")
     }
 }
 
-impl From<File> for Orderbook {
-    fn from(mut file: File) -> Self {
+impl TryFrom<File> for Orderbook {
+    type Error = anyhow::Error;
+
+    fn try_from(mut file: File) -> Result<Self> {
         let mut contents = String::new();
-        match file.read_to_string(&mut contents) {
-            Ok(value) => info!("Successfully loaded {} bytes from file", value),
-            Err(error) => panic!("Failed to read file: {}", error),
-        }
-        Orderbook::from(contents.as_bytes())
+        let bytes_read = file
+            .read_to_string(&mut contents)
+            .with_context(|| format!("Failed to read file: {:?}", file))?;
+        info!(
+            "Successfully loaded {} bytes from Orderbook file",
+            bytes_read
+        );
+        Orderbook::try_from(contents.as_bytes())
     }
 }
 
-impl From<&Path> for Orderbook {
-    fn from(path: &Path) -> Self {
-        let file = match File::open(path) {
-            Err(why) => panic!("couldn't open {}: {}", path.display(), why.to_string()),
-            Ok(file) => file,
-        };
-        Orderbook::from(file)
+impl TryFrom<&Path> for Orderbook {
+    type Error = anyhow::Error;
+
+    fn try_from(path: &Path) -> Result<Self> {
+        let file = File::open(path).with_context(|| format!("couldn't open {}", path.display()))?;
+        Orderbook::try_from(file)
     }
 }
 
@@ -174,6 +173,7 @@ mod tests {
     use super::*;
     use crate::contracts::stablex_contract::batch_exchange::event_data::*;
     use crate::contracts::stablex_contract::batch_exchange::Event;
+    use ethcontract::Address;
 
     #[test]
     fn test_filter_account_state() {
@@ -225,12 +225,12 @@ mod tests {
 
         let mut events = BTreeMap::new();
         events.insert(event_key, value);
-        let initial_orderbook = super::Orderbook { events };
+        let initial_orderbook = Orderbook { events };
 
         let test_path = Path::new("/tmp/my_test_orderbook.ron");
         initial_orderbook.write_to_file(test_path).unwrap();
 
-        let recovered_orderbook = super::Orderbook::from(test_path);
+        let recovered_orderbook = Orderbook::try_from(test_path).unwrap();
         assert_eq!(initial_orderbook.events, recovered_orderbook.events);
 
         // Cleanup the file created here.
