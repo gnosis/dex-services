@@ -6,6 +6,7 @@ use crate::{
 };
 use anyhow::Result;
 use ethcontract::{contract::EventData, H256, U256};
+use log::info;
 use ron;
 use serde::{Deserialize, Serialize};
 use state::{Batch, State};
@@ -101,7 +102,7 @@ impl Orderbook {
 }
 
 impl From<&[u8]> for Orderbook {
-    fn from(bytes: &[u8]) -> Orderbook {
+    fn from(bytes: &[u8]) -> Self {
         match ron::de::from_bytes(bytes) {
             Ok(x) => x,
             Err(e) => {
@@ -115,7 +116,7 @@ impl From<File> for Orderbook {
     fn from(mut file: File) -> Self {
         let mut contents = String::new();
         match file.read_to_string(&mut contents) {
-            Ok(value) => println!("Successfully read {} bytes", value),
+            Ok(value) => info!("Successfully loaded {} bytes from file", value),
             Err(error) => panic!("Failed to read file: {}", error),
         }
         Orderbook::from(contents.as_bytes())
@@ -208,7 +209,7 @@ mod tests {
     }
 
     #[test]
-    fn test_io_cycle() {
+    fn test_write_read_recover_full_cycle() {
         let event_key = EventSortKey {
             block_number: 0,
             block_hash: H256::zero(),
@@ -226,10 +227,13 @@ mod tests {
         events.insert(event_key, value);
         let initial_orderbook = super::Orderbook { events };
 
-        let test_path = Path::new("./my_test_orderbook.ron");
+        let test_path = Path::new("/tmp/my_test_orderbook.ron");
         initial_orderbook.write_to_file(test_path).unwrap();
 
         let recovered_orderbook = super::Orderbook::from(test_path);
         assert_eq!(initial_orderbook.events, recovered_orderbook.events);
+
+        // Cleanup the file created here.
+        assert!(fs::remove_file(test_path).is_ok());
     }
 }
