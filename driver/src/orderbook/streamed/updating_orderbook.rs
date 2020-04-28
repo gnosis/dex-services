@@ -26,7 +26,8 @@ pub struct UpdatingOrderbook {
     /// We need a mutex because otherwise the struct wouldn't be Sync which is needed because we use
     /// the orderbook in multiple threads. The mutex is locked in `get_auction_data` while the
     /// orderbook is updated with new events.
-    context: Mutex<Context>,
+    /// None means that we have not yet been initialized.
+    context: Mutex<Option<Context>>,
     /// File path where orderbook is written to disk.
     filestore: Option<PathBuf>,
 }
@@ -45,12 +46,22 @@ impl UpdatingOrderbook {
         web3: Web3,
         path: Option<PathBuf>,
     ) -> Self {
-        // Recover the orderbook from file (if possible, otherwise use default).
-        let orderbook = match &path {
+        Self {
+            contract,
+            web3,
+            context: Mutex::new(None),
+            filestore: path,
+        }
+    }
+
+    /// Recover the orderbook from file if possible.
+    fn load_orderbook_from_file(&self, context: &mut Context) {
+        match &self.filestore {
             Some(path) => match Orderbook::try_from(path.as_path()) {
                 Ok(orderbook) => {
                     info!("successfully recovered orderbook from path");
-                    orderbook
+                    context.last_handled_block = orderbook.last_handled_block().unwrap_or(0);
+                    context.orderbook = orderbook;
                 }
                 Err(error) => {
                     if path.exists() {
@@ -60,21 +71,33 @@ impl UpdatingOrderbook {
                             error
                         );
                     }
-                    Orderbook::default()
                 }
             },
-            None => Orderbook::default(),
+            None => (),
         };
-        let last_handled_block = orderbook.last_handled_block().unwrap_or(0);
-        Self {
-            contract,
-            web3: web3.clone(),
-            context: Mutex::new(Context {
-                orderbook,
-                last_handled_block,
-                block_timestamp_reader: CachedBlockTimestampReader::new(web3),
-            }),
-            filestore: path,
+    }
+
+    /// Use the context, ensuring that the orderbook has been initialized.
+    fn do_with_context<T>(&self, callback: impl FnOnce(&mut Context) -> Result<T>) -> Result<T> {
+        let mut context_guard = self
+            .context
+            .lock()
+            .map_err(|err| anyhow!("poison error: {}", err))?;
+        let context_optional: &mut Option<Context> = &mut context_guard;
+        match context_optional {
+            Some(context) => callback(context),
+            None => {
+                let mut context = Context {
+                    orderbook: Orderbook::default(),
+                    last_handled_block: 0,
+                    block_timestamp_reader: CachedBlockTimestampReader::new(self.web3.clone()),
+                };
+                self.load_orderbook_from_file(&mut context);
+                self.update_with_events(&mut context).wait()?;
+                let result = callback(&mut context);
+                *context_optional = Some(context);
+                result
+            }
         }
     }
 
@@ -166,14 +189,14 @@ impl UpdatingOrderbook {
 }
 
 impl StableXOrderBookReading for UpdatingOrderbook {
-    /// Blocks on updating the orderbook. When this is called the first time this can take several
-    /// minutes.
+    /// Blocks on updating the orderbook. This can be expensive if `initialize` hasn't been called before.
     fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
-        let mut context = self
-            .context
-            .lock()
-            .map_err(|err| anyhow!("poison error: {}", err))?;
-        self.update_with_events(&mut context).wait()?;
-        context.orderbook.get_auction_data(batch_id_to_solve)
+        self.do_with_context(|context| {
+            self.update_with_events(context).wait()?;
+            context.orderbook.get_auction_data(batch_id_to_solve)
+        })
+    }
+    fn initialize(&self) -> Result<()> {
+        self.do_with_context(|_| Ok(()))
     }
 }

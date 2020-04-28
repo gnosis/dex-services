@@ -95,6 +95,9 @@ impl<'a> StableXOrderBookReading for FilteredOrderbookReader<'a> {
         });
         Ok(util::normalize_auction_data(state, user_filtered_orders))
     }
+    fn initialize(&self) -> Result<()> {
+        self.orderbook.initialize()
+    }
 }
 
 #[cfg(test)]
