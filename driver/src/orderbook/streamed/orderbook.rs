@@ -13,10 +13,10 @@ use log::info;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
+use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
-use std::{env, fs};
 
 // Ethereum events (logs) can be both created and removed. Removals happen if the chain reorganizes
 // and ends up not including block that was previously thought to be part of the chain.
@@ -75,8 +75,7 @@ impl Orderbook {
 
     pub fn write_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
         // Write to tmp file until complete and then rename.
-        let mut temp_path = env::temp_dir();
-        temp_path.push("temp_orderbook.ron");
+        let temp_path = path.as_ref().with_extension(".temp");
 
         // Create temp file to be written completely before rename
         let mut temp_file = File::create(&temp_path)
@@ -208,6 +207,32 @@ mod tests {
     }
 
     #[test]
+    fn test_serialize_deserialize_orderbook() {
+        let event_key = EventSortKey {
+            block_number: 0,
+            block_hash: H256::zero(),
+            log_index: 1,
+        };
+        let event = Event::Deposit(Deposit {
+            user: Address::from_low_u64_be(1),
+            token: Address::from_low_u64_be(2),
+            amount: 1.into(),
+            batch_id: 2,
+        });
+        let value = Value { event, batch_id: 0 };
+
+        let mut events = BTreeMap::new();
+        events.insert(event_key, value);
+        let orderbook = Orderbook { events };
+
+        let serialized_orderbook =
+            ron::ser::to_string_pretty(&orderbook, ron::ser::PrettyConfig::default()).unwrap();
+        let deserialized_orderbook = Orderbook::try_from(serialized_orderbook.as_bytes()).unwrap();
+        assert_eq!(orderbook.events, deserialized_orderbook.events);
+    }
+
+    #[test]
+    #[ignore]
     fn test_write_read_recover_full_cycle() {
         let event_key = EventSortKey {
             block_number: 0,
