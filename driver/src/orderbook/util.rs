@@ -1,9 +1,9 @@
 use crate::models::{AccountState, Order};
 use ethcontract::Address;
 
-/// Filters empty orders and account balances for tokens for which there is
-/// not at least one sell order by a user
-pub fn filter_auction_data(
+/// Removes empty orders and token balances for which there is
+/// not at least one sell order by that user
+pub fn normalize_auction_data(
     account_states: impl IntoIterator<Item = ((Address, u16), u128)>,
     orders: impl IntoIterator<Item = Order>,
 ) -> (AccountState, Vec<Order>) {
@@ -53,7 +53,7 @@ mod tests {
             ((Address::zero(), 2), 5),
         ];
 
-        let (account_state, orders) = filter_auction_data(account_states, orders);
+        let (account_state, orders) = normalize_auction_data(account_states, orders);
         assert_eq!(account_state.0.len(), 1);
         assert_eq!(account_state.read_balance(1, Address::zero()), 4);
         assert_eq!(orders.len(), 1);
