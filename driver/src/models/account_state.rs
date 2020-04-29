@@ -15,6 +15,15 @@ impl AccountState {
     }
 }
 
+impl IntoIterator for AccountState {
+    type Item = ((Address, u16), u128);
+    type IntoIter = <HashMap<(Address, u16), u128> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 #[cfg(test)]
 mod test_util {
     use super::*;

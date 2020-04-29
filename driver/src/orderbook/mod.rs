@@ -4,6 +4,7 @@ mod onchain_filtered_orderbook;
 mod paginated_orderbook;
 mod shadow_orderbook;
 mod streamed;
+mod util;
 
 pub use self::filtered_orderbook::{FilteredOrderbookReader, OrderbookFilter};
 pub use self::onchain_filtered_orderbook::OnchainFilteredOrderBookReader;
