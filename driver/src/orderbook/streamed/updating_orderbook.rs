@@ -12,7 +12,7 @@ use anyhow::{anyhow, bail, Result};
 use block_timestamp_reading::{BlockTimestampReading, CachedBlockTimestampReader};
 use ethcontract::{contract::Event, BlockNumber, H256};
 use futures::compat::Future01CompatExt as _;
-use log::error;
+use log::{error, info, warn};
 use orderbook::Orderbook;
 use std::collections::HashSet;
 use std::convert::TryFrom;
@@ -47,7 +47,21 @@ impl UpdatingOrderbook {
     ) -> Self {
         // Recover the orderbook from file (if possible, otherwise use default).
         let orderbook = match &path {
-            Some(path) => Orderbook::try_from(path.as_path()).unwrap_or_default(),
+            Some(path) => match Orderbook::try_from(path.as_path()) {
+                Ok(orderbook) => {
+                    info!("successfully recovered orderbook from path");
+                    orderbook
+                }
+                Err(error) => {
+                    // This will always happen when file does not exist (i.e. on first startup)
+                    // TODO: match on this error and don't warn when file doesn't exist.
+                    warn!(
+                        "Failed to construct orderbook from path (using default): {}",
+                        error
+                    );
+                    Orderbook::default()
+                }
+            },
             None => Orderbook::default(),
         };
         let last_handled_block = orderbook.last_handled_block().unwrap_or(0);
