@@ -37,6 +37,7 @@ use ethcontract::PrivateKey;
 use log::info;
 use prometheus::Registry;
 use std::num::ParseIntError;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -184,6 +185,9 @@ struct Options {
         parse(try_from_str)
     )]
     use_shadowed_orderbook: bool,
+
+    #[structopt(long, env = "ORDERBOOK_FILE", parse(from_os_str))]
+    orderbook_file: Option<PathBuf>,
 }
 
 fn main() {
@@ -238,6 +242,7 @@ fn main() {
         options.auction_data_page_size,
         &options.orderbook_filter,
         web3,
+        options.orderbook_file,
     );
 
     info!("Orderbook filter: {:?}", options.orderbook_filter);

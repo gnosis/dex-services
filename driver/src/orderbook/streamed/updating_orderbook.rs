@@ -12,8 +12,11 @@ use anyhow::{anyhow, bail, Result};
 use block_timestamp_reading::{BlockTimestampReading, CachedBlockTimestampReader};
 use ethcontract::{contract::Event, BlockNumber, H256};
 use futures::compat::Future01CompatExt as _;
+use log::{error, info, warn};
 use orderbook::Orderbook;
 use std::collections::HashSet;
+use std::convert::TryFrom;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 /// An event based orderbook that automatically updates itself with new events from the contract.
@@ -24,6 +27,8 @@ pub struct UpdatingOrderbook {
     /// the orderbook in multiple threads. The mutex is locked in `get_auction_data` while the
     /// orderbook is updated with new events.
     context: Mutex<Context>,
+    /// File path where orderbook is written to disk.
+    filestore: Option<PathBuf>,
 }
 
 struct Context {
@@ -35,15 +40,40 @@ struct Context {
 impl UpdatingOrderbook {
     /// Does not block on initializing the orderbook. This will happen in the first call to
     /// `get_auction_data` which can thus take a long time to complete.
-    pub fn new(contract: Arc<dyn StableXContract + Send + Sync>, web3: Web3) -> Self {
+    pub fn new(
+        contract: Arc<dyn StableXContract + Send + Sync>,
+        web3: Web3,
+        path: Option<PathBuf>,
+    ) -> Self {
+        // Recover the orderbook from file (if possible, otherwise use default).
+        let orderbook = match &path {
+            Some(path) => match Orderbook::try_from(path.as_path()) {
+                Ok(orderbook) => {
+                    info!("successfully recovered orderbook from path");
+                    orderbook
+                }
+                Err(error) => {
+                    // This will always happen when file does not exist (i.e. on first startup)
+                    // TODO: match on this error and don't warn when file doesn't exist.
+                    warn!(
+                        "Failed to construct orderbook from path (using default): {}",
+                        error
+                    );
+                    Orderbook::default()
+                }
+            },
+            None => Orderbook::default(),
+        };
+        let last_handled_block = orderbook.last_handled_block().unwrap_or(0);
         Self {
             contract,
             web3: web3.clone(),
             context: Mutex::new(Context {
-                orderbook: Orderbook::default(),
-                last_handled_block: 0,
+                orderbook,
+                last_handled_block,
                 block_timestamp_reader: CachedBlockTimestampReader::new(web3),
             }),
+            filestore: path,
         }
     }
 
@@ -64,6 +94,12 @@ impl UpdatingOrderbook {
             .past_events(BlockNumber::Number(from_block.into()), to_block)
             .await?;
         self.handle_events(context, events, from_block).await?;
+        // Update the orderbook on disk before exit.
+        if let Some(filestore) = &self.filestore {
+            if let Err(write_error) = context.orderbook.write_to_file(filestore) {
+                error!("Failed to write to orderbook {}", write_error);
+            }
+        }
         context.last_handled_block = current_block.as_u64();
         Ok(())
     }

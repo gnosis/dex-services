@@ -19,6 +19,7 @@ use anyhow::{anyhow, Error, Result};
 use ethcontract::U256;
 #[cfg(test)]
 use mockall::automock;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -52,6 +53,7 @@ impl OrderbookReaderKind {
         auction_data_page_size: u16,
         orderbook_filter: &OrderbookFilter,
         web3: Web3,
+        file_path: Option<PathBuf>,
     ) -> Box<dyn StableXOrderBookReading + Sync> {
         match self {
             OrderbookReaderKind::Paginated => Box::new(PaginatedStableXOrderBookReader::new(
@@ -63,7 +65,9 @@ impl OrderbookReaderKind {
                 auction_data_page_size,
                 orderbook_filter,
             )),
-            OrderbookReaderKind::EventBased => Box::new(EventBasedOrderbook::new(contract, web3)),
+            OrderbookReaderKind::EventBased => {
+                Box::new(EventBasedOrderbook::new(contract, web3, file_path))
+            }
         }
     }
 }

@@ -88,6 +88,10 @@ impl Orderbook {
         Ok(())
     }
 
+    pub fn last_handled_block(&self) -> Option<u64> {
+        Some(self.events.iter().next_back()?.0.block_number)
+    }
+
     fn create_state(&self) -> Result<State> {
         self.events
             .iter()
