@@ -80,11 +80,9 @@ impl UpdatingOrderbook {
             .past_events(BlockNumber::Number(from_block.into()), to_block)
             .await?;
         self.handle_events(context, events, from_block).await?;
-        if self.filestore.is_some() {
-            if let Err(write_error) = context
-                .orderbook
-                .write_to_file(&self.filestore.as_ref().unwrap())
-            {
+        // Update the orderbook on disk before exit.
+        if let Some(filestore) = &self.filestore {
+            if let Err(write_error) = context.orderbook.write_to_file(filestore) {
                 error!("Failed to write to orderbook {}", write_error);
             }
         }
