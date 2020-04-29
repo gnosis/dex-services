@@ -93,10 +93,7 @@ impl<'a> StableXOrderBookReading for FilteredOrderbookReader<'a> {
                 true
             }
         });
-        Ok(util::filter_auction_data(
-            state.into_iter(),
-            user_filtered_orders,
-        ))
+        Ok(util::filter_auction_data(state, user_filtered_orders))
     }
 }
 

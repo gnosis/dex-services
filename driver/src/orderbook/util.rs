@@ -1,7 +1,7 @@
 use crate::models::{AccountState, Order};
 use ethcontract::Address;
 
-/// Filters empty orders as and account balances for tokens for which there is
+/// Filters empty orders and account balances for tokens for which there is
 /// not at least one sell order by a user
 pub fn filter_auction_data(
     account_states: impl IntoIterator<Item = ((Address, u16), u128)>,

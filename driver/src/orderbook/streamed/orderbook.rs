@@ -1,6 +1,6 @@
 use super::{
     state::{Batch, State},
-    BatchId, TokenId, UserId,
+    BatchId,
 };
 use crate::{
     contracts::stablex_contract::batch_exchange,
@@ -130,27 +130,6 @@ impl TryFrom<&Path> for Orderbook {
     }
 }
 
-fn filter_auction_data(
-    account_states: impl IntoIterator<Item = ((UserId, TokenId), U256)>,
-    orders: impl IntoIterator<Item = Order>,
-) -> (AccountState, Vec<Order>) {
-    let orders = orders
-        .into_iter()
-        .filter(|order| order.sell_amount > 0)
-        .collect::<Vec<_>>();
-    let account_states = account_states
-        .into_iter()
-        .filter(|((user, token), _)| {
-            orders
-                .iter()
-                .any(|order| order.account_id == *user && order.sell_token == *token)
-        })
-        // TODO: change AccountState to use U256
-        .map(|(key, value)| (key, value.low_u128()))
-        .collect();
-    (AccountState(account_states), orders)
-}
-
 impl StableXOrderBookReading for Orderbook {
     fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
         // TODO: Handle future batch ids for when we want to do optimistic solving.
@@ -161,7 +140,7 @@ impl StableXOrderBookReading for Orderbook {
         // to increment it.
         let (account_state, orders) =
             state.orderbook_for_batch(Batch::Future(batch_id_to_solve.low_u32() + 1))?;
-        let (account_state, orders) = util::filter_auction_data(
+        let (account_state, orders) = util::normalize_auction_data(
             account_state.map(|(key, balance)| (key, balance.low_u128())),
             orders,
         );
