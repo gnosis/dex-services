@@ -213,51 +213,115 @@ mod tests {
     #[test]
     fn delete_events_starting_at_block() {
         let mut orderbook = Orderbook::default();
-        for block_number in 0..3 {
-            orderbook.handle_event_data(
-                EventData::Added(Event::Deposit(Deposit::default())),
-                block_number,
-                0,
-                H256::zero(),
-                0,
-            );
-        }
-        assert_eq!(orderbook.events.len(), 3);
+        let token_listing_0 = EventData::Added(Event::TokenListing(TokenListing {
+            token: Address::from_low_u64_be(0),
+            id: 0,
+        }));
+        orderbook.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
+        let token_listing_1 = EventData::Added(Event::TokenListing(TokenListing {
+            token: Address::from_low_u64_be(1),
+            id: 1,
+        }));
+        orderbook.handle_event_data(token_listing_1, 0, 1, H256::zero(), 0);
+        let order_placement = EventData::Added(Event::OrderPlacement(OrderPlacement {
+            owner: Address::from_low_u64_be(2),
+            index: 0,
+            buy_token: 1,
+            sell_token: 0,
+            valid_from: 0,
+            valid_until: 10,
+            price_numerator: 10,
+            price_denominator: 10,
+        }));
+        orderbook.handle_event_data(order_placement, 0, 2, H256::zero(), 0);
+
+        let deposit_0 = EventData::Added(Event::Deposit(Deposit {
+            user: Address::from_low_u64_be(2),
+            token: Address::from_low_u64_be(0),
+            amount: 1.into(),
+            batch_id: 0,
+        }));
+        orderbook.handle_event_data(deposit_0, 0, 3, H256::zero(), 0);
+        let deposit_1 = EventData::Added(Event::Deposit(Deposit {
+            user: Address::from_low_u64_be(2),
+            token: Address::from_low_u64_be(0),
+            amount: 1.into(),
+            batch_id: 0,
+        }));
+        orderbook.handle_event_data(deposit_1, 1, 0, H256::zero(), 0);
+        let deposit_2 = EventData::Added(Event::Deposit(Deposit {
+            user: Address::from_low_u64_be(2),
+            token: Address::from_low_u64_be(0),
+            amount: 1.into(),
+            batch_id: 0,
+        }));
+        orderbook.handle_event_data(deposit_2, 2, 0, H256::zero(), 0);
+
+        let auction_data = orderbook.get_auction_data(1.into()).unwrap();
+        assert_eq!(
+            auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
+            3
+        );
         orderbook.delete_events_starting_at_block(1);
-        assert_eq!(orderbook.events.len(), 1);
-        assert_eq!(orderbook.events.iter().next().unwrap().0.block_number, 0);
+        let auction_data = orderbook.get_auction_data(1.into()).unwrap();
+        assert_eq!(
+            auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
+            1
+        );
     }
 
     #[test]
     fn events_get_sorted() {
+        // We add a token, deposit that token, request to withdraw that token, withdraw it but give
+        // the events to the orderbook in a shuffled order.
+        let token_listing_0 = EventData::Added(Event::TokenListing(TokenListing {
+            token: Address::from_low_u64_be(0),
+            id: 0,
+        }));
+        let token_listing_1 = EventData::Added(Event::TokenListing(TokenListing {
+            token: Address::from_low_u64_be(1),
+            id: 1,
+        }));
+        let order_placement = EventData::Added(Event::OrderPlacement(OrderPlacement {
+            owner: Address::from_low_u64_be(2),
+            index: 0,
+            buy_token: 1,
+            sell_token: 0,
+            valid_from: 0,
+            valid_until: 10,
+            price_numerator: 10,
+            price_denominator: 10,
+        }));
+        let deposit = EventData::Added(Event::Deposit(Deposit {
+            user: Address::from_low_u64_be(2),
+            token: Address::from_low_u64_be(0),
+            amount: 10.into(),
+            batch_id: 0,
+        }));
+        let withdraw_request = EventData::Added(Event::WithdrawRequest(WithdrawRequest {
+            user: Address::from_low_u64_be(2),
+            token: Address::from_low_u64_be(0),
+            amount: 5.into(),
+            batch_id: 0,
+        }));
+        let withdraw = EventData::Added(Event::Withdraw(Withdraw {
+            user: Address::from_low_u64_be(2),
+            token: Address::from_low_u64_be(0),
+            amount: 3.into(),
+        }));
+
         let mut orderbook = Orderbook::default();
-        // We are going to keep track of the correct order using the deposit's batch id.
-        let mut add_event = |deposit_id, block_number, log_index| {
-            orderbook.handle_event_data(
-                EventData::Added(Event::Deposit(Deposit {
-                    batch_id: deposit_id,
-                    ..Default::default()
-                })),
-                block_number,
-                log_index,
-                H256::zero(),
-                0,
-            );
-        };
-        // Add a couple of events in random order.
-        add_event(2, 0, 2);
-        add_event(4, 1, 1);
-        add_event(0, 0, 0);
-        add_event(5, 1, 2);
-        add_event(3, 1, 0);
-        add_event(1, 0, 1);
-        assert_eq!(orderbook.events.len(), 6);
-        // Check that the order is correct.
-        for (i, (_key, value)) in orderbook.events.iter().enumerate() {
-            match &value.event {
-                Event::Deposit(deposit) => assert_eq!(deposit.batch_id, i as u32),
-                _ => unreachable!(),
-            }
-        }
+        orderbook.handle_event_data(token_listing_1, 0, 1, H256::zero(), 0);
+        orderbook.handle_event_data(order_placement, 0, 2, H256::zero(), 0);
+        orderbook.handle_event_data(withdraw, 2, 0, H256::zero(), 300);
+        orderbook.handle_event_data(deposit, 0, 3, H256::zero(), 0);
+        orderbook.handle_event_data(withdraw_request, 1, 0, H256::zero(), 0);
+        orderbook.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
+
+        let auction_data = orderbook.get_auction_data(2.into()).unwrap();
+        assert_eq!(
+            auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
+            7
+        );
     }
 }
