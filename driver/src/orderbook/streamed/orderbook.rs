@@ -209,4 +209,55 @@ mod tests {
         // Cleanup the file created here.
         assert!(fs::remove_file(test_path).is_ok());
     }
+
+    #[test]
+    fn delete_events_starting_at_block() {
+        let mut orderbook = Orderbook::default();
+        for block_number in 0..3 {
+            orderbook.handle_event_data(
+                EventData::Added(Event::Deposit(Deposit::default())),
+                block_number,
+                0,
+                H256::zero(),
+                0,
+            );
+        }
+        assert_eq!(orderbook.events.len(), 3);
+        orderbook.delete_events_starting_at_block(1);
+        assert_eq!(orderbook.events.len(), 1);
+        assert_eq!(orderbook.events.iter().next().unwrap().0.block_number, 0);
+    }
+
+    #[test]
+    fn events_get_sorted() {
+        let mut orderbook = Orderbook::default();
+        // We are going to keep track of the correct order using the deposit's batch id.
+        let mut add_event = |deposit_id, block_number, log_index| {
+            orderbook.handle_event_data(
+                EventData::Added(Event::Deposit(Deposit {
+                    batch_id: deposit_id,
+                    ..Default::default()
+                })),
+                block_number,
+                log_index,
+                H256::zero(),
+                0,
+            );
+        };
+        // Add a couple of events in random order.
+        add_event(2, 0, 2);
+        add_event(4, 1, 1);
+        add_event(0, 0, 0);
+        add_event(5, 1, 2);
+        add_event(3, 1, 0);
+        add_event(1, 0, 1);
+        assert_eq!(orderbook.events.len(), 6);
+        // Check that the order is correct.
+        for (i, (_key, value)) in orderbook.events.iter().enumerate() {
+            match &value.event {
+                Event::Deposit(deposit) if deposit.batch_id == i as u32 => (),
+                event => panic!("event {:?} does not match", event),
+            }
+        }
+    }
 }
