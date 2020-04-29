@@ -255,8 +255,8 @@ mod tests {
         // Check that the order is correct.
         for (i, (_key, value)) in orderbook.events.iter().enumerate() {
             match &value.event {
-                Event::Deposit(deposit) if deposit.batch_id == i as u32 => (),
-                event => panic!("event {:?} does not match", event),
+                Event::Deposit(deposit) => assert_eq!(deposit.batch_id, i as u32),
+                _ => unreachable!(),
             }
         }
     }
