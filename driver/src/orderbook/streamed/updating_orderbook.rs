@@ -53,12 +53,13 @@ impl UpdatingOrderbook {
                     orderbook
                 }
                 Err(error) => {
-                    // This will always happen when file does not exist (i.e. on first startup)
-                    // TODO: match on this error and don't warn when file doesn't exist.
-                    warn!(
-                        "Failed to construct orderbook from path (using default): {}",
-                        error
-                    );
+                    if path.exists() {
+                        // Exclude warning when file doesn't exist (i.e. on first startup)
+                        warn!(
+                            "Failed to construct orderbook from path (using default): {}",
+                            error
+                        );
+                    }
                     Orderbook::default()
                 }
             },
