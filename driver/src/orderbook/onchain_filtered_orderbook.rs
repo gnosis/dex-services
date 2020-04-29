@@ -6,7 +6,7 @@ use super::filtered_orderbook::OrderbookFilter;
 use super::StableXOrderBookReading;
 
 use anyhow::Result;
-use ethcontract::{Address, BlockNumber, U256};
+use ethcontract::{Address, U256};
 use std::sync::Arc;
 
 pub struct OnchainFilteredOrderBookReader {
@@ -51,7 +51,7 @@ impl StableXOrderBookReading for OnchainFilteredOrderBookReader {
                 self.page_size,
                 auction_data.next_page_user,
                 auction_data.next_page_user_offset,
-                last_block.map(BlockNumber::from),
+                Some(last_block.into()),
             )?;
             reader.apply_page(&auction_data.indexed_elements);
         }
@@ -99,7 +99,7 @@ mod tests {
 
         contract
             .expect_get_last_block_for_batch()
-            .returning(|_| Ok(Some(42)));
+            .returning(|_| Ok(42));
         contract
             .expect_get_filtered_auction_data_paginated()
             .times(1)
@@ -129,7 +129,7 @@ mod tests {
 
         contract
             .expect_get_last_block_for_batch()
-            .returning(|_| Ok(Some(42)));
+            .returning(|_| Ok(42));
         contract
             .expect_get_filtered_auction_data_paginated()
             .times(1)
@@ -172,7 +172,7 @@ mod tests {
 
         contract
             .expect_get_last_block_for_batch()
-            .returning(|_| Ok(Some(42)));
+            .returning(|_| Ok(42));
         contract
             .expect_get_filtered_auction_data_paginated()
             .times(1)

@@ -83,8 +83,9 @@ pub trait StableXContract {
     fn get_current_auction_remaining_time(&self) -> Result<Duration>;
 
     /// Searches for the block number of the last block of the given batch. If
-    /// the batch has not yet been finalized, then `None` is returned.
-    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<Option<u64>>;
+    /// the batch has not yet been finalized, then the block number for the
+    /// `"latest"` block is returned.
+    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<u64>;
 
     /// Retrieve one page of indexed auction data that is filtered on chain
     /// to only include orders valid at the given batchId.
@@ -152,7 +153,7 @@ impl StableXContract for StableXContractImpl {
         Ok(Duration::from_secs(remaining_seconds.as_u64()))
     }
 
-    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<Option<u64>> {
+    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<u64> {
         let web3 = self.instance.raw_instance().web3();
         let get_block = |block_number: BlockNumber| -> Result<_> {
             web3.eth()
@@ -162,21 +163,13 @@ impl StableXContract for StableXContractImpl {
         };
 
         let mut current_block = get_block(BlockNumber::Latest)?;
-        let mut block_number = None;
-        while batch_id < get_block_batch_id(&current_block) {
-            if current_block.number == Some(0.into()) {
-                // NOTE: We reached the genesis block, this happens with Ganache
-                //   tests and means that the current batch being solved started
-                //   before the contract was deployed, as such there is no last
-                //   block for the solving batch.
-                return Ok(None);
-            }
-
-            let previous_block_number = current_block.number.ok_or_else(|| {
-                anyhow!("block {:?} has a missing block number", current_block.hash)
-            })? - 1;
-            current_block = get_block(previous_block_number.into())?;
-            block_number = Some(previous_block_number.as_u64());
+        let mut block_number = current_block
+            .number
+            .ok_or_else(|| anyhow!("latest block {:?} has no block number", current_block.hash))?
+            .as_u64();
+        while batch_id < get_block_batch_id(&current_block) && block_number > 0 {
+            block_number -= 1;
+            current_block = get_block(block_number.into())?;
         }
 
         Ok(block_number)
