@@ -192,6 +192,9 @@ impl StableXOrderBookReading for UpdatingOrderbook {
     /// Blocks on updating the orderbook. This can be expensive if `initialize` hasn't been called before.
     fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
         self.do_with_context(|context| {
+            // In the case where initialize has not yet been called we update the orderbook again.
+            // This is useful because the initial update can take a long time so it is possible that
+            // the current block has changed since then.
             self.update_with_events(context).wait()?;
             context.orderbook.get_auction_data(batch_id_to_solve)
         })
