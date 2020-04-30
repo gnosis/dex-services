@@ -161,23 +161,37 @@ mod tests {
 
     #[test]
     fn test_serialize_deserialize_orderbook() {
-        let event_key = EventSortKey {
-            block_number: 0,
-            block_hash: H256::zero(),
-            log_index: 1,
-        };
-        let event = Event::Deposit(Deposit {
-            user: Address::from_low_u64_be(1),
-            token: Address::from_low_u64_be(2),
-            amount: 1.into(),
-            batch_id: 2,
-        });
-        let value = Value { event, batch_id: 0 };
+        let event_list: Vec<Event> = vec![
+            Event::Deposit(Deposit::default()),
+            Event::WithdrawRequest(WithdrawRequest::default()),
+            Event::Withdraw(Withdraw::default()),
+            Event::TokenListing(TokenListing::default()),
+            Event::OrderPlacement(OrderPlacement::default()),
+            Event::OrderCancellation(OrderCancellation::default()),
+            Event::OrderDeletion(OrderDeletion::default()),
+            Event::Trade(Trade::default()),
+            Event::TradeReversion(TradeReversion::default()),
+            Event::SolutionSubmission(SolutionSubmission::default()),
+        ];
 
-        let mut events = BTreeMap::new();
-        events.insert(event_key, value);
+        let events: BTreeMap<EventSortKey, Value> = event_list
+            .iter()
+            .enumerate()
+            .map(|(i, event)| {
+                (
+                    EventSortKey {
+                        block_number: i as u64,
+                        block_hash: H256::zero(),
+                        log_index: 1,
+                    },
+                    Value {
+                        event: event.clone(),
+                        batch_id: 0,
+                    },
+                )
+            })
+            .collect();
         let orderbook = Orderbook { events };
-
         let serialized_orderbook =
             ron::ser::to_string_pretty(&orderbook, ron::ser::PrettyConfig::default()).unwrap();
         let deserialized_orderbook = Orderbook::try_from(serialized_orderbook.as_bytes()).unwrap();
