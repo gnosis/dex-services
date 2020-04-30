@@ -80,8 +80,8 @@ impl Orderbook {
         // Create temp file to be written completely before rename
         let mut temp_file = File::create(&temp_path)
             .with_context(|| format!("couldn't create {}", temp_path.display()))?;
-        let file_content = ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default())?;
-        temp_file.write_all(file_content.as_bytes())?;
+        let file_content = bincode::serialize(self)?;
+        temp_file.write_all(file_content.as_ref())?;
 
         // Rename the temp file to the originally specified path.
         fs::rename(temp_path, path)?;
@@ -105,7 +105,7 @@ impl TryFrom<&[u8]> for Orderbook {
     type Error = anyhow::Error;
 
     fn try_from(bytes: &[u8]) -> Result<Self> {
-        ron::de::from_bytes(bytes).context("Failed to load Orderbook")
+        bincode::deserialize(bytes).context("Failed to load orderbook from bytes")
     }
 }
 
@@ -192,9 +192,8 @@ mod tests {
             })
             .collect();
         let orderbook = Orderbook { events };
-        let serialized_orderbook =
-            ron::ser::to_string_pretty(&orderbook, ron::ser::PrettyConfig::default()).unwrap();
-        let deserialized_orderbook = Orderbook::try_from(serialized_orderbook.as_bytes()).unwrap();
+        let serialized_orderbook = bincode::serialize(&orderbook).unwrap();
+        let deserialized_orderbook = Orderbook::try_from(&serialized_orderbook[..]).unwrap();
         assert_eq!(orderbook.events, deserialized_orderbook.events);
     }
 
