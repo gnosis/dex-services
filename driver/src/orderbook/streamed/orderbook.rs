@@ -192,8 +192,10 @@ mod tests {
             })
             .collect();
         let orderbook = Orderbook { events };
-        let serialized_orderbook = bincode::serialize(&orderbook).unwrap();
-        let deserialized_orderbook = Orderbook::try_from(&serialized_orderbook[..]).unwrap();
+        let serialized_orderbook =
+            bincode::serialize(&orderbook).expect("Failed to serialize orderbook");
+        let deserialized_orderbook = Orderbook::try_from(&serialized_orderbook[..])
+            .expect("Failed to deserialize orderbook");
         assert_eq!(orderbook.events, deserialized_orderbook.events);
     }
 
