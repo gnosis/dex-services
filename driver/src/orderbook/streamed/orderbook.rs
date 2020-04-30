@@ -80,8 +80,8 @@ impl Orderbook {
         // Create temp file to be written completely before rename
         let mut temp_file = File::create(&temp_path)
             .with_context(|| format!("couldn't create {}", temp_path.display()))?;
-        let file_content = ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default())?;
-        temp_file.write_all(file_content.as_bytes())?;
+        let file_content = bincode::serialize(self)?;
+        temp_file.write_all(file_content.as_ref())?;
 
         // Rename the temp file to the originally specified path.
         fs::rename(temp_path, path)?;
@@ -105,7 +105,7 @@ impl TryFrom<&[u8]> for Orderbook {
     type Error = anyhow::Error;
 
     fn try_from(bytes: &[u8]) -> Result<Self> {
-        ron::de::from_bytes(bytes).context("Failed to load Orderbook")
+        bincode::deserialize(bytes).context("Failed to load orderbook from bytes")
     }
 }
 
@@ -161,26 +161,41 @@ mod tests {
 
     #[test]
     fn test_serialize_deserialize_orderbook() {
-        let event_key = EventSortKey {
-            block_number: 0,
-            block_hash: H256::zero(),
-            log_index: 1,
-        };
-        let event = Event::Deposit(Deposit {
-            user: Address::from_low_u64_be(1),
-            token: Address::from_low_u64_be(2),
-            amount: 1.into(),
-            batch_id: 2,
-        });
-        let value = Value { event, batch_id: 0 };
+        let event_list: Vec<Event> = vec![
+            Event::Deposit(Deposit::default()),
+            Event::WithdrawRequest(WithdrawRequest::default()),
+            Event::Withdraw(Withdraw::default()),
+            Event::TokenListing(TokenListing::default()),
+            Event::OrderPlacement(OrderPlacement::default()),
+            Event::OrderCancellation(OrderCancellation::default()),
+            Event::OrderDeletion(OrderDeletion::default()),
+            Event::Trade(Trade::default()),
+            Event::TradeReversion(TradeReversion::default()),
+            Event::SolutionSubmission(SolutionSubmission::default()),
+        ];
 
-        let mut events = BTreeMap::new();
-        events.insert(event_key, value);
+        let events: BTreeMap<EventSortKey, Value> = event_list
+            .iter()
+            .enumerate()
+            .map(|(i, event)| {
+                (
+                    EventSortKey {
+                        block_number: i as u64,
+                        block_hash: H256::zero(),
+                        log_index: 1,
+                    },
+                    Value {
+                        event: event.clone(),
+                        batch_id: 0,
+                    },
+                )
+            })
+            .collect();
         let orderbook = Orderbook { events };
-
         let serialized_orderbook =
-            ron::ser::to_string_pretty(&orderbook, ron::ser::PrettyConfig::default()).unwrap();
-        let deserialized_orderbook = Orderbook::try_from(serialized_orderbook.as_bytes()).unwrap();
+            bincode::serialize(&orderbook).expect("Failed to serialize orderbook");
+        let deserialized_orderbook = Orderbook::try_from(&serialized_orderbook[..])
+            .expect("Failed to deserialize orderbook");
         assert_eq!(orderbook.events, deserialized_orderbook.events);
     }
 

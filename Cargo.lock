@@ -105,18 +105,19 @@ dependencies = [
 
 [[package]]
 name = "base64"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b25d992356d2eb0ed82172f5248873db5560c4721f564b13cb5193bda5e668e"
-dependencies = [
- "byteorder",
-]
-
-[[package]]
-name = "base64"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b41b7ea54a0c9d92199de89e20e58d49f02f8e699814ef3fdf266f6f748d15c7"
+
+[[package]]
+name = "bincode"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5753e2a71534719bf3f4e57006c3a4f0d2c672a4b676eec84161f763eca87dbf"
+dependencies = [
+ "byteorder",
+ "serde",
+]
 
 [[package]]
 name = "bitflags"
@@ -586,6 +587,7 @@ name = "driver"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bincode",
  "byteorder",
  "chrono",
  "crossbeam-utils",
@@ -597,7 +599,6 @@ dependencies = [
  "log 0.4.8",
  "mockall",
  "prometheus",
- "ron",
  "rouille",
  "rustc-hex",
  "serde",
@@ -2233,17 +2234,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a7d3f9bed94764eac15b8f14af59fac420c236adaff743b7bcc88e265cb4345"
 dependencies = [
  "rustc-hex",
-]
-
-[[package]]
-name = "ron"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ece421e0c4129b90e4a35b6f625e472e96c552136f5093a2f4fa2bbb75a62d5"
-dependencies = [
- "base64 0.10.1",
- "bitflags 1.2.1",
- "serde",
 ]
 
 [[package]]
