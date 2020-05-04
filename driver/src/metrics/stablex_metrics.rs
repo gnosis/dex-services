@@ -240,7 +240,7 @@ fn users_from_solution(solution: &Solution) -> i64 {
         .unwrap_or(std::i64::MAX)
 }
 
-trait InitializeableMetric: 'static + Sized + AsRef<str> {
+trait InitializableMetric: 'static + Sized + AsRef<str> {
     const LABEL: &'static str;
     const ALL_STAGES: &'static [Self];
 
@@ -286,7 +286,7 @@ impl AsRef<str> for ProcessingStage {
     }
 }
 
-impl InitializeableMetric for ProcessingStage {
+impl InitializableMetric for ProcessingStage {
     const LABEL: &'static str = "stage";
     const ALL_STAGES: &'static [Self] = &[
         Self::Started,
@@ -303,7 +303,7 @@ enum BookType {
     Solution,
 }
 
-impl InitializeableMetric for BookType {
+impl InitializableMetric for BookType {
     const LABEL: &'static str = "type";
     const ALL_STAGES: &'static [Self] = &[Self::Orderbook, Self::Solution];
 }

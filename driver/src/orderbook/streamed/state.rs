@@ -24,7 +24,7 @@ pub struct State {
     tokens: Tokens,
     last_solution: LastSolution,
     /// True when we have received some trades or trade reverts but not yet the final solution
-    /// submission that indiciates all trades have been received.
+    /// submission that indicates all trades have been received.
     solution_partially_received: bool,
     last_batch_id: BatchId,
 }

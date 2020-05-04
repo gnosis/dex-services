@@ -70,7 +70,7 @@ impl HttpTransportInner {
         debug!("[id:{}] received response: '{}'", id, content.trim());
         let mut json = Value::from_str(&content)?;
         if let Some(map) = json.as_object_mut() {
-            // NOTE: Ganache sometimes returns errors inlined with responses,
+            // NOTE: Ganache sometimes returns errors inline with responses,
             //   filter those out.
             if map.contains_key("result") {
                 if let Some(error) = map.remove("error") {

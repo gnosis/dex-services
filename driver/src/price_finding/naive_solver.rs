@@ -922,7 +922,7 @@ pub mod tests {
             let limit_rhs = U256::from(exec_buy_amount) * U256::from(order.sell_amount);
             if limit_lhs > limit_rhs {
                 return Err(format!(
-                    "LimitPrice for order {} not satisifed ({} > {})",
+                    "LimitPrice for order {} not satisfied ({} > {})",
                     i, limit_lhs, limit_rhs
                 ));
             }
