@@ -59,9 +59,6 @@ impl<'a> StableXOrderBookReading for ShadowedOrderbookReader<'a> {
 
         Ok(orderbook)
     }
-    fn initialize(&self) -> Result<()> {
-        self.primary.initialize()
-    }
 }
 
 /// Background shadow thread that receives orders from the order channel,
@@ -74,9 +71,6 @@ fn background_shadow_reader(
     reader: &dyn StableXOrderBookReading,
     channel: Receiver<(u32, Orderbook)>,
 ) {
-    if let Err(err) = reader.initialize() {
-        log::error!("failed to initialize shadowed orderbook: {:?}", err);
-    }
     while let Ok((batch_id, primary_orderbook)) = channel.recv() {
         let shadow_orderbook = match reader.get_auction_data(batch_id.into()) {
             Ok(orderbook) => orderbook,
