@@ -76,7 +76,7 @@ impl PriceOracle {
     /// Splits order tokens into a vector of tokens that should be priced based
     /// on the token whitelist and a vector of unpriced token ids.
     ///
-    /// Note that all token ids in the returned results are garanteed to be
+    /// Note that all token ids in the returned results are guaranteed to be
     /// unique.
     fn split_order_tokens(
         &self,

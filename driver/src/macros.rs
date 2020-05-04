@@ -1,13 +1,13 @@
 //! Module containing utility macros for sharing in the crate.
 
-/// Macro for instanciating a `HashMap`.
+/// Macro for instantiating a `HashMap`.
 macro_rules! hash_map {
     ($($tt:tt)*) => {
         std_map!(<HashMap> $($tt)*)
     }
 }
 
-/// Macro for instanciating a `BTreeMap`.
+/// Macro for instantiating a `BTreeMap`.
 #[cfg(test)]
 macro_rules! btree_map {
     ($($tt:tt)*) => {
@@ -15,9 +15,9 @@ macro_rules! btree_map {
     }
 }
 
-/// Implementation macro for instanciating a standard library map type like
+/// Implementation macro for instantiating a standard library map type like
 /// `HashMap` or `BTreeMap`. Note that `ToOwned::to_owned` is called for keys,
-/// so things like `str` keys atomatically get turned into `String`s.
+/// so things like `str` keys automatically get turned into `String`s.
 macro_rules! std_map {
     (<$t:ident> $( $key:expr => $value:expr ),* $(,)?) => {{
         #[allow(unused_mut)]
