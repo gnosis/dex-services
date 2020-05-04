@@ -78,10 +78,6 @@ impl From<Error> for SolutionSubmissionError {
                         "SafeMath: subtraction overflow" => {
                             Some(SolutionSubmissionError::Benign(reason.clone()))
                         }
-                        // TODO: Should only be a benign error until https://github.com/gnosis/dex-services/issues/684 is solved
-                        "Amount exceeds user\'s balance." => {
-                            Some(SolutionSubmissionError::Benign(reason.clone()))
-                        }
                         _ => None,
                     }
                 }
