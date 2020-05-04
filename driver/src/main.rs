@@ -281,6 +281,9 @@ fn main() {
     let mut scheduler = options
         .scheduler
         .create(&*contract, &driver, scheduler_config);
+    orderbook
+        .initialize()
+        .expect("primary orderbook initialization failed");
     scheduler.start();
 }
 

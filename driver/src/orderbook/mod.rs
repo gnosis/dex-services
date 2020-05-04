@@ -31,6 +31,11 @@ pub trait StableXOrderBookReading {
     /// # Arguments
     /// * `batch_id_to_solve` - the index for which returned orders should be valid
     fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)>;
+    /// Perform potential heavy initialization of the orderbook. If this fails or wasn't called
+    // the orderbook will initialize on first use of `get_auction_data`.
+    fn initialize(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// The different kinds of orderbook readers.
