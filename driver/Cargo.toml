@@ -33,7 +33,7 @@ uint = "0.8"
 url = "2.1.1"
 
 [dev-dependencies]
-mockall = "0.7.0"
+mockall = "0.7.1"
 
 [build-dependencies]
 ethcontract-generate = "0.7.2"
