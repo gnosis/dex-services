@@ -113,15 +113,15 @@ impl TryFrom<File> for Orderbook {
     type Error = anyhow::Error;
 
     fn try_from(mut file: File) -> Result<Self> {
-        let mut contents = String::new();
+        let mut contents = Vec::new();
         let bytes_read = file
-            .read_to_string(&mut contents)
+            .read_to_end(&mut contents)
             .with_context(|| format!("Failed to read file: {:?}", file))?;
         info!(
             "Successfully loaded {} bytes from Orderbook file",
             bytes_read
         );
-        Orderbook::try_from(contents.as_bytes())
+        Orderbook::try_from(contents.as_slice())
     }
 }
 
