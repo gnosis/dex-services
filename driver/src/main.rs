@@ -73,6 +73,11 @@ struct Options {
     #[structopt(long, env = "SOLVER_TYPE", default_value = "naive-solver")]
     solver_type: SolverType,
 
+    /// Which optimization solver the solver should use internally. Is passed as
+    /// `--solver` to the solver.
+    #[structopt(long, env = "SOLVER_INTERNAL_SOLVER")]
+    solver_internal_solver: Option<String>,
+
     /// JSON encoded backup token information to provide to the solver.
     ///
     /// For example: '{
@@ -234,6 +239,7 @@ fn main() {
         options.solver_type,
         price_oracle,
         options.min_avg_fee_per_order,
+        options.solver_internal_solver,
     );
 
     // Create the orderbook reader.

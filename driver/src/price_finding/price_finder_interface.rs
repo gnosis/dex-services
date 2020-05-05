@@ -53,17 +53,19 @@ impl SolverType {
         input_file: &str,
         time_limit: String,
         min_avg_fee_per_order: u128,
+        internal_solver: Option<&str>,
     ) -> Result<Output> {
         match self {
             SolverType::OpenSolver => {
                 execute_open_solver(result_folder, input_file, min_avg_fee_per_order)
             }
-            SolverType::StandardSolver => {
-                execute_private_solver(result_folder, input_file, time_limit, min_avg_fee_per_order)
-            }
-            SolverType::FallbackSolver => {
-                execute_private_solver(result_folder, input_file, time_limit, min_avg_fee_per_order)
-            }
+            SolverType::StandardSolver | SolverType::FallbackSolver => execute_private_solver(
+                result_folder,
+                input_file,
+                time_limit,
+                min_avg_fee_per_order,
+                internal_solver,
+            ),
             SolverType::NaiveSolver => {
                 panic!("fn execute should not be called by the naive solver")
             }
@@ -98,6 +100,7 @@ pub fn execute_private_solver(
     input_file: &str,
     time_limit: String,
     min_avg_fee_per_order: u128,
+    internal_solver: Option<&str>,
 ) -> Result<Output> {
     let mut command = Command::new("python");
     let private_solver_command = command
@@ -108,6 +111,10 @@ pub fn execute_private_solver(
         .args(&["--solverTimeLimit", &time_limit])
         .arg(format!("--minAvgFeePerOrder={}", min_avg_fee_per_order))
         .arg(String::from("--useExternalPrices"));
+    if let Some(string) = internal_solver {
+        private_solver_command.arg(format!("--solver={}", string));
+    }
+
     debug!(
         "Using private-solver command `{:?}`",
         private_solver_command

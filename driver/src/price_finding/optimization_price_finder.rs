@@ -163,13 +163,14 @@ mod solver_input {
 #[cfg_attr(test, mockall::automock)]
 trait Io {
     fn write_input(&self, input_file: &str, input: &str) -> std::io::Result<()>;
-    fn run_solver(
+    fn run_solver<'a>(
         &self,
         input_file: &str,
         result_folder: &str,
         solver_type: SolverType,
         time_limit: Duration,
         min_avg_fee_per_order: u128,
+        internal_solver: Option<&'a str>,
     ) -> Result<()>;
     fn read_output(&self, result_folder: &str) -> std::io::Result<String>;
 }
@@ -180,6 +181,7 @@ pub struct OptimisationPriceFinder {
     solver_type: SolverType,
     price_oracle: Box<dyn PriceEstimating + Sync>,
     min_avg_fee_per_order: u128,
+    internal_solver: Option<String>,
 }
 
 impl OptimisationPriceFinder {
@@ -188,6 +190,7 @@ impl OptimisationPriceFinder {
         solver_type: SolverType,
         price_oracle: impl PriceEstimating + Sync + 'static,
         min_avg_fee_per_order: u128,
+        internal_solver: Option<String>,
     ) -> Self {
         OptimisationPriceFinder {
             io_methods: Box::new(DefaultIo),
@@ -195,6 +198,7 @@ impl OptimisationPriceFinder {
             solver_type,
             price_oracle: Box::new(price_oracle),
             min_avg_fee_per_order,
+            internal_solver,
         }
     }
 }
@@ -269,6 +273,7 @@ impl PriceFinding for OptimisationPriceFinder {
                 self.solver_type,
                 time_limit,
                 self.min_avg_fee_per_order,
+                self.internal_solver.as_ref().map(|s| s.as_ref()),
             )
             .with_context(|| format!("error running {:?} solver", self.solver_type))?;
         let result = self
@@ -297,10 +302,16 @@ impl Io for DefaultIo {
         solver: SolverType,
         time_limit: Duration,
         min_avg_fee_per_order: u128,
+        internal_solver: Option<&str>,
     ) -> Result<()> {
         let time_limit = (time_limit.as_secs_f64().round() as u64).to_string();
-        let output =
-            solver.execute(result_folder, input_file, time_limit, min_avg_fee_per_order)?;
+        let output = solver.execute(
+            result_folder,
+            input_file,
+            time_limit,
+            min_avg_fee_per_order,
+            internal_solver,
+        )?;
 
         if !output.status.success() {
             error!(
@@ -600,7 +611,7 @@ pub mod tests {
         io_methods
             .expect_run_solver()
             .times(1)
-            .returning(|_, _, _, _, _| Ok(()));
+            .returning(|_, _, _, _, _, _| Ok(()));
         io_methods
             .expect_read_output()
             .times(1)
@@ -611,6 +622,7 @@ pub mod tests {
             min_avg_fee_per_order: 0,
             solver_type: SolverType::StandardSolver,
             price_oracle: Box::new(price_oracle),
+            internal_solver: None,
         };
         let orders = vec![];
         assert!(solver
