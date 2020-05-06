@@ -43,7 +43,7 @@ impl FromStr for InternalOptimizer {
 }
 
 impl InternalOptimizer {
-    fn to_argument(&self) -> &'static str {
+    fn to_argument(self) -> &'static str {
         match self {
             InternalOptimizer::Scip => "SCIP",
             InternalOptimizer::Gurobi => "GUROBI",
