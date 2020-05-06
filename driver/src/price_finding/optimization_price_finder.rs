@@ -165,7 +165,7 @@ mod solver_input {
 #[cfg_attr(test, mockall::automock)]
 trait Io {
     fn write_input(&self, input_file: &str, input: &str) -> std::io::Result<()>;
-    fn run_solver<'a>(
+    fn run_solver(
         &self,
         input_file: &str,
         result_folder: &str,
