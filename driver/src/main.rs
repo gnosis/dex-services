@@ -75,7 +75,7 @@ struct Options {
 
     /// Which internal optimizer the solver should use. It is passed as
     /// `--solver` to the solver. Choices are "scip" and "gurobi".
-    #[structopt(long, env = "SOLVER_INTERNAL_SOLVER", default_value = "scip")]
+    #[structopt(long, env = "SOLVER_INTERNAL_OPTIMIZER", default_value = "scip")]
     solver_internal_optimizer: InternalOptimizer,
 
     /// JSON encoded backup token information to provide to the solver.
