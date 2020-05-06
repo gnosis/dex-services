@@ -700,7 +700,7 @@ dependencies = [
  "crunchy",
  "fixed-hash 0.6.0",
  "impl-rlp",
- "impl-serde 0.3.0",
+ "impl-serde 0.3.1",
  "tiny-keccak 2.0.2",
 ]
 
@@ -797,8 +797,8 @@ dependencies = [
  "ethbloom 0.9.0",
  "fixed-hash 0.6.0",
  "impl-rlp",
- "impl-serde 0.3.0",
- "primitive-types 0.7.1",
+ "impl-serde 0.3.1",
+ "primitive-types 0.7.2",
  "uint",
 ]
 
@@ -1231,9 +1231,9 @@ dependencies = [
 
 [[package]]
 name = "impl-serde"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bbe9ea9b182f0fb1cabbd61f4ff9b7b7b9197955e95a7e4c27de5055eb29ff8"
+checksum = "b47ca4d2b6931707a55fce5cf66aff80e2178c8b63bbb4ecb5695cbc870ddf6f"
 dependencies = [
  "serde",
 ]
@@ -1850,7 +1850,7 @@ dependencies = [
  "data-encoding",
  "lazy_static",
  "petgraph",
- "primitive-types 0.7.1",
+ "primitive-types 0.7.2",
  "thiserror",
 ]
 
@@ -1863,20 +1863,20 @@ dependencies = [
  "fixed-hash 0.5.2",
  "impl-codec",
  "impl-rlp",
- "impl-serde 0.3.0",
+ "impl-serde 0.3.1",
  "uint",
 ]
 
 [[package]]
 name = "primitive-types"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3dedac218327b6b55fff5ef05f63ce5127024e1a36342836da7e92cbfac4531"
+checksum = "c55c21c64d0eaa4d7ed885d959ef2d62d9e488c27c0e02d9aa5ce6c877b7d5f8"
 dependencies = [
  "fixed-hash 0.6.0",
  "impl-codec",
  "impl-rlp",
- "impl-serde 0.3.0",
+ "impl-serde 0.3.1",
  "uint",
 ]
 
