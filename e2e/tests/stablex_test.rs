@@ -18,6 +18,13 @@ fn test_with_ganache() {}
 
 #[test]
 fn test_rinkeby() {
+    for _ in 0..10 {
+        test_rinkeby_();
+        std::thread::sleep(std::time::Duration::from_secs(300));
+    }
+}
+
+fn test_rinkeby_() {
     // Setup instance and default tx params
     let (eloop, http) = Http::new("https://node.rinkeby.gnosisdev.com/").expect("transport failed");
     eloop.into_remote();
