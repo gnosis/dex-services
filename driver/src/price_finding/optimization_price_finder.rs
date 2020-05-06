@@ -1,6 +1,8 @@
 use crate::models::{self, TokenId, TokenInfo};
 use crate::price_estimation::PriceEstimating;
-use crate::price_finding::price_finder_interface::{Fee, PriceFinding, SolverType};
+use crate::price_finding::price_finder_interface::{
+    Fee, InternalOptimizer, PriceFinding, SolverType,
+};
 
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
@@ -170,6 +172,7 @@ trait Io {
         solver_type: SolverType,
         time_limit: Duration,
         min_avg_fee_per_order: u128,
+        internal_optimizer: InternalOptimizer,
     ) -> Result<()>;
     fn read_output(&self, result_folder: &str) -> std::io::Result<String>;
 }
@@ -180,6 +183,7 @@ pub struct OptimisationPriceFinder {
     solver_type: SolverType,
     price_oracle: Box<dyn PriceEstimating + Sync>,
     min_avg_fee_per_order: u128,
+    internal_optimizer: InternalOptimizer,
 }
 
 impl OptimisationPriceFinder {
@@ -188,6 +192,7 @@ impl OptimisationPriceFinder {
         solver_type: SolverType,
         price_oracle: impl PriceEstimating + Sync + 'static,
         min_avg_fee_per_order: u128,
+        internal_optimizer: InternalOptimizer,
     ) -> Self {
         OptimisationPriceFinder {
             io_methods: Box::new(DefaultIo),
@@ -195,6 +200,7 @@ impl OptimisationPriceFinder {
             solver_type,
             price_oracle: Box::new(price_oracle),
             min_avg_fee_per_order,
+            internal_optimizer,
         }
     }
 }
@@ -269,6 +275,7 @@ impl PriceFinding for OptimisationPriceFinder {
                 self.solver_type,
                 time_limit,
                 self.min_avg_fee_per_order,
+                self.internal_optimizer,
             )
             .with_context(|| format!("error running {:?} solver", self.solver_type))?;
         let result = self
@@ -297,10 +304,16 @@ impl Io for DefaultIo {
         solver: SolverType,
         time_limit: Duration,
         min_avg_fee_per_order: u128,
+        internal_optimizer: InternalOptimizer,
     ) -> Result<()> {
         let time_limit = (time_limit.as_secs_f64().round() as u64).to_string();
-        let output =
-            solver.execute(result_folder, input_file, time_limit, min_avg_fee_per_order)?;
+        let output = solver.execute(
+            result_folder,
+            input_file,
+            time_limit,
+            min_avg_fee_per_order,
+            internal_optimizer,
+        )?;
 
         if !output.status.success() {
             error!(
@@ -600,7 +613,7 @@ pub mod tests {
         io_methods
             .expect_run_solver()
             .times(1)
-            .returning(|_, _, _, _, _| Ok(()));
+            .returning(|_, _, _, _, _, _| Ok(()));
         io_methods
             .expect_read_output()
             .times(1)
@@ -611,6 +624,7 @@ pub mod tests {
             min_avg_fee_per_order: 0,
             solver_type: SolverType::StandardSolver,
             price_oracle: Box::new(price_oracle),
+            internal_optimizer: InternalOptimizer::Scip,
         };
         let orders = vec![];
         assert!(solver

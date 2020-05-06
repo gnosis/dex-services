@@ -30,7 +30,7 @@ use crate::orderbook::{
     ShadowedOrderbookReader, StableXOrderBookReading,
 };
 use crate::price_estimation::{PriceOracle, TokenData};
-use crate::price_finding::{Fee, SolverType};
+use crate::price_finding::{Fee, InternalOptimizer, SolverType};
 use crate::solution_submission::StableXSolutionSubmitter;
 
 use ethcontract::PrivateKey;
@@ -72,6 +72,11 @@ struct Options {
     /// programming solver.
     #[structopt(long, env = "SOLVER_TYPE", default_value = "naive-solver")]
     solver_type: SolverType,
+
+    /// Which internal optimizer the solver should use. It is passed as
+    /// `--solver` to the solver. Choices are "scip" and "gurobi".
+    #[structopt(long, env = "SOLVER_INTERNAL_SOLVER", default_value = "scip")]
+    solver_internal_optimizer: InternalOptimizer,
 
     /// JSON encoded backup token information to provide to the solver.
     ///
@@ -234,6 +239,7 @@ fn main() {
         options.solver_type,
         price_oracle,
         options.min_avg_fee_per_order,
+        options.solver_internal_optimizer,
     );
 
     // Create the orderbook reader.
