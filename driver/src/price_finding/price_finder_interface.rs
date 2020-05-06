@@ -24,6 +24,33 @@ impl Default for Fee {
     }
 }
 
+/// The internal optimizer used by the standard and fallback solvers.
+#[derive(Clone, Copy, Debug)]
+pub enum InternalOptimizer {
+    Scip,
+    Gurobi,
+}
+
+impl FromStr for InternalOptimizer {
+    type Err = Error;
+    fn from_str(string: &str) -> Result<Self> {
+        match string {
+            "scip" => Ok(Self::Scip),
+            "gurobi" => Ok(Self::Gurobi),
+            _ => Err(anyhow!("internal optimizer does not exit")),
+        }
+    }
+}
+
+impl InternalOptimizer {
+    fn to_argument(&self) -> &'static str {
+        match self {
+            InternalOptimizer::Scip => "SCIP",
+            InternalOptimizer::Gurobi => "GUROBI",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum SolverType {
     NaiveSolver,
@@ -53,7 +80,7 @@ impl SolverType {
         input_file: &str,
         time_limit: String,
         min_avg_fee_per_order: u128,
-        internal_solver: Option<&str>,
+        internal_optimizer: InternalOptimizer,
     ) -> Result<Output> {
         match self {
             SolverType::OpenSolver => {
@@ -64,7 +91,7 @@ impl SolverType {
                 input_file,
                 time_limit,
                 min_avg_fee_per_order,
-                internal_solver,
+                internal_optimizer,
             ),
             SolverType::NaiveSolver => {
                 panic!("fn execute should not be called by the naive solver")
@@ -100,7 +127,7 @@ pub fn execute_private_solver(
     input_file: &str,
     time_limit: String,
     min_avg_fee_per_order: u128,
-    internal_solver: Option<&str>,
+    internal_optimizer: InternalOptimizer,
 ) -> Result<Output> {
     let mut command = Command::new("python");
     let private_solver_command = command
@@ -110,11 +137,8 @@ pub fn execute_private_solver(
         .arg(format!("--outputDir={}{}", "/app/", result_folder))
         .args(&["--solverTimeLimit", &time_limit])
         .arg(format!("--minAvgFeePerOrder={}", min_avg_fee_per_order))
+        .arg(format!("--solver={}", internal_optimizer.to_argument()))
         .arg(String::from("--useExternalPrices"));
-    if let Some(string) = internal_solver {
-        private_solver_command.arg(format!("--solver={}", string));
-    }
-
     debug!(
         "Using private-solver command `{:?}`",
         private_solver_command
