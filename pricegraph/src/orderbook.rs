@@ -134,6 +134,67 @@ impl Orderbook {
             .for_each(|token| self.reduced_shortest_paths(token));
     }
 
+    /// Finds and reduces an overlapping trade from the graph. The ring trade
+    /// returned from this can be used to create a solution.
+    pub fn reduce_ring_trade(&mut self) -> Option<Vec<Order>> {
+        let mut orders = Vec::new();
+        while let Some(path) = Subgraphs::new(self.projection.node_indices().skip(1))
+            .for_each_until(|token| {
+                match bellman_ford::search(&self.projection, token) {
+                    Ok((_, predecessors)) => ControlFlow::Continue(predecessors),
+                    Err(NegativeCycle(predecessors, node)) => {
+                        let path = {
+                            let mut cycle = path::find_cycle(&predecessors, node)
+                                .expect("negative cycle not found after being detected");
+                            cycle.push(cycle[0]);
+                            cycle
+                        };
+
+                        if predecessors[0].is_some() {
+                            // The negative cycle is connected to the fee token.
+                            ControlFlow::Break(path)
+                        } else {
+                            ControlFlow::Continue(predecessors)
+                        }
+                    }
+                }
+            })
+        {
+            orders.clear();
+            for pair in pairs_on_path(&path) {
+                let order = self.orders.best_order_for_pair(pair).unwrap_or_else(|| {
+                    panic!(
+                        "missing token pair {:?} along detected negative cycle {}",
+                        pair,
+                        format_path(&path),
+                    )
+                });
+                orders.push(order.clone());
+            }
+
+            let (capacity, _) = self.fill_path(&path).unwrap_or_else(|| {
+                panic!(
+                    "failed to fill path along detected negative cycle {}",
+                    format_path(&path),
+                )
+            });
+            let (_, min_amount) =
+                orders
+                    .iter()
+                    .fold((capacity, capacity), |(amount, min_amount), order| {
+                        let amount = amount / order.price;
+                        (amount, num::min(min_amount, amount))
+                    });
+            if min_amount <= 10_000.0 {
+                continue;
+            }
+
+            return Some(orders);
+        }
+
+        None
+    }
+
     /// Fill a market order in the current orderbook graph returning the maximum
     /// price the order can have while overlapping with existing orders. Returns
     /// `None` if the order cannot be filled because the token pair is not
