@@ -90,7 +90,7 @@ where
         let (tokens_, futures): (Vec<_>, Vec<_>) = tokens
             .iter()
             .filter_map(|token| -> Option<(&Token, BoxFuture<Result<f64>>)> {
-                // api_tokens symbols are uppercase to disambiguate
+                // api_tokens symbols are converted to uppercase to disambiguate
                 let symbol = token.symbol().to_uppercase();
                 if symbol == api_tokens.stable_coin.symbol {
                     Some((token, Box::pin(future::ready(Ok(1.0)))))
