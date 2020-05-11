@@ -10,7 +10,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 struct ApiTokens {
-    // Maps uppercased Token::symbol to Token.
+    // Maps uppercase Token::symbol to Token.
     // This is cached in the struct because we don't expect it to change often.
     tokens: HashMap<String, api::Token>,
     stable_coin: api::Token,
@@ -90,7 +90,7 @@ where
         let (tokens_, futures): (Vec<_>, Vec<_>) = tokens
             .iter()
             .filter_map(|token| -> Option<(&Token, BoxFuture<Result<f64>>)> {
-                // api_tokens symbols are uppercased to disambiguate
+                // api_tokens symbols are uppercase to disambiguate
                 let symbol = token.symbol().to_uppercase();
                 if symbol == api_tokens.stable_coin.symbol {
                     Some((token, Box::pin(future::ready(Ok(1.0)))))
