@@ -47,10 +47,6 @@ matrix:
         - docker-compose -f docker-compose.yml -f docker-compose.private-solver.yml up -d stablex
         - cargo test -p e2e ganache -- --nocapture
         - docker-compose logs
-        # StableX e2e Tests (Rinkeby)
-        - docker-compose down && docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml -f docker-compose.private-solver.yml up -d stablex
-        - cargo test -p e2e rinkeby -- --nocapture
-        - docker-compose logs
       deploy:
         - provider: script
           script: ./docker/deploy.sh $TRAVIS_BRANCH
