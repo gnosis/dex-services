@@ -44,7 +44,7 @@ use std::time::Duration;
 use structopt::StructOpt;
 use url::Url;
 
-#[derive(Debug, StructOpt)]
+#[derive(Clone, Debug, StructOpt)]
 #[structopt(
     name = "driver",
     about = "Gnosis Exchange protocol driver.",
@@ -205,7 +205,7 @@ fn main() {
 
     // Set up shared HTTP client and HTTP services.
     let http_factory = HttpFactory::new(options.http_timeout, http_metrics);
-    let (web3, gas_station, price_oracle) = setup_http_services(http_factory);
+    let (web3, gas_station, price_oracle) = setup_http_services(http_factory, options.clone());
 
     // Set up connection to exchange contract
     let contract = Arc::new(
@@ -286,7 +286,10 @@ fn setup_metrics() -> (StableXMetrics, HttpMetrics) {
     (stablex_metrics, http_metrics)
 }
 
-fn setup_http_services(http_factory: HttpFactory) -> (Web3, GnosisSafeGasStation, PriceOracle) {
+fn setup_http_services(
+    http_factory: HttpFactory,
+    options: Options,
+) -> (Web3, GnosisSafeGasStation, PriceOracle) {
     let web3 = web3_provider(
         &http_factory,
         options.node_url.as_str(),

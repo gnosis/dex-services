@@ -71,7 +71,7 @@ impl Default for AuctionTimingConfiguration {
 }
 
 /// The different kinds of schedulers.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum SchedulerKind {
     /// A system based scheduler that uses system time to run the driver.
     System,
