@@ -2,20 +2,31 @@ use ethcontract::U256;
 use std::future::Future;
 
 pub trait CeiledDiv {
+    /// Panics on overflow.
     fn ceiled_div(&self, divisor: Self) -> Self;
 }
 
 impl CeiledDiv for u128 {
     fn ceiled_div(&self, divisor: u128) -> u128 {
         // ceil(p / float(q)) == (p + q - 1) / q
-        (self + divisor - 1) / divisor
+        self.checked_add(divisor)
+            .unwrap()
+            .checked_sub(1)
+            .unwrap()
+            .checked_div(divisor)
+            .unwrap()
     }
 }
 
 impl CeiledDiv for U256 {
     fn ceiled_div(&self, divisor: U256) -> U256 {
         //ceil(p / float(q)) == (p + q - 1) / q
-        (self + divisor - 1) / divisor
+        self.checked_add(divisor)
+            .unwrap()
+            .checked_sub(1.into())
+            .unwrap()
+            .checked_div(divisor)
+            .unwrap()
     }
 }
 
