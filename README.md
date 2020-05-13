@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.com/gnosis/dex-services.svg?branch=master)](https://travis-ci.com/gnosis/dex-services)
+[![Coverage Status](https://coveralls.io/repos/github/gnosis/dex-services/badge.svg)](https://coveralls.io/github/gnosis/dex-services)
 
 
 # Contents
