@@ -14,6 +14,21 @@ pub struct PriceEstimator {
 impl PriceEstimator {
     /// Creates a `PriceEstimator` instance by reading an orderbook from encoded
     /// bytes. Returns an error if the encoded orders are invalid.
+    ///
+    /// The orders are expected to be encoded indexed orders, in the same format
+    /// as `BatchExchangeViewer::getFilteredOrdersPaginated`. Specifically each
+    /// order has a `114` byte stride with the following values (appearing in
+    /// encoding order).
+    /// - `20` bytes: owner's address
+    /// - `32` bytes: owners's sell token balance
+    /// - `2` bytes: buy token ID
+    /// - `2` bytes: sell token ID
+    /// - `4` bytes: valid from batch ID
+    /// - `4` bytes: valid until batch ID
+    /// - `16` bytes: price numerator
+    /// - `16` bytes: price denominator
+    /// - `16` bytes: remaining order sell amount
+    /// - `2` bytes: order ID
     #[wasm_bindgen(constructor)]
     pub fn new(bytes: &[u8]) -> Result<PriceEstimator, JsValue> {
         console_error_panic_hook::set_once();

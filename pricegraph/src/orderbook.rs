@@ -38,6 +38,9 @@ pub struct Orderbook {
 impl Orderbook {
     /// Reads an orderbook from encoded bytes returning an error if the encoded
     /// orders are invalid.
+    ///
+    /// The orderbook is expected to be encoded as an indexed order as encoded
+    /// by `BatchExchangeViewer::getFilteredOrdersPaginated`.
     pub fn read(bytes: impl AsRef<[u8]>) -> Result<Self, InvalidLength> {
         let elements = Element::read_all(bytes.as_ref())?;
         Ok(Orderbook::from_elements(elements))
