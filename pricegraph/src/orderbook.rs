@@ -23,7 +23,7 @@ use thiserror::Error;
 
 /// The minimum amount where an order is considered a dust order and can be
 /// ignored in the price graph calculation.
-pub const MIN_AMOUNT: f64 = 10_000.0;
+const MIN_AMOUNT: f64 = 10_000.0;
 
 /// A graph representation of a complete orderbook.
 #[derive(Clone, Debug)]
@@ -57,15 +57,7 @@ impl Orderbook {
         let mut orders = OrderCollector::default();
         let mut users = UserMap::default();
 
-        const MIN_AMOUNT_U128: u128 = MIN_AMOUNT as _;
-        const MIN_AMOUNT_U256: U256 = U256([MIN_AMOUNT as _, 0, 0, 0]);
-
-        for element in elements {
-            if element.remaining_sell_amount < MIN_AMOUNT_U128 || element.balance < MIN_AMOUNT_U256
-            {
-                continue;
-            }
-
+        for element in elements.into_iter().filter(|e| !is_dust_order(e)) {
             let TokenPair { buy, sell } = element.pair;
             max_token = cmp::max(max_token, cmp::max(buy, sell));
             users.entry(element.user).or_default().set_balance(&element);
@@ -426,6 +418,14 @@ fn format_path(path: &[NodeIndex]) -> String {
         .map(|segment| segment.index().to_string())
         .collect::<Vec<_>>()
         .join("->")
+}
+
+/// Returns true if an auction element is considered a dust order.
+fn is_dust_order(element: &Element) -> bool {
+    const MIN_AMOUNT_U128: u128 = MIN_AMOUNT as _;
+    const MIN_AMOUNT_U256: U256 = U256([MIN_AMOUNT as _, 0, 0, 0]);
+
+    element.remaining_sell_amount < MIN_AMOUNT_U128 || element.balance < MIN_AMOUNT_U256
 }
 
 /// An error indicating that an operation over a path failed because of a
