@@ -1,9 +1,15 @@
 const Web3 = require("web3");
 const fs = require("fs").promises;
-const { BatchExchange, BatchExchangeViewer } = require("@gnosis.pm/dex-contracts");
+const {
+	BatchExchangeArtifact,
+	BatchExchangeViewerArtifact,
+	deployment,
+	getOpenOrders,
+} = require("@gnosis.pm/dex-contracts");
 
 const ALL_TOKENS = [];
-const ORDER_STRIDE = 224;
+const CONFIRMATIONS = 6;
+const ORDER_STRIDE = 228;
 
 function formatElement(element) {
 	const e = i => {
@@ -12,15 +18,11 @@ function formatElement(element) {
 		return s;
 	};
 
-	return `${e(40)} ${e(64)} ${e(4)} ${e(4)} ${e(8)} ${e(8)} ${e(32)} ${e(32)} ${e(32)}\n`;
-}
-
-function contract(web3, artifact) {
-	return new web3.eth.Contract(artifact.abi, artifact.networks["1"].address);
+	return `${e(40)} ${e(64)} ${e(4)} ${e(4)} ${e(8)} ${e(8)} ${e(32)} ${e(32)} ${e(32)} ${e(4)}\n`;
 }
 
 async function writeElements(file, elements) {
-	elements = elements.substring(2);
+	elements = (elements || "0x").substring(2);
 	while (elements.length > 0) {
 		const element = elements.substring(0, ORDER_STRIDE);
 		await file.write(formatElement(element));
@@ -29,14 +31,19 @@ async function writeElements(file, elements) {
 }
 
 async function main() {
-	const web3 = new Web3("https://node.mainnet.gnosisdev.com");
-	const exchange = contract(web3, BatchExchange);
-	const viewer = contract(web3, BatchExchangeViewer);
+	const { INFURA_PROJECT_ID } = process.env;
+	const web3 = new Web3(`https://mainnet.infura.io/v3/${INFURA_PROJECT_ID}`);
 
-	const batchId = await exchange.methods.getCurrentBatchId().call();
+	const [exchange] = await deployment(web3, BatchExchangeArtifact);
+	const [viewer] = await deployment(web3, BatchExchangeViewerArtifact);
+
+	const latestBlock = await web3.eth.getBlockNumber();
+	const blockNumber = latestBlock - CONFIRMATIONS;
+
+	const batchId = await exchange.methods.getCurrentBatchId().call(undefined, blockNumber);
 	const output = await fs.open(`orderbook-${batchId - 1}.hex`, "w");
 
-	const pageSize = 128;
+	const pageSize = 50;
 	let page = {
 		nextPageUser: "0x0000000000000000000000000000000000000000",
 		nextPageUserOffset: 0,
@@ -51,7 +58,7 @@ async function main() {
 				page.nextPageUserOffset,
 				pageSize,
 			)
-			.call();
+			.call(undefined, blockNumber);
 		await writeElements(output, page.elements);
 	}
 	while (page.hasNextPage);

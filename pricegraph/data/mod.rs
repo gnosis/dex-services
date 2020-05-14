@@ -27,11 +27,11 @@ lazy_static! {
             }
         };
 
-        add_orderbook!(5287195);
+        add_orderbook!(5298183);
 
         orderbooks
     };
 
     /// The default orderbook used for testing and benchmarking.
-    pub static ref DEFAULT_ORDERBOOK: &'static [u8] = &*ORDERBOOKS[&5_287_195];
+    pub static ref DEFAULT_ORDERBOOK: &'static [u8] = &*ORDERBOOKS[&5_298_183];
 }

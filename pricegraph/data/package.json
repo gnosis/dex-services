@@ -5,7 +5,7 @@
     "fetch": "node ./fetch.js"
   },
   "dependencies": {
-    "@gnosis.pm/dex-contracts": "^0.2.8",
-    "web3": "^1.2.6"
+    "@gnosis.pm/dex-contracts": "=0.3.0",
+    "web3": "=1.2.7"
   }
 }

@@ -12,22 +12,15 @@ pub type UserMap = HashMap<UserId, User>;
 pub struct User {
     /// User balances per token.
     balances: HashMap<TokenId, f64>,
-    /// The number of orders this user has.
-    num_orders: usize,
 }
 
 impl User {
     /// Adds an encoded orderbook element to the user data, including the
     /// reported balance and incrementing the number of orders.
-    pub fn include_order(&mut self, element: &Element) -> usize {
-        let order_id = self.num_orders;
-
+    pub fn set_balance(&mut self, element: &Element) {
         self.balances
             .entry(element.pair.sell)
             .or_insert_with(|| num::u256_to_f64(element.balance));
-        self.num_orders += 1;
-
-        order_id
     }
 
     /// Return's the user's balance for the specified token.

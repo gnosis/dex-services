@@ -1,7 +1,7 @@
 //! Data and logic related to token pair order management.
 
 use super::UserMap;
-use crate::encoding::{Element, Price, TokenId, TokenPair, UserId};
+use crate::encoding::{Element, OrderId, Price, TokenId, TokenPair, UserId};
 use crate::num;
 use std::cmp;
 use std::collections::HashMap;
@@ -122,7 +122,7 @@ pub struct Order {
     /// The user owning the order.
     pub user: UserId,
     /// The index of an order per user.
-    pub index: usize,
+    pub id: OrderId,
     /// The token pair.
     pub pair: TokenPair,
     /// The maximum capacity for this order, this is equivalent to the order's
@@ -142,7 +142,7 @@ pub struct Order {
 
 impl Order {
     /// Creates a new order from an ID and an orderbook element.
-    pub fn new(element: Element, index: usize) -> Self {
+    pub fn new(element: &Element) -> Self {
         let amount = if is_unbounded(&element) {
             f64::INFINITY
         } else {
@@ -152,7 +152,7 @@ impl Order {
 
         Order {
             user: element.user,
-            index,
+            id: element.id,
             pair: element.pair,
             amount,
             price,
