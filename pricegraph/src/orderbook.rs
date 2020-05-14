@@ -16,6 +16,7 @@ use crate::graph::path;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
 use crate::num::{self, MAX_ROUNDING_ERROR};
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
+use primitive_types::U256;
 use std::cmp;
 use std::f64;
 use thiserror::Error;
@@ -56,16 +57,19 @@ impl Orderbook {
         let mut orders = OrderCollector::default();
         let mut users = UserMap::default();
 
-        for element in elements {
-            let TokenPair { buy, sell } = element.pair;
+        const MIN_AMOUNT_U128: u128 = MIN_AMOUNT as _;
+        const MIN_AMOUNT_U256: U256 = U256([MIN_AMOUNT as _, 0, 0, 0]);
 
+        for element in elements {
+            if element.remaining_sell_amount < MIN_AMOUNT_U128 || element.balance < MIN_AMOUNT_U256
+            {
+                continue;
+            }
+
+            let TokenPair { buy, sell } = element.pair;
             max_token = cmp::max(max_token, cmp::max(buy, sell));
             users.entry(element.user).or_default().set_balance(&element);
-
-            let order = Order::new(&element);
-            if order.get_effective_amount(&users) >= MIN_AMOUNT {
-                orders.insert_order(Order::new(&element));
-            }
+            orders.insert_order(Order::new(&element));
         }
 
         let orders = orders.collect();
