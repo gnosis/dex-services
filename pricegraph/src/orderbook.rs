@@ -14,11 +14,15 @@ use crate::encoding::{Element, InvalidLength, TokenId, TokenPair};
 use crate::graph::bellman_ford::{self, NegativeCycle};
 use crate::graph::path;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
-use crate::num;
+use crate::num::{self, MAX_ROUNDING_ERROR};
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use std::cmp;
 use std::f64;
 use thiserror::Error;
+
+/// The minimum amount where an order is considered a dust order and can be
+/// ignored in the price graph calculation.
+pub const MIN_AMOUNT: f64 = 10_000.0;
 
 /// A graph representation of a complete orderbook.
 #[derive(Clone, Debug)]
@@ -54,9 +58,14 @@ impl Orderbook {
 
         for element in elements {
             let TokenPair { buy, sell } = element.pair;
+
             max_token = cmp::max(max_token, cmp::max(buy, sell));
-            orders.insert_order(Order::new(&element));
             users.entry(element.user).or_default().set_balance(&element);
+
+            let order = Order::new(&element);
+            if order.get_effective_amount(&users) >= MIN_AMOUNT {
+                orders.insert_order(Order::new(&element));
+            }
         }
 
         let orders = orders.collect();
@@ -351,11 +360,19 @@ impl Orderbook {
             let fill_amount = capacity / transient_price;
 
             order.amount -= fill_amount;
-            let new_balance = user.deduct_from_balance(order.pair.sell, fill_amount);
+            debug_assert!(
+                order.amount >= -MAX_ROUNDING_ERROR,
+                "remaining amount underflow for order {}-{}",
+                order.user,
+                order.id,
+            );
 
-            if new_balance.is_none() {
+            let new_balance = user.deduct_from_balance(pair.sell, fill_amount);
+
+            if new_balance < MIN_AMOUNT {
+                user.clear_balance(pair.sell);
                 self.update_projection_graph_node(pair.sell);
-            } else if order.amount <= 0.0 {
+            } else if order.amount < MIN_AMOUNT {
                 self.update_projection_graph_edge(pair);
             }
         }
@@ -661,38 +678,40 @@ mod tests {
     }
 
     #[test]
-    fn removes_drained_and_balanceless_orders() {
+    fn removes_dust_orders() {
         let mut orderbook = orderbook! {
             users {
                 @1 {
-                    token 0 => 5_000_000,
-                }
-                @2 {
                     token 0 => 1_000_000_000,
                 }
+                @2 {
+                    token 1 => 4_999_000,
+                }
                 @3 {
-                    token 0 => 0,
+                    token 0 => 9_000,
+                    token 1 => 1_000_000_000,
                 }
             }
             orders {
                 owner @1 buying 1 [1_000_000_000] selling 0 [1_000_000_000],
-                owner @2 buying 1 [1_000_000_000] selling 0 [2_000_000_000] (0),
+                owner @2 buying 0 [1_000_000_000] selling 1 [2_000_000_000],
                 owner @3 buying 1 [1_000_000_000] selling 0 [3_000_000_000],
+                owner @3 buying 0 [1_000_000_000] selling 1 [3_000_000_000] (0),
             }
         };
 
-        let pair = TokenPair { buy: 1, sell: 0 };
+        let pair = TokenPair { buy: 0, sell: 1 };
 
         let order = orderbook.orders.best_order_for_pair(pair).unwrap();
-        assert_eq!(orderbook.num_orders(), 3);
-        assert_eq!(order.user, user_id(3));
+        assert_eq!(orderbook.num_orders(), 2);
+        assert_eq!(order.user, user_id(2));
         assert_approx_eq!(order.weight(), orderbook.get_projected_pair_weight(pair));
 
-        orderbook.update_projection_graph();
-        let order = orderbook.orders.best_order_for_pair(pair).unwrap();
+        orderbook.reduce_overlapping_orders();
+        let order = orderbook.orders.best_order_for_pair(pair);
         assert_eq!(orderbook.num_orders(), 1);
-        assert_eq!(order.user, user_id(1));
-        assert_approx_eq!(order.weight(), orderbook.get_projected_pair_weight(pair));
+        assert!(order.is_none());
+        assert!(orderbook.get_projected_pair_weight(pair).is_infinite());
     }
 
     #[test]
