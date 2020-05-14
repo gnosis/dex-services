@@ -5,10 +5,13 @@ use primitive_types::{H160, U256};
 use thiserror::Error;
 
 /// The stride of an orderbook element in bytes.
-pub const ELEMENT_STRIDE: usize = 112;
+pub const ELEMENT_STRIDE: usize = 114;
 
 /// A type alias for a batch ID.
 pub type BatchId = u32;
+
+/// A type alias for an order ID.
+pub type OrderId = u16;
 
 /// A type alias for a token ID.
 pub type TokenId = u16;
@@ -58,6 +61,10 @@ pub struct Element {
     pub price: Price,
     /// The remaining sell amount available to this order.
     pub remaining_sell_amount: u128,
+    /// The user order id.
+    ///
+    /// Note that this ID is unique per user and not for all orders.
+    pub id: OrderId,
 }
 
 impl Element {
@@ -108,6 +115,7 @@ impl Element {
                     denominator: read!(u128),
                 },
                 remaining_sell_amount: read!(u128),
+                id: read!(u16),
             }
         }))
     }
@@ -124,7 +132,7 @@ mod tests {
     #[test]
     #[allow(clippy::unreadable_literal)]
     fn read_all_elements() {
-        let bytes = (0u8..224).collect::<Vec<_>>();
+        let bytes = (0u8..114).collect::<Vec<_>>();
         assert_eq!(
             Element::read_all(&bytes).unwrap().next(),
             Some(Element {
@@ -151,6 +159,7 @@ mod tests {
                     denominator: 0x505152535455565758595a5b5c5d5e5f,
                 },
                 remaining_sell_amount: 0x606162636465666768696a6b6c6d6e6f,
+                id: 0x7071,
             })
         );
     }

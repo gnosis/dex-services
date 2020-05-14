@@ -51,13 +51,9 @@ impl Orderbook {
 
         for element in elements {
             let TokenPair { buy, sell } = element.pair;
-            let order_id = users
-                .entry(element.user)
-                .or_default()
-                .include_order(&element);
-
             max_token = cmp::max(max_token, cmp::max(buy, sell));
-            orders.insert_order(Order::new(element, order_id));
+            orders.insert_order(Order::new(&element));
+            users.entry(element.user).or_default().set_balance(&element);
         }
 
         let orders = orders.collect();
@@ -450,6 +446,7 @@ mod tests {
             $($(
                 balances.insert(($user, $token), primitive_types::U256::from($balance));
             )*)*
+            let mut users = std::collections::HashMap::new();
             let elements = vec![$(
                 $crate::encoding::Element {
                     user: user_id($owner),
@@ -469,6 +466,12 @@ mod tests {
                     remaining_sell_amount: match &[$sell_amount, $($remaining)?][..] {
                         [_, remaining] => *remaining,
                         _ => $sell_amount,
+                    },
+                    id: {
+                        let count = users.entry($owner).or_insert(0u16);
+                        let id = *count;
+                        *count += 1;
+                        id
                     },
                 },
             )*];
@@ -501,7 +504,7 @@ mod tests {
         for (batch_id, raw_orderbook) in data::ORDERBOOKS.iter() {
             let mut orderbook = Orderbook::read(raw_orderbook).unwrap();
             println!(
-                "#{}: estimated price for selling 10 WETH at {} DAI/WETH",
+                "#{}: estimated price for selling 1 WETH at {} DAI/WETH",
                 batch_id,
                 orderbook.fill_market_order(dai_weth, volume).unwrap(),
             );
