@@ -18,7 +18,7 @@ impl PriceEstimator {
     /// The orders are expected to be encoded indexed orders, in the same format
     /// as `BatchExchangeViewer::getFilteredOrdersPaginated`. Specifically each
     /// order has a `114` byte stride with the following values (appearing in
-    /// encoding order).
+    /// encoding order, all values are little endian encoded).
     /// - `20` bytes: owner's address
     /// - `32` bytes: owners's sell token balance
     /// - `2` bytes: buy token ID
