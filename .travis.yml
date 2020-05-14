@@ -3,15 +3,27 @@ notifications:
     - oncall-dfusion@gnosis.io
   if: (branch = master) OR (tag IS present)
 if: (branch = master) OR (type = pull_request) OR (tag IS present)
+
+os: linux
+dist: xenial
 language: rust
-rust: stable
-env:
-  global:
-    - CARGO_INCREMENTAL=0
-matrix:
+
+install:
+  - rustup component add clippy rustfmt
+  - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
+  - $(aws ecr get-login --no-include-email --region $AWS_REGION)
+  - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
+  - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
+  - ./scripts/setup_contracts.sh
+
+jobs:
+  fast_finish: true
+  allow_failures:
+    - rust: nightly
+
   include:
-    - stage: "Local and Rinkeby in Parallel"
-      name: "Build and Local Testing"
+    - name: "Build and Local Testing"
+      rust: stable
       cache:
         directories:
           - $HOME/.cache/node-gyp
@@ -19,29 +31,22 @@ matrix:
           - $HOME/.cargo/bin
       before_cache:
         - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
-      before_install:
-        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
-        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
-        - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
-        - rustup component add clippy rustfmt
-      install:
-        - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
-        - ./scripts/setup_contracts.sh
+      env: CARGO_INCREMENTAL=0
       script:
         - cargo build --locked
         # Unit Tests and Linting
         - cargo test
         - cargo clippy --all --all-targets -- -D warnings
         - cargo fmt --all -- --check
-        # Build and publish compact image with compiled binary
+        # Build image with compiled binary
         - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:v0.0.10 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
         # StableX e2e Tests (Ganache) - open solver
         - docker-compose -f docker-compose.yml -f docker-compose.open-solver.yml  up -d stablex
         - cargo test -p e2e ganache -- --nocapture
         - docker-compose logs
-        # Build and publish compact image with compiled binary
+        # Build image with compiled binary
         - docker build --tag stablex-binary-private --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:v0.6.4 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
-        # StableX e2e Tests (Ganache) - naive solver
+        # StableX e2e Tests (Ganache) - private solver
         - docker-compose down
         - ./scripts/setup_contracts.sh
         - docker-compose -f docker-compose.yml -f docker-compose.private-solver.yml up -d stablex
@@ -56,3 +61,18 @@ matrix:
           script: ./docker/deploy.sh $TRAVIS_TAG
           on:
             tags: true
+
+    - name: Coverage
+      rust: nightly
+      script:
+        - curl --location https://github.com/mozilla/grcov/releases/latest/download/grcov-linux-x86_64.tar.bz2 | tar jxf -
+        # These flags are recommended by https://github.com/mozilla/grcov#grcov-with-travis .
+        # vk: I had to remove `-Zpanic_abort_tests -Cpanic=abort` because this would cause compilation
+        # to fail but I haven't investigated more into why.
+        # I added `-Awarnings` which allows all warnings. This was necessary because nightly can
+        # introduce some new warnings and when testing one such warning appeared in the ethcontract
+        # generated contract code which caused the whole file to be printed as part of the warning
+        # message which made the build fail (probably travis related).
+        - env CARGO_INCREMENTAL=0 RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Awarnings" cargo test
+        - ./grcov --branch --ignore-not-existing --llvm --ignore "/*" target/debug/ --output-path coveralls.json --output-type "coveralls+" --source-dir . --service-name travis-pro --service-job-id $TRAVIS_JOB_ID 
+        - curl --form json_file=@coveralls.json https://coveralls.io/api/v1/jobs
