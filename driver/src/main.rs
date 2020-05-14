@@ -205,7 +205,7 @@ fn main() {
 
     // Set up shared HTTP client and HTTP services.
     let http_factory = HttpFactory::new(options.http_timeout, http_metrics);
-    let (web3, gas_station, price_oracle) = setup_http_services(http_factory, options.clone());
+    let (web3, gas_station, price_oracle) = setup_http_services(http_factory, &options);
 
     // Set up connection to exchange contract
     let contract = Arc::new(
@@ -288,7 +288,7 @@ fn setup_metrics() -> (StableXMetrics, HttpMetrics) {
 
 fn setup_http_services(
     http_factory: HttpFactory,
-    options: Options,
+    options: &Options,
 ) -> (Web3, GnosisSafeGasStation, PriceOracle) {
     let web3 = web3_provider(
         &http_factory,
@@ -299,7 +299,7 @@ fn setup_http_services(
     let gas_station = GnosisSafeGasStation::new(&http_factory, gas_station::DEFAULT_URI).unwrap();
     let price_oracle = PriceOracle::new(
         &http_factory,
-        options.token_data,
+        options.token_data.clone(),
         options.price_source_update_interval,
     )
     .unwrap();
