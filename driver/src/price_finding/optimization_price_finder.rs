@@ -6,12 +6,13 @@ use crate::price_finding::price_finder_interface::{
 
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
-use log::error;
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serde_with::rust::display_fromstr;
 use std::collections::BTreeMap;
-use std::fs::{create_dir_all, File};
+use std::fs::{self, create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
+use std::path::Path;
 use std::time::Duration;
 
 /// A number wrapper type that correctly serializes large u128`s to strings to
@@ -316,11 +317,23 @@ impl Io for DefaultIo {
         )?;
 
         if !output.status.success() {
+            let stdout_path = Path::new(result_folder).join("stdout.txt");
+            let stderr_path = Path::new(result_folder).join("stderr.txt");
             error!(
-                "Solver failed - stdout: {}, error: {}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
+                "Solver failed, writing stdout to '{}' and stderr to '{}'",
+                stdout_path.display(),
+                stderr_path.display(),
             );
+
+            if let Err(err) = fs::write(stdout_path, &output.stdout) {
+                error!("Failed to write stdout: {}", err);
+                info!("Solver stdout: {}", String::from_utf8_lossy(&output.stdout));
+            }
+            if let Err(err) = fs::write(stderr_path, &output.stderr) {
+                error!("Failed to write stderr: {}", err);
+                info!("Solver stderr: {}", String::from_utf8_lossy(&output.stderr));
+            }
+
             return Err(anyhow!("Solver execution failed"));
         }
         Ok(())
