@@ -9,6 +9,7 @@ dist: xenial
 language: rust
 
 install:
+  - rm -rf /home/travis/.cache/node-gyp
   - rustup component add clippy rustfmt
   - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
   - $(aws ecr get-login --no-include-email --region $AWS_REGION)
@@ -33,34 +34,7 @@ jobs:
         - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
       env: CARGO_INCREMENTAL=0
       script:
-        - cargo build --locked
-        # Unit Tests and Linting
-        - cargo test
-        - cargo clippy --all --all-targets -- -D warnings
-        - cargo fmt --all -- --check
-        # Build image with compiled binary
-        - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:v0.0.10 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
-        # StableX e2e Tests (Ganache) - open solver
-        - docker-compose -f docker-compose.yml -f docker-compose.open-solver.yml  up -d stablex
-        - cargo test -p e2e ganache -- --nocapture
-        - docker-compose logs
-        # Build image with compiled binary
-        - docker build --tag stablex-binary-private --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:v0.6.4 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
-        # StableX e2e Tests (Ganache) - private solver
-        - docker-compose down
-        - ./scripts/setup_contracts.sh
-        - docker-compose -f docker-compose.yml -f docker-compose.private-solver.yml up -d stablex
-        - cargo test -p e2e ganache -- --nocapture
-        - docker-compose logs
-      deploy:
-        - provider: script
-          script: ./docker/deploy.sh $TRAVIS_BRANCH
-          on:
-            branch: master
-        - provider: script
-          script: ./docker/deploy.sh $TRAVIS_TAG
-          on:
-            tags: true
+        - true
 
     - name: Coverage
       rust: nightly
