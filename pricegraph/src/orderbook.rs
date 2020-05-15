@@ -153,6 +153,11 @@ impl Orderbook {
     /// with the same token pair and volume may yield different results as
     /// orders get filled with each match changing the orderbook.
     pub fn fill_market_order(&mut self, pair: TokenPair, volume: f64) -> Option<f64> {
+        let max_token = (self.projection.node_count() - 1) as u16;
+        if pair.buy > max_token || pair.sell > max_token {
+            return None;
+        }
+
         self.update_projection_graph();
 
         let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
@@ -829,6 +834,46 @@ mod tests {
         assert_approx_eq!(
             orderbook.users[&user_id(4)].balance_of(4),
             10_000_000.0 - capacity / transient_price
+        );
+    }
+
+    #[test]
+    fn fill_market_order_returns_none_for_invalid_token_pairs() {
+        //   /---1.0---v
+        //  0          1          2 --0.5--> 3
+        //  ^---1.0---/
+        let mut orderbook = orderbook! {
+            users {
+                @1 {
+                    token 1 => 1_000_000,
+                }
+                @2 {
+                    token 0 => 1_000_000,
+                }
+                @3 {
+                    token 3 => 1_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 0 [1_000_000] selling 1 [1_000_000],
+                owner @2 buying 1 [1_000_000] selling 0 [1_000_000],
+                owner @3 buying 2 [1_000_000] selling 3 [1_000_000],
+            }
+        };
+
+        // Token 2 and 1 are not connected.
+        assert_eq!(
+            orderbook.fill_market_order(TokenPair { buy: 2, sell: 1 }, 500_000.0),
+            None,
+        );
+        // Token 42 does not exist.
+        assert_eq!(
+            orderbook.fill_market_order(TokenPair { buy: 42, sell: 1 }, 500_000.0),
+            None,
+        );
+        assert_eq!(
+            orderbook.fill_market_order(TokenPair { buy: 1, sell: 42 }, 500_000.0),
+            None,
         );
     }
 }
