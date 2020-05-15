@@ -198,7 +198,7 @@ struct Options {
 fn main() {
     let options = Options::from_args();
     let (_, _guard) = logging::init(&options.log_filter);
-    info!("Starting driver with runtime options: {:#?}", options);
+    info!("Starting driver with runtime options: {:?}", options);
 
     // Set up metrics and serve in separate thread.
     let prometheus_registry = Arc::new(Registry::new());
