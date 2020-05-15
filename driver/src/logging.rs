@@ -1,3 +1,4 @@
+use chrono::Utc;
 use slog::Level;
 use slog::{o, Drain, Logger, OwnedKVList, Record};
 use slog_async::Async;
@@ -65,9 +66,9 @@ fn log_to_decorator(
     record: &Record,
     values: &OwnedKVList,
 ) -> std::result::Result<(), std::io::Error> {
-    decorator.with_record(record, values, |mut decorator| {
+    decorator.with_record(record, values, |decorator| {
         decorator.start_timestamp()?;
-        slog_term::timestamp_utc(&mut decorator)?;
+        write!(decorator, "{}", Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ"))?;
 
         decorator.start_whitespace()?;
         write!(decorator, " ")?;
