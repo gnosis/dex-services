@@ -14,3 +14,7 @@ pricegraph/data/node_modules/
 
 # WASM
 pricegraph/wasm/pkg/
+
+# Driver runtime files
+instances/
+results/
