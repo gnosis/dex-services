@@ -12,7 +12,7 @@ pub const INDEXED_AUCTION_ELEMENT_WIDTH: usize = AUCTION_ELEMENT_WIDTH + 2;
 pub struct StableXAuctionElement {
     valid_from: U256,
     valid_until: U256,
-    pub sell_token_balance: u128,
+    pub sell_token_balance: U256,
     pub order: Order,
 }
 
@@ -35,15 +35,7 @@ impl StableXAuctionElement {
     /// contract's `getFilteredOrdersPaginated` function.
     pub fn from_indexed_bytes(bytes: &[u8; INDEXED_AUCTION_ELEMENT_WIDTH]) -> Self {
         let account_id = Address::from_slice(&bytes[0..20]);
-
-        // these go together (since sell_token_balance is emitted as u256 and treated as u128
-        let sell_token_balance = BigEndian::read_u128(&bytes[36..52]);
-        let sell_token_balance_padding = BigEndian::read_u128(&bytes[20..36]);
-        assert_eq!(
-            sell_token_balance_padding, 0,
-            "User has too large balance to handle."
-        );
-
+        let sell_token_balance = U256::from_big_endian(&bytes[20..52]);
         let buy_token = u16::from_le_bytes([bytes[53], bytes[52]]);
         let sell_token = u16::from_le_bytes([bytes[55], bytes[54]]);
         let valid_from = U256::from(u32::from_le_bytes([
@@ -102,7 +94,7 @@ pub mod tests {
         StableXAuctionElement {
             valid_from: U256::from(0),
             valid_until: U256::from(0),
-            sell_token_balance: 0,
+            sell_token_balance: U256::from(0),
             order: Order {
                 id: 0,
                 account_id: Address::from_low_u64_be(0),
@@ -147,7 +139,7 @@ pub mod tests {
         let auction_element = StableXAuctionElement {
             valid_from: U256::from(2),
             valid_until: U256::from(261),
-            sell_token_balance: 3,
+            sell_token_balance: U256::from(3),
             order: Order {
                 id: 0,
                 account_id: Address::from_low_u64_be(1),
@@ -164,8 +156,8 @@ pub mod tests {
     fn test_index_auction_element() {
         let bytes: [u8; 114] = [
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // user: 20 elements
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 3, // sellTokenBalance: 3, 32 elements
+            128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 3, // sellTokenBalance: 3, 32 elements
             1, 2, // buyToken: 256+2,
             1, 1, // sellToken: 256+1,
             0, 0, 0, 2, // validFrom: 2
@@ -179,7 +171,7 @@ pub mod tests {
         let auction_element = StableXAuctionElement {
             valid_from: U256::from(2),
             valid_until: U256::from(261),
-            sell_token_balance: 3,
+            sell_token_balance: U256::from(2).pow(U256::from(255)) + U256::from(3),
             order: Order {
                 id: 1,
                 account_id: Address::from_low_u64_be(1),
@@ -190,12 +182,6 @@ pub mod tests {
             },
         };
         assert_eq!(res, auction_element);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_from_bytes_fails_on_hopefully_null() {
-        StableXAuctionElement::from_bytes(&[1u8; 112]);
     }
 
     // Testing in_auction

@@ -144,10 +144,7 @@ impl StableXOrderBookReading for Orderbook {
         // to increment it.
         let (account_state, orders) =
             state.orderbook_for_batch(Batch::Future(batch_id_to_solve.low_u32() + 1))?;
-        let (account_state, orders) = util::normalize_auction_data(
-            account_state.map(|(key, balance)| (key, balance.low_u128())),
-            orders,
-        );
+        let (account_state, orders) = util::normalize_auction_data(account_state, orders);
         Ok((account_state, orders))
     }
 }
@@ -279,13 +276,13 @@ mod tests {
         let auction_data = orderbook.get_auction_data(1.into()).unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
-            3
+            U256::from(3)
         );
         orderbook.delete_events_starting_at_block(1);
         let auction_data = orderbook.get_auction_data(1.into()).unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
-            1
+            U256::from(1)
         );
     }
 
@@ -340,7 +337,7 @@ mod tests {
         let auction_data = orderbook.get_auction_data(2.into()).unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
-            7
+            U256::from(7)
         );
     }
 }
