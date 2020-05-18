@@ -787,4 +787,106 @@ mod tests {
         assert_eq!(balance.get(&(address(2), 0)), Some(&12.into()));
         assert_eq!(balance.get(&(address(2), 1)), Some(&9.into()));
     }
+
+    #[test]
+    fn orderbook_solution_touching_same_order_twice() {
+        let mut state = state_with_fee();
+        let event = TokenListing {
+            token: address(1),
+            id: 1,
+        };
+        state = state.apply_event(&Event::TokenListing(event), 0).unwrap();
+
+        let event = Deposit {
+            user: address(2),
+            token: address(0),
+            amount: 20.into(),
+            batch_id: 0,
+        };
+        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
+        let event = Deposit {
+            user: address(3),
+            token: address(1),
+            amount: 20.into(),
+            batch_id: 0,
+        };
+        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
+
+        let event = OrderPlacement {
+            owner: address(2),
+            index: 0,
+            buy_token: 1,
+            sell_token: 0,
+            valid_from: 0,
+            valid_until: 10,
+            price_numerator: 10,
+            price_denominator: 10,
+        };
+        state = state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
+        let mut event = OrderPlacement {
+            owner: address(3),
+            index: 0,
+            buy_token: 0,
+            sell_token: 1,
+            valid_from: 0,
+            valid_until: 10,
+            price_numerator: 5,
+            price_denominator: 5,
+        };
+        state = state
+            .apply_event(&Event::OrderPlacement(event.clone()), 0)
+            .unwrap();
+        event.index = 1;
+        state = state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
+
+        let event = Trade {
+            owner: address(2),
+            order_id: 0,
+            executed_sell_amount: 4,
+            executed_buy_amount: 4,
+            ..Default::default()
+        };
+        // the one order by address(2) is split into two trades in the same solution
+        state = state.apply_event(&Event::Trade(event.clone()), 1).unwrap();
+        state = state.apply_event(&Event::Trade(event), 1).unwrap();
+        let mut event = Trade {
+            owner: address(3),
+            order_id: 0,
+            executed_sell_amount: 4,
+            executed_buy_amount: 4,
+            ..Default::default()
+        };
+        state = state.apply_event(&Event::Trade(event.clone()), 1).unwrap();
+        event.order_id = 1;
+        state = state.apply_event(&Event::Trade(event), 1).unwrap();
+
+        let balance = state
+            .orderbook_for_batch(Batch::Current)
+            .unwrap()
+            .0
+            .collect::<HashMap<_, _>>();
+        assert_eq!(balance.get(&(address(2), 0)), Some(&20.into()));
+        assert_eq!(balance.get(&(address(2), 1)), Some(&0.into()));
+        assert_eq!(balance.get(&(address(3), 0)), Some(&0.into()));
+        assert_eq!(balance.get(&(address(3), 1)), Some(&20.into()));
+
+        let event = SolutionSubmission {
+            submitter: address(4),
+            burnt_fees: 42.into(),
+            ..Default::default()
+        };
+        state = state
+            .apply_event(&Event::SolutionSubmission(event), 1)
+            .unwrap();
+
+        let balance = state
+            .orderbook_for_batch(Batch::Future(2))
+            .unwrap()
+            .0
+            .collect::<HashMap<_, _>>();
+        assert_eq!(balance.get(&(address(2), 0)), Some(&12.into()));
+        assert_eq!(balance.get(&(address(2), 1)), Some(&8.into()));
+        assert_eq!(balance.get(&(address(3), 0)), Some(&8.into()));
+        assert_eq!(balance.get(&(address(3), 1)), Some(&12.into()));
+    }
 }
