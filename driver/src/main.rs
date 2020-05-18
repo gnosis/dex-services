@@ -44,7 +44,7 @@ use std::time::Duration;
 use structopt::StructOpt;
 use url::Url;
 
-#[derive(Clone, Debug, StructOpt)]
+#[derive(Debug, StructOpt)]
 #[structopt(
     name = "driver",
     about = "Gnosis Exchange protocol driver.",
