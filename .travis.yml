@@ -9,12 +9,8 @@ dist: xenial
 language: rust
 
 install:
-  - rustup component add clippy rustfmt
-  - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
-  - $(aws ecr get-login --no-include-email --region $AWS_REGION)
   - nvm install 10 && nvm alias default 10 && npm install -g yarn@latest && yarn --version
   - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
-  - ./scripts/setup_contracts.sh
 
 jobs:
   fast_finish: true
@@ -32,8 +28,13 @@ jobs:
       before_cache:
         - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
       env: CARGO_INCREMENTAL=0
+      before_install:
+        - rustup component add clippy rustfmt
+        - sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
+        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
       script:
-        - cargo build --locked
+        - ./scripts/setup_contracts.sh
+        - cargo build --all-targets --locked
         # Unit Tests and Linting
         - cargo test
         - cargo clippy --all --all-targets -- -D warnings
@@ -64,6 +65,9 @@ jobs:
 
     - name: Coverage
       rust: nightly
+      before_install:
+        # TODO vk: Not sure why this is needed but without it I get some errors related to gyp.
+        - rm -rf /home/travis/.cache/node-gyp
       script:
         - curl --location https://github.com/mozilla/grcov/releases/latest/download/grcov-linux-x86_64.tar.bz2 | tar jxf -
         # These flags are recommended by https://github.com/mozilla/grcov#grcov-with-travis .
