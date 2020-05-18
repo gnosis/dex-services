@@ -337,12 +337,7 @@ mod tests {
     }
 
     fn account_state(state: &State, batch_id: BatchId) -> AccountState {
-        AccountState(
-            state
-                .account_state(batch_id)
-                .map(|(key, balance)| (key, balance.low_u128()))
-                .collect(),
-        )
+        AccountState(state.account_state(batch_id).collect())
     }
 
     #[test]
@@ -356,9 +351,9 @@ mod tests {
         };
         state = state.apply_event(&Event::Deposit(event), 0).unwrap();
         let account_state_ = account_state(&state, 0);
-        assert_eq!(account_state_.read_balance(0, address(3)), 0);
+        assert_eq!(account_state_.read_balance(0, address(3)), U256::from(0));
         let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(3)), 1);
+        assert_eq!(account_state_.read_balance(0, address(3)), U256::from(1));
     }
 
     #[test]
@@ -376,7 +371,7 @@ mod tests {
         }
 
         let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(3)), 1);
+        assert_eq!(account_state_.read_balance(0, address(3)), U256::from(1));
 
         let event = TokenListing {
             token: address(1),
@@ -385,8 +380,8 @@ mod tests {
         state = state.apply_event(&Event::TokenListing(event), 0).unwrap();
 
         let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(3)), 1);
-        assert_eq!(account_state_.read_balance(1, address(3)), 1);
+        assert_eq!(account_state_.read_balance(0, address(3)), U256::from(1));
+        assert_eq!(account_state_.read_balance(1, address(3)), U256::from(1));
     }
 
     #[test]
@@ -402,7 +397,10 @@ mod tests {
             state = state.apply_event(&Event::Deposit(event), i).unwrap();
 
             let account_state_ = account_state(&state, i + 2);
-            assert_eq!(account_state_.read_balance(0, address(1)), i as u128 + 1);
+            assert_eq!(
+                account_state_.read_balance(0, address(1)),
+                U256::from(i + 1)
+            );
         }
     }
 
@@ -419,9 +417,12 @@ mod tests {
             state = state.apply_event(&Event::Deposit(event), 0).unwrap();
 
             let account_state_ = account_state(&state, 0);
-            assert_eq!(account_state_.read_balance(0, address(1)), 0);
+            assert_eq!(account_state_.read_balance(0, address(1)), U256::from(0));
             let account_state_ = account_state(&state, 1);
-            assert_eq!(account_state_.read_balance(0, address(1)), i + 1);
+            assert_eq!(
+                account_state_.read_balance(0, address(1)),
+                U256::from(i + 1)
+            );
         }
     }
 
@@ -445,7 +446,7 @@ mod tests {
             .apply_event(&Event::WithdrawRequest(event), 0)
             .unwrap();
         let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(1)), 1);
+        assert_eq!(account_state_.read_balance(0, address(1)), U256::from(1));
     }
 
     #[test]
@@ -468,7 +469,7 @@ mod tests {
             .apply_event(&Event::WithdrawRequest(event), 1)
             .unwrap();
         let account_state_ = account_state(&state, 3);
-        assert_eq!(account_state_.read_balance(0, address(1)), 0);
+        assert_eq!(account_state_.read_balance(0, address(1)), U256::from(0));
     }
 
     #[test]
@@ -497,7 +498,7 @@ mod tests {
         };
         state = state.apply_event(&Event::Withdraw(event), 1).unwrap();
         let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(1)), 1);
+        assert_eq!(account_state_.read_balance(0, address(1)), U256::from(1));
     }
 
     #[test]
@@ -520,7 +521,7 @@ mod tests {
             .apply_event(&Event::WithdrawRequest(event), 0)
             .unwrap();
         let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(1)), 1);
+        assert_eq!(account_state_.read_balance(0, address(1)), U256::from(1));
         let event = Withdraw {
             user: address(1),
             token: address(0),
@@ -528,7 +529,7 @@ mod tests {
         };
         state = state.apply_event(&Event::Withdraw(event), 1).unwrap();
         let account_state_ = account_state(&state, 2);
-        assert_eq!(account_state_.read_balance(0, address(1)), 2);
+        assert_eq!(account_state_.read_balance(0, address(1)), U256::from(2));
     }
 
     #[test]
@@ -673,11 +674,11 @@ mod tests {
             .unwrap();
 
         let account_state_ = account_state(&state, 2);
-        assert_eq!(account_state_.read_balance(0, address(2)), 12);
-        assert_eq!(account_state_.read_balance(1, address(2)), 9);
-        assert_eq!(account_state_.read_balance(0, address(3)), 8);
-        assert_eq!(account_state_.read_balance(1, address(3)), 11);
-        assert_eq!(account_state_.read_balance(0, address(4)), 42);
+        assert_eq!(account_state_.read_balance(0, address(2)), U256::from(12));
+        assert_eq!(account_state_.read_balance(1, address(2)), U256::from(9));
+        assert_eq!(account_state_.read_balance(0, address(3)), U256::from(8));
+        assert_eq!(account_state_.read_balance(1, address(3)), U256::from(11));
+        assert_eq!(account_state_.read_balance(0, address(4)), U256::from(42));
         assert_eq!(
             state
                 .orders
