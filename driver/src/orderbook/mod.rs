@@ -39,7 +39,7 @@ pub trait StableXOrderBookReading {
 }
 
 /// The different kinds of orderbook readers.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum OrderbookReaderKind {
     /// An unfiltered paginated orderbook read directly from the EVM
     Paginated,
