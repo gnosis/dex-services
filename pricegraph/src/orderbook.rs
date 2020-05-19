@@ -52,7 +52,7 @@ impl Orderbook {
     }
 
     /// Creates an orderbook from an iterator over decoded auction elements.
-    fn from_elements(elements: impl IntoIterator<Item = Element>) -> Self {
+    pub fn from_elements(elements: impl IntoIterator<Item = Element>) -> Self {
         let mut max_token = 0;
         let mut orders = OrderCollector::default();
         let mut users = UserMap::default();
