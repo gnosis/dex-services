@@ -57,10 +57,7 @@ impl Orderbook {
         let mut orders = OrderCollector::default();
         let mut users = UserMap::default();
 
-        for element in elements
-            .into_iter()
-            .filter(should_include_auction_element)
-        {
+        for element in elements.into_iter().filter(should_include_auction_element) {
             let TokenPair { buy, sell } = element.pair;
             max_token = cmp::max(max_token, cmp::max(buy, sell));
             users.entry(element.user).or_default().set_balance(&element);
@@ -439,10 +436,10 @@ fn should_include_auction_element(element: &Element) -> bool {
     const MIN_AMOUNT_U256: U256 = U256([MIN_AMOUNT as _, 0, 0, 0]);
 
     let is_dust_order =
-        || element.remaining_sell_amount < MIN_AMOUNT_U128 || element.balance < MIN_AMOUNT_U256;
-    let has_valid_price = || element.price.numerator != 0 && element.price.denominator != 0;
+        element.remaining_sell_amount < MIN_AMOUNT_U128 || element.balance < MIN_AMOUNT_U256;
+    let has_valid_price = element.price.numerator != 0 && element.price.denominator != 0;
 
-    !is_dust_order() && has_valid_price()
+    !is_dust_order && has_valid_price
 }
 
 /// An error indicating that an operation over a path failed because of a
