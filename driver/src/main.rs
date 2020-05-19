@@ -17,7 +17,7 @@ mod solution_submission;
 mod transport;
 mod util;
 
-use crate::contracts::{stablex_contract::StableXContractImpl, web3_provider};
+use crate::contracts::{stablex_contract::StableXContractImpl, web3_provider, Web3};
 use crate::driver::{
     scheduler::{AuctionTimingConfiguration, SchedulerKind},
     stablex_driver::StableXDriverImpl,
@@ -201,41 +201,22 @@ fn main() {
     info!("Starting driver with runtime options: {:#?}", options);
 
     // Set up metrics and serve in separate thread.
-    let prometheus_registry = Arc::new(Registry::new());
-    let stablex_metrics = StableXMetrics::new(prometheus_registry.clone());
-    let http_metrics = HttpMetrics::new(&prometheus_registry).unwrap();
-    let metric_server = MetricsServer::new(prometheus_registry);
-    thread::spawn(move || {
-        metric_server.serve(9586);
-    });
+    let (stablex_metrics, http_metrics) = setup_metrics();
 
     // Set up shared HTTP client and HTTP services.
     let http_factory = HttpFactory::new(options.http_timeout, http_metrics);
-    let web3 = web3_provider(
-        &http_factory,
-        options.node_url.as_str(),
-        options.rpc_timeout,
-    )
-    .unwrap();
-    let gas_station = GnosisSafeGasStation::new(&http_factory, gas_station::DEFAULT_URI).unwrap();
-    let price_oracle = PriceOracle::new(
-        &http_factory,
-        options.token_data,
-        options.price_source_update_interval,
-    )
-    .unwrap();
+    let (web3, gas_station, price_oracle) = setup_http_services(http_factory, &options);
 
-    // Set up web3 and contract connection.
+    // Set up connection to exchange contract
     let contract = Arc::new(
         StableXContractImpl::new(&web3, options.private_key.clone(), options.network_id).unwrap(),
     );
     info!("Using contract at {:?}", contract.address());
     info!("Using account {:?}", contract.account());
 
-    // Set up solver.
-    let fee = Some(Fee::default());
+    // Setup price.
     let price_finder = price_finding::create_price_finder(
-        fee,
+        Some(Fee::default()),
         options.solver_type,
         price_oracle,
         options.min_avg_fee_per_order,
@@ -291,6 +272,38 @@ fn main() {
         .initialize()
         .expect("primary orderbook initialization failed");
     scheduler.start();
+}
+
+fn setup_metrics() -> (StableXMetrics, HttpMetrics) {
+    let prometheus_registry = Arc::new(Registry::new());
+    let stablex_metrics = StableXMetrics::new(prometheus_registry.clone());
+    let http_metrics = HttpMetrics::new(&prometheus_registry).unwrap();
+    let metric_server = MetricsServer::new(prometheus_registry);
+    thread::spawn(move || {
+        metric_server.serve(9586);
+    });
+
+    (stablex_metrics, http_metrics)
+}
+
+fn setup_http_services(
+    http_factory: HttpFactory,
+    options: &Options,
+) -> (Web3, GnosisSafeGasStation, PriceOracle) {
+    let web3 = web3_provider(
+        &http_factory,
+        options.node_url.as_str(),
+        options.rpc_timeout,
+    )
+    .unwrap();
+    let gas_station = GnosisSafeGasStation::new(&http_factory, gas_station::DEFAULT_URI).unwrap();
+    let price_oracle = PriceOracle::new(
+        &http_factory,
+        options.token_data.clone(),
+        options.price_source_update_interval,
+    )
+    .unwrap();
+    (web3, gas_station, price_oracle)
 }
 
 fn duration_millis(s: &str) -> Result<Duration, ParseIntError> {
