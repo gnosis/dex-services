@@ -59,7 +59,7 @@ impl Orderbook {
 
         for element in elements
             .into_iter()
-            .filter(|e| should_include_auction_element(e))
+            .filter(should_include_auction_element)
         {
             let TokenPair { buy, sell } = element.pair;
             max_token = cmp::max(max_token, cmp::max(buy, sell));
