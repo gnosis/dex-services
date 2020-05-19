@@ -33,11 +33,11 @@ jobs:
         - sudo apt-get update && sudo apt-get install -y python3-pip python3-setuptools && pip3 install --upgrade --user awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
       script:
-        - cargo build --all-targets --locked
+        - cargo fmt --all -- --check
+        - cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+        - cargo build --locked --workspace --all-targets
         # Unit Tests and Linting
         - cargo test
-        - cargo clippy --all --all-targets -- -D warnings
-        - cargo fmt --all -- --check
         # Build image with compiled binary
         - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:v0.0.10 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
         # StableX e2e Tests (Ganache) - open solver
