@@ -41,6 +41,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85bb70cc08ec97ca5450e6eba421deeea5f172c0fc61f78b5357b2a8e8be195f"
 
 [[package]]
+name = "arbitrary"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5eb01a9ab8a3369f2f7632b9461c34f5920bd454774bab5b9fc6744f21d6143"
+dependencies = [
+ "derive_arbitrary",
+]
+
+[[package]]
 name = "arc-swap"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -512,6 +521,17 @@ dependencies = [
  "adler32",
  "byteorder",
  "gzip-header",
+]
+
+[[package]]
+name = "derive_arbitrary"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5cee758ebd1c79a9c6fb95f242dcc30bdbf555c28369ae908d21fdaf81537496"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -1855,6 +1875,7 @@ dependencies = [
 name = "pricegraph"
 version = "0.1.0"
 dependencies = [
+ "arbitrary",
  "assert_approx_eq",
  "criterion",
  "data-encoding",

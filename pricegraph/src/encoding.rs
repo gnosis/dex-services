@@ -21,6 +21,7 @@ pub type UserId = H160;
 
 /// A struct representing a buy/sell token pair.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct TokenPair {
     /// The buy token.
     pub buy: TokenId,
@@ -29,7 +30,8 @@ pub struct TokenPair {
 }
 
 /// A struct representing the validity of an order.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Validity {
     /// The batch starting from which the order is valid.
     pub from: BatchId,
@@ -38,7 +40,8 @@ pub struct Validity {
 }
 
 /// A price expressed as a fraction of buy and sell amounts.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Price {
     /// The price numerator, or the buy amount.
     pub numerator: u128,
@@ -47,7 +50,7 @@ pub struct Price {
 }
 
 /// An orderbook element that is retrieved from the smart contract.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Element {
     /// The user that placed the order.
     pub user: UserId,
@@ -118,6 +121,69 @@ impl Element {
                 id: read!(u16),
             }
         }))
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+mod abitrary_impl {
+    use super::*;
+    use arbitrary::{Arbitrary, Result, Unstructured};
+
+    // We want Element to implement Arbitrary but cannot derive it because Element contains H160
+    // and U256 which do not implement arbitrary and come from foreign crates. Instead of
+    // implementing Arbitrary manually or introducing wrappers for H160 and U256 we create an
+    // equivalent to Element which can derive Arbitrary and forward all methods.
+
+    #[derive(Arbitrary)]
+    struct ArbitraryElement {
+        user: [u8; 20],
+        balance: [u8; 32],
+        pair: TokenPair,
+        valid: Validity,
+        price: Price,
+        remaining_sell_amount: u128,
+        id: OrderId,
+    }
+
+    impl ArbitraryElement {
+        fn from_element(e: &Element) -> Self {
+            let mut balance = [0u8; 32];
+            e.balance.to_little_endian(&mut balance);
+            Self {
+                user: e.user.to_fixed_bytes(),
+                balance,
+                pair: e.pair,
+                valid: e.valid,
+                price: e.price,
+                remaining_sell_amount: e.remaining_sell_amount,
+                id: e.id,
+            }
+        }
+        fn to_element(&self) -> Element {
+            Element {
+                user: H160::from_slice(&self.user),
+                balance: U256::from_little_endian(&self.balance),
+                pair: self.pair,
+                valid: self.valid,
+                price: self.price,
+                remaining_sell_amount: self.remaining_sell_amount,
+                id: self.id,
+            }
+        }
+    }
+
+    impl arbitrary::Arbitrary for Element {
+        fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
+            Ok(ArbitraryElement::arbitrary(u)?.to_element())
+        }
+        fn size_hint(depth: usize) -> (usize, Option<usize>) {
+            ArbitraryElement::size_hint(depth)
+        }
+        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+            let box_iterator = ArbitraryElement::from_element(self).shrink();
+            let mapped = box_iterator.map(|a| a.to_element());
+            Box::new(mapped)
+        }
     }
 }
 
