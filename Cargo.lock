@@ -1371,6 +1371,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99e85c08494b21a9054e7fe1374a732aeadaff3980b6990b94bfd3a70f690005"
 
 [[package]]
+name = "libfuzzer-sys"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d718794b8e23533b9069bd2c4597d69e41cc7ab1c02700a502971aca0cdcf24"
+dependencies = [
+ "arbitrary",
+ "cc",
+]
+
+[[package]]
 name = "libnghttp2-sys"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1883,6 +1893,14 @@ dependencies = [
  "petgraph",
  "primitive-types 0.7.2",
  "thiserror",
+]
+
+[[package]]
+name = "pricegraph-fuzz"
+version = "0.0.0"
+dependencies = [
+ "libfuzzer-sys",
+ "pricegraph",
 ]
 
 [[package]]
