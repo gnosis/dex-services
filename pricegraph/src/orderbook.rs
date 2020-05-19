@@ -57,7 +57,7 @@ impl Orderbook {
         let mut orders = OrderCollector::default();
         let mut users = UserMap::default();
 
-        for element in elements.into_iter().filter(|e| !is_dust_order(e)) {
+        for element in elements.into_iter().filter(should_include_auction_element) {
             let TokenPair { buy, sell } = element.pair;
             max_token = cmp::max(max_token, cmp::max(buy, sell));
             users.entry(element.user).or_default().set_balance(&element);
@@ -425,12 +425,21 @@ fn format_path(path: &[NodeIndex]) -> String {
         .join("->")
 }
 
-/// Returns true if an auction element is considered a dust order.
-fn is_dust_order(element: &Element) -> bool {
+/// Returns true if an auction element should be included in the price graph.
+///
+/// Currently auction elements are ignored if:
+/// - They are "dust" orders, that is their remaining amount or balance is less
+///   than the minimum amount that the exchange allows for trades
+/// - They have a `0` price numerator or denominator
+fn should_include_auction_element(element: &Element) -> bool {
     const MIN_AMOUNT_U128: u128 = MIN_AMOUNT as _;
     const MIN_AMOUNT_U256: U256 = U256([MIN_AMOUNT as _, 0, 0, 0]);
 
-    element.remaining_sell_amount < MIN_AMOUNT_U128 || element.balance < MIN_AMOUNT_U256
+    let is_dust_order =
+        element.remaining_sell_amount < MIN_AMOUNT_U128 || element.balance < MIN_AMOUNT_U256;
+    let has_valid_price = element.price.numerator != 0 && element.price.denominator != 0;
+
+    !is_dust_order && has_valid_price
 }
 
 /// An error indicating that an operation over a path failed because of a
@@ -721,6 +730,23 @@ mod tests {
         assert_eq!(orderbook.num_orders(), 1);
         assert!(order.is_none());
         assert!(orderbook.get_projected_pair_weight(pair).is_infinite());
+    }
+
+    #[test]
+    fn ignores_orders_with_invalid_prices() {
+        let orderbook = orderbook! {
+            users {
+                @1 {
+                    token 0 => 1_000_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 1 [1_000_000_000] selling 0 [0],
+                owner @1 buying 1 [0] selling 0 [1_000_000_000],
+            }
+        };
+
+        assert_eq!(orderbook.num_orders(), 0);
     }
 
     #[test]
