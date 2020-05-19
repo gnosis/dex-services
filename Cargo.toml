@@ -4,6 +4,7 @@ members = [
     "e2e",
     "pricegraph",
     "pricegraph/wasm",
+    "pricegraph/fuzz",
 ]
 default-members = [
     "driver",
