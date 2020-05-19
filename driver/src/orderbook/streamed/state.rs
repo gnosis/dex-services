@@ -337,12 +337,7 @@ mod tests {
     }
 
     fn account_state(state: &State, batch_id: BatchId) -> AccountState {
-        AccountState(
-            state
-                .account_state(batch_id)
-                .map(|(key, balance)| (key, balance.low_u128()))
-                .collect(),
-        )
+        AccountState(state.account_state(batch_id).collect())
     }
 
     #[test]
@@ -356,9 +351,9 @@ mod tests {
         };
         state = state.apply_event(&Event::Deposit(event), 0).unwrap();
         let account_state_ = account_state(&state, 0);
-        assert_eq!(account_state_.read_balance(0, address(3)), 0);
+        assert_eq!(account_state_.read_balance(0, address(3)), U256::from(0));
         let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(3)), 1);
+        assert_eq!(account_state_.read_balance(0, address(3)), U256::from(1));
     }
 
     #[test]
@@ -376,7 +371,7 @@ mod tests {
         }
 
         let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(3)), 1);
+        assert_eq!(account_state_.read_balance(0, address(3)), U256::from(1));
 
         let event = TokenListing {
             token: address(1),
@@ -385,8 +380,8 @@ mod tests {
         state = state.apply_event(&Event::TokenListing(event), 0).unwrap();
 
         let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(3)), 1);
-        assert_eq!(account_state_.read_balance(1, address(3)), 1);
+        assert_eq!(account_state_.read_balance(0, address(3)), U256::from(1));
+        assert_eq!(account_state_.read_balance(1, address(3)), U256::from(1));
     }
 
     #[test]
@@ -402,7 +397,10 @@ mod tests {
             state = state.apply_event(&Event::Deposit(event), i).unwrap();
 
             let account_state_ = account_state(&state, i + 2);
-            assert_eq!(account_state_.read_balance(0, address(1)), i as u128 + 1);
+            assert_eq!(
+                account_state_.read_balance(0, address(1)),
+                U256::from(i + 1)
+            );
         }
     }
 
@@ -419,9 +417,12 @@ mod tests {
             state = state.apply_event(&Event::Deposit(event), 0).unwrap();
 
             let account_state_ = account_state(&state, 0);
-            assert_eq!(account_state_.read_balance(0, address(1)), 0);
+            assert_eq!(account_state_.read_balance(0, address(1)), U256::from(0));
             let account_state_ = account_state(&state, 1);
-            assert_eq!(account_state_.read_balance(0, address(1)), i + 1);
+            assert_eq!(
+                account_state_.read_balance(0, address(1)),
+                U256::from(i + 1)
+            );
         }
     }
 
@@ -445,7 +446,7 @@ mod tests {
             .apply_event(&Event::WithdrawRequest(event), 0)
             .unwrap();
         let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(1)), 1);
+        assert_eq!(account_state_.read_balance(0, address(1)), U256::from(1));
     }
 
     #[test]
@@ -468,7 +469,7 @@ mod tests {
             .apply_event(&Event::WithdrawRequest(event), 1)
             .unwrap();
         let account_state_ = account_state(&state, 3);
-        assert_eq!(account_state_.read_balance(0, address(1)), 0);
+        assert_eq!(account_state_.read_balance(0, address(1)), U256::from(0));
     }
 
     #[test]
@@ -497,7 +498,7 @@ mod tests {
         };
         state = state.apply_event(&Event::Withdraw(event), 1).unwrap();
         let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(1)), 1);
+        assert_eq!(account_state_.read_balance(0, address(1)), U256::from(1));
     }
 
     #[test]
@@ -520,7 +521,7 @@ mod tests {
             .apply_event(&Event::WithdrawRequest(event), 0)
             .unwrap();
         let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(1)), 1);
+        assert_eq!(account_state_.read_balance(0, address(1)), U256::from(1));
         let event = Withdraw {
             user: address(1),
             token: address(0),
@@ -528,7 +529,7 @@ mod tests {
         };
         state = state.apply_event(&Event::Withdraw(event), 1).unwrap();
         let account_state_ = account_state(&state, 2);
-        assert_eq!(account_state_.read_balance(0, address(1)), 2);
+        assert_eq!(account_state_.read_balance(0, address(1)), U256::from(2));
     }
 
     #[test]
@@ -673,11 +674,11 @@ mod tests {
             .unwrap();
 
         let account_state_ = account_state(&state, 2);
-        assert_eq!(account_state_.read_balance(0, address(2)), 12);
-        assert_eq!(account_state_.read_balance(1, address(2)), 9);
-        assert_eq!(account_state_.read_balance(0, address(3)), 8);
-        assert_eq!(account_state_.read_balance(1, address(3)), 11);
-        assert_eq!(account_state_.read_balance(0, address(4)), 42);
+        assert_eq!(account_state_.read_balance(0, address(2)), U256::from(12));
+        assert_eq!(account_state_.read_balance(1, address(2)), U256::from(9));
+        assert_eq!(account_state_.read_balance(0, address(3)), U256::from(8));
+        assert_eq!(account_state_.read_balance(1, address(3)), U256::from(11));
+        assert_eq!(account_state_.read_balance(0, address(4)), U256::from(42));
         assert_eq!(
             state
                 .orders
@@ -785,5 +786,107 @@ mod tests {
             .collect::<HashMap<_, _>>();
         assert_eq!(balance.get(&(address(2), 0)), Some(&12.into()));
         assert_eq!(balance.get(&(address(2), 1)), Some(&9.into()));
+    }
+
+    #[test]
+    fn orderbook_solution_touching_same_order_twice() {
+        let mut state = state_with_fee();
+        let event = TokenListing {
+            token: address(1),
+            id: 1,
+        };
+        state = state.apply_event(&Event::TokenListing(event), 0).unwrap();
+
+        let event = Deposit {
+            user: address(2),
+            token: address(0),
+            amount: 20.into(),
+            batch_id: 0,
+        };
+        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
+        let event = Deposit {
+            user: address(3),
+            token: address(1),
+            amount: 20.into(),
+            batch_id: 0,
+        };
+        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
+
+        let event = OrderPlacement {
+            owner: address(2),
+            index: 0,
+            buy_token: 1,
+            sell_token: 0,
+            valid_from: 0,
+            valid_until: 10,
+            price_numerator: 10,
+            price_denominator: 10,
+        };
+        state = state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
+        let mut event = OrderPlacement {
+            owner: address(3),
+            index: 0,
+            buy_token: 0,
+            sell_token: 1,
+            valid_from: 0,
+            valid_until: 10,
+            price_numerator: 5,
+            price_denominator: 5,
+        };
+        state = state
+            .apply_event(&Event::OrderPlacement(event.clone()), 0)
+            .unwrap();
+        event.index = 1;
+        state = state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
+
+        let event = Trade {
+            owner: address(2),
+            order_id: 0,
+            executed_sell_amount: 4,
+            executed_buy_amount: 4,
+            ..Default::default()
+        };
+        // the one order by address(2) is split into two trades in the same solution
+        state = state.apply_event(&Event::Trade(event.clone()), 1).unwrap();
+        state = state.apply_event(&Event::Trade(event), 1).unwrap();
+        let mut event = Trade {
+            owner: address(3),
+            order_id: 0,
+            executed_sell_amount: 4,
+            executed_buy_amount: 4,
+            ..Default::default()
+        };
+        state = state.apply_event(&Event::Trade(event.clone()), 1).unwrap();
+        event.order_id = 1;
+        state = state.apply_event(&Event::Trade(event), 1).unwrap();
+
+        let balance = state
+            .orderbook_for_batch(Batch::Current)
+            .unwrap()
+            .0
+            .collect::<HashMap<_, _>>();
+        assert_eq!(balance.get(&(address(2), 0)), Some(&20.into()));
+        assert_eq!(balance.get(&(address(2), 1)), Some(&0.into()));
+        assert_eq!(balance.get(&(address(3), 0)), Some(&0.into()));
+        assert_eq!(balance.get(&(address(3), 1)), Some(&20.into()));
+
+        let event = SolutionSubmission {
+            submitter: address(4),
+            burnt_fees: 42.into(),
+            ..Default::default()
+        };
+        state = state
+            .apply_event(&Event::SolutionSubmission(event), 1)
+            .unwrap();
+
+        let balance = state
+            .orderbook_for_batch(Batch::Future(2))
+            .unwrap()
+            .0
+            .collect::<HashMap<_, _>>();
+        assert_eq!(balance.get(&(address(2), 0)), Some(&12.into()));
+        assert_eq!(balance.get(&(address(2), 1)), Some(&8.into()));
+        assert_eq!(balance.get(&(address(3), 0)), Some(&8.into()));
+        assert_eq!(balance.get(&(address(3), 1)), Some(&12.into()));
     }
 }

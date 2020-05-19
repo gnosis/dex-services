@@ -68,10 +68,8 @@ pub fn fill_market_order(c: &mut Criterion) {
 }
 
 criterion_group!(
-    benches,
-    read,
-    is_overlapping,
-    reduce_overlapping_orders,
-    fill_market_order,
+    name = benches;
+    config = Criterion::default().sample_size(20);
+    targets = read, is_overlapping, reduce_overlapping_orders, fill_market_order
 );
 criterion_main!(benches);

@@ -14,11 +14,16 @@ use crate::encoding::{Element, InvalidLength, TokenId, TokenPair};
 use crate::graph::bellman_ford::{self, NegativeCycle};
 use crate::graph::path;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
-use crate::num;
+use crate::num::{self, MAX_ROUNDING_ERROR};
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
+use primitive_types::U256;
 use std::cmp;
 use std::f64;
 use thiserror::Error;
+
+/// The minimum amount where an order is considered a dust order and can be
+/// ignored in the price graph calculation.
+const MIN_AMOUNT: f64 = 10_000.0;
 
 /// A graph representation of a complete orderbook.
 #[derive(Clone, Debug)]
@@ -38,6 +43,9 @@ pub struct Orderbook {
 impl Orderbook {
     /// Reads an orderbook from encoded bytes returning an error if the encoded
     /// orders are invalid.
+    ///
+    /// The orderbook is expected to be encoded as an indexed order as encoded
+    /// by `BatchExchangeViewer::getFilteredOrdersPaginated`.
     pub fn read(bytes: impl AsRef<[u8]>) -> Result<Self, InvalidLength> {
         let elements = Element::read_all(bytes.as_ref())?;
         Ok(Orderbook::from_elements(elements))
@@ -49,15 +57,11 @@ impl Orderbook {
         let mut orders = OrderCollector::default();
         let mut users = UserMap::default();
 
-        for element in elements {
+        for element in elements.into_iter().filter(should_include_auction_element) {
             let TokenPair { buy, sell } = element.pair;
-            let order_id = users
-                .entry(element.user)
-                .or_default()
-                .include_order(&element);
-
             max_token = cmp::max(max_token, cmp::max(buy, sell));
-            orders.insert_order(Order::new(element, order_id));
+            users.entry(element.user).or_default().set_balance(&element);
+            orders.insert_order(Order::new(&element));
         }
 
         let orders = orders.collect();
@@ -149,6 +153,11 @@ impl Orderbook {
     /// with the same token pair and volume may yield different results as
     /// orders get filled with each match changing the orderbook.
     pub fn fill_market_order(&mut self, pair: TokenPair, volume: f64) -> Option<f64> {
+        let max_token = (self.projection.node_count() - 1) as u16;
+        if pair.buy > max_token || pair.sell > max_token {
+            return None;
+        }
+
         self.update_projection_graph();
 
         let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
@@ -352,11 +361,19 @@ impl Orderbook {
             let fill_amount = capacity / transient_price;
 
             order.amount -= fill_amount;
-            let new_balance = user.deduct_from_balance(order.pair.sell, fill_amount);
+            debug_assert!(
+                order.amount >= -MAX_ROUNDING_ERROR,
+                "remaining amount underflow for order {}-{}",
+                order.user,
+                order.id,
+            );
 
-            if new_balance.is_none() {
+            let new_balance = user.deduct_from_balance(pair.sell, fill_amount);
+
+            if new_balance < MIN_AMOUNT {
+                user.clear_balance(pair.sell);
                 self.update_projection_graph_node(pair.sell);
-            } else if order.amount <= 0.0 {
+            } else if order.amount < MIN_AMOUNT {
                 self.update_projection_graph_edge(pair);
             }
         }
@@ -408,6 +425,23 @@ fn format_path(path: &[NodeIndex]) -> String {
         .join("->")
 }
 
+/// Returns true if an auction element should be included in the price graph.
+///
+/// Currently auction elements are ignored if:
+/// - They are "dust" orders, that is their remaining amount or balance is less
+///   than the minimum amount that the exchange allows for trades
+/// - They have a `0` price numerator or denominator
+fn should_include_auction_element(element: &Element) -> bool {
+    const MIN_AMOUNT_U128: u128 = MIN_AMOUNT as _;
+    const MIN_AMOUNT_U256: U256 = U256([MIN_AMOUNT as _, 0, 0, 0]);
+
+    let is_dust_order =
+        element.remaining_sell_amount < MIN_AMOUNT_U128 || element.balance < MIN_AMOUNT_U256;
+    let has_valid_price = element.price.numerator != 0 && element.price.denominator != 0;
+
+    !is_dust_order && has_valid_price
+}
+
 /// An error indicating that an operation over a path failed because of a
 /// missing connection between a token pair.
 ///
@@ -450,6 +484,7 @@ mod tests {
             $($(
                 balances.insert(($user, $token), primitive_types::U256::from($balance));
             )*)*
+            let mut users = std::collections::HashMap::new();
             let elements = vec![$(
                 $crate::encoding::Element {
                     user: user_id($owner),
@@ -469,6 +504,12 @@ mod tests {
                     remaining_sell_amount: match &[$sell_amount, $($remaining)?][..] {
                         [_, remaining] => *remaining,
                         _ => $sell_amount,
+                    },
+                    id: {
+                        let count = users.entry($owner).or_insert(0u16);
+                        let id = *count;
+                        *count += 1;
+                        id
                     },
                 },
             )*];
@@ -501,7 +542,7 @@ mod tests {
         for (batch_id, raw_orderbook) in data::ORDERBOOKS.iter() {
             let mut orderbook = Orderbook::read(raw_orderbook).unwrap();
             println!(
-                "#{}: estimated price for selling 10 WETH at {} DAI/WETH",
+                "#{}: estimated price for selling 1 WETH at {} DAI/WETH",
                 batch_id,
                 orderbook.fill_market_order(dai_weth, volume).unwrap(),
             );
@@ -655,38 +696,57 @@ mod tests {
     }
 
     #[test]
-    fn removes_drained_and_balanceless_orders() {
+    fn removes_dust_orders() {
         let mut orderbook = orderbook! {
             users {
                 @1 {
-                    token 0 => 5_000_000,
-                }
-                @2 {
                     token 0 => 1_000_000_000,
                 }
+                @2 {
+                    token 1 => 4_999_000,
+                }
                 @3 {
-                    token 0 => 0,
+                    token 0 => 9_000,
+                    token 1 => 1_000_000_000,
                 }
             }
             orders {
                 owner @1 buying 1 [1_000_000_000] selling 0 [1_000_000_000],
-                owner @2 buying 1 [1_000_000_000] selling 0 [2_000_000_000] (0),
+                owner @2 buying 0 [1_000_000_000] selling 1 [2_000_000_000],
                 owner @3 buying 1 [1_000_000_000] selling 0 [3_000_000_000],
+                owner @3 buying 0 [1_000_000_000] selling 1 [3_000_000_000] (0),
             }
         };
 
-        let pair = TokenPair { buy: 1, sell: 0 };
+        let pair = TokenPair { buy: 0, sell: 1 };
 
         let order = orderbook.orders.best_order_for_pair(pair).unwrap();
-        assert_eq!(orderbook.num_orders(), 3);
-        assert_eq!(order.user, user_id(3));
+        assert_eq!(orderbook.num_orders(), 2);
+        assert_eq!(order.user, user_id(2));
         assert_approx_eq!(order.weight(), orderbook.get_projected_pair_weight(pair));
 
-        orderbook.update_projection_graph();
-        let order = orderbook.orders.best_order_for_pair(pair).unwrap();
+        orderbook.reduce_overlapping_orders();
+        let order = orderbook.orders.best_order_for_pair(pair);
         assert_eq!(orderbook.num_orders(), 1);
-        assert_eq!(order.user, user_id(1));
-        assert_approx_eq!(order.weight(), orderbook.get_projected_pair_weight(pair));
+        assert!(order.is_none());
+        assert!(orderbook.get_projected_pair_weight(pair).is_infinite());
+    }
+
+    #[test]
+    fn ignores_orders_with_invalid_prices() {
+        let orderbook = orderbook! {
+            users {
+                @1 {
+                    token 0 => 1_000_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 1 [1_000_000_000] selling 0 [0],
+                owner @1 buying 1 [0] selling 0 [1_000_000_000],
+            }
+        };
+
+        assert_eq!(orderbook.num_orders(), 0);
     }
 
     #[test]
@@ -800,6 +860,46 @@ mod tests {
         assert_approx_eq!(
             orderbook.users[&user_id(4)].balance_of(4),
             10_000_000.0 - capacity / transient_price
+        );
+    }
+
+    #[test]
+    fn fill_market_order_returns_none_for_invalid_token_pairs() {
+        //   /---1.0---v
+        //  0          1          2 --0.5--> 3
+        //  ^---1.0---/
+        let mut orderbook = orderbook! {
+            users {
+                @1 {
+                    token 1 => 1_000_000,
+                }
+                @2 {
+                    token 0 => 1_000_000,
+                }
+                @3 {
+                    token 3 => 1_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 0 [1_000_000] selling 1 [1_000_000],
+                owner @2 buying 1 [1_000_000] selling 0 [1_000_000],
+                owner @3 buying 2 [1_000_000] selling 3 [1_000_000],
+            }
+        };
+
+        // Token 2 and 1 are not connected.
+        assert_eq!(
+            orderbook.fill_market_order(TokenPair { buy: 2, sell: 1 }, 500_000.0),
+            None,
+        );
+        // Token 42 does not exist.
+        assert_eq!(
+            orderbook.fill_market_order(TokenPair { buy: 42, sell: 1 }, 500_000.0),
+            None,
+        );
+        assert_eq!(
+            orderbook.fill_market_order(TokenPair { buy: 1, sell: 42 }, 500_000.0),
+            None,
         );
     }
 }

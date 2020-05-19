@@ -123,8 +123,8 @@ impl Diff {
 struct BalanceChange {
     user: Address,
     token: TokenId,
-    primary: u128,
-    shadow: u128,
+    primary: U256,
+    shadow: U256,
 }
 
 impl BalanceChange {
@@ -282,9 +282,9 @@ mod tests {
         let mut diff = Diff::compare(
             &(
                 AccountState(hash_map! {
-                    (addr(1), 0) => 100,
-                    (addr(1), 1) => 100,
-                    (addr(3), 3) => 100,
+                    (addr(1), 0) => U256::from(100),
+                    (addr(1), 1) => U256::from(100),
+                    (addr(3), 3) => U256::from(100),
                 }),
                 vec![
                     Order {
@@ -315,9 +315,9 @@ mod tests {
             ),
             &(
                 AccountState(hash_map! {
-                    (addr(1), 0) => 100,
-                    (addr(2), 1) => 100,
-                    (addr(3), 3) => 101,
+                    (addr(1), 0) => U256::from(100),
+                    (addr(2), 1) => U256::from(100),
+                    (addr(3), 3) => U256::from(101),
                 }),
                 vec![
                     Order {
@@ -360,20 +360,20 @@ mod tests {
                     BalanceChange {
                         user: addr(1),
                         token: TokenId(1),
-                        primary: 100,
-                        shadow: 0,
+                        primary: U256::from(100),
+                        shadow: U256::from(0),
                     },
                     BalanceChange {
                         user: addr(2),
                         token: TokenId(1),
-                        primary: 0,
-                        shadow: 100,
+                        primary: U256::from(0),
+                        shadow: U256::from(100),
                     },
                     BalanceChange {
                         user: addr(3),
                         token: TokenId(3),
-                        primary: 100,
-                        shadow: 101,
+                        primary: U256::from(100),
+                        shadow: U256::from(101),
                     },
                 ],
                 vec![

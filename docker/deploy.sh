@@ -4,7 +4,7 @@ set -euo pipefail
 
 image_name=$1
 
-sudo apt-get update && sudo apt-get install -y python-pip && sudo pip install awscli
+sudo apt-get update && sudo apt-get install -y python3-pip python3-setuptools && pip3 install --upgrade --user awscli
 
 # Get login token and execute login
 $(aws ecr get-login --no-include-email --region $AWS_REGION)

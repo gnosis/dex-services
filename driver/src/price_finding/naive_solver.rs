@@ -52,7 +52,7 @@ impl Matchable for Order {
     }
 
     fn sufficient_seller_funds(&self, state: &AccountState) -> bool {
-        state.read_balance(self.sell_token, self.account_id) >= self.sell_amount
+        state.read_balance(self.sell_token, self.account_id) >= U256::from(self.sell_amount)
     }
 
     fn match_compare(

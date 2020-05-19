@@ -79,10 +79,12 @@ impl UpdatingOrderbook {
 
     /// Use the context, ensuring that the orderbook has been initialized.
     fn do_with_context<T>(&self, callback: impl FnOnce(&mut Context) -> Result<T>) -> Result<T> {
-        let mut context_guard = self
-            .context
-            .lock()
-            .map_err(|err| anyhow!("poison error: {}", err))?;
+        // We unwrap because there is no way the mutex can be poisoned. If the mutex somehow was
+        // poisoned anyway against our expectation then panicking is correct because we cannot
+        // recover from this.
+        // The mutex cannot be poisoned because `do_with_context` is the only function accessing
+        // the mutex and is only called within this file. The `callback`s we use do not panic.
+        let mut context_guard = self.context.lock().expect("poison error");
         let context_optional: &mut Option<Context> = &mut context_guard;
         match context_optional {
             Some(context) => callback(context),

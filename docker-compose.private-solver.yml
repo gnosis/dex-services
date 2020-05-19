@@ -3,3 +3,5 @@ services:
   stablex:
     command: ./stablex
     image: stablex-binary-private
+    environment:
+      - SOLVER_TYPE=standard-solver

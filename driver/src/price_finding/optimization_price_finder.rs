@@ -6,15 +6,18 @@ use crate::price_finding::price_finder_interface::{
 
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
+use ethcontract::U256;
 use log::error;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::display_fromstr;
 use std::collections::BTreeMap;
+use std::fmt::{Debug, Display};
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
+use std::str::FromStr;
 use std::time::Duration;
 
-/// A number wrapper type that correctly serializes large u128`s to strings to
+/// A number wrapper type that correctly serializes large integers to strings to
 /// avoid precision loss.
 ///
 /// The JSON standard specifies that all numbers are `f64`s and converting to
@@ -25,7 +28,10 @@ use std::time::Duration;
 /// the serialization cannot be controlled.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(transparent)]
-pub struct Num(#[serde(with = "display_fromstr")] pub u128);
+pub struct Num<T>(#[serde(with = "display_fromstr")] pub T)
+where
+    T: Display + FromStr,
+    <T as FromStr>::Err: Display;
 
 pub type TokenDataType = BTreeMap<TokenId, Option<TokenInfo>>;
 
@@ -45,9 +51,9 @@ mod solver_output {
         #[serde(rename = "orderID")]
         pub order_id: u16,
         #[serde(default)]
-        pub exec_sell_amount: Num,
+        pub exec_sell_amount: Num<u128>,
         #[serde(default)]
-        pub exec_buy_amount: Num,
+        pub exec_buy_amount: Num<u128>,
     }
 
     /// Solver solution output format. This format can be converted directly to
@@ -56,7 +62,7 @@ mod solver_output {
     #[serde(rename_all = "camelCase")]
     pub struct Output {
         pub orders: Vec<ExecutedOrder>,
-        pub prices: HashMap<TokenId, Option<Num>>,
+        pub prices: HashMap<TokenId, Option<Num<u128>>>,
     }
 
     impl Output {
@@ -91,7 +97,7 @@ mod solver_input {
     use super::{Num, TokenDataType, TokenId};
     use crate::models;
     use crate::price_finding;
-    use ethcontract::Address;
+    use ethcontract::{Address, U256};
     use serde::Serialize;
     use std::collections::BTreeMap;
     use std::vec::Vec;
@@ -129,8 +135,8 @@ mod solver_input {
         pub account_id: Address,
         pub sell_token: TokenId,
         pub buy_token: TokenId,
-        pub sell_amount: Num,
-        pub buy_amount: Num,
+        pub sell_amount: Num<u128>,
+        pub buy_amount: Num<u128>,
         #[serde(rename = "orderID")]
         pub order_id: u16,
     }
@@ -148,7 +154,7 @@ mod solver_input {
         }
     }
 
-    pub type Accounts = BTreeMap<Address, BTreeMap<TokenId, Num>>;
+    pub type Accounts = BTreeMap<Address, BTreeMap<TokenId, Num<U256>>>;
 
     /// JSON serializable solver input data.
     #[derive(Serialize)]
@@ -214,7 +220,7 @@ fn serialize_balances(
         let token_balances = accounts.entry(order.account_id).or_default();
         for &token in &[order.buy_token, order.sell_token] {
             let balance = state.read_balance(token, order.account_id);
-            if balance > 0 {
+            if balance > U256::zero() {
                 token_balances.insert(TokenId(token), Num(balance));
             }
         }
@@ -569,13 +575,13 @@ pub mod tests {
         let mut expected = solver_input::Accounts::new();
 
         let mut first = BTreeMap::new();
-        first.insert(TokenId(1), Num(200));
-        first.insert(TokenId(2), Num(300));
+        first.insert(TokenId(1), Num(U256::from(200)));
+        first.insert(TokenId(2), Num(U256::from(300)));
         expected.insert(Address::zero(), first);
 
         let mut second = BTreeMap::new();
-        second.insert(TokenId(1), Num(500));
-        second.insert(TokenId(2), Num(600));
+        second.insert(TokenId(1), Num(U256::from(500)));
+        second.insert(TokenId(2), Num(U256::from(600)));
         expected.insert(Address::from_low_u64_be(1), second);
         assert_eq!(result, expected)
     }
@@ -642,10 +648,10 @@ pub mod tests {
 
         // Balances should end up ordered by token ID
         let mut user1_balances = BTreeMap::new();
-        user1_balances.insert(TokenId(3), Num(100));
-        user1_balances.insert(TokenId(2), Num(100));
-        user1_balances.insert(TokenId(1), Num(100));
-        user1_balances.insert(TokenId(0), Num(100));
+        user1_balances.insert(TokenId(3), Num(U256::from(100)));
+        user1_balances.insert(TokenId(2), Num(U256::from(100)));
+        user1_balances.insert(TokenId(1), Num(U256::from(100)));
+        user1_balances.insert(TokenId(0), Num(U256::from(100)));
 
         // Accounts should end up sorted by account ID
         accounts.insert(

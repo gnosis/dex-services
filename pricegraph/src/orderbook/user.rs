@@ -1,7 +1,7 @@
 //! Module implementing user and user token balance management.
 
 use crate::encoding::{Element, TokenId, UserId};
-use crate::num;
+use crate::num::{self, MAX_ROUNDING_ERROR};
 use std::collections::{hash_map, HashMap};
 
 /// A type definiton for a mapping between user IDs to user data.
@@ -12,22 +12,15 @@ pub type UserMap = HashMap<UserId, User>;
 pub struct User {
     /// User balances per token.
     balances: HashMap<TokenId, f64>,
-    /// The number of orders this user has.
-    num_orders: usize,
 }
 
 impl User {
     /// Adds an encoded orderbook element to the user data, including the
     /// reported balance and incrementing the number of orders.
-    pub fn include_order(&mut self, element: &Element) -> usize {
-        let order_id = self.num_orders;
-
+    pub fn set_balance(&mut self, element: &Element) {
         self.balances
             .entry(element.pair.sell)
             .or_insert_with(|| num::u256_to_f64(element.balance));
-        self.num_orders += 1;
-
-        order_id
     }
 
     /// Return's the user's balance for the specified token.
@@ -37,31 +30,35 @@ impl User {
 
     /// Deducts an amount from the balance for the given token. Returns the new
     /// balance or `None` if the user no longer has any balance.
-    pub fn deduct_from_balance(&mut self, token: TokenId, amount: f64) -> Option<f64> {
-        const ROUNDING_ERROR: f64 = 0.1;
-
+    pub fn deduct_from_balance(&mut self, token: TokenId, amount: f64) -> f64 {
         if let hash_map::Entry::Occupied(mut entry) = self.balances.entry(token) {
             let balance = entry.get_mut();
             *balance -= amount;
 
             debug_assert!(
-                *balance >= -ROUNDING_ERROR,
+                *balance >= -MAX_ROUNDING_ERROR,
                 "user balance underflow for token {}",
                 token,
             );
 
             if *balance > 0.0 {
-                return Some(*balance);
+                *balance
+            } else {
+                entry.remove_entry();
+                0.0
             }
-            entry.remove_entry();
         } else {
             debug_assert!(
                 false,
                 "deducted amount from user with empty balace for token {}",
                 token,
             );
+            0.0
         }
+    }
 
-        None
+    /// Clears the user balance for a specific token.
+    pub fn clear_balance(&mut self, token: TokenId) {
+        self.balances.remove(&token);
     }
 }
