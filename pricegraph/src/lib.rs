@@ -7,5 +7,5 @@ mod orderbook;
 #[path = "../data/mod.rs"]
 mod data;
 
-pub use encoding::{TokenId, TokenPair};
+pub use encoding::{Element, TokenId, TokenPair};
 pub use orderbook::Orderbook;
