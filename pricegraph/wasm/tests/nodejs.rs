@@ -1,6 +1,6 @@
 extern crate wasm_bindgen_test;
 
-#[path = "../../data.rs"]
+#[path = "../../data/mod.rs"]
 mod data;
 
 use dex_pricegraph::PriceEstimator;
