@@ -87,7 +87,7 @@ impl State {
                     // Can fail while not all trades of a solution have been received and batch_id
                     // is the next batch_id so that we assume that the current solution won't be be
                     // reverted.
-                    balance.get_balance(batch_id).ok()?,
+                    bigint_u256::bigint_to_u256(&balance.get_balance(batch_id))?,
                 ))
             })
     }
@@ -142,7 +142,8 @@ impl State {
             "deposit batch id does not match current batch id"
         );
         let balance = self.balances.entry((event.user, event.token)).or_default();
-        balance.deposit(event.amount, event.batch_id)
+        balance.deposit(event.amount, event.batch_id);
+        Ok(())
     }
 
     fn withdraw_request(&mut self, event: &WithdrawRequest, block_batch_id: BatchId) -> Result<()> {
@@ -646,27 +647,9 @@ mod tests {
             ..Default::default()
         };
         state = state.apply_event(&Event::Trade(event), 1).unwrap();
-
-        let event = Trade {
-            owner: address(2),
-            order_id: 0,
-            executed_sell_amount: 4,
-            executed_buy_amount: 3,
-            ..Default::default()
-        };
-        state = state.apply_event(&Event::Trade(event), 1).unwrap();
-        let event = TradeReversion {
-            owner: address(2),
-            order_id: 0,
-            executed_sell_amount: 4,
-            executed_buy_amount: 3,
-            ..Default::default()
-        };
-        state = state.apply_event(&Event::TradeReversion(event), 1).unwrap();
-
         let event = SolutionSubmission {
             submitter: address(4),
-            burnt_fees: 42.into(),
+            burnt_fees: 23.into(),
             ..Default::default()
         };
         state = state
@@ -678,7 +661,7 @@ mod tests {
         assert_eq!(account_state_.read_balance(1, address(2)), U256::from(9));
         assert_eq!(account_state_.read_balance(0, address(3)), U256::from(8));
         assert_eq!(account_state_.read_balance(1, address(3)), U256::from(11));
-        assert_eq!(account_state_.read_balance(0, address(4)), U256::from(42));
+        assert_eq!(account_state_.read_balance(0, address(4)), U256::from(23));
         assert_eq!(
             state
                 .orders
@@ -694,6 +677,54 @@ mod tests {
                 .unwrap()
                 .get_used_amount(2),
             2
+        );
+
+        let event = TradeReversion {
+            owner: address(3),
+            order_id: 0,
+            executed_sell_amount: 2,
+            executed_buy_amount: 1,
+            ..Default::default()
+        };
+        state = state.apply_event(&Event::TradeReversion(event), 1).unwrap();
+        let event = TradeReversion {
+            owner: address(2),
+            order_id: 0,
+            executed_sell_amount: 1,
+            executed_buy_amount: 2,
+            ..Default::default()
+        };
+        state = state.apply_event(&Event::TradeReversion(event), 1).unwrap();
+        let event = SolutionSubmission {
+            submitter: address(4),
+            burnt_fees: 42.into(),
+            ..Default::default()
+        };
+        state = state
+            .apply_event(&Event::SolutionSubmission(event), 1)
+            .unwrap();
+
+        let account_state_ = account_state(&state, 2);
+        assert_eq!(account_state_.read_balance(0, address(2)), U256::from(10));
+        assert_eq!(account_state_.read_balance(1, address(2)), U256::from(10));
+        assert_eq!(account_state_.read_balance(0, address(3)), U256::from(10));
+        assert_eq!(account_state_.read_balance(1, address(3)), U256::from(10));
+        assert_eq!(account_state_.read_balance(0, address(4)), U256::from(42));
+        assert_eq!(
+            state
+                .orders
+                .get(&(address(2), 0))
+                .unwrap()
+                .get_used_amount(2),
+            0
+        );
+        assert_eq!(
+            state
+                .orders
+                .get(&(address(3), 0))
+                .unwrap()
+                .get_used_amount(2),
+            0
         );
     }
 
