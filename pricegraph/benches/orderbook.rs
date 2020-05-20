@@ -1,4 +1,4 @@
-#[path = "../data/mod.rs"]
+#[path = "../data.rs"]
 mod data;
 
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};

@@ -4,7 +4,7 @@ mod num;
 mod orderbook;
 
 #[cfg(test)]
-#[path = "../data/mod.rs"]
+#[path = "../data.rs"]
 mod data;
 
 pub use encoding::*;
