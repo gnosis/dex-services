@@ -58,7 +58,8 @@ impl Balance {
         // Withdraw requests can be for amounts larger than balance.
         match self.withdraw.amount(batch_id) {
             Some(amount) if amount < &balance => balance - amount,
-            _ => BigInt::zero(),
+            Some(_) => BigInt::zero(),
+            None => balance,
         }
     }
 
@@ -151,5 +152,49 @@ impl Flux {
         } else {
             BigInt::zero()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_balance() {
+        let overdrawn_request = Balance {
+            balance: BigInt::from(2),
+            deposit: Flux::default(),
+            withdraw: Flux {
+                batch_id: 1,
+                amount: BigInt::from(3),
+            },
+            proceeds: Flux::default(),
+        };
+        assert_eq!(overdrawn_request.get_balance(0), BigInt::from(2));
+        assert_eq!(overdrawn_request.get_balance(1), BigInt::from(2));
+        assert_eq!(overdrawn_request.get_balance(2), BigInt::zero());
+
+        let standard_request = Balance {
+            balance: BigInt::from(2),
+            deposit: Flux::default(),
+            withdraw: Flux {
+                batch_id: 1,
+                amount: BigInt::from(1),
+            },
+            proceeds: Flux::default(),
+        };
+        assert_eq!(standard_request.get_balance(0), BigInt::from(2));
+        assert_eq!(standard_request.get_balance(1), BigInt::from(2));
+        assert_eq!(standard_request.get_balance(2), BigInt::from(1));
+
+        let no_request = Balance {
+            balance: BigInt::from(1),
+            deposit: Flux::default(),
+            withdraw: Flux::default(),
+            proceeds: Flux::default(),
+        };
+        assert_eq!(no_request.get_balance(0), BigInt::from(1));
+        assert_eq!(no_request.get_balance(1), BigInt::from(1));
+        assert_eq!(no_request.get_balance(2), BigInt::from(1));
     }
 }
