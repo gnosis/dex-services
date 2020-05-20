@@ -160,7 +160,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_get_balance() {
+    fn get_balance() {
         let overdrawn_request = Balance {
             balance: BigInt::from(2),
             deposit: Flux::default(),
