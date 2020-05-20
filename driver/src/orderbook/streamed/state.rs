@@ -323,17 +323,122 @@ mod tests {
     use super::*;
     use crate::models::AccountState;
 
+    macro_rules! apply_event {
+        (to $state:ident for batch $batch:expr; TokenListing token $token:expr) => {
+            let event = TokenListing {
+                token: address($token),
+                id: $token,
+            };
+            $state = $state
+                .apply_event(&Event::TokenListing(event), $batch)
+                .unwrap();
+        };
+        (to $state:ident for batch $batch:expr; Deposit token $token:expr, to user $user:expr, amount $amount:expr) => {
+            let event = Deposit {
+                user: address($user),
+                token: address($token),
+                amount: U256::from($amount),
+                batch_id: $batch,
+            };
+            $state = $state.apply_event(&Event::Deposit(event), $batch).unwrap();
+        };
+        (to $state:ident for batch $batch:expr; WithdrawRequest from user $user:expr, of token $token:expr, amount $amount:expr, valid after batch $valid_from:expr) => {
+            let event = WithdrawRequest {
+                user: address($user),
+                token: address($token),
+                amount: U256::from($amount),
+                batch_id: $valid_from,
+            };
+            $state = $state
+                .apply_event(&Event::WithdrawRequest(event), $batch)
+                .unwrap();
+        };
+        (to $state:ident for batch $batch:expr; Withdraw from user $user:expr, of token $token:expr, amount $amount:expr) => {
+            let event = Withdraw {
+                user: address($user),
+                token: address($token),
+                amount: U256::from($amount),
+            };
+            $state = $state.apply_event(&Event::Withdraw(event), $batch).unwrap();
+        };
+        (to $state:ident for batch $batch:expr; OrderPlacement number $index:expr, from user $user:expr, selling $sell_amount:expr, of token $sell_token:expr, for at least $buy_amount:expr, of token $buy_token:expr, for batch interval [$valid_from:expr, $valid_until:expr]) => {
+            let event = OrderPlacement {
+                owner: address($user),
+                index: $index,
+                buy_token: $buy_token,
+                sell_token: $sell_token,
+                valid_from: $valid_from,
+                valid_until: $valid_until,
+                price_numerator: $sell_amount,
+                price_denominator: $buy_amount,
+            };
+            $state = $state
+                .apply_event(&Event::OrderPlacement(event), $batch)
+                .unwrap();
+        };
+        (to $state:ident for batch $batch:expr; Trade order number $index:expr, from user $user:expr, selling $sell_amount:expr, for $buy_amount:expr) => {
+            let event = Trade {
+                owner: address($user),
+                order_id: $index,
+                executed_sell_amount: $sell_amount,
+                executed_buy_amount: $buy_amount,
+                ..Default::default()
+            };
+            $state = $state.apply_event(&Event::Trade(event), $batch).unwrap();
+        };
+        (to $state:ident for batch $batch:expr; TradeReversion order number $index:expr, from user $user:expr, selling $sell_amount:expr, for $buy_amount:expr) => {
+            let event = TradeReversion {
+                owner: address($user),
+                order_id: $index,
+                executed_sell_amount: $sell_amount,
+                executed_buy_amount: $buy_amount,
+                ..Default::default()
+            };
+            $state = $state
+                .apply_event(&Event::TradeReversion(event), $batch)
+                .unwrap();
+        };
+        (to $state:ident for batch $batch:expr; SolutionSubmission from user $user:expr, with fee $fee:expr) => {
+            let event = SolutionSubmission {
+                submitter: address($user),
+                burnt_fees: U256::from($fee),
+                ..Default::default()
+            };
+            $state = $state
+                .apply_event(&Event::SolutionSubmission(event), $batch)
+                .unwrap();
+        };
+    }
+
+    macro_rules! assert_balance {
+        (in $state:ident for batch $batch:expr; user $user:expr, has token $token:expr, balance $balance:expr) => {
+            assert_eq!(
+                account_state(&$state, $batch).read_balance($token, address($user)),
+                U256::from($balance)
+            );
+        };
+    }
+
+    macro_rules! assert_used_amount {
+        (in $state:ident for batch $batch:expr; of order number $index:expr, from user $user:expr, is $amount:expr) => {
+            assert_eq!(
+                $state
+                    .orders
+                    .get(&(address($user), $index))
+                    .unwrap()
+                    .get_used_amount($batch),
+                $amount
+            );
+        };
+    }
+
     fn address(n: u64) -> Address {
         Address::from_low_u64_be(n)
     }
 
     fn state_with_fee() -> State {
         let mut state = State::default();
-        let event = TokenListing {
-            token: address(0),
-            id: 0,
-        };
-        state = state.apply_event(&Event::TokenListing(event), 0).unwrap();
+        apply_event!(to state for batch 0; TokenListing token 0);
         state
     }
 
@@ -344,64 +449,31 @@ mod tests {
     #[test]
     fn account_state_respects_deposit_batch() {
         let mut state = state_with_fee();
-        let event = Deposit {
-            user: address(3),
-            token: address(0),
-            amount: 1.into(),
-            batch_id: 0,
-        };
-        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
-        let account_state_ = account_state(&state, 0);
-        assert_eq!(account_state_.read_balance(0, address(3)), U256::from(0));
-        let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(3)), U256::from(1));
+        apply_event!(to state for batch 0; Deposit token 0, to user 3, amount 1);
+        assert_balance!(in state for batch 0; user 3, has token 0, balance 0);
+        assert_balance!(in state for batch 1; user 3, has token 0, balance 1);
     }
 
     #[test]
     fn account_state_works_with_unlisted_token() {
         let mut state = state_with_fee();
         // token id 1 is not listed
-        for token_id in 0..2 {
-            let event = Deposit {
-                user: address(3),
-                token: address(token_id),
-                amount: 1.into(),
-                batch_id: 0,
-            };
-            state = state.apply_event(&Event::Deposit(event), 0).unwrap();
-        }
+        apply_event!(to state for batch 0; Deposit token 0, to user 3, amount 1);
+        apply_event!(to state for batch 0; Deposit token 1, to user 3, amount 1);
+        assert_balance!(in state for batch 1; user 3, has token 0, balance 1);
+        assert_balance!(in state for batch 1; user 3, has token 1, balance 0);
 
-        let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(3)), U256::from(1));
-
-        let event = TokenListing {
-            token: address(1),
-            id: 1,
-        };
-        state = state.apply_event(&Event::TokenListing(event), 0).unwrap();
-
-        let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(3)), U256::from(1));
-        assert_eq!(account_state_.read_balance(1, address(3)), U256::from(1));
+        apply_event!(to state for batch 1; TokenListing token 1);
+        assert_balance!(in state for batch 1; user 3, has token 0, balance 1);
+        assert_balance!(in state for batch 1; user 3, has token 1, balance 1);
     }
 
     #[test]
     fn multiple_deposits_in_different_batches() {
         let mut state = state_with_fee();
         for i in 0..3 {
-            let event = Deposit {
-                user: address(1),
-                token: address(0),
-                amount: 1.into(),
-                batch_id: i,
-            };
-            state = state.apply_event(&Event::Deposit(event), i).unwrap();
-
-            let account_state_ = account_state(&state, i + 2);
-            assert_eq!(
-                account_state_.read_balance(0, address(1)),
-                U256::from(i + 1)
-            );
+            apply_event!(to state for batch i; Deposit token 0, to user 1, amount 1);
+            assert_balance!(in state for batch i + 2; user 1, has token 0, balance i + 1);
         }
     }
 
@@ -409,145 +481,54 @@ mod tests {
     fn multiple_deposits_in_same_batch() {
         let mut state = state_with_fee();
         for i in 0..3 {
-            let event = Deposit {
-                user: address(1),
-                token: address(0),
-                amount: 1.into(),
-                batch_id: 0,
-            };
-            state = state.apply_event(&Event::Deposit(event), 0).unwrap();
-
-            let account_state_ = account_state(&state, 0);
-            assert_eq!(account_state_.read_balance(0, address(1)), U256::from(0));
-            let account_state_ = account_state(&state, 1);
-            assert_eq!(
-                account_state_.read_balance(0, address(1)),
-                U256::from(i + 1)
-            );
+            apply_event!(to state for batch 0; Deposit token 0, to user 1, amount 1);
+            assert_balance!(in state for batch 1; user 1, has token 0, balance i + 1);
         }
     }
 
     #[test]
     fn withdraw_request_deducted_from_balance() {
         let mut state = state_with_fee();
-        let event = Deposit {
-            user: address(1),
-            token: address(0),
-            amount: 2.into(),
-            batch_id: 0,
-        };
-        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
-        let event = WithdrawRequest {
-            user: address(1),
-            token: address(0),
-            amount: 1.into(),
-            batch_id: 0,
-        };
-        state = state
-            .apply_event(&Event::WithdrawRequest(event), 0)
-            .unwrap();
-        let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(1)), U256::from(1));
+        apply_event!(to state for batch 0; Deposit token 0, to user 1, amount 2);
+        apply_event!(to state for batch 0; WithdrawRequest from user 1, of token 0, amount 1, valid after batch 0);
+        assert_balance!(in state for batch 1; user 1, has token 0, balance 1);
     }
 
     #[test]
     fn withdraw_request_does_not_underflow() {
         let mut state = state_with_fee();
-        let event = Deposit {
-            user: address(1),
-            token: address(0),
-            amount: 2.into(),
-            batch_id: 0,
-        };
-        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
-        let event = WithdrawRequest {
-            user: address(1),
-            token: address(0),
-            amount: 3.into(),
-            batch_id: 2,
-        };
-        state = state
-            .apply_event(&Event::WithdrawRequest(event), 1)
-            .unwrap();
-        let account_state_ = account_state(&state, 3);
-        assert_eq!(account_state_.read_balance(0, address(1)), U256::from(0));
+        apply_event!(to state for batch 0; Deposit token 0, to user 1, amount 2);
+        apply_event!(to state for batch 1; WithdrawRequest from user 1, of token 0, amount 3, valid after batch 2);
+        assert_balance!(in state for batch 3; user 1, has token 0, balance 0);
     }
 
     #[test]
     fn withdraw_deducted_from_balance() {
         let mut state = state_with_fee();
-        let event = Deposit {
-            user: address(1),
-            token: address(0),
-            amount: 2.into(),
-            batch_id: 0,
-        };
-        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
-        let event = WithdrawRequest {
-            user: address(1),
-            token: address(0),
-            amount: 2.into(),
-            batch_id: 0,
-        };
-        state = state
-            .apply_event(&Event::WithdrawRequest(event), 0)
-            .unwrap();
-        let event = Withdraw {
-            user: address(1),
-            token: address(0),
-            amount: 1.into(),
-        };
-        state = state.apply_event(&Event::Withdraw(event), 1).unwrap();
-        let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(1)), U256::from(1));
+        apply_event!(to state for batch 0; Deposit token 0, to user 1, amount 2);
+        apply_event!(to state for batch 0; WithdrawRequest from user 1, of token 0, amount 2, valid after batch 0);
+        apply_event!(to state for batch 1; Withdraw from user 1, of token 0, amount 1);
+        assert_balance!(in state for batch 1; user 1, has token 0, balance 1);
     }
 
     #[test]
     fn withdraw_removes_pending_withdraw() {
         let mut state = state_with_fee();
-        let event = Deposit {
-            user: address(1),
-            token: address(0),
-            amount: 3.into(),
-            batch_id: 0,
-        };
-        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
-        let event = WithdrawRequest {
-            user: address(1),
-            token: address(0),
-            amount: 2.into(),
-            batch_id: 0,
-        };
-        state = state
-            .apply_event(&Event::WithdrawRequest(event), 0)
-            .unwrap();
-        let account_state_ = account_state(&state, 1);
-        assert_eq!(account_state_.read_balance(0, address(1)), U256::from(1));
-        let event = Withdraw {
-            user: address(1),
-            token: address(0),
-            amount: 1.into(),
-        };
-        state = state.apply_event(&Event::Withdraw(event), 1).unwrap();
-        let account_state_ = account_state(&state, 2);
-        assert_eq!(account_state_.read_balance(0, address(1)), U256::from(2));
+        apply_event!(to state for batch 0; Deposit token 0, to user 1, amount 3);
+        apply_event!(to state for batch 0; WithdrawRequest from user 1, of token 0, amount 2, valid after batch 0);
+        assert_balance!(in state for batch 1; user 1, has token 0, balance 1);
+        apply_event!(to state for batch 1; Withdraw from user 1, of token 0, amount 1);
+        assert_balance!(in state for batch 2; user 1, has token 0, balance 2);
     }
 
     #[test]
     fn order_placement_cancellation_deletion() {
         let mut state = state_with_fee();
         assert_eq!(state.orders(0).next(), None);
-        let event = OrderPlacement {
-            owner: address(2),
-            index: 0,
-            buy_token: 0,
-            sell_token: 1,
-            valid_from: 1,
-            valid_until: 2,
-            price_numerator: 3,
-            price_denominator: 4,
-        };
-        state = state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
+        apply_event!(
+            to state for batch 0; OrderPlacement number 0, from user 2,
+            selling 3, of token 1, for at least 4, of token 0, for batch interval [1, 2]
+        );
 
         assert_eq!(state.orders(1).next(), None);
         let expected_orders = vec![ModelOrder {
@@ -590,154 +571,52 @@ mod tests {
     #[test]
     fn trade_and_reversion_and_solution() {
         let mut state = state_with_fee();
-        let event = TokenListing {
-            token: address(1),
-            id: 1,
-        };
-        state = state.apply_event(&Event::TokenListing(event), 0).unwrap();
+        apply_event!(to state for batch 0; TokenListing token 1);
 
         for token in 0..2 {
             for user in 2..4 {
-                let event = Deposit {
-                    user: address(user),
-                    token: address(token),
-                    amount: 10.into(),
-                    batch_id: 0,
-                };
-                state = state.apply_event(&Event::Deposit(event), 0).unwrap();
+                apply_event!(to state for batch 0; Deposit token token, to user user, amount 10);
             }
         }
 
-        let event = OrderPlacement {
-            owner: address(2),
-            index: 0,
-            buy_token: 0,
-            sell_token: 1,
-            valid_from: 0,
-            valid_until: 10,
-            price_numerator: 5,
-            price_denominator: 5,
-        };
-        state = state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
-        let event = OrderPlacement {
-            owner: address(3),
-            index: 0,
-            buy_token: 1,
-            sell_token: 0,
-            valid_from: 0,
-            valid_until: 10,
-            price_numerator: 3,
-            price_denominator: 3,
-        };
-        state = state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
-
-        let event = Trade {
-            owner: address(2),
-            order_id: 0,
-            executed_sell_amount: 1,
-            executed_buy_amount: 2,
-            ..Default::default()
-        };
-        state = state.apply_event(&Event::Trade(event), 1).unwrap();
-        let event = Trade {
-            owner: address(3),
-            order_id: 0,
-            executed_sell_amount: 2,
-            executed_buy_amount: 1,
-            ..Default::default()
-        };
-        state = state.apply_event(&Event::Trade(event), 1).unwrap();
-        let event = SolutionSubmission {
-            submitter: address(4),
-            burnt_fees: 23.into(),
-            ..Default::default()
-        };
-        state = state
-            .apply_event(&Event::SolutionSubmission(event), 1)
-            .unwrap();
-
-        let account_state_ = account_state(&state, 2);
-        assert_eq!(account_state_.read_balance(0, address(2)), U256::from(12));
-        assert_eq!(account_state_.read_balance(1, address(2)), U256::from(9));
-        assert_eq!(account_state_.read_balance(0, address(3)), U256::from(8));
-        assert_eq!(account_state_.read_balance(1, address(3)), U256::from(11));
-        assert_eq!(account_state_.read_balance(0, address(4)), U256::from(23));
-        assert_eq!(
-            state
-                .orders
-                .get(&(address(2), 0))
-                .unwrap()
-                .get_used_amount(2),
-            1
+        apply_event!(
+            to state for batch 0; OrderPlacement number 0, from user 2,
+            selling 5, of token 1, for at least 5, of token 0, for batch interval [0, 10]
         );
-        assert_eq!(
-            state
-                .orders
-                .get(&(address(3), 0))
-                .unwrap()
-                .get_used_amount(2),
-            2
+        apply_event!(
+            to state for batch 0; OrderPlacement number 0, from user 3,
+            selling 3, of token 0, for at least 3, of token 1, for batch interval [0, 10]
         );
 
-        let event = TradeReversion {
-            owner: address(3),
-            order_id: 0,
-            executed_sell_amount: 2,
-            executed_buy_amount: 1,
-            ..Default::default()
-        };
-        state = state.apply_event(&Event::TradeReversion(event), 1).unwrap();
-        let event = TradeReversion {
-            owner: address(2),
-            order_id: 0,
-            executed_sell_amount: 1,
-            executed_buy_amount: 2,
-            ..Default::default()
-        };
-        state = state.apply_event(&Event::TradeReversion(event), 1).unwrap();
-        let event = SolutionSubmission {
-            submitter: address(4),
-            burnt_fees: 42.into(),
-            ..Default::default()
-        };
-        state = state
-            .apply_event(&Event::SolutionSubmission(event), 1)
-            .unwrap();
+        apply_event!(to state for batch 1; Trade order number 0, from user 2, selling 1, for 2);
+        apply_event!(to state for batch 1; Trade order number 0, from user 3, selling 2, for 1);
+        apply_event!(to state for batch 1; SolutionSubmission from user 4, with fee 23);
 
-        let account_state_ = account_state(&state, 2);
-        assert_eq!(account_state_.read_balance(0, address(2)), U256::from(10));
-        assert_eq!(account_state_.read_balance(1, address(2)), U256::from(10));
-        assert_eq!(account_state_.read_balance(0, address(3)), U256::from(10));
-        assert_eq!(account_state_.read_balance(1, address(3)), U256::from(10));
-        assert_eq!(account_state_.read_balance(0, address(4)), U256::from(42));
-        assert_eq!(
-            state
-                .orders
-                .get(&(address(2), 0))
-                .unwrap()
-                .get_used_amount(2),
-            0
-        );
-        assert_eq!(
-            state
-                .orders
-                .get(&(address(3), 0))
-                .unwrap()
-                .get_used_amount(2),
-            0
-        );
+        assert_balance!(in state for batch 2; user 2, has token 0, balance 12);
+        assert_balance!(in state for batch 2; user 2, has token 1, balance 9);
+        assert_balance!(in state for batch 2; user 3, has token 0, balance 8);
+        assert_balance!(in state for batch 2; user 3, has token 1, balance 11);
+        assert_balance!(in state for batch 2; user 4, has token 0, balance 23);
+        assert_used_amount!(in state for batch 2; of order number 0, from user 2, is 1);
+        assert_used_amount!(in state for batch 2; of order number 0, from user 3, is 2);
+
+        apply_event!(to state for batch 1; TradeReversion order number 0, from user 3, selling 2, for 1);
+        apply_event!(to state for batch 1; TradeReversion order number 0, from user 2, selling 1, for 2);
+        apply_event!(to state for batch 1; SolutionSubmission from user 4, with fee 42);
+
+        assert_balance!(in state for batch 2; user 2, has token 0, balance 10);
+        assert_balance!(in state for batch 2; user 2, has token 1, balance 10);
+        assert_balance!(in state for batch 2; user 3, has token 0, balance 10);
+        assert_balance!(in state for batch 2; user 3, has token 1, balance 10);
+        assert_balance!(in state for batch 2; user 4, has token 0, balance 42);
+        assert_used_amount!(in state for batch 2; of order number 0, from user 2, is 0);
+        assert_used_amount!(in state for batch 2; of order number 0, from user 3, is 0);
     }
 
     #[test]
     fn orderbook_batch_id() {
         let mut state = state_with_fee();
-        let event = Deposit {
-            user: address(3),
-            token: address(0),
-            amount: 1.into(),
-            batch_id: 1,
-        };
-        state = state.apply_event(&Event::Deposit(event), 1).unwrap();
+        apply_event!(to state for batch 1; Deposit token 0, to user 3, amount 1);
         let balance = state
             .orderbook_for_batch(Batch::Current)
             .unwrap()
@@ -759,165 +638,61 @@ mod tests {
     #[test]
     fn orderbook_partial_solution() {
         let mut state = state_with_fee();
-        let event = TokenListing {
-            token: address(1),
-            id: 1,
-        };
+        apply_event!(to state for batch 0; TokenListing token 1);
         for token in 0..2 {
-            let event = Deposit {
-                user: address(2),
-                token: address(token),
-                amount: 10.into(),
-                batch_id: 0,
-            };
-            state = state.apply_event(&Event::Deposit(event), 0).unwrap();
+            apply_event!(to state for batch 0; Deposit token token, to user 2, amount 10);
         }
-        state = state.apply_event(&Event::TokenListing(event), 0).unwrap();
-        let event = OrderPlacement {
-            owner: address(2),
-            index: 0,
-            buy_token: 0,
-            sell_token: 1,
-            valid_from: 0,
-            valid_until: 10,
-            price_numerator: 5,
-            price_denominator: 5,
-        };
-        state = state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
-        let event = Trade {
-            owner: address(2),
-            order_id: 0,
-            executed_sell_amount: 1,
-            executed_buy_amount: 2,
-            ..Default::default()
-        };
-        state = state.apply_event(&Event::Trade(event), 1).unwrap();
+        apply_event!(
+            to state for batch 0; OrderPlacement number 0, from user 2,
+            selling 5, of token 1, for at least 5, of token 0, for batch interval [0, 10]
+        );
+        apply_event!(to state for batch 1; Trade order number 0, from user 2, selling 1, for 2);
 
-        let balance = state
-            .orderbook_for_batch(Batch::Current)
-            .unwrap()
-            .0
-            .collect::<HashMap<_, _>>();
-        assert_eq!(balance.get(&(address(2), 0)), Some(&10.into()));
-        assert_eq!(balance.get(&(address(2), 1)), Some(&10.into()));
+        assert_balance!(in state for batch 1; user 2, has token 0, balance 10);
+        assert_balance!(in state for batch 1; user 2, has token 1, balance 10);
 
-        let event = SolutionSubmission {
-            submitter: address(4),
-            burnt_fees: 42.into(),
-            ..Default::default()
-        };
-        state = state
-            .apply_event(&Event::SolutionSubmission(event), 1)
-            .unwrap();
+        apply_event!(to state for batch 1; SolutionSubmission from user 4, with fee 42);
 
-        let balance = state
-            .orderbook_for_batch(Batch::Future(2))
-            .unwrap()
-            .0
-            .collect::<HashMap<_, _>>();
-        assert_eq!(balance.get(&(address(2), 0)), Some(&12.into()));
-        assert_eq!(balance.get(&(address(2), 1)), Some(&9.into()));
+        assert_balance!(in state for batch 2; user 2, has token 0, balance 12);
+        assert_balance!(in state for batch 2; user 2, has token 1, balance 9);
     }
 
     #[test]
     fn orderbook_solution_touching_same_order_twice() {
         let mut state = state_with_fee();
-        let event = TokenListing {
-            token: address(1),
-            id: 1,
-        };
-        state = state.apply_event(&Event::TokenListing(event), 0).unwrap();
+        apply_event!(to state for batch 0; TokenListing token 1);
 
-        let event = Deposit {
-            user: address(2),
-            token: address(0),
-            amount: 20.into(),
-            batch_id: 0,
-        };
-        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
-        let event = Deposit {
-            user: address(3),
-            token: address(1),
-            amount: 20.into(),
-            batch_id: 0,
-        };
-        state = state.apply_event(&Event::Deposit(event), 0).unwrap();
+        apply_event!(to state for batch 0; Deposit token 0, to user 2, amount 20);
+        apply_event!(to state for batch 0; Deposit token 1, to user 3, amount 20);
 
-        let event = OrderPlacement {
-            owner: address(2),
-            index: 0,
-            buy_token: 1,
-            sell_token: 0,
-            valid_from: 0,
-            valid_until: 10,
-            price_numerator: 10,
-            price_denominator: 10,
-        };
-        state = state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
-        let mut event = OrderPlacement {
-            owner: address(3),
-            index: 0,
-            buy_token: 0,
-            sell_token: 1,
-            valid_from: 0,
-            valid_until: 10,
-            price_numerator: 5,
-            price_denominator: 5,
-        };
-        state = state
-            .apply_event(&Event::OrderPlacement(event.clone()), 0)
-            .unwrap();
-        event.index = 1;
-        state = state.apply_event(&Event::OrderPlacement(event), 0).unwrap();
+        apply_event!(
+            to state for batch 0; OrderPlacement number 0, from user 2,
+            selling 10, of token 0, for at least 10, of token 1, for batch interval [0, 10]
+        );
+        apply_event!(
+            to state for batch 0; OrderPlacement number 0, from user 3,
+            selling 5, of token 1, for at least 5, of token 0, for batch interval [0, 10]
+        );
+        apply_event!(
+            to state for batch 0; OrderPlacement number 1, from user 3,
+            selling 5, of token 1, for at least 5, of token 0, for batch interval [0, 10]
+        );
 
-        let event = Trade {
-            owner: address(2),
-            order_id: 0,
-            executed_sell_amount: 4,
-            executed_buy_amount: 4,
-            ..Default::default()
-        };
         // the one order by address(2) is split into two trades in the same solution
-        state = state.apply_event(&Event::Trade(event.clone()), 1).unwrap();
-        state = state.apply_event(&Event::Trade(event), 1).unwrap();
-        let mut event = Trade {
-            owner: address(3),
-            order_id: 0,
-            executed_sell_amount: 4,
-            executed_buy_amount: 4,
-            ..Default::default()
-        };
-        state = state.apply_event(&Event::Trade(event.clone()), 1).unwrap();
-        event.order_id = 1;
-        state = state.apply_event(&Event::Trade(event), 1).unwrap();
+        apply_event!(to state for batch 1; Trade order number 0, from user 2, selling 4, for 4);
+        apply_event!(to state for batch 1; Trade order number 0, from user 2, selling 4, for 4);
+        apply_event!(to state for batch 1; Trade order number 0, from user 3, selling 4, for 4);
+        apply_event!(to state for batch 1; Trade order number 1, from user 3, selling 4, for 4);
+        apply_event!(to state for batch 1; SolutionSubmission from user 4, with fee 42);
 
-        let balance = state
-            .orderbook_for_batch(Batch::Current)
-            .unwrap()
-            .0
-            .collect::<HashMap<_, _>>();
-        assert_eq!(balance.get(&(address(2), 0)), Some(&20.into()));
-        assert_eq!(balance.get(&(address(2), 1)), Some(&0.into()));
-        assert_eq!(balance.get(&(address(3), 0)), Some(&0.into()));
-        assert_eq!(balance.get(&(address(3), 1)), Some(&20.into()));
+        assert_balance!(in state for batch 1; user 2, has token 0, balance 20);
+        assert_balance!(in state for batch 1; user 2, has token 1, balance 0);
+        assert_balance!(in state for batch 1; user 3, has token 0, balance 0);
+        assert_balance!(in state for batch 1; user 3, has token 1, balance 20);
 
-        let event = SolutionSubmission {
-            submitter: address(4),
-            burnt_fees: 42.into(),
-            ..Default::default()
-        };
-        state = state
-            .apply_event(&Event::SolutionSubmission(event), 1)
-            .unwrap();
-
-        let balance = state
-            .orderbook_for_batch(Batch::Future(2))
-            .unwrap()
-            .0
-            .collect::<HashMap<_, _>>();
-        assert_eq!(balance.get(&(address(2), 0)), Some(&12.into()));
-        assert_eq!(balance.get(&(address(2), 1)), Some(&8.into()));
-        assert_eq!(balance.get(&(address(3), 0)), Some(&8.into()));
-        assert_eq!(balance.get(&(address(3), 1)), Some(&12.into()));
+        assert_balance!(in state for batch 2; user 2, has token 0, balance 12);
+        assert_balance!(in state for batch 2; user 2, has token 1, balance 8);
+        assert_balance!(in state for batch 2; user 3, has token 0, balance 8);
+        assert_balance!(in state for batch 2; user 3, has token 1, balance 12);
     }
 }
