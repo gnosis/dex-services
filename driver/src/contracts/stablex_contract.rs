@@ -162,17 +162,63 @@ impl StableXContract for StableXContractImpl {
                 .ok_or_else(|| anyhow!("block {:?} is missing", block_number))
         };
 
-        let mut current_block = get_block(BlockNumber::Latest)?;
-        let mut block_number = current_block
+        struct Bounds {
+            lower: u64,
+            upper: u64,
+        }
+        impl Bounds {
+            fn diff(&self) -> u64 {
+                self.upper - self.lower
+            }
+            fn mid(&self) -> u64 {
+                self.diff() / 2
+            }
+        }
+
+        let get_bounds_for_binary_search =
+            |current_block: u64, target_batch_id: u32| -> Result<_> {
+                let mut step = 1;
+                let mut lower_bound = current_block;
+                let mut upper_bound = current_block;
+                let mut lower_block = get_block(lower_bound.into())?;
+                while target_batch_id > get_block_batch_id(&lower_block) {
+                    upper_bound = lower_bound;
+                    if step >= lower_bound {
+                        lower_bound = 0;
+                        break;
+                    } else {
+                        lower_bound -= step;
+                        lower_block = get_block(lower_bound.into())?;
+                    }
+                    step *= 2;
+                }
+                Ok(Bounds {
+                    lower: lower_bound,
+                    upper: upper_bound,
+                })
+            };
+
+        let get_last_block_for_batch_within_bounds =
+            |mut bounds: Bounds, target_batch_id: u32| -> Result<_> {
+                while bounds.diff() > 1 {
+                    let mid = bounds.mid();
+                    let block = get_block(mid.into())?;
+                    if target_batch_id <= get_block_batch_id(&block) {
+                        bounds.lower = mid;
+                    } else {
+                        bounds.upper = mid;
+                    }
+                }
+                Ok(bounds.lower)
+            };
+
+        let current_block = get_block(BlockNumber::Latest)?;
+        let current_block_number = current_block
             .number
             .ok_or_else(|| anyhow!("latest block {:?} has no block number", current_block.hash))?
             .as_u64();
-        while batch_id < get_block_batch_id(&current_block) && block_number > 0 {
-            block_number -= 1;
-            current_block = get_block(block_number.into())?;
-        }
-
-        Ok(block_number)
+        let search_bounds = get_bounds_for_binary_search(current_block_number, batch_id)?;
+        get_last_block_for_batch_within_bounds(search_bounds, batch_id)
     }
 
     fn get_filtered_auction_data_paginated(
