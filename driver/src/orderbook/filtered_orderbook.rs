@@ -3,6 +3,7 @@ use super::*;
 use crate::models::{AccountState, Order};
 use anyhow::Error;
 use ethcontract::Address;
+use futures::future::{BoxFuture, FutureExt as _};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
@@ -69,33 +70,41 @@ impl<'a> FilteredOrderbookReader<'a> {
 }
 
 impl<'a> StableXOrderBookReading for FilteredOrderbookReader<'a> {
-    fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
-        let (state, orders) = self.orderbook.get_auction_data(batch_id_to_solve)?;
-        let token_filtered_orders: Vec<Order> = match &self.filter.tokens {
-            TokenFilter::Whitelist(token_list) => orders
-                .into_iter()
-                .filter(|o| token_list.contains(&o.buy_token) && token_list.contains(&o.sell_token))
-                .collect(),
-            TokenFilter::Blacklist(token_list) => orders
-                .into_iter()
-                .filter(|o| {
-                    !token_list.contains(&o.buy_token) && !token_list.contains(&o.sell_token)
-                })
-                .collect(),
-        };
-        let user_filtered_orders = token_filtered_orders.into_iter().filter(|o| {
-            if let Some(user_filter) = self.filter.users.get(&o.account_id) {
-                match user_filter {
-                    UserOrderFilter::All => false,
-                    UserOrderFilter::OrderIds(ids) => !ids.contains(&o.id),
+    fn get_auction_data<'b>(
+        &'b self,
+        batch_id_to_solve: U256,
+    ) -> BoxFuture<'b, Result<(AccountState, Vec<Order>)>> {
+        async move {
+            let (state, orders) = self.orderbook.get_auction_data(batch_id_to_solve).await?;
+            let token_filtered_orders: Vec<Order> = match &self.filter.tokens {
+                TokenFilter::Whitelist(token_list) => orders
+                    .into_iter()
+                    .filter(|o| {
+                        token_list.contains(&o.buy_token) && token_list.contains(&o.sell_token)
+                    })
+                    .collect(),
+                TokenFilter::Blacklist(token_list) => orders
+                    .into_iter()
+                    .filter(|o| {
+                        !token_list.contains(&o.buy_token) && !token_list.contains(&o.sell_token)
+                    })
+                    .collect(),
+            };
+            let user_filtered_orders = token_filtered_orders.into_iter().filter(|o| {
+                if let Some(user_filter) = self.filter.users.get(&o.account_id) {
+                    match user_filter {
+                        UserOrderFilter::All => false,
+                        UserOrderFilter::OrderIds(ids) => !ids.contains(&o.id),
+                    }
+                } else {
+                    true
                 }
-            } else {
-                true
-            }
-        });
-        Ok(util::normalize_auction_data(state, user_filtered_orders))
+            });
+            Ok(util::normalize_auction_data(state, user_filtered_orders))
+        }
+        .boxed()
     }
-    fn initialize(&self) -> Result<()> {
+    fn initialize<'b>(&'b self) -> BoxFuture<'b, Result<()>> {
         self.orderbook.initialize()
     }
 }
@@ -183,7 +192,7 @@ mod test {
                     mixed_user_good_order.clone(),
                 ],
             );
-            move |_| Ok(result)
+            move |_| async { Ok(result) }.boxed()
         });
 
         let filter = OrderbookFilter {
@@ -207,7 +216,11 @@ mod test {
 
         let reader = FilteredOrderbookReader::new(&inner, filter);
 
-        let (_, filtered_orders) = reader.get_auction_data(U256::zero()).unwrap();
+        let (_, filtered_orders) = reader
+            .get_auction_data(U256::zero())
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         assert_eq!(filtered_orders, vec![mixed_user_good_order]);
     }
 
@@ -226,7 +239,7 @@ mod test {
                 AccountState::default(),
                 vec![bad_buy_token, bad_sell_token, good_order.clone()],
             );
-            move |_| Ok(result)
+            move |_| async { Ok(result) }.boxed()
         });
 
         let filter = OrderbookFilter {
@@ -236,7 +249,11 @@ mod test {
 
         let reader = FilteredOrderbookReader::new(&inner, filter);
 
-        let (_, filtered_orders) = reader.get_auction_data(U256::zero()).unwrap();
+        let (_, filtered_orders) = reader
+            .get_auction_data(U256::zero())
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         assert_eq!(filtered_orders, vec![good_order]);
     }
 
@@ -247,7 +264,7 @@ mod test {
         let mut inner = MockStableXOrderBookReading::default();
         inner
             .expect_get_auction_data()
-            .return_once({ move |_| Ok((state, vec![])) });
+            .return_once({ move |_| async { Ok((state, vec![])) }.boxed() });
 
         let filter = OrderbookFilter {
             tokens: TokenFilter::default(),
@@ -256,7 +273,11 @@ mod test {
 
         let reader = FilteredOrderbookReader::new(&inner, filter);
 
-        let (state, filtered_orders) = reader.get_auction_data(U256::zero()).unwrap();
+        let (state, filtered_orders) = reader
+            .get_auction_data(U256::zero())
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         assert_eq!(filtered_orders, vec![]);
         assert_eq!(state, AccountState::default());
     }

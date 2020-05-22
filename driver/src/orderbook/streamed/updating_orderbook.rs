@@ -6,18 +6,19 @@ use crate::{
     },
     models::{AccountState, Order},
     orderbook::StableXOrderBookReading,
-    util::FutureWaitExt as _,
 };
 use anyhow::{anyhow, bail, Result};
 use block_timestamp_reading::{BlockTimestampReading, CachedBlockTimestampReader};
 use ethcontract::{contract::Event, BlockNumber, H256};
 use futures::compat::Future01CompatExt as _;
+use futures::future::{BoxFuture, FutureExt as _};
+use futures::lock::Mutex;
 use log::{error, info, warn};
 use orderbook::Orderbook;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 /// An event based orderbook that automatically updates itself with new events from the contract.
 pub struct UpdatingOrderbook {
@@ -56,6 +57,7 @@ impl UpdatingOrderbook {
 
     /// Recover the orderbook from file if possible.
     fn load_orderbook_from_file(&self, context: &mut Context) {
+        // TODO: use async file io
         match &self.filestore {
             Some(path) => match Orderbook::try_from(path.as_path()) {
                 Ok(orderbook) => {
@@ -77,17 +79,17 @@ impl UpdatingOrderbook {
         };
     }
 
-    /// Use the context, ensuring that the orderbook has been initialized.
-    fn do_with_context<T>(&self, callback: impl FnOnce(&mut Context) -> Result<T>) -> Result<T> {
-        // We unwrap because there is no way the mutex can be poisoned. If the mutex somehow was
-        // poisoned anyway against our expectation then panicking is correct because we cannot
-        // recover from this.
-        // The mutex cannot be poisoned because `do_with_context` is the only function accessing
-        // the mutex and is only called within this file. The `callback`s we use do not panic.
-        let mut context_guard = self.context.lock().expect("poison error");
-        let context_optional: &mut Option<Context> = &mut context_guard;
-        match context_optional {
-            Some(context) => callback(context),
+    /// Use the context, ensuring that the orderbook has been initialized and updated.
+    async fn do_with_context<T, F>(&self, callback: F) -> Result<T>
+    where
+        F: for<'ctx> FnOnce(&'ctx mut Context) -> BoxFuture<'ctx, Result<T>>,
+    {
+        let mut context_guard = self.context.lock().await;
+        match context_guard.as_mut() {
+            Some(context) => {
+                self.update_with_events(context).await?;
+                callback(context).await
+            }
             None => {
                 let mut context = Context {
                     orderbook: Orderbook::default(),
@@ -95,9 +97,9 @@ impl UpdatingOrderbook {
                     block_timestamp_reader: CachedBlockTimestampReader::new(self.web3.clone()),
                 };
                 self.load_orderbook_from_file(&mut context);
-                self.update_with_events(&mut context).wait()?;
-                let result = callback(&mut context);
-                *context_optional = Some(context);
+                self.update_with_events(&mut context).await?;
+                let result = callback(&mut context).await;
+                *context_guard = Some(context);
                 result
             }
         }
@@ -192,16 +194,15 @@ impl UpdatingOrderbook {
 
 impl StableXOrderBookReading for UpdatingOrderbook {
     /// Blocks on updating the orderbook. This can be expensive if `initialize` hasn't been called before.
-    fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
-        self.do_with_context(|context| {
-            // In the case where initialize has not yet been called we update the orderbook again.
-            // This is useful because the initial update can take a long time so it is possible that
-            // the current block has changed since then.
-            self.update_with_events(context).wait()?;
-            context.orderbook.get_auction_data(batch_id_to_solve)
-        })
+    fn get_auction_data<'a>(
+        &'a self,
+        batch_id_to_solve: U256,
+    ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
+        self.do_with_context(move |context| context.orderbook.get_auction_data(batch_id_to_solve))
+            .boxed()
     }
-    fn initialize(&self) -> Result<()> {
-        self.do_with_context(|_| Ok(()))
+    fn initialize<'a>(&'a self) -> BoxFuture<'a, Result<()>> {
+        // self.update_context().boxed()
+        self.do_with_context(|_| async { Ok(()) }.boxed()).boxed()
     }
 }
