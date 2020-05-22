@@ -32,6 +32,7 @@ use crate::orderbook::{
 use crate::price_estimation::{PriceOracle, TokenData};
 use crate::price_finding::{Fee, InternalOptimizer, SolverType};
 use crate::solution_submission::StableXSolutionSubmitter;
+use crate::util::FutureWaitExt as _;
 
 use ethcontract::PrivateKey;
 use log::info;
@@ -209,7 +210,9 @@ fn main() {
 
     // Set up connection to exchange contract
     let contract = Arc::new(
-        StableXContractImpl::new(&web3, options.private_key.clone(), options.network_id).unwrap(),
+        StableXContractImpl::new(&web3, options.private_key.clone(), options.network_id)
+            .wait()
+            .unwrap(),
     );
     info!("Using contract at {:?}", contract.address());
     info!("Using account {:?}", contract.account());

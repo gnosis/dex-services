@@ -1,9 +1,10 @@
 #![allow(clippy::ptr_arg)] // required for automock
 
 use crate::contracts::stablex_contract::StableXContract;
-use crate::models::Solution;
-
 use crate::gas_station::GasPriceEstimating;
+use crate::models::Solution;
+use crate::util::FutureWaitExt as _;
+
 use anyhow::{Error, Result};
 use ethcontract::errors::{ExecutionError, MethodError};
 use ethcontract::web3::types::TransactionReceipt;
@@ -112,13 +113,14 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
     ) -> Result<U256, SolutionSubmissionError> {
         // NOTE: Compare with `>=` as the exchange's current batch index is the
         //   one accepting orders and does not yet accept solutions.
-        while batch_index.as_u32() >= self.contract.get_current_auction_index()? {
+        while batch_index.as_u32() >= self.contract.get_current_auction_index().wait()? {
             info!("Solved batch is not yet accepting solutions, waiting for next batch.");
             thread::sleep(POLL_TIMEOUT);
         }
 
         self.contract
             .get_solution_objective_value(batch_index, solution, None)
+            .wait()
             .map_err(SolutionSubmissionError::from)
     }
 
@@ -140,11 +142,15 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
             extract_transaction_receipt(&err)
                 .and_then(|tx| {
                     let block_number = tx.block_number?;
-                    match self.contract.get_solution_objective_value(
-                        batch_index,
-                        solution,
-                        Some(block_number.into()),
-                    ) {
+                    match self
+                        .contract
+                        .get_solution_objective_value(
+                            batch_index,
+                            solution,
+                            Some(block_number.into()),
+                        )
+                        .wait()
+                    {
                         Ok(_) => None,
                         Err(e) => Some(SolutionSubmissionError::from(e)),
                     }
@@ -186,17 +192,19 @@ fn retry_with_gas_price_increase(
         let gas_price = std::cmp::min(gas_price_estimate * gas_price_factor, gas_cap);
 
         // Submit solution at estimated gas price (not exceeding the cap)
-        result = contract.submit_solution(
-            batch_index,
-            solution.clone(),
-            claimed_objective_value,
-            gas_price,
-            if gas_price == gas_cap {
-                None
-            } else {
-                Some(BLOCK_TIMEOUT)
-            },
-        );
+        result = contract
+            .submit_solution(
+                batch_index,
+                solution.clone(),
+                claimed_objective_value,
+                gas_price,
+                if gas_price == gas_cap {
+                    None
+                } else {
+                    Some(BLOCK_TIMEOUT)
+                },
+            )
+            .wait();
 
         // Breaking condition for our loop
         gas_price < gas_cap
@@ -235,6 +243,7 @@ mod tests {
     use anyhow::anyhow;
     use ethcontract::web3::types::H2048;
     use ethcontract::H256;
+    use futures::future::FutureExt as _;
     use mockall::predicate::{always, eq};
 
     #[test]
@@ -244,15 +253,15 @@ mod tests {
         contract
             .expect_get_current_auction_index()
             .times(2)
-            .returning(|| Ok(0));
+            .returning(|| async { Ok(0) }.boxed());
         contract
             .expect_get_current_auction_index()
             .times(1)
-            .returning(|| Ok(1));
+            .returning(|| async { Ok(1) }.boxed());
 
         contract
             .expect_get_solution_objective_value()
-            .return_once(move |_, _, _| Ok(U256::from(42)));
+            .return_once(move |_, _, _| async { Ok(U256::from(42)) }.boxed());
 
         let gas_station = MockGasPriceEstimating::new();
 
@@ -271,16 +280,19 @@ mod tests {
             .times(1)
             .with(always(), always(), always(), eq(U256::from(5)), eq(Some(2)))
             .return_once(|_, _, _, _, _| {
-                Err(MethodError::from_parts(
+                async {
+                    Err(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
                         .to_owned(),
                     ExecutionError::ConfirmTimeout,
                 ))
+                }
+                .boxed()
             });
         contract
             .expect_submit_solution()
             .with(always(), always(), always(), eq(U256::from(9)), eq(None))
-            .return_once(|_, _, _, _, _| Ok(()));
+            .return_once(|_, _, _, _, _| async { Ok(()) }.boxed());
 
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station.expect_estimate_gas_price().returning(|| {
@@ -309,11 +321,14 @@ mod tests {
             .times(1)
             .with(always(), always(), always(), eq(U256::from(5)), eq(Some(2)))
             .return_once(|_, _, _, _, _| {
-                Err(MethodError::from_parts(
+                async {
+                    Err(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
                         .to_owned(),
                     ExecutionError::ConfirmTimeout,
                 ))
+                }
+                .boxed()
             });
         contract
             .expect_submit_solution()
@@ -326,21 +341,27 @@ mod tests {
                 eq(Some(2)),
             )
             .return_once(|_, _, _, _, _| {
-                Err(MethodError::from_parts(
+                async {
+                    Err(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
                         .to_owned(),
                     ExecutionError::ConfirmTimeout,
                 ))
+                }
+                .boxed()
             });
         contract
             .expect_submit_solution()
             .with(always(), always(), always(), eq(U256::from(15)), eq(None))
             .return_once(|_, _, _, _, _| {
-                Err(MethodError::from_parts(
+                async {
+                    Err(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
                         .to_owned(),
                     ExecutionError::ConfirmTimeout,
                 ))
+                }
+                .boxed()
             });
 
         let mut gas_station = MockGasPriceEstimating::new();
@@ -377,15 +398,18 @@ mod tests {
 
         contract
             .expect_get_current_auction_index()
-            .return_once(|| Ok(1));
+            .return_once(|| async { Ok(1) }.boxed());
         contract
             .expect_get_solution_objective_value()
             .return_once(move |_, _, _| {
-                Err(anyhow!(MethodError::from_parts(
+                async {
+                    Err(anyhow!(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
                         .to_owned(),
                     ExecutionError::Revert(Some("SafeMath: subtraction overflow".to_owned())),
                 )))
+                }
+                .boxed()
             });
         let gas_station = MockGasPriceEstimating::new();
 
@@ -423,22 +447,25 @@ mod tests {
         contract
             .expect_submit_solution()
             .return_once(move |_, _, _, _, _| {
-                Err(MethodError::from_parts(
+                async {
+                    Err(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
                         .to_owned(),
                     ExecutionError::Failure(Box::new(receipt)),
                 ))
+                }
+                .boxed()
             });
         // Get objective value on old block number returns revert reason
         contract
             .expect_get_solution_objective_value()
             .with(always(), always(), eq(Some(block_number.into())))
             .return_once(move |_, _, _| {
-                Err(anyhow!(MethodError::from_parts(
+                async{Err(anyhow!(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
                         .to_owned(),
                     ExecutionError::Revert(Some("Claimed objective doesn't sufficiently improve current solution".to_owned())),
-                )))
+                )))}.boxed()
             });
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station.expect_estimate_gas_price().return_once(|| {
