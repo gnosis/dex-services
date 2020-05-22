@@ -4,6 +4,7 @@
 use super::{AuctionTimingConfiguration, Scheduler, BATCH_DURATION};
 use crate::contracts::stablex_contract::StableXContract;
 use crate::driver::stablex_driver::{DriverResult, StableXDriver};
+use crate::util::FutureWaitExt as _;
 use anyhow::Result;
 use log::{debug, error, info, warn};
 use std::thread;
@@ -53,7 +54,7 @@ impl<'a> EvmScheduler<'a> {
             return Ok(());
         }
 
-        let time_remaining = self.exchange.get_current_auction_remaining_time()?;
+        let time_remaining = self.exchange.get_current_auction_remaining_time().wait()?;
         // NOTE: We need to take into account the asynchronous nature of web3
         //   and handle the case where we query the batch information right on
         //   a batch border and the following happens:
@@ -109,7 +110,7 @@ impl<'a> EvmScheduler<'a> {
     /// This is the current batch ID minus 1, as the current batch ID is the ID
     /// of the batch that is currently accepting orders.
     fn current_solving_batch(&self) -> Result<u32> {
-        Ok(self.exchange.get_current_auction_index()? - 1)
+        Ok(self.exchange.get_current_auction_index().wait()? - 1)
     }
 }
 
@@ -131,6 +132,7 @@ mod tests {
     use crate::driver::stablex_driver::MockStableXDriver;
     use anyhow::anyhow;
     use ethcontract::U256;
+    use futures::future::FutureExt as _;
     use mockall::predicate::eq;
     use mockall::Sequence;
 
@@ -139,10 +141,10 @@ mod tests {
         let mut exchange = MockStableXContract::new();
         exchange
             .expect_get_current_auction_index()
-            .returning(|| Ok(42));
+            .returning(|| async { Ok(42) }.boxed());
         exchange
             .expect_get_current_auction_remaining_time()
-            .returning(|| Ok(Duration::from_secs(270)));
+            .returning(|| async { Ok(Duration::from_secs(270)) }.boxed());
 
         let mut driver = MockStableXDriver::new();
         driver
@@ -161,10 +163,10 @@ mod tests {
         let mut exchange = MockStableXContract::new();
         exchange
             .expect_get_current_auction_index()
-            .returning(|| Ok(42));
+            .returning(|| async { Ok(42) }.boxed());
         exchange
             .expect_get_current_auction_remaining_time()
-            .returning(|| Ok(Duration::from_secs(240)));
+            .returning(|| async { Ok(Duration::from_secs(240)) }.boxed());
 
         let mut driver = MockStableXDriver::new();
         driver.expect_run().returning(|_, _| DriverResult::Ok);
@@ -181,7 +183,7 @@ mod tests {
         let mut exchange = MockStableXContract::new();
         exchange
             .expect_get_current_auction_index()
-            .returning(|| Ok(42));
+            .returning(|| async { Ok(42) }.boxed());
 
         let driver = MockStableXDriver::new();
 
@@ -199,15 +201,15 @@ mod tests {
             .expect_get_current_auction_index()
             .times(1)
             .in_sequence(&mut seq)
-            .returning(|| Ok(42));
+            .returning(|| async { Ok(42) }.boxed());
         exchange
             .expect_get_current_auction_remaining_time()
-            .returning(|| Ok(Duration::from_secs(270)));
+            .returning(|| async { Ok(Duration::from_secs(270)) }.boxed());
         exchange
             .expect_get_current_auction_index()
             .times(1)
             .in_sequence(&mut seq)
-            .returning(|| Ok(43));
+            .returning(|| async { Ok(43) }.boxed());
 
         let driver = MockStableXDriver::new();
 
@@ -222,10 +224,10 @@ mod tests {
         let mut exchange = MockStableXContract::new();
         exchange
             .expect_get_current_auction_index()
-            .returning(|| Ok(42));
+            .returning(|| async { Ok(42) }.boxed());
         exchange
             .expect_get_current_auction_remaining_time()
-            .returning(|| Ok(Duration::from_secs(1)));
+            .returning(|| async { Ok(Duration::from_secs(1)) }.boxed());
 
         let driver = MockStableXDriver::new();
 
@@ -240,10 +242,10 @@ mod tests {
         let mut exchange = MockStableXContract::new();
         exchange
             .expect_get_current_auction_index()
-            .returning(|| Ok(42));
+            .returning(|| async { Ok(42) }.boxed());
         exchange
             .expect_get_current_auction_remaining_time()
-            .returning(|| Ok(Duration::from_secs(270)));
+            .returning(|| async { Ok(Duration::from_secs(270)) }.boxed());
 
         let mut driver = MockStableXDriver::new();
         driver
@@ -261,10 +263,10 @@ mod tests {
         let mut exchange = MockStableXContract::new();
         exchange
             .expect_get_current_auction_index()
-            .returning(|| Ok(42));
+            .returning(|| async { Ok(42) }.boxed());
         exchange
             .expect_get_current_auction_remaining_time()
-            .returning(|| Ok(Duration::from_secs(270)));
+            .returning(|| async { Ok(Duration::from_secs(270)) }.boxed());
 
         let mut driver = MockStableXDriver::new();
         driver
