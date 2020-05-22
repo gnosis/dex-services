@@ -273,6 +273,7 @@ fn main() {
         .create(&*contract, &driver, scheduler_config);
     orderbook
         .initialize()
+        .wait()
         .expect("primary orderbook initialization failed");
     scheduler.start();
 }

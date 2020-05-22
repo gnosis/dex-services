@@ -1,11 +1,11 @@
 use crate::contracts::stablex_contract::StableXContract;
 use crate::models::{AccountState, Order};
-use crate::util::FutureWaitExt as _;
 
 use super::auction_data_reader::PaginatedAuctionDataReader;
 use super::StableXOrderBookReading;
 use anyhow::Result;
 use ethcontract::{BlockNumber, U256};
+use futures::future::{BoxFuture, FutureExt as _};
 use std::convert::TryInto;
 use std::sync::Arc;
 
@@ -27,24 +27,30 @@ impl PaginatedStableXOrderBookReader {
 }
 
 impl StableXOrderBookReading for PaginatedStableXOrderBookReader {
-    fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
-        let mut reader =
-            PaginatedAuctionDataReader::new(batch_id_to_solve, self.page_size as usize);
-        while let Some(page_info) = reader.next_page() {
-            let page = &self
-                .contract
-                .get_auction_data_paginated(
-                    self.page_size,
-                    page_info.previous_page_user,
-                    page_info
-                        .previous_page_user_offset
-                        .try_into()
-                        .expect("user cannot have more than u16::MAX orders"),
-                    Some(BlockNumber::Pending),
-                )
-                .wait()?;
-            reader.apply_page(page);
+    fn get_auction_data<'a>(
+        &'a self,
+        batch_id_to_solve: U256,
+    ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
+        async move {
+            let mut reader =
+                PaginatedAuctionDataReader::new(batch_id_to_solve, self.page_size as usize);
+            while let Some(page_info) = reader.next_page() {
+                let page = &self
+                    .contract
+                    .get_auction_data_paginated(
+                        self.page_size,
+                        page_info.previous_page_user,
+                        page_info
+                            .previous_page_user_offset
+                            .try_into()
+                            .expect("user cannot have more than u16::MAX orders"),
+                        Some(BlockNumber::Pending),
+                    )
+                    .await?;
+                reader.apply_page(page);
+            }
+            Ok(reader.get_auction_data())
         }
-        Ok(reader.get_auction_data())
+        .boxed()
     }
 }

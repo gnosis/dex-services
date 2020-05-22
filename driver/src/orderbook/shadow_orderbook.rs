@@ -7,8 +7,10 @@
 
 use super::StableXOrderBookReading;
 use crate::models::{AccountState, Order, TokenId};
+use crate::util::FutureWaitExt as _;
 use anyhow::Result;
 use ethcontract::{Address, U256};
+use futures::future::{BoxFuture, FutureExt as _};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::sync::mpsc::{self, Receiver, SyncSender};
@@ -48,16 +50,19 @@ impl<'a> ShadowedOrderbookReader<'a> {
 }
 
 impl<'a> StableXOrderBookReading for ShadowedOrderbookReader<'a> {
-    fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<Orderbook> {
-        let orderbook = self.primary.get_auction_data(batch_id_to_solve)?;
+    fn get_auction_data<'b>(&'b self, batch_id_to_solve: U256) -> BoxFuture<'b, Result<Orderbook>> {
+        async move {
+            let orderbook = self.primary.get_auction_data(batch_id_to_solve).await?;
 
-        // NOTE: Ignore errors here as they indicate that the shadow reader is
-        //   already reading an orderbook.
-        let _ = self
-            .shadow_channel
-            .try_send((batch_id_to_solve.low_u32(), orderbook.clone()));
+            // NOTE: Ignore errors here as they indicate that the shadow reader is
+            //   already reading an orderbook.
+            let _ = self
+                .shadow_channel
+                .try_send((batch_id_to_solve.low_u32(), orderbook.clone()));
 
-        Ok(orderbook)
+            Ok(orderbook)
+        }
+        .boxed()
     }
 }
 
@@ -72,7 +77,7 @@ fn background_shadow_reader(
     channel: Receiver<(u32, Orderbook)>,
 ) {
     while let Ok((batch_id, primary_orderbook)) = channel.recv() {
-        let shadow_orderbook = match reader.get_auction_data(batch_id.into()) {
+        let shadow_orderbook = match reader.get_auction_data(batch_id.into()).wait() {
             Ok(orderbook) => orderbook,
             Err(err) => {
                 log::error!(

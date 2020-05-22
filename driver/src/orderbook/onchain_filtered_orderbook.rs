@@ -1,6 +1,5 @@
 use crate::contracts::stablex_contract::{FilteredOrderPage, StableXContract};
 use crate::models::{AccountState, Order};
-use crate::util::FutureWaitExt as _;
 
 use super::auction_data_reader::IndexedAuctionDataReader;
 use super::filtered_orderbook::OrderbookFilter;
@@ -8,6 +7,7 @@ use super::StableXOrderBookReading;
 
 use anyhow::Result;
 use ethcontract::{Address, U256};
+use futures::future::{BoxFuture, FutureExt as _};
 use std::sync::Arc;
 
 pub struct OnchainFilteredOrderBookReader {
@@ -34,33 +34,39 @@ impl OnchainFilteredOrderBookReader {
 }
 
 impl StableXOrderBookReading for OnchainFilteredOrderBookReader {
-    fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
-        let last_block = self
-            .contract
-            .get_last_block_for_batch(batch_id_to_solve.as_u32())
-            .wait()?;
-        let mut reader = IndexedAuctionDataReader::new(batch_id_to_solve);
-        let mut auction_data = FilteredOrderPage {
-            indexed_elements: vec![],
-            has_next_page: true,
-            next_page_user: Address::zero(),
-            next_page_user_offset: 0,
-        };
-        while auction_data.has_next_page {
-            auction_data = self
+    fn get_auction_data<'a>(
+        &'a self,
+        batch_id_to_solve: U256,
+    ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
+        async move {
+            let last_block = self
                 .contract
-                .get_filtered_auction_data_paginated(
-                    batch_id_to_solve,
-                    self.filter.clone(),
-                    self.page_size,
-                    auction_data.next_page_user,
-                    auction_data.next_page_user_offset,
-                    Some(last_block.into()),
-                )
-                .wait()?;
-            reader.apply_page(&auction_data.indexed_elements);
+                .get_last_block_for_batch(batch_id_to_solve.as_u32())
+                .await?;
+            let mut reader = IndexedAuctionDataReader::new(batch_id_to_solve);
+            let mut auction_data = FilteredOrderPage {
+                indexed_elements: vec![],
+                has_next_page: true,
+                next_page_user: Address::zero(),
+                next_page_user_offset: 0,
+            };
+            while auction_data.has_next_page {
+                auction_data = self
+                    .contract
+                    .get_filtered_auction_data_paginated(
+                        batch_id_to_solve,
+                        self.filter.clone(),
+                        self.page_size,
+                        auction_data.next_page_user,
+                        auction_data.next_page_user_offset,
+                        Some(last_block.into()),
+                    )
+                    .await?;
+                reader.apply_page(&auction_data.indexed_elements);
+            }
+            Ok(reader.get_auction_data())
         }
-        Ok(reader.get_auction_data())
+        .boxed()
     }
 }
 
@@ -68,7 +74,7 @@ impl StableXOrderBookReading for OnchainFilteredOrderBookReader {
 mod tests {
     use super::*;
     use crate::contracts::stablex_contract::MockStableXContract;
-    use futures::future::FutureExt as _;
+    use crate::util::FutureWaitExt as _;
     use mockall::Sequence;
 
     const FIRST_ORDER: &[u8] = &[
@@ -127,7 +133,7 @@ mod tests {
             &OrderbookFilter::default(),
         );
         assert_eq!(
-            reader.get_auction_data(U256::from(42)).unwrap(),
+            reader.get_auction_data(U256::from(42)).wait().unwrap(),
             (AccountState::default(), vec![])
         )
     }
@@ -172,7 +178,7 @@ mod tests {
         };
 
         assert_eq!(
-            reader.get_auction_data(U256::from(42)).unwrap(),
+            reader.get_auction_data(U256::from(42)).wait().unwrap(),
             (state, vec![order])
         )
     }
@@ -246,7 +252,7 @@ mod tests {
         ];
 
         assert_eq!(
-            reader.get_auction_data(U256::from(42)).unwrap(),
+            reader.get_auction_data(U256::from(42)).wait().unwrap(),
             (state, orders)
         )
     }
