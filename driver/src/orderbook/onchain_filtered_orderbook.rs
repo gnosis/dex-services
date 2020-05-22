@@ -1,5 +1,6 @@
 use crate::contracts::stablex_contract::{FilteredOrderPage, StableXContract};
 use crate::models::{AccountState, Order};
+use crate::util::FutureWaitExt as _;
 
 use super::auction_data_reader::IndexedAuctionDataReader;
 use super::filtered_orderbook::OrderbookFilter;
@@ -36,7 +37,8 @@ impl StableXOrderBookReading for OnchainFilteredOrderBookReader {
     fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
         let last_block = self
             .contract
-            .get_last_block_for_batch(batch_id_to_solve.as_u32())?;
+            .get_last_block_for_batch(batch_id_to_solve.as_u32())
+            .wait()?;
         let mut reader = IndexedAuctionDataReader::new(batch_id_to_solve);
         let mut auction_data = FilteredOrderPage {
             indexed_elements: vec![],
@@ -45,14 +47,17 @@ impl StableXOrderBookReading for OnchainFilteredOrderBookReader {
             next_page_user_offset: 0,
         };
         while auction_data.has_next_page {
-            auction_data = self.contract.get_filtered_auction_data_paginated(
-                batch_id_to_solve,
-                self.filter.clone(),
-                self.page_size,
-                auction_data.next_page_user,
-                auction_data.next_page_user_offset,
-                Some(last_block.into()),
-            )?;
+            auction_data = self
+                .contract
+                .get_filtered_auction_data_paginated(
+                    batch_id_to_solve,
+                    self.filter.clone(),
+                    self.page_size,
+                    auction_data.next_page_user,
+                    auction_data.next_page_user_offset,
+                    Some(last_block.into()),
+                )
+                .wait()?;
             reader.apply_page(&auction_data.indexed_elements);
         }
         Ok(reader.get_auction_data())
@@ -63,6 +68,7 @@ impl StableXOrderBookReading for OnchainFilteredOrderBookReader {
 mod tests {
     use super::*;
     use crate::contracts::stablex_contract::MockStableXContract;
+    use futures::future::FutureExt as _;
     use mockall::Sequence;
 
     const FIRST_ORDER: &[u8] = &[
@@ -99,17 +105,20 @@ mod tests {
 
         contract
             .expect_get_last_block_for_batch()
-            .returning(|_| Ok(42));
+            .returning(|_| async { Ok(42) }.boxed());
         contract
             .expect_get_filtered_auction_data_paginated()
             .times(1)
             .returning(|_, _, _, _, _, _| {
-                Ok(FilteredOrderPage {
-                    indexed_elements: vec![],
-                    has_next_page: false,
-                    next_page_user: Address::zero(),
-                    next_page_user_offset: 1,
-                })
+                async {
+                    Ok(FilteredOrderPage {
+                        indexed_elements: vec![],
+                        has_next_page: false,
+                        next_page_user: Address::zero(),
+                        next_page_user_offset: 1,
+                    })
+                }
+                .boxed()
             });
 
         let reader = OnchainFilteredOrderBookReader::new(
@@ -129,17 +138,20 @@ mod tests {
 
         contract
             .expect_get_last_block_for_batch()
-            .returning(|_| Ok(42));
+            .returning(|_| async { Ok(42) }.boxed());
         contract
             .expect_get_filtered_auction_data_paginated()
             .times(1)
             .returning(|_, _, _, _, _, _| {
-                Ok(FilteredOrderPage {
-                    indexed_elements: FIRST_ORDER.to_vec(),
-                    has_next_page: false,
-                    next_page_user: Address::from_low_u64_be(1),
-                    next_page_user_offset: 0,
-                })
+                async {
+                    Ok(FilteredOrderPage {
+                        indexed_elements: FIRST_ORDER.to_vec(),
+                        has_next_page: false,
+                        next_page_user: Address::from_low_u64_be(1),
+                        next_page_user_offset: 0,
+                    })
+                }
+                .boxed()
             });
 
         let reader = OnchainFilteredOrderBookReader::new(
@@ -172,18 +184,21 @@ mod tests {
 
         contract
             .expect_get_last_block_for_batch()
-            .returning(|_| Ok(42));
+            .returning(|_| async { Ok(42) }.boxed());
         contract
             .expect_get_filtered_auction_data_paginated()
             .times(1)
             .in_sequence(&mut seq)
             .returning(|_, _, _, _, _, _| {
-                Ok(FilteredOrderPage {
-                    indexed_elements: FIRST_ORDER.to_vec(),
-                    has_next_page: true,
-                    next_page_user: Address::from_low_u64_be(1),
-                    next_page_user_offset: 0,
-                })
+                async {
+                    Ok(FilteredOrderPage {
+                        indexed_elements: FIRST_ORDER.to_vec(),
+                        has_next_page: true,
+                        next_page_user: Address::from_low_u64_be(1),
+                        next_page_user_offset: 0,
+                    })
+                }
+                .boxed()
             });
 
         contract
@@ -191,12 +206,15 @@ mod tests {
             .times(1)
             .in_sequence(&mut seq)
             .returning(|_, _, _, _, _, _| {
-                Ok(FilteredOrderPage {
-                    indexed_elements: SECOND_ORDER.to_vec(),
-                    has_next_page: false,
-                    next_page_user: Address::from_low_u64_be(1),
-                    next_page_user_offset: 1,
-                })
+                async {
+                    Ok(FilteredOrderPage {
+                        indexed_elements: SECOND_ORDER.to_vec(),
+                        has_next_page: false,
+                        next_page_user: Address::from_low_u64_be(1),
+                        next_page_user_offset: 1,
+                    })
+                }
+                .boxed()
             });
 
         let reader = OnchainFilteredOrderBookReader::new(

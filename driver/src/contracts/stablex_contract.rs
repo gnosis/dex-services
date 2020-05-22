@@ -4,17 +4,19 @@
 use crate::{
     contracts,
     models::{ExecutedOrder, Solution},
-    util::FutureWaitExt,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Error, Result};
 use ethcontract::{
     contract::Event,
     errors::{ExecutionError, MethodError},
+    prelude::Web3,
     transaction::{confirm::ConfirmParams, GasPrice, ResolveCondition},
-    web3::{futures::Future as _, types::Block},
-    Address, BlockNumber, PrivateKey, U256,
+    transport::DynTransport,
+    web3::types::Block,
+    Address, BlockNumber, PrivateKey, H256, U256,
 };
 use futures::{
+    compat::Future01CompatExt as _,
     future::{BoxFuture, FutureExt},
     stream::{BoxStream, StreamExt},
 };
@@ -40,11 +42,11 @@ pub struct StableXContractImpl {
 }
 
 impl StableXContractImpl {
-    pub fn new(web3: &contracts::Web3, key: PrivateKey, network_id: u64) -> Result<Self> {
+    pub async fn new(web3: &contracts::Web3, key: PrivateKey, network_id: u64) -> Result<Self> {
         let defaults = contracts::method_defaults(key, network_id)?;
 
-        let viewer = BatchExchangeViewer::deployed(&web3).wait()?;
-        let mut instance = BatchExchange::deployed(&web3).wait()?;
+        let viewer = BatchExchangeViewer::deployed(&web3).await?;
+        let mut instance = BatchExchange::deployed(&web3).await?;
         *instance.defaults_mut() = defaults;
 
         Ok(StableXContractImpl { instance, viewer })
@@ -77,15 +79,15 @@ pub struct FilteredOrderPage {
 pub trait StableXContract {
     /// Retrieve the current batch ID that is accepting orders. Note that this
     /// is always `1` greater than the batch ID that is accepting solutions.
-    fn get_current_auction_index(&self) -> Result<u32>;
+    fn get_current_auction_index(&self) -> BoxFuture<'static, Result<u32>>;
 
     /// Retrieve the time remaining in the batch.
-    fn get_current_auction_remaining_time(&self) -> Result<Duration>;
+    fn get_current_auction_remaining_time(&self) -> BoxFuture<'static, Result<Duration>>;
 
     /// Searches for the block number of the last block of the given batch. If
     /// the batch has not yet been finalized, then the block number for the
     /// `"latest"` block is returned.
-    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<u64>;
+    fn get_last_block_for_batch(&self, batch_id: u32) -> BoxFuture<'static, Result<u64>>;
 
     /// Retrieve one page of indexed auction data that is filtered on chain
     /// to only include orders valid at the given batchId.
@@ -97,7 +99,7 @@ pub trait StableXContract {
         previous_page_user: Address,
         previous_page_user_offset: u16,
         block_number: Option<BlockNumber>,
-    ) -> Result<FilteredOrderPage>;
+    ) -> BoxFuture<'static, Result<FilteredOrderPage>>;
 
     /// Retrieve one page of auction data.
     /// `block` is needed because the state of the smart contract could change
@@ -109,14 +111,14 @@ pub trait StableXContract {
         previous_page_user: Address,
         previous_page_user_offset: u16,
         block_number: Option<BlockNumber>,
-    ) -> Result<Vec<u8>>;
+    ) -> BoxFuture<'static, Result<Vec<u8>>>;
 
     fn get_solution_objective_value(
         &self,
         batch_index: U256,
         solution: Solution,
         block_number: Option<BlockNumber>,
-    ) -> Result<U256>;
+    ) -> BoxFuture<'static, Result<U256>>;
 
     fn submit_solution(
         &self,
@@ -125,7 +127,7 @@ pub trait StableXContract {
         claimed_objective_value: U256,
         gas_price: U256,
         block_timeout: Option<usize>,
-    ) -> Result<(), MethodError>;
+    ) -> BoxFuture<'static, Result<(), MethodError>>;
 
     fn past_events(
         &self,
@@ -139,40 +141,38 @@ pub trait StableXContract {
 }
 
 impl StableXContract for StableXContractImpl {
-    fn get_current_auction_index(&self) -> Result<u32> {
-        let auction_index = self.instance.get_current_batch_id().call().wait()?;
-        Ok(auction_index)
+    fn get_current_auction_index(&self) -> BoxFuture<'static, Result<u32>> {
+        let future = self.instance.get_current_batch_id().call();
+        async move { future.await.map_err(Error::from) }.boxed()
     }
 
-    fn get_current_auction_remaining_time(&self) -> Result<Duration> {
-        let remaining_seconds = self
-            .instance
-            .get_seconds_remaining_in_batch()
-            .call()
-            .wait()?;
-        Ok(Duration::from_secs(remaining_seconds.as_u64()))
-    }
-
-    fn get_last_block_for_batch(&self, batch_id: u32) -> Result<u64> {
-        let web3 = self.instance.raw_instance().web3();
-        let get_block = |block_number: BlockNumber| -> Result<_> {
-            web3.eth()
-                .block(block_number.into())
-                .wait()?
-                .ok_or_else(|| anyhow!("block {:?} is missing", block_number))
-        };
-
-        let mut current_block = get_block(BlockNumber::Latest)?;
-        let mut block_number = current_block
-            .number
-            .ok_or_else(|| anyhow!("latest block {:?} has no block number", current_block.hash))?
-            .as_u64();
-        while batch_id < get_block_batch_id(&current_block) && block_number > 0 {
-            block_number -= 1;
-            current_block = get_block(block_number.into())?;
+    fn get_current_auction_remaining_time(&self) -> BoxFuture<'static, Result<Duration>> {
+        let future = self.instance.get_seconds_remaining_in_batch().call();
+        async move {
+            let seconds = future.await?;
+            Ok(Duration::from_secs(seconds.as_u64()))
         }
+        .boxed()
+    }
 
-        Ok(block_number)
+    fn get_last_block_for_batch(&self, batch_id: u32) -> BoxFuture<'static, Result<u64>> {
+        let web3 = self.instance.raw_instance().web3();
+        async move {
+            let mut current_block = get_block(&web3, BlockNumber::Latest).await?;
+            let mut block_number = current_block
+                .number
+                .ok_or_else(|| {
+                    anyhow!("latest block {:?} has no block number", current_block.hash)
+                })?
+                .as_u64();
+            while batch_id < get_block_batch_id(&current_block) && block_number > 0 {
+                block_number -= 1;
+                current_block = get_block(&web3, block_number.into()).await?;
+            }
+
+            Ok(block_number)
+        }
+        .boxed()
     }
 
     fn get_filtered_auction_data_paginated(
@@ -183,7 +183,7 @@ impl StableXContract for StableXContractImpl {
         previous_page_user: Address,
         previous_page_user_offset: u16,
         block_number: Option<BlockNumber>,
-    ) -> Result<FilteredOrderPage> {
+    ) -> BoxFuture<'static, Result<FilteredOrderPage>> {
         let target_batch = batch_index.low_u32();
         let mut builder = self.viewer.get_filtered_orders_paginated(
             // Balances should be valid for the batch at which we are submitting (target batch + 1)
@@ -195,14 +195,18 @@ impl StableXContract for StableXContractImpl {
         );
         builder.block = block_number;
         builder.m.tx.gas = None;
-        let (indexed_elements, has_next_page, next_page_user, next_page_user_offset) =
-            builder.call().wait()?;
-        Ok(FilteredOrderPage {
-            indexed_elements,
-            has_next_page,
-            next_page_user,
-            next_page_user_offset,
-        })
+        let future = builder.call();
+        async move {
+            let (indexed_elements, has_next_page, next_page_user, next_page_user_offset) =
+                future.await?;
+            Ok(FilteredOrderPage {
+                indexed_elements,
+                has_next_page,
+                next_page_user,
+                next_page_user_offset,
+            })
+        }
+        .boxed()
     }
 
     fn get_auction_data_paginated(
@@ -211,7 +215,7 @@ impl StableXContract for StableXContractImpl {
         previous_page_user: Address,
         previous_page_user_offset: u16,
         block_number: Option<BlockNumber>,
-    ) -> Result<Vec<u8>> {
+    ) -> BoxFuture<'static, Result<Vec<u8>>> {
         let mut orders_builder = self.viewer.get_encoded_orders_paginated(
             previous_page_user,
             previous_page_user_offset,
@@ -219,7 +223,8 @@ impl StableXContract for StableXContractImpl {
         );
         orders_builder.block = block_number;
         orders_builder.m.tx.gas = None;
-        orders_builder.call().wait().map_err(From::from)
+        let future = orders_builder.call();
+        async move { future.await.map_err(Error::from) }.boxed()
     }
 
     fn get_solution_objective_value(
@@ -227,7 +232,7 @@ impl StableXContract for StableXContractImpl {
         batch_index: U256,
         solution: Solution,
         block_number: Option<BlockNumber>,
-    ) -> Result<U256> {
+    ) -> BoxFuture<'static, Result<U256>> {
         let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
         let (owners, order_ids, volumes) = encode_execution_for_contract(&solution.executed_orders);
         let mut builder = self
@@ -243,8 +248,8 @@ impl StableXContract for StableXContractImpl {
             )
             .view();
         builder.block = block_number;
-        let objective_value = builder.call().wait()?;
-        Ok(objective_value)
+        let future = builder.call();
+        async move { future.await.map_err(Error::from) }.boxed()
     }
 
     fn submit_solution(
@@ -254,7 +259,7 @@ impl StableXContract for StableXContractImpl {
         claimed_objective_value: U256,
         gas_price: U256,
         block_timeout: Option<usize>,
-    ) -> Result<(), MethodError> {
+    ) -> BoxFuture<'static, Result<(), MethodError>> {
         let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
         let (owners, order_ids, volumes) = encode_execution_for_contract(&solution.executed_orders);
         let mut method = self
@@ -278,9 +283,8 @@ impl StableXContract for StableXContractImpl {
             block_timeout,
             ..Default::default()
         }));
-        method.send().wait()?;
-
-        Ok(())
+        let future = method.send();
+        async move { future.await.map(|_| ()) }.boxed()
     }
 
     fn past_events(
@@ -344,6 +348,17 @@ fn encode_execution_for_contract(
 fn get_block_batch_id<T>(block: &Block<T>) -> u32 {
     const BATCH_DURATION: u64 = 300;
     (block.timestamp.as_u64() / BATCH_DURATION) as _
+}
+
+async fn get_block(
+    web3: &Web3<DynTransport>,
+    block_number: BlockNumber,
+) -> Result<ethcontract::web3::types::Block<H256>> {
+    web3.eth()
+        .block(block_number.into())
+        .compat()
+        .await?
+        .ok_or_else(|| anyhow!("block {:?} is missing", block_number))
 }
 
 #[cfg(test)]
