@@ -17,6 +17,7 @@ use crate::models::{AccountState, Order};
 
 use anyhow::{anyhow, Error, Result};
 use ethcontract::U256;
+use futures::future::{BoxFuture, FutureExt as _};
 #[cfg(test)]
 use mockall::automock;
 use std::path::PathBuf;
@@ -30,11 +31,14 @@ pub trait StableXOrderBookReading {
     ///
     /// # Arguments
     /// * `batch_id_to_solve` - the index for which returned orders should be valid
-    fn get_auction_data(&self, batch_id_to_solve: U256) -> Result<(AccountState, Vec<Order>)>;
+    fn get_auction_data<'a>(
+        &'a self,
+        batch_id_to_solve: U256,
+    ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>>;
     /// Perform potential heavy initialization of the orderbook. If this fails or wasn't called
     // the orderbook will initialize on first use of `get_auction_data`.
-    fn initialize(&self) -> Result<()> {
-        Ok(())
+    fn initialize<'a>(&'a self) -> BoxFuture<'a, Result<()>> {
+        async { Ok(()) }.boxed()
     }
 }
 

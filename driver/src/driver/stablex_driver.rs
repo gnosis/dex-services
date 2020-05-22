@@ -3,6 +3,7 @@ use crate::models::{account_state::AccountState, order::Order, Solution};
 use crate::orderbook::StableXOrderBookReading;
 use crate::price_finding::PriceFinding;
 use crate::solution_submission::{SolutionSubmissionError, StableXSolutionSubmitting};
+use crate::util::FutureWaitExt as _;
 use anyhow::{Error, Result};
 use ethcontract::U256;
 use log::{info, warn};
@@ -43,7 +44,10 @@ impl<'a> StableXDriverImpl<'a> {
     }
 
     fn get_orderbook(&self, batch_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
-        let get_auction_data_result = self.orderbook_reader.get_auction_data(batch_to_solve);
+        let get_auction_data_result = self
+            .orderbook_reader
+            .get_auction_data(batch_to_solve)
+            .wait();
         self.metrics
             .auction_orders_fetched(batch_to_solve, &get_auction_data_result);
         get_auction_data_result
@@ -188,6 +192,7 @@ mod tests {
     use crate::solution_submission::MockStableXSolutionSubmitting;
     use crate::util::test_util::map_from_slice;
     use anyhow::anyhow;
+    use futures::future::FutureExt as _;
     use mockall::predicate::*;
     use std::thread;
 
@@ -232,7 +237,7 @@ mod tests {
             .with(eq(batch))
             .return_once({
                 let result = (state.clone(), orders.clone());
-                |_| Ok(result)
+                |_| async { Ok(result) }.boxed()
             });
 
         submitter
@@ -269,7 +274,7 @@ mod tests {
 
         reader
             .expect_get_auction_data()
-            .returning(|_| Err(anyhow!("Error")));
+            .returning(|_| async { Err(anyhow!("Error")) }.boxed());
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
 
@@ -294,7 +299,7 @@ mod tests {
             .with(eq(batch))
             .return_once({
                 let result = (state, orders);
-                |_| Ok(result)
+                |_| async { Ok(result) }.boxed()
             });
 
         submitter
@@ -331,7 +336,7 @@ mod tests {
         reader
             .expect_get_auction_data()
             .with(eq(batch))
-            .return_once(move |_| Ok((state, orders)));
+            .return_once(move |_| async { Ok((state, orders)) }.boxed());
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
         assert!(driver.run(batch, time_limit).is_ok());
@@ -355,7 +360,7 @@ mod tests {
             .with(eq(batch))
             .return_once({
                 let result = (state.clone(), orders.clone());
-                |_| Ok(result)
+                |_| async { Ok(result) }.boxed()
             });
 
         let solution = Solution::trivial();
@@ -387,7 +392,7 @@ mod tests {
             .with(eq(batch))
             .return_once({
                 let result = (state.clone(), orders.clone());
-                |_| Ok(result)
+                |_| async { Ok(result) }.boxed()
             });
 
         submitter
@@ -433,7 +438,7 @@ mod tests {
             .with(eq(batch))
             .return_once({
                 let result = (state.clone(), orders.clone());
-                |_| Ok(result)
+                |_| async { Ok(result) }.boxed()
             });
 
         submitter
@@ -475,7 +480,7 @@ mod tests {
             .with(eq(batch))
             .return_once({
                 let result = (state.clone(), orders.clone());
-                |_| Ok(result)
+                |_| async { Ok(result) }.boxed()
             });
 
         submitter
@@ -525,7 +530,7 @@ mod tests {
                 while start.elapsed() <= time_limit {
                     thread::yield_now();
                 }
-                Ok((state, orders))
+                async { Ok((state, orders)) }.boxed()
             });
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
