@@ -29,7 +29,7 @@ async function main(args) {
 	const instance = await readJson(args[0]);
 	const batchId = parseInt(args[1]);
 
-	const output = await fs.open(`orderbook-${batchId - 1}.hex`, "w");
+	const output = await fs.open(`orderbook-${batchId}.hex`, "w");
 	for (const order of instance.orders) {
 		const balance = instance.accounts[order.accountID][order.sellToken];
 		await output.write(encodeOrder(order, balance));
