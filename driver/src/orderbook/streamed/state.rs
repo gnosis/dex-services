@@ -62,9 +62,14 @@ impl State {
                 // We allow the batch ids being equal to prevent race conditions where the State gets
                 // a new event right before we want to get the orderbook.
                 ensure!(self.last_batch_id <= batch_id, "batch is in the past");
-                // TODO: in the future we might want to handle the case where
-                // solution_partially_received is true and react in some way like erroring or
-                // excluding pending balances.
+                // The orderbook should never be retrieved with a partially applied solution. If
+                // this happens, it is an error as events are applied per block and solutions are
+                // applied in a single block.
+                ensure!(
+                    !self.solution_partially_received,
+                    "retrieved orderbook with a partially applied solution",
+                );
+
                 batch_id
             }
         };
