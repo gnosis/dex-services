@@ -132,7 +132,7 @@ pub fn execute_private_solver(
     let mut command = Command::new("python");
     let private_solver_command = command
         .current_dir("/app/batchauctions")
-        .args(&["-m", "scripts.e2e._run"])
+        .args(&["-m", "src._run"])
         .arg(format!("{}{}", "/app/", input_file.to_owned()))
         .arg(format!("--outputDir={}{}", "/app/", result_folder))
         .args(&["--solverTimeLimit", &time_limit])
