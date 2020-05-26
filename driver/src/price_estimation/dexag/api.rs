@@ -1,7 +1,7 @@
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::{Context, Result};
 use ethcontract::Address;
-use futures::future::{BoxFuture, FutureExt};
+use futures::future::{BoxFuture, FutureExt as _};
 use serde::Deserialize;
 use serde_with::rust::display_fromstr;
 use url::Url;
@@ -10,7 +10,7 @@ use url::Url;
 /// Parts of the dex.ag api.
 pub trait DexagApi {
     /// https://docs.dex.ag/api/tokens
-    fn get_token_list(&self) -> Result<Vec<Token>>;
+    fn get_token_list<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Token>>>;
     /// https://docs.dex.ag/api/price
     /// Returns the price of one unit of `from` expressed in `to`.
     /// For example `get_price("ETH", "DAI")` is ~220.
@@ -55,12 +55,16 @@ impl DexagHttpApi {
 }
 
 impl DexagApi for DexagHttpApi {
-    fn get_token_list(&self) -> Result<Vec<Token>> {
-        let mut url = self.base_url.clone();
-        url.set_path("token-list-full");
-        self.client
-            .get_json(url.to_string(), HttpLabel::Dexag)
-            .context("failed to parse token list json from dexag response")
+    fn get_token_list<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Token>>> {
+        async move {
+            let mut url = self.base_url.clone();
+            url.set_path("token-list-full");
+            self.client
+                .get_json_async(url.to_string(), HttpLabel::Dexag)
+                .await
+                .context("failed to parse token list json from dexag response")
+        }
+        .boxed()
     }
 
     fn get_price<'a>(&'a self, from: &Token, to: &Token) -> BoxFuture<'a, Result<f64>> {
@@ -90,6 +94,7 @@ impl DexagApi for DexagHttpApi {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::util::FutureWaitExt as _;
 
     #[test]
     #[allow(clippy::float_cmp)]
@@ -126,10 +131,10 @@ mod tests {
     #[ignore]
     fn online_dexag_api() {
         let api = DexagHttpApi::new(&HttpFactory::default()).unwrap();
-        let tokens = api.get_token_list().unwrap();
+        let tokens = api.get_token_list().wait().unwrap();
         println!("{:#?}", tokens);
 
-        let price = futures::executor::block_on(api.get_price(&tokens[0], &tokens[1])).unwrap();
+        let price = api.get_price(&tokens[0], &tokens[1]).wait().unwrap();
         println!("{:#?}", price);
     }
 }
