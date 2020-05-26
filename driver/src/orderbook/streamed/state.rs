@@ -653,8 +653,7 @@ mod tests {
         );
         apply_event!(to state for batch 1; Trade order number 0, from user 2, selling 1, for 2);
 
-        assert_balance!(in state for batch 1; user 2, has token 0, balance 10);
-        assert_balance!(in state for batch 1; user 2, has token 1, balance 10);
+        assert!(state.orderbook_for_batch(Batch::Future(1)).is_err());
 
         apply_event!(to state for batch 1; SolutionSubmission from user 4, with fee 42);
 
