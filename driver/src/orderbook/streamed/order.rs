@@ -68,7 +68,7 @@ impl Order {
         }
     }
 
-    pub fn get_remaining_amount(&self, batch_id: BatchId) -> u128 {
+    pub fn get_remaining_amount_at_beginning_of_batch(&self, batch_id: BatchId) -> u128 {
         // Cannot fail because of the invariant.
         self.price_denominator
             .checked_sub(self.get_used_amount(batch_id))
@@ -117,7 +117,9 @@ impl Order {
         let (buy_amount, sell_amount) = stablex_auction_element::compute_buy_sell_amounts(
             self.price_numerator,
             self.price_denominator,
-            self.get_remaining_amount(batch_id),
+            // Remaining amount needs to incorporate trades that happened while collecting orders
+            // for the batch we are trying to solve. Thus query balance as of beginning of the next.
+            self.get_remaining_amount_at_beginning_of_batch(batch_id + 1),
         );
         ModelOrder {
             id: order_id,

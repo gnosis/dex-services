@@ -53,7 +53,7 @@ impl Balance {
         Ok(())
     }
 
-    pub fn get_balance(&self, batch_id: BatchId) -> BigInt {
+    pub fn get_balance_at_beginning_of_batch(&self, batch_id: BatchId) -> BigInt {
         let balance = self.balance_with_deposit_and_proceeds(batch_id);
         // Withdraw requests can be for amounts larger than balance.
         match self.withdraw.amount(batch_id) {
@@ -160,7 +160,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn get_balance() {
+    fn get_balance_at_beginning_of_batch() {
         let overdrawn_request = Balance {
             balance: BigInt::from(2),
             deposit: Flux::default(),
@@ -170,9 +170,18 @@ mod tests {
             },
             proceeds: Flux::default(),
         };
-        assert_eq!(overdrawn_request.get_balance(0), BigInt::from(2));
-        assert_eq!(overdrawn_request.get_balance(1), BigInt::from(2));
-        assert_eq!(overdrawn_request.get_balance(2), BigInt::zero());
+        assert_eq!(
+            overdrawn_request.get_balance_at_beginning_of_batch(0),
+            BigInt::from(2)
+        );
+        assert_eq!(
+            overdrawn_request.get_balance_at_beginning_of_batch(1),
+            BigInt::from(2)
+        );
+        assert_eq!(
+            overdrawn_request.get_balance_at_beginning_of_batch(2),
+            BigInt::zero()
+        );
 
         let standard_request = Balance {
             balance: BigInt::from(2),
@@ -183,9 +192,18 @@ mod tests {
             },
             proceeds: Flux::default(),
         };
-        assert_eq!(standard_request.get_balance(0), BigInt::from(2));
-        assert_eq!(standard_request.get_balance(1), BigInt::from(2));
-        assert_eq!(standard_request.get_balance(2), BigInt::from(1));
+        assert_eq!(
+            standard_request.get_balance_at_beginning_of_batch(0),
+            BigInt::from(2)
+        );
+        assert_eq!(
+            standard_request.get_balance_at_beginning_of_batch(1),
+            BigInt::from(2)
+        );
+        assert_eq!(
+            standard_request.get_balance_at_beginning_of_batch(2),
+            BigInt::from(1)
+        );
 
         let no_request = Balance {
             balance: BigInt::from(1),
@@ -193,8 +211,17 @@ mod tests {
             withdraw: Flux::default(),
             proceeds: Flux::default(),
         };
-        assert_eq!(no_request.get_balance(0), BigInt::from(1));
-        assert_eq!(no_request.get_balance(1), BigInt::from(1));
-        assert_eq!(no_request.get_balance(2), BigInt::from(1));
+        assert_eq!(
+            no_request.get_balance_at_beginning_of_batch(0),
+            BigInt::from(1)
+        );
+        assert_eq!(
+            no_request.get_balance_at_beginning_of_batch(1),
+            BigInt::from(1)
+        );
+        assert_eq!(
+            no_request.get_balance_at_beginning_of_batch(2),
+            BigInt::from(1)
+        );
     }
 }

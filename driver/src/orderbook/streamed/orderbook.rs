@@ -138,14 +138,9 @@ impl StableXOrderBookReading for Orderbook {
         batch_id_to_solve: U256,
     ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
         async move {
-            // TODO: Handle future batch ids for when we want to do optimistic solving.
             let state = self.create_state()?;
-            // `orderbook_for_batch` takes the index of the auction that is currently collecting orders and returns
-            // the orderbook for the batch index that is currently being solved. `get_auction_data` passed in the
-            // index for the auction that orders should be valid for (the one currently being solved). Thus we need
-            // to increment it.
             let (account_state, orders) =
-                state.orderbook_for_batch(batch_id_to_solve.low_u32() + 1)?;
+                state.orderbook_to_solve_batch(batch_id_to_solve.low_u32())?;
             let (account_state, orders) = util::normalize_auction_data(account_state, orders);
             Ok((account_state, orders))
         }
@@ -278,7 +273,7 @@ mod tests {
         orderbook.handle_event_data(deposit_2, 2, 0, H256::zero(), 0);
 
         let auction_data = orderbook
-            .get_auction_data(1.into())
+            .get_auction_data(2.into())
             .now_or_never()
             .unwrap()
             .unwrap();
