@@ -23,7 +23,7 @@ jobs:
 
   include:
     - name: "Build and Local Testing"
-      if: type IS pull_request
+      if: type = pull_request
       rust: stable
       cache:
         directories:
@@ -76,7 +76,7 @@ jobs:
         - curl --form json_file=@coveralls.json https://coveralls.io/api/v1/jobs
     
     - name: Deploy
-      if: (type IS NOT pull_request) AND (tag is present OR branch = master)
+      if: (type != pull_request) AND (tag is present OR branch = master)
       before_install:
         - sudo apt-get update && sudo apt-get install -y python3-pip python3-setuptools && pip3 install --upgrade --user awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
