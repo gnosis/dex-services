@@ -2228,6 +2228,7 @@ dependencies = [
 name = "pricegraph-fuzz"
 version = "0.0.0"
 dependencies = [
+ "arbitrary",
  "libfuzzer-sys",
  "pricegraph",
 ]
