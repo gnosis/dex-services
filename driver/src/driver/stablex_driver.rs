@@ -86,7 +86,8 @@ impl<'a> StableXDriverImpl<'a> {
             //   accepted for this batch ID.
             let verification_result = self
                 .solution_submitter
-                .get_solution_objective_value(batch_to_solve, solution.clone());
+                .get_solution_objective_value(batch_to_solve, solution.clone())
+                .wait();
             self.metrics
                 .auction_solution_verified(batch_to_solve, &verification_result);
 
@@ -118,9 +119,10 @@ impl<'a> StableXDriverImpl<'a> {
         };
 
         let submitted = if let Some(objective_value) = verified {
-            let submission_result =
-                self.solution_submitter
-                    .submit_solution(batch_to_solve, solution, objective_value);
+            let submission_result = self
+                .solution_submitter
+                .submit_solution(batch_to_solve, solution, objective_value)
+                .wait();
             self.metrics
                 .auction_solution_submitted(batch_to_solve, &submission_result);
             match submission_result {
@@ -243,12 +245,12 @@ mod tests {
         submitter
             .expect_get_solution_objective_value()
             .with(eq(batch), always())
-            .returning(|_, _| Ok(U256::from(1337)));
+            .returning(|_, _| async { Ok(U256::from(1337)) }.boxed());
 
         submitter
             .expect_submit_solution()
             .with(eq(batch), always(), eq(U256::from(1337)))
-            .returning(|_, _, _| Ok(()));
+            .returning(|_, _, _| async { Ok(()) }.boxed());
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
@@ -305,12 +307,12 @@ mod tests {
         submitter
             .expect_get_solution_objective_value()
             .with(eq(batch), always())
-            .returning(|_, _| Ok(U256::from(1337)));
+            .returning(|_, _| async { Ok(U256::from(1337)) }.boxed());
 
         submitter
             .expect_submit_solution()
             .with(eq(batch), always(), eq(U256::from(1337)))
-            .returning(|_, _, _| Ok(()));
+            .returning(|_, _, _| async { Ok(()) }.boxed());
 
         pf.expect_find_prices()
             .returning(|_, _, _| Err(anyhow!("Error")));
@@ -399,9 +401,12 @@ mod tests {
             .expect_get_solution_objective_value()
             .with(eq(batch), always())
             .returning(|_, _| {
-                Err(SolutionSubmissionError::Unexpected(anyhow!(
-                    "get_solution_objective_value failed"
-                )))
+                async {
+                    Err(SolutionSubmissionError::Unexpected(anyhow!(
+                        "get_solution_objective_value failed"
+                    )))
+                }
+                .boxed()
             });
         submitter.expect_submit_solution().times(0);
 
@@ -444,7 +449,9 @@ mod tests {
         submitter
             .expect_get_solution_objective_value()
             .with(eq(batch), always())
-            .returning(|_, _| Err(SolutionSubmissionError::Benign("Benign Error".to_owned())));
+            .returning(|_, _| {
+                async { Err(SolutionSubmissionError::Benign("Benign Error".to_owned())) }.boxed()
+            });
         submitter.expect_submit_solution().times(0);
 
         let solution = Solution {
@@ -486,11 +493,13 @@ mod tests {
         submitter
             .expect_get_solution_objective_value()
             .with(eq(batch), always())
-            .returning(|_, _| Ok(42.into()));
+            .returning(|_, _| async { Ok(42.into()) }.boxed());
         submitter
             .expect_submit_solution()
             .with(eq(batch), always(), eq(U256::from(42)))
-            .returning(|_, _, _| Err(SolutionSubmissionError::Benign("Benign Error".to_owned())));
+            .returning(|_, _, _| {
+                async { Err(SolutionSubmissionError::Benign("Benign Error".to_owned())) }.boxed()
+            });
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
