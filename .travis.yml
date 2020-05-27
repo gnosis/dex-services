@@ -7,11 +7,13 @@ if: (branch = master) OR (type = pull_request) OR (tag IS present)
 os: linux
 dist: bionic
 language: rust
+env:
+  - OPEN_SOLVER_VERSION=v0.0.10
+  - PRIVATE_SOLVER_VERSION=v0.7.0
 
 install:
   - nvm install 12 && nvm alias default 12 && npm install -g yarn@latest && yarn --version
   - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
-  - ./scripts/setup_contracts.sh
 
 jobs:
   fast_finish: true
@@ -20,6 +22,7 @@ jobs:
 
   include:
     - name: "Build and Local Testing"
+      if: type is pull_request
       rust: stable
       cache:
         directories:
@@ -28,10 +31,11 @@ jobs:
       before_cache:
         - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
       env: CARGO_INCREMENTAL=0
-      before_install:
+      before_script:
         - rustup component add clippy rustfmt
         - sudo apt-get update && sudo apt-get install -y python3-pip python3-setuptools && pip3 install --upgrade --user awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
+        - ./scripts/setup_contracts.sh
       script:
         - cargo fmt --all -- --check
         - cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
@@ -39,31 +43,24 @@ jobs:
         # Unit Tests and Linting
         - cargo test
         # Build image with compiled binary
-        - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:v0.0.10 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
+        - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:OPEN_SOLVER_VERSION --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
         # StableX e2e Tests (Ganache) - open solver
         - docker-compose -f docker-compose.yml -f docker-compose.open-solver.yml  up -d stablex
         - cargo test -p e2e ganache -- --nocapture
         - docker-compose logs
         # Build image with compiled binary
-        - docker build --tag stablex-binary-private --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:v0.7.0 --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
+        - docker build --tag stablex-binary-private --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:$PRIVATE_SOLVER_VERSION --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
         # StableX e2e Tests (Ganache) - private solver
         - docker-compose down
         - ./scripts/setup_contracts.sh
         - docker-compose -f docker-compose.yml -f docker-compose.private-solver.yml up -d stablex
         - cargo test -p e2e ganache -- --nocapture
         - docker-compose logs
-      deploy:
-        - provider: script
-          script: ./docker/deploy.sh $TRAVIS_BRANCH
-          on:
-            branch: master
-        - provider: script
-          script: ./docker/deploy.sh $TRAVIS_TAG
-          on:
-            tags: true
 
     - name: Coverage
       rust: nightly
+      before_script: 
+        - ./scripts/setup_contracts.sh
       script:
         - curl --location https://github.com/mozilla/grcov/releases/latest/download/grcov-linux-x86_64.tar.bz2 | tar jxf -
         # These flags are recommended by https://github.com/mozilla/grcov#grcov-with-travis .
@@ -76,3 +73,23 @@ jobs:
         - env CARGO_INCREMENTAL=0 RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Awarnings" cargo test
         - ./grcov --branch --ignore-not-existing --llvm --ignore "/*" target/debug/ --output-path coveralls.json --output-type "coveralls+" --source-dir . --service-name travis-pro --service-job-id $TRAVIS_JOB_ID
         - curl --form json_file=@coveralls.json https://coveralls.io/api/v1/jobs
+    
+    - name: Deploy
+      if: tag is present OR branch == master
+      before_install:
+        - sudo apt-get update && sudo apt-get install -y python3-pip python3-setuptools && pip3 install --upgrade --user awscli
+        - $(aws ecr get-login --no-include-email --region $AWS_REGION)
+      script:
+        - cargo build --locked -p driver
+        - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:OPEN_SOLVER_VERSION --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
+        - docker build --tag stablex-binary-private --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:PRIVATE_SOLVER_VERSION --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .        
+      deploy:
+      - provider: script
+        script: ./docker/deploy.sh $TRAVIS_BRANCH
+        on:
+          branch: master
+      - provider: script
+        script: ./docker/deploy.sh $TRAVIS_TAG
+        on:
+          tags: true
+
