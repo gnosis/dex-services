@@ -1,7 +1,4 @@
-use super::{
-    state::{Batch, State},
-    BatchId,
-};
+use super::{state::State, BatchId};
 use crate::{
     contracts::stablex_contract::batch_exchange,
     models::{AccountState, Order},
@@ -148,7 +145,7 @@ impl StableXOrderBookReading for Orderbook {
             // index for the auction that orders should be valid for (the one currently being solved). Thus we need
             // to increment it.
             let (account_state, orders) =
-                state.orderbook_for_batch(Batch::Future(batch_id_to_solve.low_u32() + 1))?;
+                state.orderbook_for_batch(batch_id_to_solve.low_u32() + 1)?;
             let (account_state, orders) = util::normalize_auction_data(account_state, orders);
             Ok((account_state, orders))
         }

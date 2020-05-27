@@ -29,14 +29,6 @@ pub struct State {
     last_batch_id: BatchId,
 }
 
-#[derive(Debug)]
-pub enum Batch {
-    /// The current completed batch that can no longer change
-    Current,
-    /// A future potentially still changing batch if a new solution comes in
-    Future(BatchId),
-}
-
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 struct LastSolution {
     batch_id: BatchId,
@@ -47,32 +39,25 @@ struct LastSolution {
 impl State {
     /// Errors if State has only received a partial solution which would make the result
     /// inconsistent.
-    /// Errors if the batch is `Future` but is not actually in the future.
+    /// Errors if the batch is in the past as information about historic balances/orders is not preserved.
     /// Account balances that overflow a U256 are skipped.
     pub fn orderbook_for_batch(
         &self,
-        batch: Batch,
+        batch_id: BatchId,
     ) -> Result<(
         impl Iterator<Item = ((UserId, TokenId), U256)> + '_,
         impl Iterator<Item = ModelOrder> + '_,
     )> {
-        let batch_id = match batch {
-            Batch::Current => self.last_batch_id,
-            Batch::Future(batch_id) => {
-                // We allow the batch ids being equal to prevent race conditions where the State gets
-                // a new event right before we want to get the orderbook.
-                ensure!(self.last_batch_id <= batch_id, "batch is in the past");
-                // The orderbook should never be retrieved with a partially applied solution. If
-                // this happens, it is an error as events are applied per block and solutions are
-                // applied in a single block.
-                ensure!(
-                    !self.solution_partially_received,
-                    "retrieved orderbook with a partially applied solution",
-                );
-
-                batch_id
-            }
-        };
+        // We allow the batch ids being equal to prevent race conditions where the State gets
+        // a new event right before we want to get the orderbook.
+        ensure!(self.last_batch_id <= batch_id, "batch is in the past");
+        // The orderbook should never be retrieved with a partially applied solution. If
+        // this happens, it is an error as events are applied per block and solutions are
+        // applied in a single block.
+        ensure!(
+            !self.solution_partially_received,
+            "retrieved orderbook with a partially applied solution",
+        );
         Ok((self.account_state(batch_id), self.orders(batch_id)))
     }
 
@@ -622,21 +607,9 @@ mod tests {
     fn orderbook_batch_id() {
         let mut state = state_with_fee();
         apply_event!(to state for batch 1; Deposit token 0, to user 3, amount 1);
-        let balance = state
-            .orderbook_for_batch(Batch::Current)
-            .unwrap()
-            .0
-            .next()
-            .unwrap()
-            .1;
+        let balance = state.orderbook_for_batch(1).unwrap().0.next().unwrap().1;
         assert_eq!(balance, U256::zero());
-        let balance = state
-            .orderbook_for_batch(Batch::Future(2))
-            .unwrap()
-            .0
-            .next()
-            .unwrap()
-            .1;
+        let balance = state.orderbook_for_batch(2).unwrap().0.next().unwrap().1;
         assert_eq!(balance, U256::one());
     }
 
@@ -653,7 +626,7 @@ mod tests {
         );
         apply_event!(to state for batch 1; Trade order number 0, from user 2, selling 1, for 2);
 
-        assert!(state.orderbook_for_batch(Batch::Future(1)).is_err());
+        assert!(state.orderbook_for_batch(1).is_err());
 
         apply_event!(to state for batch 1; SolutionSubmission from user 4, with fee 42);
 

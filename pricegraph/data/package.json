@@ -2,6 +2,7 @@
   "name": "pricegraph",
   "private": true,
   "scripts": {
+    "convert": "node ./convert.js",
     "fetch": "node ./fetch.js"
   },
   "dependencies": {

@@ -3,16 +3,15 @@
 use crate::contracts::stablex_contract::StableXContract;
 use crate::gas_station::GasPriceEstimating;
 use crate::models::Solution;
-use crate::util::FutureWaitExt as _;
 
 use anyhow::{Error, Result};
 use ethcontract::errors::{ExecutionError, MethodError};
 use ethcontract::web3::types::TransactionReceipt;
 use ethcontract::U256;
+use futures::future::{BoxFuture, FutureExt as _};
 use log::info;
 #[cfg(test)]
 use mockall::automock;
-use std::thread;
 use std::time::Duration;
 use thiserror::Error;
 
@@ -33,11 +32,11 @@ pub trait StableXSolutionSubmitting {
     /// * `batch_index` - the auction for which this solutions should be evaluated
     /// * `orders` - the list of orders for which this solution is applicable
     /// * `solution` - the solution to be evaluated
-    fn get_solution_objective_value(
-        &self,
+    fn get_solution_objective_value<'a>(
+        &'a self,
         batch_index: U256,
         solution: Solution,
-    ) -> Result<U256, SolutionSubmissionError>;
+    ) -> BoxFuture<'a, Result<U256, SolutionSubmissionError>>;
 
     /// Submits the provided solution and returns the result of the submission
     ///
@@ -46,12 +45,12 @@ pub trait StableXSolutionSubmitting {
     /// * `orders` - the list of orders for which this solution is applicable
     /// * `solution` - the solution to be evaluated
     /// * `claimed_objective_value` - the objective value of the provided solution.
-    fn submit_solution(
-        &self,
+    fn submit_solution<'a>(
+        &'a self,
         batch_index: U256,
         solution: Solution,
         claimed_objective_value: U256,
-    ) -> Result<(), SolutionSubmissionError>;
+    ) -> BoxFuture<'a, Result<(), SolutionSubmissionError>>;
 }
 
 /// An error with verifying or submitting a solution
@@ -103,6 +102,27 @@ impl<'a> StableXSolutionSubmitter<'a> {
             gas_price_estimating,
         }
     }
+
+    /// Turn a method error from a solution submission into a SolutionSubmissionError.
+    async fn make_error(
+        &self,
+        batch_index: U256,
+        solution: Solution,
+        err: MethodError,
+    ) -> SolutionSubmissionError {
+        if let Some(tx) = extract_transaction_receipt(&err) {
+            if let Some(block_number) = tx.block_number {
+                if let Err(err) = self
+                    .contract
+                    .get_solution_objective_value(batch_index, solution, Some(block_number.into()))
+                    .await
+                {
+                    return SolutionSubmissionError::from(err);
+                }
+            }
+        }
+        SolutionSubmissionError::Unexpected(err.into())
+    }
 }
 
 impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
@@ -110,18 +130,23 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
         &self,
         batch_index: U256,
         solution: Solution,
-    ) -> Result<U256, SolutionSubmissionError> {
-        // NOTE: Compare with `>=` as the exchange's current batch index is the
-        //   one accepting orders and does not yet accept solutions.
-        while batch_index.as_u32() >= self.contract.get_current_auction_index().wait()? {
-            info!("Solved batch is not yet accepting solutions, waiting for next batch.");
-            thread::sleep(POLL_TIMEOUT);
-        }
+    ) -> BoxFuture<Result<U256, SolutionSubmissionError>> {
+        async move {
+            // NOTE: Compare with `>=` as the exchange's current batch index is the
+            //   one accepting orders and does not yet accept solutions.
+            while batch_index.as_u32() >= self.contract.get_current_auction_index().await? {
+                info!("Solved batch is not yet accepting solutions, waiting for next batch.");
+                if POLL_TIMEOUT > Duration::from_secs(0) {
+                    futures_timer::Delay::new(POLL_TIMEOUT).await;
+                }
+            }
 
-        self.contract
-            .get_solution_objective_value(batch_index, solution, None)
-            .wait()
-            .map_err(SolutionSubmissionError::from)
+            self.contract
+                .get_solution_objective_value(batch_index, solution, None)
+                .await
+                .map_err(SolutionSubmissionError::from)
+        }
+        .boxed()
     }
 
     fn submit_solution(
@@ -129,44 +154,32 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
         batch_index: U256,
         solution: Solution,
         claimed_objective_value: U256,
-    ) -> Result<(), SolutionSubmissionError> {
-        retry_with_gas_price_increase(
-            self.contract,
-            batch_index,
-            solution.clone(),
-            claimed_objective_value,
-            self.gas_price_estimating,
-            60_000_000_000u64.into(),
-        )
-        .map_err(|err| {
-            extract_transaction_receipt(&err)
-                .and_then(|tx| {
-                    let block_number = tx.block_number?;
-                    match self
-                        .contract
-                        .get_solution_objective_value(
-                            batch_index,
-                            solution,
-                            Some(block_number.into()),
-                        )
-                        .wait()
-                    {
-                        Ok(_) => None,
-                        Err(e) => Some(SolutionSubmissionError::from(e)),
-                    }
-                })
-                .unwrap_or_else(|| SolutionSubmissionError::Unexpected(err.into()))
-        })
-        .map(|_| ())
+    ) -> BoxFuture<Result<(), SolutionSubmissionError>> {
+        async move {
+            match retry_with_gas_price_increase(
+                self.contract,
+                batch_index,
+                solution.clone(),
+                claimed_objective_value,
+                self.gas_price_estimating,
+                60_000_000_000u64.into(),
+            )
+            .await
+            {
+                Ok(()) => Ok(()),
+                Err(err) => Err(self.make_error(batch_index, solution, err).await),
+            }
+        }
+        .boxed()
     }
 }
 
-fn retry_with_gas_price_increase(
-    contract: &dyn StableXContract,
+async fn retry_with_gas_price_increase(
+    contract: &(dyn StableXContract + Sync),
     batch_index: U256,
     solution: Solution,
     claimed_objective_value: U256,
-    gas_price_estimating: &dyn GasPriceEstimating,
+    gas_price_estimating: &(dyn GasPriceEstimating + Sync),
     gas_cap: U256,
 ) -> Result<(), MethodError> {
     const INCREASE_FACTOR: u32 = 2;
@@ -178,7 +191,7 @@ fn retry_with_gas_price_increase(
     let mut result;
     // the following block emulates a do-while loop
     while {
-        gas_price_estimate = match gas_price_estimating.estimate_gas_price() {
+        gas_price_estimate = match gas_price_estimating.estimate_gas_price().await {
             Ok(gas_estimate) => gas_estimate.fast,
             Err(ref err) => {
                 log::warn!(
@@ -204,7 +217,7 @@ fn retry_with_gas_price_increase(
                     Some(BLOCK_TIMEOUT)
                 },
             )
-            .wait();
+            .await;
 
         // Breaking condition for our loop
         gas_price < gas_cap
@@ -243,7 +256,6 @@ mod tests {
     use anyhow::anyhow;
     use ethcontract::web3::types::H2048;
     use ethcontract::H256;
-    use futures::future::FutureExt as _;
     use mockall::predicate::{always, eq};
 
     #[test]
@@ -266,8 +278,10 @@ mod tests {
         let gas_station = MockGasPriceEstimating::new();
 
         let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
-        let result = submitter.get_solution_objective_value(U256::zero(), Solution::trivial());
-
+        let result = submitter
+            .get_solution_objective_value(U256::zero(), Solution::trivial())
+            .now_or_never()
+            .unwrap();
         contract.checkpoint();
         assert_eq!(result.unwrap(), U256::from(42));
     }
@@ -296,10 +310,13 @@ mod tests {
 
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station.expect_estimate_gas_price().returning(|| {
-            Ok(GasPrice {
-                fast: 5.into(),
-                ..Default::default()
-            })
+            async {
+                Ok(GasPrice {
+                    fast: 5.into(),
+                    ..Default::default()
+                })
+            }
+            .boxed()
         });
 
         retry_with_gas_price_increase(
@@ -310,6 +327,8 @@ mod tests {
             &gas_station,
             9.into(),
         )
+        .now_or_never()
+        .unwrap()
         .unwrap();
     }
 
@@ -369,16 +388,22 @@ mod tests {
             .expect_estimate_gas_price()
             .times(1)
             .return_once(|| {
-                Ok(GasPrice {
-                    fast: 5.into(),
-                    ..Default::default()
-                })
+                async {
+                    Ok(GasPrice {
+                        fast: 5.into(),
+                        ..Default::default()
+                    })
+                }
+                .boxed()
             });
         gas_station.expect_estimate_gas_price().returning(|| {
-            Ok(GasPrice {
-                fast: 6.into(),
-                ..Default::default()
-            })
+            async {
+                Ok(GasPrice {
+                    fast: 6.into(),
+                    ..Default::default()
+                })
+            }
+            .boxed()
         });
 
         assert!(retry_with_gas_price_increase(
@@ -389,6 +414,8 @@ mod tests {
             &gas_station,
             15.into(),
         )
+        .now_or_never()
+        .unwrap()
         .is_err())
     }
 
@@ -414,7 +441,10 @@ mod tests {
         let gas_station = MockGasPriceEstimating::new();
 
         let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
-        let result = submitter.get_solution_objective_value(U256::zero(), Solution::trivial());
+        let result = submitter
+            .get_solution_objective_value(U256::zero(), Solution::trivial())
+            .now_or_never()
+            .unwrap();
 
         match result.expect_err("Should have errored") {
             SolutionSubmissionError::Benign(_) => (),
@@ -469,14 +499,20 @@ mod tests {
             });
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station.expect_estimate_gas_price().return_once(|| {
-            Ok(GasPrice {
-                fast: 5.into(),
-                ..Default::default()
-            })
+            async {
+                Ok(GasPrice {
+                    fast: 5.into(),
+                    ..Default::default()
+                })
+            }
+            .boxed()
         });
 
         let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
-        let result = submitter.submit_solution(U256::zero(), Solution::trivial(), U256::zero());
+        let result = submitter
+            .submit_solution(U256::zero(), Solution::trivial(), U256::zero())
+            .now_or_never()
+            .unwrap();
 
         match result.expect_err("Should have errored") {
             SolutionSubmissionError::Benign(_) => (),
