@@ -92,23 +92,6 @@ impl HttpClient {
     }
 
     /// Standard HTTP GET request that parses the result as JSON.
-    pub fn get_json<U, T>(&self, url: U, label: HttpLabel) -> Result<T>
-    where
-        Uri: TryFrom<U>,
-        <Uri as TryFrom<U>>::Error: Into<HttpError>,
-        T: DeserializeOwned,
-    {
-        let start = Instant::now();
-
-        let json = self.inner.get(url)?.text()?;
-        let size = json.len();
-        self.metrics.request(label, start.elapsed(), size);
-
-        let result = serde_json::from_str(&json)?;
-        Ok(result)
-    }
-
-    /// Standard HTTP GET request that parses the result as JSON.
     pub async fn get_json_async<U, T>(&self, url: U, label: HttpLabel) -> Result<T>
     where
         Uri: TryFrom<U>,

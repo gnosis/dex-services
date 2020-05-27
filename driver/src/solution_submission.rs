@@ -178,7 +178,7 @@ fn retry_with_gas_price_increase(
     let mut result;
     // the following block emulates a do-while loop
     while {
-        gas_price_estimate = match gas_price_estimating.estimate_gas_price() {
+        gas_price_estimate = match gas_price_estimating.estimate_gas_price().wait() {
             Ok(gas_estimate) => gas_estimate.fast,
             Err(ref err) => {
                 log::warn!(
@@ -296,10 +296,13 @@ mod tests {
 
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station.expect_estimate_gas_price().returning(|| {
-            Ok(GasPrice {
-                fast: 5.into(),
-                ..Default::default()
-            })
+            async {
+                Ok(GasPrice {
+                    fast: 5.into(),
+                    ..Default::default()
+                })
+            }
+            .boxed()
         });
 
         retry_with_gas_price_increase(
@@ -369,16 +372,22 @@ mod tests {
             .expect_estimate_gas_price()
             .times(1)
             .return_once(|| {
-                Ok(GasPrice {
-                    fast: 5.into(),
-                    ..Default::default()
-                })
+                async {
+                    Ok(GasPrice {
+                        fast: 5.into(),
+                        ..Default::default()
+                    })
+                }
+                .boxed()
             });
         gas_station.expect_estimate_gas_price().returning(|| {
-            Ok(GasPrice {
-                fast: 6.into(),
-                ..Default::default()
-            })
+            async {
+                Ok(GasPrice {
+                    fast: 6.into(),
+                    ..Default::default()
+                })
+            }
+            .boxed()
         });
 
         assert!(retry_with_gas_price_increase(
@@ -469,10 +478,13 @@ mod tests {
             });
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station.expect_estimate_gas_price().return_once(|| {
-            Ok(GasPrice {
-                fast: 5.into(),
-                ..Default::default()
-            })
+            async {
+                Ok(GasPrice {
+                    fast: 5.into(),
+                    ..Default::default()
+                })
+            }
+            .boxed()
         });
 
         let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
