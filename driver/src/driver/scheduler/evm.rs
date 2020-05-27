@@ -118,7 +118,7 @@ impl Scheduler for EvmScheduler<'_> {
     fn start(&mut self) -> ! {
         loop {
             if let Err(err) = self.step() {
-                error!("EVM scheduler error: {}", err);
+                error!("EVM scheduler error: {:?}", err);
             }
             thread::sleep(POLL_TIMEOUT);
         }

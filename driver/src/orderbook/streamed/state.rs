@@ -62,9 +62,14 @@ impl State {
                 // We allow the batch ids being equal to prevent race conditions where the State gets
                 // a new event right before we want to get the orderbook.
                 ensure!(self.last_batch_id <= batch_id, "batch is in the past");
-                // TODO: in the future we might want to handle the case where
-                // solution_partially_received is true and react in some way like erroring or
-                // excluding pending balances.
+                // The orderbook should never be retrieved with a partially applied solution. If
+                // this happens, it is an error as events are applied per block and solutions are
+                // applied in a single block.
+                ensure!(
+                    !self.solution_partially_received,
+                    "retrieved orderbook with a partially applied solution",
+                );
+
                 batch_id
             }
         };
@@ -648,8 +653,7 @@ mod tests {
         );
         apply_event!(to state for batch 1; Trade order number 0, from user 2, selling 1, for 2);
 
-        assert_balance!(in state for batch 1; user 2, has token 0, balance 10);
-        assert_balance!(in state for batch 1; user 2, has token 1, balance 10);
+        assert!(state.orderbook_for_batch(Batch::Future(1)).is_err());
 
         apply_event!(to state for batch 1; SolutionSubmission from user 4, with fee 42);
 

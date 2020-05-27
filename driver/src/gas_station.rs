@@ -1,6 +1,7 @@
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::Result;
 use ethcontract::U256;
+use futures::future::{BoxFuture, FutureExt as _};
 use isahc::http::uri::Uri;
 use serde::Deserialize;
 use uint::FromDecStrErr;
@@ -28,7 +29,7 @@ pub struct GasPrice {
 #[cfg_attr(test, mockall::automock)]
 pub trait GasPriceEstimating {
     /// Retrieves gas prices from the Gnosis Safe Relay api.
-    fn estimate_gas_price(&self) -> Result<GasPrice>;
+    fn estimate_gas_price<'a>(&'a self) -> BoxFuture<'a, Result<GasPrice>>;
 }
 
 pub struct GnosisSafeGasStation {
@@ -45,8 +46,10 @@ impl GnosisSafeGasStation {
 }
 
 impl GasPriceEstimating for GnosisSafeGasStation {
-    fn estimate_gas_price(&self) -> Result<GasPrice> {
-        self.client.get_json(&self.uri, HttpLabel::GasStation)
+    fn estimate_gas_price(&self) -> BoxFuture<Result<GasPrice>> {
+        self.client
+            .get_json_async(&self.uri, HttpLabel::GasStation)
+            .boxed()
     }
 }
 
@@ -70,6 +73,7 @@ fn uint_error_to_string(err: FromDecStrErr) -> &'static str {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::util::FutureWaitExt as _;
 
     #[test]
     fn deserialize() {
@@ -97,7 +101,7 @@ pub mod tests {
     #[ignore]
     fn real_request() {
         let gas_station = GnosisSafeGasStation::new(&HttpFactory::default(), DEFAULT_URI).unwrap();
-        let gas_price = gas_station.estimate_gas_price().unwrap();
+        let gas_price = gas_station.estimate_gas_price().wait().unwrap();
         println!("{:?}", gas_price);
     }
 }

@@ -55,7 +55,7 @@ struct Options {
     /// The log filter to use.
     ///
     /// This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug').
-    #[structopt(long, env = "DFUSION_LOG", default_value = "info")]
+    #[structopt(long, env = "DFUSION_LOG", default_value = "warn,driver=info")]
     log_filter: String,
 
     /// The Ethereum node URL to connect to. Make sure that the node allows for

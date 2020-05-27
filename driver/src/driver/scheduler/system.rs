@@ -122,11 +122,12 @@ impl<'a> SystemScheduler<'a> {
 fn log_driver_result(batch_id: BatchId, driver_result: &DriverResult) {
     match driver_result {
         DriverResult::Ok => info!("Batch {} solved successfully.", batch_id.0),
-        DriverResult::Retry(err) => {
-            error!("Batch {} failed with retryable error: {}", batch_id.0, err)
-        }
+        DriverResult::Retry(err) => error!(
+            "Batch {} failed with retryable error: {:?}",
+            batch_id.0, err
+        ),
         DriverResult::Skip(err) => error!(
-            "Batch {} failed with unretryable error: {}",
+            "Batch {} failed with unretryable error: {:?}",
             batch_id.0, err
         ),
     }
@@ -147,7 +148,7 @@ impl<'a> Scheduler for SystemScheduler<'a> {
                         self.start_solving_in_thread(batch_id, Instant::now() + duration, scope)
                     }
                     Err(err) => {
-                        error!("Scheduler error: {}", err);
+                        error!("Scheduler error: {:?}", err);
                         thread::sleep(RETRY_SLEEP_DURATION);
                     }
                 };

@@ -6,6 +6,7 @@ use self::api::{Asset, AssetPair, KrakenApi, KrakenHttpApi};
 use super::{PriceSource, Token};
 use crate::http::HttpFactory;
 use crate::models::TokenId;
+use crate::util::FutureWaitExt as _;
 use anyhow::{anyhow, Context, Result};
 use std::collections::HashMap;
 
@@ -42,8 +43,8 @@ where
         //   complicated is determining when the cache needs to be invalidated
         //   as new assets get added to Kraken.
 
-        let assets = self.api.assets()?;
-        let asset_pairs = self.api.asset_pairs()?;
+        let assets = self.api.assets().wait()?;
+        let asset_pairs = self.api.asset_pairs().wait()?;
 
         let usd =
             find_asset("USD", &assets).ok_or_else(|| anyhow!("unable to locate USD asset"))?;
@@ -71,7 +72,7 @@ where
             .context("failed to generate asset pairs mapping for tokens")?;
 
         let asset_pairs: Vec<_> = token_asset_pairs.keys().map(String::as_str).collect();
-        let ticker_infos = self.api.ticker(&asset_pairs)?;
+        let ticker_infos = self.api.ticker(&asset_pairs).wait()?;
 
         let prices = ticker_infos
             .iter()
@@ -118,6 +119,7 @@ fn find_asset_pair<'a>(
 mod tests {
     use super::api::{MockKrakenApi, TickerInfo};
     use super::*;
+    use futures::future::FutureExt as _;
     use std::collections::HashSet;
     use std::time::Instant;
 
@@ -131,17 +133,23 @@ mod tests {
 
         let mut api = MockKrakenApi::new();
         api.expect_assets().returning(|| {
-            Ok(hash_map! {
-                "USDC" => Asset::new("USDC"),
-                "XETH" => Asset::new("ETH"),
-                "ZUSD" => Asset::new("USD"),
-            })
+            async {
+                Ok(hash_map! {
+                    "USDC" => Asset::new("USDC"),
+                    "XETH" => Asset::new("ETH"),
+                    "ZUSD" => Asset::new("USD"),
+                })
+            }
+            .boxed()
         });
         api.expect_asset_pairs().returning(|| {
-            Ok(hash_map! {
-                "USDCUSD" => AssetPair::new("USDC", "ZUSD"),
-                "XETHZUSD" => AssetPair::new("XETH", "ZUSD"),
-            })
+            async {
+                Ok(hash_map! {
+                    "USDCUSD" => AssetPair::new("USDC", "ZUSD"),
+                    "XETHZUSD" => AssetPair::new("XETH", "ZUSD"),
+                })
+            }
+            .boxed()
         });
         api.expect_ticker()
             .withf(|pairs| {
@@ -149,10 +157,13 @@ mod tests {
                 unordered_pairs == ["USDCUSD", "XETHZUSD"].iter().collect()
             })
             .returning(|_| {
-                Ok(hash_map! {
-                    "USDCUSD" => TickerInfo::new(1.0, 1.01),
-                    "XETHZUSD" => TickerInfo::new(100.0, 99.0),
-                })
+                async {
+                    Ok(hash_map! {
+                        "USDCUSD" => TickerInfo::new(1.0, 1.01),
+                        "XETHZUSD" => TickerInfo::new(100.0, 99.0),
+                    })
+                }
+                .boxed()
             });
 
         let client = KrakenClient::with_api(api);

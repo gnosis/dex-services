@@ -1,5 +1,6 @@
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::{anyhow, Context, Result};
+use futures::future::{BoxFuture, FutureExt as _};
 use serde::Deserialize;
 use serde_with::rust::display_fromstr;
 use std::collections::HashMap;
@@ -11,12 +12,15 @@ use std::collections::HashMap;
 #[cfg_attr(test, mockall::automock)]
 pub trait KrakenApi {
     /// Retrieves the list of supported assets.
-    fn assets(&self) -> Result<HashMap<String, Asset>>;
+    fn assets<'a>(&'a self) -> BoxFuture<'a, Result<HashMap<String, Asset>>>;
     /// Retrieves the list of supported asset pairs.
-    fn asset_pairs(&self) -> Result<HashMap<String, AssetPair>>;
+    fn asset_pairs<'a>(&'a self) -> BoxFuture<'a, Result<HashMap<String, AssetPair>>>;
     /// Retrieves ticker information (with recent prices) for the given asset
     /// pair identifiers.
-    fn ticker<'a>(&'a self, pairs: &'a [&'a str]) -> Result<HashMap<String, TickerInfo>>;
+    fn ticker<'a, 'b>(
+        &'a self,
+        pairs: &'b [&'b str],
+    ) -> BoxFuture<'a, Result<HashMap<String, TickerInfo>>>;
 }
 
 /// An HTTP Kraken API Client.
@@ -46,35 +50,55 @@ impl KrakenHttpApi {
 }
 
 impl KrakenApi for KrakenHttpApi {
-    fn assets(&self) -> Result<HashMap<String, Asset>> {
-        self.client
-            .get_json::<_, KrakenResult<_>>(format!("{}/Assets", self.base_url), HttpLabel::Kraken)
-            .context("failed to parse assets JSON")?
-            .into_result()
-    }
-
-    fn asset_pairs(&self) -> Result<HashMap<String, AssetPair>> {
-        self.client
-            .get_json::<_, KrakenResult<_>>(
-                format!("{}/AssetPairs", self.base_url),
-                HttpLabel::Kraken,
-            )
-            .context("failed to parse asset pairs JSON")?
-            .into_result()
-    }
-
-    fn ticker(&self, pairs: &[&str]) -> Result<HashMap<String, TickerInfo>> {
-        if pairs.is_empty() {
-            return Ok(HashMap::new());
+    fn assets<'a>(&'a self) -> BoxFuture<'a, Result<HashMap<String, Asset>>> {
+        async move {
+            self.client
+                .get_json_async::<_, KrakenResult<_>>(
+                    format!("{}/Assets", self.base_url),
+                    HttpLabel::Kraken,
+                )
+                .await
+                .context("failed to parse assets JSON")?
+                .into_result()
         }
+        .boxed()
+    }
 
-        self.client
-            .get_json::<_, KrakenResult<_>>(
-                format!("{}/Ticker?pair={}", self.base_url, pairs.join(",")),
-                HttpLabel::Kraken,
-            )
-            .context("failed to parse ticker JSON")?
-            .into_result()
+    fn asset_pairs<'a>(&'a self) -> BoxFuture<'a, Result<HashMap<String, AssetPair>>> {
+        async move {
+            self.client
+                .get_json_async::<_, KrakenResult<_>>(
+                    format!("{}/AssetPairs", self.base_url),
+                    HttpLabel::Kraken,
+                )
+                .await
+                .context("failed to parse asset pairs JSON")?
+                .into_result()
+        }
+        .boxed()
+    }
+
+    fn ticker<'a, 'b>(
+        &'a self,
+        pairs: &'b [&'b str],
+    ) -> BoxFuture<'a, Result<HashMap<String, TickerInfo>>> {
+        let url = if pairs.is_empty() {
+            None
+        } else {
+            Some(format!("{}/Ticker?pair={}", self.base_url, pairs.join(",")))
+        };
+        async move {
+            match url {
+                None => Ok(HashMap::new()),
+                Some(url) => self
+                    .client
+                    .get_json_async::<_, KrakenResult<_>>(url, HttpLabel::Kraken)
+                    .await
+                    .context("failed to parse ticker JSON")?
+                    .into_result(),
+            }
+        }
+        .boxed()
     }
 }
 
@@ -183,6 +207,7 @@ impl PricePair {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::util::FutureWaitExt as _;
     use serde::de::DeserializeOwned;
 
     fn deserialize<T: DeserializeOwned>(json: &str) -> T {
@@ -252,13 +277,13 @@ mod tests {
 
         let api = KrakenHttpApi::new(&HttpFactory::default()).unwrap();
 
-        let assets = api.assets().unwrap();
+        let assets = api.assets().wait().unwrap();
         println!("GNO asset information: {:?}", assets["GNO"]);
 
-        let pairs = api.asset_pairs().unwrap();
+        let pairs = api.asset_pairs().wait().unwrap();
         println!("GNO/EUR asset pair: {:?}", pairs["GNOEUR"]);
 
-        let ticker = api.ticker(&["GNOEUR"]).unwrap();
+        let ticker = api.ticker(&["GNOEUR"]).wait().unwrap();
         println!("GNO/EUR ticker information: {:?}", ticker["GNOEUR"]);
     }
 }
