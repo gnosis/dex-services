@@ -1,18 +1,21 @@
 const fs = require("fs").promises;
 
-function encodeOrder(order, balance) {
-	hex = (val, n) => val.toString(16).padStart(n * 2, "0")
-
-	const a = order.accountID.substr(2).padStart(40, "0");
-	const b = hex(BigInt(balance || 0), 32);
-	const bt = hex(Number(order.buyToken.substr(1)), 2);
-	const st = hex(Number(order.sellToken.substr(1)), 2);
-	const vf = hex(0x00000000, 4);
-	const vu = hex(0xffffffff, 4);
-	const ba = hex(BigInt(order.buyAmount), 16);
-	const sa = hex(BigInt(order.sellAmount), 16);
-	const id = hex(Number(order.orderID), 2);
-	return `${a} ${b} ${bt} ${st} ${vf} ${vu} ${ba} ${sa} ${sa} ${id}\n`
+function encodeOrder(order, sellTokenBalance) {
+	const num = (val, n) => BigInt(val).toString(16).padStart(n * 2, "0");
+	const token = (val) => num(val.substr(1), 2);
+	const owner = order.accountID.substr(2).padStart(40, "0");
+	return [
+		owner,
+		num(sellTokenBalance || 0, 32),
+		token(order.buyToken),
+		token(order.sellToken),
+		num(0x00000000, 4),
+		num(0xffffffff, 4),
+		num(order.buyAmount, 16),
+		num(order.sellAmount, 16),
+		num(order.sellAmount, 16),
+		num(order.orderID, 2),
+	].join(" ") + "\n";
 }
 
 async function readJson(path) {
