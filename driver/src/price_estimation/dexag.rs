@@ -3,6 +3,7 @@ mod api;
 use super::{PriceSource, Token};
 use crate::http::HttpFactory;
 use crate::models::TokenId;
+use crate::util::FutureWaitExt;
 use anyhow::{anyhow, Context, Result};
 use api::{DexagApi, DexagHttpApi};
 use futures::future::{self, BoxFuture};
@@ -43,7 +44,7 @@ where
     }
 
     fn create_api_tokens(&self) -> Result<ApiTokens> {
-        let tokens = self.api.get_token_list()?;
+        let tokens = self.api.get_token_list().wait()?;
         let mut tokens: HashMap<String, api::Token> = tokens
             .into_iter()
             .map(|token| (token.symbol.to_uppercase(), token))
@@ -125,13 +126,15 @@ where
 mod tests {
     use super::api::MockDexagApi;
     use super::*;
+    use futures::future::FutureExt as _;
+    use lazy_static::lazy_static;
     use mockall::{predicate::*, Sequence};
 
     #[test]
     fn fails_if_stable_coin_does_not_exist() {
         let mut api = MockDexagApi::new();
         api.expect_get_token_list()
-            .returning(move || Ok(Vec::new()));
+            .returning(|| async { Ok(Vec::new()) }.boxed());
 
         assert!(DexagClient::with_api(api)
             .get_prices(&[Token::new(6, "DAI", 18)])
@@ -147,17 +150,20 @@ mod tests {
         api.expect_get_token_list()
             .times(2)
             .in_sequence(&mut seq)
-            .returning(|| Err(anyhow!("")));
+            .returning(|| async { Err(anyhow!("")) }.boxed());
 
         api.expect_get_token_list()
             .times(1)
             .in_sequence(&mut seq)
             .returning(|| {
-                Ok(vec![super::api::Token {
-                    name: String::new(),
-                    symbol: "DAI".to_string(),
-                    address: None,
-                }])
+                async {
+                    Ok(vec![super::api::Token {
+                        name: String::new(),
+                        symbol: "DAI".to_string(),
+                        address: None,
+                    }])
+                }
+                .boxed()
             });
 
         let client = DexagClient::with_api(api);
@@ -177,38 +183,39 @@ mod tests {
             Token::new(4, "USDC", 6),
         ];
 
-        let api_tokens = [
-            super::api::Token {
-                name: String::new(),
-                symbol: "DAI".to_string(),
-                address: None,
-            },
-            super::api::Token {
-                name: String::new(),
-                symbol: "ETH".to_string(),
-                address: None,
-            },
-            super::api::Token {
-                name: String::new(),
-                symbol: "USDC".to_string(),
-                address: None,
-            },
-        ];
+        lazy_static! {
+            static ref API_TOKENS: [super::api::Token; 3] = [
+                super::api::Token {
+                    name: String::new(),
+                    symbol: "DAI".to_string(),
+                    address: None,
+                },
+                super::api::Token {
+                    name: String::new(),
+                    symbol: "ETH".to_string(),
+                    address: None,
+                },
+                super::api::Token {
+                    name: String::new(),
+                    symbol: "USDC".to_string(),
+                    address: None,
+                },
+            ];
+        }
 
-        let api_tokens_ = api_tokens.clone();
         api.expect_get_token_list()
-            .returning(move || Ok(api_tokens_.to_vec()));
+            .returning(|| async { Ok(API_TOKENS.to_vec()) }.boxed());
 
         api.expect_get_price()
-            .with(eq(api_tokens[1].clone()), eq(api_tokens[0].clone()))
-            .returning(|_, _| Box::pin(future::ready(Ok(0.7))));
+            .with(eq(API_TOKENS[1].clone()), eq(API_TOKENS[0].clone()))
+            .returning(|_, _| async { Ok(0.7) }.boxed());
         api.expect_get_price()
             .with(
-                eq(api_tokens[2].clone()),
+                eq(API_TOKENS[2].clone()),
                 #[allow(clippy::redundant_clone)]
-                eq(api_tokens[0].clone()),
+                eq(API_TOKENS[0].clone()),
             )
-            .returning(|_, _| Box::pin(future::ready(Ok(1.2))));
+            .returning(|_, _| async { Ok(1.2) }.boxed());
 
         let client = DexagClient::with_api(api);
         let prices = client.get_prices(&tokens).unwrap();
@@ -228,30 +235,31 @@ mod tests {
 
         let tokens = [Token::new(6, "DAI", 18), Token::new(1, "ETH", 18)];
 
-        let api_tokens = [
-            super::api::Token {
-                name: String::new(),
-                symbol: "DAI".to_string(),
-                address: None,
-            },
-            super::api::Token {
-                name: String::new(),
-                symbol: "ETH".to_string(),
-                address: None,
-            },
-        ];
+        lazy_static! {
+            static ref API_TOKENS: [super::api::Token; 2] = [
+                super::api::Token {
+                    name: String::new(),
+                    symbol: "DAI".to_string(),
+                    address: None,
+                },
+                super::api::Token {
+                    name: String::new(),
+                    symbol: "ETH".to_string(),
+                    address: None,
+                },
+            ];
+        }
 
-        let api_tokens_ = api_tokens.clone();
         api.expect_get_token_list()
-            .returning(move || Ok(api_tokens_.to_vec()));
+            .returning(|| async { Ok(API_TOKENS.to_vec()) }.boxed());
 
         api.expect_get_price()
             .with(
-                eq(api_tokens[1].clone()),
+                eq(API_TOKENS[1].clone()),
                 #[allow(clippy::redundant_clone)]
-                eq(api_tokens[0].clone()),
+                eq(API_TOKENS[0].clone()),
             )
-            .returning(|_, _| Box::pin(future::ready(Err(anyhow!("")))));
+            .returning(|_, _| async { Err(anyhow!("")) }.boxed());
 
         let client = DexagClient::with_api(api);
         let prices = client.get_prices(&tokens).unwrap();
@@ -274,29 +282,31 @@ mod tests {
             Token::new(4, "sUSD", 6),
         ];
 
-        let api_tokens = [
-            super::api::Token {
-                name: String::new(),
-                symbol: "DAI".to_string(),
-                address: None,
-            },
-            super::api::Token {
-                name: String::new(),
-                symbol: "eth".to_string(),
-                address: None,
-            },
-            super::api::Token {
-                name: String::new(),
-                symbol: "Susd".to_string(),
-                address: None,
-            },
-        ];
+        lazy_static! {
+            static ref API_TOKENS: [super::api::Token; 3] = [
+                super::api::Token {
+                    name: String::new(),
+                    symbol: "DAI".to_string(),
+                    address: None,
+                },
+                super::api::Token {
+                    name: String::new(),
+                    symbol: "eth".to_string(),
+                    address: None,
+                },
+                super::api::Token {
+                    name: String::new(),
+                    symbol: "Susd".to_string(),
+                    address: None,
+                },
+            ];
+        }
 
         api.expect_get_token_list()
-            .returning(move || Ok(api_tokens.to_vec()));
+            .returning(|| async { Ok(API_TOKENS.to_vec()) }.boxed());
 
         api.expect_get_price()
-            .returning(|_, _| Box::pin(future::ready(Ok(1.0))));
+            .returning(|_, _| async { Ok(1.0) }.boxed());
 
         let client = DexagClient::with_api(api);
         let prices = client.get_prices(&tokens).unwrap();
