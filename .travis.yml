@@ -75,7 +75,7 @@ jobs:
         - curl --form json_file=@coveralls.json https://coveralls.io/api/v1/jobs
     
     - name: Deploy
-      if: tag is present OR branch == master
+      if: tag is present OR branch = master
       before_install:
         - sudo apt-get update && sudo apt-get install -y python3-pip python3-setuptools && pip3 install --upgrade --user awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
