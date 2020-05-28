@@ -1948,7 +1948,6 @@ dependencies = [
 name = "pricegraph"
 version = "0.1.0"
 dependencies = [
- "arbitrary",
  "assert_approx_eq",
  "criterion",
  "data-encoding",
@@ -1962,6 +1961,7 @@ dependencies = [
 name = "pricegraph-fuzz"
 version = "0.0.0"
 dependencies = [
+ "arbitrary",
  "libfuzzer-sys",
  "pricegraph",
 ]

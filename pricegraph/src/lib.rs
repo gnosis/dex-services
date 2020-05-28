@@ -9,3 +9,4 @@ mod data;
 
 pub use encoding::*;
 pub use orderbook::Orderbook;
+pub use primitive_types::{H160, U256};
