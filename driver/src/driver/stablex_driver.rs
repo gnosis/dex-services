@@ -23,7 +23,7 @@ pub trait StableXDriver {
 
 pub struct StableXDriverImpl<'a> {
     price_finder: &'a (dyn PriceFinding + Sync),
-    orderbook_reader: &'a (dyn StableXOrderBookReading + Sync),
+    orderbook_reader: &'a (dyn StableXOrderBookReading),
     solution_submitter: &'a (dyn StableXSolutionSubmitting + Sync),
     metrics: &'a StableXMetrics,
 }
@@ -31,7 +31,7 @@ pub struct StableXDriverImpl<'a> {
 impl<'a> StableXDriverImpl<'a> {
     pub fn new(
         price_finder: &'a (dyn PriceFinding + Sync),
-        orderbook_reader: &'a (dyn StableXOrderBookReading + Sync),
+        orderbook_reader: &'a (dyn StableXOrderBookReading),
         solution_submitter: &'a (dyn StableXSolutionSubmitting + Sync),
         metrics: &'a StableXMetrics,
     ) -> Self {

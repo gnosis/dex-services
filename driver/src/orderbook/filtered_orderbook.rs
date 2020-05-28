@@ -55,21 +55,18 @@ impl FromStr for OrderbookFilter {
     }
 }
 
-pub struct FilteredOrderbookReader<'a> {
-    orderbook: &'a (dyn StableXOrderBookReading + Sync),
+pub struct FilteredOrderbookReader {
+    orderbook: Box<dyn StableXOrderBookReading>,
     filter: OrderbookFilter,
 }
 
-impl<'a> FilteredOrderbookReader<'a> {
-    pub fn new(
-        orderbook: &'a (dyn StableXOrderBookReading + Sync),
-        filter: OrderbookFilter,
-    ) -> Self {
+impl FilteredOrderbookReader {
+    pub fn new(orderbook: Box<dyn StableXOrderBookReading>, filter: OrderbookFilter) -> Self {
         Self { orderbook, filter }
     }
 }
 
-impl<'a> StableXOrderBookReading for FilteredOrderbookReader<'a> {
+impl StableXOrderBookReading for FilteredOrderbookReader {
     fn get_auction_data<'b>(
         &'b self,
         batch_id_to_solve: U256,
@@ -214,7 +211,7 @@ mod test {
             .collect(),
         };
 
-        let reader = FilteredOrderbookReader::new(&inner, filter);
+        let reader = FilteredOrderbookReader::new(Box::new(inner), filter);
 
         let (_, filtered_orders) = reader
             .get_auction_data(U256::zero())
@@ -247,7 +244,7 @@ mod test {
             users: HashMap::new(),
         };
 
-        let reader = FilteredOrderbookReader::new(&inner, filter);
+        let reader = FilteredOrderbookReader::new(Box::new(inner), filter);
 
         let (_, filtered_orders) = reader
             .get_auction_data(U256::zero())
@@ -271,7 +268,7 @@ mod test {
             users: HashMap::new(),
         };
 
-        let reader = FilteredOrderbookReader::new(&inner, filter);
+        let reader = FilteredOrderbookReader::new(Box::new(inner), filter);
 
         let (state, filtered_orders) = reader
             .get_auction_data(U256::zero())
