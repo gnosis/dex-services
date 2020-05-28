@@ -37,19 +37,21 @@ struct LastSolution {
 }
 
 impl State {
+    /// Returns the orderbook when the requested batch started collecting orders given all events received so far.
+    ///
     /// Errors if State has only received a partial solution which would make the result
     /// inconsistent.
-    /// Errors if the batch is in the past as information about historic balances/orders is not preserved.
+    /// Errors if the target batch is in the past.
     /// Account balances that overflow a U256 are skipped.
-    pub fn orderbook_for_batch(
+    pub fn orderbook_at_beginning_of_batch(
         &self,
         batch_id: BatchId,
     ) -> Result<(
         impl Iterator<Item = ((UserId, TokenId), U256)> + '_,
         impl Iterator<Item = ModelOrder> + '_,
     )> {
-        // We allow the batch ids being equal to prevent race conditions where the State gets
-        // a new event right before we want to get the orderbook.
+        // We can only serve state up until the most recent batch, as we are not keeping
+        // historic information about orders and balance updates around.
         ensure!(self.last_batch_id <= batch_id, "batch is in the past");
         // The orderbook should never be retrieved with a partially applied solution. If
         // this happens, it is an error as events are applied per block and solutions are
@@ -74,10 +76,9 @@ impl State {
                 Some((
                     (*user_id, token_id),
                     // Can fail if user's balance exceeds U256::max.
-                    // Can fail while not all trades of a solution have been received and batch_id
-                    // is the next batch_id so that we assume that the current solution won't be be
-                    // reverted.
-                    bigint_u256::bigint_to_u256(&balance.get_balance(batch_id))?,
+                    bigint_u256::bigint_to_u256(
+                        &balance.get_balance_at_beginning_of_batch(batch_id),
+                    )?,
                 ))
             })
     }
@@ -401,7 +402,7 @@ mod tests {
     }
 
     macro_rules! assert_balance {
-        (in $state:ident for batch $batch:expr; user $user:expr, has token $token:expr, balance $balance:expr) => {
+        (in $state:ident at beginning of batch $batch:expr; user $user:expr, has token $token:expr, balance $balance:expr) => {
             assert_eq!(
                 account_state(&$state, $batch).read_balance($token, address($user)),
                 U256::from($balance)
@@ -440,8 +441,8 @@ mod tests {
     fn account_state_respects_deposit_batch() {
         let mut state = state_with_fee();
         apply_event!(to state for batch 0; Deposit token 0, to user 3, amount 1);
-        assert_balance!(in state for batch 0; user 3, has token 0, balance 0);
-        assert_balance!(in state for batch 1; user 3, has token 0, balance 1);
+        assert_balance!(in state at beginning of batch 0; user 3, has token 0, balance 0);
+        assert_balance!(in state at beginning of batch 1; user 3, has token 0, balance 1);
     }
 
     #[test]
@@ -450,12 +451,12 @@ mod tests {
         // token id 1 is not listed
         apply_event!(to state for batch 0; Deposit token 0, to user 3, amount 1);
         apply_event!(to state for batch 0; Deposit token 1, to user 3, amount 1);
-        assert_balance!(in state for batch 1; user 3, has token 0, balance 1);
-        assert_balance!(in state for batch 1; user 3, has token 1, balance 0);
+        assert_balance!(in state at beginning of batch 1; user 3, has token 0, balance 1);
+        assert_balance!(in state at beginning of batch 1; user 3, has token 1, balance 0);
 
         apply_event!(to state for batch 1; TokenListing token 1);
-        assert_balance!(in state for batch 1; user 3, has token 0, balance 1);
-        assert_balance!(in state for batch 1; user 3, has token 1, balance 1);
+        assert_balance!(in state at beginning of batch 1; user 3, has token 0, balance 1);
+        assert_balance!(in state at beginning of batch 1; user 3, has token 1, balance 1);
     }
 
     #[test]
@@ -463,7 +464,7 @@ mod tests {
         let mut state = state_with_fee();
         for i in 0..3 {
             apply_event!(to state for batch i; Deposit token 0, to user 1, amount 1);
-            assert_balance!(in state for batch i + 2; user 1, has token 0, balance i + 1);
+            assert_balance!(in state at beginning of batch i + 2; user 1, has token 0, balance i + 1);
         }
     }
 
@@ -472,7 +473,7 @@ mod tests {
         let mut state = state_with_fee();
         for i in 0..3 {
             apply_event!(to state for batch 0; Deposit token 0, to user 1, amount 1);
-            assert_balance!(in state for batch 1; user 1, has token 0, balance i + 1);
+            assert_balance!(in state at beginning of batch 1; user 1, has token 0, balance i + 1);
         }
     }
 
@@ -481,7 +482,7 @@ mod tests {
         let mut state = state_with_fee();
         apply_event!(to state for batch 0; Deposit token 0, to user 1, amount 2);
         apply_event!(to state for batch 0; WithdrawRequest from user 1, of token 0, amount 1, valid after batch 0);
-        assert_balance!(in state for batch 1; user 1, has token 0, balance 1);
+        assert_balance!(in state at beginning of batch 1; user 1, has token 0, balance 1);
     }
 
     #[test]
@@ -489,7 +490,7 @@ mod tests {
         let mut state = state_with_fee();
         apply_event!(to state for batch 0; Deposit token 0, to user 1, amount 2);
         apply_event!(to state for batch 1; WithdrawRequest from user 1, of token 0, amount 3, valid after batch 2);
-        assert_balance!(in state for batch 3; user 1, has token 0, balance 0);
+        assert_balance!(in state at beginning of batch 3; user 1, has token 0, balance 0);
     }
 
     #[test]
@@ -498,7 +499,7 @@ mod tests {
         apply_event!(to state for batch 0; Deposit token 0, to user 1, amount 2);
         apply_event!(to state for batch 0; WithdrawRequest from user 1, of token 0, amount 2, valid after batch 0);
         apply_event!(to state for batch 1; Withdraw from user 1, of token 0, amount 1);
-        assert_balance!(in state for batch 1; user 1, has token 0, balance 1);
+        assert_balance!(in state at beginning of batch 1; user 1, has token 0, balance 1);
     }
 
     #[test]
@@ -506,9 +507,9 @@ mod tests {
         let mut state = state_with_fee();
         apply_event!(to state for batch 0; Deposit token 0, to user 1, amount 3);
         apply_event!(to state for batch 0; WithdrawRequest from user 1, of token 0, amount 2, valid after batch 0);
-        assert_balance!(in state for batch 1; user 1, has token 0, balance 1);
+        assert_balance!(in state at beginning of batch 1; user 1, has token 0, balance 1);
         apply_event!(to state for batch 1; Withdraw from user 1, of token 0, amount 1);
-        assert_balance!(in state for batch 2; user 1, has token 0, balance 2);
+        assert_balance!(in state at beginning of batch 2; user 1, has token 0, balance 2);
     }
 
     #[test]
@@ -582,11 +583,11 @@ mod tests {
         apply_event!(to state for batch 1; Trade order number 0, from user 3, selling 2, for 1);
         apply_event!(to state for batch 1; SolutionSubmission from user 4, with fee 23);
 
-        assert_balance!(in state for batch 2; user 2, has token 0, balance 12);
-        assert_balance!(in state for batch 2; user 2, has token 1, balance 9);
-        assert_balance!(in state for batch 2; user 3, has token 0, balance 8);
-        assert_balance!(in state for batch 2; user 3, has token 1, balance 11);
-        assert_balance!(in state for batch 2; user 4, has token 0, balance 23);
+        assert_balance!(in state at beginning of batch 2; user 2, has token 0, balance 12);
+        assert_balance!(in state at beginning of batch 2; user 2, has token 1, balance 9);
+        assert_balance!(in state at beginning of batch 2; user 3, has token 0, balance 8);
+        assert_balance!(in state at beginning of batch 2; user 3, has token 1, balance 11);
+        assert_balance!(in state at beginning of batch 2; user 4, has token 0, balance 23);
         assert_used_amount!(in state for batch 2; of order number 0, from user 2, is 1);
         assert_used_amount!(in state for batch 2; of order number 0, from user 3, is 2);
 
@@ -594,11 +595,11 @@ mod tests {
         apply_event!(to state for batch 1; TradeReversion order number 0, from user 2, selling 1, for 2);
         apply_event!(to state for batch 1; SolutionSubmission from user 4, with fee 42);
 
-        assert_balance!(in state for batch 2; user 2, has token 0, balance 10);
-        assert_balance!(in state for batch 2; user 2, has token 1, balance 10);
-        assert_balance!(in state for batch 2; user 3, has token 0, balance 10);
-        assert_balance!(in state for batch 2; user 3, has token 1, balance 10);
-        assert_balance!(in state for batch 2; user 4, has token 0, balance 42);
+        assert_balance!(in state at beginning of batch 2; user 2, has token 0, balance 10);
+        assert_balance!(in state at beginning of batch 2; user 2, has token 1, balance 10);
+        assert_balance!(in state at beginning of batch 2; user 3, has token 0, balance 10);
+        assert_balance!(in state at beginning of batch 2; user 3, has token 1, balance 10);
+        assert_balance!(in state at beginning of batch 2; user 4, has token 0, balance 42);
         assert_used_amount!(in state for batch 2; of order number 0, from user 2, is 0);
         assert_used_amount!(in state for batch 2; of order number 0, from user 3, is 0);
     }
@@ -607,9 +608,21 @@ mod tests {
     fn orderbook_batch_id() {
         let mut state = state_with_fee();
         apply_event!(to state for batch 1; Deposit token 0, to user 3, amount 1);
-        let balance = state.orderbook_for_batch(1).unwrap().0.next().unwrap().1;
+        let balance = state
+            .orderbook_at_beginning_of_batch(1)
+            .unwrap()
+            .0
+            .next()
+            .unwrap()
+            .1;
         assert_eq!(balance, U256::zero());
-        let balance = state.orderbook_for_batch(2).unwrap().0.next().unwrap().1;
+        let balance = state
+            .orderbook_at_beginning_of_batch(2)
+            .unwrap()
+            .0
+            .next()
+            .unwrap()
+            .1;
         assert_eq!(balance, U256::one());
     }
 
@@ -626,12 +639,12 @@ mod tests {
         );
         apply_event!(to state for batch 1; Trade order number 0, from user 2, selling 1, for 2);
 
-        assert!(state.orderbook_for_batch(1).is_err());
+        assert!(state.orderbook_at_beginning_of_batch(1).is_err());
 
         apply_event!(to state for batch 1; SolutionSubmission from user 4, with fee 42);
 
-        assert_balance!(in state for batch 2; user 2, has token 0, balance 12);
-        assert_balance!(in state for batch 2; user 2, has token 1, balance 9);
+        assert_balance!(in state at beginning of batch 2; user 2, has token 0, balance 12);
+        assert_balance!(in state at beginning of batch 2; user 2, has token 1, balance 9);
     }
 
     #[test]
@@ -662,14 +675,14 @@ mod tests {
         apply_event!(to state for batch 1; Trade order number 1, from user 3, selling 4, for 4);
         apply_event!(to state for batch 1; SolutionSubmission from user 4, with fee 42);
 
-        assert_balance!(in state for batch 1; user 2, has token 0, balance 20);
-        assert_balance!(in state for batch 1; user 2, has token 1, balance 0);
-        assert_balance!(in state for batch 1; user 3, has token 0, balance 0);
-        assert_balance!(in state for batch 1; user 3, has token 1, balance 20);
+        assert_balance!(in state at beginning of batch 1; user 2, has token 0, balance 20);
+        assert_balance!(in state at beginning of batch 1; user 2, has token 1, balance 0);
+        assert_balance!(in state at beginning of batch 1; user 3, has token 0, balance 0);
+        assert_balance!(in state at beginning of batch 1; user 3, has token 1, balance 20);
 
-        assert_balance!(in state for batch 2; user 2, has token 0, balance 12);
-        assert_balance!(in state for batch 2; user 2, has token 1, balance 8);
-        assert_balance!(in state for batch 2; user 3, has token 0, balance 8);
-        assert_balance!(in state for batch 2; user 3, has token 1, balance 12);
+        assert_balance!(in state at beginning of batch 2; user 2, has token 0, balance 12);
+        assert_balance!(in state at beginning of batch 2; user 2, has token 1, balance 8);
+        assert_balance!(in state at beginning of batch 2; user 3, has token 0, balance 8);
+        assert_balance!(in state at beginning of batch 2; user 3, has token 1, balance 12);
     }
 }
