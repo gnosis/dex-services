@@ -117,9 +117,7 @@ impl Order {
         let (buy_amount, sell_amount) = stablex_auction_element::compute_buy_sell_amounts(
             self.price_numerator,
             self.price_denominator,
-            // Remaining amount needs to incorporate trades that happened while collecting orders
-            // for the batch we are trying to solve. Thus query balance as of beginning of the next.
-            self.get_remaining_amount_at_beginning_of_batch(batch_id + 1),
+            self.get_remaining_amount_at_beginning_of_batch(batch_id),
         );
         ModelOrder {
             id: order_id,

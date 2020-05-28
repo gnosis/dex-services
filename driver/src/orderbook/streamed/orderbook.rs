@@ -139,8 +139,9 @@ impl StableXOrderBookReading for Orderbook {
     ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
         async move {
             let state = self.create_state()?;
+            // In order to solve batch t we need the orderbook at the beginning of batch t+1's collection process
             let (account_state, orders) =
-                state.orderbook_to_solve_batch(batch_id_to_solve.low_u32())?;
+                state.orderbook_at_beginning_of_batch(batch_id_to_solve.low_u32() + 1)?;
             let (account_state, orders) = util::normalize_auction_data(account_state, orders);
             Ok((account_state, orders))
         }
