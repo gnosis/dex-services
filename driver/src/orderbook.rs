@@ -25,7 +25,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 #[cfg_attr(test, automock)]
-pub trait StableXOrderBookReading {
+pub trait StableXOrderBookReading: Send + Sync {
     /// Returns the current state of the order book, including account balances
     /// and open orders or an error in case it cannot get this information.
     ///
@@ -63,7 +63,7 @@ impl OrderbookReaderKind {
         orderbook_filter: &OrderbookFilter,
         web3: Web3,
         file_path: Option<PathBuf>,
-    ) -> Box<dyn StableXOrderBookReading + Sync> {
+    ) -> Box<dyn StableXOrderBookReading> {
         match self {
             OrderbookReaderKind::Paginated => Box::new(PaginatedStableXOrderBookReader::new(
                 contract,
