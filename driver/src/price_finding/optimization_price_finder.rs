@@ -72,6 +72,7 @@ mod solver_output {
                 .prices
                 .into_iter()
                 .filter_map(|(token, price)| Some((token.0, price?.0)))
+                .filter(|(_, price)| *price > 0)
                 .collect();
 
             let executed_orders = self
@@ -379,6 +380,7 @@ pub mod tests {
                 "T0000": "14024052566155238000",
                 "T0001": "170141183460469231731687303715884105728", // greater than max value of u64
                 "T0002": null, // null prices get removed from output
+                "T0003": "0", // 0 prices get removed from output
             },
             "orders": [
                 {
