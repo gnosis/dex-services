@@ -319,8 +319,7 @@ checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 [[package]]
 name = "core-foundation"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57d24c7a13c43e870e37c1556b74555437870a04514f7685f5b354e090567171"
+source = "git+https://github.com/servo/core-foundation-rs?tag=v0.20.1#01d69213403e5f8c8e2556f81495e98571e6e882"
 dependencies = [
  "core-foundation-sys",
  "libc",
@@ -329,8 +328,7 @@ dependencies = [
 [[package]]
 name = "core-foundation-sys"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3a71ab494c0b5b860bdc8407ae08978052417070c2ced38573a9157ad75b8ac"
+source = "git+https://github.com/servo/core-foundation-rs?tag=v0.20.1#01d69213403e5f8c8e2556f81495e98571e6e882"
 
 [[package]]
 name = "crc32fast"
