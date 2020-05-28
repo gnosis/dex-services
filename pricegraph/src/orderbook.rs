@@ -136,6 +136,8 @@ impl Orderbook {
     pub fn reduce_overlapping_orders(&mut self) {
         Subgraphs::new(self.projection.node_indices())
             .for_each(|token| self.reduced_shortest_paths(token));
+
+        debug_assert!(!self.is_overlapping());
     }
 
     /// Fill a market order in the current orderbook graph returning the maximum
