@@ -67,16 +67,16 @@ mod solver_output {
 
     impl Output {
         /// Convert the solver output to a solution.
-        pub fn to_solution(&self) -> Solution {
+        pub fn into_solution(self) -> Solution {
             let prices = self
                 .prices
-                .iter()
-                .map(|(token, price)| (token.0, price.unwrap_or_default().0))
+                .into_iter()
+                .filter_map(|(token, price)| Some((token.0, price?.0)))
                 .collect();
 
             let executed_orders = self
                 .orders
-                .iter()
+                .into_iter()
                 .map(|order| crate::models::ExecutedOrder {
                     account_id: order.account_id,
                     order_id: order.order_id,
@@ -230,7 +230,7 @@ fn serialize_balances(
 
 fn deserialize_result(result: String) -> Result<models::Solution> {
     let output: solver_output::Output = serde_json::from_str(&result)?;
-    Ok(output.to_solution())
+    Ok(output.into_solution())
 }
 
 impl PriceFinding for OptimisationPriceFinder {
@@ -378,7 +378,7 @@ pub mod tests {
             "prices": {
                 "T0000": "14024052566155238000",
                 "T0001": "170141183460469231731687303715884105728", // greater than max value of u64
-                "T0002": null,
+                "T0002": null, // null prices get removed from output
             },
             "orders": [
                 {
@@ -400,7 +400,6 @@ pub mod tests {
             prices: map_from_slice(&[
                 (0, 14_024_052_566_155_238_000),
                 (1, 170_141_183_460_469_231_731_687_303_715_884_105_728),
-                (2, 0),
             ]),
 
             executed_orders: vec![
