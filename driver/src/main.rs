@@ -236,22 +236,25 @@ fn main() {
     );
 
     info!("Orderbook filter: {:?}", options.orderbook_filter);
-    let filtered_orderbook =
-        FilteredOrderbookReader::new(&*primary_orderbook, options.orderbook_filter.clone());
+    let filtered_orderbook = Box::new(FilteredOrderbookReader::new(
+        primary_orderbook,
+        options.orderbook_filter.clone(),
+    ));
 
     // NOTE: Keep the shadowed orderbook around so it doesn't get dropped and we
     //   can pass a reference to the filtered orderbook reader.
-    let orderbook: Box<dyn StableXOrderBookReading + Sync> = if options.use_shadowed_orderbook {
-        let shadow_orderbook = OnchainFilteredOrderBookReader::new(
+    let orderbook: Box<dyn StableXOrderBookReading> = if options.use_shadowed_orderbook {
+        let shadow_orderbook = Box::new(OnchainFilteredOrderBookReader::new(
             contract.clone(),
             options.auction_data_page_size,
             &options.orderbook_filter,
-        );
-        let shadowed_orderbook =
-            ShadowedOrderbookReader::new(&filtered_orderbook, shadow_orderbook);
-        Box::new(shadowed_orderbook)
+        ));
+        Box::new(ShadowedOrderbookReader::new(
+            filtered_orderbook,
+            shadow_orderbook,
+        ))
     } else {
-        Box::new(filtered_orderbook)
+        filtered_orderbook
     };
 
     // Set up solution submitter.
