@@ -14,10 +14,10 @@ use self::kraken::KrakenClient;
 use crate::{
     http::HttpFactory,
     models::{Order, TokenId, TokenInfo},
-    util::FutureWaitExt as _,
 };
 use anyhow::Result;
 use average_price_source::AveragePriceSource;
+use futures::future::{BoxFuture, FutureExt as _};
 use log::warn;
 use price_source::{NoopPriceSource, PriceSource, Token};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -32,7 +32,7 @@ type Tokens = BTreeMap<TokenId, Option<TokenInfo>>;
 /// tokens included in the current orderbook.
 #[cfg_attr(test, mockall::automock)]
 pub trait PriceEstimating {
-    fn get_token_prices(&self, orders: &[Order]) -> Tokens;
+    fn get_token_prices<'a>(&'a self, orders: &[Order]) -> BoxFuture<'a, Tokens>;
 }
 
 pub struct PriceOracle {
@@ -40,7 +40,7 @@ pub struct PriceOracle {
     /// whitelisted tokens get their prices estimated.
     tokens: TokenData,
     /// The price source to use.
-    source: Box<dyn PriceSource + Sync>,
+    source: Box<dyn PriceSource + Send + Sync>,
 }
 
 impl PriceOracle {
@@ -50,7 +50,7 @@ impl PriceOracle {
         tokens: TokenData,
         update_interval: Duration,
     ) -> Result<Self> {
-        let source: Box<dyn PriceSource + Sync> = if tokens.is_empty() {
+        let source: Box<dyn PriceSource + Send + Sync> = if tokens.is_empty() {
             Box::new(NoopPriceSource)
         } else {
             let source = AveragePriceSource::new(
@@ -69,7 +69,7 @@ impl PriceOracle {
     }
 
     #[cfg(test)]
-    fn with_source(tokens: TokenData, source: impl PriceSource + Sync + 'static) -> Self {
+    fn with_source(tokens: TokenData, source: impl PriceSource + Send + Sync + 'static) -> Self {
         PriceOracle {
             tokens,
             source: Box::new(source),
@@ -112,12 +112,12 @@ impl PriceOracle {
     }
 
     /// Gets price estimates for some tokens
-    fn get_prices(&self, tokens: &[Token]) -> HashMap<TokenId, u128> {
+    async fn get_prices(&self, tokens: &[Token]) -> HashMap<TokenId, u128> {
         if tokens.is_empty() {
             return HashMap::new();
         }
 
-        match self.source.get_prices(tokens).wait() {
+        match self.source.get_prices(tokens).await {
             Ok(prices) => prices,
             Err(err) => {
                 warn!("failed to retrieve token prices: {}", err);
@@ -128,27 +128,30 @@ impl PriceOracle {
 }
 
 impl PriceEstimating for PriceOracle {
-    fn get_token_prices(&self, orders: &[Order]) -> Tokens {
+    fn get_token_prices<'a>(&'a self, orders: &[Order]) -> BoxFuture<'a, Tokens> {
         let (tokens_to_price, unpriced_token_ids) = self.split_order_tokens(orders);
-        let prices = self.get_prices(&tokens_to_price);
+        async move {
+            let prices = self.get_prices(&tokens_to_price).await;
 
-        tokens_to_price
-            .into_iter()
-            .map(|token| {
-                let price = prices
-                    .get(&token.id)
-                    .copied()
-                    .unwrap_or(token.info.external_price);
-                (
-                    token.id,
-                    Some(TokenInfo {
-                        external_price: price,
-                        ..token.info
-                    }),
-                )
-            })
-            .chain(unpriced_token_ids.into_iter())
-            .collect()
+            tokens_to_price
+                .into_iter()
+                .map(|token| {
+                    let price = prices
+                        .get(&token.id)
+                        .copied()
+                        .unwrap_or(token.info.external_price);
+                    (
+                        token.id,
+                        Some(TokenInfo {
+                            external_price: price,
+                            ..token.info
+                        }),
+                    )
+                })
+                .chain(unpriced_token_ids.into_iter())
+                .collect()
+        }
+        .boxed()
     }
 }
 
@@ -157,7 +160,6 @@ mod tests {
     use super::data::TokenBaseInfo;
     use super::*;
     use anyhow::anyhow;
-    use futures::FutureExt as _;
     use price_source::MockPriceSource;
 
     #[test]
@@ -185,13 +187,16 @@ mod tests {
             });
 
         let oracle = PriceOracle::with_source(tokens, source);
-        let prices = oracle.get_token_prices(&[
-            Order::for_token_pair(0, 1),
-            Order::for_token_pair(1, 2),
-            Order::for_token_pair(2, 3),
-            Order::for_token_pair(1, 3),
-            Order::for_token_pair(0, 2),
-        ]);
+        let prices = oracle
+            .get_token_prices(&[
+                Order::for_token_pair(0, 1),
+                Order::for_token_pair(1, 2),
+                Order::for_token_pair(2, 3),
+                Order::for_token_pair(1, 3),
+                Order::for_token_pair(0, 2),
+            ])
+            .now_or_never()
+            .unwrap();
 
         assert_eq!(
             prices,
@@ -216,7 +221,10 @@ mod tests {
             .returning(|_| async { Err(anyhow!("error")) }.boxed());
 
         let oracle = PriceOracle::with_source(tokens, source);
-        let prices = oracle.get_token_prices(&[Order::for_token_pair(0, 1)]);
+        let prices = oracle
+            .get_token_prices(&[Order::for_token_pair(0, 1)])
+            .now_or_never()
+            .unwrap();
 
         assert_eq!(
             prices,
@@ -230,7 +238,7 @@ mod tests {
     #[test]
     fn price_oracle_always_includes_reference_token() {
         let oracle = PriceOracle::with_source(TokenData::default(), MockPriceSource::new());
-        let prices = oracle.get_token_prices(&[]);
+        let prices = oracle.get_token_prices(&[]).now_or_never().unwrap();
 
         assert_eq!(prices, btree_map! { TokenId(0) => None });
     }
@@ -247,7 +255,10 @@ mod tests {
             .returning(|_| async { Ok(HashMap::new()) }.boxed());
 
         let oracle = PriceOracle::with_source(tokens, source);
-        let prices = oracle.get_token_prices(&[Order::for_token_pair(0, 7)]);
+        let prices = oracle
+            .get_token_prices(&[Order::for_token_pair(0, 7)])
+            .now_or_never()
+            .unwrap();
 
         assert_eq!(
             prices,
@@ -280,7 +291,10 @@ mod tests {
             });
 
         let oracle = PriceOracle::with_source(tokens, source);
-        let prices = oracle.get_token_prices(&[Order::for_token_pair(1, 2)]);
+        let prices = oracle
+            .get_token_prices(&[Order::for_token_pair(1, 2)])
+            .now_or_never()
+            .unwrap();
 
         assert_eq!(
             prices,
