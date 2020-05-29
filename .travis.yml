@@ -10,7 +10,7 @@ language: rust
 env:
   global:
     - OPEN_SOLVER_VERSION=v0.0.10
-    - PRIVATE_SOLVER_VERSION=v0.7.0
+    - PRIVATE_SOLVER_VERSION=v0.7.1
 
 install:
   - nvm install 12 && nvm alias default 12 && npm install -g yarn@latest && yarn --version
@@ -57,10 +57,16 @@ jobs:
         - docker-compose -f docker-compose.yml -f docker-compose.private-solver.yml up -d stablex
         - cargo test -p e2e ganache -- --nocapture
         - docker-compose logs
+        # StableX e2e Tests (Ganache) - private best-ring solver
+        - docker-compose down
+        - ./scripts/setup_contracts.sh
+        - docker-compose -f docker-compose.yml -f docker-compose.best-ring-solver.yml up -d stablex
+        - cargo test -p e2e ganache -- --nocapture
+        - docker-compose logs
 
     - name: Coverage
       rust: nightly
-      before_script: 
+      before_script:
         - ./scripts/setup_contracts.sh
       script:
         - curl --location https://github.com/mozilla/grcov/releases/latest/download/grcov-linux-x86_64.tar.bz2 | tar jxf -
@@ -75,7 +81,7 @@ jobs:
         # Ignore untested cargo files in travis root and auto-generated eth-contract code
         - ./grcov --branch --ignore-not-existing --llvm --excl-start "mod test" --excl-line "#\[cfg_attr\(test, mockall::automock\)\]|#\[derive" --ignore "/*" --ignore "target/debug/build/**" target/debug/ --output-path coveralls.json --output-type "coveralls+" --source-dir . --service-name travis-pro --service-job-id $TRAVIS_JOB_ID
         - curl --form json_file=@coveralls.json https://coveralls.io/api/v1/jobs
-    
+
     - name: Deploy
       if: (type != pull_request) AND (tag is present OR branch = master)
       before_install:
@@ -84,14 +90,13 @@ jobs:
       script:
         - cargo build --locked -p driver
         - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:$OPEN_SOLVER_VERSION --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
-        - docker build --tag stablex-binary-private --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:$PRIVATE_SOLVER_VERSION --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .        
+        - docker build --tag stablex-binary-private --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:$PRIVATE_SOLVER_VERSION --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
       deploy:
-      - provider: script
-        script: ./docker/deploy.sh $TRAVIS_BRANCH
-        on:
-          branch: master
-      - provider: script
-        script: ./docker/deploy.sh $TRAVIS_TAG
-        on:
-          tags: true
-
+        - provider: script
+          script: ./docker/deploy.sh $TRAVIS_BRANCH
+          on:
+            branch: master
+        - provider: script
+          script: ./docker/deploy.sh $TRAVIS_TAG
+          on:
+            tags: true
