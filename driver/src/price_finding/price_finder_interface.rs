@@ -55,7 +55,6 @@ impl InternalOptimizer {
 pub enum SolverType {
     NaiveSolver,
     StandardSolver,
-    FallbackSolver,
     OpenSolver,
     BestRingSolver,
 }
@@ -64,10 +63,8 @@ impl FromStr for SolverType {
     type Err = Error;
 
     fn from_str(solver_type_str: &str) -> Result<Self> {
-        println!("{:}", solver_type_str.to_lowercase().as_str());
         match solver_type_str.to_lowercase().as_str() {
             "standard-solver" => Ok(SolverType::StandardSolver),
-            "fallback-solver" => Ok(SolverType::FallbackSolver),
             "naive-solver" => Ok(SolverType::NaiveSolver),
             "open-solver" => Ok(SolverType::OpenSolver),
             "best-ring-solver" => Ok(SolverType::BestRingSolver),
@@ -89,9 +86,7 @@ impl SolverType {
             SolverType::OpenSolver => {
                 execute_open_solver(result_folder, input_file, min_avg_fee_per_order)
             }
-            SolverType::StandardSolver
-            | SolverType::FallbackSolver
-            | SolverType::BestRingSolver => execute_private_solver(
+            SolverType::StandardSolver | SolverType::BestRingSolver => execute_private_solver(
                 result_folder,
                 input_file,
                 time_limit,

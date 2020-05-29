@@ -204,7 +204,6 @@ OPTIONS:
         --solver-type <solver-type>
             Which style of solver to use. Can be one of: 'naive-solver' for the naive solver;
             'standard-solver' for mixed integer programming solver;
-            'fallback-solver' for a more conservative solver than the standard solver;
             'best-ring-solver' for a solver searching only for the best ring;
             'open-solver' for the open-source solver 
             [env: SOLVER_TYPE=]  [default: naive-solver]
