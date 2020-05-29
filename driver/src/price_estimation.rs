@@ -11,8 +11,11 @@ mod threaded_price_source;
 pub use self::data::TokenData;
 use self::dexag::DexagClient;
 use self::kraken::KrakenClient;
-use crate::http::HttpFactory;
-use crate::models::{Order, TokenId, TokenInfo};
+use crate::{
+    http::HttpFactory,
+    models::{Order, TokenId, TokenInfo},
+    util::FutureWaitExt as _,
+};
 use anyhow::Result;
 use average_price_source::AveragePriceSource;
 use log::warn;
@@ -114,7 +117,7 @@ impl PriceOracle {
             return HashMap::new();
         }
 
-        match self.source.get_prices(tokens) {
+        match self.source.get_prices(tokens).wait() {
             Ok(prices) => prices,
             Err(err) => {
                 warn!("failed to retrieve token prices: {}", err);
@@ -154,6 +157,7 @@ mod tests {
     use super::data::TokenBaseInfo;
     use super::*;
     use anyhow::anyhow;
+    use futures::FutureExt as _;
     use price_source::MockPriceSource;
 
     #[test]
@@ -172,9 +176,12 @@ mod tests {
                 tokens == [Token::new(1, "WETH", 18), Token::new(2, "USDT", 6)]
             })
             .returning(|_| {
-                Ok(hash_map! {
-                    TokenId(2) => 1_000_000_000_000_000_000,
-                })
+                async {
+                    Ok(hash_map! {
+                        TokenId(2) => 1_000_000_000_000_000_000,
+                    })
+                }
+                .boxed()
             });
 
         let oracle = PriceOracle::with_source(tokens, source);
@@ -206,7 +213,7 @@ mod tests {
         let mut source = MockPriceSource::new();
         source
             .expect_get_prices()
-            .returning(|_| Err(anyhow!("error")));
+            .returning(|_| async { Err(anyhow!("error")) }.boxed());
 
         let oracle = PriceOracle::with_source(tokens, source);
         let prices = oracle.get_token_prices(&[Order::for_token_pair(0, 1)]);
@@ -235,7 +242,9 @@ mod tests {
         });
 
         let mut source = MockPriceSource::new();
-        source.expect_get_prices().returning(|_| Ok(HashMap::new()));
+        source
+            .expect_get_prices()
+            .returning(|_| async { Ok(HashMap::new()) }.boxed());
 
         let oracle = PriceOracle::with_source(tokens, source);
         let prices = oracle.get_token_prices(&[Order::for_token_pair(0, 7)]);
@@ -261,10 +270,13 @@ mod tests {
             .expect_get_prices()
             .withf(|tokens| tokens == [Token::new(2, "USDT", 6)])
             .returning(|_| {
-                Ok(hash_map! {
-                    TokenId(1) => 1_000_000_000_000_000_000,
-                    TokenId(2) => 1_000_000_000_000_000_000,
-                })
+                async {
+                    Ok(hash_map! {
+                        TokenId(1) => 1_000_000_000_000_000_000,
+                        TokenId(2) => 1_000_000_000_000_000_000,
+                    })
+                }
+                .boxed()
             });
 
         let oracle = PriceOracle::with_source(tokens, source);
