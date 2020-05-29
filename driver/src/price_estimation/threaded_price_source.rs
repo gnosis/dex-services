@@ -1,12 +1,16 @@
 use super::{price_source::PriceSource, Token};
-use crate::models::TokenId;
+use crate::{models::TokenId, util::FutureWaitExt as _};
 use anyhow::Result;
+use futures::{
+    future::{BoxFuture, FutureExt as _},
+    lock::Mutex,
+};
 use std::collections::HashMap;
 #[cfg(test)]
 use std::sync::mpsc::Receiver;
 use std::sync::{
     mpsc::{self, RecvTimeoutError, Sender},
-    Arc, Mutex,
+    Arc,
 };
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -56,11 +60,8 @@ impl ThreadedPriceSource {
                 match receiver.recv_timeout(update_interval) {
                     Ok(()) | Err(RecvTimeoutError::Timeout) => {
                         // Make sure we don't hold the mutex while this blocking call happens.
-                        match price_source.get_prices(&tokens) {
-                            Ok(prices) => price_map
-                                .lock()
-                                .expect("mutex should never be poisoned")
-                                .extend(prices),
+                        match price_source.get_prices(&tokens).wait() {
+                            Ok(prices) => price_map.lock().wait().extend(prices),
                             Err(err) => log::warn!("price_source::get_prices failed: {}", err),
                         }
                     }
@@ -88,15 +89,18 @@ impl ThreadedPriceSource {
 }
 
 impl PriceSource for ThreadedPriceSource {
-    fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>> {
-        let price_map = self
-            .price_map
-            .lock()
-            .expect("mutex should never be poisoned");
-        Ok(tokens
-            .iter()
-            .filter_map(|token| Some((token.id, *price_map.get(&token.id)?)))
-            .collect())
+    fn get_prices<'a>(
+        &'a self,
+        tokens: &'a [Token],
+    ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
+        async move {
+            let price_map = self.price_map.lock().await;
+            Ok(tokens
+                .iter()
+                .filter_map(|token| Some((token.id, *price_map.get(&token.id)?)))
+                .collect())
+        }
+        .boxed()
     }
 }
 
@@ -124,7 +128,7 @@ mod tests {
     /// when an expectation is violated.
     fn join(tps: ThreadedPriceSource, handle: JoinHandle<()>) {
         fn extract_test_receiver(tps: ThreadedPriceSource) -> Receiver<()> {
-            tps.test_receiver.into_inner().unwrap()
+            tps.test_receiver.into_inner()
         }
         let test_receiver = extract_test_receiver(tps);
         let deadline = Instant::now() + THREAD_TIMEOUT;
@@ -147,7 +151,7 @@ mod tests {
     fn wait_for_thread_to_loop(tps: &ThreadedPriceSource) {
         // Clear previous messages.
         let deadline = Instant::now() + THREAD_TIMEOUT;
-        for _ in tps.test_receiver.lock().unwrap().try_iter() {
+        for _ in tps.test_receiver.lock().now_or_never().unwrap().try_iter() {
             if Instant::now() >= deadline {
                 panic!("Background thread of ThreadedPriceSource ran too many loops.");
             }
@@ -155,6 +159,7 @@ mod tests {
         // Wait for one new message.
         tps.test_receiver
             .lock()
+            .now_or_never()
             .unwrap()
             .recv_timeout(THREAD_TIMEOUT)
             .unwrap();
@@ -163,7 +168,8 @@ mod tests {
     #[test]
     fn thread_exits_when_owner_is_dropped() {
         let mut ps = MockPriceSource::new();
-        ps.expect_get_prices().returning(|_| Ok(HashMap::new()));
+        ps.expect_get_prices()
+            .returning(|_| async { Ok(HashMap::new()) }.boxed());
         let (tps, handle) =
             ThreadedPriceSource::new(TOKENS.to_vec(), ps, Duration::from_secs(std::u64::MAX));
         join(tps, handle);
@@ -173,23 +179,32 @@ mod tests {
     fn update_triggered_by_interval() {
         let mut price_source = MockPriceSource::new();
         let start_returning = Arc::new(atomic::AtomicBool::new(false));
-        let start_returning_ = start_returning.clone();
-        price_source.expect_get_prices().returning(move |_| {
-            Ok(if start_returning_.load(ORDERING) {
-                hash_map! {TOKENS[0].id => 1}
-            } else {
-                hash_map! {}
-            })
+        price_source.expect_get_prices().returning({
+            let start_returning = start_returning.clone();
+            move |_| {
+                let start_returning_ = start_returning.clone();
+                async move {
+                    Ok(if start_returning_.load(ORDERING) {
+                        hash_map! {TOKENS[0].id => 1}
+                    } else {
+                        hash_map! {}
+                    })
+                }
+                .boxed()
+            }
         });
 
         let (tps, handle) =
             ThreadedPriceSource::new(TOKENS.to_vec(), price_source, Duration::from_millis(1));
-        assert_eq!(tps.get_prices(&TOKENS[..]).unwrap(), hash_map! {});
+        assert_eq!(
+            tps.get_prices(&TOKENS[..]).now_or_never().unwrap().unwrap(),
+            hash_map! {}
+        );
         wait_for_thread_to_loop(&tps);
         start_returning.store(true, ORDERING);
         wait_for_thread_to_loop(&tps);
         assert_eq!(
-            tps.get_prices(&TOKENS[..]).unwrap(),
+            tps.get_prices(&TOKENS[..]).now_or_never().unwrap().unwrap(),
             hash_map! {TOKENS[0].id => 1}
         );
         join(tps, handle);
