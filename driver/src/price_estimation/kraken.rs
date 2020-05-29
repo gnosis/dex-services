@@ -73,11 +73,11 @@ where
 {
     fn get_prices<'a>(
         &'a self,
-        tokens: &'a [Token],
+        tokens: Vec<Token>,
     ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
         async move {
             let token_asset_pairs = self
-                .get_token_asset_pairs(tokens)
+                .get_token_asset_pairs(&tokens)
                 .await
                 .context("failed to generate asset pairs mapping for tokens")?;
 
@@ -179,7 +179,7 @@ mod tests {
             });
 
         let client = KrakenClient::with_api(api);
-        let prices = client.get_prices(&tokens).now_or_never().unwrap().unwrap();
+        let prices = client.get_prices(tokens).now_or_never().unwrap().unwrap();
 
         assert_eq!(
             prices,
@@ -217,7 +217,7 @@ mod tests {
         let start_time = Instant::now();
         {
             let client = KrakenClient::new(&HttpFactory::default()).unwrap();
-            let prices = client.get_prices(&tokens).wait().unwrap();
+            let prices = client.get_prices(tokens).wait().unwrap();
 
             println!("{:#?}", prices);
             assert!(

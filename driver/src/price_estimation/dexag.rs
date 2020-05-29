@@ -75,7 +75,7 @@ where
 {
     fn get_prices<'a>(
         &'a self,
-        tokens: &'a [Token],
+        tokens: Vec<Token>,
     ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
         async move {
             if tokens.is_empty() {
@@ -146,7 +146,7 @@ mod tests {
             .returning(|| async { Ok(Vec::new()) }.boxed());
 
         assert!(DexagClient::with_api(api)
-            .get_prices(&[Token::new(6, "DAI", 18)])
+            .get_prices(vec![Token::new(6, "DAI", 18)])
             .now_or_never()
             .unwrap()
             .is_err());
@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn get_token_prices_initialization_fails_then_works() {
-        let tokens = [Token::new(1, "ETH", 18)];
+        let tokens = vec![Token::new(1, "ETH", 18)];
         let mut api = MockDexagApi::new();
         let mut seq = Sequence::new();
 
@@ -178,17 +178,29 @@ mod tests {
             });
 
         let client = DexagClient::with_api(api);
-        assert!(client.get_prices(&tokens).now_or_never().unwrap().is_err());
-        assert!(client.get_prices(&tokens).now_or_never().unwrap().is_err());
-        assert!(client.get_prices(&tokens).now_or_never().unwrap().is_ok());
-        assert!(client.get_prices(&tokens).now_or_never().unwrap().is_ok());
+        assert!(client
+            .get_prices(tokens.clone())
+            .now_or_never()
+            .unwrap()
+            .is_err());
+        assert!(client
+            .get_prices(tokens.clone())
+            .now_or_never()
+            .unwrap()
+            .is_err());
+        assert!(client
+            .get_prices(tokens.clone())
+            .now_or_never()
+            .unwrap()
+            .is_ok());
+        assert!(client.get_prices(tokens).now_or_never().unwrap().is_ok());
     }
 
     #[test]
     fn get_token_prices() {
         let mut api = MockDexagApi::new();
 
-        let tokens = [
+        let tokens = vec![
             Token::new(6, "DAI", 18),
             Token::new(1, "ETH", 18),
             Token::new(4, "USDC", 6),
@@ -229,7 +241,11 @@ mod tests {
             .returning(|_, _| async { Ok(1.2) }.boxed());
 
         let client = DexagClient::with_api(api);
-        let prices = client.get_prices(&tokens).now_or_never().unwrap().unwrap();
+        let prices = client
+            .get_prices(tokens.clone())
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         assert_eq!(
             prices,
             hash_map! {
@@ -244,7 +260,7 @@ mod tests {
     fn get_token_prices_error() {
         let mut api = MockDexagApi::new();
 
-        let tokens = [Token::new(6, "DAI", 18), Token::new(1, "ETH", 18)];
+        let tokens = vec![Token::new(6, "DAI", 18), Token::new(1, "ETH", 18)];
 
         lazy_static! {
             static ref API_TOKENS: [super::api::Token; 2] = [
@@ -273,7 +289,11 @@ mod tests {
             .returning(|_, _| async { Err(anyhow!("")) }.boxed());
 
         let client = DexagClient::with_api(api);
-        let prices = client.get_prices(&tokens).now_or_never().unwrap().unwrap();
+        let prices = client
+            .get_prices(tokens.clone())
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         assert_eq!(
             prices,
             hash_map! {
@@ -287,7 +307,7 @@ mod tests {
     fn test_case_insensitivity() {
         let mut api = MockDexagApi::new();
 
-        let tokens = [
+        let tokens = vec![
             Token::new(6, "dai", 18),
             Token::new(1, "ETH", 18),
             Token::new(4, "sUSD", 6),
@@ -320,7 +340,11 @@ mod tests {
             .returning(|_, _| async { Ok(1.0) }.boxed());
 
         let client = DexagClient::with_api(api);
-        let prices = client.get_prices(&tokens).now_or_never().unwrap().unwrap();
+        let prices = client
+            .get_prices(tokens.clone())
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         assert_eq!(
             prices,
             hash_map! {
@@ -337,7 +361,7 @@ mod tests {
     fn online_dexag_client() {
         use std::time::Instant;
 
-        let tokens = &[
+        let tokens = vec![
             Token::new(1, "WETH", 18),
             Token::new(2, "USDT", 6),
             Token::new(3, "TUSD", 18),
@@ -352,7 +376,7 @@ mod tests {
 
         let client = DexagClient::new(&HttpFactory::default()).unwrap();
         let before = Instant::now();
-        let prices = client.get_prices(tokens).wait().unwrap();
+        let prices = client.get_prices(tokens.clone()).wait().unwrap();
         let after = Instant::now();
         println!(
             "Took {} seconds to get prices.",

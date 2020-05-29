@@ -60,7 +60,7 @@ impl ThreadedPriceSource {
                 match receiver.recv_timeout(update_interval) {
                     Ok(()) | Err(RecvTimeoutError::Timeout) => {
                         // Make sure we don't hold the mutex while this blocking call happens.
-                        match price_source.get_prices(&tokens).wait() {
+                        match price_source.get_prices(tokens.clone()).wait() {
                             Ok(prices) => price_map.lock().wait().extend(prices),
                             Err(err) => log::warn!("price_source::get_prices failed: {}", err),
                         }
@@ -91,7 +91,7 @@ impl ThreadedPriceSource {
 impl PriceSource for ThreadedPriceSource {
     fn get_prices<'a>(
         &'a self,
-        tokens: &'a [Token],
+        tokens: Vec<Token>,
     ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
         async move {
             let price_map = self.price_map.lock().await;
@@ -197,14 +197,20 @@ mod tests {
         let (tps, handle) =
             ThreadedPriceSource::new(TOKENS.to_vec(), price_source, Duration::from_millis(1));
         assert_eq!(
-            tps.get_prices(&TOKENS[..]).now_or_never().unwrap().unwrap(),
+            tps.get_prices(TOKENS.to_vec())
+                .now_or_never()
+                .unwrap()
+                .unwrap(),
             hash_map! {}
         );
         wait_for_thread_to_loop(&tps);
         start_returning.store(true, ORDERING);
         wait_for_thread_to_loop(&tps);
         assert_eq!(
-            tps.get_prices(&TOKENS[..]).now_or_never().unwrap().unwrap(),
+            tps.get_prices(TOKENS.to_vec())
+                .now_or_never()
+                .unwrap()
+                .unwrap(),
             hash_map! {TOKENS[0].id => 1}
         );
         join(tps, handle);

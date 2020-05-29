@@ -58,6 +58,7 @@ impl Token {
 
 /// An abstraction around a type that retrieves price estimate from a source
 /// such as an exchange.
+#[cfg_attr(test, mockall::automock)]
 pub trait PriceSource {
     /// Retrieve current prices relative to the OWL token for the specified
     /// tokens. The OWL token is pegged at 1 USD with 18 decimals. Returns a
@@ -65,7 +66,9 @@ pub trait PriceSource {
     /// error.
     fn get_prices<'a>(
         &'a self,
-        tokens: &'a [Token],
+        // This parameter should conceptually be a reference (slice) but a limitation of mockall
+        // prevents us from using the signature `tokens: &'a [Token]`.
+        tokens: Vec<Token>,
     ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>>;
 }
 
@@ -73,30 +76,7 @@ pub trait PriceSource {
 pub struct NoopPriceSource;
 
 impl PriceSource for NoopPriceSource {
-    fn get_prices(&self, _: &[Token]) -> BoxFuture<Result<HashMap<TokenId, u128>>> {
+    fn get_prices(&self, _: Vec<Token>) -> BoxFuture<Result<HashMap<TokenId, u128>>> {
         async { Ok(HashMap::new()) }.boxed()
     }
 }
-
-// We would like to tag `PriceSource` with `mockall::automock` but mockall does not support the
-// lifetime bounds on `tokens`: https://github.com/asomers/mockall/issues/134 . As a workaround
-// we create a similar trait with simpler lifetimes on which mockall works.
-#[cfg(test)]
-mod mock {
-    use super::*;
-    #[mockall::automock]
-    pub trait PriceSource_ {
-        fn get_prices<'a>(
-            &'a self,
-            tokens: &[Token],
-        ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>>;
-    }
-
-    impl PriceSource for MockPriceSource_ {
-        fn get_prices(&self, tokens: &[Token]) -> BoxFuture<Result<HashMap<TokenId, u128>>> {
-            PriceSource_::get_prices(self, tokens)
-        }
-    }
-}
-#[cfg(test)]
-pub use mock::MockPriceSource_ as MockPriceSource;

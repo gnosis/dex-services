@@ -112,7 +112,7 @@ impl PriceOracle {
     }
 
     /// Gets price estimates for some tokens
-    fn get_prices(&self, tokens: &[Token]) -> HashMap<TokenId, u128> {
+    fn get_prices(&self, tokens: Vec<Token>) -> HashMap<TokenId, u128> {
         if tokens.is_empty() {
             return HashMap::new();
         }
@@ -130,7 +130,7 @@ impl PriceOracle {
 impl PriceEstimating for PriceOracle {
     fn get_token_prices(&self, orders: &[Order]) -> Tokens {
         let (tokens_to_price, unpriced_token_ids) = self.split_order_tokens(orders);
-        let prices = self.get_prices(&tokens_to_price);
+        let prices = self.get_prices(tokens_to_price.clone());
 
         tokens_to_price
             .into_iter()
@@ -268,7 +268,7 @@ mod tests {
         let mut source = MockPriceSource::new();
         source
             .expect_get_prices()
-            .withf(|tokens| tokens == [Token::new(2, "USDT", 6)])
+            .withf(|tokens| tokens.as_slice() == &[Token::new(2, "USDT", 6)])
             .returning(|_| {
                 async {
                     Ok(hash_map! {

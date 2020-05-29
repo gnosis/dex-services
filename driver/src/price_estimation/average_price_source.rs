@@ -23,11 +23,11 @@ where
 {
     fn get_prices<'a>(
         &'a self,
-        tokens: &'a [Token],
+        tokens: Vec<Token>,
     ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
         async move {
             let prices = future::join(
-                self.source_0.get_prices(tokens),
+                self.source_0.get_prices(tokens.clone()),
                 self.source_1.get_prices(tokens),
             )
             .await;
