@@ -3,6 +3,7 @@ use crate::price_estimation::PriceEstimating;
 use crate::price_finding::price_finder_interface::{
     Fee, InternalOptimizer, PriceFinding, SolverType,
 };
+use crate::util::FutureWaitExt as _;
 
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
@@ -242,7 +243,7 @@ impl PriceFinding for OptimisationPriceFinder {
         time_limit: Duration,
     ) -> Result<models::Solution> {
         let input = solver_input::Input {
-            tokens: self.price_oracle.get_token_prices(&orders),
+            tokens: self.price_oracle.get_token_prices(&orders).wait(),
             ref_token: TokenId(0),
             accounts: serialize_balances(&state, &orders),
             orders: orders.iter().map(From::from).collect(),
@@ -349,6 +350,7 @@ pub mod tests {
     use crate::price_estimation::MockPriceEstimating;
     use crate::util::test_util::map_from_slice;
     use ethcontract::Address;
+    use futures::future::FutureExt as _;
     use serde_json::json;
     use std::collections::BTreeMap;
 
@@ -599,9 +601,12 @@ pub mod tests {
             .expect_get_token_prices()
             .withf(|orders| orders == [])
             .returning(|_| {
-                btree_map! {
-                    TokenId(0) => Some(TokenInfo::new("T1", 18, 1_000_000_000_000_000_000)),
+                async {
+                    btree_map! {
+                        TokenId(0) => Some(TokenInfo::new("T1", 18, 1_000_000_000_000_000_000)),
+                    }
                 }
+                .boxed()
             });
 
         let mut io_methods = MockIo::new();
