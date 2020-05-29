@@ -57,17 +57,20 @@ pub enum SolverType {
     StandardSolver,
     FallbackSolver,
     OpenSolver,
+    BestRingSolver,
 }
 
 impl FromStr for SolverType {
     type Err = Error;
 
     fn from_str(solver_type_str: &str) -> Result<Self> {
+        println!("{:}", solver_type_str.to_lowercase().as_str());
         match solver_type_str.to_lowercase().as_str() {
             "standard-solver" => Ok(SolverType::StandardSolver),
             "fallback-solver" => Ok(SolverType::FallbackSolver),
             "naive-solver" => Ok(SolverType::NaiveSolver),
             "open-solver" => Ok(SolverType::OpenSolver),
+            "best-ring-solver" => Ok(SolverType::BestRingSolver),
             _ => Err(anyhow!("solver type does not exit")),
         }
     }
@@ -86,12 +89,15 @@ impl SolverType {
             SolverType::OpenSolver => {
                 execute_open_solver(result_folder, input_file, min_avg_fee_per_order)
             }
-            SolverType::StandardSolver | SolverType::FallbackSolver => execute_private_solver(
+            SolverType::StandardSolver
+            | SolverType::FallbackSolver
+            | SolverType::BestRingSolver => execute_private_solver(
                 result_folder,
                 input_file,
                 time_limit,
                 min_avg_fee_per_order,
                 internal_optimizer,
+                self == SolverType::BestRingSolver,
             ),
             SolverType::NaiveSolver => {
                 panic!("fn execute should not be called by the naive solver")
@@ -128,9 +134,10 @@ pub fn execute_private_solver(
     time_limit: String,
     min_avg_fee_per_order: u128,
     internal_optimizer: InternalOptimizer,
+    search_only_for_best_ring_solution: bool,
 ) -> Result<Output> {
     let mut command = Command::new("python");
-    let private_solver_command = command
+    let mut private_solver_command = command
         .current_dir("/app/batchauctions")
         .args(&["-m", "src._run"])
         .arg(format!("{}{}", "/app/", input_file.to_owned()))
@@ -139,6 +146,9 @@ pub fn execute_private_solver(
         .arg(format!("--minAvgFeePerOrder={}", min_avg_fee_per_order))
         .arg(format!("--solver={}", internal_optimizer.to_argument()))
         .arg(String::from("--useExternalPrices"));
+    if search_only_for_best_ring_solution {
+        private_solver_command = private_solver_command.arg(String::from("--solveBestCycle"));
+    }
     debug!(
         "Using private-solver command `{:?}`",
         private_solver_command

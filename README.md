@@ -202,8 +202,9 @@ OPTIONS:
             Solver parameter: The minimum avg fee per order that allows the solver to run economically viable.
             [default: 0]
         --solver-type <solver-type>
-            Which style of solver to use. Can be one of: 'NAIVE' for the naive solver; 'MIP' for mixed integer
-            programming solver; 'NLP' for non-linear programming solver [env: SOLVER_TYPE=]  [default: naive-solver]
+            Which style of solver to use. Can be one of: 'naive-solver' for the naive solver; 'standard-solver' for mixed integer
+            programming solver; 'fallback-solver' for the solver; 'best-ring-solver' for a solver searching only for the best ring 
+            and 'open-solver' for the open-source solver [env: SOLVER_TYPE=]  [default: naive-solver]
         --target-start-solve-time <target-start-solve-time>
             The offset from the start of a batch in seconds at which point we should start solving [env:
             TARGET_START_SOLVE_TIME=]  [default: 30]
