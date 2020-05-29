@@ -64,7 +64,6 @@ impl FromStr for SolverType {
     type Err = Error;
 
     fn from_str(solver_type_str: &str) -> Result<Self> {
-        println!("{:}", solver_type_str.to_lowercase().as_str());
         match solver_type_str.to_lowercase().as_str() {
             "standard-solver" => Ok(SolverType::StandardSolver),
             "fallback-solver" => Ok(SolverType::FallbackSolver),
