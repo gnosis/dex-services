@@ -121,6 +121,7 @@ pub fn execute_open_solver(
             result_folder.to_owned(),
             "06_solution_int_valid.json",
         ))
+        .arg("--logging=WARNING")
         .arg(format!("--min-avg-fee-per-order={}", min_avg_fee_per_order))
         .arg(String::from("best-token-pair"));
     debug!("Using open-solver command `{:?}`", open_solver_command);
@@ -141,6 +142,7 @@ pub fn execute_private_solver(
         .args(&["-m", "src._run"])
         .arg(format!("{}{}", "/app/", input_file.to_owned()))
         .arg(format!("--outputDir={}{}", "/app/", result_folder))
+        .arg("--logging=WARNING")
         .args(&["--solverTimeLimit", &time_limit])
         .arg(format!("--minAvgFeePerOrder={}", min_avg_fee_per_order))
         .arg(format!("--solver={}", internal_optimizer.to_argument()))
