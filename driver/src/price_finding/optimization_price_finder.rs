@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 use std::fmt::{Debug, Display};
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
+use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -270,9 +271,6 @@ impl PriceFinding for OptimisationPriceFinder {
             &now.to_rfc3339()
         );
 
-        create_dir_all(&input_folder)?;
-        create_dir_all(&result_folder)?;
-
         let result = self
             .io_methods
             .run_solver(
@@ -294,6 +292,9 @@ pub struct DefaultIo;
 
 impl DefaultIo {
     fn write_input(&self, input_file: &str, input: &str) -> std::io::Result<()> {
+        if let Some(parent) = Path::new(input_file).parent() {
+            create_dir_all(parent)?;
+        }
         let file = File::create(&input_file)?;
         let mut writer = BufWriter::new(file);
         writer.write_all(input.as_bytes())?;
@@ -323,6 +324,7 @@ impl Io for DefaultIo {
         self.write_input(input_file, input)
             .with_context(|| format!("error writing instance to {}", input_file))?;
 
+        create_dir_all(result_folder)?;
         let time_limit = (time_limit.as_secs_f64().round() as u64).to_string();
         let output = solver.execute(
             result_folder,
