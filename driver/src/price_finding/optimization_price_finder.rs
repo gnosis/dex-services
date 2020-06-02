@@ -172,17 +172,17 @@ mod solver_input {
 
 #[cfg_attr(test, mockall::automock)]
 trait Io {
-    fn write_input(&self, input_file: &str, input: &str) -> std::io::Result<()>;
+    #[allow(clippy::too_many_arguments)]
     fn run_solver(
         &self,
         input_file: &str,
+        input: &str,
         result_folder: &str,
         solver_type: SolverType,
         time_limit: Duration,
         min_avg_fee_per_order: u128,
         internal_optimizer: InternalOptimizer,
-    ) -> Result<()>;
-    fn read_output(&self, result_folder: &str) -> std::io::Result<String>;
+    ) -> Result<String>;
 }
 
 pub struct OptimisationPriceFinder {
@@ -273,12 +273,11 @@ impl PriceFinding for OptimisationPriceFinder {
         create_dir_all(&input_folder)?;
         create_dir_all(&result_folder)?;
 
-        self.io_methods
-            .write_input(&input_file, &serde_json::to_string(&input)?)
-            .with_context(|| format!("error writing instance to {}", input_file))?;
-        self.io_methods
+        let result = self
+            .io_methods
             .run_solver(
                 &input_file,
+                &serde_json::to_string(&input)?,
                 &result_folder,
                 self.solver_type,
                 time_limit,
@@ -286,10 +285,6 @@ impl PriceFinding for OptimisationPriceFinder {
                 self.internal_optimizer,
             )
             .with_context(|| format!("error running {:?} solver", self.solver_type))?;
-        let result = self
-            .io_methods
-            .read_output(&result_folder)
-            .with_context(|| format!("error reading solver output from {}", &result_folder))?;
         let solution = deserialize_result(result).context("error deserializing solver output")?;
         Ok(solution)
     }
@@ -297,7 +292,7 @@ impl PriceFinding for OptimisationPriceFinder {
 
 pub struct DefaultIo;
 
-impl Io for DefaultIo {
+impl DefaultIo {
     fn write_input(&self, input_file: &str, input: &str) -> std::io::Result<()> {
         let file = File::create(&input_file)?;
         let mut writer = BufWriter::new(file);
@@ -305,15 +300,29 @@ impl Io for DefaultIo {
         Ok(())
     }
 
+    fn read_output(&self, result_folder: &str) -> std::io::Result<String> {
+        let file = File::open(format!("{}{}", result_folder, "06_solution_int_valid.json"))?;
+        let mut reader = BufReader::new(file);
+        let mut result = String::new();
+        reader.read_to_string(&mut result)?;
+        Ok(result)
+    }
+}
+
+impl Io for DefaultIo {
     fn run_solver(
         &self,
         input_file: &str,
+        input: &str,
         result_folder: &str,
         solver: SolverType,
         time_limit: Duration,
         min_avg_fee_per_order: u128,
         internal_optimizer: InternalOptimizer,
-    ) -> Result<()> {
+    ) -> Result<String> {
+        self.write_input(input_file, input)
+            .with_context(|| format!("error writing instance to {}", input_file))?;
+
         let time_limit = (time_limit.as_secs_f64().round() as u64).to_string();
         let output = solver.execute(
             result_folder,
@@ -331,15 +340,9 @@ impl Io for DefaultIo {
             );
             return Err(anyhow!("Solver execution failed"));
         }
-        Ok(())
-    }
 
-    fn read_output(&self, result_folder: &str) -> std::io::Result<String> {
-        let file = File::open(format!("{}{}", result_folder, "06_solution_int_valid.json"))?;
-        let mut reader = BufReader::new(file);
-        let mut result = String::new();
-        reader.read_to_string(&mut result)?;
-        Ok(result)
+        self.read_output(result_folder)
+            .with_context(|| format!("error reading solver output from {}", result_folder))
     }
 }
 
@@ -611,9 +614,9 @@ pub mod tests {
 
         let mut io_methods = MockIo::new();
         io_methods
-            .expect_write_input()
+            .expect_run_solver()
             .times(1)
-            .withf(|_, content: &str| {
+            .withf(|_, content: &str, _, _, _, _, _| {
                 let json: serde_json::value::Value = serde_json::from_str(content).unwrap();
                 json["fee"]
                     == json!({
@@ -621,15 +624,7 @@ pub mod tests {
                         "ratio": 0.001
                     })
             })
-            .returning(|_, _| Ok(()));
-        io_methods
-            .expect_run_solver()
-            .times(1)
-            .returning(|_, _, _, _, _, _| Ok(()));
-        io_methods
-            .expect_read_output()
-            .times(1)
-            .returning(|_| Err(std::io::Error::last_os_error()));
+            .returning(|_, _, _, _, _, _, _| Err(anyhow!("")));
         let solver = OptimisationPriceFinder {
             io_methods: Box::new(io_methods),
             fee: Some(fee),
