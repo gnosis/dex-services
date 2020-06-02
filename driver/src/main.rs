@@ -68,9 +68,12 @@ struct Options {
     #[structopt(short = "i", long, env = "NETWORK_ID")]
     network_id: u64,
 
-    /// Which style of solver to use. Can be one of: 'NAIVE' for the naive
-    /// solver; 'MIP' for mixed integer programming solver; 'NLP' for non-linear
-    /// programming solver.
+    /// Which style of solver to use. Can be one of:
+    /// 'naive-solver' for the naive solver;
+    /// 'standard-solver' for mixed integer programming solver;
+    /// 'fallback-solver' for a more conservative solver than the standard solver;
+    /// 'best-ring-solver' for a solver searching only for the best ring;
+    /// 'open-solver' for the open-source solver
     #[structopt(long, env = "SOLVER_TYPE", default_value = "naive-solver")]
     solver_type: SolverType,
 
