@@ -19,7 +19,3 @@ path = "fuzz_targets/element_read_all.rs"
 [[bin]]
 name = "orderbook"
 path = "fuzz_targets/orderbook.rs"
-
-[[bin]]
-name = "continuous"
-path = "fuzz_targets/continuous.rs"
