@@ -170,7 +170,6 @@ OPTIONS:
             and exchange REST APIs for fetching price estimates [env: HTTP_TIMEOUT=]  [default: 10000]
         --log-filter <log-filter>
             The log filter to use.
-            
             This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug'). [env: DFUSION_LOG=]  [default:
             warn,driver=info]
         --min-avg-fee-per-order <min-avg-fee-per-order>
@@ -182,12 +181,11 @@ OPTIONS:
     -n, --node-url <node-url>
             The Ethereum node URL to connect to. Make sure that the node allows for queries without a gas limit to be
             able to fetch the orderbook [env: ETHEREUM_NODE_URL=]
-        --orderbook-file <orderbook-file>                                
+        --orderbook-file <orderbook-file>
              [env: ORDERBOOK_FILE=]
 
         --orderbook-filter <orderbook-filter>
             JSON encoded object of which tokens/orders to ignore.
-            
             For example: '{ "tokens": {"Whitelist": [1, 2]}, "users": { "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A": {
             "OrderIds": [0, 1] }, "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B": "All" } }' More examples can be found in
             the tests of orderbook/filtered_orderboook.rs [env: ORDERBOOK_FILTER=]  [default: {}]
@@ -222,7 +220,6 @@ OPTIONS:
             TARGET_START_SOLVE_TIME=]  [default: 30]
         --token-data <token-data>
             JSON encoded backup token information to provide to the solver.
-            
             For example: '{ "T0001": { "alias": "WETH", "decimals": 18, "externalPrice": 200000000000000000000,
             "shouldEstimatePrice": false }, "T0004": { "alias": "USDC", "decimals": 6, "externalPrice":
             1000000000000000000000000000000, "shouldEstimatePrice": true } }' [env: TOKEN_DATA=]  [default: {}]

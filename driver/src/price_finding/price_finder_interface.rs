@@ -1,8 +1,7 @@
 use crate::models;
 use anyhow::{anyhow, Error, Result};
+use futures::future::BoxFuture;
 use log::debug;
-#[cfg(test)]
-use mockall::automock;
 use std::process::Command;
 use std::process::Output;
 use std::str::FromStr;
@@ -117,6 +116,7 @@ pub fn execute_open_solver(
             result_folder.to_owned(),
             "06_solution_int_valid.json",
         ))
+        .arg("--logging=WARNING")
         .arg(format!("--min-avg-fee-per-order={}", min_avg_fee_per_order))
         .arg(String::from("best-token-pair"));
     debug!("Using open-solver command `{:?}`", open_solver_command);
@@ -137,6 +137,7 @@ pub fn execute_private_solver(
         .args(&["-m", "src._run"])
         .arg(format!("{}{}", "/app/", input_file.to_owned()))
         .arg(format!("--outputDir={}{}", "/app/", result_folder))
+        .arg("--logging=WARNING")
         .args(&["--solverTimeLimit", &time_limit])
         .arg(format!("--minAvgFeePerOrder={}", min_avg_fee_per_order))
         .arg(format!("--solver={}", internal_optimizer.to_argument()))
@@ -151,12 +152,41 @@ pub fn execute_private_solver(
     Ok(private_solver_command.output()?)
 }
 
-#[cfg_attr(test, automock)]
 pub trait PriceFinding {
-    fn find_prices(
-        &self,
-        orders: &[models::Order],
-        state: &models::AccountState,
+    fn find_prices<'a>(
+        &'a self,
+        orders: &'a [models::Order],
+        state: &'a models::AccountState,
         time_limit: Duration,
-    ) -> Result<models::Solution, Error>;
+    ) -> BoxFuture<'a, Result<models::Solution, Error>>;
 }
+
+// We would like to tag `PriceFinding` with `mockall::automock` but mockall does not support the
+// lifetime bounds on `tokens`: https://github.com/asomers/mockall/issues/134 . As a workaround
+// we create a similar trait with simpler lifetimes on which mockall works.
+#[cfg(test)]
+mod mock {
+    use super::*;
+    #[mockall::automock]
+    pub trait PriceFinding_ {
+        fn find_prices<'a>(
+            &'a self,
+            orders: &[models::Order],
+            state: &models::AccountState,
+            time_limit: Duration,
+        ) -> BoxFuture<'a, Result<models::Solution, Error>>;
+    }
+
+    impl PriceFinding for MockPriceFinding_ {
+        fn find_prices<'a>(
+            &'a self,
+            orders: &'a [models::Order],
+            state: &'a models::AccountState,
+            time_limit: Duration,
+        ) -> BoxFuture<'a, Result<models::Solution, Error>> {
+            PriceFinding_::find_prices(self, orders, state, time_limit)
+        }
+    }
+}
+#[cfg(test)]
+pub use mock::MockPriceFinding_ as MockPriceFinding;

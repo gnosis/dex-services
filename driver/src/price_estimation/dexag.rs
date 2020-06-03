@@ -3,11 +3,12 @@ mod api;
 use super::{PriceSource, Token};
 use crate::http::HttpFactory;
 use crate::models::TokenId;
-use crate::util::FutureWaitExt;
 use anyhow::{anyhow, Context, Result};
 use api::{DexagApi, DexagHttpApi};
-use futures::future::{self, BoxFuture};
-use std::cell::RefCell;
+use futures::{
+    future::{self, BoxFuture, FutureExt as _},
+    lock::Mutex,
+};
 use std::collections::HashMap;
 
 struct ApiTokens {
@@ -21,7 +22,7 @@ pub struct DexagClient<Api> {
     api: Api,
     /// Lazily retrieved the first time it is needed when `get_prices` is
     /// called. We don't want to use the network in `new`.
-    api_tokens: RefCell<Option<ApiTokens>>,
+    api_tokens: Mutex<Option<ApiTokens>>,
 }
 
 impl DexagClient<DexagHttpApi> {
@@ -39,12 +40,12 @@ where
     pub fn with_api(api: Api) -> Self {
         Self {
             api,
-            api_tokens: RefCell::new(None),
+            api_tokens: Mutex::new(None),
         }
     }
 
-    fn create_api_tokens(&self) -> Result<ApiTokens> {
-        let tokens = self.api.get_token_list().wait()?;
+    async fn create_api_tokens(&self) -> Result<ApiTokens> {
+        let tokens = self.api.get_token_list().await?;
         let mut tokens: HashMap<String, api::Token> = tokens
             .into_iter()
             .map(|token| (token.symbol.to_uppercase(), token))
@@ -70,55 +71,63 @@ where
 
 impl<Api> PriceSource for DexagClient<Api>
 where
-    Api: DexagApi + Sync,
+    Api: DexagApi + Sync + Send,
 {
-    fn get_prices(&self, tokens: &[Token]) -> Result<HashMap<TokenId, u128>> {
-        if tokens.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let api_tokens_option = &mut self.api_tokens.borrow_mut();
-        let api_tokens: &ApiTokens = match api_tokens_option.as_ref() {
-            Some(api_tokens) => api_tokens,
-            None => {
-                let initialized = self
-                    .create_api_tokens()
-                    .with_context(|| anyhow!("failed to perform lazy initialization"))?;
-                api_tokens_option.get_or_insert(initialized)
+    fn get_prices<'a>(
+        &'a self,
+        tokens: &'a [Token],
+    ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
+        async move {
+            if tokens.is_empty() {
+                return Ok(HashMap::new());
             }
-        };
 
-        let (tokens_, futures): (Vec<_>, Vec<_>) = tokens
-            .iter()
-            .filter_map(|token| -> Option<(&Token, BoxFuture<Result<f64>>)> {
-                // api_tokens symbols are converted to uppercase to disambiguate
-                let symbol = token.symbol().to_uppercase();
-                if symbol == api_tokens.stable_coin.symbol {
-                    Some((token, Box::pin(future::ready(Ok(1.0)))))
-                } else if let Some(api_token) = api_tokens.tokens.get(&symbol) {
-                    Some((
-                        token,
-                        self.api.get_price(api_token, &api_tokens.stable_coin),
-                    ))
-                } else {
-                    None
+            let mut api_tokens_guard = self.api_tokens.lock().await;
+            let api_tokens_option = &mut api_tokens_guard;
+            let api_tokens: &ApiTokens = match api_tokens_option.as_ref() {
+                Some(api_tokens) => api_tokens,
+                None => {
+                    let initialized = self
+                        .create_api_tokens()
+                        .await
+                        .with_context(|| anyhow!("failed to perform lazy initialization"))?;
+                    api_tokens_option.get_or_insert(initialized)
                 }
-            })
-            .unzip();
+            };
 
-        let joined = future::join_all(futures);
-        let results = futures::executor::block_on(joined);
-        assert_eq!(tokens_.len(), results.len());
+            let (tokens_, futures): (Vec<_>, Vec<_>) = tokens
+                .iter()
+                .filter_map(|token| -> Option<(&Token, BoxFuture<Result<f64>>)> {
+                    // api_tokens symbols are converted to uppercase to disambiguate
+                    let symbol = token.symbol().to_uppercase();
+                    if symbol == api_tokens.stable_coin.symbol {
+                        Some((token, async { Ok(1.0) }.boxed()))
+                    } else if let Some(api_token) = api_tokens.tokens.get(&symbol) {
+                        Some((
+                            token,
+                            self.api.get_price(api_token, &api_tokens.stable_coin),
+                        ))
+                    } else {
+                        None
+                    }
+                })
+                .unzip();
 
-        Ok(tokens_
-            .iter()
-            .zip(results.iter())
-            .filter_map(|(token, result)| match result {
-                Ok(price) => Some((token, price)),
-                Err(_) => None,
-            })
-            .map(|(token, price)| (token.id, token.get_owl_price(*price)))
-            .collect())
+            let joined = future::join_all(futures);
+            let results = joined.await;
+            assert_eq!(tokens_.len(), results.len());
+
+            Ok(tokens_
+                .iter()
+                .zip(results.iter())
+                .filter_map(|(token, result)| match result {
+                    Ok(price) => Some((token, price)),
+                    Err(_) => None,
+                })
+                .map(|(token, price)| (token.id, token.get_owl_price(*price)))
+                .collect())
+        }
+        .boxed()
     }
 }
 
@@ -126,7 +135,7 @@ where
 mod tests {
     use super::api::MockDexagApi;
     use super::*;
-    use futures::future::FutureExt as _;
+    use crate::util::FutureWaitExt as _;
     use lazy_static::lazy_static;
     use mockall::{predicate::*, Sequence};
 
@@ -138,6 +147,8 @@ mod tests {
 
         assert!(DexagClient::with_api(api)
             .get_prices(&[Token::new(6, "DAI", 18)])
+            .now_or_never()
+            .unwrap()
             .is_err());
     }
 
@@ -167,10 +178,10 @@ mod tests {
             });
 
         let client = DexagClient::with_api(api);
-        assert!(client.get_prices(&tokens).is_err());
-        assert!(client.get_prices(&tokens).is_err());
-        assert!(client.get_prices(&tokens).is_ok());
-        assert!(client.get_prices(&tokens).is_ok());
+        assert!(client.get_prices(&tokens).now_or_never().unwrap().is_err());
+        assert!(client.get_prices(&tokens).now_or_never().unwrap().is_err());
+        assert!(client.get_prices(&tokens).now_or_never().unwrap().is_ok());
+        assert!(client.get_prices(&tokens).now_or_never().unwrap().is_ok());
     }
 
     #[test]
@@ -218,7 +229,7 @@ mod tests {
             .returning(|_, _| async { Ok(1.2) }.boxed());
 
         let client = DexagClient::with_api(api);
-        let prices = client.get_prices(&tokens).unwrap();
+        let prices = client.get_prices(&tokens).now_or_never().unwrap().unwrap();
         assert_eq!(
             prices,
             hash_map! {
@@ -262,7 +273,7 @@ mod tests {
             .returning(|_, _| async { Err(anyhow!("")) }.boxed());
 
         let client = DexagClient::with_api(api);
-        let prices = client.get_prices(&tokens).unwrap();
+        let prices = client.get_prices(&tokens).now_or_never().unwrap().unwrap();
         assert_eq!(
             prices,
             hash_map! {
@@ -309,7 +320,7 @@ mod tests {
             .returning(|_, _| async { Ok(1.0) }.boxed());
 
         let client = DexagClient::with_api(api);
-        let prices = client.get_prices(&tokens).unwrap();
+        let prices = client.get_prices(&tokens).now_or_never().unwrap().unwrap();
         assert_eq!(
             prices,
             hash_map! {
@@ -341,7 +352,7 @@ mod tests {
 
         let client = DexagClient::new(&HttpFactory::default()).unwrap();
         let before = Instant::now();
-        let prices = client.get_prices(tokens).unwrap();
+        let prices = client.get_prices(tokens).wait().unwrap();
         let after = Instant::now();
         println!(
             "Took {} seconds to get prices.",
