@@ -6,4 +6,5 @@ use pricegraph::{Element, Orderbook};
 
 fuzz_target!(|elements: Vec<Element>| {
     let _ = Orderbook::from_elements(elements);
+    panic!("foo");
 });
