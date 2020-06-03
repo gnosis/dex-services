@@ -162,6 +162,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "blocking"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ee77a98872673f1839c1a434e98b7652b3adb54a4c485735ea5937b66da5800"
+dependencies = [
+ "futures-channel",
+ "futures-util",
+ "once_cell",
+ "parking",
+ "waker-fn",
+]
+
+[[package]]
 name = "brotli-sys"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -606,6 +619,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bincode",
+ "blocking",
  "byteorder",
  "chrono",
  "crossbeam-utils",
@@ -1753,6 +1767,12 @@ dependencies = [
  "byte-slice-cast",
  "serde",
 ]
+
+[[package]]
+name = "parking"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a7fad362df89617628a7508b3e9d588ade1b0ac31aa25de168193ad999c2dd4"
 
 [[package]]
 name = "parking_lot"
@@ -3339,6 +3359,12 @@ name = "version_check"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "078775d0255232fb988e6fccf26ddc9d1ac274299aaedcedce21c6f72cc533ce"
+
+[[package]]
+name = "waker-fn"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9571542c2ce85ce642e6b58b3364da2fb53526360dfb7c211add4f5c23105ff7"
 
 [[package]]
 name = "walkdir"
