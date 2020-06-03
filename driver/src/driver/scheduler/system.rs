@@ -1,5 +1,6 @@
 use super::{AuctionTimingConfiguration, Scheduler, BATCH_DURATION};
 use crate::driver::stablex_driver::{DriverResult, StableXDriver};
+use crate::util::FutureWaitExt as _;
 use anyhow::{Context, Result};
 use crossbeam_utils::thread::Scope;
 use log::error;
@@ -76,7 +77,7 @@ impl<'a> SystemScheduler<'a> {
         let driver = self.driver;
         scope.spawn(move |_| {
             while let Some(time_limit) = solver_deadline.checked_duration_since(Instant::now()) {
-                let driver_result = driver.run(batch_id.0.into(), time_limit);
+                let driver_result = driver.run(batch_id.0.into(), time_limit).wait();
                 log_driver_result(batch_id, &driver_result);
                 match driver_result {
                     DriverResult::Retry(_) => thread::sleep(RETRY_SLEEP_DURATION),
@@ -163,6 +164,7 @@ mod tests {
     use super::*;
     use crate::driver::stablex_driver::MockStableXDriver;
     use anyhow::anyhow;
+    use futures::future::FutureExt as _;
 
     #[test]
     fn batch_id_current() {
@@ -315,12 +317,15 @@ mod tests {
                 time_limit.as_secs(),
             );
             counter += 1;
-            match counter % 3 {
-                0 => DriverResult::Ok,
-                1 => DriverResult::Retry(anyhow!("")),
-                2 => DriverResult::Skip(anyhow!("")),
-                _ => unreachable!(),
+            async move {
+                match counter % 3 {
+                    0 => DriverResult::Ok,
+                    1 => DriverResult::Retry(anyhow!("")),
+                    2 => DriverResult::Skip(anyhow!("")),
+                    _ => unreachable!(),
+                }
             }
+            .boxed()
         });
 
         let auction_timing_configuration = AuctionTimingConfiguration {
