@@ -1,3 +1,4 @@
+mod filter;
 mod orderbook;
 
 use core::{
@@ -5,30 +6,20 @@ use core::{
     http::HttpFactory,
     metrics::{HttpMetrics, MetricsServer},
     orderbook::EventBasedOrderbook,
-    orderbook::StableXOrderBookReading,
     util::FutureWaitExt as _,
 };
 use ethcontract::PrivateKey;
+use filter::TokenPair;
 use prometheus::Registry;
 use std::{num::ParseIntError, path::PathBuf, sync::Arc, thread, time::Duration};
 use structopt::StructOpt;
 use tokio::{runtime, time};
 use url::Url;
-use warp::Filter;
+use warp::{Filter, Rejection};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "price estimator", rename_all = "kebab")]
 struct Options {
-    /// The log filter to use.
-    ///
-    /// This follows the envlogger syntax (e.g. 'info,driver=debug').
-    #[structopt(
-        long,
-        env = "LOG_FILTER",
-        default_value = "warn,driver=info,price_estimator=info"
-    )]
-    log_filter: String,
-
     /// The Ethereum node URL to connect to. Make sure that the node allows for
     /// queries without a gas limit to be able to fetch the orderbook.
     #[structopt(short, long, env = "NODE_URL")]
@@ -77,8 +68,9 @@ fn main() {
     );
 
     let orderbook = EventBasedOrderbook::new(contract, web3, options.orderbook_file);
-    orderbook.initialize().wait().unwrap();
     let orderbook = Arc::new(Orderbook::new(orderbook));
+    let _ = orderbook.update().wait();
+    log::info!("Orderbook initialized.");
 
     let mut runtime = runtime::Builder::new()
         .threaded_scheduler()
@@ -87,13 +79,25 @@ fn main() {
         .unwrap();
 
     let orderbook_task = runtime.spawn(update_orderbook_forever(
-        orderbook,
+        orderbook.clone(),
         options.orderbook_update_interval,
     ));
 
-    // TODO: handle http requests
-    let serve_task = runtime.spawn(warp::serve(warp::any().map(|| "")).run(([127, 0, 0, 1], 8080)));
+    let filter = filter::estimated_buy_amount().and_then(
+        move |token_pair: TokenPair, sell_amount_in_quote| {
+            let orderbook = orderbook.clone();
+            async move {
+                // TODO: format the response the way the nodejs price estimator did.
+                let orderbook = orderbook.get_reduced_orderbook().await;
+                let result = estimate_price(token_pair, sell_amount_in_quote as f64, orderbook);
+                // The compiler cannot infer the error type because we never return an error.
+                Result::<_, Rejection>::Ok(format!("{}", result.unwrap_or_default()))
+            }
+        },
+    );
+    let serve_task = runtime.spawn(warp::serve(filter).run(([127, 0, 0, 1], 8080)));
 
+    log::info!("Server ready.");
     runtime.block_on(async move {
         tokio::select! {
             _ = orderbook_task => log::error!("Update task exited."),
@@ -109,6 +113,14 @@ async fn update_orderbook_forever(orderbook: Arc<Orderbook>, update_interval: Du
             log::warn!("error updating orderbook: {:?}", err);
         }
     }
+}
+
+fn estimate_price(
+    token_pair: TokenPair,
+    sell_amount_in_quote: f64,
+    mut orderbook: pricegraph::Orderbook,
+) -> Option<f64> {
+    orderbook.fill_market_order(token_pair.into(), sell_amount_in_quote)
 }
 
 fn duration_secs(s: &str) -> Result<Duration, ParseIntError> {
