@@ -4,6 +4,20 @@ use anyhow::{anyhow, Result};
 use futures::future::{self, BoxFuture, FutureExt as _};
 use std::collections::HashMap;
 
+pub struct PriceSources {
+    sources: Vec<Box<dyn PriceSource>>,
+}
+
+impl PriceSources {
+    pub fn new(sources: Vec<Box<dyn PriceSource>>) -> Self {
+        Self { sources }
+    }
+
+    pub fn average_price(self) -> HashMap<TokenId, u128> {
+        unimplemented!();
+    }
+}
+
 /// Combines two prices into one average.
 pub struct AveragePriceSource<T0, T1> {
     source_0: T0,
@@ -40,7 +54,7 @@ where
                 (Err(e0), Err(e1)) => Err(anyhow!("both price sources failed: {}, {}", e0, e1)),
             }
         }
-        .boxed()
+            .boxed()
     }
 }
 
