@@ -154,10 +154,10 @@ USAGE:
     driver [OPTIONS] --network-id <network-id> --node-url <node-url> --private-key <private-key>
 
 FLAGS:
-    -h, --help
+    -h, --help       
             Prints help information
 
-    -V, --version
+    -V, --version    
             Prints version information
 
 
@@ -169,23 +169,32 @@ OPTIONS:
             The default timeout in milliseconds of HTTP requests to remote services such as the Gnosis Safe gas station
             and exchange REST APIs for fetching price estimates [env: HTTP_TIMEOUT=]  [default: 10000]
         --log-filter <log-filter>
-            The log fiter to use.
-
-            This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug'). [env: DFUSION_LOG=]  [default: info]
+            The log filter to use.
+            This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug'). [env: DFUSION_LOG=]  [default:
+            warn,driver=info]
+        --min-avg-fee-per-order <min-avg-fee-per-order>
+            Solver parameter: minimal average fee per order Its unit is [OWL] [env: MIN_AVG_FEE_PER_ORDER=]  [default:
+            0]
     -i, --network-id <network-id>
             The network ID used for signing transactions (e.g. 1 for mainnet, 4 for rinkeby, 5777 for ganache) [env:
             NETWORK_ID=]
     -n, --node-url <node-url>
-            The Ethereum node URL to connect to. Make sure that the node allows for queries witout a gas limit to be
+            The Ethereum node URL to connect to. Make sure that the node allows for queries without a gas limit to be
             able to fetch the orderbook [env: ETHEREUM_NODE_URL=]
+        --orderbook-file <orderbook-file>
+             [env: ORDERBOOK_FILE=]
+
         --orderbook-filter <orderbook-filter>
             JSON encoded object of which tokens/orders to ignore.
-
-            For example: '{ "tokens": [1, 2], "users": { "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A": { "OrderIds": [0,
-            1] }, "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B": "All" } }' [env: ORDERBOOK_FILTER=]  [default: {}]
+            For example: '{ "tokens": {"Whitelist": [1, 2]}, "users": { "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A": {
+            "OrderIds": [0, 1] }, "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B": "All" } }' More examples can be found in
+            the tests of orderbook/filtered_orderboook.rs [env: ORDERBOOK_FILTER=]  [default: {}]
         --price-source-update-interval <price-source-update-interval>
             Time interval in seconds in which price sources should be updated [env: PRICE_SOURCE_UPDATE_INTERVAL=]
             [default: 300]
+        --primary-orderbook <primary-orderbook>
+            Primary method for orderbook retrieval ("Paginated" or "OnchainFiltered") [env: PRIMARY_ORDERBOOK=]
+            [default: paginated]
     -k, --private-key <private-key>
             The private key used by the driver to sign transactions [env: PRIVATE_KEY]
 
@@ -195,28 +204,28 @@ OPTIONS:
         --scheduler <scheduler>
             The kind of scheduler to use [env: SCHEDULER=]  [default: system]
 
+        --solver-internal-optimizer <solver-internal-optimizer>
+            Which internal optimizer the solver should use. It is passed as `--solver` to the solver. Choices are "scip"
+            and "gurobi" [env: SOLVER_INTERNAL_OPTIMIZER=]  [default: scip]
         --solver-time-limit <solver-time-limit>
             The offset from the start of the batch to cap the solver's execution time [env: SOLVER_TIME_LIMIT=]
             [default: 210]
-        --min-avg-fee-per-order <min-avg-fee-per-order>
-            Solver parameter: The minimum avg fee per order that allows the solver to run economically viable.
-            [default: 0]
         --solver-type <solver-type>
-            Which style of solver to use. Can be one of: 'naive-solver' for the naive solver;
-            'standard-solver' for mixed integer programming solver;
-            'fallback-solver' for a more conservative solver than the standard solver;
-            'best-ring-solver' for a solver searching only for the best ring;
-            'open-solver' for the open-source solver 
+            Which style of solver to use. Can be one of: 'naive-solver' for the naive solver; 'standard-solver' for
+            mixed integer programming solver; 'fallback-solver' for a more conservative solver than the standard solver;
+            'best-ring-solver' for a solver searching only for the best ring; 'open-solver' for the open-source solver
             [env: SOLVER_TYPE=]  [default: naive-solver]
         --target-start-solve-time <target-start-solve-time>
             The offset from the start of a batch in seconds at which point we should start solving [env:
             TARGET_START_SOLVE_TIME=]  [default: 30]
         --token-data <token-data>
             JSON encoded backup token information to provide to the solver.
-
             For example: '{ "T0001": { "alias": "WETH", "decimals": 18, "externalPrice": 200000000000000000000,
             "shouldEstimatePrice": false }, "T0004": { "alias": "USDC", "decimals": 6, "externalPrice":
             1000000000000000000000000000000, "shouldEstimatePrice": true } }' [env: TOKEN_DATA=]  [default: {}]
+        --use-shadowed-orderbook <use-shadowed-orderbook>
+            Use a shadowed orderbook reader along side a primary reader so that the queried data can be compared and
+            produce log errors in case they disagree [env: USE_SHADOWED_ORDERBOOK=]  [default: false]
 ```
 
 ### Orderbook Filter Example
