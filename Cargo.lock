@@ -330,6 +330,42 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 
 [[package]]
+name = "core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "blocking",
+ "byteorder",
+ "chrono",
+ "crossbeam-utils",
+ "ethcontract",
+ "ethcontract-generate",
+ "futures 0.3.5",
+ "futures-timer",
+ "isahc",
+ "lazy_static",
+ "log 0.4.8",
+ "mockall",
+ "num",
+ "prometheus",
+ "rouille",
+ "rustc-hex",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "slog",
+ "slog-async",
+ "slog-envlogger",
+ "slog-scope",
+ "slog-stdlog",
+ "slog-term",
+ "thiserror",
+ "uint",
+ "url 2.1.1",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.7.0"
 source = "git+https://github.com/servo/core-foundation-rs?tag=v0.20.1#01d69213403e5f8c8e2556f81495e98571e6e882"
@@ -617,36 +653,11 @@ checksum = "4bb454f0228b18c7f4c3b0ebbee346ed9c52e7443b0999cd543ff3571205701d"
 name = "driver"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "bincode",
- "blocking",
- "byteorder",
- "chrono",
- "crossbeam-utils",
+ "core",
  "ethcontract",
- "ethcontract-generate",
- "futures 0.3.5",
- "futures-timer",
- "isahc",
- "lazy_static",
  "log 0.4.8",
- "mockall",
- "num",
  "prometheus",
- "rouille",
- "rustc-hex",
- "serde",
- "serde_json",
- "serde_with",
- "slog",
- "slog-async",
- "slog-envlogger",
- "slog-scope",
- "slog-stdlog",
- "slog-term",
  "structopt",
- "thiserror",
- "uint",
  "url 2.1.1",
 ]
 
