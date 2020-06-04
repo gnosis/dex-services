@@ -196,7 +196,7 @@ impl StableXOrderBookReading for UpdatingOrderbook {
     /// Blocks on updating the orderbook. This can be expensive if `initialize` hasn't been called before.
     fn get_auction_data<'a>(
         &'a self,
-        batch_id_to_solve: U256,
+        batch_id_to_solve: u32,
     ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
         self.do_with_context(move |context| context.orderbook.get_auction_data(batch_id_to_solve))
             .boxed()

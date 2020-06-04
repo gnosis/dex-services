@@ -77,7 +77,7 @@ impl<'a> SystemScheduler<'a> {
         let driver = self.driver;
         scope.spawn(move |_| {
             while let Some(time_limit) = solver_deadline.checked_duration_since(Instant::now()) {
-                let driver_result = driver.run(batch_id.0.into(), time_limit).wait();
+                let driver_result = driver.run(batch_id.0 as u32, time_limit).wait();
                 log_driver_result(batch_id, &driver_result);
                 match driver_result {
                     DriverResult::Retry(_) => thread::sleep(RETRY_SLEEP_DURATION),
@@ -313,7 +313,7 @@ mod tests {
             log::info!(
                 "driver run called for the {}. time with batch {} time_limit {}",
                 counter,
-                batch.low_u64(),
+                batch,
                 time_limit.as_secs(),
             );
             counter += 1;

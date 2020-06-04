@@ -34,7 +34,7 @@ pub trait StableXSolutionSubmitting {
     /// * `solution` - the solution to be evaluated
     fn get_solution_objective_value<'a>(
         &'a self,
-        batch_index: U256,
+        batch_index: u32,
         solution: Solution,
     ) -> BoxFuture<'a, Result<U256, SolutionSubmissionError>>;
 
@@ -47,7 +47,7 @@ pub trait StableXSolutionSubmitting {
     /// * `claimed_objective_value` - the objective value of the provided solution.
     fn submit_solution<'a>(
         &'a self,
-        batch_index: U256,
+        batch_index: u32,
         solution: Solution,
         claimed_objective_value: U256,
     ) -> BoxFuture<'a, Result<(), SolutionSubmissionError>>;
@@ -106,7 +106,7 @@ impl<'a> StableXSolutionSubmitter<'a> {
     /// Turn a method error from a solution submission into a SolutionSubmissionError.
     async fn make_error(
         &self,
-        batch_index: U256,
+        batch_index: u32,
         solution: Solution,
         err: MethodError,
     ) -> SolutionSubmissionError {
@@ -128,13 +128,13 @@ impl<'a> StableXSolutionSubmitter<'a> {
 impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
     fn get_solution_objective_value(
         &self,
-        batch_index: U256,
+        batch_index: u32,
         solution: Solution,
     ) -> BoxFuture<Result<U256, SolutionSubmissionError>> {
         async move {
             // NOTE: Compare with `>=` as the exchange's current batch index is the
             //   one accepting orders and does not yet accept solutions.
-            while batch_index.as_u32() >= self.contract.get_current_auction_index().await? {
+            while batch_index >= self.contract.get_current_auction_index().await? {
                 info!("Solved batch is not yet accepting solutions, waiting for next batch.");
                 if POLL_TIMEOUT > Duration::from_secs(0) {
                     futures_timer::Delay::new(POLL_TIMEOUT).await;
@@ -151,7 +151,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
 
     fn submit_solution(
         &self,
-        batch_index: U256,
+        batch_index: u32,
         solution: Solution,
         claimed_objective_value: U256,
     ) -> BoxFuture<Result<(), SolutionSubmissionError>> {
@@ -176,7 +176,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
 
 async fn retry_with_gas_price_increase(
     contract: &(dyn StableXContract + Sync),
-    batch_index: U256,
+    batch_index: u32,
     solution: Solution,
     claimed_objective_value: U256,
     gas_price_estimating: &(dyn GasPriceEstimating + Sync),
@@ -279,7 +279,7 @@ mod tests {
 
         let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
         let result = submitter
-            .get_solution_objective_value(U256::zero(), Solution::trivial())
+            .get_solution_objective_value(0, Solution::trivial())
             .now_or_never()
             .unwrap();
         contract.checkpoint();
@@ -321,7 +321,7 @@ mod tests {
 
         retry_with_gas_price_increase(
             &contract,
-            1.into(),
+            1,
             Solution::trivial(),
             1.into(),
             &gas_station,
@@ -408,7 +408,7 @@ mod tests {
 
         assert!(retry_with_gas_price_increase(
             &contract,
-            1.into(),
+            1,
             Solution::trivial(),
             1.into(),
             &gas_station,
@@ -442,7 +442,7 @@ mod tests {
 
         let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
         let result = submitter
-            .get_solution_objective_value(U256::zero(), Solution::trivial())
+            .get_solution_objective_value(0, Solution::trivial())
             .now_or_never()
             .unwrap();
 
@@ -510,7 +510,7 @@ mod tests {
 
         let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
         let result = submitter
-            .submit_solution(U256::zero(), Solution::trivial(), U256::zero())
+            .submit_solution(0, Solution::trivial(), U256::zero())
             .now_or_never()
             .unwrap();
 
