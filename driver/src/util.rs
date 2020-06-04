@@ -1,6 +1,5 @@
 use ethcontract::U256;
 use std::future::Future;
-
 pub trait CeiledDiv {
     /// Panics on overflow.
     fn ceiled_div(&self, divisor: Self) -> Self;
