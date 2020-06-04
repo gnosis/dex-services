@@ -31,6 +31,17 @@ pub fn reduce_overlapping_orders(c: &mut Criterion) {
     });
 }
 
+pub fn reduce_overlapping_transitive_orderbook(c: &mut Criterion) {
+    c.bench_function("Orderbook::reduce_overlapping_transitive_orderbook", |b| {
+        let orderbook = read_default_orderbook();
+        b.iter_batched(
+            || orderbook.clone(),
+            |mut orderbook| orderbook.reduce_overlapping_transitive_orderbook(1, 7),
+            BatchSize::SmallInput,
+        )
+    });
+}
+
 pub fn fill_market_order(c: &mut Criterion) {
     let dai_weth = TokenPair { buy: 7, sell: 1 };
     let eth = 10.0f64.powi(18);
@@ -70,6 +81,8 @@ pub fn fill_market_order(c: &mut Criterion) {
 criterion_group!(
     name = benches;
     config = Criterion::default().sample_size(20);
-    targets = read, is_overlapping, reduce_overlapping_orders, fill_market_order
+    targets =
+        read, is_overlapping, reduce_overlapping_orders,
+        reduce_overlapping_transitive_orderbook, fill_market_order
 );
 criterion_main!(benches);
