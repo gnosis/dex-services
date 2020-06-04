@@ -3,9 +3,9 @@ use crate::models::{account_state::AccountState, order::Order, Solution};
 use crate::orderbook::StableXOrderBookReading;
 use crate::price_finding::PriceFinding;
 use crate::solution_submission::{SolutionSubmissionError, StableXSolutionSubmitting};
-use crate::util::FutureWaitExt as _;
 use anyhow::{Error, Result};
 use ethcontract::U256;
+use futures::future::{BoxFuture, FutureExt as _};
 use log::{info, warn};
 use std::time::{Duration, Instant};
 
@@ -18,7 +18,10 @@ pub enum DriverResult {
 
 #[cfg_attr(test, mockall::automock)]
 pub trait StableXDriver {
-    fn run(&self, batch_to_solve: U256, time_limit: Duration) -> DriverResult;
+    // mockall needs the lifetimes but clippy warns that they are not needed.
+    #[allow(clippy::needless_lifetimes)]
+    fn run<'a>(&'a self, batch_to_solve: U256, time_limit: Duration)
+        -> BoxFuture<'a, DriverResult>;
 }
 
 pub struct StableXDriverImpl<'a> {
@@ -43,17 +46,14 @@ impl<'a> StableXDriverImpl<'a> {
         }
     }
 
-    fn get_orderbook(&self, batch_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
-        let get_auction_data_result = self
-            .orderbook_reader
-            .get_auction_data(batch_to_solve)
-            .wait();
+    async fn get_orderbook(&self, batch_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
+        let get_auction_data_result = self.orderbook_reader.get_auction_data(batch_to_solve).await;
         self.metrics
             .auction_orders_fetched(batch_to_solve, &get_auction_data_result);
         get_auction_data_result
     }
 
-    fn solve(
+    async fn solve(
         &self,
         batch_to_solve: U256,
         time_limit: Duration,
@@ -64,9 +64,10 @@ impl<'a> StableXDriverImpl<'a> {
             info!("No orders in batch {}", batch_to_solve);
             Solution::trivial()
         } else {
-            let price_finder_result =
-                self.price_finder
-                    .find_prices(&orders, &account_state, time_limit);
+            let price_finder_result = self
+                .price_finder
+                .find_prices(&orders, &account_state, time_limit)
+                .await;
             self.metrics
                 .auction_solution_computed(batch_to_solve, &price_finder_result);
 
@@ -87,7 +88,7 @@ impl<'a> StableXDriverImpl<'a> {
             let verification_result = self
                 .solution_submitter
                 .get_solution_objective_value(batch_to_solve, solution.clone())
-                .wait();
+                .await;
             self.metrics
                 .auction_solution_verified(batch_to_solve, &verification_result);
 
@@ -122,7 +123,7 @@ impl<'a> StableXDriverImpl<'a> {
             let submission_result = self
                 .solution_submitter
                 .submit_solution(batch_to_solve, solution, objective_value)
-                .wait();
+                .await;
             self.metrics
                 .auction_solution_submitted(batch_to_solve, &submission_result);
             match submission_result {
@@ -152,35 +153,41 @@ impl<'a> StableXDriverImpl<'a> {
 }
 
 impl<'a> StableXDriver for StableXDriverImpl<'a> {
-    fn run(&self, batch_to_solve: U256, time_limit: Duration) -> DriverResult {
-        let deadline = Instant::now() + time_limit;
+    fn run(&self, batch_to_solve: U256, time_limit: Duration) -> BoxFuture<DriverResult> {
+        async move {
+            let deadline = Instant::now() + time_limit;
 
-        self.metrics.auction_processing_started(&Ok(batch_to_solve));
-        let (account_state, orders) = match self.get_orderbook(batch_to_solve) {
-            Ok(ok) => ok,
-            Err(err) => return DriverResult::Retry(err),
-        };
+            self.metrics.auction_processing_started(&Ok(batch_to_solve));
+            let (account_state, orders) = match self.get_orderbook(batch_to_solve).await {
+                Ok(ok) => ok,
+                Err(err) => return DriverResult::Retry(err),
+            };
 
-        // Make sure the solver has at least some minimal time to run to have a chance for a
-        // solution. This also fixes an assert where the solver fails if the timelimit gets rounded
-        // to 0.
-        let price_finding_time_limit = match deadline.checked_duration_since(Instant::now()) {
-            Some(time_limit) if time_limit > Duration::from_secs(1) => time_limit,
-            _ => {
-                warn!("orderbook retrieval exceeded time limit");
-                return DriverResult::Ok;
+            // Make sure the solver has at least some minimal time to run to have a chance for a
+            // solution. This also fixes an assert where the solver fails if the timelimit gets rounded
+            // to 0.
+            let price_finding_time_limit = match deadline.checked_duration_since(Instant::now()) {
+                Some(time_limit) if time_limit > Duration::from_secs(1) => time_limit,
+                _ => {
+                    warn!("orderbook retrieval exceeded time limit");
+                    return DriverResult::Ok;
+                }
+            };
+
+            match self
+                .solve(
+                    batch_to_solve,
+                    price_finding_time_limit,
+                    account_state,
+                    orders,
+                )
+                .await
+            {
+                Ok(()) => DriverResult::Ok,
+                Err(err) => DriverResult::Skip(err),
             }
-        };
-
-        match self.solve(
-            batch_to_solve,
-            price_finding_time_limit,
-            account_state,
-            orders,
-        ) {
-            Ok(()) => DriverResult::Ok,
-            Err(err) => DriverResult::Skip(err),
         }
+        .boxed()
     }
 }
 
@@ -194,7 +201,6 @@ mod tests {
     use crate::solution_submission::MockStableXSolutionSubmitting;
     use crate::util::test_util::map_from_slice;
     use anyhow::anyhow;
-    use futures::future::FutureExt as _;
     use mockall::predicate::*;
     use std::thread;
 
@@ -261,10 +267,14 @@ mod tests {
         };
         pf.expect_find_prices()
             .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
-            .return_once(move |_, _, _| Ok(solution));
+            .return_once(move |_, _, _| async { Ok(solution) }.boxed());
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
-        assert!(driver.run(batch, time_limit).is_ok());
+        assert!(driver
+            .run(batch, time_limit)
+            .now_or_never()
+            .unwrap()
+            .is_ok());
     }
 
     #[test]
@@ -280,7 +290,11 @@ mod tests {
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
 
-        assert!(driver.run(U256::from(42), Duration::default()).is_retry())
+        assert!(driver
+            .run(U256::from(42), Duration::default())
+            .now_or_never()
+            .unwrap()
+            .is_retry())
     }
 
     #[test]
@@ -315,11 +329,15 @@ mod tests {
             .returning(|_, _, _| async { Ok(()) }.boxed());
 
         pf.expect_find_prices()
-            .returning(|_, _, _| Err(anyhow!("Error")));
+            .returning(|_, _, _| async { Err(anyhow!("Error")) }.boxed());
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
 
-        assert!(driver.run(batch, time_limit).is_skip());
+        assert!(driver
+            .run(batch, time_limit)
+            .now_or_never()
+            .unwrap()
+            .is_skip());
     }
 
     #[test]
@@ -341,7 +359,11 @@ mod tests {
             .return_once(move |_| async { Ok((state, orders)) }.boxed());
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
-        assert!(driver.run(batch, time_limit).is_ok());
+        assert!(driver
+            .run(batch, time_limit)
+            .now_or_never()
+            .unwrap()
+            .is_ok());
     }
 
     #[test]
@@ -368,12 +390,16 @@ mod tests {
         let solution = Solution::trivial();
         pf.expect_find_prices()
             .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
-            .return_once(move |_, _, _| Ok(solution));
+            .return_once(move |_, _, _| async { Ok(solution) }.boxed());
 
         submitter.expect_submit_solution().times(0);
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
-        assert!(driver.run(batch, time_limit).is_ok());
+        assert!(driver
+            .run(batch, time_limit)
+            .now_or_never()
+            .unwrap()
+            .is_ok());
     }
 
     #[test]
@@ -419,10 +445,14 @@ mod tests {
         };
         pf.expect_find_prices()
             .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
-            .return_once(move |_, _, _| Ok(solution));
+            .return_once(move |_, _, _| async { Ok(solution) }.boxed());
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
-        assert!(driver.run(batch, time_limit).is_skip());
+        assert!(driver
+            .run(batch, time_limit)
+            .now_or_never()
+            .unwrap()
+            .is_skip());
     }
 
     #[test]
@@ -463,10 +493,14 @@ mod tests {
         };
         pf.expect_find_prices()
             .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
-            .return_once(move |_, _, _| Ok(solution));
+            .return_once(move |_, _, _| async { Ok(solution) }.boxed());
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
-        assert!(driver.run(batch, time_limit).is_ok());
+        assert!(driver
+            .run(batch, time_limit)
+            .now_or_never()
+            .unwrap()
+            .is_ok());
     }
 
     #[test]
@@ -510,10 +544,14 @@ mod tests {
         };
         pf.expect_find_prices()
             .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
-            .return_once(move |_, _, _| Ok(solution));
+            .return_once(move |_, _, _| async { Ok(solution) }.boxed());
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
-        assert!(driver.run(batch, time_limit).is_ok());
+        assert!(driver
+            .run(batch, time_limit)
+            .now_or_never()
+            .unwrap()
+            .is_ok());
     }
 
     #[test]
@@ -543,6 +581,10 @@ mod tests {
             });
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
-        assert!(driver.run(batch, time_limit).is_ok());
+        assert!(driver
+            .run(batch, time_limit)
+            .now_or_never()
+            .unwrap()
+            .is_ok());
     }
 }

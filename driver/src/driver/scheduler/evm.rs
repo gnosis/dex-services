@@ -88,7 +88,7 @@ impl<'a> EvmScheduler<'a> {
             batch_id,
             time_limit.as_secs_f64(),
         );
-        match self.driver.run(batch_id.into(), time_limit) {
+        match self.driver.run(batch_id.into(), time_limit).wait() {
             DriverResult::Ok => {
                 info!("successfully solved batch {}", batch_id);
                 self.last_batch = Some(batch_id);
@@ -150,7 +150,7 @@ mod tests {
         driver
             .expect_run()
             .with(eq(U256::from(41)), eq(Duration::from_secs(150)))
-            .returning(|_, _| DriverResult::Ok);
+            .returning(|_, _| async { DriverResult::Ok }.boxed());
 
         let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
 
@@ -169,7 +169,9 @@ mod tests {
             .returning(|| async { Ok(Duration::from_secs(240)) }.boxed());
 
         let mut driver = MockStableXDriver::new();
-        driver.expect_run().returning(|_, _| DriverResult::Ok);
+        driver
+            .expect_run()
+            .returning(|_, _| async { DriverResult::Ok }.boxed());
 
         let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
         scheduler.last_batch = Some(40);
@@ -250,7 +252,7 @@ mod tests {
         let mut driver = MockStableXDriver::new();
         driver
             .expect_run()
-            .returning(|_, _| DriverResult::Skip(anyhow!("error")));
+            .returning(|_, _| async { DriverResult::Skip(anyhow!("error")) }.boxed());
 
         let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
 
@@ -271,7 +273,7 @@ mod tests {
         let mut driver = MockStableXDriver::new();
         driver
             .expect_run()
-            .returning(|_, _| DriverResult::Retry(anyhow!("error")));
+            .returning(|_, _| async { DriverResult::Retry(anyhow!("error")) }.boxed());
 
         let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
 

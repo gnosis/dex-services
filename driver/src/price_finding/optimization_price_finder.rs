@@ -3,11 +3,11 @@ use crate::price_estimation::PriceEstimating;
 use crate::price_finding::price_finder_interface::{
     Fee, InternalOptimizer, PriceFinding, SolverType,
 };
-use crate::util::FutureWaitExt as _;
 
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use ethcontract::U256;
+use futures::future::{BoxFuture, FutureExt as _};
 use log::error;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::display_fromstr;
@@ -15,7 +15,9 @@ use std::collections::BTreeMap;
 use std::fmt::{Debug, Display};
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
+use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 /// A number wrapper type that correctly serializes large integers to strings to
@@ -186,7 +188,7 @@ trait Io {
 }
 
 pub struct OptimisationPriceFinder {
-    io_methods: Box<dyn Io + Sync>,
+    io_methods: Arc<dyn Io + Send + Sync>,
     fee: Option<Fee>,
     solver_type: SolverType,
     price_oracle: Box<dyn PriceEstimating + Sync>,
@@ -203,7 +205,7 @@ impl OptimisationPriceFinder {
         internal_optimizer: InternalOptimizer,
     ) -> Self {
         OptimisationPriceFinder {
-            io_methods: Box::new(DefaultIo),
+            io_methods: Arc::new(DefaultIo),
             fee,
             solver_type,
             price_oracle: Box::new(price_oracle),
@@ -236,57 +238,65 @@ fn deserialize_result(result: String) -> Result<models::Solution> {
 }
 
 impl PriceFinding for OptimisationPriceFinder {
-    fn find_prices(
-        &self,
-        orders: &[models::Order],
-        state: &models::AccountState,
+    fn find_prices<'a>(
+        &'a self,
+        orders: &'a [models::Order],
+        state: &'a models::AccountState,
         time_limit: Duration,
-    ) -> Result<models::Solution> {
-        let input = solver_input::Input {
-            tokens: self.price_oracle.get_token_prices(&orders).wait(),
-            ref_token: TokenId(0),
-            accounts: serialize_balances(&state, &orders),
-            orders: orders.iter().map(From::from).collect(),
-            fee: self.fee.as_ref().map(From::from),
-        };
+    ) -> BoxFuture<'a, Result<models::Solution>> {
+        let price_oracle = &*self.price_oracle;
+        async move {
+            let input = solver_input::Input {
+                tokens: price_oracle.get_token_prices(&orders).await,
+                ref_token: TokenId(0),
+                accounts: serialize_balances(&state, &orders),
+                orders: orders.iter().map(From::from).collect(),
+                fee: self.fee.as_ref().map(From::from),
+            };
 
-        let now = Utc::now();
-        // We are solving the batch before the current one
-        let batch_id = (now.timestamp() / 300) - 1;
-        let date = now.format("%Y-%m-%d");
+            let now = Utc::now();
+            // We are solving the batch before the current one
+            let batch_id = (now.timestamp() / 300) - 1;
+            let date = now.format("%Y-%m-%d");
 
-        let input_folder = format!("instances/{}", &date);
-        let input_file = format!(
-            "{}/instance_{}_{}.json",
-            &input_folder,
-            &batch_id,
-            &now.to_rfc3339()
-        );
+            let input_folder = format!("instances/{}", &date);
+            let input_file = format!(
+                "{}/instance_{}_{}.json",
+                &input_folder,
+                &batch_id,
+                &now.to_rfc3339()
+            );
 
-        let result_folder = format!(
-            "results/{}/instance_{}_{}/",
-            &date,
-            &batch_id,
-            &now.to_rfc3339()
-        );
+            let result_folder = format!(
+                "results/{}/instance_{}_{}/",
+                &date,
+                &batch_id,
+                &now.to_rfc3339()
+            );
 
-        create_dir_all(&input_folder)?;
-        create_dir_all(&result_folder)?;
-
-        let result = self
-            .io_methods
-            .run_solver(
-                &input_file,
-                &serde_json::to_string(&input)?,
-                &result_folder,
-                self.solver_type,
-                time_limit,
-                self.min_avg_fee_per_order,
-                self.internal_optimizer,
-            )
+            // `blocking::unblock` requires the closure to be 'static.
+            let io_methods = self.io_methods.clone();
+            let solver_type = self.solver_type;
+            let min_avg_fee_per_order = self.min_avg_fee_per_order;
+            let internal_optimizer = self.internal_optimizer;
+            let result = blocking::unblock(move || {
+                io_methods.run_solver(
+                    &input_file,
+                    &serde_json::to_string(&input)?,
+                    &result_folder,
+                    solver_type,
+                    time_limit,
+                    min_avg_fee_per_order,
+                    internal_optimizer,
+                )
+            })
+            .await
             .with_context(|| format!("error running {:?} solver", self.solver_type))?;
-        let solution = deserialize_result(result).context("error deserializing solver output")?;
-        Ok(solution)
+            let solution =
+                deserialize_result(result).context("error deserializing solver output")?;
+            Ok(solution)
+        }
+        .boxed()
     }
 }
 
@@ -294,6 +304,9 @@ pub struct DefaultIo;
 
 impl DefaultIo {
     fn write_input(&self, input_file: &str, input: &str) -> std::io::Result<()> {
+        if let Some(parent) = Path::new(input_file).parent() {
+            create_dir_all(parent)?;
+        }
         let file = File::create(&input_file)?;
         let mut writer = BufWriter::new(file);
         writer.write_all(input.as_bytes())?;
@@ -323,6 +336,7 @@ impl Io for DefaultIo {
         self.write_input(input_file, input)
             .with_context(|| format!("error writing instance to {}", input_file))?;
 
+        create_dir_all(result_folder)?;
         let time_limit = (time_limit.as_secs_f64().round() as u64).to_string();
         let output = solver.execute(
             result_folder,
@@ -352,8 +366,8 @@ pub mod tests {
     use crate::models::AccountState;
     use crate::price_estimation::MockPriceEstimating;
     use crate::util::test_util::map_from_slice;
+    use crate::util::FutureWaitExt as _;
     use ethcontract::Address;
-    use futures::future::FutureExt as _;
     use serde_json::json;
     use std::collections::BTreeMap;
 
@@ -626,7 +640,7 @@ pub mod tests {
             })
             .returning(|_, _, _, _, _, _, _| Err(anyhow!("")));
         let solver = OptimisationPriceFinder {
-            io_methods: Box::new(io_methods),
+            io_methods: Arc::new(io_methods),
             fee: Some(fee),
             min_avg_fee_per_order: 0,
             solver_type: SolverType::StandardSolver,
@@ -640,6 +654,7 @@ pub mod tests {
                 &AccountState::with_balance_for(&orders),
                 Duration::from_secs(180)
             )
+            .wait()
             .is_err());
     }
 

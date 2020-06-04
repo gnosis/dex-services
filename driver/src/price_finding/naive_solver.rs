@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use ethcontract::U256;
+use futures::future::{BoxFuture, FutureExt as _};
 
 const BASE_UNIT: u128 = 1_000_000_000_000_000_000u128;
 const BASE_PRICE: u128 = BASE_UNIT;
@@ -122,7 +123,12 @@ type OrderPair = [Order; 2];
 type ExecutedOrderPair = [ExecutedOrder; 2];
 
 impl PriceFinding for NaiveSolver {
-    fn find_prices(&self, orders: &[Order], state: &AccountState, _: Duration) -> Result<Solution> {
+    fn find_prices<'a>(
+        &'a self,
+        orders: &'a [Order],
+        state: &'a AccountState,
+        _: Duration,
+    ) -> BoxFuture<'a, Result<Solution>> {
         let solution = if let Some(first_match) = find_first_match(orders, state, &self.fee) {
             let (executed_orders, prices) = create_executed_orders(&first_match, &self.fee);
             if let Some(ref fee) = self.fee {
@@ -136,7 +142,7 @@ impl PriceFinding for NaiveSolver {
         } else {
             Solution::trivial()
         };
-        Ok(solution)
+        async move { Ok(solution) }.boxed()
     }
 }
 
@@ -327,6 +333,8 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver
             .find_prices(&orders, &state, Duration::default())
+            .now_or_never()
+            .unwrap()
             .unwrap();
 
         assert_eq!(
@@ -354,6 +362,8 @@ pub mod tests {
         let solver = NaiveSolver::new(fee.clone());
         let res = solver
             .find_prices(&orders, &state, Duration::default())
+            .now_or_never()
+            .unwrap()
             .unwrap();
         check_solution(&orders, res, &fee).unwrap();
     }
@@ -367,6 +377,8 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver
             .find_prices(&orders, &state, Duration::default())
+            .now_or_never()
+            .unwrap()
             .unwrap();
 
         assert_eq!(
@@ -395,6 +407,8 @@ pub mod tests {
         let solver = NaiveSolver::new(fee.clone());
         let res = solver
             .find_prices(&orders, &state, Duration::default())
+            .now_or_never()
+            .unwrap()
             .unwrap();
         check_solution(&orders, res, &fee).unwrap();
     }
@@ -407,6 +421,8 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver
             .find_prices(&orders, &state, Duration::default())
+            .now_or_never()
+            .unwrap()
             .unwrap();
 
         assert_eq!(
@@ -433,6 +449,8 @@ pub mod tests {
         let solver = NaiveSolver::new(fee.clone());
         let res = solver
             .find_prices(&orders, &state, Duration::default())
+            .now_or_never()
+            .unwrap()
             .unwrap();
         check_solution(&orders, res, &fee).unwrap();
     }
@@ -494,6 +512,8 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver
             .find_prices(&orders, &state, Duration::default())
+            .now_or_never()
+            .unwrap()
             .unwrap();
 
         assert_eq!(
@@ -535,6 +555,8 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver
             .find_prices(&orders, &state, Duration::default())
+            .now_or_never()
+            .unwrap()
             .unwrap();
         assert!(!res.is_non_trivial());
     }
@@ -564,6 +586,8 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver
             .find_prices(&orders, &state, Duration::default())
+            .now_or_never()
+            .unwrap()
             .unwrap();
         assert!(!res.is_non_trivial());
     }
@@ -597,6 +621,8 @@ pub mod tests {
         let solver = NaiveSolver::new(fee.clone());
         let res = solver
             .find_prices(&orders, &state, Duration::default())
+            .now_or_never()
+            .unwrap()
             .unwrap();
 
         assert_eq!(
@@ -647,6 +673,8 @@ pub mod tests {
         let solver = NaiveSolver::new(fee.clone());
         let res = solver
             .find_prices(&orders, &state, Duration::default())
+            .now_or_never()
+            .unwrap()
             .unwrap();
 
         assert!(res.is_non_trivial());
@@ -682,6 +710,8 @@ pub mod tests {
         let solver = NaiveSolver::new(fee);
         let res = solver
             .find_prices(&orders, &state, Duration::default())
+            .now_or_never()
+            .unwrap()
             .unwrap();
         assert!(!res.is_non_trivial());
     }
@@ -694,6 +724,8 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver
             .find_prices(&orders, &state, Duration::default())
+            .now_or_never()
+            .unwrap()
             .unwrap();
         assert_eq!(res, Solution::trivial());
     }
@@ -723,6 +755,8 @@ pub mod tests {
         let solver = NaiveSolver::new(None);
         let res = solver
             .find_prices(&orders, &state, Duration::default())
+            .now_or_never()
+            .unwrap()
             .unwrap();
         assert!(!res.is_non_trivial());
     }
@@ -764,6 +798,8 @@ pub mod tests {
         let solver = NaiveSolver::new(fee.clone());
         let res = solver
             .find_prices(&orders, &state, Duration::default())
+            .now_or_never()
+            .unwrap()
             .unwrap();
         check_solution(&orders, res, &fee).unwrap();
     }
@@ -813,6 +849,8 @@ pub mod tests {
         let solver = NaiveSolver::new(fee.clone());
         let res = solver
             .find_prices(&orders, &state, Duration::default())
+            .now_or_never()
+            .unwrap()
             .unwrap();
         check_solution(&orders, res, &fee).unwrap();
     }
