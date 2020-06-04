@@ -5,7 +5,7 @@ use crate::{
     orderbook::{util, StableXOrderBookReading},
 };
 use anyhow::{Context, Result};
-use ethcontract::{contract::EventData, H256, U256};
+use ethcontract::{contract::EventData, H256};
 use futures::future::{BoxFuture, FutureExt as _};
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -135,13 +135,13 @@ impl TryFrom<&Path> for Orderbook {
 impl StableXOrderBookReading for Orderbook {
     fn get_auction_data<'a>(
         &'a self,
-        batch_id_to_solve: U256,
+        batch_id_to_solve: u32,
     ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
         async move {
             let state = self.create_state()?;
             // In order to solve batch t we need the orderbook at the beginning of batch t+1's collection process
             let (account_state, orders) =
-                state.orderbook_at_beginning_of_batch(batch_id_to_solve.low_u32() + 1)?;
+                state.orderbook_at_beginning_of_batch(batch_id_to_solve + 1)?;
             let (account_state, orders) = util::normalize_auction_data(account_state, orders);
             Ok((account_state, orders))
         }
@@ -154,7 +154,7 @@ mod tests {
     use super::*;
     use crate::contracts::stablex_contract::batch_exchange::event_data::*;
     use crate::contracts::stablex_contract::batch_exchange::Event;
-    use ethcontract::Address;
+    use ethcontract::{Address, U256};
 
     #[test]
     fn test_serialize_deserialize_orderbook() {
@@ -274,7 +274,7 @@ mod tests {
         orderbook.handle_event_data(deposit_2, 2, 0, H256::zero(), 0);
 
         let auction_data = orderbook
-            .get_auction_data(2.into())
+            .get_auction_data(2)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -284,7 +284,7 @@ mod tests {
         );
         orderbook.delete_events_starting_at_block(1);
         let auction_data = orderbook
-            .get_auction_data(1.into())
+            .get_auction_data(1)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -343,7 +343,7 @@ mod tests {
         orderbook.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
 
         let auction_data = orderbook
-            .get_auction_data(2.into())
+            .get_auction_data(2)
             .now_or_never()
             .unwrap()
             .unwrap();

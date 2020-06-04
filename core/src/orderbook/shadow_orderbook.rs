@@ -50,7 +50,7 @@ impl ShadowedOrderbookReader {
 }
 
 impl StableXOrderBookReading for ShadowedOrderbookReader {
-    fn get_auction_data<'b>(&'b self, batch_id_to_solve: U256) -> BoxFuture<'b, Result<Orderbook>> {
+    fn get_auction_data<'b>(&'b self, batch_id_to_solve: u32) -> BoxFuture<'b, Result<Orderbook>> {
         async move {
             let orderbook = self.primary.get_auction_data(batch_id_to_solve).await?;
 
@@ -58,7 +58,7 @@ impl StableXOrderBookReading for ShadowedOrderbookReader {
             //   already reading an orderbook.
             let _ = self
                 .shadow_channel
-                .try_send((batch_id_to_solve.low_u32(), orderbook.clone()));
+                .try_send((batch_id_to_solve, orderbook.clone()));
 
             Ok(orderbook)
         }
@@ -77,7 +77,7 @@ fn background_shadow_reader(
     channel: Receiver<(u32, Orderbook)>,
 ) {
     while let Ok((batch_id, primary_orderbook)) = channel.recv() {
-        let shadow_orderbook = match reader.get_auction_data(batch_id.into()).wait() {
+        let shadow_orderbook = match reader.get_auction_data(batch_id).wait() {
             Ok(orderbook) => orderbook,
             Err(err) => {
                 log::error!(

@@ -73,7 +73,7 @@ impl StableXMetrics {
         }
     }
 
-    pub fn auction_processing_started(&self, res: &Result<U256>) {
+    pub fn auction_processing_started(&self, res: &Result<u32>) {
         // Reset values from previous batch
         for stage in ProcessingStage::ALL_STAGES {
             self.processing_times
@@ -91,7 +91,7 @@ impl StableXMetrics {
         };
     }
 
-    pub fn auction_orders_fetched(&self, batch: U256, res: &Result<(AccountState, Vec<Order>)>) {
+    pub fn auction_orders_fetched(&self, batch: u32, res: &Result<(AccountState, Vec<Order>)>) {
         let stage_label = &[ProcessingStage::OrdersFetched.as_ref()];
         let book_label = &[BookType::Orderbook.as_ref()];
         self.processing_times
@@ -113,7 +113,7 @@ impl StableXMetrics {
         }
     }
 
-    pub fn auction_solution_computed(&self, batch: U256, res: &Result<Solution>) {
+    pub fn auction_solution_computed(&self, batch: u32, res: &Result<Solution>) {
         let stage_label = &[ProcessingStage::Solved.as_ref()];
         let book_label = &[BookType::Solution.as_ref()];
         self.processing_times
@@ -141,7 +141,7 @@ impl StableXMetrics {
 
     pub fn auction_solution_verified(
         &self,
-        batch: U256,
+        batch: u32,
         res: &Result<U256, SolutionSubmissionError>,
     ) {
         let stage_label = &[ProcessingStage::Solved.as_ref()];
@@ -161,7 +161,7 @@ impl StableXMetrics {
 
     pub fn auction_solution_submitted(
         &self,
-        batch: U256,
+        batch: u32,
         res: &Result<(), SolutionSubmissionError>,
     ) {
         let stage_label = &[ProcessingStage::Submitted.as_ref()];
@@ -179,7 +179,7 @@ impl StableXMetrics {
         }
     }
 
-    pub fn auction_processed_but_not_submitted(&self, batch: U256) {
+    pub fn auction_processed_but_not_submitted(&self, batch: u32) {
         let stage_label = &[ProcessingStage::SolutionNotSubmitted.as_ref()];
         self.processing_times
             .with_label_values(stage_label)
@@ -188,10 +188,10 @@ impl StableXMetrics {
     }
 }
 
-fn time_elapsed_since_batch_start(batch: U256) -> i64 {
+fn time_elapsed_since_batch_start(batch: u32) -> i64 {
     let now = Utc::now().timestamp();
     // A new batch is created every 5 minutes and becomes solvable one batch later
-    let batch_start = (batch.low_u64() as i64 + 1) * 300;
+    let batch_start = (batch as i64 + 1) * 300;
     now - batch_start
 }
 

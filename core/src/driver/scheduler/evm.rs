@@ -88,7 +88,7 @@ impl<'a> EvmScheduler<'a> {
             batch_id,
             time_limit.as_secs_f64(),
         );
-        match self.driver.run(batch_id.into(), time_limit).wait() {
+        match self.driver.run(batch_id, time_limit).wait() {
             DriverResult::Ok => {
                 info!("successfully solved batch {}", batch_id);
                 self.last_batch = Some(batch_id);
@@ -131,7 +131,6 @@ mod tests {
     use crate::contracts::stablex_contract::MockStableXContract;
     use crate::driver::stablex_driver::MockStableXDriver;
     use anyhow::anyhow;
-    use ethcontract::U256;
     use futures::future::FutureExt as _;
     use mockall::predicate::eq;
     use mockall::Sequence;
@@ -149,7 +148,7 @@ mod tests {
         let mut driver = MockStableXDriver::new();
         driver
             .expect_run()
-            .with(eq(U256::from(41)), eq(Duration::from_secs(150)))
+            .with(eq(41), eq(Duration::from_secs(150)))
             .returning(|_, _| async { DriverResult::Ok }.boxed());
 
         let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
