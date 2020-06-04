@@ -25,10 +25,9 @@ impl PriceSource for PriceSources {
         tokens: &'a [Token],
     ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
         async move {
-            let price_futures = future::join_all(self.sources.iter().map(|s| s.get_prices(tokens)));
+            let price_futures = future::join_all(self.sources.iter().map(|s| s.get_prices(tokens))).await;
 
             let acquired_prices: Vec<HashMap<TokenId, u128>> = price_futures
-                .await
                 .filter_map(|f| match f {
                     Ok(prices) => Some(prices),
                     Err(err) => {
