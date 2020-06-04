@@ -30,6 +30,12 @@ pub fn find_cycle(
         visited[cursor.index()] = step;
     }
 
+    // NOTE: Allocate the cycle vector with enough capacity for the negative
+    // cycle plus one. This extra capacity is used by the orderbook graph to
+    // create a circular path equivalent to the negative cycle.
+    let len = step + 1 - visited[cursor.index()];
+    let mut path = Vec::with_capacity(len + 1);
+
     // NOTE: `cursor` is now guaranteed to be on the cycle. Furthermore, if
     // `origin` was visited after `cursor`, then it is on the cycle as well.
     let start = match origin {
@@ -40,7 +46,6 @@ pub fn find_cycle(
     // NOTE: Now we have found the cycle starting at `start`, walk backwards
     // until we reach the `start` node again.
     let mut cursor = start;
-    let mut path = Vec::with_capacity(predecessor.len());
     loop {
         cursor = predecessor[cursor.index()]?;
         path.push(cursor);
@@ -99,6 +104,7 @@ pub mod tests {
 
         let cycle = find_cycle(&predecessor, node, None).unwrap();
         assert_eq!(cycle, &[1.into(), 2.into(), 3.into()]);
+        assert_eq!(cycle.capacity(), cycle.len() + 1);
 
         let cycle = find_cycle(&predecessor, node, Some(2.into())).unwrap();
         assert_eq!(cycle, &[2.into(), 3.into(), 1.into()]);
