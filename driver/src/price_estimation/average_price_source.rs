@@ -52,14 +52,11 @@ pub fn lossless_merge<T: Copy + Eq + Hash + PartialEq, U: Clone + Copy>(
     let complete_key_set: HashSet<_> = map_collection.iter().map(|m| m.keys()).flatten().collect();
     let mut gathered_maps: HashMap<T, Vec<U>> = HashMap::new();
     for key in &complete_key_set {
-        let mut place_holder = vec![];
-        for map in &map_collection {
-            if map.get(key).is_some() {
-                let value = map.get(key).unwrap();
-                place_holder.push(*value);
-            }
-        }
-        gathered_maps.insert(**key, place_holder);
+        let available_prices = map_collection
+            .iter()
+            .filter_map(|map| map.get(key).copied())
+            .collect();
+        gathered_maps.insert(**key, available_prices);
     }
     gathered_maps
 }
