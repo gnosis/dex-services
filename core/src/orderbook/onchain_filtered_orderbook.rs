@@ -6,7 +6,7 @@ use super::filtered_orderbook::OrderbookFilter;
 use super::StableXOrderBookReading;
 
 use anyhow::Result;
-use ethcontract::{Address, U256};
+use ethcontract::Address;
 use futures::future::{BoxFuture, FutureExt as _};
 use std::sync::Arc;
 
@@ -28,7 +28,7 @@ impl OnchainFilteredOrderBookReader {
             filter: filter
                 .whitelist()
                 .map(|set| set.iter().cloned().collect())
-                .unwrap_or_else(|| vec![]),
+                .unwrap_or_else(Vec::new),
         }
     }
 }
@@ -36,12 +36,12 @@ impl OnchainFilteredOrderBookReader {
 impl StableXOrderBookReading for OnchainFilteredOrderBookReader {
     fn get_auction_data<'a>(
         &'a self,
-        batch_id_to_solve: U256,
+        batch_id_to_solve: u32,
     ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
         async move {
             let last_block = self
                 .contract
-                .get_last_block_for_batch(batch_id_to_solve.as_u32())
+                .get_last_block_for_batch(batch_id_to_solve)
                 .await?;
             let mut reader = IndexedAuctionDataReader::new(batch_id_to_solve);
             let mut auction_data = FilteredOrderPage {
@@ -133,7 +133,7 @@ mod tests {
             &OrderbookFilter::default(),
         );
         assert_eq!(
-            reader.get_auction_data(U256::from(42)).wait().unwrap(),
+            reader.get_auction_data(42).wait().unwrap(),
             (AccountState::default(), vec![])
         )
     }
@@ -178,7 +178,7 @@ mod tests {
         };
 
         assert_eq!(
-            reader.get_auction_data(U256::from(42)).wait().unwrap(),
+            reader.get_auction_data(42).wait().unwrap(),
             (state, vec![order])
         )
     }
@@ -251,9 +251,6 @@ mod tests {
             },
         ];
 
-        assert_eq!(
-            reader.get_auction_data(U256::from(42)).wait().unwrap(),
-            (state, orders)
-        )
+        assert_eq!(reader.get_auction_data(42).wait().unwrap(), (state, orders))
     }
 }

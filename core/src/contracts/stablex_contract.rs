@@ -93,7 +93,7 @@ pub trait StableXContract {
     /// to only include orders valid at the given batchId.
     fn get_filtered_auction_data_paginated<'a>(
         &'a self,
-        batch_index: U256,
+        batch_index: u32,
         token_whitelist: Vec<u16>,
         page_size: u16,
         previous_page_user: Address,
@@ -115,14 +115,14 @@ pub trait StableXContract {
 
     fn get_solution_objective_value<'a>(
         &'a self,
-        batch_index: U256,
+        batch_index: u32,
         solution: Solution,
         block_number: Option<BlockNumber>,
     ) -> BoxFuture<'a, Result<U256>>;
 
     fn submit_solution<'a>(
         &'a self,
-        batch_index: U256,
+        batch_index: u32,
         solution: Solution,
         claimed_objective_value: U256,
         gas_price: U256,
@@ -185,7 +185,7 @@ impl StableXContract for StableXContractImpl {
 
     fn get_filtered_auction_data_paginated<'a>(
         &'a self,
-        batch_index: U256,
+        batch_index: u32,
         token_whitelist: Vec<u16>,
         page_size: u16,
         previous_page_user: Address,
@@ -193,7 +193,7 @@ impl StableXContract for StableXContractImpl {
         block_number: Option<BlockNumber>,
     ) -> BoxFuture<'a, Result<FilteredOrderPage>> {
         async move {
-            let target_batch = batch_index.low_u32();
+            let target_batch = batch_index;
             let mut builder = self.viewer.get_filtered_orders_paginated(
                 // Balances should be valid for the batch at which we are submitting (target batch + 1)
                 [target_batch, target_batch, target_batch + 1],
@@ -239,7 +239,7 @@ impl StableXContract for StableXContractImpl {
 
     fn get_solution_objective_value<'a>(
         &'a self,
-        batch_index: U256,
+        batch_index: u32,
         solution: Solution,
         block_number: Option<BlockNumber>,
     ) -> BoxFuture<'a, Result<U256>> {
@@ -250,7 +250,7 @@ impl StableXContract for StableXContractImpl {
             let mut builder = self
                 .instance
                 .submit_solution(
-                    batch_index.low_u32(),
+                    batch_index,
                     *MAX_OBJECTIVE_VALUE,
                     owners,
                     order_ids,
@@ -267,7 +267,7 @@ impl StableXContract for StableXContractImpl {
 
     fn submit_solution<'a>(
         &'a self,
-        batch_index: U256,
+        batch_index: u32,
         solution: Solution,
         claimed_objective_value: U256,
         gas_price: U256,
@@ -280,7 +280,7 @@ impl StableXContract for StableXContractImpl {
             let mut method = self
                 .instance
                 .submit_solution(
-                    batch_index.low_u32(),
+                    batch_index,
                     claimed_objective_value,
                     owners,
                     order_ids,

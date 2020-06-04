@@ -10,14 +10,14 @@ pub const INDEXED_AUCTION_ELEMENT_WIDTH: usize = AUCTION_ELEMENT_WIDTH + 2;
 
 #[derive(Debug, PartialEq)]
 pub struct StableXAuctionElement {
-    valid_from: U256,
-    valid_until: U256,
+    valid_from: u32,
+    valid_until: u32,
     pub sell_token_balance: U256,
     pub order: Order,
 }
 
 impl StableXAuctionElement {
-    pub fn in_auction(&self, index: U256) -> bool {
+    pub fn in_auction(&self, index: u32) -> bool {
         self.valid_from <= index && index <= self.valid_until
     }
 
@@ -38,12 +38,8 @@ impl StableXAuctionElement {
         let sell_token_balance = U256::from_big_endian(&bytes[20..52]);
         let buy_token = u16::from_le_bytes([bytes[53], bytes[52]]);
         let sell_token = u16::from_le_bytes([bytes[55], bytes[54]]);
-        let valid_from = U256::from(u32::from_le_bytes([
-            bytes[59], bytes[58], bytes[57], bytes[56],
-        ]));
-        let valid_until = U256::from(u32::from_le_bytes([
-            bytes[63], bytes[62], bytes[61], bytes[60],
-        ]));
+        let valid_from = u32::from_le_bytes([bytes[59], bytes[58], bytes[57], bytes[56]]);
+        let valid_until = u32::from_le_bytes([bytes[63], bytes[62], bytes[61], bytes[60]]);
         let numerator = BigEndian::read_u128(&bytes[64..80]);
         let denominator = BigEndian::read_u128(&bytes[80..96]);
         let remaining = BigEndian::read_u128(&bytes[96..112]);
@@ -92,8 +88,8 @@ pub mod tests {
 
     fn emptyish_auction_element() -> StableXAuctionElement {
         StableXAuctionElement {
-            valid_from: U256::from(0),
-            valid_until: U256::from(0),
+            valid_from: 0,
+            valid_until: 0,
             sell_token_balance: U256::from(0),
             order: Order {
                 id: 0,
@@ -137,8 +133,8 @@ pub mod tests {
         ];
         let res = StableXAuctionElement::from_bytes(&bytes);
         let auction_element = StableXAuctionElement {
-            valid_from: U256::from(2),
-            valid_until: U256::from(261),
+            valid_from: 2,
+            valid_until: 261,
             sell_token_balance: U256::from(3),
             order: Order {
                 id: 0,
@@ -169,9 +165,9 @@ pub mod tests {
         ];
         let res = StableXAuctionElement::from_indexed_bytes(&bytes);
         let auction_element = StableXAuctionElement {
-            valid_from: U256::from(2),
-            valid_until: U256::from(261),
-            sell_token_balance: U256::from(2).pow(U256::from(255)) + U256::from(3),
+            valid_from: 2,
+            valid_until: 261,
+            sell_token_balance: U256::from(2).pow(U256::from(255)) + 3,
             order: Order {
                 id: 1,
                 account_id: Address::from_low_u64_be(1),
@@ -188,42 +184,34 @@ pub mod tests {
     #[test]
     fn not_in_auction_left() {
         let mut element = emptyish_auction_element();
-        element.valid_from = U256::from(2);
-        element.valid_until = U256::from(5);
-        assert_eq!(element.in_auction(U256::from(1)), false);
+        element.valid_from = 2;
+        element.valid_until = 5;
+        assert_eq!(element.in_auction(1), false);
     }
 
     #[test]
     fn not_in_auction_right() {
         let mut element = emptyish_auction_element();
-        element.valid_from = U256::from(2);
-        element.valid_until = U256::from(5);
-        assert_eq!(element.in_auction(U256::from(6)), false);
+        element.valid_from = 2;
+        element.valid_until = 5;
+        assert_eq!(element.in_auction(6), false);
     }
 
     #[test]
     fn in_auction_interior() {
         let mut element = emptyish_auction_element();
-        element.valid_from = U256::from(2);
-        element.valid_until = U256::from(5);
-        assert_eq!(element.in_auction(U256::from(3)), true);
+        element.valid_from = 2;
+        element.valid_until = 5;
+        assert_eq!(element.in_auction(3), true);
     }
 
     #[test]
     fn in_auction_boundary() {
         let mut element = emptyish_auction_element();
-        element.valid_from = U256::from(2);
-        element.valid_until = U256::from(5);
-        assert_eq!(
-            element.in_auction(U256::from(5)),
-            true,
-            "failed on right boundary"
-        );
-        assert_eq!(
-            element.in_auction(U256::from(2)),
-            true,
-            "failed on left boundary"
-        );
+        element.valid_from = 2;
+        element.valid_until = 5;
+        assert_eq!(element.in_auction(5), true, "failed on right boundary");
+        assert_eq!(element.in_auction(2), true, "failed on left boundary");
     }
 
     // tests for compute_buy_sell_amounts
