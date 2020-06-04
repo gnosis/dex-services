@@ -2,33 +2,49 @@
 
 use petgraph::graph::NodeIndex;
 
-/// Finds a cycle and returns a vector representing a path along the cycle,
-/// ending that is the predecessor of the starting node.
+/// Finds a cycle starting at the provided `search` node and returns a vector
+/// representing a path along the cycle.
+///
+/// Optionally, an `origin` node can be provided so that the first element of
+/// the cycle vector is `origin` if and only if `origin` is part of the cycle.
 ///
 /// Returns `None` if no such cycle can be found.
-pub fn find_cycle(predecessor: &[Option<NodeIndex>], start: NodeIndex) -> Option<Vec<NodeIndex>> {
+pub fn find_cycle(
+    predecessor: &[Option<NodeIndex>],
+    search: NodeIndex,
+    origin: Option<NodeIndex>,
+) -> Option<Vec<NodeIndex>> {
     // NOTE: First find a node that is actually on the cycle, this is done
     // because a negative cycle can be detected on any node connected to the
     // cycle and not just nodes on the cycle itself.
-    let mut visited = vec![false; predecessor.len()];
-    let mut current = start;
-    visited[current.index()] = true;
+    let mut visited = vec![0; predecessor.len()];
+    let mut cursor = search;
+    let mut step = 1;
+    visited[cursor.index()] = step;
     loop {
-        current = predecessor[current.index()]?;
-        if visited[current.index()] {
+        cursor = predecessor[cursor.index()]?;
+        if visited[cursor.index()] > 0 {
             break;
         }
-        visited[current.index()] = true;
+        step += 1;
+        visited[cursor.index()] = step;
     }
 
-    // NOTE: `current` is now guaranteed to be on the cycle, so just walk
-    // backwards until we reach `current` again.
-    let start = current;
+    // NOTE: `cursor` is now guaranteed to be on the cycle. Furthermore, if
+    // `origin` was visited after `cursor`, then it is on the cycle as well.
+    let start = match origin {
+        Some(origin) if visited[origin.index()] > visited[cursor.index()] => origin,
+        _ => cursor,
+    };
+
+    // NOTE: Now we have found the cycle starting at `start`, walk backwards
+    // until we reach the `start` node again.
+    let mut cursor = start;
     let mut path = Vec::with_capacity(predecessor.len());
     loop {
-        current = predecessor[current.index()]?;
-        path.push(current);
-        if current == start {
+        cursor = predecessor[cursor.index()]?;
+        path.push(cursor);
+        if cursor == start {
             break;
         }
     }
@@ -80,8 +96,16 @@ pub mod tests {
         ]);
 
         let NegativeCycle(predecessor, node) = bellman_ford::search(&graph, 0.into()).unwrap_err();
-        let cycle = find_cycle(&predecessor, node).unwrap();
 
+        let cycle = find_cycle(&predecessor, node, None).unwrap();
+        assert_eq!(cycle, &[1.into(), 2.into(), 3.into()]);
+
+        let cycle = find_cycle(&predecessor, node, Some(2.into())).unwrap();
+        assert_eq!(cycle, &[2.into(), 3.into(), 1.into()]);
+
+        // NOTE: if `origin` is provided, but not part of the cycle, then the
+        // first node in the vector cycle can be any node.
+        let cycle = find_cycle(&predecessor, node, Some(4.into())).unwrap();
         assert_eq!(cycle, &[1.into(), 2.into(), 3.into()]);
     }
 
