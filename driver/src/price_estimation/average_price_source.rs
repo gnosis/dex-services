@@ -2,19 +2,44 @@ use super::{PriceSource, Token};
 use crate::models::TokenId;
 use anyhow::{anyhow, Result};
 use futures::future::{self, BoxFuture, FutureExt as _};
+use futures::StreamExt;
 use std::collections::HashMap;
 
 pub struct PriceSources {
-    sources: Vec<Box<dyn PriceSource>>,
+    sources: Vec<Box<dyn PriceSource + Send + Sync>>,
 }
 
 impl PriceSources {
-    pub fn new(sources: Vec<Box<dyn PriceSource>>) -> Self {
+    pub fn new(sources: Vec<Box<dyn PriceSource + Send + Sync>>) -> Self {
         Self { sources }
     }
 
     pub fn average_price(self) -> HashMap<TokenId, u128> {
         unimplemented!();
+    }
+}
+
+impl PriceSource for PriceSources {
+    fn get_prices<'a>(
+        &'a self,
+        tokens: &'a [Token],
+    ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
+        async move {
+            let price_futures = future::join_all(self.sources.iter().map(|s| s.get_prices(tokens)));
+
+            let acquired_prices: Vec<HashMap<TokenId, u128>> = price_futures
+                .await
+                .filter_map(|f| match f {
+                    Ok(prices) => Some(prices),
+                    Err(err) => {
+                        log::warn!("Price source failed: {}", err);
+                        None
+                    }
+                })
+                .collect();
+            Ok(HashMap::new())
+        }
+        .boxed()
     }
 }
 
@@ -54,7 +79,7 @@ where
                 (Err(e0), Err(e1)) => Err(anyhow!("both price sources failed: {}, {}", e0, e1)),
             }
         }
-            .boxed()
+        .boxed()
     }
 }
 
