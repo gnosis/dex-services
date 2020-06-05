@@ -53,7 +53,7 @@ impl AuctionDataReader {
         let index = self.index;
         let auction_elements = auction_elements
             .iter()
-            .filter(|x| x.in_auction(index) && x.order.sell_amount > 0);
+            .filter(|x| x.in_auction(index) && x.order.remaining_sell_amount > 0);
         self.apply_auction_elements_to_account_state(auction_elements.clone());
         self.orders
             .extend(auction_elements.map(|auction_element| auction_element.order.clone()));
@@ -285,24 +285,33 @@ pub mod tests {
             account_id: Address::from_low_u64_be(1),
             sell_token: 257,
             buy_token: 258,
-            sell_amount: 257,
-            buy_amount: 257,
+            denominator: 259,
+            numerator: 258,
+            remaining_sell_amount: 257,
+            valid_from: 2,
+            valid_until: 261,
         };
         static ref ORDER_2: Order = Order {
             id: 1,
             account_id: Address::from_low_u64_be(1),
             sell_token: 258,
             buy_token: 257,
-            sell_amount: 256,
-            buy_amount: 256,
+            denominator: 259,
+            numerator: 258,
+            remaining_sell_amount: 256,
+            valid_from: 2,
+            valid_until: 261,
         };
         static ref ORDER_3: Order = Order {
             id: 0,
             account_id: Address::from_low_u64_be(2),
             sell_token: 258,
             buy_token: 257,
-            sell_amount: 256,
-            buy_amount: 256,
+            denominator: 259,
+            numerator: 258,
+            remaining_sell_amount: 256,
+            valid_from: 2,
+            valid_until: 261,
         };
     }
 

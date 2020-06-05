@@ -62,7 +62,7 @@ mod test_util {
                 account_state.increase_balance(
                     order.account_id,
                     order.sell_token,
-                    order.sell_amount,
+                    order.remaining_sell_amount,
                 );
             }
             account_state

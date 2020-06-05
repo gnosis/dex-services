@@ -53,7 +53,8 @@ impl Matchable for Order {
     }
 
     fn sufficient_seller_funds(&self, state: &AccountState) -> bool {
-        state.read_balance(self.sell_token, self.account_id) >= U256::from(self.sell_amount)
+        state.read_balance(self.sell_token, self.account_id)
+            >= U256::from(self.remaining_sell_amount)
     }
 
     fn match_compare(
@@ -73,9 +74,9 @@ impl Matchable for Order {
             return None;
         }
 
-        if self.buy_amount <= other.sell_amount && self.sell_amount <= other.buy_amount {
+        if self.numerator <= other.denominator && self.denominator <= other.numerator {
             Some(OrderPairType::LhsFullyFilled)
-        } else if self.buy_amount >= other.sell_amount && self.sell_amount >= other.buy_amount {
+        } else if self.numerator >= other.denominator && self.denominator >= other.numerator {
             Some(OrderPairType::RhsFullyFilled)
         } else {
             Some(OrderPairType::BothFullyFilled)
@@ -87,10 +88,10 @@ impl Matchable for Order {
     }
 
     fn have_price_overlap(&self, other: &Order) -> bool {
-        self.sell_amount > 0
-            && other.sell_amount > 0
-            && U256::from(self.buy_amount) * U256::from(other.buy_amount)
-                <= U256::from(other.sell_amount) * U256::from(self.sell_amount)
+        self.denominator > 0
+            && other.denominator > 0
+            && U256::from(self.numerator) * U256::from(other.numerator)
+                <= U256::from(other.denominator) * U256::from(self.denominator)
     }
 
     fn trades_fee_token(&self, fee: &Fee) -> bool {
@@ -129,7 +130,19 @@ impl PriceFinding for NaiveSolver {
         state: &'a AccountState,
         _: Duration,
     ) -> BoxFuture<'a, Result<Solution>> {
-        let solution = if let Some(first_match) = find_first_match(orders, state, &self.fee) {
+        // Convert orders into the form where they have remaining == denominator.
+        let orders = orders
+            .iter()
+            .map(|order| {
+                let (buy_amount, sell_amount) = order.compute_remaining_buy_sell_amounts();
+                let mut order = order.clone();
+                order.numerator = buy_amount;
+                order.denominator = sell_amount;
+                order.remaining_sell_amount = sell_amount;
+                order
+            })
+            .collect::<Vec<_>>();
+        let solution = if let Some(first_match) = find_first_match(&orders, state, &self.fee) {
             let (executed_orders, prices) = create_executed_orders(&first_match, &self.fee);
             if let Some(ref fee) = self.fee {
                 create_solution_with_fee(&first_match.orders, fee, executed_orders, prices)
@@ -184,19 +197,19 @@ fn create_executed_orders(first_match: &Match, fee: &Option<Fee>) -> (ExecutedOr
     let mut prices = HashMap::new();
     let executed_orders = match first_match.order_pair_type {
         OrderPairType::LhsFullyFilled => {
-            prices.insert(x.buy_token, x.sell_amount);
-            prices.insert(y.buy_token, x.buy_amount);
-            create_orders(x.sell_amount, x.buy_amount, x.buy_amount, x.sell_amount)
+            prices.insert(x.buy_token, x.denominator);
+            prices.insert(y.buy_token, x.numerator);
+            create_orders(x.denominator, x.numerator, x.numerator, x.denominator)
         }
         OrderPairType::RhsFullyFilled => {
-            prices.insert(x.sell_token, y.sell_amount);
-            prices.insert(y.sell_token, y.buy_amount);
-            create_orders(y.buy_amount, y.sell_amount, y.sell_amount, y.buy_amount)
+            prices.insert(x.sell_token, y.denominator);
+            prices.insert(y.sell_token, y.numerator);
+            create_orders(y.numerator, y.denominator, y.denominator, y.numerator)
         }
         OrderPairType::BothFullyFilled => {
-            prices.insert(y.buy_token, y.sell_amount);
-            prices.insert(x.buy_token, x.sell_amount);
-            create_orders(x.sell_amount, y.sell_amount, y.sell_amount, x.sell_amount)
+            prices.insert(y.buy_token, y.denominator);
+            prices.insert(x.buy_token, x.denominator);
+            create_orders(x.denominator, y.denominator, y.denominator, x.denominator)
         }
     };
 
@@ -258,10 +271,10 @@ fn order_with_buffer_for_fee(order: &Order, fee: &Option<Fee>) -> Order {
             // b) give away less stuff (while receiving the same)
             let fee_denominator = (1.0 / fee.ratio) as u128;
             if fee.token == order.buy_token {
-                order.buy_amount =
-                    (order.buy_amount * fee_denominator).ceiled_div(fee_denominator - 1)
+                order.numerator =
+                    (order.numerator * fee_denominator).ceiled_div(fee_denominator - 1)
             } else if fee.token == order.sell_token {
-                order.sell_amount = order.sell_amount * (fee_denominator - 1) / fee_denominator
+                order.denominator = order.denominator * (fee_denominator - 1) / fee_denominator
             }
             order
         }
@@ -463,48 +476,66 @@ pub mod tests {
                 account_id: Address::from_low_u64_be(0),
                 sell_token: 3,
                 buy_token: 2,
-                sell_amount: 12,
-                buy_amount: 12,
+                denominator: 12,
+                numerator: 12,
+                remaining_sell_amount: 12,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 0,
                 account_id: Address::from_low_u64_be(1),
                 sell_token: 2,
                 buy_token: 3,
-                sell_amount: 20,
-                buy_amount: 22,
+                denominator: 20,
+                numerator: 22,
+                remaining_sell_amount: 20,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 0,
                 account_id: Address::from_low_u64_be(2),
                 sell_token: 3,
                 buy_token: 1,
-                sell_amount: 10,
-                buy_amount: 150,
+                denominator: 10,
+                numerator: 150,
+                remaining_sell_amount: 10,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 0,
                 account_id: Address::from_low_u64_be(3),
                 sell_token: 2,
                 buy_token: 1,
-                sell_amount: 15,
-                buy_amount: 180,
+                denominator: 15,
+                numerator: 180,
+                remaining_sell_amount: 15,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 0,
                 account_id: Address::from_low_u64_be(4),
                 sell_token: 1,
                 buy_token: 2,
-                sell_amount: 52,
-                buy_amount: 4,
+                denominator: 52,
+                numerator: 4,
+                remaining_sell_amount: 52,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 0,
                 account_id: Address::from_low_u64_be(5),
                 sell_token: 1,
                 buy_token: 3,
-                sell_amount: 280,
-                buy_amount: 20,
+                denominator: 280,
+                numerator: 20,
+                remaining_sell_amount: 280,
+                valid_from: 0,
+                valid_until: 0,
             },
         ];
         let state = AccountState::with_balance_for(&orders);
@@ -539,16 +570,22 @@ pub mod tests {
                 account_id: Address::from_low_u64_be(1),
                 sell_token: 1,
                 buy_token: 2,
-                sell_amount: 52,
-                buy_amount: 4,
+                denominator: 52,
+                numerator: 4,
+                remaining_sell_amount: 52,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 0,
                 account_id: Address::from_low_u64_be(0),
                 sell_token: 2,
                 buy_token: 1,
-                sell_amount: 15,
-                buy_amount: 180,
+                denominator: 15,
+                numerator: 180,
+                remaining_sell_amount: 15,
+                valid_from: 0,
+                valid_until: 0,
             },
         ];
 
@@ -569,16 +606,22 @@ pub mod tests {
                 account_id: Address::from_low_u64_be(1),
                 sell_token: 1,
                 buy_token: 2,
-                sell_amount: 52,
-                buy_amount: 4,
+                denominator: 52,
+                numerator: 4,
+                remaining_sell_amount: 52,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 0,
                 account_id: Address::from_low_u64_be(0),
                 sell_token: 2,
                 buy_token: 1,
-                sell_amount: 10,
-                buy_amount: 180,
+                denominator: 10,
+                numerator: 180,
+                remaining_sell_amount: 10,
+                valid_from: 0,
+                valid_until: 0,
             },
         ];
         let state = AccountState::with_balance_for(&orders);
@@ -600,16 +643,22 @@ pub mod tests {
                 account_id: Address::from_low_u64_be(0),
                 sell_token: 0,
                 buy_token: 1,
-                sell_amount: 20000,
-                buy_amount: 9990,
+                denominator: 20000,
+                numerator: 9990,
+                remaining_sell_amount: 20000,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 1,
                 account_id: Address::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 0,
-                sell_amount: 9990,
-                buy_amount: 19960,
+                denominator: 9990,
+                numerator: 19960,
+                remaining_sell_amount: 9990,
+                valid_from: 0,
+                valid_until: 0,
             },
         ];
         let state = AccountState::with_balance_for(&orders);
@@ -653,16 +702,22 @@ pub mod tests {
                 account_id: users[0],
                 sell_token: 0,
                 buy_token: 1,
-                sell_amount: 2000 * BASE_UNIT,
-                buy_amount: 999 * BASE_UNIT,
+                denominator: 2000 * BASE_UNIT,
+                numerator: 999 * BASE_UNIT,
+                remaining_sell_amount: 2000 * BASE_UNIT,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 0,
                 account_id: users[1],
                 sell_token: 1,
                 buy_token: 0,
-                sell_amount: 999 * BASE_UNIT,
-                buy_amount: 1996 * BASE_UNIT,
+                denominator: 999 * BASE_UNIT,
+                numerator: 1996 * BASE_UNIT,
+                remaining_sell_amount: 999 * BASE_UNIT,
+                valid_from: 0,
+                valid_until: 0,
             },
         ];
 
@@ -689,16 +744,22 @@ pub mod tests {
                 account_id: Address::from_low_u64_be(0),
                 sell_token: 0,
                 buy_token: 1,
-                sell_amount: 20000,
-                buy_amount: 9990,
+                denominator: 20000,
+                numerator: 9990,
+                remaining_sell_amount: 20000,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 0,
                 account_id: Address::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 0,
-                sell_amount: 9990,
-                buy_amount: 19960,
+                denominator: 9990,
+                numerator: 19960,
+                remaining_sell_amount: 9990,
+                valid_from: 0,
+                valid_until: 0,
             },
         ];
         let state = AccountState::with_balance_for(&orders);
@@ -738,16 +799,22 @@ pub mod tests {
                 account_id: Address::from_low_u64_be(0),
                 sell_token: 0,
                 buy_token: 1,
-                sell_amount: 0,
-                buy_amount: 0,
+                denominator: 0,
+                numerator: 0,
+                remaining_sell_amount: 0,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 0,
                 account_id: Address::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 0,
-                sell_amount: 0,
-                buy_amount: 0,
+                denominator: 0,
+                numerator: 0,
+                remaining_sell_amount: 0,
+                valid_from: 0,
+                valid_until: 0,
             },
         ];
         let state = AccountState::with_balance_for(&orders);
@@ -773,24 +840,33 @@ pub mod tests {
                 account_id: Address::from_low_u64_be(0),
                 sell_token: 0,
                 buy_token: 1,
-                sell_amount: 20 * BASE_UNIT,
-                buy_amount: 10 * BASE_UNIT,
+                denominator: 20 * BASE_UNIT,
+                numerator: 10 * BASE_UNIT,
+                remaining_sell_amount: 20 * BASE_UNIT,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 1,
                 account_id: Address::from_low_u64_be(1),
                 sell_token: 1,
                 buy_token: 0,
-                sell_amount: 10 * BASE_UNIT,
-                buy_amount: 5 * BASE_UNIT,
+                denominator: 10 * BASE_UNIT,
+                numerator: 5 * BASE_UNIT,
+                remaining_sell_amount: 10 * BASE_UNIT,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 2,
                 account_id: Address::from_low_u64_be(2),
                 sell_token: 0,
                 buy_token: 2,
-                sell_amount: BASE_UNIT,
-                buy_amount: BASE_UNIT,
+                denominator: BASE_UNIT,
+                numerator: BASE_UNIT,
+                remaining_sell_amount: BASE_UNIT,
+                valid_from: 0,
+                valid_until: 0,
             },
         ];
         let state = AccountState::with_balance_for(&orders);
@@ -816,32 +892,44 @@ pub mod tests {
                 account_id: Address::from_low_u64_be(0),
                 sell_token: 0,
                 buy_token: 1,
-                sell_amount: 20 * BASE_UNIT,
-                buy_amount: 10 * BASE_UNIT,
+                denominator: 20 * BASE_UNIT,
+                numerator: 10 * BASE_UNIT,
+                remaining_sell_amount: 20 * BASE_UNIT,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 1,
                 account_id: Address::from_low_u64_be(1),
                 sell_token: 1,
                 buy_token: 0,
-                sell_amount: 10 * BASE_UNIT,
-                buy_amount: 5 * BASE_UNIT,
+                denominator: 10 * BASE_UNIT,
+                numerator: 5 * BASE_UNIT,
+                remaining_sell_amount: 10 * BASE_UNIT,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 2,
                 account_id: Address::from_low_u64_be(2),
                 sell_token: 0,
                 buy_token: 2,
-                sell_amount: 20 * BASE_UNIT,
-                buy_amount: 10 * BASE_UNIT,
+                denominator: 20 * BASE_UNIT,
+                numerator: 10 * BASE_UNIT,
+                remaining_sell_amount: 20 * BASE_UNIT,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 3,
                 account_id: Address::from_low_u64_be(3),
                 sell_token: 2,
                 buy_token: 0,
-                sell_amount: 10 * BASE_UNIT,
-                buy_amount: 5 * BASE_UNIT,
+                denominator: 10 * BASE_UNIT,
+                numerator: 5 * BASE_UNIT,
+                remaining_sell_amount: 10 * BASE_UNIT,
+                valid_from: 0,
+                valid_until: 0,
             },
         ];
         let state = AccountState::with_balance_for(&orders);
@@ -862,16 +950,22 @@ pub mod tests {
                 account_id: Address::from_low_u64_be(1),
                 sell_token: 0,
                 buy_token: 1,
-                sell_amount: 52 * BASE_UNIT,
-                buy_amount: 4 * BASE_UNIT,
+                denominator: 52 * BASE_UNIT,
+                numerator: 4 * BASE_UNIT,
+                remaining_sell_amount: 52 * BASE_UNIT,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 0,
                 account_id: Address::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 0,
-                sell_amount: 15 * BASE_UNIT,
-                buy_amount: 180 * BASE_UNIT,
+                denominator: 15 * BASE_UNIT,
+                numerator: 180 * BASE_UNIT,
+                remaining_sell_amount: 15 * BASE_UNIT,
+                valid_from: 0,
+                valid_until: 0,
             },
         ]
     }
@@ -883,16 +977,22 @@ pub mod tests {
                 account_id: Address::from_low_u64_be(1),
                 sell_token: 2,
                 buy_token: 1,
-                sell_amount: 10 * BASE_UNIT,
-                buy_amount: 10 * BASE_UNIT,
+                denominator: 10 * BASE_UNIT,
+                numerator: 10 * BASE_UNIT,
+                remaining_sell_amount: 10 * BASE_UNIT,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 1,
                 account_id: Address::from_low_u64_be(1),
                 sell_token: 1,
                 buy_token: 2,
-                sell_amount: 16 * BASE_UNIT,
-                buy_amount: 8 * BASE_UNIT,
+                denominator: 16 * BASE_UNIT,
+                numerator: 8 * BASE_UNIT,
+                remaining_sell_amount: 16 * BASE_UNIT,
+                valid_from: 0,
+                valid_until: 0,
             },
         ]
     }
@@ -949,15 +1049,15 @@ pub mod tests {
                 0
             };
 
-            if exec_sell_amount > order.sell_amount {
+            if exec_sell_amount > order.remaining_sell_amount {
                 return Err(format!(
                     "ExecutedSellAmount for order {} bigger than allowed ({} > {})",
-                    i, exec_sell_amount, order.sell_amount
+                    i, exec_sell_amount, order.remaining_sell_amount
                 ));
             }
 
-            let limit_lhs = U256::from(exec_sell_amount) * U256::from(order.buy_amount);
-            let limit_rhs = U256::from(exec_buy_amount) * U256::from(order.sell_amount);
+            let limit_lhs = U256::from(exec_sell_amount) * U256::from(order.numerator);
+            let limit_rhs = U256::from(exec_buy_amount) * U256::from(order.denominator);
             if limit_lhs > limit_rhs {
                 return Err(format!(
                     "LimitPrice for order {} not satisfied ({} > {})",
