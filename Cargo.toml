@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "core",
     "driver",
     "e2e",
     "pricegraph",
@@ -18,3 +19,4 @@ opt-level = "s"
 # Needed to make coverage work on MacOS (https://github.com/servo/core-foundation-rs/pull/357)
 core-foundation = { git = "https://github.com/servo/core-foundation-rs", tag="v0.20.1"}
 core-foundation-sys = { git = "https://github.com/servo/core-foundation-rs", tag="v0.20.1"}
+

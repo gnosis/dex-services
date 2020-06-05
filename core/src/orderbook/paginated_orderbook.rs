@@ -4,7 +4,7 @@ use crate::models::{AccountState, Order};
 use super::auction_data_reader::PaginatedAuctionDataReader;
 use super::StableXOrderBookReading;
 use anyhow::Result;
-use ethcontract::{BlockNumber, U256};
+use ethcontract::BlockNumber;
 use futures::future::{BoxFuture, FutureExt as _};
 use std::convert::TryInto;
 use std::sync::Arc;
@@ -29,7 +29,7 @@ impl PaginatedStableXOrderBookReader {
 impl StableXOrderBookReading for PaginatedStableXOrderBookReader {
     fn get_auction_data<'a>(
         &'a self,
-        batch_id_to_solve: U256,
+        batch_id_to_solve: u32,
     ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
         async move {
             let mut reader =

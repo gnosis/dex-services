@@ -4,7 +4,6 @@ use crate::orderbook::StableXOrderBookReading;
 use crate::price_finding::PriceFinding;
 use crate::solution_submission::{SolutionSubmissionError, StableXSolutionSubmitting};
 use anyhow::{Error, Result};
-use ethcontract::U256;
 use futures::future::{BoxFuture, FutureExt as _};
 use log::{info, warn};
 use std::time::{Duration, Instant};
@@ -20,8 +19,7 @@ pub enum DriverResult {
 pub trait StableXDriver {
     // mockall needs the lifetimes but clippy warns that they are not needed.
     #[allow(clippy::needless_lifetimes)]
-    fn run<'a>(&'a self, batch_to_solve: U256, time_limit: Duration)
-        -> BoxFuture<'a, DriverResult>;
+    fn run<'a>(&'a self, batch_to_solve: u32, time_limit: Duration) -> BoxFuture<'a, DriverResult>;
 }
 
 pub struct StableXDriverImpl<'a> {
@@ -46,7 +44,7 @@ impl<'a> StableXDriverImpl<'a> {
         }
     }
 
-    async fn get_orderbook(&self, batch_to_solve: U256) -> Result<(AccountState, Vec<Order>)> {
+    async fn get_orderbook(&self, batch_to_solve: u32) -> Result<(AccountState, Vec<Order>)> {
         let get_auction_data_result = self.orderbook_reader.get_auction_data(batch_to_solve).await;
         self.metrics
             .auction_orders_fetched(batch_to_solve, &get_auction_data_result);
@@ -55,7 +53,7 @@ impl<'a> StableXDriverImpl<'a> {
 
     async fn solve(
         &self,
-        batch_to_solve: U256,
+        batch_to_solve: u32,
         time_limit: Duration,
         account_state: AccountState,
         orders: Vec<Order>,
@@ -153,7 +151,7 @@ impl<'a> StableXDriverImpl<'a> {
 }
 
 impl<'a> StableXDriver for StableXDriverImpl<'a> {
-    fn run(&self, batch_to_solve: U256, time_limit: Duration) -> BoxFuture<DriverResult> {
+    fn run(&self, batch_to_solve: u32, time_limit: Duration) -> BoxFuture<DriverResult> {
         async move {
             let deadline = Instant::now() + time_limit;
 
@@ -201,6 +199,7 @@ mod tests {
     use crate::solution_submission::MockStableXSolutionSubmitting;
     use crate::util::test_util::map_from_slice;
     use anyhow::anyhow;
+    use ethcontract::U256;
     use mockall::predicate::*;
     use std::thread;
 
@@ -237,7 +236,7 @@ mod tests {
         let orders = vec![create_order_for_test(), create_order_for_test()];
         let state = AccountState::with_balance_for(&orders);
 
-        let batch = U256::from(42);
+        let batch = 42;
         let time_limit = Duration::from_secs(120);
 
         reader
@@ -291,7 +290,7 @@ mod tests {
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
 
         assert!(driver
-            .run(U256::from(42), Duration::default())
+            .run(42, Duration::default())
             .now_or_never()
             .unwrap()
             .is_retry())
@@ -307,7 +306,7 @@ mod tests {
         let orders = vec![create_order_for_test(), create_order_for_test()];
         let state = AccountState::with_balance_for(&orders);
 
-        let batch = U256::from(42);
+        let batch = 42;
         let time_limit = Duration::from_secs(120);
 
         reader
@@ -350,7 +349,7 @@ mod tests {
         let orders = vec![];
         let state = AccountState::with_balance_for(&orders);
 
-        let batch = U256::from(42);
+        let batch = 42;
         let time_limit = Duration::from_secs(120);
 
         reader
@@ -376,7 +375,7 @@ mod tests {
         let orders = vec![create_order_for_test(), create_order_for_test()];
         let state = AccountState::with_balance_for(&orders);
 
-        let batch = U256::from(42);
+        let batch = 42;
         let time_limit = Duration::from_secs(120);
 
         reader
@@ -412,7 +411,7 @@ mod tests {
         let orders = vec![create_order_for_test(), create_order_for_test()];
         let state = AccountState::with_balance_for(&orders);
 
-        let batch = U256::from(42);
+        let batch = 42;
         let time_limit = Duration::from_secs(120);
 
         reader
@@ -465,7 +464,7 @@ mod tests {
         let orders = vec![create_order_for_test(), create_order_for_test()];
         let state = AccountState::with_balance_for(&orders);
 
-        let batch = U256::from(42);
+        let batch = 42;
         let time_limit = Duration::from_secs(120);
 
         reader
@@ -513,7 +512,7 @@ mod tests {
         let orders = vec![create_order_for_test(), create_order_for_test()];
         let state = AccountState::with_balance_for(&orders);
 
-        let batch = U256::from(42);
+        let batch = 42;
         let time_limit = Duration::from_secs(120);
 
         reader
@@ -564,7 +563,7 @@ mod tests {
         let orders = vec![create_order_for_test(), create_order_for_test()];
         let state = AccountState::with_balance_for(&orders);
 
-        let batch = U256::from(42);
+        let batch = 42;
         let time_limit = Duration::from_secs(0);
 
         reader

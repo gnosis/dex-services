@@ -69,7 +69,7 @@ impl FilteredOrderbookReader {
 impl StableXOrderBookReading for FilteredOrderbookReader {
     fn get_auction_data<'b>(
         &'b self,
-        batch_id_to_solve: U256,
+        batch_id_to_solve: u32,
     ) -> BoxFuture<'b, Result<(AccountState, Vec<Order>)>> {
         async move {
             let (state, orders) = self.orderbook.get_auction_data(batch_id_to_solve).await?;
@@ -213,11 +213,7 @@ mod test {
 
         let reader = FilteredOrderbookReader::new(Box::new(inner), filter);
 
-        let (_, filtered_orders) = reader
-            .get_auction_data(U256::zero())
-            .now_or_never()
-            .unwrap()
-            .unwrap();
+        let (_, filtered_orders) = reader.get_auction_data(0).now_or_never().unwrap().unwrap();
         assert_eq!(filtered_orders, vec![mixed_user_good_order]);
     }
 
@@ -246,11 +242,7 @@ mod test {
 
         let reader = FilteredOrderbookReader::new(Box::new(inner), filter);
 
-        let (_, filtered_orders) = reader
-            .get_auction_data(U256::zero())
-            .now_or_never()
-            .unwrap()
-            .unwrap();
+        let (_, filtered_orders) = reader.get_auction_data(0).now_or_never().unwrap().unwrap();
         assert_eq!(filtered_orders, vec![good_order]);
     }
 
@@ -261,7 +253,7 @@ mod test {
         let mut inner = MockStableXOrderBookReading::default();
         inner
             .expect_get_auction_data()
-            .return_once({ move |_| async { Ok((state, vec![])) }.boxed() });
+            .return_once(move |_| async { Ok((state, vec![])) }.boxed());
 
         let filter = OrderbookFilter {
             tokens: TokenFilter::default(),
@@ -270,11 +262,7 @@ mod test {
 
         let reader = FilteredOrderbookReader::new(Box::new(inner), filter);
 
-        let (state, filtered_orders) = reader
-            .get_auction_data(U256::zero())
-            .now_or_never()
-            .unwrap()
-            .unwrap();
+        let (state, filtered_orders) = reader.get_auction_data(0).now_or_never().unwrap().unwrap();
         assert_eq!(filtered_orders, vec![]);
         assert_eq!(state, AccountState::default());
     }
