@@ -2,7 +2,7 @@ use super::{PriceSource, Token};
 use crate::models::TokenId;
 use anyhow::{anyhow, Result};
 use futures::future::{self, BoxFuture, FutureExt as _};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::Hash;
 
 pub struct AveragePriceSource {
@@ -46,17 +46,10 @@ impl PriceSource for AveragePriceSource {
 }
 
 /// Lossless merger of a collection of maps puts all available values into a list for each available key
-fn lossless_merge<T: Copy + Eq + Hash + PartialEq, U: Copy>(
-    map_collection: Vec<HashMap<T, U>>,
-) -> HashMap<T, Vec<U>> {
-    let complete_key_set: HashSet<_> = map_collection.iter().map(|m| m.keys()).flatten().collect();
+fn lossless_merge<T: Eq + Hash, U>(map_collection: Vec<HashMap<T, U>>) -> HashMap<T, Vec<U>> {
     let mut gathered_maps: HashMap<T, Vec<U>> = HashMap::new();
-    for key in &complete_key_set {
-        let available_prices = map_collection
-            .iter()
-            .filter_map(|map| map.get(key).copied())
-            .collect();
-        gathered_maps.insert(**key, available_prices);
+    for (key, value) in map_collection.into_iter().flatten() {
+        gathered_maps.entry(key).or_default().push(value);
     }
     gathered_maps
 }
