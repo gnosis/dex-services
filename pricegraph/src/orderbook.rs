@@ -697,7 +697,7 @@ mod tests {
                 owner @1 buying 0 [1_000_000] selling 1 [1_000_000],
                 owner @1 buying 3 [1_000_000] selling 1 [1_000_000],
                 owner @2 buying 1 [1_000_000] selling 2 [2_000_000],
-                owner @3 buying 2 [1_000_000] selling 3 [1_000_000],
+                owner @3 buying 2 [1_000_000] selling 3 [1_000_000] (500_000),
 
                 owner @4 buying 3 [1_000_000] selling 4 [1_000_000],
                 owner @5 buying 4 [1_000_000] selling 3 [2_000_000],
@@ -707,8 +707,8 @@ mod tests {
         let overlap = orderbook.reduce_overlapping_transitive_orderbook(1, 2);
 
         // Transitive order `2 -> 3 -> 1`
-        assert_approx_eq!(overlap.asks[0].buy, 1_000_000.0);
-        assert_approx_eq!(overlap.asks[0].sell, 1_000_000.0 / FEE_FACTOR);
+        assert_approx_eq!(overlap.asks[0].buy, 500_000.0);
+        assert_approx_eq!(overlap.asks[0].sell, 500_000.0 / FEE_FACTOR);
 
         // Transitive order `1 -> 2`
         assert_approx_eq!(overlap.bids[0].buy, 1_000_000.0);
