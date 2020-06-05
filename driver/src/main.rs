@@ -1,38 +1,21 @@
-#![recursion_limit = "256"]
-
-#[macro_use]
-mod macros;
-
-mod contracts;
-mod driver;
-mod gas_station;
-mod http;
-mod logging;
-mod metrics;
-mod models;
-mod orderbook;
-mod price_estimation;
-mod price_finding;
-mod solution_submission;
-mod transport;
-mod util;
-
-use crate::contracts::{stablex_contract::StableXContractImpl, web3_provider, Web3};
-use crate::driver::{
+use core::contracts::{stablex_contract::StableXContractImpl, web3_provider, Web3};
+use core::driver::{
     scheduler::{AuctionTimingConfiguration, SchedulerKind},
     stablex_driver::StableXDriverImpl,
 };
-use crate::gas_station::GnosisSafeGasStation;
-use crate::http::HttpFactory;
-use crate::metrics::{HttpMetrics, MetricsServer, StableXMetrics};
-use crate::orderbook::{
+use core::gas_station::{self, GnosisSafeGasStation};
+use core::http::HttpFactory;
+use core::logging;
+use core::metrics::{HttpMetrics, MetricsServer, StableXMetrics};
+use core::orderbook::{
     FilteredOrderbookReader, OnchainFilteredOrderBookReader, OrderbookFilter, OrderbookReaderKind,
     ShadowedOrderbookReader, StableXOrderBookReading,
 };
-use crate::price_estimation::{PriceOracle, TokenData};
-use crate::price_finding::{Fee, InternalOptimizer, SolverType};
-use crate::solution_submission::StableXSolutionSubmitter;
-use crate::util::FutureWaitExt as _;
+use core::price_estimation::{PriceOracle, TokenData};
+use core::price_finding;
+use core::price_finding::{Fee, InternalOptimizer, SolverType};
+use core::solution_submission::StableXSolutionSubmitter;
+use core::util::FutureWaitExt as _;
 
 use ethcontract::PrivateKey;
 use log::info;
@@ -55,7 +38,11 @@ struct Options {
     /// The log filter to use.
     ///
     /// This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug').
-    #[structopt(long, env = "DFUSION_LOG", default_value = "warn,driver=info")]
+    #[structopt(
+        long,
+        env = "DFUSION_LOG",
+        default_value = "warn,driver=info,core=info"
+    )]
     log_filter: String,
 
     /// The Ethereum node URL to connect to. Make sure that the node allows for

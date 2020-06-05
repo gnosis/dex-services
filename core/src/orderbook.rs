@@ -16,7 +16,6 @@ use crate::contracts::{stablex_contract::StableXContractImpl, Web3};
 use crate::models::{AccountState, Order};
 
 use anyhow::{anyhow, Error, Result};
-use ethcontract::U256;
 use futures::future::{BoxFuture, FutureExt as _};
 #[cfg(test)]
 use mockall::automock;
@@ -33,7 +32,7 @@ pub trait StableXOrderBookReading: Send + Sync {
     /// * `batch_id_to_solve` - the index for which returned orders should be valid
     fn get_auction_data<'a>(
         &'a self,
-        batch_id_to_solve: U256,
+        batch_id_to_solve: u32,
     ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>>;
     /// Perform potential heavy initialization of the orderbook. If this fails or wasn't called
     // the orderbook will initialize on first use of `get_auction_data`.

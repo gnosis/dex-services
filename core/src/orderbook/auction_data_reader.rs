@@ -2,7 +2,7 @@ use crate::contracts::stablex_auction_element::{
     StableXAuctionElement, AUCTION_ELEMENT_WIDTH, INDEXED_AUCTION_ELEMENT_WIDTH,
 };
 use crate::models::{AccountState, Order};
-use ethcontract::{Address, U256};
+use ethcontract::Address;
 use std::collections::HashMap;
 
 /// Handles reading of auction data that has been encoded with the smart
@@ -13,13 +13,13 @@ pub struct AuctionDataReader {
     /// All unfiltered orders in the order they were received.
     orders: Vec<Order>,
     /// Used when reading data from the smart contract in batches.
-    index: U256,
+    index: u32,
     /// The total number of orders per user.
     user_order_counts: HashMap<Address, usize>,
 }
 
 impl AuctionDataReader {
-    pub fn new(index: U256) -> Self {
+    pub fn new(index: u32) -> Self {
         Self {
             account_state: AccountState::default(),
             orders: Vec::new(),
@@ -132,7 +132,7 @@ pub struct Pagination {
 
 impl PaginatedAuctionDataReader {
     /// Create a new PaginatedAuctionDataReader.
-    pub fn new(index: U256, page_size: usize) -> PaginatedAuctionDataReader {
+    pub fn new(index: u32, page_size: usize) -> PaginatedAuctionDataReader {
         PaginatedAuctionDataReader {
             reader: AuctionDataReader::new(index),
             next_page: Some(Pagination {
@@ -187,7 +187,7 @@ impl PaginatedAuctionDataReader {
 pub struct IndexedAuctionDataReader(AuctionDataReader);
 
 impl IndexedAuctionDataReader {
-    pub fn new(index: U256) -> Self {
+    pub fn new(index: u32) -> Self {
         Self(AuctionDataReader::new(index))
     }
 
@@ -308,7 +308,7 @@ pub mod tests {
 
     #[test]
     fn auction_data_reader_empty() {
-        let mut reader = AuctionDataReader::new(U256::from(3));
+        let mut reader = AuctionDataReader::new(3);
         reader.apply_page(&[]);
         assert_eq!(reader.orders.len(), 0);
     }
@@ -318,7 +318,7 @@ pub mod tests {
         let mut bytes = Vec::new();
         bytes.extend(ORDER_1_BYTES);
         bytes.extend(ORDER_2_BYTES);
-        let mut reader = AuctionDataReader::new(U256::from(3));
+        let mut reader = AuctionDataReader::new(3);
         reader.apply_page(&bytes);
 
         let mut account_state = AccountState::default();
@@ -332,7 +332,7 @@ pub mod tests {
     #[test]
     fn auction_data_reader_multiple_batches() {
         let mut account_state = AccountState::default();
-        let mut reader = AuctionDataReader::new(U256::from(3));
+        let mut reader = AuctionDataReader::new(3);
         let mut bytes = Vec::new();
 
         bytes.extend(ORDER_1_BYTES);
@@ -358,7 +358,7 @@ pub mod tests {
     #[test]
     fn auction_data_reader_multiple_batches_different_users() {
         let mut account_state = AccountState::default();
-        let mut reader = AuctionDataReader::new(U256::from(3));
+        let mut reader = AuctionDataReader::new(3);
         let mut bytes = Vec::new();
 
         bytes.extend(ORDER_1_BYTES);
@@ -381,7 +381,7 @@ pub mod tests {
         let mut bytes = Vec::new();
         bytes.extend(ORDER_1_BYTES);
         bytes.extend(ORDER_2_BYTES);
-        let mut reader = AuctionDataReader::new(U256::from(1000));
+        let mut reader = AuctionDataReader::new(1000);
         // the bytes contain two orders
         reader.apply_page(&bytes);
 
@@ -396,7 +396,7 @@ pub mod tests {
         let mut bytes = Vec::new();
         bytes.extend(ORDER_1_BYTES);
         bytes.extend(ORDER_2_BYTES);
-        let mut reader = PaginatedAuctionDataReader::new(U256::from(3), 2);
+        let mut reader = PaginatedAuctionDataReader::new(3, 2);
         reader.apply_page(&bytes);
 
         assert_eq!(
@@ -410,7 +410,7 @@ pub mod tests {
 
     #[test]
     fn paginated_auction_data_reader_multiple_batches() {
-        let mut reader = PaginatedAuctionDataReader::new(U256::from(3), 1);
+        let mut reader = PaginatedAuctionDataReader::new(3, 1);
         let mut bytes = Vec::new();
 
         bytes.extend(ORDER_1_BYTES);
@@ -452,7 +452,7 @@ pub mod tests {
 
     #[test]
     fn paginated_auction_data_reader_multiple_batches_different_users() {
-        let mut reader = PaginatedAuctionDataReader::new(U256::from(3), 2);
+        let mut reader = PaginatedAuctionDataReader::new(3, 2);
         let mut bytes = Vec::new();
 
         bytes.extend(ORDER_3_BYTES);
