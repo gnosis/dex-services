@@ -187,7 +187,7 @@ impl Orderbook {
         overlap
     }
 
-    /// Computes the equivalent transient order along a path.
+    /// Computes the equivalent transitive order along a path.
     ///
     /// Returns `None` if the path does not exist.
     fn find_transitive_order(&self, path: &[NodeIndex]) -> Option<TransitiveOrder> {
