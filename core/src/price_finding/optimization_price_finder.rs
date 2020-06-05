@@ -147,12 +147,14 @@ mod solver_input {
 
     impl From<&'_ models::Order> for Order {
         fn from(order: &models::Order) -> Self {
+            // The solver does not handle remaining amounts.
+            let (buy_amount, sell_amount) = order.compute_remaining_buy_sell_amounts();
             Order {
                 account_id: order.account_id,
                 sell_token: TokenId(order.sell_token),
                 buy_token: TokenId(order.buy_token),
-                sell_amount: Num(order.sell_amount),
-                buy_amount: Num(order.buy_amount),
+                sell_amount: Num(sell_amount),
+                buy_amount: Num(buy_amount),
                 order_id: order.id,
             }
         }
@@ -579,16 +581,22 @@ pub mod tests {
                 account_id: Address::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 2,
-                sell_amount: 100,
-                buy_amount: 200,
+                numerator: 100,
+                denominator: 200,
+                remaining_sell_amount: 200,
+                valid_from: 0,
+                valid_until: 0,
             },
             models::Order {
                 id: 0,
                 account_id: Address::from_low_u64_be(1),
                 sell_token: 2,
                 buy_token: 1,
-                sell_amount: 200,
-                buy_amount: 100,
+                denominator: 200,
+                numerator: 100,
+                remaining_sell_amount: 200,
+                valid_from: 0,
+                valid_until: 0,
             },
         ];
         let result = serialize_balances(&state, &orders);
@@ -690,16 +698,22 @@ pub mod tests {
                 account_id: Address::from_low_u64_be(0),
                 sell_token: 1,
                 buy_token: 2,
-                sell_amount: 100,
-                buy_amount: 200,
+                denominator: 100,
+                numerator: 200,
+                remaining_sell_amount: 100,
+                valid_from: 0,
+                valid_until: 0,
             },
             models::Order {
                 id: 0,
                 account_id: Address::from_low_u64_be(1),
                 sell_token: 2,
                 buy_token: 1,
-                sell_amount: 200,
-                buy_amount: 100,
+                denominator: 200,
+                numerator: 100,
+                remaining_sell_amount: 200,
+                valid_from: 0,
+                valid_until: 0,
             },
         ]
         .to_vec();

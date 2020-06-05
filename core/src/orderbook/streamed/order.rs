@@ -1,5 +1,4 @@
 use super::*;
-use crate::contracts::stablex_auction_element;
 use crate::models::Order as ModelOrder;
 use anyhow::{anyhow, ensure, Result};
 use serde::{Deserialize, Serialize};
@@ -114,18 +113,16 @@ impl Order {
         user_id: UserId,
         order_id: OrderId,
     ) -> ModelOrder {
-        let (buy_amount, sell_amount) = stablex_auction_element::compute_buy_sell_amounts(
-            self.price_numerator,
-            self.price_denominator,
-            self.get_remaining_amount_at_beginning_of_batch(batch_id),
-        );
         ModelOrder {
             id: order_id,
             account_id: user_id,
             buy_token: self.buy_token,
             sell_token: self.sell_token,
-            buy_amount,
-            sell_amount,
+            numerator: self.price_numerator,
+            denominator: self.price_denominator,
+            remaining_sell_amount: self.get_remaining_amount_at_beginning_of_batch(batch_id),
+            valid_from: self.valid_from,
+            valid_until: self.valid_until,
         }
     }
 
