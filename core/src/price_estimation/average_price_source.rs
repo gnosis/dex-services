@@ -46,7 +46,7 @@ impl PriceSource for AveragePriceSource {
 }
 
 /// Lossless merger of a collection of maps puts all available values into a list for each available key
-fn lossless_merge<T: Copy + Eq + Hash + PartialEq, U: Copy + Clone>(
+fn lossless_merge<T: Copy + Eq + Hash + PartialEq, U: Copy>(
     map_collection: Vec<HashMap<T, U>>,
 ) -> HashMap<T, Vec<U>> {
     let complete_key_set: HashSet<_> = map_collection.iter().map(|m| m.keys()).flatten().collect();
