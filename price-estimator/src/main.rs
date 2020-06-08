@@ -1,14 +1,18 @@
+mod orderbook;
+
 use core::{
     contracts::{stablex_contract::StableXContractImpl, web3_provider},
     http::HttpFactory,
     metrics::{HttpMetrics, MetricsServer},
+    orderbook::EventBasedOrderbook,
+    orderbook::StableXOrderBookReading,
     util::FutureWaitExt as _,
 };
 use ethcontract::PrivateKey;
 use prometheus::Registry;
 use std::{num::ParseIntError, path::PathBuf, sync::Arc, thread, time::Duration};
 use structopt::StructOpt;
-use tokio::runtime;
+use tokio::{runtime, time};
 use url::Url;
 use warp::Filter;
 
@@ -51,6 +55,8 @@ struct Options {
     orderbook_update_interval: Duration,
 }
 
+type Orderbook = orderbook::Orderbook<EventBasedOrderbook>;
+
 fn main() {
     let options = Options::from_args();
     env_logger::init();
@@ -64,14 +70,15 @@ fn main() {
     let web3 = web3_provider(&http_factory, options.node_url.as_str(), options.timeout).unwrap();
     // The private key is not actually used but StableXContractImpl requires it.
     let private_key = PrivateKey::from_raw([1u8; 32]).unwrap();
-    let _contract = Arc::new(
+    let contract = Arc::new(
         StableXContractImpl::new(&web3, private_key, 0)
             .wait()
             .unwrap(),
     );
 
-    // TODO: create event based orderbook
-    // TODO: handle http requests
+    let orderbook = EventBasedOrderbook::new(contract, web3, options.orderbook_file);
+    orderbook.initialize().wait().unwrap();
+    let orderbook = Arc::new(Orderbook::new(orderbook));
 
     let mut runtime = runtime::Builder::new()
         .threaded_scheduler()
@@ -79,7 +86,29 @@ fn main() {
         .build()
         .unwrap();
 
-    runtime.block_on(warp::serve(warp::any().map(|| "")).run(([127, 0, 0, 1], 8080)));
+    let orderbook_task = runtime.spawn(update_orderbook_forever(
+        orderbook,
+        options.orderbook_update_interval,
+    ));
+
+    // TODO: handle http requests
+    let serve_task = runtime.spawn(warp::serve(warp::any().map(|| "")).run(([127, 0, 0, 1], 8080)));
+
+    runtime.block_on(async move {
+        tokio::select! {
+            _ = orderbook_task => log::error!("Update task exited."),
+            _ = serve_task => log::error!("Serve task exited."),
+        }
+    });
+}
+
+async fn update_orderbook_forever(orderbook: Arc<Orderbook>, update_interval: Duration) -> ! {
+    loop {
+        time::delay_for(update_interval).await;
+        if let Err(err) = orderbook.update().await {
+            log::warn!("error updating orderbook: {:?}", err);
+        }
+    }
 }
 
 fn duration_secs(s: &str) -> Result<Duration, ParseIntError> {

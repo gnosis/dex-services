@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
+anyhow = "1.0"
 core = { path = "../core" }
 env_logger = "0.7"
 ethcontract = "0.7"
@@ -12,6 +13,6 @@ pricegraph = { path = "../pricegraph" }
 primitive-types = "0.7"
 prometheus = "0.9"
 structopt = "0.3"
-tokio = { version = "0.2", features = ["rt-threaded"] }
+tokio = { version = "0.2", features = ["macros", "rt-threaded", "time"] }
 url = "2.1"
 warp = "0.2"
