@@ -3,9 +3,10 @@ members = [
     "core",
     "driver",
     "e2e",
+    "price-estimator",
     "pricegraph",
-    "pricegraph/wasm",
     "pricegraph/fuzz",
+    "pricegraph/wasm",
 ]
 default-members = [
     "driver",
