@@ -26,12 +26,12 @@ pub struct TransitiveOrderbook {
 /// A transitive order is defined as the transitive combination of multiple
 /// orders into a single equivalent order. For example consider the following
 /// two orders:
-/// - *A*: buying 1_000_000 token 1 selling 2_000_000 token 2
-/// - *B*: buying 4_000_000 token 2 selling 1_000_000 token 3
+/// - *A*: buying 1.0 token 1 selling 2.0 token 2
+/// - *B*: buying 4.0 token 2 selling 1.0 token 3
 ///
-/// We can define a transitive order *C* buying 1_000_000 token 1 selling
-/// 500_000 token 3 by combining *A* and *B*. Note that the sell amount of token
-/// 3 is limited by the token 2 capacity for this transitive order.
+/// We can define a transitive order *C* buying 1.0 token 1 selling 0.5 token 3
+/// by combining *A* and *B*. Note that the sell amount of token 3 is limited by
+/// the token 2 capacity for this transitive order.
 ///
 /// Additionally, a transitive order over a single order is equal to that order.
 #[derive(Clone, Debug, PartialEq)]
