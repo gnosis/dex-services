@@ -908,8 +908,7 @@ mod tests {
             3_000_000.0
         );
         assert_approx_eq!(
-            orderbook
-                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 10.0),
+            orderbook.fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 10.0),
             3_000_000.0
         );
     }
