@@ -9,7 +9,7 @@ pub fn normalize_auction_data(
 ) -> (AccountState, Vec<Order>) {
     let orders = orders
         .into_iter()
-        .filter(|order| order.sell_amount > 0)
+        .filter(|order| order.remaining_sell_amount > 0)
         .collect::<Vec<_>>();
     let account_states = account_states
         .into_iter()
@@ -35,16 +35,22 @@ mod tests {
                 account_id: Address::zero(),
                 buy_token: 0,
                 sell_token: 1,
-                buy_amount: 1,
-                sell_amount: 1,
+                numerator: 1,
+                denominator: 1,
+                remaining_sell_amount: 1,
+                valid_from: 0,
+                valid_until: 0,
             },
             Order {
                 id: 0,
                 account_id: Address::repeat_byte(1),
                 buy_token: 0,
                 sell_token: 2,
-                buy_amount: 0,
-                sell_amount: 0,
+                numerator: 0,
+                denominator: 0,
+                remaining_sell_amount: 0,
+                valid_from: 0,
+                valid_until: 0,
             },
         ];
         let account_states = vec![

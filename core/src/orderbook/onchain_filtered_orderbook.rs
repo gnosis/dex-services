@@ -173,8 +173,11 @@ mod tests {
             account_id: Address::from_low_u64_be(1),
             buy_token: 258,
             sell_token: 257,
-            buy_amount: 257,
-            sell_amount: 257,
+            numerator: 258,
+            denominator: 259,
+            remaining_sell_amount: 257,
+            valid_from: 2,
+            valid_until: 261,
         };
 
         assert_eq!(
@@ -238,16 +241,22 @@ mod tests {
                 account_id: Address::from_low_u64_be(1),
                 buy_token: 258,
                 sell_token: 257,
-                buy_amount: 257,
-                sell_amount: 257,
+                numerator: 258,
+                denominator: 259,
+                remaining_sell_amount: 257,
+                valid_from: 2,
+                valid_until: 261,
             },
             Order {
                 id: 1,
                 account_id: Address::from_low_u64_be(1),
                 buy_token: 257,
                 sell_token: 258,
-                buy_amount: 256,
-                sell_amount: 256,
+                numerator: 258,
+                denominator: 259,
+                remaining_sell_amount: 256,
+                valid_from: 2,
+                valid_until: 261,
             },
         ];
 

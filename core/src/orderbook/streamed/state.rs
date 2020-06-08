@@ -360,8 +360,8 @@ mod tests {
                 sell_token: $sell_token,
                 valid_from: $valid_from,
                 valid_until: $valid_until,
-                price_numerator: $sell_amount,
-                price_denominator: $buy_amount,
+                price_numerator: $buy_amount,
+                price_denominator: $sell_amount,
             };
             $state = $state
                 .apply_event(&Event::OrderPlacement(event), $batch)
@@ -522,13 +522,16 @@ mod tests {
         );
 
         assert_eq!(state.orders(1).next(), None);
-        let expected_orders = vec![ModelOrder {
+        let mut expected_orders = vec![ModelOrder {
             id: 0,
             account_id: address(2),
             buy_token: 0,
             sell_token: 1,
-            buy_amount: 3,
-            sell_amount: 4,
+            numerator: 4,
+            denominator: 3,
+            remaining_sell_amount: 3,
+            valid_from: 1,
+            valid_until: 2,
         }];
         assert_eq!(state.orders(2).collect::<Vec<_>>(), expected_orders);
         assert_eq!(state.orders(3).collect::<Vec<_>>(), expected_orders);
@@ -541,6 +544,7 @@ mod tests {
         state = state
             .apply_event(&Event::OrderCancellation(event), 2)
             .unwrap();
+        expected_orders[0].valid_until = 1;
 
         assert_eq!(state.orders(1).next(), None);
         assert_eq!(state.orders(2).collect::<Vec<_>>(), expected_orders);

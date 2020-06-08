@@ -3,58 +3,64 @@ use crate::models::TokenId;
 use anyhow::{anyhow, Result};
 use futures::future::{self, BoxFuture, FutureExt as _};
 use std::collections::HashMap;
+use std::hash::Hash;
 
-/// Combines two prices into one average.
-pub struct AveragePriceSource<T0, T1> {
-    source_0: T0,
-    source_1: T1,
+pub struct AveragePriceSource {
+    sources: Vec<Box<dyn PriceSource + Send + Sync>>,
 }
 
-impl<T0, T1> AveragePriceSource<T0, T1> {
-    pub fn new(source_0: T0, source_1: T1) -> Self {
-        Self { source_0, source_1 }
+impl AveragePriceSource {
+    pub fn new(sources: Vec<Box<dyn PriceSource + Send + Sync>>) -> Self {
+        Self { sources }
     }
 }
 
-impl<T0, T1> PriceSource for AveragePriceSource<T0, T1>
-where
-    T0: PriceSource + Send + Sync,
-    T1: PriceSource + Send + Sync,
-{
+impl PriceSource for AveragePriceSource {
     fn get_prices<'a>(
         &'a self,
         tokens: &'a [Token],
     ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
         async move {
-            let prices = future::join(
-                self.source_0.get_prices(tokens),
-                self.source_1.get_prices(tokens),
-            )
-            .await;
-            match prices {
-                (Ok(p0), Ok(p1)) => Ok(average_prices(p0, p1)),
-                (Ok(p), Err(e)) | (Err(e), Ok(p)) => {
-                    log::warn!("one price source failed: {}", e);
-                    Ok(p)
-                }
-                (Err(e0), Err(e1)) => Err(anyhow!("both price sources failed: {}, {}", e0, e1)),
+            let price_futures =
+                future::join_all(self.sources.iter().map(|s| s.get_prices(tokens))).await;
+
+            let acquired_prices: Vec<HashMap<TokenId, u128>> = price_futures
+                .into_iter()
+                .filter_map(|f| match f {
+                    Ok(prices) => Some(prices),
+                    Err(err) => {
+                        log::warn!("Price source failed: {}", err);
+                        None
+                    }
+                })
+                .collect();
+
+            if !acquired_prices.is_empty() {
+                Ok(average_prices(acquired_prices))
+            } else {
+                Err(anyhow!("All price sources failed!"))
             }
         }
         .boxed()
     }
 }
 
-fn average_prices(
-    prices_0: HashMap<TokenId, u128>,
-    mut prices_1: HashMap<TokenId, u128>,
-) -> HashMap<TokenId, u128> {
-    for (token_id, price_1) in prices_0 {
-        prices_1
-            .entry(token_id)
-            .and_modify(|price| *price = (*price + price_1) / 2)
-            .or_insert(price_1);
+/// Lossless merger of a collection of maps puts all available values into a list for each available key
+fn lossless_merge<T: Eq + Hash, U>(map_collection: Vec<HashMap<T, U>>) -> HashMap<T, Vec<U>> {
+    let mut gathered_maps: HashMap<T, Vec<U>> = HashMap::new();
+    for (key, value) in map_collection.into_iter().flatten() {
+        gathered_maps.entry(key).or_default().push(value);
     }
-    prices_1
+    gathered_maps
+}
+
+fn average_prices(price_maps: Vec<HashMap<TokenId, u128>>) -> HashMap<TokenId, u128> {
+    // Lossless merger of the collection of hash maps. That is, putting all
+    // available prices for each token into a list to be averaged at the end.
+    lossless_merge(price_maps)
+        .iter()
+        .map(|(token, prices)| (*token, prices.iter().sum::<u128>() / prices.len() as u128))
+        .collect()
 }
 
 #[cfg(test)]
@@ -62,29 +68,40 @@ mod tests {
     use super::*;
 
     #[test]
+    fn lossless_merge_() {
+        let a = hash_map! {
+            1 => 1,
+            2 => 2,
+        };
+        let b = hash_map! {
+            2 => 1,
+            3 => 2
+        };
+        let res = lossless_merge(vec![a, b]);
+        let expected = hash_map! {1 => vec![1], 2 => vec![2, 1], 3 => vec![2]};
+        assert_eq!(res, expected);
+    }
+
+    #[test]
     fn average_prices_() {
         let p0 = hash_map! {
             TokenId(0) => 0,
-            TokenId(1) => 5,
+            TokenId(1) => 1,
             TokenId(2) => 10,
-            TokenId(3) => 20,
-            TokenId(5) => 0,
         };
         let p1 = hash_map! {
-            TokenId(0) => 0,
-            TokenId(1) => 5,
-            TokenId(2) => 20,
-            TokenId(4) => 30,
-            TokenId(5) => 100,
+            TokenId(1) => 3,
+            TokenId(2) => 10,
         };
-        let result = average_prices(p0, p1);
+        let p2 = hash_map! {
+            TokenId(2) => 20,
+        };
+
+        let result = average_prices(vec![p0, p1, p2]);
         let expected = hash_map! {
             TokenId(0) => 0,
-            TokenId(1) => 5,
-            TokenId(2) => 15,
-            TokenId(3) => 20,
-            TokenId(4) => 30,
-            TokenId(5) => 50,
+            TokenId(1) => 2,
+            TokenId(2) => 13,
         };
         assert_eq!(result, expected);
     }
