@@ -276,14 +276,17 @@ impl Orderbook {
     /// This is calculated by repeatedly finding the cheapest path between a
     /// token pair that is below the specified price and adding the capacity of
     /// the path to the result.
-    pub fn fill_order_at_price(&mut self, pair: TokenPair, limit_price: f64) -> f64 {
+    ///
+    /// Note that the limit price is expressed as an exchange limit price, i.e.
+    /// with implicitely included fees.
+    pub fn fill_order_at_price(&mut self, pair: TokenPair, actual_limit_price: f64) -> f64 {
         if !self.is_token_pair_valid(pair) {
             return 0.0;
         }
         self.update_projection_graph();
 
         let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
-        let effective_limit_price = limit_price / FEE_FACTOR;
+        let effective_limit_price = actual_limit_price / FEE_FACTOR;
 
         let mut total_volume = 0.0;
         let mut predecessors = self.reduced_shortest_paths(sell);
