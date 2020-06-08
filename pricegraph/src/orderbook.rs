@@ -215,8 +215,7 @@ impl Orderbook {
     /// with the same token pair and volume may yield different results as
     /// orders get filled with each match changing the orderbook.
     pub fn fill_market_order(&mut self, pair: TokenPair, volume: f64) -> Option<f64> {
-        let max_token = (self.projection.node_count() - 1) as u16;
-        if pair.buy > max_token || pair.sell > max_token {
+        if !self.is_token_pair_valid(pair) {
             return None;
         }
 
@@ -269,6 +268,53 @@ impl Orderbook {
         }
 
         Some(invert_price(last_transient_price))
+    }
+
+    /// Fill an order at a given price, returning the estimated buy amount that
+    /// can be filled at the given price with the current existing orders.
+    ///
+    /// This is calculated by repeatedly finding the cheapest path between a
+    /// token pair that is below the specified price and adding the capacity of
+    /// the path to the result.
+    pub fn fill_order_at_price(&mut self, pair: TokenPair, limit_price: f64) -> f64 {
+        if !self.is_token_pair_valid(pair) {
+            return 0.0;
+        }
+        self.update_projection_graph();
+
+        let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
+        let effective_limit_price = limit_price / FEE_FACTOR;
+
+        let mut total_volume = 0.0;
+        let mut predecessors = self.reduced_shortest_paths(sell);
+        while let Some(path) = path::find_path(&predecessors, sell, buy) {
+            let (capacity, transient_price) =
+                self.find_path_capacity_and_price(&path).unwrap_or_else(|| {
+                    panic!(
+                        "failed to fill detected shortest path {}",
+                        format_path(&path),
+                    )
+                });
+
+            if transient_price > effective_limit_price {
+                break;
+            }
+            // NOTE: Capacity is a sell amount, so convert to a buy amount.
+            total_volume += capacity / transient_price;
+
+            self.fill_path_with_capacity(&path, capacity)
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "failed to fill with capacity along detected path {}",
+                        format_path(&path),
+                    )
+                });
+            predecessors = bellman_ford::search(&self.projection, sell)
+                .expect("unexpected negative cycle in reduced graph")
+                .1;
+        }
+
+        total_volume
     }
 
     /// Calculates the shortest paths from the start token to all other tokens
@@ -455,6 +501,13 @@ impl Orderbook {
 
         Some((order, user))
     }
+
+    /// Returns `true` if the specified token pair is valid, and `false`
+    /// otherwise.
+    fn is_token_pair_valid(&self, pair: TokenPair) -> bool {
+        let max_token = (self.projection.node_count() - 1) as u16;
+        pair.buy <= max_token && pair.sell <= max_token
+    }
 }
 
 /// Create a node index from a token ID.
@@ -507,7 +560,7 @@ fn should_include_auction_element(element: &Element) -> bool {
 /// state as parts of a path were updated but other parts were not.
 #[derive(Debug, Error)]
 #[error("incomplete path in orderbook from {} to {}", .0.buy, 0)]
-pub struct IncompletePathError(pub TokenPair);
+struct IncompletePathError(TokenPair);
 
 #[cfg(test)]
 mod tests {
@@ -796,6 +849,66 @@ mod tests {
         assert!(price.is_none());
 
         assert_eq!(orderbook.num_orders(), 0);
+    }
+
+    #[test]
+    fn fills_order_at_price_with_correct_amount() {
+        //    /-1.0---v
+        //   /--2.0---v
+        //  /---4.0---v
+        // 1          2
+        let mut orderbook = orderbook! {
+            users {
+                @1 {
+                    token 2 => 1_000_000,
+                }
+                @2 {
+                    token 2 => 1_000_000,
+                }
+                @3 {
+                    token 2 => 1_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 1 [1_000_000] selling 2 [1_000_000],
+                owner @2 buying 1 [2_000_000] selling 2 [1_000_000],
+                owner @3 buying 1 [4_000_000] selling 2 [1_000_000],
+            }
+        };
+
+        assert!(!orderbook.is_overlapping());
+
+        assert_approx_eq!(
+            orderbook
+                .clone()
+                // NOTE: 1.001 for 1 is not enough to match any volume because
+                // fees need to be applied twice!
+                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 1.0 * FEE_FACTOR),
+            0.0
+        );
+        assert_approx_eq!(
+            orderbook
+                .clone()
+                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 1.0 * FEE_FACTOR.powi(2)),
+            1_000_000.0
+        );
+        assert_approx_eq!(
+            orderbook
+                .clone()
+                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 3.0),
+            2_000_000.0
+        );
+        assert_approx_eq!(
+            orderbook
+                .clone()
+                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 4.0 * FEE_FACTOR.powi(2)),
+            3_000_000.0
+        );
+        assert_approx_eq!(
+            orderbook
+                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 10.0),
+            3_000_000.0
+        );
     }
 
     #[test]
