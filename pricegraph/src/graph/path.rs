@@ -2,13 +2,14 @@
 
 use petgraph::graph::NodeIndex;
 
-/// Finds a cycle starting at the provided `search` node and returns a vector
-/// representing a path along the cycle.
+/// Finds a cycle by searching from the provided `search` node and returns a
+/// vector representing a path along the cycle. This method returns a path,
+/// which means that the first and last nodes will always be the same.
 ///
 /// Optionally, an `origin` node can be provided so that the first element of
 /// the cycle vector is `origin` if and only if `origin` is part of the cycle.
 ///
-/// Returns `None` if no such cycle can be found.
+/// Returns `None` if no cycle can be found.
 pub fn find_cycle(
     predecessor: &[Option<NodeIndex>],
     search: NodeIndex,
@@ -31,8 +32,8 @@ pub fn find_cycle(
     }
 
     // NOTE: Allocate the cycle vector with enough capacity for the negative
-    // cycle plus one. This extra capacity is used by the orderbook graph to
-    // create a circular path equivalent to the negative cycle.
+    // cycle path, that is the length of the negative cycle plus one (which is
+    // used by the final segment of the path to return to the starting node).
     let len = step + 1 - visited[cursor.index()];
     let mut path = Vec::with_capacity(len + 1);
 
@@ -46,6 +47,7 @@ pub fn find_cycle(
     // NOTE: Now we have found the cycle starting at `start`, walk backwards
     // until we reach the `start` node again.
     let mut cursor = start;
+    path.push(cursor);
     loop {
         cursor = predecessor[cursor.index()]?;
         path.push(cursor);
@@ -103,16 +105,15 @@ pub mod tests {
         let NegativeCycle(predecessor, node) = bellman_ford::search(&graph, 0.into()).unwrap_err();
 
         let cycle = find_cycle(&predecessor, node, None).unwrap();
-        assert_eq!(cycle, &[1.into(), 2.into(), 3.into()]);
-        assert_eq!(cycle.capacity(), cycle.len() + 1);
+        assert_eq!(cycle, &[1.into(), 2.into(), 3.into(), 1.into()]);
 
         let cycle = find_cycle(&predecessor, node, Some(2.into())).unwrap();
-        assert_eq!(cycle, &[2.into(), 3.into(), 1.into()]);
+        assert_eq!(cycle, &[2.into(), 3.into(), 1.into(), 2.into()]);
 
         // NOTE: if `origin` is provided, but not part of the cycle, then the
         // first node in the vector cycle can be any node.
         let cycle = find_cycle(&predecessor, node, Some(4.into())).unwrap();
-        assert_eq!(cycle, &[1.into(), 2.into(), 3.into()]);
+        assert_eq!(cycle, &[1.into(), 2.into(), 3.into(), 1.into()]);
     }
 
     #[test]

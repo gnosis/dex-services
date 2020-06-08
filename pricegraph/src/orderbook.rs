@@ -154,14 +154,10 @@ impl Orderbook {
         while let Err(NegativeCycle(predecessors, node)) =
             bellman_ford::search(&self.projection, quote)
         {
-            let path = {
-                let mut cycle = path::find_cycle(&predecessors, node, Some(quote))
-                    .expect("negative cycle not found after being detected");
-                cycle.push(cycle[0]);
-                cycle
-            };
+            let path = path::find_cycle(&predecessors, node, Some(quote))
+                .expect("negative cycle not found after being detected");
 
-            if path[0] == quote {
+            if path.first() == Some(&quote) {
                 if let Some(base_index) = path.iter().position(|node| *node == base) {
                     let (ask, bid) = (&path[0..base_index + 1], &path[base_index..]);
 
@@ -287,12 +283,8 @@ impl Orderbook {
             match bellman_ford::search(&self.projection, start) {
                 Ok((_, predecessors)) => return predecessors,
                 Err(NegativeCycle(predecessors, node)) => {
-                    let path = {
-                        let mut cycle = path::find_cycle(&predecessors, node, None)
-                            .expect("negative cycle not found after being detected");
-                        cycle.push(cycle[0]);
-                        cycle
-                    };
+                    let path = path::find_cycle(&predecessors, node, None)
+                        .expect("negative cycle not found after being detected");
 
                     self.fill_path(&path).unwrap_or_else(|| {
                         panic!(
