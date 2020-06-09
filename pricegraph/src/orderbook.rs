@@ -183,21 +183,89 @@ impl Orderbook {
         overlap
     }
 
+    /// Fills transitive orders along a token pair, optionally specifying a
+    /// maximum price spread for the orders.
+    ///
+    /// Returns a vector containing all the transitive orders that were filled.
+    ///
+    /// Note that the spread is a decimal fraction that defines the maximum
+    /// transitive order price with the equation:
+    /// `first_transitive_price + first_transitive_price * spread`. This means
+    /// that given a spread of 0.5 (or 50%), and if the cheapest transitive
+    /// order has a price of 1.2, then the maximum price will be `1.8`.
+    ///
+    /// # Panics
+    ///
+    /// This method panics if the spread is zero or negative.
+    pub fn fill_transitive_orders(
+        &mut self,
+        pair: TokenPair,
+        spread: Option<f64>,
+    ) -> Vec<TransitiveOrder> {
+        if let Some(spread) = spread {
+            assert!(spread > 0.0, "invalid spread");
+        }
+
+        if !self.is_token_pair_valid(pair) {
+            return Vec::new();
+        }
+        self.update_projection_graph();
+
+        let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
+
+        let mut orders = Vec::new();
+        let mut spread_limit_price = None;
+
+        // NOTE: A subtle difference here is that we are searching for paths in
+        // the same direction as the token pair (as opposed to the opposite
+        // direction when doing price estimates).
+        let mut predecessors = self.reduced_shortest_paths(buy);
+
+        while let Some(path) = path::find_path(&predecessors, buy, sell) {
+            let (capacity, transitive_price) =
+                self.find_path_capacity_and_price(&path).unwrap_or_else(|| {
+                    panic!(
+                        "failed to fill detected shortest path {}",
+                        format_path(&path),
+                    )
+                });
+
+            if let Some(spread) = spread {
+                let spread_limit_price = spread_limit_price
+                    .get_or_insert_with(|| transitive_price + transitive_price * spread);
+
+                if transitive_price > *spread_limit_price {
+                    break;
+                }
+            }
+            orders.push(transitive_order_from_capacity_and_price(
+                capacity,
+                transitive_price,
+            ));
+
+            self.fill_path_with_capacity(&path, capacity)
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "failed to fill with capacity along detected path {}",
+                        format_path(&path),
+                    )
+                });
+            predecessors = bellman_ford::search(&self.projection, buy)
+                .expect("unexpected negative cycle in reduced graph")
+                .1;
+        }
+
+        orders
+    }
+
     /// Computes the equivalent transitive order along a path.
     ///
     /// Returns `None` if the path does not exist.
     fn find_transitive_order(&self, path: &[NodeIndex]) -> Option<TransitiveOrder> {
         let (capacity, price) = self.find_path_capacity_and_price(path)?;
+        let order = transitive_order_from_capacity_and_price(capacity, price);
 
-        // NOTE: We now have the capacity and price for this transitive order
-        // which needs to be converted to a buy and sell amount. We have:
-        // - `price = FEE_FACTOR * buy_amount / sell_amount`
-        // - `capacity = sell_amount * price`
-        // Solving for `buy_amount` and `sell_amount`, we get:
-        let buy = capacity / FEE_FACTOR;
-        let sell = capacity / price;
-
-        Some(TransitiveOrder { buy, sell })
+        Some(order)
     }
 
     /// Fill a market order in the current orderbook graph returning the maximum
@@ -218,7 +286,6 @@ impl Orderbook {
         if !self.is_token_pair_valid(pair) {
             return None;
         }
-
         self.update_projection_graph();
 
         let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
@@ -556,6 +623,22 @@ fn should_include_auction_element(element: &Element) -> bool {
     !is_dust_order && has_valid_price
 }
 
+/// Returns a new transitive order from an orderbook graph price and capacity.
+fn transitive_order_from_capacity_and_price(
+    capacity: f64,
+    transitive_price: f64,
+) -> TransitiveOrder {
+    // NOTE: We now have the capacity and price for this transitive order which
+    // needs to be converted to a buy and sell amount. We have:
+    // - `price = FEE_FACTOR * buy_amount / sell_amount`
+    // - `capacity = sell_amount * price`
+    // Solving for `buy_amount` and `sell_amount`, we get:
+    let buy = capacity / FEE_FACTOR;
+    let sell = capacity / transitive_price;
+
+    TransitiveOrder { buy, sell }
+}
+
 /// An error indicating that an operation over a path failed because of a
 /// missing connection between a token pair.
 ///
@@ -761,6 +844,102 @@ mod tests {
         // Transitive order `1 -> 2`
         assert_approx_eq!(overlap.bids[0].buy, 1_000_000.0);
         assert_approx_eq!(overlap.bids[0].sell, 2_000_000.0);
+    }
+
+    #[test]
+    fn fills_transitive_orders_with_maximum_spread() {
+        //    /--1.0--v
+        //   /        v---2.0--\
+        //  /---4.0---v         \
+        // 1          2          3
+        //  \                    ^
+        //   \--------1.0-------/
+        let mut orderbook = orderbook! {
+            users {
+                @1 {
+                    token 2 => 1_000_000,
+                    token 3 => 1_000_000,
+                }
+                @2 {
+                    token 2 => 1_000_000,
+                }
+                @3 {
+                    token 2 => 1_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 1 [1_000_000] selling 2 [1_000_000],
+                owner @2 buying 3 [2_000_000] selling 2 [1_000_000],
+                owner @3 buying 1 [4_000_000] selling 2 [1_000_000],
+
+                owner @1 buying 1 [1_000_000] selling 3 [1_000_000],
+            }
+        };
+        let pair = TokenPair { buy: 1, sell: 2 };
+
+        let orders = orderbook.clone().fill_transitive_orders(pair, Some(0.5));
+        assert_eq!(orders.len(), 1);
+        assert_approx_eq!(orders[0].buy, 1_000_000.0);
+        assert_approx_eq!(orders[0].sell, 1_000_000.0);
+
+        let orders = orderbook.clone().fill_transitive_orders(pair, Some(1.0));
+        assert_eq!(orders.len(), 1);
+
+        let orders = orderbook
+            .clone()
+            .fill_transitive_orders(pair, Some((2.0 * FEE_FACTOR) - 1.0));
+        assert_eq!(orders.len(), 2);
+        assert_approx_eq!(orders[1].buy, 1_000_000.0);
+        assert_approx_eq!(orders[1].sell, 500_000.0 / FEE_FACTOR);
+
+        let orders = orderbook.fill_transitive_orders(pair, Some(3.0));
+        assert_eq!(orders.len(), 3);
+        assert_approx_eq!(orders[2].buy, 4_000_000.0);
+        assert_approx_eq!(orders[2].sell, 1_000_000.0);
+    }
+
+    #[test]
+    fn fills_all_transitive_orders_without_maximum_spread() {
+        //    /--1.0--v
+        //   /        v---2.0--\
+        //  /---4.0---v         \
+        // 1          2          3
+        //  \                    ^
+        //   \--------1.0-------/
+        let mut orderbook = orderbook! {
+            users {
+                @1 {
+                    token 2 => 1_000_000,
+                    token 3 => 1_000_000,
+                }
+                @2 {
+                    token 2 => 1_000_000,
+                }
+                @3 {
+                    token 2 => 1_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 1 [1_000_000] selling 2 [1_000_000],
+                owner @2 buying 3 [2_000_000] selling 2 [1_000_000],
+                owner @3 buying 1 [4_000_000] selling 2 [1_000_000],
+
+                owner @1 buying 1 [1_000_000] selling 3 [1_000_000],
+            }
+        };
+        let pair = TokenPair { buy: 1, sell: 2 };
+
+        let orders = orderbook.fill_transitive_orders(pair, None);
+        assert_eq!(orders.len(), 3);
+
+        assert_approx_eq!(orders[0].buy, 1_000_000.0);
+        assert_approx_eq!(orders[0].sell, 1_000_000.0);
+
+        assert_approx_eq!(orders[1].buy, 1_000_000.0);
+        assert_approx_eq!(orders[1].sell, 500_000.0 / FEE_FACTOR);
+
+        assert_approx_eq!(orders[2].buy, 4_000_000.0);
+        assert_approx_eq!(orders[2].sell, 1_000_000.0);
     }
 
     #[test]

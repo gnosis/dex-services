@@ -42,6 +42,49 @@ pub fn reduce_overlapping_transitive_orderbook(c: &mut Criterion) {
     });
 }
 
+pub fn fill_transitive_orders(c: &mut Criterion) {
+    let dai_weth = TokenPair { buy: 7, sell: 1 };
+    let spreads = &[Some(0.1), Some(0.25), Some(0.5), Some(1.0), None];
+
+    let mut group = c.benchmark_group("Orderbook::fill_transitive_orders");
+    for spread in spreads {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(spread.unwrap_or(f64::INFINITY)),
+            spread,
+            |b, &spread| {
+                let orderbook = read_default_orderbook();
+                b.iter_batched(
+                    || orderbook.clone(),
+                    |mut orderbook| orderbook.fill_transitive_orders(black_box(dai_weth), spread),
+                    BatchSize::SmallInput,
+                )
+            },
+        );
+    }
+    group.finish();
+
+    let mut group = c.benchmark_group("Orderbook::fill_transitive_orders(reduced)");
+    for spread in spreads {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(spread.unwrap_or(f64::INFINITY)),
+            spread,
+            |b, &spread| {
+                let reduced_orderbook = {
+                    let mut orderbook = read_default_orderbook();
+                    orderbook.reduce_overlapping_orders();
+                    orderbook
+                };
+                b.iter_batched(
+                    || reduced_orderbook.clone(),
+                    |mut orderbook| orderbook.fill_transitive_orders(black_box(dai_weth), spread),
+                    BatchSize::SmallInput,
+                )
+            },
+        );
+    }
+    group.finish();
+}
+
 pub fn fill_market_order(c: &mut Criterion) {
     let dai_weth = TokenPair { buy: 7, sell: 1 };
     let eth = 10.0f64.powi(18);
@@ -83,6 +126,7 @@ criterion_group!(
     config = Criterion::default().sample_size(20);
     targets =
         read, is_overlapping, reduce_overlapping_orders,
-        reduce_overlapping_transitive_orderbook, fill_market_order
+        reduce_overlapping_transitive_orderbook, fill_transitive_orders,
+        fill_market_order
 );
 criterion_main!(benches);
