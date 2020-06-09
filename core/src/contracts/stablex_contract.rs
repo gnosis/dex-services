@@ -4,6 +4,7 @@
 use crate::{
     contracts,
     models::{ExecutedOrder, Solution},
+    util::FutureWaitExt,
 };
 use anyhow::{anyhow, Error, Result};
 use ethcontract::{
@@ -514,5 +515,50 @@ pub mod tests {
             encode_prices_for_contract(&unordered_price_map),
             (expected_prices, expected_token_ids)
         );
+    }
+
+    #[test]
+    fn incremental_binary_search() {
+        struct MockBlockchain {
+            batch_id: Vec<u32>,
+        }
+        impl BatchIdGetter for MockBlockchain {
+            fn batch_id_from_block<'a>(
+                &'a self,
+                block_number: BlockNumber,
+            ) -> BoxFuture<'a, Result<u32>> {
+                async move {
+                    Ok(self.batch_id[if let BlockNumber::Number(n) = block_number {
+                        n
+                    } else {
+                        panic!("Not necessary");
+                    }
+                    .as_u64() as usize])
+                }
+                .boxed()
+            }
+
+            fn current_batch_id_and_block_number<'a>(
+                &'a self,
+            ) -> BoxFuture<'a, Result<(u32, u64)>> {
+                async move {
+                    let latest_block = self.batch_id.len() as u64 - 1;
+                    Ok((self.batch_id[latest_block as usize], latest_block))
+                }
+                .boxed()
+            }
+        }
+
+        let blockchain = MockBlockchain {
+            //                   2        5     7     9  10
+            batch_id: vec![1, 1, 1, 2, 2, 2, 3, 3, 5, 5, 6],
+        };
+        assert_eq!(blockchain.get_last_block_for_batch(1).wait().unwrap(), 2);
+        assert_eq!(blockchain.get_last_block_for_batch(2).wait().unwrap(), 5);
+        assert_eq!(blockchain.get_last_block_for_batch(3).wait().unwrap(), 7);
+        assert_eq!(blockchain.get_last_block_for_batch(4).wait().unwrap(), 7); // note: no error if batch does not exist
+        assert_eq!(blockchain.get_last_block_for_batch(5).wait().unwrap(), 9);
+        assert_eq!(blockchain.get_last_block_for_batch(6).wait().unwrap(), 10);
+        assert_eq!(blockchain.get_last_block_for_batch(7).wait().unwrap(), 10); // note: returns last batch for batches in the future
     }
 }
