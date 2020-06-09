@@ -196,8 +196,7 @@ impl Orderbook {
     ///
     /// # Panics
     ///
-    /// This method panics if the spread is invalid, that is not in the range
-    /// `(0.0, +∞)`.
+    /// This method panics if the spread is zero or negative.
     pub fn fill_transitive_orders(
         &mut self,
         pair: TokenPair,
