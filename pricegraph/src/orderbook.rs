@@ -357,7 +357,7 @@ impl Orderbook {
         // the specified token pair, but since we are finding transitive orders
         // in the opposite direction to match this order, calculate the maximum
         // price that still respects the provided limit price.
-        let max_price = 1.0 / (limit_price * FEE_FACTOR);
+        let max_price = (1.0 / limit_price) / FEE_FACTOR;
 
         let mut total_volume = 0.0;
         let mut predecessors = self.reduced_shortest_paths(sell);
