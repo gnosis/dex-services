@@ -167,18 +167,7 @@ impl StableXContract for StableXContractImpl {
     fn get_last_block_for_batch<'a>(&'a self, batch_id: u32) -> BoxFuture<'a, Result<u64>> {
         async move {
             let web3 = self.instance.raw_instance().web3();
-            let mut current_block = get_block(&web3, BlockNumber::Latest).await?;
-            let mut block_number = current_block
-                .number
-                .ok_or_else(|| {
-                    anyhow!("latest block {:?} has no block number", current_block.hash)
-                })?
-                .as_u64();
-            while batch_id < get_block_batch_id(&current_block) && block_number > 0 {
-                block_number -= 1;
-                current_block = get_block(&web3, block_number.into()).await?;
-            }
-            Ok(block_number)
+            Ok(web3.get_last_block_for_batch(batch_id).await?)
         }
         .boxed()
     }
