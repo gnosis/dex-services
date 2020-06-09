@@ -23,7 +23,7 @@ impl<T> Orderbook<T> {
         }
     }
 
-    pub async fn _get_reduced_orderbook(&self) -> pricegraph::Orderbook {
+    pub async fn get_reduced_orderbook(&self) -> pricegraph::Orderbook {
         self.reduced_pricegraph_orderbook.read().await.clone()
     }
 }
