@@ -346,14 +346,18 @@ impl Orderbook {
     ///
     /// Note that the limit price is expressed as an exchange limit price, i.e.
     /// with implicitely included fees.
-    pub fn fill_order_at_price(&mut self, pair: TokenPair, actual_limit_price: f64) -> f64 {
+    pub fn fill_order_at_price(&mut self, pair: TokenPair, limit_price: f64) -> f64 {
         if !self.is_token_pair_valid(pair) {
             return 0.0;
         }
         self.update_projection_graph();
 
         let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
-        let effective_limit_price = actual_limit_price / FEE_FACTOR;
+        // NOTE: The limit price is expressed in `buy_amount / sell_amount` for
+        // the specified token pair, but since we are finding transitive orders
+        // in the opposite direction to match this order, calculate the maximum
+        // price that still respects the provided limit price.
+        let max_price = 1.0 / (limit_price * FEE_FACTOR);
 
         let mut total_volume = 0.0;
         let mut predecessors = self.reduced_shortest_paths(sell);
@@ -366,7 +370,7 @@ impl Orderbook {
                     )
                 });
 
-            if transient_price > effective_limit_price {
+            if transient_price > max_price {
                 break;
             }
             // NOTE: Capacity is a sell amount, so convert to a buy amount.
@@ -1058,36 +1062,34 @@ mod tests {
             }
         };
 
-        assert!(!orderbook.is_overlapping());
-
         assert_approx_eq!(
             orderbook
                 .clone()
-                // NOTE: 1.001 for 1 is not enough to match any volume because
+                // NOTE: 1 for 1.001 is not enough to match any volume because
                 // fees need to be applied twice!
-                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 1.0 * FEE_FACTOR),
+                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR),
             0.0
         );
         assert_approx_eq!(
             orderbook
                 .clone()
-                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 1.0 * FEE_FACTOR.powi(2)),
+                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR.powi(2)),
             1_000_000.0
         );
         assert_approx_eq!(
             orderbook
                 .clone()
-                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 3.0),
+                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.3),
             2_000_000.0
         );
         assert_approx_eq!(
             orderbook
                 .clone()
-                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 4.0 * FEE_FACTOR.powi(2)),
+                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.25 / FEE_FACTOR.powi(2)),
             3_000_000.0
         );
         assert_approx_eq!(
-            orderbook.fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 10.0),
+            orderbook.fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.1),
             3_000_000.0
         );
     }

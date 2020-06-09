@@ -121,12 +121,47 @@ pub fn fill_market_order(c: &mut Criterion) {
     group.finish();
 }
 
+pub fn fill_order_at_price(c: &mut Criterion) {
+    let dai_weth = TokenPair { buy: 7, sell: 1 };
+    let prices = &[200.0, 190.0, 180.0, 150.0, 100.0];
+
+    let mut group = c.benchmark_group("Orderbook::fill_order_at_price");
+    for price in prices {
+        group.bench_with_input(BenchmarkId::from_parameter(price), price, |b, &price| {
+            let orderbook = read_default_orderbook();
+            b.iter_batched(
+                || orderbook.clone(),
+                |mut orderbook| orderbook.fill_order_at_price(black_box(dai_weth), price),
+                BatchSize::SmallInput,
+            )
+        });
+    }
+    group.finish();
+
+    let mut group = c.benchmark_group("Orderbook::fill_order_at_price(reduced)");
+    for price in prices {
+        group.bench_with_input(BenchmarkId::from_parameter(price), price, |b, &price| {
+            let reduced_orderbook = {
+                let mut orderbook = read_default_orderbook();
+                orderbook.reduce_overlapping_orders();
+                orderbook
+            };
+            b.iter_batched(
+                || reduced_orderbook.clone(),
+                |mut orderbook| orderbook.fill_order_at_price(black_box(dai_weth), price),
+                BatchSize::SmallInput,
+            )
+        });
+    }
+    group.finish();
+}
+
 criterion_group!(
     name = benches;
     config = Criterion::default().sample_size(20);
     targets =
         read, is_overlapping, reduce_overlapping_orders,
         reduce_overlapping_transitive_orderbook, fill_transitive_orders,
-        fill_market_order
+        fill_market_order, fill_order_at_price
 );
 criterion_main!(benches);
