@@ -377,6 +377,95 @@ async fn get_block(
         .ok_or_else(|| anyhow!("block {:?} is missing", block_number))
 }
 
+trait BatchIdGetter {
+    fn batch_id_from_block<'a>(&'a self, block_number: BlockNumber) -> BoxFuture<'a, Result<u32>>;
+
+    fn current_batch_id_and_block_number<'a>(&'a self) -> BoxFuture<'a, Result<(u32, u64)>>;
+}
+
+impl BatchIdGetter for Web3<DynTransport> {
+    fn batch_id_from_block<'a>(&'a self, block_number: BlockNumber) -> BoxFuture<'a, Result<u32>> {
+        async move {
+            let current_block = get_block(&self, block_number).await?;
+            Ok(get_block_batch_id(&current_block))
+        }
+        .boxed()
+    }
+
+    fn current_batch_id_and_block_number<'a>(&'a self) -> BoxFuture<'a, Result<(u32, u64)>> {
+        async move {
+            let current_block = get_block(&self, BlockNumber::Latest).await?;
+            let batch_id = get_block_batch_id(&current_block);
+            let block_number = current_block
+                .number
+                .ok_or_else(|| {
+                    anyhow!("latest block {:?} has no block number", current_block.hash)
+                })?
+                .as_u64();
+            Ok((batch_id, block_number))
+        }
+        .boxed()
+    }
+}
+
+trait IncrementalBinarySearch<T: BatchIdGetter = Self> {
+    fn get_last_block_for_batch<'a>(&'a self, batch_id: u32) -> BoxFuture<'a, Result<u64>>;
+}
+
+impl<T: Sync + BatchIdGetter> IncrementalBinarySearch for T {
+    fn get_last_block_for_batch<'a>(&'a self, batch_id: u32) -> BoxFuture<'a, Result<u64>> {
+        async move {
+            struct Bounds {
+                lower: u64,
+                upper: u64,
+            }
+            impl Bounds {
+                fn diff(&self) -> u64 {
+                    self.upper - self.lower
+                }
+                fn mid(&self) -> u64 {
+                    (self.upper + self.lower) / 2
+                }
+            }
+
+            let (current_batch_id, current_block_number) =
+                self.current_batch_id_and_block_number().await?;
+
+            // find lower bound for binary search
+            let mut step = 1_u64;
+            let mut bounds = Bounds {
+                lower: current_block_number,
+                upper: current_block_number,
+            };
+            let mut lower_batch_id = current_batch_id;
+            while batch_id < lower_batch_id {
+                bounds.upper = bounds.lower;
+                if step >= bounds.lower {
+                    bounds.lower = 0;
+                    break;
+                } else {
+                    bounds.lower -= step;
+                    lower_batch_id = self.batch_id_from_block(bounds.lower.into()).await?;
+                }
+                step *= 2;
+            }
+
+            // find last block for batch within bounds
+            while bounds.diff() > 1 {
+                let mid = bounds.mid();
+                let mid_batch_id = self.batch_id_from_block(mid.into()).await?;
+                if batch_id >= mid_batch_id {
+                    bounds.lower = mid;
+                } else {
+                    bounds.upper = mid;
+                }
+            }
+            Ok(bounds.lower)
+        }
+        .boxed()
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
