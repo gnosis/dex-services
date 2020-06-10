@@ -4,7 +4,6 @@
 use crate::{
     contracts,
     models::{ExecutedOrder, Solution},
-    util::FutureWaitExt,
 };
 use anyhow::{anyhow, Error, Result};
 use ethcontract::{
@@ -459,7 +458,7 @@ impl<T: Sync + BatchIdGetter> IncrementalBinarySearch for T {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::util::test_util::map_from_slice;
+    use crate::util::{test_util::map_from_slice, FutureWaitExt};
 
     #[test]
     fn generic_encode_execution_test() {
