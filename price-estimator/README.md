@@ -9,7 +9,11 @@ The service exposes the following endpoints:
 * `market` is of the form `<base_token_id>-<quote_token_id>`. The token ids the same as in the smart contract.
 * `sell_amount_in_quote_token` is a positive integer.
 
-Example Request: `markets/1-7/estimated-buy-amount/20000000000000000000`
+Url Query:
+* `atoms`: If set to `true` (for now this is the only implemented method) all amounts will be denominated in the smallest available unit (base quantity) of the token.
+* `hops`: TODO: document this once it has been implemented.
+
+Example Request: `markets/1-7/estimated-buy-amount/20000000000000000000?atoms=true`
 
 Example Response:
 
