@@ -1,3 +1,4 @@
+mod estimate_buy_amount;
 mod filter;
 mod orderbook;
 
@@ -9,13 +10,11 @@ use core::{
     util::FutureWaitExt as _,
 };
 use ethcontract::PrivateKey;
-use filter::TokenPair;
 use prometheus::Registry;
 use std::{num::ParseIntError, path::PathBuf, sync::Arc, thread, time::Duration};
 use structopt::StructOpt;
 use tokio::{runtime, time};
 use url::Url;
-use warp::{Filter, Rejection};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "price estimator", rename_all = "kebab")]
@@ -40,10 +39,15 @@ struct Options {
     #[structopt(
         long,
         env = "ORDERBOOK_UPDATE_INTERVAL",
-        default_value = "100",
+        default_value = "10",
         parse(try_from_str = duration_secs),
     )]
     orderbook_update_interval: Duration,
+
+    /// The safety margin to subtract from the estimated price, in order to make it more likely to
+    /// be matched.
+    #[structopt(long, env = "PRICE_ROUNDING_BUFFER", default_value = "0.001")]
+    price_rounding_buffer: f64,
 }
 
 type Orderbook = orderbook::Orderbook<EventBasedOrderbook>;
@@ -55,6 +59,9 @@ fn main() {
         "Starting price estimator with runtime options: {:#?}",
         options
     );
+    let price_rounding_buffer = options.price_rounding_buffer;
+    assert!(price_rounding_buffer.is_finite());
+    assert!(price_rounding_buffer >= 0.0 && price_rounding_buffer <= 1.0);
 
     let driver_http_metrics = setup_driver_metrics();
     let http_factory = HttpFactory::new(options.timeout, driver_http_metrics);
@@ -83,18 +90,7 @@ fn main() {
         options.orderbook_update_interval,
     ));
 
-    let filter = filter::estimated_buy_amount().and_then(
-        move |token_pair: TokenPair, sell_amount_in_quote| {
-            let orderbook = orderbook.clone();
-            async move {
-                // TODO: format the response the way the nodejs price estimator did.
-                let orderbook = orderbook.get_reduced_orderbook().await;
-                let result = estimate_price(token_pair, sell_amount_in_quote as f64, orderbook);
-                // The compiler cannot infer the error type because we never return an error.
-                Result::<_, Rejection>::Ok(format!("{}", result.unwrap_or_default()))
-            }
-        },
-    );
+    let filter = filter::estimated_buy_amount(orderbook, price_rounding_buffer);
     let serve_task = runtime.spawn(warp::serve(filter).run(([127, 0, 0, 1], 8080)));
 
     log::info!("Server ready.");
@@ -113,14 +109,6 @@ async fn update_orderbook_forever(orderbook: Arc<Orderbook>, update_interval: Du
             log::warn!("error updating orderbook: {:?}", err);
         }
     }
-}
-
-fn estimate_price(
-    token_pair: TokenPair,
-    sell_amount_in_quote: f64,
-    mut orderbook: pricegraph::Orderbook,
-) -> Option<f64> {
-    orderbook.fill_market_order(token_pair.into(), sell_amount_in_quote)
 }
 
 fn duration_secs(s: &str) -> Result<Duration, ParseIntError> {

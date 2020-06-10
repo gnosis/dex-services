@@ -1,18 +1,66 @@
+use crate::orderbook::Orderbook;
+use serde::Serialize;
+use serde_with::rust::display_fromstr;
 use std::num::ParseIntError;
-use warp::Filter;
+use std::sync::Arc;
+use warp::{Filter, Rejection};
 
 /// Validate a request of the form
 /// `/markets/<baseTokenId>-<quoteTokenId>/estimated-buy-amount/<sellAmountInQuoteToken>`
-/// and extract the url parameters.
-pub fn estimated_buy_amount(
-) -> impl Filter<Extract = (TokenPair, u128), Error = warp::Rejection> + Copy {
+/// and answer it.
+pub fn estimated_buy_amount<T: Send + Sync + 'static>(
+    orderbook: Arc<Orderbook<T>>,
+    price_rounding_buffer: f64,
+) -> impl Filter<Extract = (String,), Error = Rejection> + Clone {
+    estimated_buy_amount_filter().and_then({
+        move |token_pair, sell_amount_in_quote| {
+            let orderbook = orderbook.clone();
+            async move {
+                let orderbook = orderbook.get_reduced_orderbook().await;
+                let result = estimate_buy_amount(
+                    token_pair,
+                    sell_amount_in_quote,
+                    price_rounding_buffer,
+                    orderbook,
+                );
+                // The compiler cannot infer the error type because we never return an error.
+                Result::<_, Rejection>::Ok(result)
+            }
+        }
+    })
+}
+
+fn estimated_buy_amount_filter(
+) -> impl Filter<Extract = (TokenPair, u128), Error = Rejection> + Copy {
     warp::path!("markets" / TokenPair / "estimated-buy-amount" / u128)
+}
+
+fn estimate_buy_amount(
+    token_pair: TokenPair,
+    sell_amount_in_quote: u128,
+    price_rounding_buffer: f64,
+    orderbook: pricegraph::Orderbook,
+) -> String {
+    let buy_amount_in_base = crate::estimate_buy_amount::estimate_buy_amount(
+        token_pair,
+        sell_amount_in_quote as f64,
+        price_rounding_buffer,
+        orderbook,
+    )
+    .unwrap_or(0.0) as u128;
+    serde_json::to_string(&JsonResult {
+        base_token_id: token_pair.buy_token_id,
+        quote_token_id: token_pair.sell_token_id,
+        sell_amount_in_quote,
+        buy_amount_in_base,
+    })
+    .expect("serialization failed")
 }
 
 #[derive(Debug, Copy, Clone)]
 pub struct TokenPair {
-    buy_token_id: u16,
-    sell_token_id: u16,
+    pub buy_token_id: u16,
+    pub sell_token_id: u16,
 }
 
 impl std::convert::Into<pricegraph::TokenPair> for TokenPair {
@@ -54,16 +102,30 @@ impl std::str::FromStr for TokenPair {
     }
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsonResult {
+    #[serde(with = "display_fromstr")]
+    base_token_id: u16,
+    #[serde(with = "display_fromstr")]
+    quote_token_id: u16,
+    #[serde(with = "display_fromstr")]
+    buy_amount_in_base: u128,
+    #[serde(with = "display_fromstr")]
+    sell_amount_in_quote: u128,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use futures::future::FutureExt as _;
+    use serde_json::Value;
 
     #[test]
     fn estimated_buy_amount_ok() {
         let (token_pair, volume) = warp::test::request()
             .path("/markets/0-65535/estimated-buy-amount/1")
-            .filter(&estimated_buy_amount())
+            .filter(&estimated_buy_amount_filter())
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -80,7 +142,7 @@ mod tests {
         ] {
             assert!(warp::test::request()
                 .path(path)
-                .filter(&estimated_buy_amount())
+                .filter(&estimated_buy_amount_filter())
                 .now_or_never()
                 .unwrap()
                 .is_err());
@@ -97,7 +159,7 @@ mod tests {
         ] {
             assert!(warp::test::request()
                 .path(path)
-                .filter(&estimated_buy_amount())
+                .filter(&estimated_buy_amount_filter())
                 .now_or_never()
                 .unwrap()
                 .is_err());
@@ -105,14 +167,14 @@ mod tests {
     }
 
     #[test]
-    fn estimated_buy_amount_no_volume() {
+    fn estimated_buy_amount_no_sell_amount() {
         for path in &[
             "/markets/0-1/estimated-buy-amount/",
             "/markets/0-1/estimated-buy-amount/asdf",
         ] {
             assert!(warp::test::request()
                 .path(path)
-                .filter(&estimated_buy_amount())
+                .filter(&estimated_buy_amount_filter())
                 .now_or_never()
                 .unwrap()
                 .is_err());
@@ -128,10 +190,29 @@ mod tests {
         ] {
             assert!(warp::test::request()
                 .path(path)
-                .filter(&estimated_buy_amount())
+                .filter(&estimated_buy_amount_filter())
                 .now_or_never()
                 .unwrap()
                 .is_err());
         }
+    }
+
+    #[test]
+    fn serialization() {
+        let original = JsonResult {
+            base_token_id: 1,
+            quote_token_id: 2,
+            buy_amount_in_base: 3,
+            sell_amount_in_quote: 4,
+        };
+        let serialized = serde_json::to_string(&original).unwrap();
+        let json: Value = serde_json::from_str(&serialized).unwrap();
+        let expected = serde_json::json!({
+            "baseTokenId": "1",
+            "quoteTokenId": "2",
+            "buyAmountInBase": "3",
+            "sellAmountInQuote": "4",
+        });
+        assert_eq!(json, expected);
     }
 }
