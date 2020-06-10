@@ -455,7 +455,7 @@ async fn get_last_block_for_batch(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::util::{test_util::map_from_slice, FutureWaitExt};
+    use crate::util::test_util::map_from_slice;
 
     #[test]
     fn generic_encode_execution_test() {
@@ -547,46 +547,52 @@ pub mod tests {
 
         assert_eq!(
             get_last_block_for_batch(&mock_batch_id_getting, 1)
-                .wait()
+                .now_or_never()
+                .unwrap()
                 .unwrap(),
             2
         );
         assert_eq!(
             get_last_block_for_batch(&mock_batch_id_getting, 2)
-                .wait()
+                .now_or_never()
+                .unwrap()
                 .unwrap(),
             5
         );
         assert_eq!(
             get_last_block_for_batch(&mock_batch_id_getting, 3)
-                .wait()
+                .now_or_never()
+                .unwrap()
                 .unwrap(),
             7
         );
         assert_eq!(
             get_last_block_for_batch(&mock_batch_id_getting, 4)
-                .wait()
+                .now_or_never()
+                .unwrap()
                 .unwrap(),
             7
         ); // note: no error if batch does not exist
         assert_eq!(
             get_last_block_for_batch(&mock_batch_id_getting, 5)
-                .wait()
+                .now_or_never()
+                .unwrap()
                 .unwrap(),
             9
         );
         assert_eq!(
             get_last_block_for_batch(&mock_batch_id_getting, 6)
-                .wait()
+                .now_or_never()
+                .unwrap()
                 .unwrap(),
             10
         );
         assert_eq!(
             get_last_block_for_batch(&mock_batch_id_getting, 7)
-                .wait()
+                .now_or_never()
+                .unwrap()
                 .unwrap(),
             10
-        );
-        // note: returns last batch for batches in the future
+        ); // note: returns last batch for batches in the future
     }
 }
