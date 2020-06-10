@@ -167,7 +167,7 @@ impl StableXContract for StableXContractImpl {
     fn get_last_block_for_batch<'a>(&'a self, batch_id: u32) -> BoxFuture<'a, Result<u64>> {
         async move {
             let web3 = self.instance.raw_instance().web3();
-            get_last_block_for_batch(&web3, batch_id).await
+            search_last_block_for_batch(&web3, batch_id).await
         }
         .boxed()
     }
@@ -398,7 +398,7 @@ impl BatchIdGetting for Web3<DynTransport> {
     }
 }
 
-async fn get_last_block_for_batch(
+async fn search_last_block_for_batch(
     batch_id_getting: &impl BatchIdGetting,
     batch_id: u32,
 ) -> Result<u64> {
@@ -546,49 +546,49 @@ pub mod tests {
             });
 
         assert_eq!(
-            get_last_block_for_batch(&mock_batch_id_getting, 1)
+            search_last_block_for_batch(&mock_batch_id_getting, 1)
                 .now_or_never()
                 .unwrap()
                 .unwrap(),
             2
         );
         assert_eq!(
-            get_last_block_for_batch(&mock_batch_id_getting, 2)
+            search_last_block_for_batch(&mock_batch_id_getting, 2)
                 .now_or_never()
                 .unwrap()
                 .unwrap(),
             5
         );
         assert_eq!(
-            get_last_block_for_batch(&mock_batch_id_getting, 3)
+            search_last_block_for_batch(&mock_batch_id_getting, 3)
                 .now_or_never()
                 .unwrap()
                 .unwrap(),
             7
         );
         assert_eq!(
-            get_last_block_for_batch(&mock_batch_id_getting, 4)
+            search_last_block_for_batch(&mock_batch_id_getting, 4)
                 .now_or_never()
                 .unwrap()
                 .unwrap(),
             7
         ); // note: no error if batch does not exist
         assert_eq!(
-            get_last_block_for_batch(&mock_batch_id_getting, 5)
+            search_last_block_for_batch(&mock_batch_id_getting, 5)
                 .now_or_never()
                 .unwrap()
                 .unwrap(),
             9
         );
         assert_eq!(
-            get_last_block_for_batch(&mock_batch_id_getting, 6)
+            search_last_block_for_batch(&mock_batch_id_getting, 6)
                 .now_or_never()
                 .unwrap()
                 .unwrap(),
             10
         );
         assert_eq!(
-            get_last_block_for_batch(&mock_batch_id_getting, 7)
+            search_last_block_for_batch(&mock_batch_id_getting, 7)
                 .now_or_never()
                 .unwrap()
                 .unwrap(),
