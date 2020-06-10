@@ -150,4 +150,42 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn token_get_price() {
+        for (token, usd_price, expected) in &[
+            (
+                TokenBaseInfo::new("USDC", 6, 0, true),
+                0.99,
+                0.99 * 10f64.powi(30),
+            ),
+            (
+                TokenBaseInfo::new("DAI", 18, 0, true),
+                1.01,
+                1.01 * 10f64.powi(18),
+            ),
+            (TokenBaseInfo::new("FAKE", 32, 0, true), 1.0, 10f64.powi(4)),
+            (
+                TokenBaseInfo::new("SCAM", 42, 0, true),
+                10f64.powi(10),
+                10f64.powi(4),
+            ),
+        ] {
+            let owl_price = token.get_owl_price(*usd_price);
+            assert_eq!(owl_price, *expected as u128);
+        }
+    }
+
+    #[test]
+    fn token_get_price_without_rounding_error() {
+        assert_eq!(
+            TokenBaseInfo::new("OWL", 18, 0, true).get_owl_price(1.0),
+            1_000_000_000_000_000_000,
+        );
+    }
+
+    #[test]
+    fn weth_token_symbol_is_eth() {
+        assert_eq!(TokenBaseInfo::new("WETH", 18, 0, true).symbol(), "ETH");
+    }
 }

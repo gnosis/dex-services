@@ -108,7 +108,6 @@ impl PriceSource for ThreadedPriceSource {
 mod tests {
     use super::super::price_source::MockPriceSource;
     use super::*;
-    use crate::price_estimation::{data::TokenBaseInfo, TokenData};
     use std::sync::atomic;
     use std::time::Instant;
 

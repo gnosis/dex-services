@@ -306,30 +306,4 @@ mod tests {
             }
         );
     }
-
-    #[test]
-    fn token_get_price() {
-        for (token, usd_price, expected) in &[
-            (Token::new(4, "USDC", 6), 0.99, 0.99 * 10f64.powi(30)),
-            (Token::new(7, "DAI", 18), 1.01, 1.01 * 10f64.powi(18)),
-            (Token::new(42, "FAKE", 32), 1.0, 10f64.powi(4)),
-            (Token::new(99, "SCAM", 42), 10f64.powi(10), 10f64.powi(4)),
-        ] {
-            let owl_price = token.get_owl_price(*usd_price);
-            assert_eq!(owl_price, *expected as u128);
-        }
-    }
-
-    #[test]
-    fn token_get_price_without_rounding_error() {
-        assert_eq!(
-            Token::new(0, "OWL", 18).get_owl_price(1.0),
-            1_000_000_000_000_000_000,
-        );
-    }
-
-    #[test]
-    fn weth_token_symbol_is_eth() {
-        assert_eq!(Token::new(1, "WETH", 18).symbol(), "ETH");
-    }
 }
