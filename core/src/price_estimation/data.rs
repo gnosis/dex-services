@@ -1,9 +1,9 @@
 //! This module contains fallback token data that should be used by the price
 //! estimator when prices are not available.
 
-use super::Token;
 use crate::models::{TokenId, TokenInfo};
 use anyhow::{Context, Error, Result};
+use lazy_static::lazy_static;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -42,6 +42,30 @@ impl TokenBaseInfo {
             should_estimate_price,
         }
     }
+
+    /// Retrieves the token symbol for this token.
+    ///
+    /// Note that the token info alias is first checked if it is part of a
+    /// symbol override map, and if it is, then that value is used instead. This
+    /// allows ERC20 tokens like WETH to be treated as ETH, since exchanges
+    /// generally only track prices for the latter.
+    pub fn symbol(&self) -> &str {
+        lazy_static! {
+            static ref SYMBOL_OVERRIDES: HashMap<String, String> = hash_map! {
+                "WETH" => "ETH".to_owned(),
+            };
+        }
+
+        SYMBOL_OVERRIDES.get(&self.alias).unwrap_or(&self.alias)
+    }
+
+    /// Converts the prices from USD into the unit expected by the contract.
+    /// This price is relative to the OWL token which is considered pegged at
+    /// exactly 1 USD with 18 decimals.
+    pub fn get_owl_price(&self, usd_price: f64) -> u128 {
+        let pow = 36 - (self.decimals as i32);
+        (usd_price * 10f64.powi(pow)) as _
+    }
 }
 
 impl Into<TokenInfo> for TokenBaseInfo {
@@ -74,14 +98,11 @@ impl TokenData {
 
     /// Returns a vector with all the tokens that should be priced in the token
     /// data map.
-    pub fn all_tokens_to_estimate_price(&self) -> Vec<Token> {
+    pub fn all_tokens_to_estimate_price(&self) -> Vec<TokenId> {
         self.0
             .iter()
             .filter(|&(_, info)| info.should_estimate_price)
-            .map(|(&id, info)| Token {
-                id,
-                info: info.clone().into(),
-            })
+            .map(|(&id, _)| id)
             .collect()
     }
 }
@@ -128,5 +149,43 @@ mod tests {
                 TokenId(4) => TokenBaseInfo::new("USDC", 6, 1_000_000_000_000_000_000_000_000_000_000, true),
             })
         );
+    }
+
+    #[test]
+    fn token_get_price() {
+        for (token, usd_price, expected) in &[
+            (
+                TokenBaseInfo::new("USDC", 6, 0, true),
+                0.99,
+                0.99 * 10f64.powi(30),
+            ),
+            (
+                TokenBaseInfo::new("DAI", 18, 0, true),
+                1.01,
+                1.01 * 10f64.powi(18),
+            ),
+            (TokenBaseInfo::new("FAKE", 32, 0, true), 1.0, 10f64.powi(4)),
+            (
+                TokenBaseInfo::new("SCAM", 42, 0, true),
+                10f64.powi(10),
+                10f64.powi(4),
+            ),
+        ] {
+            let owl_price = token.get_owl_price(*usd_price);
+            assert_eq!(owl_price, *expected as u128);
+        }
+    }
+
+    #[test]
+    fn token_get_price_without_rounding_error() {
+        assert_eq!(
+            TokenBaseInfo::new("OWL", 18, 0, true).get_owl_price(1.0),
+            1_000_000_000_000_000_000,
+        );
+    }
+
+    #[test]
+    fn weth_token_symbol_is_eth() {
+        assert_eq!(TokenBaseInfo::new("WETH", 18, 0, true).symbol(), "ETH");
     }
 }

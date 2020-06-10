@@ -1,4 +1,4 @@
-use super::{PriceSource, Token};
+use super::PriceSource;
 use crate::models::TokenId;
 use anyhow::{anyhow, Result};
 use futures::future::{self, BoxFuture, FutureExt as _};
@@ -18,7 +18,7 @@ impl AveragePriceSource {
 impl PriceSource for AveragePriceSource {
     fn get_prices<'a>(
         &'a self,
-        tokens: &'a [Token],
+        tokens: &'a [TokenId],
     ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
         async move {
             let price_futures =

@@ -3,7 +3,7 @@
 mod api;
 
 use self::api::{Asset, AssetPair, KrakenApi, KrakenHttpApi};
-use super::{PriceSource, Token};
+use super::{PriceSource, TokenData};
 use crate::http::HttpFactory;
 use crate::models::TokenId;
 use anyhow::{anyhow, Context, Result};
@@ -15,14 +15,15 @@ pub struct KrakenClient<Api> {
     /// A Kraken API implementation. This allows for mocked Kraken APIs to be
     /// used for testing.
     api: Api,
+    tokens: TokenData,
 }
 
 impl KrakenClient<KrakenHttpApi> {
     /// Creates a new client instance using an HTTP API instance and the default
     /// Kraken API base URL.
-    pub fn new(http_factory: &HttpFactory) -> Result<Self> {
+    pub fn new(http_factory: &HttpFactory, tokens: TokenData) -> Result<Self> {
         let api = KrakenHttpApi::new(http_factory)?;
-        Ok(KrakenClient::with_api(api))
+        Ok(KrakenClient::with_api_and_tokens(api, tokens))
     }
 }
 
@@ -31,18 +32,15 @@ where
     Api: KrakenApi,
 {
     /// Create a new client instance from an API.
-    pub fn with_api(api: Api) -> Self {
-        KrakenClient { api }
+    pub fn with_api_and_tokens(api: Api, tokens: TokenData) -> Self {
+        KrakenClient { api, tokens }
     }
 
     // Clippy complains about this but the lifetimes are needed.
     /// Generates a mapping between Kraken asset pair identifiers and tokens
     /// that are used when computing the price map.
     #[allow(clippy::needless_lifetimes)]
-    async fn get_token_asset_pairs<'a>(
-        &self,
-        tokens: &'a [Token],
-    ) -> Result<HashMap<String, &'a Token>> {
+    async fn get_token_asset_pairs(&self, tokens: &[TokenId]) -> Result<HashMap<String, TokenId>> {
         // TODO(nlordell): If these calls start taking too long, we can consider
         //   caching this information somehow. The only thing that is
         //   complicated is determining when the cache needs to be invalidated
@@ -57,9 +55,9 @@ where
         let token_assets = tokens
             .iter()
             .flat_map(|token| {
-                let asset = find_asset(token.symbol(), &assets)?;
+                let asset = find_asset(&self.tokens.info(*token)?.symbol(), &assets)?;
                 let pair = find_asset_pair(asset, usd, &asset_pairs)?;
-                Some((pair.to_owned(), token))
+                Some((pair.to_owned(), *token))
             })
             .collect();
 
@@ -73,7 +71,7 @@ where
 {
     fn get_prices<'a>(
         &'a self,
-        tokens: &'a [Token],
+        tokens: &'a [TokenId],
     ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
         async move {
             let token_asset_pairs = self
@@ -88,9 +86,9 @@ where
                 .iter()
                 .flat_map(|(pair, info)| {
                     let token = token_asset_pairs.get(pair)?;
-                    let price = token.get_owl_price(info.p.last_24h());
+                    let price = self.tokens.info(*token)?.get_owl_price(info.p.last_24h());
 
-                    Some((token.id, price))
+                    Some((*token, price))
                 })
                 .collect();
 
@@ -131,17 +129,18 @@ fn find_asset_pair<'a>(
 mod tests {
     use super::api::{MockKrakenApi, TickerInfo};
     use super::*;
+    use crate::price_estimation::data::TokenBaseInfo;
     use crate::util::FutureWaitExt as _;
     use std::collections::HashSet;
     use std::time::Instant;
 
     #[test]
     fn get_token_prices() {
-        let tokens = vec![
-            Token::new(1, "ETH", 18),
-            Token::new(4, "USDC", 6),
-            Token::new(5, "PAX", 18),
-        ];
+        let tokens = hash_map! {
+            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0, true),
+            TokenId(4) => TokenBaseInfo::new("USDC", 6, 0, true),
+            TokenId(5) => TokenBaseInfo::new("PAX", 18, 0, true),
+        };
 
         let mut api = MockKrakenApi::new();
         api.expect_assets().returning(|| {
@@ -178,8 +177,12 @@ mod tests {
                 .boxed()
             });
 
-        let client = KrakenClient::with_api(api);
-        let prices = client.get_prices(&tokens).now_or_never().unwrap().unwrap();
+        let client = KrakenClient::with_api_and_tokens(api, tokens.into());
+        let prices = client
+            .get_prices(&[1.into(), 4.into(), 5.into()])
+            .now_or_never()
+            .unwrap()
+            .unwrap();
 
         assert_eq!(
             prices,
@@ -201,23 +204,24 @@ mod tests {
         // cargo test online_kraken_prices -- --ignored --nocapture
         // ```
 
-        let tokens = vec![
-            Token::new(1, "WETH", 18),
-            Token::new(2, "USDT", 6),
-            Token::new(3, "TUSD", 18),
-            Token::new(4, "USDC", 6),
-            Token::new(5, "PAX", 18),
-            Token::new(6, "GUSD", 2),
-            Token::new(7, "DAI", 18),
-            Token::new(8, "sETH", 18),
-            Token::new(9, "sUSD", 18),
-            Token::new(15, "SNX", 18),
-        ];
+        let tokens = hash_map! {
+            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0, true),
+            TokenId(2) => TokenBaseInfo::new("USDT", 6, 0, true),
+            TokenId(3) => TokenBaseInfo::new("TUSD", 18, 0, true),
+            TokenId(4) => TokenBaseInfo::new("USDC", 6, 0, true),
+            TokenId(5) => TokenBaseInfo::new("PAX", 18, 0, true),
+            TokenId(6) => TokenBaseInfo::new("GUSD", 2, 0, true),
+            TokenId(7) => TokenBaseInfo::new("DAI", 18, 0, true),
+            TokenId(8) => TokenBaseInfo::new("sETH", 18, 0, true),
+            TokenId(9) => TokenBaseInfo::new("sUSD", 18, 0, true),
+            TokenId(15) => TokenBaseInfo::new("SNX", 18, 0, true)
+        };
+        let token_ids: Vec<TokenId> = tokens.keys().copied().collect();
 
         let start_time = Instant::now();
         {
-            let client = KrakenClient::new(&HttpFactory::default()).unwrap();
-            let prices = client.get_prices(&tokens).wait().unwrap();
+            let client = KrakenClient::new(&HttpFactory::default(), tokens.into()).unwrap();
+            let prices = client.get_prices(&token_ids).wait().unwrap();
 
             println!("{:#?}", prices);
             assert!(

@@ -1,6 +1,6 @@
 mod api;
 
-use super::{PriceSource, Token};
+use super::{PriceSource, TokenData};
 use crate::http::HttpFactory;
 use crate::models::TokenId;
 use anyhow::{anyhow, Context, Result};
@@ -23,13 +23,14 @@ pub struct DexagClient<Api> {
     /// Lazily retrieved the first time it is needed when `get_prices` is
     /// called. We don't want to use the network in `new`.
     api_tokens: Mutex<Option<ApiTokens>>,
+    tokens: TokenData,
 }
 
 impl DexagClient<DexagHttpApi> {
     /// Create a DexagClient using DexagHttpApi as the api implementation.
-    pub fn new(http_factory: &HttpFactory) -> Result<Self> {
+    pub fn new(http_factory: &HttpFactory, tokens: TokenData) -> Result<Self> {
         let api = DexagHttpApi::new(http_factory)?;
-        Ok(Self::with_api(api))
+        Ok(Self::with_api_and_tokens(api, tokens))
     }
 }
 
@@ -37,10 +38,11 @@ impl<Api> DexagClient<Api>
 where
     Api: DexagApi,
 {
-    pub fn with_api(api: Api) -> Self {
+    pub fn with_api_and_tokens(api: Api, tokens: TokenData) -> Self {
         Self {
             api,
             api_tokens: Mutex::new(None),
+            tokens,
         }
     }
 
@@ -75,7 +77,7 @@ where
 {
     fn get_prices<'a>(
         &'a self,
-        tokens: &'a [Token],
+        tokens: &'a [TokenId],
     ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
         async move {
             if tokens.is_empty() {
@@ -95,11 +97,11 @@ where
                 }
             };
 
-            let (tokens_, futures): (Vec<_>, Vec<_>) = tokens
+            let (tokens_, futures): (Vec<TokenId>, Vec<_>) = tokens
                 .iter()
-                .filter_map(|token| -> Option<(&Token, BoxFuture<Result<f64>>)> {
+                .filter_map(|token| -> Option<(&TokenId, BoxFuture<Result<f64>>)> {
                     // api_tokens symbols are converted to uppercase to disambiguate
-                    let symbol = token.symbol().to_uppercase();
+                    let symbol = self.tokens.info(*token)?.symbol().to_uppercase();
                     if symbol == api_tokens.stable_coin.symbol {
                         Some((token, async { Ok(1.0) }.boxed()))
                     } else if let Some(api_token) = api_tokens.tokens.get(&symbol) {
@@ -121,10 +123,9 @@ where
                 .iter()
                 .zip(results.iter())
                 .filter_map(|(token, result)| match result {
-                    Ok(price) => Some((token, price)),
+                    Ok(price) => Some((*token, self.tokens.info(*token)?.get_owl_price(*price))),
                     Err(_) => None,
                 })
-                .map(|(token, price)| (token.id, token.get_owl_price(*price)))
                 .collect())
         }
         .boxed()
@@ -135,6 +136,7 @@ where
 mod tests {
     use super::api::MockDexagApi;
     use super::*;
+    use crate::price_estimation::data::TokenBaseInfo;
     use crate::util::FutureWaitExt as _;
     use lazy_static::lazy_static;
     use mockall::{predicate::*, Sequence};
@@ -145,8 +147,9 @@ mod tests {
         api.expect_get_token_list()
             .returning(|| async { Ok(Vec::new()) }.boxed());
 
-        assert!(DexagClient::with_api(api)
-            .get_prices(&[Token::new(6, "DAI", 18)])
+        let tokens = hash_map! { TokenId::from(6) => TokenBaseInfo::new("DAI", 18, 0, true)};
+        assert!(DexagClient::with_api_and_tokens(api, tokens.into())
+            .get_prices(&[6.into()])
             .now_or_never()
             .unwrap()
             .is_err());
@@ -154,7 +157,7 @@ mod tests {
 
     #[test]
     fn get_token_prices_initialization_fails_then_works() {
-        let tokens = [Token::new(1, "ETH", 18)];
+        let tokens = hash_map! { TokenId::from(1) => TokenBaseInfo::new("ETH", 18, 0, true)};
         let mut api = MockDexagApi::new();
         let mut seq = Sequence::new();
 
@@ -177,22 +180,38 @@ mod tests {
                 .boxed()
             });
 
-        let client = DexagClient::with_api(api);
-        assert!(client.get_prices(&tokens).now_or_never().unwrap().is_err());
-        assert!(client.get_prices(&tokens).now_or_never().unwrap().is_err());
-        assert!(client.get_prices(&tokens).now_or_never().unwrap().is_ok());
-        assert!(client.get_prices(&tokens).now_or_never().unwrap().is_ok());
+        let client = DexagClient::with_api_and_tokens(api, tokens.into());
+        assert!(client
+            .get_prices(&[1.into()])
+            .now_or_never()
+            .unwrap()
+            .is_err());
+        assert!(client
+            .get_prices(&[1.into()])
+            .now_or_never()
+            .unwrap()
+            .is_err());
+        assert!(client
+            .get_prices(&[1.into()])
+            .now_or_never()
+            .unwrap()
+            .is_ok());
+        assert!(client
+            .get_prices(&[1.into()])
+            .now_or_never()
+            .unwrap()
+            .is_ok());
     }
 
     #[test]
     fn get_token_prices() {
         let mut api = MockDexagApi::new();
 
-        let tokens = [
-            Token::new(6, "DAI", 18),
-            Token::new(1, "ETH", 18),
-            Token::new(4, "USDC", 6),
-        ];
+        let tokens = hash_map! {
+            TokenId(6) => TokenBaseInfo::new("DAI", 18, 0, true),
+            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0, true),
+            TokenId(4) => TokenBaseInfo::new("USDC", 6, 0, true),
+        };
 
         lazy_static! {
             static ref API_TOKENS: [super::api::Token; 3] = [
@@ -228,14 +247,18 @@ mod tests {
             )
             .returning(|_, _| async { Ok(1.2) }.boxed());
 
-        let client = DexagClient::with_api(api);
-        let prices = client.get_prices(&tokens).now_or_never().unwrap().unwrap();
+        let client = DexagClient::with_api_and_tokens(api, tokens.clone().into());
+        let prices = client
+            .get_prices(&[1.into(), 4.into(), 6.into()])
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         assert_eq!(
             prices,
             hash_map! {
-                TokenId(1) => tokens[1].get_owl_price(0.7) as u128,
-                TokenId(4) => tokens[2].get_owl_price(1.2) as u128,
-                TokenId(6) => tokens[0].get_owl_price(1.0) as u128,
+                TokenId(1) => tokens.get(&1.into()).unwrap().get_owl_price(0.7) as u128,
+                TokenId(4) => tokens.get(&4.into()).unwrap().get_owl_price(1.2) as u128,
+                TokenId(6) => tokens.get(&6.into()).unwrap().get_owl_price(1.0) as u128
             }
         );
     }
@@ -244,7 +267,10 @@ mod tests {
     fn get_token_prices_error() {
         let mut api = MockDexagApi::new();
 
-        let tokens = [Token::new(6, "DAI", 18), Token::new(1, "ETH", 18)];
+        let tokens = hash_map! {
+            TokenId(6) => TokenBaseInfo::new("DAI", 18, 0, true),
+            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0, true)
+        };
 
         lazy_static! {
             static ref API_TOKENS: [super::api::Token; 2] = [
@@ -272,13 +298,17 @@ mod tests {
             )
             .returning(|_, _| async { Err(anyhow!("")) }.boxed());
 
-        let client = DexagClient::with_api(api);
-        let prices = client.get_prices(&tokens).now_or_never().unwrap().unwrap();
+        let client = DexagClient::with_api_and_tokens(api, tokens.clone().into());
+        let prices = client
+            .get_prices(&[6.into(), 1.into()])
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         assert_eq!(
             prices,
             hash_map! {
                 // No TokenId(1) because we made the price error above.
-                TokenId(6) => tokens[0].get_owl_price(1.0) as u128,
+                TokenId(6) => tokens.get(&6.into()).unwrap().get_owl_price(1.0) as u128,
             }
         );
     }
@@ -287,11 +317,11 @@ mod tests {
     fn test_case_insensitivity() {
         let mut api = MockDexagApi::new();
 
-        let tokens = [
-            Token::new(6, "dai", 18),
-            Token::new(1, "ETH", 18),
-            Token::new(4, "sUSD", 6),
-        ];
+        let tokens = hash_map! {
+            TokenId(6) => TokenBaseInfo::new("dai", 18, 0, true),
+            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0, true),
+            TokenId(4) => TokenBaseInfo::new("sUSD", 6, 0, true)
+        };
 
         lazy_static! {
             static ref API_TOKENS: [super::api::Token; 3] = [
@@ -319,14 +349,18 @@ mod tests {
         api.expect_get_price()
             .returning(|_, _| async { Ok(1.0) }.boxed());
 
-        let client = DexagClient::with_api(api);
-        let prices = client.get_prices(&tokens).now_or_never().unwrap().unwrap();
+        let client = DexagClient::with_api_and_tokens(api, tokens.clone().into());
+        let prices = client
+            .get_prices(&[1.into(), 4.into(), 6.into()])
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         assert_eq!(
             prices,
             hash_map! {
-                TokenId(1) => tokens[1].get_owl_price(1.0) as u128,
-                TokenId(4) => tokens[2].get_owl_price(1.0) as u128,
-                TokenId(6) => tokens[0].get_owl_price(1.0) as u128,
+                TokenId(1) => tokens.get(&1.into()).unwrap().get_owl_price(1.0) as u128,
+                TokenId(4) => tokens.get(&4.into()).unwrap().get_owl_price(1.0) as u128,
+                TokenId(6) => tokens.get(&6.into()).unwrap().get_owl_price(1.0) as u128
             }
         );
     }
@@ -337,30 +371,31 @@ mod tests {
     fn online_dexag_client() {
         use std::time::Instant;
 
-        let tokens = &[
-            Token::new(1, "WETH", 18),
-            Token::new(2, "USDT", 6),
-            Token::new(3, "TUSD", 18),
-            Token::new(4, "USDC", 6),
-            Token::new(5, "PAX", 18),
-            Token::new(6, "GUSD", 2),
-            Token::new(7, "DAI", 18),
-            Token::new(8, "sETH", 18),
-            Token::new(9, "sUSD", 18),
-            Token::new(15, "SNX", 18),
-        ];
+        let tokens = hash_map! {
+            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0, true),
+            TokenId(2) => TokenBaseInfo::new("USDT", 6, 0, true),
+            TokenId(3) => TokenBaseInfo::new("TUSD", 18, 0, true),
+            TokenId(4) => TokenBaseInfo::new("USDC", 6, 0, true),
+            TokenId(5) => TokenBaseInfo::new("PAX", 18, 0, true),
+            TokenId(6) => TokenBaseInfo::new("GUSD", 2, 0, true),
+            TokenId(7) => TokenBaseInfo::new("DAI", 18, 0, true),
+            TokenId(8) => TokenBaseInfo::new("sETH", 18, 0, true),
+            TokenId(9) => TokenBaseInfo::new("sUSD", 18, 0, true),
+            TokenId(15) => TokenBaseInfo::new("SNX", 18, 0, true)
+        };
+        let ids: Vec<TokenId> = tokens.keys().copied().collect();
 
-        let client = DexagClient::new(&HttpFactory::default()).unwrap();
+        let client = DexagClient::new(&HttpFactory::default(), tokens.clone().into()).unwrap();
         let before = Instant::now();
-        let prices = client.get_prices(tokens).wait().unwrap();
+        let prices = client.get_prices(&ids).wait().unwrap();
         let after = Instant::now();
         println!(
             "Took {} seconds to get prices.",
             (after - before).as_secs_f64()
         );
 
-        for token in tokens {
-            if let Some(price) = prices.get(&token.id) {
+        for (id, token) in tokens {
+            if let Some(price) = prices.get(&id) {
                 println!("Token {} has OWL price of {}.", token.symbol(), price);
             } else {
                 println!("Token {} price could not be determined.", token.symbol());
