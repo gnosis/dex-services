@@ -366,6 +366,7 @@ async fn get_block(
         .ok_or_else(|| anyhow!("block {:?} is missing", block_number))
 }
 
+#[cfg_attr(test, automock)]
 trait BatchIdGetting {
     fn batch_id_from_block<'a>(&'a self, block_number: BlockNumber) -> BoxFuture<'a, Result<u32>>;
 
@@ -514,47 +515,78 @@ pub mod tests {
 
     #[test]
     fn incremental_binary_search() {
-        struct MockBlockchain {
-            batch_id: Vec<u32>,
-        }
-        impl BatchIdGetting for MockBlockchain {
-            fn batch_id_from_block<'a>(
-                &'a self,
-                block_number: BlockNumber,
-            ) -> BoxFuture<'a, Result<u32>> {
-                async move {
-                    Ok(self.batch_id[if let BlockNumber::Number(n) = block_number {
+        //                                   2        5     7     9  10
+        let batch_ids: Vec<u32> = vec![1, 1, 1, 2, 2, 2, 3, 3, 5, 5, 6];
+        let mut mock_batch_id_getting = MockBatchIdGetting::new();
+        mock_batch_id_getting
+            .expect_batch_id_from_block()
+            .withf(|block_number: &BlockNumber| match block_number {
+                BlockNumber::Number(_) => true,
+                _ => false,
+            })
+            .returning({
+                let batch_ids = batch_ids.clone();
+                move |block_number: BlockNumber| {
+                    let result = batch_ids[if let BlockNumber::Number(n) = block_number {
                         n
                     } else {
-                        panic!("Not necessary");
+                        panic!("Not implemented");
                     }
-                    .as_u64() as usize])
+                    .as_u64() as usize];
+                    async move { Ok(result) }.boxed()
                 }
-                .boxed()
-            }
+            });
 
-            fn current_batch_id_and_block_number<'a>(
-                &'a self,
-            ) -> BoxFuture<'a, Result<(u32, u64)>> {
-                async move {
-                    let latest_block = self.batch_id.len() as u64 - 1;
-                    Ok((self.batch_id[latest_block as usize], latest_block))
-                }
-                .boxed()
-            }
-        }
+        mock_batch_id_getting
+            .expect_current_batch_id_and_block_number()
+            .returning(move || {
+                let latest_block = batch_ids.len() as u64 - 1;
+                let latest_batch_id = batch_ids[latest_block as usize];
+                async move { Ok((latest_batch_id, latest_block)) }.boxed()
+            });
 
-        let blockchain = MockBlockchain {
-            //                   2        5     7     9  10
-            batch_id: vec![1, 1, 1, 2, 2, 2, 3, 3, 5, 5, 6],
-        };
-        assert_eq!(get_last_block_for_batch(&blockchain, 1).wait().unwrap(), 2);
-        assert_eq!(get_last_block_for_batch(&blockchain, 2).wait().unwrap(), 5);
-        assert_eq!(get_last_block_for_batch(&blockchain, 3).wait().unwrap(), 7);
-        assert_eq!(get_last_block_for_batch(&blockchain, 4).wait().unwrap(), 7); // note: no error if batch does not exist
-        assert_eq!(get_last_block_for_batch(&blockchain, 5).wait().unwrap(), 9);
-        assert_eq!(get_last_block_for_batch(&blockchain, 6).wait().unwrap(), 10);
-        assert_eq!(get_last_block_for_batch(&blockchain, 7).wait().unwrap(), 10);
+        assert_eq!(
+            get_last_block_for_batch(&mock_batch_id_getting, 1)
+                .wait()
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            get_last_block_for_batch(&mock_batch_id_getting, 2)
+                .wait()
+                .unwrap(),
+            5
+        );
+        assert_eq!(
+            get_last_block_for_batch(&mock_batch_id_getting, 3)
+                .wait()
+                .unwrap(),
+            7
+        );
+        assert_eq!(
+            get_last_block_for_batch(&mock_batch_id_getting, 4)
+                .wait()
+                .unwrap(),
+            7
+        ); // note: no error if batch does not exist
+        assert_eq!(
+            get_last_block_for_batch(&mock_batch_id_getting, 5)
+                .wait()
+                .unwrap(),
+            9
+        );
+        assert_eq!(
+            get_last_block_for_batch(&mock_batch_id_getting, 6)
+                .wait()
+                .unwrap(),
+            10
+        );
+        assert_eq!(
+            get_last_block_for_batch(&mock_batch_id_getting, 7)
+                .wait()
+                .unwrap(),
+            10
+        );
         // note: returns last batch for batches in the future
     }
 }
