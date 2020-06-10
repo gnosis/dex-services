@@ -2195,11 +2195,13 @@ dependencies = [
  "core",
  "env_logger",
  "ethcontract",
+ "futures 0.3.5",
  "log 0.4.8",
  "pricegraph",
  "primitive-types 0.7.2",
  "prometheus",
  "structopt",
+ "thiserror",
  "tokio 0.2.21",
  "url 2.1.1",
  "warp",
@@ -2788,9 +2790,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.53"
+version = "1.0.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "993948e75b189211a9b31a7528f950c6adc21f9720b6438ff80a7fa2f864cea2"
+checksum = "cfe4c1f6427dbc29329c6288e9e748b8b8e0ea42a0aab733e887fa72c22e965d"
 dependencies = [
  "itoa",
  "ryu",

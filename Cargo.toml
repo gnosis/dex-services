@@ -9,7 +9,9 @@ members = [
     "pricegraph/wasm",
 ]
 default-members = [
+    "core",
     "driver",
+    "price-estimator",
     "pricegraph",
 ]
 
