@@ -383,7 +383,7 @@ mod tests {
             TokenId(9) => TokenBaseInfo::new("sUSD", 18, 0, true),
             TokenId(15) => TokenBaseInfo::new("SNX", 18, 0, true)
         };
-        let ids: Vec<TokenId> = tokens.keys().map(|id| *id).collect();
+        let ids: Vec<TokenId> = tokens.keys().copied().collect();
 
         let client = DexagClient::new(&HttpFactory::default(), tokens.clone().into()).unwrap();
         let before = Instant::now();
