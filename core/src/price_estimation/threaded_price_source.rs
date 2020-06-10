@@ -1,4 +1,4 @@
-use super::{price_source::PriceSource, Token};
+use super::price_source::PriceSource;
 use crate::{models::TokenId, util::FutureWaitExt as _};
 use anyhow::Result;
 use futures::{
@@ -39,7 +39,7 @@ impl ThreadedPriceSource {
     /// The join handle represents the background thread. It can be used to
     /// verify that it exits when the created struct is dropped.
     pub fn new<T: 'static + PriceSource + Send>(
-        tokens: Vec<Token>,
+        tokens: Vec<TokenId>,
         price_source: T,
         update_interval: Duration,
     ) -> (Self, JoinHandle<()>) {
@@ -91,13 +91,13 @@ impl ThreadedPriceSource {
 impl PriceSource for ThreadedPriceSource {
     fn get_prices<'a>(
         &'a self,
-        tokens: &'a [Token],
+        tokens: &'a [TokenId],
     ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
         async move {
             let price_map = self.price_map.lock().await;
             Ok(tokens
                 .iter()
-                .filter_map(|token| Some((token.id, *price_map.get(&token.id)?)))
+                .filter_map(|token| Some((*token, *price_map.get(&token)?)))
                 .collect())
         }
         .boxed()
@@ -108,6 +108,7 @@ impl PriceSource for ThreadedPriceSource {
 mod tests {
     use super::super::price_source::MockPriceSource;
     use super::*;
+    use crate::price_estimation::{data::TokenBaseInfo, TokenData};
     use std::sync::atomic;
     use std::time::Instant;
 
@@ -115,10 +116,10 @@ mod tests {
     const THREAD_TIMEOUT: Duration = Duration::from_secs(1);
 
     lazy_static::lazy_static! {
-        static ref TOKENS: [Token; 3] = [
-            Token::new(0, "0", 0),
-            Token::new(1, "1", 1),
-            Token::new(2, "2", 2),
+        static ref TOKENS: [TokenId; 3] = [
+            TokenId(0),
+            TokenId(1),
+            TokenId(2),
         ];
     }
 
@@ -185,7 +186,7 @@ mod tests {
                 let start_returning_ = start_returning.clone();
                 async move {
                     Ok(if start_returning_.load(ORDERING) {
-                        hash_map! {TOKENS[0].id => 1}
+                        hash_map! {TOKENS[0] => 1}
                     } else {
                         hash_map! {}
                     })
@@ -205,7 +206,7 @@ mod tests {
         wait_for_thread_to_loop(&tps);
         assert_eq!(
             tps.get_prices(&TOKENS[..]).now_or_never().unwrap().unwrap(),
-            hash_map! {TOKENS[0].id => 1}
+            hash_map! {TOKENS[0] => 1}
         );
         join(tps, handle);
     }

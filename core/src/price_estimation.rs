@@ -54,8 +54,8 @@ impl PriceOracle {
             Box::new(NoopPriceSource)
         } else {
             let source = AveragePriceSource::new(vec![
-                Box::new(KrakenClient::new(http_factory)?),
-                Box::new(DexagClient::new(http_factory)?),
+                Box::new(KrakenClient::new(http_factory, tokens.clone())?),
+                Box::new(DexagClient::new(http_factory, tokens.clone())?),
             ]);
             let (source, _) = ThreadedPriceSource::new(
                 tokens.all_tokens_to_estimate_price(),
@@ -112,7 +112,7 @@ impl PriceOracle {
     }
 
     /// Gets price estimates for some tokens
-    async fn get_prices(&self, tokens: &[Token]) -> HashMap<TokenId, u128> {
+    async fn get_prices(&self, tokens: &[TokenId]) -> HashMap<TokenId, u128> {
         if tokens.is_empty() {
             return HashMap::new();
         }
@@ -131,7 +131,8 @@ impl PriceEstimating for PriceOracle {
     fn get_token_prices<'a>(&'a self, orders: &[Order]) -> BoxFuture<'a, Tokens> {
         let (tokens_to_price, unpriced_token_ids) = self.split_order_tokens(orders);
         async move {
-            let prices = self.get_prices(&tokens_to_price).await;
+            let token_ids: Vec<TokenId> = tokens_to_price.iter().map(|t| t.id).collect();
+            let prices = self.get_prices(&token_ids).await;
 
             tokens_to_price
                 .into_iter()
@@ -174,8 +175,8 @@ mod tests {
             .expect_get_prices()
             .withf(|tokens| {
                 let mut tokens = tokens.to_vec();
-                tokens.sort_unstable_by_key(|token| token.id);
-                tokens == [Token::new(1, "WETH", 18), Token::new(2, "USDT", 6)]
+                tokens.sort();
+                tokens == [TokenId(1), TokenId(2)]
             })
             .returning(|_| {
                 async {
@@ -279,7 +280,7 @@ mod tests {
         let mut source = MockPriceSource::new();
         source
             .expect_get_prices()
-            .withf(|tokens| tokens == [Token::new(2, "USDT", 6)])
+            .withf(|tokens| tokens == [2.into()])
             .returning(|_| {
                 async {
                     Ok(hash_map! {

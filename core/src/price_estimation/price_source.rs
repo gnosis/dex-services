@@ -65,7 +65,7 @@ pub trait PriceSource {
     /// error.
     fn get_prices<'a>(
         &'a self,
-        tokens: &'a [Token],
+        tokens: &'a [TokenId],
     ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>>;
 }
 
@@ -73,7 +73,7 @@ pub trait PriceSource {
 pub struct NoopPriceSource;
 
 impl PriceSource for NoopPriceSource {
-    fn get_prices(&self, _: &[Token]) -> BoxFuture<Result<HashMap<TokenId, u128>>> {
+    fn get_prices(&self, _: &[TokenId]) -> BoxFuture<Result<HashMap<TokenId, u128>>> {
         async { Ok(HashMap::new()) }.boxed()
     }
 }
@@ -88,12 +88,12 @@ mod mock {
     pub trait PriceSource_ {
         fn get_prices<'a>(
             &'a self,
-            tokens: &[Token],
+            tokens: &[TokenId],
         ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>>;
     }
 
     impl PriceSource for MockPriceSource_ {
-        fn get_prices(&self, tokens: &[Token]) -> BoxFuture<Result<HashMap<TokenId, u128>>> {
+        fn get_prices(&self, tokens: &[TokenId]) -> BoxFuture<Result<HashMap<TokenId, u128>>> {
             PriceSource_::get_prices(self, tokens)
         }
     }
