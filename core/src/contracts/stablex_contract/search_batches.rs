@@ -27,13 +27,13 @@ async fn get_block(
 }
 
 #[cfg_attr(test, automock)]
-pub trait BatchIdGetting {
+pub trait BatchIdRetrieving {
     fn batch_id_from_block<'a>(&'a self, block_number: BlockNumber) -> BoxFuture<'a, Result<u32>>;
 
     fn current_batch_id_and_block_number<'a>(&'a self) -> BoxFuture<'a, Result<(u32, u64)>>;
 }
 
-impl BatchIdGetting for Web3<DynTransport> {
+impl BatchIdRetrieving for Web3<DynTransport> {
     fn batch_id_from_block<'a>(&'a self, block_number: BlockNumber) -> BoxFuture<'a, Result<u32>> {
         async move {
             let current_block = get_block(&self, block_number).await?;
@@ -59,7 +59,7 @@ impl BatchIdGetting for Web3<DynTransport> {
 }
 
 pub async fn search_last_block_for_batch(
-    batch_id_getting: &impl BatchIdGetting,
+    batch_id_retrieving: &impl BatchIdRetrieving,
     batch_id: u32,
 ) -> Result<u64> {
     struct Bounds {
@@ -75,8 +75,9 @@ pub async fn search_last_block_for_batch(
         }
     }
 
-    let (current_batch_id, current_block_number) =
-        batch_id_getting.current_batch_id_and_block_number().await?;
+    let (current_batch_id, current_block_number) = batch_id_retrieving
+        .current_batch_id_and_block_number()
+        .await?;
 
     // find lower bound for binary search
     let mut step = 1_u64;
@@ -92,7 +93,7 @@ pub async fn search_last_block_for_batch(
             break;
         } else {
             bounds.lower -= step;
-            lower_batch_id = batch_id_getting
+            lower_batch_id = batch_id_retrieving
                 .batch_id_from_block(bounds.lower.into())
                 .await?;
         }
@@ -102,7 +103,7 @@ pub async fn search_last_block_for_batch(
     // find last block for batch within bounds
     while bounds.diff() > 1 {
         let mid = bounds.mid();
-        let mid_batch_id = batch_id_getting.batch_id_from_block(mid.into()).await?;
+        let mid_batch_id = batch_id_retrieving.batch_id_from_block(mid.into()).await?;
         if batch_id >= mid_batch_id {
             bounds.lower = mid;
         } else {
@@ -120,8 +121,8 @@ pub mod tests {
     fn incremental_binary_search() {
         //                                   2        5     7     9  10
         let batch_ids: Vec<u32> = vec![1, 1, 1, 2, 2, 2, 3, 3, 5, 5, 6];
-        let mut mock_batch_id_getting = MockBatchIdGetting::new();
-        mock_batch_id_getting
+        let mut mock_batch_id_retrieving = MockBatchIdRetrieving::new();
+        mock_batch_id_retrieving
             .expect_batch_id_from_block()
             .withf(|block_number: &BlockNumber| match block_number {
                 BlockNumber::Number(_) => true,
@@ -140,7 +141,7 @@ pub mod tests {
                 }
             });
 
-        mock_batch_id_getting
+        mock_batch_id_retrieving
             .expect_current_batch_id_and_block_number()
             .returning(move || {
                 let latest_block = batch_ids.len() as u64 - 1;
@@ -149,49 +150,49 @@ pub mod tests {
             });
 
         assert_eq!(
-            search_last_block_for_batch(&mock_batch_id_getting, 1)
+            search_last_block_for_batch(&mock_batch_id_retrieving, 1)
                 .now_or_never()
                 .unwrap()
                 .unwrap(),
             2
         );
         assert_eq!(
-            search_last_block_for_batch(&mock_batch_id_getting, 2)
+            search_last_block_for_batch(&mock_batch_id_retrieving, 2)
                 .now_or_never()
                 .unwrap()
                 .unwrap(),
             5
         );
         assert_eq!(
-            search_last_block_for_batch(&mock_batch_id_getting, 3)
+            search_last_block_for_batch(&mock_batch_id_retrieving, 3)
                 .now_or_never()
                 .unwrap()
                 .unwrap(),
             7
         );
         assert_eq!(
-            search_last_block_for_batch(&mock_batch_id_getting, 4)
+            search_last_block_for_batch(&mock_batch_id_retrieving, 4)
                 .now_or_never()
                 .unwrap()
                 .unwrap(),
             7
         ); // note: no error if batch does not exist
         assert_eq!(
-            search_last_block_for_batch(&mock_batch_id_getting, 5)
+            search_last_block_for_batch(&mock_batch_id_retrieving, 5)
                 .now_or_never()
                 .unwrap()
                 .unwrap(),
             9
         );
         assert_eq!(
-            search_last_block_for_batch(&mock_batch_id_getting, 6)
+            search_last_block_for_batch(&mock_batch_id_retrieving, 6)
                 .now_or_never()
                 .unwrap()
                 .unwrap(),
             10
         );
         assert_eq!(
-            search_last_block_for_batch(&mock_batch_id_getting, 7)
+            search_last_block_for_batch(&mock_batch_id_retrieving, 7)
                 .now_or_never()
                 .unwrap()
                 .unwrap(),
