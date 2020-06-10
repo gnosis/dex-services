@@ -167,7 +167,7 @@ impl StableXContract for StableXContractImpl {
     fn get_last_block_for_batch<'a>(&'a self, batch_id: u32) -> BoxFuture<'a, Result<u64>> {
         async move {
             let web3 = self.instance.raw_instance().web3();
-            Ok(web3.get_last_block_for_batch(batch_id).await?)
+            get_last_block_for_batch(&web3, batch_id).await
         }
         .boxed()
     }
@@ -366,13 +366,13 @@ async fn get_block(
         .ok_or_else(|| anyhow!("block {:?} is missing", block_number))
 }
 
-trait BatchIdGetter {
+trait BatchIdGetting {
     fn batch_id_from_block<'a>(&'a self, block_number: BlockNumber) -> BoxFuture<'a, Result<u32>>;
 
     fn current_batch_id_and_block_number<'a>(&'a self) -> BoxFuture<'a, Result<(u32, u64)>>;
 }
 
-impl BatchIdGetter for Web3<DynTransport> {
+impl BatchIdGetting for Web3<DynTransport> {
     fn batch_id_from_block<'a>(&'a self, block_number: BlockNumber) -> BoxFuture<'a, Result<u32>> {
         async move {
             let current_block = get_block(&self, block_number).await?;
@@ -397,62 +397,58 @@ impl BatchIdGetter for Web3<DynTransport> {
     }
 }
 
-trait IncrementalBinarySearch<T: BatchIdGetter = Self> {
-    fn get_last_block_for_batch<'a>(&'a self, batch_id: u32) -> BoxFuture<'a, Result<u64>>;
-}
-
-impl<T: Sync + BatchIdGetter> IncrementalBinarySearch for T {
-    fn get_last_block_for_batch<'a>(&'a self, batch_id: u32) -> BoxFuture<'a, Result<u64>> {
-        async move {
-            struct Bounds {
-                lower: u64,
-                upper: u64,
-            }
-            impl Bounds {
-                fn diff(&self) -> u64 {
-                    self.upper - self.lower
-                }
-                fn mid(&self) -> u64 {
-                    (self.upper + self.lower) / 2
-                }
-            }
-
-            let (current_batch_id, current_block_number) =
-                self.current_batch_id_and_block_number().await?;
-
-            // find lower bound for binary search
-            let mut step = 1_u64;
-            let mut bounds = Bounds {
-                lower: current_block_number,
-                upper: current_block_number,
-            };
-            let mut lower_batch_id = current_batch_id;
-            while batch_id < lower_batch_id {
-                bounds.upper = bounds.lower;
-                if step >= bounds.lower {
-                    bounds.lower = 0;
-                    break;
-                } else {
-                    bounds.lower -= step;
-                    lower_batch_id = self.batch_id_from_block(bounds.lower.into()).await?;
-                }
-                step *= 2;
-            }
-
-            // find last block for batch within bounds
-            while bounds.diff() > 1 {
-                let mid = bounds.mid();
-                let mid_batch_id = self.batch_id_from_block(mid.into()).await?;
-                if batch_id >= mid_batch_id {
-                    bounds.lower = mid;
-                } else {
-                    bounds.upper = mid;
-                }
-            }
-            Ok(bounds.lower)
-        }
-        .boxed()
+async fn get_last_block_for_batch(
+    batch_id_getting: &impl BatchIdGetting,
+    batch_id: u32,
+) -> Result<u64> {
+    struct Bounds {
+        lower: u64,
+        upper: u64,
     }
+    impl Bounds {
+        fn diff(&self) -> u64 {
+            self.upper - self.lower
+        }
+        fn mid(&self) -> u64 {
+            (self.upper + self.lower) / 2
+        }
+    }
+
+    let (current_batch_id, current_block_number) =
+        batch_id_getting.current_batch_id_and_block_number().await?;
+
+    // find lower bound for binary search
+    let mut step = 1_u64;
+    let mut bounds = Bounds {
+        lower: current_block_number,
+        upper: current_block_number,
+    };
+    let mut lower_batch_id = current_batch_id;
+    while batch_id < lower_batch_id {
+        bounds.upper = bounds.lower;
+        if step >= bounds.lower {
+            bounds.lower = 0;
+            break;
+        } else {
+            bounds.lower -= step;
+            lower_batch_id = batch_id_getting
+                .batch_id_from_block(bounds.lower.into())
+                .await?;
+        }
+        step *= 2;
+    }
+
+    // find last block for batch within bounds
+    while bounds.diff() > 1 {
+        let mid = bounds.mid();
+        let mid_batch_id = batch_id_getting.batch_id_from_block(mid.into()).await?;
+        if batch_id >= mid_batch_id {
+            bounds.lower = mid;
+        } else {
+            bounds.upper = mid;
+        }
+    }
+    Ok(bounds.lower)
 }
 
 #[cfg(test)]
@@ -521,7 +517,7 @@ pub mod tests {
         struct MockBlockchain {
             batch_id: Vec<u32>,
         }
-        impl BatchIdGetter for MockBlockchain {
+        impl BatchIdGetting for MockBlockchain {
             fn batch_id_from_block<'a>(
                 &'a self,
                 block_number: BlockNumber,
@@ -552,12 +548,13 @@ pub mod tests {
             //                   2        5     7     9  10
             batch_id: vec![1, 1, 1, 2, 2, 2, 3, 3, 5, 5, 6],
         };
-        assert_eq!(blockchain.get_last_block_for_batch(1).wait().unwrap(), 2);
-        assert_eq!(blockchain.get_last_block_for_batch(2).wait().unwrap(), 5);
-        assert_eq!(blockchain.get_last_block_for_batch(3).wait().unwrap(), 7);
-        assert_eq!(blockchain.get_last_block_for_batch(4).wait().unwrap(), 7); // note: no error if batch does not exist
-        assert_eq!(blockchain.get_last_block_for_batch(5).wait().unwrap(), 9);
-        assert_eq!(blockchain.get_last_block_for_batch(6).wait().unwrap(), 10);
-        assert_eq!(blockchain.get_last_block_for_batch(7).wait().unwrap(), 10); // note: returns last batch for batches in the future
+        assert_eq!(get_last_block_for_batch(&blockchain, 1).wait().unwrap(), 2);
+        assert_eq!(get_last_block_for_batch(&blockchain, 2).wait().unwrap(), 5);
+        assert_eq!(get_last_block_for_batch(&blockchain, 3).wait().unwrap(), 7);
+        assert_eq!(get_last_block_for_batch(&blockchain, 4).wait().unwrap(), 7); // note: no error if batch does not exist
+        assert_eq!(get_last_block_for_batch(&blockchain, 5).wait().unwrap(), 9);
+        assert_eq!(get_last_block_for_batch(&blockchain, 6).wait().unwrap(), 10);
+        assert_eq!(get_last_block_for_batch(&blockchain, 7).wait().unwrap(), 10);
+        // note: returns last batch for batches in the future
     }
 }
