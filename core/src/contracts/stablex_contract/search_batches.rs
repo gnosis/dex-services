@@ -26,6 +26,19 @@ async fn get_block(
         .ok_or_else(|| anyhow!("block {:?} is missing", block_number))
 }
 
+struct Bounds {
+    lower: u64,
+    upper: u64,
+}
+impl Bounds {
+    fn diff(&self) -> u64 {
+        self.upper - self.lower
+    }
+    fn mid(&self) -> u64 {
+        (self.upper + self.lower) / 2
+    }
+}
+
 #[cfg_attr(test, automock)]
 pub trait BatchIdRetrieving {
     fn batch_id_from_block<'a>(&'a self, block_number: BlockNumber) -> BoxFuture<'a, Result<u32>>;
@@ -62,19 +75,6 @@ pub async fn search_last_block_for_batch(
     batch_id_retrieving: &impl BatchIdRetrieving,
     batch_id: u32,
 ) -> Result<u64> {
-    struct Bounds {
-        lower: u64,
-        upper: u64,
-    }
-    impl Bounds {
-        fn diff(&self) -> u64 {
-            self.upper - self.lower
-        }
-        fn mid(&self) -> u64 {
-            (self.upper + self.lower) / 2
-        }
-    }
-
     let (current_batch_id, current_block_number) = batch_id_retrieving
         .current_batch_id_and_block_number()
         .await?;
