@@ -1,4 +1,4 @@
-use crate::filter::TokenPair;
+use crate::models::TokenPair;
 use pricegraph::Orderbook;
 
 pub fn estimate_buy_amount(
