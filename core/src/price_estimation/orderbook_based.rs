@@ -6,15 +6,16 @@ use futures::future::{BoxFuture, FutureExt as _};
 use pricegraph::{Orderbook, TokenPair};
 use primitive_types::U256;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::SystemTime;
 
-pub struct PricegraphEstimator<'a> {
-    orderbook_reader: &'a (dyn StableXOrderBookReading),
+pub struct PricegraphEstimator {
+    orderbook_reader: Arc<dyn StableXOrderBookReading>,
 }
 
 const ONE_OWL: f64 = 1_000_000_000_000_000_000.0;
 
-impl<'a> PriceSource for PricegraphEstimator<'a> {
+impl PriceSource for PricegraphEstimator {
     fn get_prices<'b>(
         &'b self,
         tokens: &'b [TokenId],
@@ -23,14 +24,13 @@ impl<'a> PriceSource for PricegraphEstimator<'a> {
             let batch = BatchId::currently_being_solved(SystemTime::now())?;
             let (account_state, orders) =
                 self.orderbook_reader.get_auction_data(batch.into()).await?;
-            let mut orderbook = Orderbook::from_elements(orders.iter().map(|order| {
+            let orderbook = Orderbook::from_elements(orders.iter().map(|order| {
                 order.to_element(U256(
                     account_state
                         .read_balance(order.sell_token, order.account_id)
                         .0,
                 ))
             }));
-            orderbook.reduce_overlapping_orders();
             Ok(self.estimate_prices(tokens, orderbook))
         }
         .boxed()
@@ -50,9 +50,9 @@ impl Pricegraph for Orderbook {
     }
 }
 
-impl<'a> PricegraphEstimator<'a> {
+impl PricegraphEstimator {
     #[allow(dead_code)]
-    pub fn new(orderbook_reader: &'a (dyn StableXOrderBookReading)) -> Self {
+    pub fn new(orderbook_reader: Arc<dyn StableXOrderBookReading>) -> Self {
         Self { orderbook_reader }
     }
 
@@ -64,17 +64,20 @@ impl<'a> PricegraphEstimator<'a> {
         tokens
             .iter()
             .flat_map(|token| {
-                let price = if token == &TokenId::reference() {
+                let price_in_token = if token == &TokenId::reference() {
                     1.0
                 } else {
-                    // Estimate price by selling 1 unit of the reference token for each token to estimate.
+                    // Estimate price by selling 1 unit of the reference token for each token.
+                    // We sell rather than buy the reference token because volume is denominated
+                    // in the sell token, for which we know the number of decimals.
                     let pair = TokenPair {
                         buy: token.0,
                         sell: TokenId::reference().0,
                     };
                     pricegraph.estimate_price(pair, ONE_OWL)?
                 };
-                Some((*token, (price * ONE_OWL) as u128))
+                let price_in_reference = 1.0 / price_in_token;
+                Some((*token, (ONE_OWL * price_in_reference) as u128))
             })
             .collect()
     }
@@ -98,13 +101,13 @@ mod tests {
             .with(eq(TokenPair { buy: 2, sell: 0 }), eq(ONE_OWL))
             .return_const(0.5);
 
-        let reader = MockStableXOrderBookReading::new();
-        let estimator = PricegraphEstimator::new(&reader);
+        let reader = Arc::new(MockStableXOrderBookReading::new());
+        let estimator = PricegraphEstimator::new(reader);
         assert_eq!(
             estimator.estimate_prices(&[1.into(), 2.into()], pricegraph),
             hash_map! {
-                TokenId(1) => 2_000_000_000_000_000_000,
-                TokenId(2) => 500_000_000_000_000_000,
+                TokenId(1) => 500_000_000_000_000_000,
+                TokenId(2) => 2_000_000_000_000_000_000,
             }
         );
     }
@@ -115,14 +118,14 @@ mod tests {
         pricegraph
             .expect_estimate_price()
             .with(eq(TokenPair { buy: 1, sell: 0 }), eq(ONE_OWL))
-            .return_const(2.0);
+            .return_const(0.5);
         pricegraph
             .expect_estimate_price()
             .with(eq(TokenPair { buy: 2, sell: 0 }), eq(ONE_OWL))
             .return_const(None);
 
-        let reader = MockStableXOrderBookReading::new();
-        let estimator = PricegraphEstimator::new(&reader);
+        let reader = Arc::new(MockStableXOrderBookReading::new());
+        let estimator = PricegraphEstimator::new(reader);
         assert_eq!(
             estimator.estimate_prices(&[1.into(), 2.into()], pricegraph),
             hash_map! {
@@ -134,8 +137,8 @@ mod tests {
     #[test]
     fn returns_one_owl_for_estimating_owl() {
         let pricegraph = MockPricegraph::new();
-        let reader = MockStableXOrderBookReading::new();
-        let estimator = PricegraphEstimator::new(&reader);
+        let reader = Arc::new(MockStableXOrderBookReading::new());
+        let estimator = PricegraphEstimator::new(reader);
         assert_eq!(
             estimator.estimate_prices(&[0.into()], pricegraph),
             hash_map! {

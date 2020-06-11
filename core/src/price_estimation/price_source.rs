@@ -18,9 +18,9 @@ pub struct Token {
 /// such as an exchange.
 pub trait PriceSource {
     /// Retrieve current prices relative to the OWL token for the specified
-    /// tokens. The OWL token is pegged at 1 USD with 18 decimals. Returns a
-    /// sparse price array as being unable to find a price is not considered an
-    /// error.
+    /// tokens (price denominated in OWL). The OWL token is pegged at 1 USD
+    /// with 18 decimals. Returns a sparse price array as being unable to
+    /// find a price is not considered an error.
     fn get_prices<'a>(
         &'a self,
         tokens: &'a [TokenId],
