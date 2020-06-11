@@ -17,6 +17,7 @@ pub fn estimated_buy_amount<T: Send + Sync + 'static>(
         .and(warp::any().map(move || price_rounding_buffer))
         .and(warp::any().map(move || orderbook.clone()))
         .and_then(estimate_buy_amount)
+        .with(warp::log("price_estimator::api::estimate_buy_amount"))
 }
 
 fn estimated_buy_amount_filter(
