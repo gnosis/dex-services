@@ -131,13 +131,14 @@ pub mod tests {
             .returning({
                 let batch_ids = batch_ids.clone();
                 move |block_number: BlockNumber| {
-                    let result = batch_ids[if let BlockNumber::Number(n) = block_number {
+                    let index = if let BlockNumber::Number(n) = block_number {
                         n
                     } else {
                         panic!("Not implemented");
                     }
-                    .as_u64() as usize];
-                    async move { Ok(result) }.boxed()
+                    .as_u64() as usize;
+                    let batch_id = batch_ids[index];
+                    async move { Ok(batch_id) }.boxed()
                 }
             });
 
