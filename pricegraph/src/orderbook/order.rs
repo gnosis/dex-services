@@ -195,10 +195,7 @@ fn is_unbounded(element: &Element) -> bool {
     element.price.numerator == UNBOUNDED_AMOUNT || element.price.denominator == UNBOUNDED_AMOUNT
 }
 
-/// The fee factor that is applied to each order's buy price.
-pub const FEE_FACTOR: f64 = 1.0 / 0.999;
-
 /// Calculates an effective price as a `f64` from a price fraction.
 fn as_effective_sell_price(price: &Price) -> f64 {
-    FEE_FACTOR * (price.numerator as f64) / (price.denominator as f64)
+    crate::FEE_FACTOR * (price.numerator as f64) / (price.denominator as f64)
 }

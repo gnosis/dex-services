@@ -10,6 +10,9 @@ mod data;
 pub use encoding::*;
 pub use orderbook::Orderbook;
 
+/// The fee factor that is applied to each order's buy price.
+pub const FEE_FACTOR: f64 = 1.0 / 0.999;
+
 /// A struct representing a transitive orderbook for a base and quote token.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TransitiveOrderbook {
@@ -36,8 +39,34 @@ pub struct TransitiveOrderbook {
 /// Additionally, a transitive order over a single order is equal to that order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TransitiveOrder {
+    price: f64,
+    capacity: f64,
+}
+
+impl TransitiveOrder {
+    /// ?
+    pub fn price(&self) -> f64 {
+        self.price
+    }
+
+    /// ?
+    pub fn capacity(&self) -> f64 {
+        self.capacity
+    }
+
+    // NOTE: We have the capacity and price for this transitive order which
+    // needs to be converted to a buy and sell amount. We have:
+    // - `price = FEE_FACTOR * buy_amount / sell_amount`
+    // - `capacity = sell_amount * price`
+    // Solving for `buy_amount` and `sell_amount`, we get:
+
     /// The effective buy amount for this transient order.
-    pub buy: f64,
+    pub fn buy(&self) -> f64 {
+        self.capacity / FEE_FACTOR
+    }
+
     /// The effective sell amount for this transient order.
-    pub sell: f64,
+    pub fn sell(&self) -> f64 {
+        self.capacity / self.price
+    }
 }
