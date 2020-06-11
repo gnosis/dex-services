@@ -40,12 +40,13 @@ impl<'a> PriceSource for PricegraphEstimator<'a> {
 // Private trait to facilitate testing this module
 #[cfg_attr(test, mockall::automock)]
 trait Pricegraph {
-    fn estimate_price(&mut self, pair: TokenPair, volume: f64) -> Option<f64>;
+    fn estimate_price(&self, pair: TokenPair, volume: f64) -> Option<f64>;
 }
 
 impl Pricegraph for Orderbook {
-    fn estimate_price(&mut self, pair: TokenPair, volume: f64) -> Option<f64> {
-        self.fill_market_order(pair, volume)
+    fn estimate_price(&self, pair: TokenPair, volume: f64) -> Option<f64> {
+        // Clone the pricegraph so that each estimation is independent of one another.
+        self.clone().fill_market_order(pair, volume)
     }
 }
 
@@ -58,7 +59,7 @@ impl<'a> PricegraphEstimator<'a> {
     fn estimate_prices(
         &self,
         tokens: &[TokenId],
-        mut pricegraph: impl Pricegraph,
+        pricegraph: impl Pricegraph,
     ) -> HashMap<TokenId, u128> {
         tokens
             .iter()
@@ -66,6 +67,7 @@ impl<'a> PricegraphEstimator<'a> {
                 let price = if token == &TokenId::reference() {
                     1.0
                 } else {
+                    // Estimate price by selling 1 unit of the reference token for each token to estimate.
                     let pair = TokenPair {
                         buy: token.0,
                         sell: TokenId::reference().0,
