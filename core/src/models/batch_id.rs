@@ -52,25 +52,83 @@ impl fmt::Display for BatchId {
 mod tests {
     use super::*;
     #[test]
-    fn batch_id_current() {
+    fn current_batch_at_unix_epoch_is_zero() {
         let start_time = SystemTime::UNIX_EPOCH;
         let batch_id = BatchId::current(start_time).unwrap();
         assert_eq!(batch_id.0, 0);
-        assert_eq!(batch_id.order_collection_start_time(), start_time);
+    }
 
+    #[test]
+    fn current_batch_at_unix_epoch_has_next_batch_one() {
+        let start_time = SystemTime::UNIX_EPOCH;
+        let batch_id = BatchId::current(start_time).unwrap();
+        assert_eq!(batch_id.next().0, 1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn current_batch_at_unix_epoch_panics_on_previous() {
+        let start_time = SystemTime::UNIX_EPOCH;
+        BatchId::current(start_time).unwrap().prev();
+    }
+
+    #[test]
+    fn current_batch_at_unix_epoch_plus_300_has_previous_batch_zero() {
+        let batch_id = BatchId::current(SystemTime::UNIX_EPOCH + Duration::from_secs(300)).unwrap();
+        assert_eq!(batch_id.prev().0, 0);
+    }
+
+    #[test]
+    #[should_panic]
+    #[allow(unused_must_use)]
+    fn currently_being_solved_at_unix_epoch_panics() {
+        let start_time = SystemTime::UNIX_EPOCH;
+        BatchId::currently_being_solved(start_time);
+    }
+
+    #[test]
+    fn currently_being_solved_batch_at_unix_epoch_plus_300_is_zero() {
+        let batch_id =
+            BatchId::currently_being_solved(SystemTime::UNIX_EPOCH + Duration::from_secs(300))
+                .unwrap();
+        assert_eq!(batch_id.0, 0);
+    }
+
+    #[test]
+    fn batch_id_increases_every_300_seconds() {
         let start_time = SystemTime::UNIX_EPOCH;
         let batch_id = BatchId::current(start_time + Duration::from_secs(299)).unwrap();
         assert_eq!(batch_id.0, 0);
-        assert_eq!(batch_id.order_collection_start_time(), start_time);
+        let batch_id = BatchId::current(start_time + Duration::from_secs(300)).unwrap();
+        assert_eq!(batch_id.0, 1);
 
-        let start_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
+        let batch_id = BatchId::current(start_time + Duration::from_secs(599)).unwrap();
+        assert_eq!(batch_id.0, 1);
+    }
+
+    #[test]
+    fn order_collection_start_time_is_first_second_of_batch() {
+        let start_time = SystemTime::UNIX_EPOCH;
         let batch_id = BatchId::current(start_time).unwrap();
-        assert_eq!(batch_id.0, 1);
         assert_eq!(batch_id.order_collection_start_time(), start_time);
 
-        let start_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
         let batch_id = BatchId::current(start_time + Duration::from_secs(299)).unwrap();
-        assert_eq!(batch_id.0, 1);
         assert_eq!(batch_id.order_collection_start_time(), start_time);
+    }
+
+    #[test]
+    fn solve_start_time_is_order_collection_start_time() {
+        let start_time = SystemTime::UNIX_EPOCH;
+        let batch_id = BatchId::current(start_time).unwrap();
+        assert_eq!(
+            batch_id.solve_start_time(),
+            batch_id.next().order_collection_start_time()
+        );
+
+        let batch_id = BatchId::current(start_time + Duration::from_secs(299)).unwrap();
+        assert_eq!(
+            batch_id.solve_start_time(),
+            batch_id.next().order_collection_start_time()
+        );
     }
 }
