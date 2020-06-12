@@ -382,7 +382,6 @@ dependencies = [
  "mockall",
  "num",
  "pricegraph",
- "primitive-types 0.7.2",
  "prometheus",
  "rouille",
  "rustc-hex",
@@ -2222,7 +2221,7 @@ dependencies = [
  "data-encoding",
  "lazy_static",
  "petgraph",
- "primitive-types 0.7.2",
+ "primitive-types 0.6.2",
  "thiserror",
 ]
 

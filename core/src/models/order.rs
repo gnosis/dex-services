@@ -1,6 +1,6 @@
 use crate::util::CeiledDiv;
 use ethcontract::{Address, U256};
-use pricegraph::{Element, Price, TokenPair, UserId, Validity};
+use pricegraph::{Element, Price, TokenPair, Validity};
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct Order {
@@ -42,11 +42,9 @@ impl Order {
         )
     }
 
-    pub fn to_element(&self, balance: primitive_types::U256) -> Element {
-        // Some conversions are needed because the primitive types crate is on different versions in
-        // core and pricegraph.
+    pub fn to_element(&self, balance: U256) -> Element {
         Element {
-            user: UserId::from_slice(self.account_id.as_fixed_bytes()),
+            user: self.account_id,
             balance,
             pair: TokenPair {
                 buy: self.buy_token,

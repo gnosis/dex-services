@@ -11,7 +11,7 @@ harness = false
 [dependencies]
 arbitrary = { version = "0.4", optional = true, features = ["derive"] }
 petgraph = "0.5"
-primitive-types = "0.7"
+primitive-types = "0.6.2"
 thiserror = "1"
 
 [dev-dependencies]
