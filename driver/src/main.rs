@@ -196,7 +196,7 @@ fn main() {
 
     // Set up shared HTTP client and HTTP services.
     let http_factory = HttpFactory::new(options.http_timeout, http_metrics);
-    let (web3, gas_station, price_oracle) = setup_http_services(http_factory, &options);
+    let (web3, gas_station) = setup_http_services(&http_factory, &options);
 
     // Set up connection to exchange contract
     let contract = Arc::new(
@@ -206,15 +206,6 @@ fn main() {
     );
     info!("Using contract at {:?}", contract.address());
     info!("Using account {:?}", contract.account());
-
-    // Setup price.
-    let price_finder = price_finding::create_price_finder(
-        Some(Fee::default()),
-        options.solver_type,
-        price_oracle,
-        options.min_avg_fee_per_order,
-        options.solver_internal_optimizer,
-    );
 
     // Create the orderbook reader.
     let primary_orderbook = options.primary_orderbook.create(
@@ -233,19 +224,36 @@ fn main() {
 
     // NOTE: Keep the shadowed orderbook around so it doesn't get dropped and we
     //   can pass a reference to the filtered orderbook reader.
-    let orderbook: Box<dyn StableXOrderBookReading> = if options.use_shadowed_orderbook {
+    let orderbook: Arc<dyn StableXOrderBookReading> = if options.use_shadowed_orderbook {
         let shadow_orderbook = Box::new(OnchainFilteredOrderBookReader::new(
             contract.clone(),
             options.auction_data_page_size,
             &options.orderbook_filter,
         ));
-        Box::new(ShadowedOrderbookReader::new(
+        Arc::new(ShadowedOrderbookReader::new(
             filtered_orderbook,
             shadow_orderbook,
         ))
     } else {
-        filtered_orderbook
+        Arc::new(*filtered_orderbook)
     };
+
+    let price_oracle = PriceOracle::new(
+        &http_factory,
+        orderbook.clone(),
+        options.token_data.clone(),
+        options.price_source_update_interval,
+    )
+    .unwrap();
+
+    // Setup price.
+    let price_finder = price_finding::create_price_finder(
+        Some(Fee::default()),
+        options.solver_type,
+        price_oracle,
+        options.min_avg_fee_per_order,
+        options.solver_internal_optimizer,
+    );
 
     // Set up solution submitter.
     let solution_submitter = StableXSolutionSubmitter::new(&*contract, &gas_station);
@@ -284,23 +292,12 @@ fn setup_metrics() -> (StableXMetrics, HttpMetrics) {
 }
 
 fn setup_http_services(
-    http_factory: HttpFactory,
+    http_factory: &HttpFactory,
     options: &Options,
-) -> (Web3, GnosisSafeGasStation, PriceOracle) {
-    let web3 = web3_provider(
-        &http_factory,
-        options.node_url.as_str(),
-        options.rpc_timeout,
-    )
-    .unwrap();
+) -> (Web3, GnosisSafeGasStation) {
+    let web3 = web3_provider(http_factory, options.node_url.as_str(), options.rpc_timeout).unwrap();
     let gas_station = GnosisSafeGasStation::new(&http_factory, gas_station::DEFAULT_URI).unwrap();
-    let price_oracle = PriceOracle::new(
-        &http_factory,
-        options.token_data.clone(),
-        options.price_source_update_interval,
-    )
-    .unwrap();
-    (web3, gas_station, price_oracle)
+    (web3, gas_station)
 }
 
 fn duration_millis(s: &str) -> Result<Duration, ParseIntError> {
