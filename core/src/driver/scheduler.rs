@@ -9,9 +9,6 @@ use anyhow::{anyhow, Error, Result};
 use std::str::FromStr;
 use std::time::Duration;
 
-/// The total time in a batch.
-const BATCH_DURATION: Duration = Duration::from_secs(300);
-
 /// The time in a batch where a solution may be submitted.
 const SOLVING_WINDOW: Duration = Duration::from_secs(240);
 

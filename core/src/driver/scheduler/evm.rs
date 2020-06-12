@@ -1,9 +1,10 @@
 //! Implementation of an EVM-based scheduler that retrieves current batch and
 //! batch duration information directly from the EVM instead of system time.
 
-use super::{AuctionTimingConfiguration, Scheduler, BATCH_DURATION};
+use super::{AuctionTimingConfiguration, Scheduler};
 use crate::contracts::stablex_contract::StableXContract;
 use crate::driver::stablex_driver::{DriverResult, StableXDriver};
+use crate::models::batch_id::BATCH_DURATION;
 use crate::util::FutureWaitExt as _;
 use anyhow::Result;
 use log::{debug, error, info, warn};
