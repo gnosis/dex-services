@@ -110,7 +110,7 @@ impl Pricegraph {
     }
 
     /// Estimates an exchange rate for the specified token pair and sell volume.
-    /// Returns `None` if the volume cannot be fully filled because there are
+    /// Returns `None` if the volume cannot be fully filled because there is
     /// not enough liquidity in the current batch.
     ///
     /// Note that this price is in exchange format, that is, it is expressed as
@@ -121,7 +121,7 @@ impl Pricegraph {
     }
 
     /// Returns a transitive order with a buy amount calculated such that there
-    /// exists overlapping transitive orders to completely fill the speicified
+    /// exists overlapping transitive orders to completely fill the specified
     /// `sell_amount`. As such, this is an estimated order that is *likely* to
     /// be matched given the **current** state of the batch.
     pub fn order_for_sell_amount(
