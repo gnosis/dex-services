@@ -17,7 +17,7 @@ impl<T> Orderbook<T> {
     pub fn new(orderbook_reading: T) -> Self {
         Self {
             orderbook_reading,
-            reduced_pricegraph_orderbook: RwLock::new(pricegraph::Orderbook::from_elements(
+            reduced_pricegraph_orderbook: RwLock::new(pricegraph::Orderbook::new(
                 std::iter::empty(),
             )),
         }
@@ -37,7 +37,7 @@ impl<T: StableXOrderBookReading> Orderbook<T> {
             .await?;
 
         // TODO: Move this cpu heavy computation out of the async function using spawn_blocking.
-        let mut orderbook = pricegraph::Orderbook::from_elements(
+        let mut orderbook = pricegraph::Orderbook::new(
             orders
                 .iter()
                 .map(|order| order_to_element(order, &account_state)),
