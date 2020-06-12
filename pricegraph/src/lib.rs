@@ -120,7 +120,7 @@ impl Pricegraph {
     }
 
     /// Returns a transitive order with a buy amount calculated such that there
-    /// exists overlapping transitive orders to completely fill the speicified
+    /// exists overlapping transitive orders to completely fill the specified
     /// `sell_amount`. As such, this is an estimated order that is *likely* to
     /// be matched given the **current** state of the batch.
     pub fn order_for_sell_amount(
