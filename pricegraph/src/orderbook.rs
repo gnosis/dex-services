@@ -209,7 +209,6 @@ impl Orderbook {
         if !self.is_token_pair_valid(pair) {
             return Vec::new();
         }
-        self.update_projection_graph();
 
         let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
 
@@ -286,13 +285,12 @@ impl Orderbook {
         if !self.is_token_pair_valid(pair) {
             return None;
         }
-        self.update_projection_graph();
 
         let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
         let predecessors = self.reduced_shortest_paths(sell);
         let mut path = path::find_path(&predecessors, sell, buy)?;
 
-        // NOTE: The transient price of a path is the price of the sell token
+        // NOTE: The transitive price of a path is the price of the sell token
         // (i.e. `sell_amount / buy_amount`). Since we are trying to find the
         // best price for an order for the specified token pair (i.e. and order
         // that would create a cycle of weight 0 going from the speicifed sell
@@ -316,16 +314,16 @@ impl Orderbook {
         }
 
         let mut remaining_volume = volume;
-        let mut last_transient_price: f64;
+        let mut last_transitive_price: f64;
         while {
-            let (capacity, transient_price) = self.fill_path(&path).unwrap_or_else(|| {
+            let (capacity, transitive_price) = self.fill_path(&path).unwrap_or_else(|| {
                 panic!(
                     "failed to fill detected shortest path {}",
                     format_path(&path),
                 )
             });
             remaining_volume -= capacity;
-            last_transient_price = transient_price;
+            last_transitive_price = transitive_price;
 
             remaining_volume > 0.0
         } {
@@ -334,7 +332,7 @@ impl Orderbook {
             path = path::find_path(&predecessors, sell, buy)?;
         }
 
-        Some(invert_price(last_transient_price))
+        Some(invert_price(last_transitive_price))
     }
 
     /// Fill an order at a given price, returning the estimated buy amount that
@@ -346,19 +344,22 @@ impl Orderbook {
     ///
     /// Note that the limit price is expressed as an exchange limit price, i.e.
     /// with implicitely included fees.
-    pub fn fill_order_at_price(&mut self, pair: TokenPair, actual_limit_price: f64) -> f64 {
+    pub fn fill_order_at_price(&mut self, pair: TokenPair, limit_price: f64) -> f64 {
         if !self.is_token_pair_valid(pair) {
             return 0.0;
         }
-        self.update_projection_graph();
 
         let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
-        let effective_limit_price = actual_limit_price / FEE_FACTOR;
+        // NOTE: The limit price is expressed in `buy_amount / sell_amount` for
+        // the specified token pair, but since we are finding transitive orders
+        // in the opposite direction to match this order, calculate the maximum
+        // price that still respects the provided limit price.
+        let max_price = (1.0 / limit_price) / FEE_FACTOR;
 
         let mut total_volume = 0.0;
         let mut predecessors = self.reduced_shortest_paths(sell);
         while let Some(path) = path::find_path(&predecessors, sell, buy) {
-            let (capacity, transient_price) =
+            let (capacity, transitive_price) =
                 self.find_path_capacity_and_price(&path).unwrap_or_else(|| {
                     panic!(
                         "failed to fill detected shortest path {}",
@@ -366,11 +367,11 @@ impl Orderbook {
                     )
                 });
 
-            if transient_price > effective_limit_price {
+            if transitive_price > max_price {
                 break;
             }
             // NOTE: Capacity is a sell amount, so convert to a buy amount.
-            total_volume += capacity / transient_price;
+            total_volume += capacity / transitive_price;
 
             self.fill_path_with_capacity(&path, capacity)
                 .unwrap_or_else(|_| {
@@ -410,18 +411,6 @@ impl Orderbook {
                     });
                 }
             }
-        }
-    }
-
-    /// Updates the projection graph for every token pair.
-    fn update_projection_graph(&mut self) {
-        let pairs = self
-            .orders
-            .all_pairs()
-            .map(|(pair, _)| pair)
-            .collect::<Vec<_>>();
-        for pair in pairs {
-            self.update_projection_graph_edge(pair);
         }
     }
 
@@ -476,7 +465,7 @@ impl Orderbook {
     /// Fills a trading path through the orderbook to maximum capacity, reducing
     /// the remaining order amounts and user balances along the way, returning
     /// the amount of flow that left the first node in the path and the final
-    /// transient price (i.e. the final price of the last node as a result of
+    /// transitive price (i.e. the final price of the last node as a result of
     /// trading along the path) or `None` if the path was invalid.
     ///
     /// Note that currently, user buy token balances are not incremented as a
@@ -494,21 +483,21 @@ impl Orderbook {
         Some((capacity, price))
     }
 
-    /// Finds a transient trade along a path and returns the maximum capacity of
-    /// the path expressed in an amount of the starting token and the transient
-    /// price. Returns `None` if the path doesn't exist.
+    /// Finds a transitive trade along a path and returns the maximum capacity
+    /// of the path expressed in an amount of the starting token and the
+    /// transitive price. Returns `None` if the path doesn't exist.
     fn find_path_capacity_and_price(&self, path: &[NodeIndex]) -> Option<(f64, f64)> {
         let mut capacity = f64::INFINITY;
-        let mut transient_price = 1.0;
+        let mut transitive_price = 1.0;
         for pair in pairs_on_path(path) {
             let order = self.orders.best_order_for_pair(pair)?;
-            transient_price *= order.price;
+            transitive_price *= order.price;
 
             let sell_amount = order.get_effective_amount(&self.users);
-            capacity = num::min(capacity, sell_amount * transient_price);
+            capacity = num::min(capacity, sell_amount * transitive_price);
         }
 
-        Some((capacity, transient_price))
+        Some((capacity, transitive_price))
     }
 
     /// Pushes flow through a path of orders reducing order amounts and user
@@ -522,17 +511,17 @@ impl Orderbook {
         path: &[NodeIndex],
         capacity: f64,
     ) -> Result<(), IncompletePathError> {
-        let mut transient_price = 1.0;
+        let mut transitive_price = 1.0;
         for pair in pairs_on_path(path) {
             let (order, user) = self
                 .best_order_with_user_for_pair_mut(pair)
                 .ok_or_else(|| IncompletePathError(pair))?;
 
-            transient_price *= order.price;
+            transitive_price *= order.price;
 
             // NOTE: `capacity` here is a buy amount, so we need to divide by
             // the price to get the sell amount being filled.
-            let fill_amount = capacity / transient_price;
+            let fill_amount = capacity / transitive_price;
 
             order.amount -= fill_amount;
             debug_assert!(
@@ -1058,36 +1047,34 @@ mod tests {
             }
         };
 
-        assert!(!orderbook.is_overlapping());
-
         assert_approx_eq!(
             orderbook
                 .clone()
-                // NOTE: 1.001 for 1 is not enough to match any volume because
+                // NOTE: 1 for 1.001 is not enough to match any volume because
                 // fees need to be applied twice!
-                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 1.0 * FEE_FACTOR),
+                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR),
             0.0
         );
         assert_approx_eq!(
             orderbook
                 .clone()
-                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 1.0 * FEE_FACTOR.powi(2)),
+                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR.powi(2)),
             1_000_000.0
         );
         assert_approx_eq!(
             orderbook
                 .clone()
-                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 3.0),
+                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.3),
             2_000_000.0
         );
         assert_approx_eq!(
             orderbook
                 .clone()
-                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 4.0 * FEE_FACTOR.powi(2)),
+                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.25 / FEE_FACTOR.powi(2)),
             3_000_000.0
         );
         assert_approx_eq!(
-            orderbook.fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 10.0),
+            orderbook.fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.1),
             3_000_000.0
         );
     }
@@ -1186,17 +1173,17 @@ mod tests {
             .map(node_index)
             .collect::<Vec<_>>();
 
-        let (capacity, transient_price) = orderbook.find_path_capacity_and_price(&path).unwrap();
+        let (capacity, transitive_price) = orderbook.find_path_capacity_and_price(&path).unwrap();
         assert_approx_eq!(
             capacity,
             // NOTE: We can send a little more than the balance limit of user 2
             // because some of it gets eaten up by the fees along the way.
             500_000.0 * FEE_FACTOR.powi(2)
         );
-        assert_approx_eq!(transient_price, 0.5 * FEE_FACTOR.powi(4));
+        assert_approx_eq!(transitive_price, 0.5 * FEE_FACTOR.powi(4));
 
         let filled = orderbook.fill_path(&path).unwrap();
-        assert_eq!(filled, (capacity, transient_price));
+        assert_eq!(filled, (capacity, transitive_price));
 
         assert_approx_eq!(
             orderbook.get_projected_pair_weight(TokenPair { buy: 1, sell: 2 }),
@@ -1232,18 +1219,18 @@ mod tests {
             1_000_000.0 - capacity / FEE_FACTOR
         );
 
-        let transient_price_0_1 = FEE_FACTOR;
+        let transitive_price_0_1 = FEE_FACTOR;
         assert_approx_eq!(
             orderbook
                 .orders
                 .best_order_for_pair(TokenPair { buy: 0, sell: 1 })
                 .unwrap()
                 .amount,
-            1_000_000.0 - capacity / transient_price_0_1
+            1_000_000.0 - capacity / transitive_price_0_1
         );
         assert_approx_eq!(
             orderbook.users[&user_id(1)].balance_of(1),
-            1_000_000.0 - capacity / transient_price_0_1
+            1_000_000.0 - capacity / transitive_price_0_1
         );
 
         assert_approx_eq!(
@@ -1252,11 +1239,11 @@ mod tests {
                 .best_order_for_pair(TokenPair { buy: 3, sell: 4 })
                 .unwrap()
                 .amount,
-            2_000_000.0 - capacity / transient_price
+            2_000_000.0 - capacity / transitive_price
         );
         assert_approx_eq!(
             orderbook.users[&user_id(4)].balance_of(4),
-            10_000_000.0 - capacity / transient_price
+            10_000_000.0 - capacity / transitive_price
         );
     }
 

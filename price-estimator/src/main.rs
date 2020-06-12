@@ -1,3 +1,6 @@
+mod estimate_buy_amount;
+mod filter;
+mod models;
 mod orderbook;
 
 use core::{
@@ -5,7 +8,6 @@ use core::{
     http::HttpFactory,
     metrics::{HttpMetrics, MetricsServer},
     orderbook::EventBasedOrderbook,
-    orderbook::StableXOrderBookReading,
     util::FutureWaitExt as _,
 };
 use ethcontract::PrivateKey;
@@ -14,21 +16,10 @@ use std::{num::ParseIntError, path::PathBuf, sync::Arc, thread, time::Duration};
 use structopt::StructOpt;
 use tokio::{runtime, time};
 use url::Url;
-use warp::Filter;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "price estimator", rename_all = "kebab")]
 struct Options {
-    /// The log filter to use.
-    ///
-    /// This follows the envlogger syntax (e.g. 'info,driver=debug').
-    #[structopt(
-        long,
-        env = "LOG_FILTER",
-        default_value = "warn,driver=info,price_estimator=info"
-    )]
-    log_filter: String,
-
     /// The Ethereum node URL to connect to. Make sure that the node allows for
     /// queries without a gas limit to be able to fetch the orderbook.
     #[structopt(short, long, env = "NODE_URL")]
@@ -49,10 +40,15 @@ struct Options {
     #[structopt(
         long,
         env = "ORDERBOOK_UPDATE_INTERVAL",
-        default_value = "100",
+        default_value = "10",
         parse(try_from_str = duration_secs),
     )]
     orderbook_update_interval: Duration,
+
+    /// The safety margin to subtract from the estimated price, in order to make it more likely to
+    /// be matched.
+    #[structopt(long, env = "PRICE_ROUNDING_BUFFER", default_value = "0.001")]
+    price_rounding_buffer: f64,
 }
 
 type Orderbook = orderbook::Orderbook<EventBasedOrderbook>;
@@ -64,6 +60,9 @@ fn main() {
         "Starting price estimator with runtime options: {:#?}",
         options
     );
+    let price_rounding_buffer = options.price_rounding_buffer;
+    assert!(price_rounding_buffer.is_finite());
+    assert!(price_rounding_buffer >= 0.0 && price_rounding_buffer <= 1.0);
 
     let driver_http_metrics = setup_driver_metrics();
     let http_factory = HttpFactory::new(options.timeout, driver_http_metrics);
@@ -77,8 +76,9 @@ fn main() {
     );
 
     let orderbook = EventBasedOrderbook::new(contract, web3, options.orderbook_file);
-    orderbook.initialize().wait().unwrap();
     let orderbook = Arc::new(Orderbook::new(orderbook));
+    let _ = orderbook.update().wait();
+    log::info!("Orderbook initialized.");
 
     let mut runtime = runtime::Builder::new()
         .threaded_scheduler()
@@ -87,13 +87,14 @@ fn main() {
         .unwrap();
 
     let orderbook_task = runtime.spawn(update_orderbook_forever(
-        orderbook,
+        orderbook.clone(),
         options.orderbook_update_interval,
     ));
 
-    // TODO: handle http requests
-    let serve_task = runtime.spawn(warp::serve(warp::any().map(|| "")).run(([127, 0, 0, 1], 8080)));
+    let filter = filter::estimated_buy_amount(orderbook, price_rounding_buffer);
+    let serve_task = runtime.spawn(warp::serve(filter).run(([127, 0, 0, 1], 8080)));
 
+    log::info!("Server ready.");
     runtime.block_on(async move {
         tokio::select! {
             _ = orderbook_task => log::error!("Update task exited."),

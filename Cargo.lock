@@ -381,6 +381,8 @@ dependencies = [
  "log 0.4.8",
  "mockall",
  "num",
+ "pricegraph",
+ "primitive-types 0.7.2",
  "prometheus",
  "rouille",
  "rustc-hex",
@@ -1479,9 +1481,9 @@ dependencies = [
 
 [[package]]
 name = "isahc"
-version = "0.9.3"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "098c47b6176a9b667292810105999d6029d8338819f299584677e8a125e549c2"
+checksum = "2494793ea0eaa3a17154ca8aa0a02b941abd269b7eb904f5f0a4de3bbbe6b7fa"
 dependencies = [
  "bytes 0.5.4",
  "crossbeam-channel",
@@ -2195,11 +2197,16 @@ dependencies = [
  "core",
  "env_logger",
  "ethcontract",
+ "futures 0.3.5",
  "log 0.4.8",
  "pricegraph",
  "primitive-types 0.7.2",
  "prometheus",
+ "serde",
+ "serde_json",
+ "serde_with",
  "structopt",
+ "thiserror",
  "tokio 0.2.21",
  "url 2.1.1",
  "warp",
@@ -2788,9 +2795,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.53"
+version = "1.0.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "993948e75b189211a9b31a7528f950c6adc21f9720b6438ff80a7fa2f864cea2"
+checksum = "ec2c5d7e739bc07a3e73381a39d61fdb5f671c60c1df26a130690665803d8226"
 dependencies = [
  "itoa",
  "ryu",
