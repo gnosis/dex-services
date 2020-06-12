@@ -109,7 +109,7 @@ impl Pricegraph {
     }
 
     /// Estimates an exchange rate for the specified token pair and sell volume.
-    /// Returns `None` if the volume cannot be fully filled because there are
+    /// Returns `None` if the volume cannot be fully filled because there is
     /// not enough liquidity in the current batch.
     ///
     /// Note that this price is in exchange format, that is, it is expressed as
