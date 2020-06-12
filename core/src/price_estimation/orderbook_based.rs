@@ -24,7 +24,7 @@ impl PriceSource for PricegraphEstimator {
             let batch = BatchId::currently_being_solved(SystemTime::now())?;
             let (account_state, orders) =
                 self.orderbook_reader.get_auction_data(batch.into()).await?;
-            let mut orderbook = Orderbook::new(orders.iter().map(|order| {
+            let mut orderbook = Orderbook::from_elements(orders.iter().map(|order| {
                 order.to_element(U256(
                     account_state
                         .read_balance(order.sell_token, order.account_id)
