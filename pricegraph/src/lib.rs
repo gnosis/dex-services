@@ -10,6 +10,9 @@ mod data;
 pub use encoding::*;
 pub use orderbook::Orderbook;
 
+/// The fee factor that is applied to each order's buy price.
+const FEE_FACTOR: f64 = 1.0 / 0.999;
+
 /// A struct representing a transitive orderbook for a base and quote token.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TransitiveOrderbook {
@@ -40,4 +43,124 @@ pub struct TransitiveOrder {
     pub buy: f64,
     /// The effective sell amount for this transient order.
     pub sell: f64,
+}
+
+impl TransitiveOrder {
+    /// Retrieves the exchange price for this order.
+    pub fn price(&self) -> f64 {
+        self.buy / self.sell
+    }
+
+    /// Retrieves the effective price for this order after fees are condidered.
+    ///
+    /// Note that `effective_price > price`.
+    pub fn effective_price(&self) -> f64 {
+        self.price() * FEE_FACTOR
+    }
+}
+
+/// API entry point for computing price estimates and transitive orderbooks for
+/// a give auction.
+pub struct Pricegraph {
+    full_orderbook: Orderbook,
+    reduced_orderbook: Orderbook,
+}
+
+impl Pricegraph {
+    /// Create a new `Pricegraph` instance given an iterator of auction elements
+    /// for the batch.
+    ///
+    /// The auction elements are in the standard exchange format.
+    pub fn new(elements: impl IntoIterator<Item = Element>) -> Self {
+        let orderbook = Orderbook::new(elements);
+        Pricegraph::from_orderbook(orderbook)
+    }
+
+    /// Create a new `Pricegraph` instance from an `Orderbook`.
+    pub fn from_orderbook(mut orderbook: Orderbook) -> Self {
+        let full_orderbook = orderbook.clone();
+        let reduced_orderbook = {
+            orderbook.reduce_overlapping_orders();
+            orderbook
+        };
+
+        Pricegraph {
+            full_orderbook,
+            reduced_orderbook,
+        }
+    }
+
+    /// Gets a copy of the full orderbook for operations that need to contain
+    /// the existing overlapping transitive orders for accuracy.
+    ///
+    /// This method returns a clone of the reduced orderbook because orderbook
+    /// operations are destructive (as they require filling orders).
+    pub fn full_orderbook(&self) -> Orderbook {
+        self.full_orderbook.clone()
+    }
+
+    /// Gets a copy of the reduced orderbook for operations that prefer there to
+    /// be no overlapping transitive orders.
+    ///
+    /// This method returns a clone of the reduced orderbook because orderbook
+    /// operations are destructive (as they require filling orders).
+    pub fn reduced_orderbook(&self) -> Orderbook {
+        self.reduced_orderbook.clone()
+    }
+
+    /// Estimates an exchange rate for the specified token pair and sell volume.
+    /// Returns `None` if the volume cannot be fully filled because there are
+    /// not enough liquidity in the current batch.
+    ///
+    /// Note that this price is in exchange format, that is, it is expressed as
+    /// the ratio between buy and sell amounts, with implicit fees.
+    pub fn estimate_exchange_rate(&self, pair: TokenPair, sell_amount: f64) -> Option<f64> {
+        self.reduced_orderbook()
+            .fill_market_order(pair, sell_amount as _)
+    }
+
+    /// Returns a transitive order with a buy amount calculated such that there
+    /// exists overlapping transitive orders to completely fill the speicified
+    /// `sell_amount`. As such, this is an estimated order that is *likely* to
+    /// be matched given the **current** state of the batch.
+    pub fn order_for_sell_amount(
+        &self,
+        pair: TokenPair,
+        sell_amount: f64,
+    ) -> Option<TransitiveOrder> {
+        let price = self.estimate_exchange_rate(pair, sell_amount)?;
+        Some(TransitiveOrder {
+            buy: sell_amount * price,
+            sell: sell_amount,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn real_orderbooks() {
+        // The output of this test can be seen with:
+        // ```
+        // cargo test -p pricegraph real_orderbooks -- --nocapture
+        // ```
+
+        let base_unit = 10.0f64.powi(18);
+
+        let dai_weth = TokenPair { buy: 7, sell: 1 };
+        let volume = 1.0 * base_unit;
+
+        for (batch_id, raw_orderbook) in data::ORDERBOOKS.iter() {
+            let pricegraph = Pricegraph::from_orderbook(Orderbook::read(raw_orderbook).unwrap());
+            let order = pricegraph.order_for_sell_amount(dai_weth, volume).unwrap();
+            println!(
+                "#{}: estimated order for buying {} DAI for {} WETH",
+                batch_id,
+                order.buy / base_unit,
+                order.sell / base_unit,
+            );
+        }
+    }
 }
