@@ -35,3 +35,14 @@ pub fn min(a: f64, b: f64) -> f64 {
         _ => b,
     }
 }
+
+/// Compare two floats and returns an `Ordering`. This helper is used because
+/// floats do not implement `Ord` because of `NaN` comparison semantics.
+///
+/// # Panics
+///
+/// If any of the two floats are NaN.
+pub fn compare(a: f64, b: f64) -> cmp::Ordering {
+    a.partial_cmp(&b)
+        .expect("orderbooks cannot have NaN quantities")
+}

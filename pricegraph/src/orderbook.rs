@@ -8,14 +8,14 @@
 mod order;
 mod user;
 
-use self::order::{Order, OrderCollector, OrderMap, FEE_FACTOR};
+use self::order::{Order, OrderCollector, OrderMap};
 use self::user::{User, UserMap};
 use crate::encoding::{Element, InvalidLength, TokenId, TokenPair};
 use crate::graph::bellman_ford::{self, NegativeCycle};
 use crate::graph::path;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
 use crate::num::{self, MAX_ROUNDING_ERROR};
-use crate::{TransitiveOrder, TransitiveOrderbook};
+use crate::{TransitiveOrder, TransitiveOrderbook, FEE_FACTOR};
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use primitive_types::U256;
 use std::cmp;
@@ -42,16 +42,6 @@ pub struct Orderbook {
 }
 
 impl Orderbook {
-    /// Reads an orderbook from encoded bytes returning an error if the encoded
-    /// orders are invalid.
-    ///
-    /// The orderbook is expected to be encoded as an indexed order as encoded
-    /// by `BatchExchangeViewer::getFilteredOrdersPaginated`.
-    pub fn read(bytes: impl AsRef<[u8]>) -> Result<Self, InvalidLength> {
-        let elements = Element::read_all(bytes.as_ref())?;
-        Ok(Orderbook::from_elements(elements))
-    }
-
     /// Creates an orderbook from an iterator over decoded auction elements.
     pub fn from_elements(elements: impl IntoIterator<Item = Element>) -> Self {
         let mut max_token = 0;
@@ -93,6 +83,28 @@ impl Orderbook {
             users,
             projection,
         }
+    }
+
+    /// Reads an orderbook from encoded bytes returning an error if the encoded
+    /// orders are invalid.
+    ///
+    /// The orderbook is expected to be encoded as an indexed order as encoded
+    /// by `BatchExchangeViewer::getFilteredOrdersPaginated`. Specifically, each
+    /// order has a `114` byte stride with the following values (appearing in
+    /// encoding order, all values are little endian encoded).
+    /// - `20` bytes: owner's address
+    /// - `32` bytes: owners's sell token balance
+    /// - `2` bytes: buy token ID
+    /// - `2` bytes: sell token ID
+    /// - `4` bytes: valid from batch ID
+    /// - `4` bytes: valid until batch ID
+    /// - `16` bytes: price numerator
+    /// - `16` bytes: price denominator
+    /// - `16` bytes: remaining order sell amount
+    /// - `2` bytes: order ID
+    pub fn read(bytes: impl AsRef<[u8]>) -> Result<Self, InvalidLength> {
+        let elements = Element::read_all(bytes.as_ref())?;
+        Ok(Orderbook::from_elements(elements))
     }
 
     /// Returns the number of orders in the orderbook.
@@ -645,7 +657,6 @@ struct IncompletePathError(TokenPair);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data;
     use crate::encoding::UserId;
     use assert_approx_eq::assert_approx_eq;
 
@@ -717,26 +728,6 @@ mod tests {
                 None => return f64::INFINITY,
             };
             self.projection[edge]
-        }
-    }
-
-    #[test]
-    fn real_orderbooks() {
-        // The output of this test can be seen with:
-        // ```
-        // cargo test -p pricegraph real_orderbooks -- --nocapture
-        // ```
-
-        let dai_weth = TokenPair { buy: 7, sell: 1 };
-        let volume = 10.0f64.powi(18);
-
-        for (batch_id, raw_orderbook) in data::ORDERBOOKS.iter() {
-            let mut orderbook = Orderbook::read(raw_orderbook).unwrap();
-            println!(
-                "#{}: estimated price for selling 1 WETH at {} DAI/WETH",
-                batch_id,
-                orderbook.fill_market_order(dai_weth, volume).unwrap(),
-            );
         }
     }
 
