@@ -178,6 +178,13 @@ impl Pricegraph {
                 spread,
             ));
 
+        for orders in &mut [
+            &mut transitive_orderbook.asks,
+            &mut transitive_orderbook.bids,
+        ] {
+            orders.sort_unstable_by(|a, b| num::compare(a.price(), b.price()));
+        }
+
         transitive_orderbook
     }
 }
@@ -213,12 +220,32 @@ mod tests {
             let TransitiveOrderbook { asks, bids } =
                 pricegraph.transitive_orderbook(dai_weth.buy, dai_weth.sell, Some(spread));
             println!(
-                "#{}: DAI-WETH market contains {} ask orders and {} bid orders within a {}% spread",
+                "#{}: DAI-WETH market contains {} ask orders and {} bid orders within a {}% spread:",
                 batch_id,
                 asks.len(),
                 bids.len(),
                 100.0 * spread,
             );
+
+            for (name, buy_token, sell_token, orders) in
+                &[("Ask", "DAI", "WETH", asks), ("Bid", "WETH", "DAI", bids)]
+            {
+                println!(" - {} orders", name);
+
+                let mut last_price = orders[0].price();
+                for order in orders {
+                    assert!(last_price <= order.price());
+                    last_price = order.price();
+
+                    println!(
+                        "    buy {} {} for {} {}",
+                        order.buy / base_unit,
+                        buy_token,
+                        order.sell / base_unit,
+                        sell_token,
+                    );
+                }
+            }
         }
     }
 }
