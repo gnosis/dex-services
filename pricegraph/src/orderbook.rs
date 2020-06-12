@@ -171,7 +171,7 @@ impl Orderbook {
 
             if path.first() == Some(&quote) {
                 if let Some(base_index) = path.iter().position(|node| *node == base) {
-                    let (ask, bid) = (&path[0..base_index + 1], &path[base_index..]);
+                    let (bid, ask) = (&path[0..base_index + 1], &path[base_index..]);
 
                     overlap.asks.push(
                         self.find_transitive_order(ask)
@@ -817,13 +817,13 @@ mod tests {
 
         let overlap = orderbook.reduce_overlapping_transitive_orderbook(1, 2);
 
-        // Transitive order `2 -> 3 -> 1`
-        assert_approx_eq!(overlap.asks[0].buy, 500_000.0);
-        assert_approx_eq!(overlap.asks[0].sell, 500_000.0 / FEE_FACTOR);
+        // Transitive order `1 -> 2` buying 1 selling 2
+        assert_approx_eq!(overlap.asks[0].buy, 1_000_000.0);
+        assert_approx_eq!(overlap.asks[0].sell, 2_000_000.0);
 
-        // Transitive order `1 -> 2`
-        assert_approx_eq!(overlap.bids[0].buy, 1_000_000.0);
-        assert_approx_eq!(overlap.bids[0].sell, 2_000_000.0);
+        // Transitive order `2 -> 3 -> 1` buying 2 selling 1
+        assert_approx_eq!(overlap.bids[0].buy, 500_000.0);
+        assert_approx_eq!(overlap.bids[0].sell, 500_000.0 / FEE_FACTOR);
     }
 
     #[test]
