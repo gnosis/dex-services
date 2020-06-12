@@ -1,22 +1,20 @@
 // NOTE: Required for automock.
 #![cfg_attr(test, allow(clippy::ptr_arg))]
 
+mod search_batches;
+
 use crate::{
     contracts,
     models::{ExecutedOrder, Solution},
 };
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result};
 use ethcontract::{
     contract::Event,
     errors::{ExecutionError, MethodError},
-    prelude::Web3,
     transaction::{confirm::ConfirmParams, GasPrice, ResolveCondition},
-    transport::DynTransport,
-    web3::types::Block,
-    Address, BlockNumber, PrivateKey, H256, U256,
+    Address, BlockNumber, PrivateKey, U256,
 };
 use futures::{
-    compat::Future01CompatExt as _,
     future::{BoxFuture, FutureExt as _},
     stream::{BoxStream, StreamExt as _},
 };
@@ -167,18 +165,7 @@ impl StableXContract for StableXContractImpl {
     fn get_last_block_for_batch<'a>(&'a self, batch_id: u32) -> BoxFuture<'a, Result<u64>> {
         async move {
             let web3 = self.instance.raw_instance().web3();
-            let mut current_block = get_block(&web3, BlockNumber::Latest).await?;
-            let mut block_number = current_block
-                .number
-                .ok_or_else(|| {
-                    anyhow!("latest block {:?} has no block number", current_block.hash)
-                })?
-                .as_u64();
-            while batch_id < get_block_batch_id(&current_block) && block_number > 0 {
-                block_number -= 1;
-                current_block = get_block(&web3, block_number.into()).await?;
-            }
-            Ok(block_number)
+            search_batches::search_last_block_for_batch(&web3, batch_id).await
         }
         .boxed()
     }
@@ -359,22 +346,6 @@ fn encode_execution_for_contract(
         }
     }
     (owners, order_ids, volumes)
-}
-
-fn get_block_batch_id<T>(block: &Block<T>) -> u32 {
-    const BATCH_DURATION: u64 = 300;
-    (block.timestamp.as_u64() / BATCH_DURATION) as _
-}
-
-async fn get_block(
-    web3: &Web3<DynTransport>,
-    block_number: BlockNumber,
-) -> Result<ethcontract::web3::types::Block<H256>> {
-    web3.eth()
-        .block(block_number.into())
-        .compat()
-        .await?
-        .ok_or_else(|| anyhow!("block {:?} is missing", block_number))
 }
 
 #[cfg(test)]
