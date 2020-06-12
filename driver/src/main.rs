@@ -101,8 +101,8 @@ struct Options {
     #[structopt(long, env = "ORDERBOOK_FILTER", default_value = "{}")]
     orderbook_filter: OrderbookFilter,
 
-    /// Primary method for orderbook retrieval ("Paginated" or "OnchainFiltered")
-    #[structopt(long, env = "PRIMARY_ORDERBOOK", default_value = "paginated")]
+    /// Primary method for orderbook retrieval
+    #[structopt(long, env = "PRIMARY_ORDERBOOK", default_value = "eventbased")]
     primary_orderbook: OrderbookReaderKind,
 
     /// The private key used by the driver to sign transactions.
