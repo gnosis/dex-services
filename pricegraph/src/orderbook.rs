@@ -209,7 +209,6 @@ impl Orderbook {
         if !self.is_token_pair_valid(pair) {
             return Vec::new();
         }
-        self.update_projection_graph();
 
         let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
 
@@ -286,7 +285,6 @@ impl Orderbook {
         if !self.is_token_pair_valid(pair) {
             return None;
         }
-        self.update_projection_graph();
 
         let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
         let predecessors = self.reduced_shortest_paths(sell);
@@ -350,7 +348,6 @@ impl Orderbook {
         if !self.is_token_pair_valid(pair) {
             return 0.0;
         }
-        self.update_projection_graph();
 
         let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
         // NOTE: The limit price is expressed in `buy_amount / sell_amount` for
@@ -414,18 +411,6 @@ impl Orderbook {
                     });
                 }
             }
-        }
-    }
-
-    /// Updates the projection graph for every token pair.
-    fn update_projection_graph(&mut self) {
-        let pairs = self
-            .orders
-            .all_pairs()
-            .map(|(pair, _)| pair)
-            .collect::<Vec<_>>();
-        for pair in pairs {
-            self.update_projection_graph_edge(pair);
         }
     }
 
