@@ -16,21 +16,22 @@ pub struct PricegraphEstimator {
 const ONE_OWL: f64 = 1_000_000_000_000_000_000.0;
 
 impl PriceSource for PricegraphEstimator {
-    fn get_prices<'b>(
-        &'b self,
-        tokens: &'b [TokenId],
-    ) -> BoxFuture<'b, Result<HashMap<TokenId, u128>>> {
+    fn get_prices<'a>(
+        &'a self,
+        tokens: &'a [TokenId],
+    ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
         async move {
             let batch = BatchId::currently_being_solved(SystemTime::now())?;
             let (account_state, orders) =
                 self.orderbook_reader.get_auction_data(batch.into()).await?;
-            let orderbook = Orderbook::from_elements(orders.iter().map(|order| {
+            let mut orderbook = Orderbook::from_elements(orders.iter().map(|order| {
                 order.to_element(U256(
                     account_state
                         .read_balance(order.sell_token, order.account_id)
                         .0,
                 ))
             }));
+            orderbook.reduce_overlapping_orders();
             Ok(self.estimate_prices(tokens, orderbook))
         }
         .boxed()
