@@ -106,8 +106,11 @@ impl Pricegraph {
     }
 
     /// Estimates an exchange rate for the specified token pair and sell volume.
-    /// Returns `None` if the volume cannot be fully filled because there is
-    /// not enough liquidity in the current batch.
+    /// Returns `None` if no combination of orders is able to trade this amount
+    /// of the sell token into the buy token. This usually occurs if there is
+    /// not enough buy token liquidity in the exchange or if there is no inverse
+    /// transitive orders buying the specified sell token for the specified buy
+    /// token.
     ///
     /// Note that this price is in exchange format, that is, it is expressed as
     /// the ratio between buy and sell amounts, with implicit fees.
