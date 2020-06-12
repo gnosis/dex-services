@@ -182,7 +182,7 @@ impl Pricegraph {
             &mut transitive_orderbook.asks,
             &mut transitive_orderbook.bids,
         ] {
-            orders.sort_unstable_by(|a, b| num::compare(a.price(), b.price()));
+            orders.sort_unstable_by(|a, b| num::compare(a.exchange_rate(), b.exchange_rate()));
         }
 
         transitive_orderbook
