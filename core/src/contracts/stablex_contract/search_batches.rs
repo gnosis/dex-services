@@ -41,8 +41,10 @@ impl Bounds {
 
 #[cfg_attr(test, automock)]
 pub trait BatchIdRetrieving {
+    /// Return the id of the unique batch associated with the given block
     fn batch_id_from_block<'a>(&'a self, block_number: BlockNumber) -> BoxFuture<'a, Result<u32>>;
 
+    /// Return a pair containing the id of the batch we are currently in and the last block number, in this order
     fn current_batch_id_and_block_number<'a>(&'a self) -> BoxFuture<'a, Result<(u32, u64)>>;
 }
 
