@@ -91,20 +91,16 @@ impl Pricegraph {
         }
     }
 
-    /// Gets a copy of the full orderbook for operations that need to contain
-    /// the existing overlapping transitive orders for accuracy.
-    ///
-    /// This method returns a clone of the reduced orderbook because orderbook
-    /// operations are destructive (as they require filling orders).
+    /// Gets a clone of the full orderbook for operations that need to contain
+    /// the existing overlapping transitive orders for accuracy. A clone is
+    /// returned because orderbook operations are destructive.
     pub fn full_orderbook(&self) -> Orderbook {
         self.full_orderbook.clone()
     }
 
-    /// Gets a copy of the reduced orderbook for operations that prefer there to
-    /// be no overlapping transitive orders.
-    ///
-    /// This method returns a clone of the reduced orderbook because orderbook
-    /// operations are destructive (as they require filling orders).
+    /// Gets a clone of the reduced orderbook for operations that prefer there
+    /// to be no overlapping transitive orders. A clone is returned because
+    /// orderbook operations are destructive.
     pub fn reduced_orderbook(&self) -> Orderbook {
         self.reduced_orderbook.clone()
     }
