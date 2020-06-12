@@ -5,6 +5,7 @@ mod average_price_source;
 pub mod data;
 mod dexag;
 mod kraken;
+mod orderbook_based;
 mod price_source;
 mod threaded_price_source;
 
