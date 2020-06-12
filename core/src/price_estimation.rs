@@ -58,17 +58,21 @@ impl PriceOracle {
         let source: Box<dyn PriceSource + Send + Sync> = if tokens.is_empty() {
             Box::new(NoopPriceSource)
         } else {
-            let source = AveragePriceSource::new(vec![
-                Box::new(KrakenClient::new(http_factory, tokens.clone())?),
-                Box::new(DexagClient::new(http_factory, tokens.clone())?),
-                Box::new(PricegraphEstimator::new(orderbook_reader)),
-            ]);
-            let (source, _) = ThreadedPriceSource::new(
+            let (kraken_source, _) = ThreadedPriceSource::new(
                 tokens.all_tokens_to_estimate_price(),
-                source,
+                KrakenClient::new(http_factory, tokens.clone())?,
                 update_interval,
             );
-            Box::new(source)
+            let (dexag_source, _) = ThreadedPriceSource::new(
+                tokens.all_tokens_to_estimate_price(),
+                DexagClient::new(http_factory, tokens.clone())?,
+                update_interval,
+            );
+            Box::new(AveragePriceSource::new(vec![
+                Box::new(kraken_source),
+                Box::new(dexag_source),
+                Box::new(PricegraphEstimator::new(orderbook_reader)),
+            ]))
         };
 
         Ok(PriceOracle { tokens, source })
