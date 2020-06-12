@@ -43,7 +43,7 @@ pub struct Orderbook {
 
 impl Orderbook {
     /// Creates an orderbook from an iterator over decoded auction elements.
-    pub fn new(elements: impl IntoIterator<Item = Element>) -> Self {
+    pub fn from_elements(elements: impl IntoIterator<Item = Element>) -> Self {
         let mut max_token = 0;
         let mut orders = OrderCollector::default();
         let mut users = UserMap::default();
@@ -104,7 +104,7 @@ impl Orderbook {
     /// - `2` bytes: order ID
     pub fn read(bytes: impl AsRef<[u8]>) -> Result<Self, InvalidLength> {
         let elements = Element::read_all(bytes.as_ref())?;
-        Ok(Orderbook::new(elements))
+        Ok(Orderbook::from_elements(elements))
     }
 
     /// Returns the number of orders in the orderbook.
@@ -710,7 +710,7 @@ mod tests {
                     },
                 },
             )*];
-            Orderbook::new(elements)
+            Orderbook::from_elements(elements)
         }};
     }
 

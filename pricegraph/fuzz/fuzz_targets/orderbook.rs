@@ -5,5 +5,5 @@ use pricegraph::{Element, Orderbook};
 // Fuzz creation and usage of Orderbook.
 
 fuzz_target!(|elements: Vec<Element>| {
-    let _ = Orderbook::new(elements);
+    let _ = Orderbook::from_elements(elements);
 });

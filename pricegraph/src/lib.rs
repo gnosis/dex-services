@@ -72,7 +72,7 @@ impl Pricegraph {
     ///
     /// The auction elements are in the standard exchange format.
     pub fn new(elements: impl IntoIterator<Item = Element>) -> Self {
-        let orderbook = Orderbook::new(elements);
+        let orderbook = Orderbook::from_elements(elements);
         Pricegraph::from_orderbook(orderbook)
     }
 
