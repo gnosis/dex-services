@@ -200,5 +200,5 @@ fn as_effective_sell_price(price: &Price) -> f64 {
         buy: price.numerator as _,
         sell: price.denominator as _,
     }
-    .effective_price()
+    .effective_exchange_rate()
 }

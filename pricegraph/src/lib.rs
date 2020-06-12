@@ -46,16 +46,17 @@ pub struct TransitiveOrder {
 }
 
 impl TransitiveOrder {
-    /// Retrieves the exchange price for this order.
-    pub fn price(&self) -> f64 {
+    /// Retrieves the exchange rate for this order.
+    pub fn exchange_rate(&self) -> f64 {
         self.buy / self.sell
     }
 
-    /// Retrieves the effective price for this order after fees are condidered.
+    /// Retrieves the effective exchange rate for this order after fees are
+    /// condidered.
     ///
-    /// Note that `effective_price > price`.
-    pub fn effective_price(&self) -> f64 {
-        self.price() * FEE_FACTOR
+    /// Note that `effective_exchange_rate > exchange_rate`.
+    pub fn effective_exchange_rate(&self) -> f64 {
+        self.exchange_rate() * FEE_FACTOR
     }
 }
 
