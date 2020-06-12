@@ -159,7 +159,7 @@ impl Orderbook {
 
             if path.first() == Some(&quote) {
                 if let Some(base_index) = path.iter().position(|node| *node == base) {
-                    let (ask, bid) = (&path[0..base_index + 1], &path[base_index..]);
+                    let (bid, ask) = (&path[0..base_index + 1], &path[base_index..]);
 
                     overlap.asks.push(
                         self.find_transitive_order(ask)
@@ -178,6 +178,10 @@ impl Orderbook {
                     format_path(&path),
                 )
             });
+        }
+
+        for orders in &mut [&mut overlap.asks, &mut overlap.bids] {
+            orders.sort_unstable_by(|a, b| num::compare(a.price(), b.price()));
         }
 
         overlap
@@ -826,13 +830,48 @@ mod tests {
 
         let overlap = orderbook.reduce_overlapping_transitive_orderbook(1, 2);
 
-        // Transitive order `2 -> 3 -> 1`
-        assert_approx_eq!(overlap.asks[0].buy, 500_000.0);
-        assert_approx_eq!(overlap.asks[0].sell, 500_000.0 / FEE_FACTOR);
+        // Transitive order `1 -> 2` buying 1 selling 2
+        assert_approx_eq!(overlap.asks[0].buy, 1_000_000.0);
+        assert_approx_eq!(overlap.asks[0].sell, 2_000_000.0);
 
-        // Transitive order `1 -> 2`
+        // Transitive order `2 -> 3 -> 1` buying 2 selling 1
+        assert_approx_eq!(overlap.bids[0].buy, 500_000.0);
+        assert_approx_eq!(overlap.bids[0].sell, 500_000.0 / FEE_FACTOR);
+    }
+
+    #[test]
+    fn orders_overlapping_transitive_orders_by_price() {
+        //  /---0.5---v
+        // 0          1
+        // ^---1.0---/
+        // ^---1.5--/
+        let mut orderbook = orderbook! {
+            users {
+                @1 {
+                    token 1 => 4_000_000,
+                }
+                @2 {
+                    token 0 => 2_000_000,
+                }
+                @3 {
+                    token 0 => 1_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 0 [2_000_000] selling 1 [4_000_000],
+                owner @2 buying 1 [1_000_000] selling 0 [1_000_000],
+                owner @3 buying 1 [1_500_000] selling 0 [1_000_000],
+            }
+        };
+
+        let overlap = orderbook.reduce_overlapping_transitive_orderbook(0, 1);
+
+        // Transitive orders `1 -> 0` buying 1 selling 0
+        assert_eq!(overlap.asks.len(), 2);
         assert_approx_eq!(overlap.bids[0].buy, 1_000_000.0);
-        assert_approx_eq!(overlap.bids[0].sell, 2_000_000.0);
+        assert_approx_eq!(overlap.bids[0].sell, 1_000_000.0);
+        assert_approx_eq!(overlap.bids[1].buy, 1_500_000.0);
+        assert_approx_eq!(overlap.bids[1].sell, 1_000_000.0);
     }
 
     #[test]
