@@ -138,7 +138,7 @@ impl Pricegraph {
     /// Computes a transitive orderbook for the given market specified by the
     /// base and quote tokens.
     ///
-    /// This method optionally accepts a spread is a decimal fraction that
+    /// This method optionally accepts a spread that is a decimal fraction that
     /// defines the maximume transitive order price with the equation:
     /// `first_transitive_price + first_transitive_price * spread`. This means
     /// that given a spread of 0.5 (or 50%), and if the cheapest transitive
