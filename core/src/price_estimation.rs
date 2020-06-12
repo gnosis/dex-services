@@ -9,7 +9,7 @@ mod orderbook_based;
 mod price_source;
 mod threaded_price_source;
 
-pub use self::data::TokenData;
+pub use self::data::{TokenBaseInfo, TokenData};
 use self::dexag::DexagClient;
 use self::kraken::KrakenClient;
 use self::orderbook_based::PricegraphEstimator;
@@ -22,9 +22,10 @@ use anyhow::Result;
 use average_price_source::AveragePriceSource;
 use futures::future::{BoxFuture, FutureExt as _};
 use log::warn;
-use price_source::{NoopPriceSource, PriceSource, Token};
+use price_source::{NoopPriceSource, PriceSource};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter;
+use std::iter::FromIterator;
 use std::sync::Arc;
 use std::time::Duration;
 use threaded_price_source::ThreadedPriceSource;
@@ -59,12 +60,12 @@ impl PriceOracle {
             Box::new(NoopPriceSource)
         } else {
             let (kraken_source, _) = ThreadedPriceSource::new(
-                tokens.all_tokens_to_estimate_price(),
+                tokens.all_ids(),
                 KrakenClient::new(http_factory, tokens.clone())?,
                 update_interval,
             );
             let (dexag_source, _) = ThreadedPriceSource::new(
-                tokens.all_tokens_to_estimate_price(),
+                tokens.all_ids(),
                 DexagClient::new(http_factory, tokens.clone())?,
                 update_interval,
             );
@@ -86,41 +87,6 @@ impl PriceOracle {
         }
     }
 
-    /// Splits order tokens into a vector of tokens that should be priced based
-    /// on the token whitelist and a vector of unpriced token ids.
-    ///
-    /// Note that all token ids in the returned results are guaranteed to be
-    /// unique.
-    fn split_order_tokens(
-        &self,
-        orders: &[Order],
-    ) -> (Vec<Token>, Vec<(TokenId, Option<TokenInfo>)>) {
-        let unique_token_ids: HashSet<_> = orders
-            .iter()
-            .flat_map(|order| vec![order.buy_token, order.sell_token])
-            .map(TokenId)
-            // NOTE: Always include the reference token. This is done since the
-            //   solver input specifies the reference token, so for correctness
-            //   it should always be considered.
-            .chain(iter::once(TokenId::reference()))
-            .collect();
-
-        unique_token_ids.into_iter().fold(
-            (Vec::new(), Vec::new()),
-            |(mut tokens_to_price, mut unpriced_token_ids), id| {
-                match self.tokens.info(id).cloned() {
-                    Some(info) if info.should_estimate_price => tokens_to_price.push(Token {
-                        id,
-                        info: info.into(),
-                    }),
-                    Some(info) => unpriced_token_ids.push((id, Some(info.into()))),
-                    None => unpriced_token_ids.push((id, None)),
-                }
-                (tokens_to_price, unpriced_token_ids)
-            },
-        )
-    }
-
     /// Gets price estimates for some tokens
     async fn get_prices(&self, tokens: &[TokenId]) -> HashMap<TokenId, u128> {
         if tokens.is_empty() {
@@ -139,27 +105,40 @@ impl PriceOracle {
 
 impl PriceEstimating for PriceOracle {
     fn get_token_prices<'a>(&'a self, orders: &[Order]) -> BoxFuture<'a, Tokens> {
-        let (tokens_to_price, unpriced_token_ids) = self.split_order_tokens(orders);
+        let token_ids_to_price: HashSet<_> = orders
+            .iter()
+            .flat_map(|order| vec![order.buy_token, order.sell_token])
+            .map(TokenId)
+            // NOTE: Always include the reference token. This is done since the
+            //   solver input specifies the reference token, so for correctness
+            //   it should always be considered.
+            .chain(iter::once(TokenId::reference()))
+            .collect();
         async move {
-            let token_ids: Vec<TokenId> = tokens_to_price.iter().map(|t| t.id).collect();
-            let prices = self.get_prices(&token_ids).await;
+            let prices = self
+                .get_prices(&Vec::from_iter(token_ids_to_price.clone()))
+                .await;
 
-            tokens_to_price
+            token_ids_to_price
                 .into_iter()
-                .map(|token| {
-                    let price = prices
-                        .get(&token.id)
-                        .copied()
-                        .unwrap_or(token.info.external_price);
-                    (
-                        token.id,
+                .map(|token_id| {
+                    let price = prices.get(&token_id).copied();
+                    let token_info = if let Some(base_info) = self.tokens.info(token_id) {
                         Some(TokenInfo {
+                            external_price: price.unwrap_or(base_info.external_price),
+                            ..base_info.clone().into()
+                        })
+                    } else if let Some(price) = price {
+                        Some(TokenInfo {
+                            alias: None,
+                            decimals: None,
                             external_price: price,
-                            ..token.info
-                        }),
-                    )
+                        })
+                    } else {
+                        None
+                    };
+                    (token_id, token_info)
                 })
-                .chain(unpriced_token_ids.into_iter())
                 .collect()
         }
         .boxed()
@@ -168,7 +147,6 @@ impl PriceEstimating for PriceOracle {
 
 #[cfg(test)]
 mod tests {
-    use super::data::TokenBaseInfo;
     use super::*;
     use anyhow::anyhow;
     use price_source::MockPriceSource;
@@ -176,8 +154,8 @@ mod tests {
     #[test]
     fn price_oracle_fetches_token_prices() {
         let tokens = TokenData::from(hash_map! {
-            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0, true),
-            TokenId(2) => TokenBaseInfo::new("USDT", 6, 0, true),
+            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0),
+            TokenId(2) => TokenBaseInfo::new("USDT", 6, 0),
         });
 
         let mut source = MockPriceSource::new();
@@ -186,7 +164,7 @@ mod tests {
             .withf(|tokens| {
                 let mut tokens = tokens.to_vec();
                 tokens.sort();
-                tokens == [TokenId(1), TokenId(2)]
+                tokens == [TokenId(0), TokenId(1), TokenId(2), TokenId(3)]
             })
             .returning(|_| {
                 async {
@@ -223,7 +201,7 @@ mod tests {
     #[test]
     fn price_oracle_ignores_source_error() {
         let tokens = TokenData::from(hash_map! {
-            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0, true),
+            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0),
         });
 
         let mut source = MockPriceSource::new();
@@ -248,7 +226,7 @@ mod tests {
 
     #[test]
     fn price_oracle_always_includes_reference_token() {
-        let oracle = PriceOracle::with_source(TokenData::default(), MockPriceSource::new());
+        let oracle = PriceOracle::with_source(TokenData::default(), NoopPriceSource {});
         let prices = oracle.get_token_prices(&[]).now_or_never().unwrap();
 
         assert_eq!(prices, btree_map! { TokenId(0) => None });
@@ -257,7 +235,7 @@ mod tests {
     #[test]
     fn price_oracle_uses_uses_fallback_prices() {
         let tokens = TokenData::from(hash_map! {
-            TokenId(7) => TokenBaseInfo::new("DAI", 18, 1_000_000_000_000_000_000, true),
+            TokenId(7) => TokenBaseInfo::new("DAI", 18, 1_000_000_000_000_000_000),
         });
 
         let mut source = MockPriceSource::new();
@@ -276,43 +254,6 @@ mod tests {
             btree_map! {
                 TokenId(0) => None,
                 TokenId(7) => Some(TokenInfo::new("DAI", 18, 1_000_000_000_000_000_000)),
-            }
-        );
-    }
-
-    #[test]
-    fn price_oracle_ignores_tokens_not_flagged_for_estimation() {
-        let tokens = TokenData::from(hash_map! {
-            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0, false),
-            TokenId(2) => TokenBaseInfo::new("USDT", 6, 0, true),
-        });
-
-        let mut source = MockPriceSource::new();
-        source
-            .expect_get_prices()
-            .withf(|tokens| tokens == [2.into()])
-            .returning(|_| {
-                async {
-                    Ok(hash_map! {
-                        TokenId(1) => 1_000_000_000_000_000_000,
-                        TokenId(2) => 1_000_000_000_000_000_000,
-                    })
-                }
-                .boxed()
-            });
-
-        let oracle = PriceOracle::with_source(tokens, source);
-        let prices = oracle
-            .get_token_prices(&[Order::for_token_pair(1, 2)])
-            .now_or_never()
-            .unwrap();
-
-        assert_eq!(
-            prices,
-            btree_map! {
-                TokenId(0) => None,
-                TokenId(1) => Some(TokenInfo::new("WETH", 18, 0)),
-                TokenId(2) => Some(TokenInfo::new("USDT", 6, 1_000_000_000_000_000_000)),
             }
         );
     }
