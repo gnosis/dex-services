@@ -1,46 +1,15 @@
-use super::{AuctionTimingConfiguration, Scheduler, BATCH_DURATION};
+use super::{AuctionTimingConfiguration, Scheduler};
 use crate::driver::stablex_driver::{DriverResult, StableXDriver};
+use crate::models::BatchId;
 use crate::util::FutureWaitExt as _;
 use anyhow::{Context, Result};
 use crossbeam_utils::thread::Scope;
 use log::error;
 use log::info;
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, SystemTimeError};
+use std::time::{Duration, Instant, SystemTime};
 
 const RETRY_SLEEP_DURATION: Duration = Duration::from_secs(1);
-
-/// Wraps a batch id as in the smart contract to add functionality related to
-/// the current time.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-struct BatchId(u64);
-
-impl BatchId {
-    fn current(now: SystemTime) -> std::result::Result<Self, SystemTimeError> {
-        let time_since_epoch = now.duration_since(SystemTime::UNIX_EPOCH)?;
-        Ok(Self(time_since_epoch.as_secs() / BATCH_DURATION.as_secs()))
-    }
-
-    fn currently_being_solved(now: SystemTime) -> std::result::Result<Self, SystemTimeError> {
-        Self::current(now).map(|batch_id| batch_id.prev())
-    }
-
-    fn order_collection_start_time(self) -> SystemTime {
-        SystemTime::UNIX_EPOCH + Duration::from_secs(self.0 * BATCH_DURATION.as_secs())
-    }
-
-    fn solve_start_time(self) -> SystemTime {
-        self.order_collection_start_time() + BATCH_DURATION
-    }
-
-    fn next(self) -> BatchId {
-        self.0.checked_add(1).map(BatchId).unwrap()
-    }
-
-    fn prev(self) -> BatchId {
-        self.0.checked_sub(1).map(BatchId).unwrap()
-    }
-}
 
 pub struct SystemScheduler<'a> {
     driver: &'a (dyn StableXDriver + Sync),
@@ -77,7 +46,7 @@ impl<'a> SystemScheduler<'a> {
         let driver = self.driver;
         scope.spawn(move |_| {
             while let Some(time_limit) = solver_deadline.checked_duration_since(Instant::now()) {
-                let driver_result = driver.run(batch_id.0 as u32, time_limit).wait();
+                let driver_result = driver.run(batch_id.into(), time_limit).wait();
                 log_driver_result(batch_id, &driver_result);
                 match driver_result {
                     DriverResult::Retry(_) => thread::sleep(RETRY_SLEEP_DURATION),
@@ -122,14 +91,13 @@ impl<'a> SystemScheduler<'a> {
 
 fn log_driver_result(batch_id: BatchId, driver_result: &DriverResult) {
     match driver_result {
-        DriverResult::Ok => info!("Batch {} solved successfully.", batch_id.0),
-        DriverResult::Retry(err) => error!(
-            "Batch {} failed with retryable error: {:?}",
-            batch_id.0, err
-        ),
+        DriverResult::Ok => info!("Batch {} solved successfully.", batch_id),
+        DriverResult::Retry(err) => {
+            error!("Batch {} failed with retryable error: {:?}", batch_id, err)
+        }
         DriverResult::Skip(err) => error!(
             "Batch {} failed with unretryable error: {:?}",
-            batch_id.0, err
+            batch_id, err
         ),
     }
 }
@@ -144,7 +112,7 @@ impl<'a> Scheduler for SystemScheduler<'a> {
                         thread::sleep(duration);
                     }
                     Ok(Action::Solve(batch_id, duration)) => {
-                        info!("Starting to solve batch {}.", batch_id.0);
+                        info!("Starting to solve batch {}.", batch_id);
                         self.last_solved_batch = Some(batch_id);
                         self.start_solving_in_thread(batch_id, Instant::now() + duration, scope)
                     }
@@ -165,29 +133,6 @@ mod tests {
     use crate::driver::stablex_driver::MockStableXDriver;
     use anyhow::anyhow;
     use futures::future::FutureExt as _;
-
-    #[test]
-    fn batch_id_current() {
-        let start_time = SystemTime::UNIX_EPOCH;
-        let batch_id = BatchId::current(start_time).unwrap();
-        assert_eq!(batch_id.0, 0);
-        assert_eq!(batch_id.order_collection_start_time(), start_time);
-
-        let start_time = SystemTime::UNIX_EPOCH;
-        let batch_id = BatchId::current(start_time + Duration::from_secs(299)).unwrap();
-        assert_eq!(batch_id.0, 0);
-        assert_eq!(batch_id.order_collection_start_time(), start_time);
-
-        let start_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
-        let batch_id = BatchId::current(start_time).unwrap();
-        assert_eq!(batch_id.0, 1);
-        assert_eq!(batch_id.order_collection_start_time(), start_time);
-
-        let start_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
-        let batch_id = BatchId::current(start_time + Duration::from_secs(299)).unwrap();
-        assert_eq!(batch_id.0, 1);
-        assert_eq!(batch_id.order_collection_start_time(), start_time);
-    }
 
     #[test]
     fn determine_action_without_matching_last_solved_batch() {

@@ -1479,9 +1479,9 @@ dependencies = [
 
 [[package]]
 name = "isahc"
-version = "0.9.3"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "098c47b6176a9b667292810105999d6029d8338819f299584677e8a125e549c2"
+checksum = "2494793ea0eaa3a17154ca8aa0a02b941abd269b7eb904f5f0a4de3bbbe6b7fa"
 dependencies = [
  "bytes 0.5.4",
  "crossbeam-channel",
