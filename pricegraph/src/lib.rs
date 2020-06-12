@@ -134,6 +134,52 @@ impl Pricegraph {
             sell: sell_amount,
         })
     }
+
+    /// Computes a transitive orderbook for the given market specified by the
+    /// base and quote tokens.
+    ///
+    /// This method optionally accepts a spread is a decimal fraction that
+    /// defines the maximume transitive order price with the equation:
+    /// `first_transitive_price + first_transitive_price * spread`. This means
+    /// that given a spread of 0.5 (or 50%), and if the cheapest transitive
+    /// order has a price of 1.2, then the maximum price will be `1.8`.
+    ///
+    /// The spread applies to both `asks` and `bids` transitive orders.
+    ///
+    /// # Panics
+    ///
+    /// This method panics if the spread is zero or negative.
+    pub fn transitive_orderbook(
+        &self,
+        base: TokenId,
+        quote: TokenId,
+        spread: Option<f64>,
+    ) -> TransitiveOrderbook {
+        let mut orderbook = self.full_orderbook();
+
+        let mut transitive_orderbook =
+            orderbook.reduce_overlapping_transitive_orderbook(base, quote);
+        transitive_orderbook
+            .asks
+            .extend(orderbook.clone().fill_transitive_orders(
+                TokenPair {
+                    buy: base,
+                    sell: quote,
+                },
+                spread,
+            ));
+        transitive_orderbook
+            .bids
+            .extend(orderbook.fill_transitive_orders(
+                TokenPair {
+                    buy: quote,
+                    sell: base,
+                },
+                spread,
+            ));
+
+        transitive_orderbook
+    }
 }
 
 #[cfg(test)]
@@ -151,15 +197,27 @@ mod tests {
 
         let dai_weth = TokenPair { buy: 7, sell: 1 };
         let volume = 1.0 * base_unit;
+        let spread = 0.05;
 
         for (batch_id, raw_orderbook) in data::ORDERBOOKS.iter() {
             let pricegraph = Pricegraph::from_orderbook(Orderbook::read(raw_orderbook).unwrap());
+
             let order = pricegraph.order_for_sell_amount(dai_weth, volume).unwrap();
             println!(
                 "#{}: estimated order for buying {} DAI for {} WETH",
                 batch_id,
                 order.buy / base_unit,
                 order.sell / base_unit,
+            );
+
+            let TransitiveOrderbook { asks, bids } =
+                pricegraph.transitive_orderbook(dai_weth.buy, dai_weth.sell, Some(spread));
+            println!(
+                "#{}: DAI-WETH market contains {} ask orders and {} bid orders within a {}% spread",
+                batch_id,
+                asks.len(),
+                bids.len(),
+                100.0 * spread,
             );
         }
     }
