@@ -46,16 +46,17 @@ pub struct TransitiveOrder {
 }
 
 impl TransitiveOrder {
-    /// Retrieves the exchange price for this order.
-    pub fn price(&self) -> f64 {
+    /// Retrieves the exchange rate for this order.
+    pub fn exchange_rate(&self) -> f64 {
         self.buy / self.sell
     }
 
-    /// Retrieves the effective price for this order after fees are condidered.
+    /// Retrieves the effective exchange rate for this order after fees are
+    /// condidered.
     ///
-    /// Note that `effective_price > price`.
-    pub fn effective_price(&self) -> f64 {
-        self.price() * FEE_FACTOR
+    /// Note that `effective_exchange_rate > exchange_rate`.
+    pub fn effective_exchange_rate(&self) -> f64 {
+        self.exchange_rate() * FEE_FACTOR
     }
 }
 
@@ -90,27 +91,26 @@ impl Pricegraph {
         }
     }
 
-    /// Gets a copy of the full orderbook for operations that need to contain
-    /// the existing overlapping transitive orders for accuracy.
-    ///
-    /// This method returns a clone of the reduced orderbook because orderbook
-    /// operations are destructive (as they require filling orders).
+    /// Gets a clone of the full orderbook for operations that need to contain
+    /// the existing overlapping transitive orders for accuracy. A clone is
+    /// returned because orderbook operations are destructive.
     pub fn full_orderbook(&self) -> Orderbook {
         self.full_orderbook.clone()
     }
 
-    /// Gets a copy of the reduced orderbook for operations that prefer there to
-    /// be no overlapping transitive orders.
-    ///
-    /// This method returns a clone of the reduced orderbook because orderbook
-    /// operations are destructive (as they require filling orders).
+    /// Gets a clone of the reduced orderbook for operations that prefer there
+    /// to be no overlapping transitive orders. A clone is returned because
+    /// orderbook operations are destructive.
     pub fn reduced_orderbook(&self) -> Orderbook {
         self.reduced_orderbook.clone()
     }
 
     /// Estimates an exchange rate for the specified token pair and sell volume.
-    /// Returns `None` if the volume cannot be fully filled because there are
-    /// not enough liquidity in the current batch.
+    /// Returns `None` if no combination of orders is able to trade this amount
+    /// of the sell token into the buy token. This usually occurs if there is
+    /// not enough buy token liquidity in the exchange or if there is no inverse
+    /// transitive orders buying the specified sell token for the specified buy
+    /// token.
     ///
     /// Note that this price is in exchange format, that is, it is expressed as
     /// the ratio between buy and sell amounts, with implicit fees.
@@ -120,7 +120,7 @@ impl Pricegraph {
     }
 
     /// Returns a transitive order with a buy amount calculated such that there
-    /// exists overlapping transitive orders to completely fill the speicified
+    /// exists overlapping transitive orders to completely fill the specified
     /// `sell_amount`. As such, this is an estimated order that is *likely* to
     /// be matched given the **current** state of the batch.
     pub fn order_for_sell_amount(
@@ -232,10 +232,10 @@ mod tests {
             {
                 println!(" - {} orders", name);
 
-                let mut last_price = orders[0].price();
+                let mut last_xrate = orders[0].exchange_rate();
                 for order in orders {
-                    assert!(last_price <= order.price());
-                    last_price = order.price();
+                    assert!(last_xrate <= order.exchange_rate());
+                    last_xrate = order.exchange_rate();
 
                     println!(
                         "    buy {} {} for {} {}",
