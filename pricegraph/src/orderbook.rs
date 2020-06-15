@@ -1291,9 +1291,10 @@ mod tests {
                 .orders
                 .best_order_for_pair(TokenPair { buy: 1, sell: 2 })
                 .unwrap()
-                .price,
-            2.0 * FEE_FACTOR
+                .amount,
+            1_000_000.0
         );
+        assert_approx_eq!(orderbook.users[&user_id(5)].balance_of(2), 1_000_000.0);
 
         assert_approx_eq!(
             orderbook
