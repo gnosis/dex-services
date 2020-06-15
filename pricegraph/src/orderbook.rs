@@ -153,8 +153,14 @@ impl Orderbook {
         debug_assert!(!self.is_overlapping());
     }
 
-    /// Reduces all overlapping orders for a given market and returns the
-    /// computed overlapping transitive orderbook for that market.
+    /// Find negative cycles in the specified market and splits each one into a
+    /// `base -> quote` (ask) transitive order and a `quote -> base` (bid)
+    /// transitive order, reducing them both. Returns the computed overlapping
+    /// transitive orderbook for that market.
+    ///
+    /// Note that there may exist additional transitive orders that may overlap
+    /// with orders in the resulting transitive orderbook. However, all negative
+    /// cycles will be removed from the orderbook graph.
     pub fn reduce_overlapping_transitive_orderbook(
         &mut self,
         base: TokenId,
@@ -173,14 +179,23 @@ impl Orderbook {
                 if let Some(base_index) = path.iter().position(|node| *node == base) {
                     let (bid, ask) = (&path[0..base_index + 1], &path[base_index..]);
 
-                    overlap.asks.push(
-                        self.find_transitive_order(ask)
-                            .expect("ask transitive path not found after being detected"),
-                    );
-                    overlap.bids.push(
-                        self.find_transitive_order(bid)
-                            .expect("bid transitive path not found after being detected"),
-                    );
+                    let (capacity, transitive_price) = self
+                        .fill_path(ask)
+                        .expect("ask transitive path not found after being detected");
+                    overlap.asks.push(transitive_order_from_capacity_and_price(
+                        capacity,
+                        transitive_price,
+                    ));
+
+                    let (capacity, transitive_price) = self
+                        .fill_path(bid)
+                        .expect("bid transitive path not found after being detected");
+                    overlap.bids.push(transitive_order_from_capacity_and_price(
+                        capacity,
+                        transitive_price,
+                    ));
+
+                    continue;
                 }
             }
 
@@ -267,16 +282,6 @@ impl Orderbook {
         }
 
         orders
-    }
-
-    /// Computes the equivalent transitive order along a path.
-    ///
-    /// Returns `None` if the path does not exist.
-    fn find_transitive_order(&self, path: &[NodeIndex]) -> Option<TransitiveOrder> {
-        let (capacity, price) = self.find_path_capacity_and_price(path)?;
-        let order = transitive_order_from_capacity_and_price(capacity, price);
-
-        Some(order)
     }
 
     /// Fill a market order in the current orderbook graph returning the maximum
@@ -818,12 +823,64 @@ mod tests {
         let overlap = orderbook.reduce_overlapping_transitive_orderbook(1, 2);
 
         // Transitive order `1 -> 2` buying 1 selling 2
+        assert_eq!(overlap.asks.len(), 1);
         assert_approx_eq!(overlap.asks[0].buy, 1_000_000.0);
         assert_approx_eq!(overlap.asks[0].sell, 2_000_000.0);
 
         // Transitive order `2 -> 3 -> 1` buying 2 selling 1
+        assert_eq!(overlap.bids.len(), 1);
         assert_approx_eq!(overlap.bids[0].buy, 500_000.0);
         assert_approx_eq!(overlap.bids[0].sell, 500_000.0 / FEE_FACTOR);
+    }
+
+    #[test]
+    fn includes_transitive_order_only_once() {
+        // /---0.5---v
+        // 0         1
+        // ^---1.0---/
+        // ^---1.5--/
+        let mut orderbook = orderbook! {
+            users {
+                @1 {
+                    token 1 => 100_000_000,
+                }
+                @2 {
+                    token 0 => 1_000_000,
+                }
+                @3 {
+                    token 0 => 1_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 0 [50_000_000] selling 1 [100_000_000],
+                owner @2 buying 1 [1_000_000] selling 0 [1_000_000],
+                owner @3 buying 1 [1_500_000] selling 0 [1_000_000],
+            }
+        };
+
+        let overlap = orderbook.reduce_overlapping_transitive_orderbook(0, 1);
+
+        // Transitive order `0 -> 1` buying 0 selling 1
+        assert_eq!(overlap.asks.len(), 1);
+        assert_approx_eq!(overlap.asks[0].buy, 50_000_000.0);
+        assert_approx_eq!(overlap.asks[0].sell, 100_000_000.0);
+
+        // Transitive order `1 -> 0` buying 1 selling 0
+        assert_eq!(overlap.bids.len(), 1);
+        assert_approx_eq!(overlap.bids[0].buy, 1_000_000.0);
+        assert_approx_eq!(overlap.bids[0].sell, 1_000_000.0);
+
+        // NOTE: This is counter-intuitive, but there should only be one
+        // transitive order from `1 -> 0` even if there are two orders that
+        // overlap with the large `0 -> 1` order. This is because whenever a
+        // negative cycle is found, it gets split into two transitive orders,
+        // one from `base -> quote` (ask) and the other from `quote -> base`
+        // (bid). These transitive orders are **completely** reduced, so even if
+        // there are other orders that overlap with the remaining amount of one
+        // of these transitive orders, they might not get found by
+        // `reduce_overlapping_transitive_orderbook`. Rest assured, they will
+        // get found by `fill_transitive_orderbook` and ultimately included in
+        // the final transitive orderbook.
     }
 
     #[test]
