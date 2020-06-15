@@ -2193,6 +2193,7 @@ name = "price-estimator"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "assert_approx_eq",
  "core",
  "env_logger",
  "ethcontract",
