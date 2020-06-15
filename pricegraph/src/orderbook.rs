@@ -1354,6 +1354,7 @@ mod tests {
             }
         };
 
-        orderbook.fill_order_at_price(TokenPair { buy: 1, sell: 0 }, 1.0);
+        let amount = orderbook.fill_order_at_price(TokenPair { buy: 1, sell: 0 }, 1.0);
+        assert_approx_eq!(amount, 83798276971421254262445676335662107162.0);
     }
 }
