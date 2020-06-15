@@ -73,12 +73,6 @@ pub struct TransitiveOrder {
     pub volume: f64,
 }
 
-impl From<&pricegraph::TransitiveOrder> for TransitiveOrder {
-    fn from(_order: &pricegraph::TransitiveOrder) -> Self {
-        unimplemented!()
-    }
-}
-
 #[derive(Debug, Serialize)]
 pub struct MarketsResult {
     pub asks: Vec<TransitiveOrder>,
@@ -87,18 +81,16 @@ pub struct MarketsResult {
 
 impl From<&pricegraph::TransitiveOrderbook> for MarketsResult {
     fn from(orderbook: &pricegraph::TransitiveOrderbook) -> Self {
-        let convert = |orders: &Vec<_>| orders.iter().map(From::from).collect();
-        Self {
-            asks: convert(&orderbook.asks),
-            bids: convert(&orderbook.bids),
-        }
+        let to_order = |(price, volume)| TransitiveOrder { price, volume };
+        let asks = orderbook.ask_prices().map(to_order).collect();
+        let bids = orderbook.bid_prices().map(to_order).collect();
+        Self { asks, bids }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    // use assert_approx_eq::assert_approx_eq;
     use serde_json::Value;
 
     #[test]
@@ -140,17 +132,4 @@ mod tests {
         });
         assert_eq!(json, expected);
     }
-
-    /*
-    #[test]
-    fn transitive_order_conversion() {
-        let pricegraph_order = pricegraph::TransitiveOrder {
-            buy: 0.5,
-            sell: 2.0,
-        };
-        let converted = TransitiveOrder::from(&pricegraph_order);
-        assert_approx_eq!(converted.price, 0.25);
-        assert_approx_eq!(converted.volume, 2.0);
-    }
-    */
 }
