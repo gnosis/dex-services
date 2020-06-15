@@ -871,15 +871,16 @@ mod tests {
         assert_approx_eq!(overlap.bids[0].sell, 1_000_000.0);
 
         // NOTE: This is counter-intuitive, but there should only be one
-        // transitive order from `0 -> 1`. This is because whenever a negative
-        // cycle is found, it gets split into two transitive orders, one from
-        // `base -> quote` (ask) and the other from `quote -> base` (bid). These
-        // transitive orders are **completely** reduced, so even if there are
-        // more orders that could overlap with the remaining amount of a
-        // transitive order if only the negative cycle we reduced, they might
-        // not get found by `reduce_overlapping_transitive_orderbook`. Rest
-        // assured, they will get found by `fill_transitive_orderbook` and
-        // ultimately included in the final transitive orderbook.
+        // transitive order from `1 -> 0` even if there are two orders that
+        // overlap with the large `0 -> 1` order. This is because whenever a
+        // negative cycle is found, it gets split into two transitive orders,
+        // one from `base -> quote` (ask) and the other from `quote -> base`
+        // (bid). These transitive orders are **completely** reduced, so even if
+        // there are other orders that overlap with the remaining amount of one
+        // of these transitive orders, they might not get found by
+        // `reduce_overlapping_transitive_orderbook`. Rest assured, they will
+        // get found by `fill_transitive_orderbook` and ultimately included in
+        // the final transitive orderbook.
     }
 
     #[test]
