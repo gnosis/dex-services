@@ -2,28 +2,26 @@ use core::{
     models::{AccountState, Order},
     orderbook::StableXOrderBookReading,
 };
-use pricegraph::{Element, Price, TokenPair, Validity};
+use pricegraph::{Element, Price, Pricegraph, TokenPair, Validity};
 use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
 
 /// Access and update the pricegraph orderbook.
 pub struct Orderbook<T> {
     orderbook_reading: T,
-    reduced_pricegraph_orderbook: RwLock<pricegraph::Orderbook>,
+    pricegraph: RwLock<Pricegraph>,
 }
 
 impl<T> Orderbook<T> {
     pub fn new(orderbook_reading: T) -> Self {
         Self {
             orderbook_reading,
-            reduced_pricegraph_orderbook: RwLock::new(pricegraph::Orderbook::from_elements(
-                std::iter::empty(),
-            )),
+            pricegraph: RwLock::new(Pricegraph::new(std::iter::empty())),
         }
     }
 
-    pub async fn get_reduced_orderbook(&self) -> pricegraph::Orderbook {
-        self.reduced_pricegraph_orderbook.read().await.clone()
+    pub async fn get_pricegraph(&self) -> Pricegraph {
+        self.pricegraph.read().await.clone()
     }
 }
 
@@ -36,14 +34,13 @@ impl<T: StableXOrderBookReading> Orderbook<T> {
             .await?;
 
         // TODO: Move this cpu heavy computation out of the async function using spawn_blocking.
-        let mut orderbook = pricegraph::Orderbook::from_elements(
+        let pricegraph = Pricegraph::new(
             orders
                 .iter()
                 .map(|order| order_to_element(order, &account_state)),
         );
-        orderbook.reduce_overlapping_orders();
 
-        *self.reduced_pricegraph_orderbook.write().await = orderbook;
+        *self.pricegraph.write().await = pricegraph;
         Ok(())
     }
 }

@@ -59,13 +59,15 @@ async fn estimate_buy_amount<T>(
     price_rounding_buffer: f64,
     orderbook: Arc<Orderbook<T>>,
 ) -> Result<impl warp::Reply, Infallible> {
-    let buy_amount_in_base = crate::estimate_buy_amount::estimate_buy_amount(
-        token_pair,
-        sell_amount_in_quote as f64,
-        price_rounding_buffer,
-        orderbook.get_reduced_orderbook().await,
-    )
-    .unwrap_or(0.0) as u128;
+    let transitive_order = orderbook
+        .get_pricegraph()
+        .await
+        .order_for_sell_amount(token_pair.into(), sell_amount_in_quote as f64);
+    let buy_amount_in_base = if let Some(order) = transitive_order {
+        (1.0 - price_rounding_buffer) * order.buy
+    } else {
+        0.0
+    } as u128;
     let result = EstimatedBuyAmountResult {
         base_token_id: token_pair.buy_token_id,
         quote_token_id: token_pair.sell_token_id,

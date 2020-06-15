@@ -62,6 +62,7 @@ impl TransitiveOrder {
 
 /// API entry point for computing price estimates and transitive orderbooks for
 /// a give auction.
+#[derive(Clone, Debug)]
 pub struct Pricegraph {
     full_orderbook: Orderbook,
     reduced_orderbook: Orderbook,
