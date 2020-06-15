@@ -138,10 +138,10 @@ pub fn execute_private_solver(
         .arg(format!("{}{}", "/app/", input_file.to_owned()))
         .arg(format!("--outputDir={}{}", "/app/", result_folder))
         .arg("--logging=WARNING")
-        .args(&["--timeLimit", &time_limit])
+        .arg(format!("--timeLimit={}", time_limit))
         .arg(format!("--minAvgFeePerOrder={}", min_avg_fee_per_order))
         .arg(format!("--solver={}", internal_optimizer.to_argument()))
-        .arg(String::from("--useExternalPrices"));
+        .arg("--useExternalPrices");
     if search_only_for_best_ring_solution {
         private_solver_command = private_solver_command.arg(String::from("--solveBestCycle"));
     }
