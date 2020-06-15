@@ -6,6 +6,7 @@ pub mod macros;
 pub mod contracts;
 pub mod driver;
 pub mod gas_station;
+pub mod history;
 pub mod http;
 pub mod logging;
 pub mod metrics;

@@ -28,3 +28,15 @@ macro_rules! std_map {
         map
     }}
 }
+
+#[cfg(test)]
+macro_rules! hash_set {
+    ($($value:expr),* $(,)?) => {{
+        #[allow(unused_mut)]
+        let mut set = std::collections::HashSet::new();
+        $(
+            set.insert($value);
+        )*
+        set
+    }}
+}

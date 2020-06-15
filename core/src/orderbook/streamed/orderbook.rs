@@ -97,6 +97,12 @@ impl Orderbook {
                 state.apply_event(&value.event, value.batch_id)
             })
     }
+
+    pub fn into_events(self) -> impl Iterator<Item = (batch_exchange::Event, BatchId)> {
+        self.events
+            .into_iter()
+            .map(|(_, Value { event, batch_id })| (event, batch_id))
+    }
 }
 
 impl TryFrom<&[u8]> for Orderbook {
