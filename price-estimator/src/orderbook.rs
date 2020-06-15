@@ -2,8 +2,7 @@ use core::{
     models::{AccountState, Order},
     orderbook::StableXOrderBookReading,
 };
-use pricegraph::{Element, Price, TokenPair, UserId, Validity};
-use primitive_types::U256;
+use pricegraph::{Element, Price, TokenPair, Validity};
 use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
 
@@ -64,12 +63,8 @@ fn order_to_element(order: &Order, account_state: &AccountState) -> Element {
     // Some conversions are needed because the primitive types crate is on different versions in
     // core and pricegraph.
     Element {
-        user: UserId::from_slice(order.account_id.as_fixed_bytes()),
-        balance: U256(
-            account_state
-                .read_balance(order.sell_token, order.account_id)
-                .0,
-        ),
+        user: order.account_id,
+        balance: account_state.read_balance(order.sell_token, order.account_id),
         pair: TokenPair {
             buy: order.buy_token,
             sell: order.sell_token,

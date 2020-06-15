@@ -4,6 +4,14 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use warp::{Filter, Rejection};
 
+/// Handles all supported requests.
+pub fn all<T: Send + Sync + 'static>(
+    orderbook: Arc<Orderbook<T>>,
+    price_rounding_buffer: f64,
+) -> impl Filter<Extract = impl warp::Reply, Error = Rejection> + Clone {
+    markets(orderbook.clone()).or(estimated_buy_amount(orderbook, price_rounding_buffer))
+}
+
 /// Validate a request of the form
 /// `/markets/<baseTokenId>-<quoteTokenId>/estimated-buy-amount/<sellAmountInQuoteToken>`
 /// and answer it.
@@ -18,9 +26,28 @@ pub fn estimated_buy_amount<T: Send + Sync + 'static>(
         .with(warp::log("price_estimator::api::estimate_buy_amount"))
 }
 
+/// Validate a request of the form
+/// `/markets/<baseTokenId>-<quoteTokenId>`
+/// and answer it.
+pub fn markets<T: Send + Sync + 'static>(
+    orderbook: Arc<Orderbook<T>>,
+) -> impl Filter<Extract = impl warp::Reply, Error = Rejection> + Clone {
+    markets_filter()
+        .and(warp::any().map(move || orderbook.clone()))
+        .and_then(get_markets)
+        .with(warp::log("price_estimator::api::markets"))
+}
+
 fn estimated_buy_amount_filter(
 ) -> impl Filter<Extract = (TokenPair, u128, QueryParameters), Error = Rejection> + Copy {
     warp::path!("markets" / TokenPair / "estimated-buy-amount" / u128)
+        .and(warp::get())
+        .and(warp::query::<QueryParameters>())
+}
+
+fn markets_filter() -> impl Filter<Extract = (TokenPair, QueryParameters), Error = Rejection> + Copy
+{
+    warp::path!("markets" / TokenPair)
         .and(warp::get())
         .and(warp::query::<QueryParameters>())
 }
@@ -48,6 +75,18 @@ async fn estimate_buy_amount<T>(
     Ok(warp::reply::json(&result))
 }
 
+async fn get_markets<T>(
+    _token_pair: TokenPair,
+    _query: QueryParameters,
+    _orderbook: Arc<Orderbook<T>>,
+) -> Result<impl warp::Reply, Infallible> {
+    // TODO: implement
+    Ok(warp::reply::json(&MarketsResult {
+        asks: Vec::new(),
+        bids: Vec::new(),
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -66,6 +105,20 @@ mod tests {
         assert_eq!(volume, 1);
         assert_eq!(query.atoms, true);
         assert_eq!(query.hops, Some(2));
+    }
+
+    #[test]
+    fn markets_ok() {
+        let (token_pair, query) = warp::test::request()
+            .path("/markets/1-2?atoms=true&hops=3")
+            .filter(&markets_filter())
+            .now_or_never()
+            .unwrap()
+            .unwrap();
+        assert_eq!(token_pair.buy_token_id, 1);
+        assert_eq!(token_pair.sell_token_id, 2);
+        assert_eq!(query.atoms, true);
+        assert_eq!(query.hops, Some(3));
     }
 
     #[test]
