@@ -4,9 +4,13 @@ use primitive_types::U256;
 use std::cmp;
 use std::f64;
 
-/// The maximum rounding error, used for asserting that amounts and balances
-/// remain coherent for tests and when built in `debug` profile.
-pub const MAX_ROUNDING_ERROR: f64 = 0.1;
+/// The maximum rounding error for the specified amount, used for asserting that
+/// amounts and balances remain coherent for tests and for `debug` profile.
+pub fn max_rounding_error(quantity: f64) -> f64 {
+    //quantity * f64::EPSILON
+    let _ = quantity;
+    0.1
+}
 
 /// Convert an unsigned 256-bit integer into a `f64`.
 pub fn u256_to_f64(u: U256) -> f64 {
