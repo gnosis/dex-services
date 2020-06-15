@@ -29,7 +29,7 @@ impl TransitiveOrderbook {
     /// corresponding volumes.
     ///
     /// Note that the prices are effective prices and include fees.
-    pub fn ask_prices(&self) -> impl Iterator<Item = (f64, f64)> + '_ {
+    pub fn ask_prices(&self) -> impl DoubleEndedIterator<Item = (f64, f64)> + '_ {
         self.asks
             .iter()
             .map(|order| ((order.buy / order.sell) * FEE_FACTOR, order.sell))
