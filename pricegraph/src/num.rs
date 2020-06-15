@@ -7,9 +7,7 @@ use std::f64;
 /// The maximum rounding error for the specified amount, used for asserting that
 /// amounts and balances remain coherent for tests and for `debug` profile.
 pub fn max_rounding_error(quantity: f64) -> f64 {
-    //quantity * f64::EPSILON
-    let _ = quantity;
-    0.1
+    quantity * f64::EPSILON
 }
 
 /// Convert an unsigned 256-bit integer into a `f64`.
