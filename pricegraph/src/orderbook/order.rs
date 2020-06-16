@@ -3,6 +3,7 @@
 use super::UserMap;
 use crate::encoding::{Element, OrderId, Price, TokenId, TokenPair, UserId};
 use crate::num;
+use crate::TransitiveOrder;
 use std::cmp;
 use std::collections::HashMap;
 use std::f64;
@@ -167,9 +168,7 @@ impl Order {
     /// `NaN`s and `NaN < 0 == false` and `NaN >= 0 == false` (cf. IEEE 754-2008
     /// section 5.11), which can cause serious problems with sorting.
     fn cmp_descending_prices(a: &Order, b: &Order) -> cmp::Ordering {
-        b.price
-            .partial_cmp(&a.price)
-            .expect("orders cannot have NaN prices")
+        num::compare(b.price, a.price)
     }
 
     /// The weight of the order in the graph. This is the base-2 logarithm of
@@ -195,10 +194,11 @@ fn is_unbounded(element: &Element) -> bool {
     element.price.numerator == UNBOUNDED_AMOUNT || element.price.denominator == UNBOUNDED_AMOUNT
 }
 
-/// The fee factor that is applied to each order's buy price.
-pub const FEE_FACTOR: f64 = 1.0 / 0.999;
-
 /// Calculates an effective price as a `f64` from a price fraction.
 fn as_effective_sell_price(price: &Price) -> f64 {
-    FEE_FACTOR * (price.numerator as f64) / (price.denominator as f64)
+    TransitiveOrder {
+        buy: price.numerator as _,
+        sell: price.denominator as _,
+    }
+    .effective_exchange_rate()
 }

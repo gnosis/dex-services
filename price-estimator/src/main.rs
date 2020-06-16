@@ -1,4 +1,3 @@
-mod estimate_buy_amount;
 mod filter;
 mod models;
 mod orderbook;
@@ -91,7 +90,7 @@ fn main() {
         options.orderbook_update_interval,
     ));
 
-    let filter = filter::estimated_buy_amount(orderbook, price_rounding_buffer);
+    let filter = filter::all(orderbook, price_rounding_buffer);
     let serve_task = runtime.spawn(warp::serve(filter).run(([127, 0, 0, 1], 8080)));
 
     log::info!("Server ready.");

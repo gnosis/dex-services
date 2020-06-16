@@ -138,7 +138,7 @@ pub fn execute_private_solver(
         .arg(format!("{}{}", "/app/", input_file.to_owned()))
         .arg(format!("--outputDir={}{}", "/app/", result_folder))
         .arg("--logging=WARNING")
-        .args(&["--solverTimeLimit", &time_limit])
+        .arg(format!("--timeLimit={}", time_limit))
         .arg(format!("--minAvgFeePerOrder={}", min_avg_fee_per_order))
         .arg(format!("--solver={}", internal_optimizer.to_argument()))
         .arg(String::from("--useExternalPrices"));
