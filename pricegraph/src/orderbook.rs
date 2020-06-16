@@ -14,7 +14,7 @@ use crate::encoding::{Element, InvalidLength, TokenId, TokenPair};
 use crate::graph::bellman_ford::{self, NegativeCycle};
 use crate::graph::path;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
-use crate::num::{self, MAX_ROUNDING_ERROR};
+use crate::num;
 use crate::{TransitiveOrder, TransitiveOrderbook, FEE_FACTOR};
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use primitive_types::U256;
@@ -542,7 +542,7 @@ impl Orderbook {
 
             order.amount -= fill_amount;
             debug_assert!(
-                order.amount >= -MAX_ROUNDING_ERROR,
+                order.amount >= -num::max_rounding_error(fill_amount),
                 "remaining amount underflow for order {}-{}",
                 order.user,
                 order.id,
@@ -1347,6 +1347,33 @@ mod tests {
         assert_eq!(
             orderbook.fill_market_order(TokenPair { buy: 1, sell: 42 }, 500_000.0),
             None,
+        );
+    }
+
+    #[test]
+    fn fuzz_calculates_rounding_errors_based_on_amounts() {
+        // NOTE: Discovered by fuzzer, see
+        // https://github.com/gnosis/dex-services/issues/916#issuecomment-634457245
+
+        let mut orderbook = orderbook! {
+            users {
+                @1 {
+                    token 1 => u128::MAX,
+                }
+            }
+            orders {
+                owner @1
+                    buying  0 [ 13_294_906_614_391_990_988_372_451_468_773_477_386]
+                    selling 1 [327_042_228_921_422_829_026_657_257_798_164_547_592]
+                              ( 83_798_276_971_421_254_262_445_676_335_662_107_162),
+            }
+        };
+
+        let amount = orderbook.fill_order_at_price(TokenPair { buy: 1, sell: 0 }, 1.0);
+        assert_approx_eq!(
+            amount,
+            83_798_276_971_421_254_262_445_676_335_662_107_162.0,
+            num::max_rounding_error_with_epsilon(amount)
         );
     }
 }
