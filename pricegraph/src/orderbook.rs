@@ -1358,7 +1358,7 @@ mod tests {
         assert_approx_eq!(
             amount,
             83_798_276_971_421_254_262_445_676_335_662_107_162.0,
-            num::max_rounding_error(amount)
+            num::max_rounding_error_with_epsilon(amount)
         );
     }
 }
