@@ -137,9 +137,9 @@ mod tests {
     #[test]
     fn get_token_prices() {
         let tokens = hash_map! {
-            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0, true),
-            TokenId(4) => TokenBaseInfo::new("USDC", 6, 0, true),
-            TokenId(5) => TokenBaseInfo::new("PAX", 18, 0, true),
+            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0),
+            TokenId(4) => TokenBaseInfo::new("USDC", 6, 0),
+            TokenId(5) => TokenBaseInfo::new("PAX", 18, 0),
         };
 
         let mut api = MockKrakenApi::new();
@@ -205,16 +205,16 @@ mod tests {
         // ```
 
         let tokens = hash_map! {
-            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0, true),
-            TokenId(2) => TokenBaseInfo::new("USDT", 6, 0, true),
-            TokenId(3) => TokenBaseInfo::new("TUSD", 18, 0, true),
-            TokenId(4) => TokenBaseInfo::new("USDC", 6, 0, true),
-            TokenId(5) => TokenBaseInfo::new("PAX", 18, 0, true),
-            TokenId(6) => TokenBaseInfo::new("GUSD", 2, 0, true),
-            TokenId(7) => TokenBaseInfo::new("DAI", 18, 0, true),
-            TokenId(8) => TokenBaseInfo::new("sETH", 18, 0, true),
-            TokenId(9) => TokenBaseInfo::new("sUSD", 18, 0, true),
-            TokenId(15) => TokenBaseInfo::new("SNX", 18, 0, true)
+            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0),
+            TokenId(2) => TokenBaseInfo::new("USDT", 6, 0),
+            TokenId(3) => TokenBaseInfo::new("TUSD", 18, 0),
+            TokenId(4) => TokenBaseInfo::new("USDC", 6, 0),
+            TokenId(5) => TokenBaseInfo::new("PAX", 18, 0),
+            TokenId(6) => TokenBaseInfo::new("GUSD", 2, 0),
+            TokenId(7) => TokenBaseInfo::new("DAI", 18, 0),
+            TokenId(8) => TokenBaseInfo::new("sETH", 18, 0),
+            TokenId(9) => TokenBaseInfo::new("sUSD", 18, 0),
+            TokenId(15) => TokenBaseInfo::new("SNX", 18, 0)
         };
         let token_ids: Vec<TokenId> = tokens.keys().copied().collect();
 
