@@ -6,6 +6,7 @@ use anyhow::{Context, Error, Result};
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::iter::FromIterator;
 use std::str::FromStr;
 
 /// Base token info to use for providing token information to the solver. This
@@ -22,24 +23,16 @@ pub struct TokenBaseInfo {
     pub alias: String,
     pub decimals: u8,
     pub external_price: u128,
-    #[serde(default)]
-    pub should_estimate_price: bool,
 }
 
 impl TokenBaseInfo {
     /// Create new token information from its parameters.
     #[cfg(test)]
-    pub fn new(
-        alias: impl Into<String>,
-        decimals: u8,
-        external_price: u128,
-        should_estimate_price: bool,
-    ) -> Self {
+    pub fn new(alias: impl Into<String>, decimals: u8, external_price: u128) -> Self {
         TokenBaseInfo {
             alias: alias.into(),
             decimals,
             external_price,
-            should_estimate_price,
         }
     }
 
@@ -71,8 +64,8 @@ impl TokenBaseInfo {
 impl Into<TokenInfo> for TokenBaseInfo {
     fn into(self) -> TokenInfo {
         TokenInfo {
-            alias: self.alias,
-            decimals: self.decimals,
+            alias: Some(self.alias),
+            decimals: Some(self.decimals),
             external_price: self.external_price,
         }
     }
@@ -98,12 +91,8 @@ impl TokenData {
 
     /// Returns a vector with all the tokens that should be priced in the token
     /// data map.
-    pub fn all_tokens_to_estimate_price(&self) -> Vec<TokenId> {
-        self.0
-            .iter()
-            .filter(|&(_, info)| info.should_estimate_price)
-            .map(|(&id, _)| id)
-            .collect()
+    pub fn all_ids(&self) -> Vec<TokenId> {
+        Vec::from_iter(self.0.keys().copied())
     }
 }
 
@@ -145,8 +134,8 @@ mod tests {
         assert_eq!(
             TokenData::from_str(json).unwrap(),
             TokenData::from(hash_map! {
-                TokenId(1) => TokenBaseInfo::new("WETH", 18, 200_000_000_000_000_000_000, false),
-                TokenId(4) => TokenBaseInfo::new("USDC", 6, 1_000_000_000_000_000_000_000_000_000_000, true),
+                TokenId(1) => TokenBaseInfo::new("WETH", 18, 200_000_000_000_000_000_000),
+                TokenId(4) => TokenBaseInfo::new("USDC", 6, 1_000_000_000_000_000_000_000_000_000_000),
             })
         );
     }
@@ -155,18 +144,18 @@ mod tests {
     fn token_get_price() {
         for (token, usd_price, expected) in &[
             (
-                TokenBaseInfo::new("USDC", 6, 0, true),
+                TokenBaseInfo::new("USDC", 6, 0),
                 0.99,
                 0.99 * 10f64.powi(30),
             ),
             (
-                TokenBaseInfo::new("DAI", 18, 0, true),
+                TokenBaseInfo::new("DAI", 18, 0),
                 1.01,
                 1.01 * 10f64.powi(18),
             ),
-            (TokenBaseInfo::new("FAKE", 32, 0, true), 1.0, 10f64.powi(4)),
+            (TokenBaseInfo::new("FAKE", 32, 0), 1.0, 10f64.powi(4)),
             (
-                TokenBaseInfo::new("SCAM", 42, 0, true),
+                TokenBaseInfo::new("SCAM", 42, 0),
                 10f64.powi(10),
                 10f64.powi(4),
             ),
@@ -179,13 +168,13 @@ mod tests {
     #[test]
     fn token_get_price_without_rounding_error() {
         assert_eq!(
-            TokenBaseInfo::new("OWL", 18, 0, true).get_owl_price(1.0),
+            TokenBaseInfo::new("OWL", 18, 0).get_owl_price(1.0),
             1_000_000_000_000_000_000,
         );
     }
 
     #[test]
     fn weth_token_symbol_is_eth() {
-        assert_eq!(TokenBaseInfo::new("WETH", 18, 0, true).symbol(), "ETH");
+        assert_eq!(TokenBaseInfo::new("WETH", 18, 0).symbol(), "ETH");
     }
 }
