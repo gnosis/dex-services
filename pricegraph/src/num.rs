@@ -13,9 +13,8 @@ use std::f64;
 pub fn max_rounding_error(quantity: f64) -> f64 {
     // NOTE: For discussion on the derivation of this formula, see:
     // https://github.com/gnosis/dex-services/pull/1012#discussion_r440627156
-    // const MANTISSA_MASK: u64 = !0 >> (64 - f64::MANTISSA_DIGITS + 1);
-    const MANTISSA_MASK: u64 = 0xfff0_0000_0000_0000;
-    f64::from_bits(quantity.to_bits() & MANTISSA_MASK) * f64::EPSILON
+    const SIGN_EXPONENT_MASK: u64 = 0xfff0_0000_0000_0000;
+    f64::from_bits(quantity.to_bits() & SIGN_EXPONENT_MASK) * f64::EPSILON
 }
 
 /// The maximum rouding error with an epsilon. This is because the assertion
