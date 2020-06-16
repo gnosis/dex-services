@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_with::rust::display_fromstr;
-use std::num::ParseIntError;
+use std::{convert::From, num::ParseIntError, str::FromStr};
 
 #[derive(Debug, Copy, Clone)]
 pub struct TokenPair {
@@ -25,7 +25,7 @@ pub enum ParseTokenPairError {
     ParseIntError(#[from] ParseIntError),
 }
 
-impl std::str::FromStr for TokenPair {
+impl FromStr for TokenPair {
     type Err = ParseTokenPairError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut split = s.split('-');
@@ -67,13 +67,42 @@ pub struct EstimatedBuyAmountResult {
     pub sell_amount_in_quote: u128,
 }
 
+#[derive(Debug, Serialize)]
+pub struct TransitiveOrder {
+    pub price: f64,
+    pub volume: f64,
+}
+
+impl From<&pricegraph::TransitiveOrder> for TransitiveOrder {
+    fn from(_order: &pricegraph::TransitiveOrder) -> Self {
+        unimplemented!()
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct MarketsResult {
+    pub asks: Vec<TransitiveOrder>,
+    pub bids: Vec<TransitiveOrder>,
+}
+
+impl From<&pricegraph::TransitiveOrderbook> for MarketsResult {
+    fn from(orderbook: &pricegraph::TransitiveOrderbook) -> Self {
+        let convert = |orders: &Vec<_>| orders.iter().map(From::from).collect();
+        Self {
+            asks: convert(&orderbook.asks),
+            bids: convert(&orderbook.bids),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    // use assert_approx_eq::assert_approx_eq;
     use serde_json::Value;
 
     #[test]
-    fn serialization() {
+    fn estimated_buy_amount_serialization() {
         let original = EstimatedBuyAmountResult {
             base_token_id: 1,
             quote_token_id: 2,
@@ -90,4 +119,38 @@ mod tests {
         });
         assert_eq!(json, expected);
     }
+
+    #[test]
+    fn transitive_orderbook_serialization() {
+        let original = MarketsResult {
+            asks: vec![TransitiveOrder {
+                price: 1.0,
+                volume: 2.0,
+            }],
+            bids: vec![TransitiveOrder {
+                price: 3.5,
+                volume: 4.0,
+            }],
+        };
+        let serialized = serde_json::to_string(&original).unwrap();
+        let json: Value = serde_json::from_str(&serialized).unwrap();
+        let expected = serde_json::json!({
+            "asks": [{"price": 1.0, "volume": 2.0}],
+            "bids": [{"price": 3.5, "volume": 4.0}],
+        });
+        assert_eq!(json, expected);
+    }
+
+    /*
+    #[test]
+    fn transitive_order_conversion() {
+        let pricegraph_order = pricegraph::TransitiveOrder {
+            buy: 0.5,
+            sell: 2.0,
+        };
+        let converted = TransitiveOrder::from(&pricegraph_order);
+        assert_approx_eq!(converted.price, 0.25);
+        assert_approx_eq!(converted.volume, 2.0);
+    }
+    */
 }

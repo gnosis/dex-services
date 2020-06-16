@@ -4,7 +4,6 @@ use crate::orderbook::StableXOrderBookReading;
 use anyhow::Result;
 use futures::future::{BoxFuture, FutureExt as _};
 use pricegraph::{Orderbook, TokenPair};
-use primitive_types::U256;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -25,11 +24,7 @@ impl PriceSource for PricegraphEstimator {
             let (account_state, orders) =
                 self.orderbook_reader.get_auction_data(batch.into()).await?;
             let mut orderbook = Orderbook::from_elements(orders.iter().map(|order| {
-                order.to_element(U256(
-                    account_state
-                        .read_balance(order.sell_token, order.account_id)
-                        .0,
-                ))
+                order.to_element(account_state.read_balance(order.sell_token, order.account_id))
             }));
             orderbook.reduce_overlapping_orders();
             Ok(self.estimate_prices(tokens, orderbook))

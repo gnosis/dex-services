@@ -8,14 +8,14 @@
 mod order;
 mod user;
 
-use self::order::{Order, OrderCollector, OrderMap, FEE_FACTOR};
+use self::order::{Order, OrderCollector, OrderMap};
 use self::user::{User, UserMap};
 use crate::encoding::{Element, InvalidLength, TokenId, TokenPair};
 use crate::graph::bellman_ford::{self, NegativeCycle};
 use crate::graph::path;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
 use crate::num::{self, MAX_ROUNDING_ERROR};
-use crate::{TransitiveOrder, TransitiveOrderbook};
+use crate::{TransitiveOrder, TransitiveOrderbook, FEE_FACTOR};
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use primitive_types::U256;
 use std::cmp;
@@ -42,16 +42,6 @@ pub struct Orderbook {
 }
 
 impl Orderbook {
-    /// Reads an orderbook from encoded bytes returning an error if the encoded
-    /// orders are invalid.
-    ///
-    /// The orderbook is expected to be encoded as an indexed order as encoded
-    /// by `BatchExchangeViewer::getFilteredOrdersPaginated`.
-    pub fn read(bytes: impl AsRef<[u8]>) -> Result<Self, InvalidLength> {
-        let elements = Element::read_all(bytes.as_ref())?;
-        Ok(Orderbook::from_elements(elements))
-    }
-
     /// Creates an orderbook from an iterator over decoded auction elements.
     pub fn from_elements(elements: impl IntoIterator<Item = Element>) -> Self {
         let mut max_token = 0;
@@ -93,6 +83,28 @@ impl Orderbook {
             users,
             projection,
         }
+    }
+
+    /// Reads an orderbook from encoded bytes returning an error if the encoded
+    /// orders are invalid.
+    ///
+    /// The orderbook is expected to be encoded as an indexed order as encoded
+    /// by `BatchExchangeViewer::getFilteredOrdersPaginated`. Specifically, each
+    /// order has a `114` byte stride with the following values (appearing in
+    /// encoding order, all values are little endian encoded).
+    /// - `20` bytes: owner's address
+    /// - `32` bytes: owners's sell token balance
+    /// - `2` bytes: buy token ID
+    /// - `2` bytes: sell token ID
+    /// - `4` bytes: valid from batch ID
+    /// - `4` bytes: valid until batch ID
+    /// - `16` bytes: price numerator
+    /// - `16` bytes: price denominator
+    /// - `16` bytes: remaining order sell amount
+    /// - `2` bytes: order ID
+    pub fn read(bytes: impl AsRef<[u8]>) -> Result<Self, InvalidLength> {
+        let elements = Element::read_all(bytes.as_ref())?;
+        Ok(Orderbook::from_elements(elements))
     }
 
     /// Returns the number of orders in the orderbook.
@@ -141,8 +153,14 @@ impl Orderbook {
         debug_assert!(!self.is_overlapping());
     }
 
-    /// Reduces all overlapping orders for a given market and returns the
-    /// computed overlapping transitive orderbook for that market.
+    /// Find negative cycles in the specified market and splits each one into a
+    /// `base -> quote` (ask) transitive order and a `quote -> base` (bid)
+    /// transitive order, reducing them both. Returns the computed overlapping
+    /// transitive orderbook for that market.
+    ///
+    /// Note that there may exist additional transitive orders that may overlap
+    /// with orders in the resulting transitive orderbook. However, all negative
+    /// cycles will be removed from the orderbook graph.
     pub fn reduce_overlapping_transitive_orderbook(
         &mut self,
         base: TokenId,
@@ -159,16 +177,25 @@ impl Orderbook {
 
             if path.first() == Some(&quote) {
                 if let Some(base_index) = path.iter().position(|node| *node == base) {
-                    let (ask, bid) = (&path[0..base_index + 1], &path[base_index..]);
+                    let (bid, ask) = (&path[0..base_index + 1], &path[base_index..]);
 
-                    overlap.asks.push(
-                        self.find_transitive_order(ask)
-                            .expect("ask transitive path not found after being detected"),
-                    );
-                    overlap.bids.push(
-                        self.find_transitive_order(bid)
-                            .expect("bid transitive path not found after being detected"),
-                    );
+                    let (capacity, transitive_price) = self
+                        .fill_path(ask)
+                        .expect("ask transitive path not found after being detected");
+                    overlap.asks.push(transitive_order_from_capacity_and_price(
+                        capacity,
+                        transitive_price,
+                    ));
+
+                    let (capacity, transitive_price) = self
+                        .fill_path(bid)
+                        .expect("bid transitive path not found after being detected");
+                    overlap.bids.push(transitive_order_from_capacity_and_price(
+                        capacity,
+                        transitive_price,
+                    ));
+
+                    continue;
                 }
             }
 
@@ -255,16 +282,6 @@ impl Orderbook {
         }
 
         orders
-    }
-
-    /// Computes the equivalent transitive order along a path.
-    ///
-    /// Returns `None` if the path does not exist.
-    fn find_transitive_order(&self, path: &[NodeIndex]) -> Option<TransitiveOrder> {
-        let (capacity, price) = self.find_path_capacity_and_price(path)?;
-        let order = transitive_order_from_capacity_and_price(capacity, price);
-
-        Some(order)
     }
 
     /// Fill a market order in the current orderbook graph returning the maximum
@@ -437,7 +454,7 @@ impl Orderbook {
         while let Some(true) = self
             .orders
             .best_order_for_pair(pair)
-            .map(|order| order.get_effective_amount(&self.users) <= 0.0)
+            .map(|order| order.get_effective_amount(&self.users) <= MIN_AMOUNT)
         {
             self.orders.remove_pair_order(pair);
         }
@@ -640,7 +657,6 @@ struct IncompletePathError(TokenPair);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data;
     use crate::encoding::UserId;
     use assert_approx_eq::assert_approx_eq;
 
@@ -712,26 +728,6 @@ mod tests {
                 None => return f64::INFINITY,
             };
             self.projection[edge]
-        }
-    }
-
-    #[test]
-    fn real_orderbooks() {
-        // The output of this test can be seen with:
-        // ```
-        // cargo test -p pricegraph real_orderbooks -- --nocapture
-        // ```
-
-        let dai_weth = TokenPair { buy: 7, sell: 1 };
-        let volume = 10.0f64.powi(18);
-
-        for (batch_id, raw_orderbook) in data::ORDERBOOKS.iter() {
-            let mut orderbook = Orderbook::read(raw_orderbook).unwrap();
-            println!(
-                "#{}: estimated price for selling 1 WETH at {} DAI/WETH",
-                batch_id,
-                orderbook.fill_market_order(dai_weth, volume).unwrap(),
-            );
         }
     }
 
@@ -826,13 +822,65 @@ mod tests {
 
         let overlap = orderbook.reduce_overlapping_transitive_orderbook(1, 2);
 
-        // Transitive order `2 -> 3 -> 1`
-        assert_approx_eq!(overlap.asks[0].buy, 500_000.0);
-        assert_approx_eq!(overlap.asks[0].sell, 500_000.0 / FEE_FACTOR);
+        // Transitive order `1 -> 2` buying 1 selling 2
+        assert_eq!(overlap.asks.len(), 1);
+        assert_approx_eq!(overlap.asks[0].buy, 1_000_000.0);
+        assert_approx_eq!(overlap.asks[0].sell, 2_000_000.0);
 
-        // Transitive order `1 -> 2`
+        // Transitive order `2 -> 3 -> 1` buying 2 selling 1
+        assert_eq!(overlap.bids.len(), 1);
+        assert_approx_eq!(overlap.bids[0].buy, 500_000.0);
+        assert_approx_eq!(overlap.bids[0].sell, 500_000.0 / FEE_FACTOR);
+    }
+
+    #[test]
+    fn includes_transitive_order_only_once() {
+        // /---0.5---v
+        // 0         1
+        // ^---1.0---/
+        // ^---1.5--/
+        let mut orderbook = orderbook! {
+            users {
+                @1 {
+                    token 1 => 100_000_000,
+                }
+                @2 {
+                    token 0 => 1_000_000,
+                }
+                @3 {
+                    token 0 => 1_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 0 [50_000_000] selling 1 [100_000_000],
+                owner @2 buying 1 [1_000_000] selling 0 [1_000_000],
+                owner @3 buying 1 [1_500_000] selling 0 [1_000_000],
+            }
+        };
+
+        let overlap = orderbook.reduce_overlapping_transitive_orderbook(0, 1);
+
+        // Transitive order `0 -> 1` buying 0 selling 1
+        assert_eq!(overlap.asks.len(), 1);
+        assert_approx_eq!(overlap.asks[0].buy, 50_000_000.0);
+        assert_approx_eq!(overlap.asks[0].sell, 100_000_000.0);
+
+        // Transitive order `1 -> 0` buying 1 selling 0
+        assert_eq!(overlap.bids.len(), 1);
         assert_approx_eq!(overlap.bids[0].buy, 1_000_000.0);
-        assert_approx_eq!(overlap.bids[0].sell, 2_000_000.0);
+        assert_approx_eq!(overlap.bids[0].sell, 1_000_000.0);
+
+        // NOTE: This is counter-intuitive, but there should only be one
+        // transitive order from `1 -> 0` even if there are two orders that
+        // overlap with the large `0 -> 1` order. This is because whenever a
+        // negative cycle is found, it gets split into two transitive orders,
+        // one from `base -> quote` (ask) and the other from `quote -> base`
+        // (bid). These transitive orders are **completely** reduced, so even if
+        // there are other orders that overlap with the remaining amount of one
+        // of these transitive orders, they might not get found by
+        // `reduce_overlapping_transitive_orderbook`. Rest assured, they will
+        // get found by `fill_transitive_orderbook` and ultimately included in
+        // the final transitive orderbook.
     }
 
     #[test]
@@ -1185,6 +1233,14 @@ mod tests {
         let filled = orderbook.fill_path(&path).unwrap();
         assert_eq!(filled, (capacity, transitive_price));
 
+        // NOTE: The expected fill amounts are:
+        //  Order | buy amt | sell amt | xrate
+        // -------+---------+----------+-------
+        // 0 -> 1 | 501_000 |  500_500 |   1.0
+        // 1 -> 2 | 500_500 |  500_000 |   1.0
+        // 2 -> 3 | 500_000 |  499_500 |   1.0
+        // 3 -> 4 | 499_500 |  998_000 |   0.5
+
         assert_approx_eq!(
             orderbook.get_projected_pair_weight(TokenPair { buy: 1, sell: 2 }),
             // NOTE: user 2's order has no more balance so expect the new weight
@@ -1203,21 +1259,18 @@ mod tests {
         assert!(orderbook
             .get_projected_pair_weight(TokenPair { buy: 4, sell: 2 })
             .is_infinite());
+        // NOTE: User 3's order selling token 3 for 2 has become a dust order
+        // (since it has a remaining amount of about 500), check that it was
+        // removed.
+        assert!(orderbook
+            .orders
+            .best_order_for_pair(TokenPair { buy: 2, sell: 3 })
+            .is_none());
+        assert!(orderbook
+            .get_projected_pair_weight(TokenPair { buy: 2, sell: 3 })
+            .is_infinite());
 
-        assert_eq!(orderbook.num_orders(), 4);
-
-        assert_approx_eq!(
-            orderbook
-                .orders
-                .best_order_for_pair(TokenPair { buy: 0, sell: 1 })
-                .unwrap()
-                .amount,
-            1_000_000.0 - capacity / FEE_FACTOR
-        );
-        assert_approx_eq!(
-            orderbook.users[&user_id(1)].balance_of(1),
-            1_000_000.0 - capacity / FEE_FACTOR
-        );
+        assert_eq!(orderbook.num_orders(), 3);
 
         let transitive_price_0_1 = FEE_FACTOR;
         assert_approx_eq!(
@@ -1232,6 +1285,16 @@ mod tests {
             orderbook.users[&user_id(1)].balance_of(1),
             1_000_000.0 - capacity / transitive_price_0_1
         );
+
+        assert_approx_eq!(
+            orderbook
+                .orders
+                .best_order_for_pair(TokenPair { buy: 1, sell: 2 })
+                .unwrap()
+                .amount,
+            1_000_000.0
+        );
+        assert_approx_eq!(orderbook.users[&user_id(5)].balance_of(2), 1_000_000.0);
 
         assert_approx_eq!(
             orderbook
