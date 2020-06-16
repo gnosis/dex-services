@@ -12,9 +12,11 @@ mod threaded_price_source;
 pub use self::data::TokenData;
 use self::dexag::DexagClient;
 use self::kraken::KrakenClient;
+use self::orderbook_based::PricegraphEstimator;
 use crate::{
     http::HttpFactory,
     models::{Order, TokenId, TokenInfo},
+    orderbook::StableXOrderBookReading,
 };
 use anyhow::Result;
 use average_price_source::AveragePriceSource;
@@ -23,6 +25,7 @@ use log::warn;
 use price_source::{NoopPriceSource, PriceSource, Token};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter;
+use std::sync::Arc;
 use std::time::Duration;
 use threaded_price_source::ThreadedPriceSource;
 
@@ -48,22 +51,28 @@ impl PriceOracle {
     /// Creates a new price oracle from a token whitelist data.
     pub fn new(
         http_factory: &HttpFactory,
+        orderbook_reader: Arc<dyn StableXOrderBookReading>,
         tokens: TokenData,
         update_interval: Duration,
     ) -> Result<Self> {
         let source: Box<dyn PriceSource + Send + Sync> = if tokens.is_empty() {
             Box::new(NoopPriceSource)
         } else {
-            let source = AveragePriceSource::new(vec![
-                Box::new(KrakenClient::new(http_factory, tokens.clone())?),
-                Box::new(DexagClient::new(http_factory, tokens.clone())?),
-            ]);
-            let (source, _) = ThreadedPriceSource::new(
+            let (kraken_source, _) = ThreadedPriceSource::new(
                 tokens.all_tokens_to_estimate_price(),
-                source,
+                KrakenClient::new(http_factory, tokens.clone())?,
                 update_interval,
             );
-            Box::new(source)
+            let (dexag_source, _) = ThreadedPriceSource::new(
+                tokens.all_tokens_to_estimate_price(),
+                DexagClient::new(http_factory, tokens.clone())?,
+                update_interval,
+            );
+            Box::new(AveragePriceSource::new(vec![
+                Box::new(kraken_source),
+                Box::new(dexag_source),
+                Box::new(PricegraphEstimator::new(orderbook_reader)),
+            ]))
         };
 
         Ok(PriceOracle { tokens, source })
