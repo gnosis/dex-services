@@ -11,6 +11,7 @@ use core::{
 };
 use ethcontract::PrivateKey;
 use prometheus::Registry;
+use std::net::SocketAddr;
 use std::{num::ParseIntError, path::PathBuf, sync::Arc, thread, time::Duration};
 use structopt::StructOpt;
 use tokio::{runtime, time};
@@ -19,9 +20,12 @@ use url::Url;
 #[derive(Debug, StructOpt)]
 #[structopt(name = "price estimator", rename_all = "kebab")]
 struct Options {
+    #[structopt(long, env = "BIND_ADDRESS", default_value = "0.0.0.0:8080")]
+    bind_address: SocketAddr,
+
     /// The Ethereum node URL to connect to. Make sure that the node allows for
     /// queries without a gas limit to be able to fetch the orderbook.
-    #[structopt(short, long, env = "NODE_URL")]
+    #[structopt(long, env = "ETHEREUM_NODE_URL")]
     node_url: Url,
 
     /// The timeout in seconds of web3 JSON RPC calls.
@@ -91,7 +95,7 @@ fn main() {
     ));
 
     let filter = filter::all(orderbook, price_rounding_buffer);
-    let serve_task = runtime.spawn(warp::serve(filter).run(([127, 0, 0, 1], 8080)));
+    let serve_task = runtime.spawn(warp::serve(filter).run(options.bind_address));
 
     log::info!("Server ready.");
     runtime.block_on(async move {

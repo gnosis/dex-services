@@ -82,7 +82,7 @@ jobs:
         - ./grcov --branch --ignore-not-existing --llvm --excl-start "mod test" --excl-line "#\[cfg_attr\(test, mockall::automock\)\]|#\[derive" --ignore "/*" --ignore "target/debug/build/**" target/debug/ --output-path coveralls.json --output-type "coveralls+" --source-dir . --service-name travis-pro --service-job-id $TRAVIS_JOB_ID
         - curl --form json_file=@coveralls.json https://coveralls.io/api/v1/jobs
 
-    - name: Deploy
+    - name: "Deploy Driver"
       if: (type != pull_request) AND (tag is present OR branch = master)
       rust: 1.43.0
       before_install:
@@ -99,5 +99,22 @@ jobs:
             branch: master
         - provider: script
           script: ./docker/deploy.sh $TRAVIS_TAG
+          on:
+            tags: true
+    - name: "Deploy Price Estimator"
+      if: (type != pull_request) AND (tag is present OR branch = master)
+      rust: 1.43.0
+      before_script:
+        - ./scripts/setup_contracts.sh
+      script:
+        - true
+      deploy:
+        - script:
+        - provider: script
+          script: ./price-estimator/docker/deploy.sh $TRAVIS_BRANCH
+          on:
+            branch: master
+        - provider: script
+          script: ./price-estimator/docker/deploy.sh $TRAVIS_TAG
           on:
             tags: true
