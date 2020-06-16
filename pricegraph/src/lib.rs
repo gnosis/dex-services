@@ -24,6 +24,28 @@ pub struct TransitiveOrderbook {
     pub bids: Vec<TransitiveOrder>,
 }
 
+impl TransitiveOrderbook {
+    /// Returns an iterator with ask prices (expressed in the quote token) and
+    /// corresponding volumes.
+    ///
+    /// Note that the prices are effective prices and include fees.
+    pub fn ask_prices(&self) -> impl DoubleEndedIterator<Item = (f64, f64)> + '_ {
+        self.asks
+            .iter()
+            .map(|order| ((order.buy / order.sell) * FEE_FACTOR, order.sell))
+    }
+
+    /// Returns an iterator with bid prices (expressed in the quote token) and
+    /// corresponding volumes.
+    ///
+    /// Note that the prices are effective prices and include fees.
+    pub fn bid_prices(&self) -> impl DoubleEndedIterator<Item = (f64, f64)> + '_ {
+        self.bids
+            .iter()
+            .map(|order| ((order.sell / order.buy) / FEE_FACTOR, order.buy))
+    }
+}
+
 /// A struct representing a transitive order for trading between two tokens.
 ///
 /// A transitive order is defined as the transitive combination of multiple
@@ -193,6 +215,47 @@ impl Pricegraph {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transitive_orderbook_prices() {
+        let transitive_orderbook = TransitiveOrderbook {
+            asks: vec![
+                TransitiveOrder {
+                    buy: 1_000_000.0,
+                    sell: 2_000_000.0,
+                },
+                TransitiveOrder {
+                    buy: 500_000.0,
+                    sell: 900_000.0,
+                },
+            ],
+            bids: vec![
+                TransitiveOrder {
+                    buy: 20_000_000.0,
+                    sell: 10_000_000.0,
+                },
+                TransitiveOrder {
+                    buy: 1_500_000.0,
+                    sell: 900_000.0,
+                },
+            ],
+        };
+
+        assert_eq!(
+            transitive_orderbook.ask_prices().collect::<Vec<_>>(),
+            vec![
+                (0.5 * FEE_FACTOR, 2_000_000.0),
+                ((1.0 / 1.8) * FEE_FACTOR, 900_000.0)
+            ]
+        );
+        assert_eq!(
+            transitive_orderbook.bid_prices().collect::<Vec<_>>(),
+            vec![
+                (0.5 / FEE_FACTOR, 20_000_000.0),
+                ((0.9 / 1.5) / FEE_FACTOR, 1_500_000.0)
+            ]
+        );
+    }
 
     #[test]
     fn real_orderbooks() {
