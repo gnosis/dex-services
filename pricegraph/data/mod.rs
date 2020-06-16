@@ -28,9 +28,7 @@ lazy_static! {
         };
 
         add_orderbook!(5298183);
-        // TODO: this orderbook in test real_orderbooks randomly fails. Disabled it to have CI working reliably.
-        // panicked at 'remaining amount underflow for order 0x424a…ffa5-62', pricegraph/src/orderbook.rs:364:13
-        // add_orderbook!(5301531);
+        add_orderbook!(5301531);
 
         orderbooks
     };
