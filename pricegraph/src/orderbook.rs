@@ -454,7 +454,7 @@ impl Orderbook {
         while let Some(true) = self
             .orders
             .best_order_for_pair(pair)
-            .map(|order| order.get_effective_amount(&self.users) <= 0.0)
+            .map(|order| order.get_effective_amount(&self.users) <= MIN_AMOUNT)
         {
             self.orders.remove_pair_order(pair);
         }
@@ -1233,6 +1233,14 @@ mod tests {
         let filled = orderbook.fill_path(&path).unwrap();
         assert_eq!(filled, (capacity, transitive_price));
 
+        // NOTE: The expected fill amounts are:
+        //  Order | buy amt | sell amt | xrate
+        // -------+---------+----------+-------
+        // 0 -> 1 | 501_000 |  500_500 |   1.0
+        // 1 -> 2 | 500_500 |  500_000 |   1.0
+        // 2 -> 3 | 500_000 |  499_500 |   1.0
+        // 3 -> 4 | 499_500 |  998_000 |   0.5
+
         assert_approx_eq!(
             orderbook.get_projected_pair_weight(TokenPair { buy: 1, sell: 2 }),
             // NOTE: user 2's order has no more balance so expect the new weight
@@ -1251,21 +1259,18 @@ mod tests {
         assert!(orderbook
             .get_projected_pair_weight(TokenPair { buy: 4, sell: 2 })
             .is_infinite());
+        // NOTE: User 3's order selling token 3 for 2 has become a dust order
+        // (since it has a remaining amount of about 500), check that it was
+        // removed.
+        assert!(orderbook
+            .orders
+            .best_order_for_pair(TokenPair { buy: 2, sell: 3 })
+            .is_none());
+        assert!(orderbook
+            .get_projected_pair_weight(TokenPair { buy: 2, sell: 3 })
+            .is_infinite());
 
-        assert_eq!(orderbook.num_orders(), 4);
-
-        assert_approx_eq!(
-            orderbook
-                .orders
-                .best_order_for_pair(TokenPair { buy: 0, sell: 1 })
-                .unwrap()
-                .amount,
-            1_000_000.0 - capacity / FEE_FACTOR
-        );
-        assert_approx_eq!(
-            orderbook.users[&user_id(1)].balance_of(1),
-            1_000_000.0 - capacity / FEE_FACTOR
-        );
+        assert_eq!(orderbook.num_orders(), 3);
 
         let transitive_price_0_1 = FEE_FACTOR;
         assert_approx_eq!(
@@ -1280,6 +1285,16 @@ mod tests {
             orderbook.users[&user_id(1)].balance_of(1),
             1_000_000.0 - capacity / transitive_price_0_1
         );
+
+        assert_approx_eq!(
+            orderbook
+                .orders
+                .best_order_for_pair(TokenPair { buy: 1, sell: 2 })
+                .unwrap()
+                .amount,
+            1_000_000.0
+        );
+        assert_approx_eq!(orderbook.users[&user_id(5)].balance_of(2), 1_000_000.0);
 
         assert_approx_eq!(
             orderbook
