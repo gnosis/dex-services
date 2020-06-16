@@ -10,6 +10,10 @@ use std::f64;
 /// The maximum rouding error is calcuated by finding the value of the least
 /// significant digit of quantity. This means that quantities can only be off
 /// by that least significant digit.
+///
+/// Another way of describing this is to compute an `f64::EPSILON` (which is for
+/// `1.0`) equivalent for `quantity`. This implies
+/// `max_rounding_error(1.0) == f64::EPSILON`.
 pub fn max_rounding_error(quantity: f64) -> f64 {
     // NOTE: For discussion on the derivation of this formula, see:
     // https://github.com/gnosis/dex-services/pull/1012#discussion_r440627156
@@ -20,6 +24,9 @@ pub fn max_rounding_error(quantity: f64) -> f64 {
 /// The maximum rouding error with an epsilon. This is because the assertion
 /// `assert_approx_eq` uses `>` and `<` semantics, while the maximum rounding
 /// error expects `>=` and `<=` semantics.
+///
+/// This method computes the next representable `f64` that is greater than
+/// the maximum rounding error for `quantity`.
 #[cfg(test)]
 pub fn max_rounding_error_with_epsilon(quantity: f64) -> f64 {
     let r = max_rounding_error(quantity);
@@ -92,5 +99,11 @@ mod tests {
                 if is_mantissa_1(*value) { 2 } else { 1 },
             );
         }
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn rounding_error_is_epsilon_for_1() {
+        assert_eq!(max_rounding_error(1.0), f64::EPSILON);
     }
 }
