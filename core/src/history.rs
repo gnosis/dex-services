@@ -27,10 +27,11 @@ impl ExchangeHistory {
 
         // NOTE: Since history methods depend on events being sorted, assert
         // this invariant is true!
-        debug_assert!(events
-            .windows(2)
-            .map(|evs| (evs[0].1, evs[1].1))
-            .all(|(a, b)| a <= b));
+        debug_assert!(events.windows(2).all(|event_pair| {
+            let (_, previous_event_batch) = event_pair[0];
+            let (_, next_event_batch) = event_pair[1];
+            previous_event_batch <= next_event_batch
+        }));
 
         Ok(ExchangeHistory { events })
     }
@@ -58,7 +59,7 @@ impl ExchangeHistory {
     /// The finalized orderbook includes all account state changes and orders
     /// that are consisdered by the smart contract for solving the subsequent
     /// batch.
-    pub fn finalized_auction_data_for_batch(
+    pub fn auction_data_for_batch(
         &self,
         batch_id: impl Into<BatchId>,
     ) -> Result<(AccountState, Vec<Order>)> {
@@ -174,7 +175,7 @@ mod tests {
     }
 
     #[test]
-    fn computes_historic_finalized_orderbook() {
+    fn computes_historic_orderbook() {
         let history = ExchangeHistory {
             events: vec![
                 (token_listing(0), BatchId(0)),
@@ -213,7 +214,7 @@ mod tests {
             ],
         };
 
-        let auction_data = history.finalized_auction_data_for_batch(1).unwrap();
+        let auction_data = history.auction_data_for_batch(1).unwrap();
         assert_eq!(
             auction_data,
             (
@@ -234,7 +235,7 @@ mod tests {
             )
         );
 
-        let (account_state, _) = history.finalized_auction_data_for_batch(2).unwrap();
+        let (account_state, _) = history.auction_data_for_batch(2).unwrap();
         assert_eq!(account_state.read_balance(0, user(0)), 20_000_000.into());
     }
 }
