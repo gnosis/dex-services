@@ -23,8 +23,12 @@ impl ExchangeHistory {
         let events = orderbook
             .into_events()
             .map(|(event, batch_id)| (event, BatchId(batch_id as _)))
-            .collect::<Vec<_>>();
+            .collect();
 
+        Ok(ExchangeHistory::from_events(events))
+    }
+
+    fn from_events(events: Vec<(batch_exchange::Event, BatchId)>) -> Self {
         // NOTE: Since history methods depend on events being sorted, assert
         // this invariant is true!
         debug_assert!(events.windows(2).all(|event_pair| {
@@ -33,7 +37,7 @@ impl ExchangeHistory {
             previous_event_batch <= next_event_batch
         }));
 
-        Ok(ExchangeHistory { events })
+        ExchangeHistory { events }
     }
 
     /// Reads historic exchange events from an `Orderbook` filestore.
@@ -156,13 +160,11 @@ mod tests {
 
     #[test]
     fn iterates_events_until_batch() {
-        let history = ExchangeHistory {
-            events: vec![
-                (token_listing(0), BatchId(0)),
-                (token_listing(1), BatchId(1)),
-                (token_listing(2), BatchId(2)),
-            ],
-        };
+        let history = ExchangeHistory::from_events(vec![
+            (token_listing(0), BatchId(0)),
+            (token_listing(1), BatchId(1)),
+            (token_listing(2), BatchId(2)),
+        ]);
         let events = history.events_until_end_of_batch(1).collect::<Vec<_>>();
 
         assert_eq!(
@@ -176,43 +178,41 @@ mod tests {
 
     #[test]
     fn computes_historic_orderbook() {
-        let history = ExchangeHistory {
-            events: vec![
-                (token_listing(0), BatchId(0)),
-                (token_listing(1), BatchId(0)),
-                (
-                    Event::OrderPlacement(OrderPlacement {
-                        owner: user(0),
-                        index: 0,
-                        buy_token: 1,
-                        sell_token: 0,
-                        price_numerator: 1_000_000,
-                        price_denominator: 1_000_000,
-                        valid_from: 1,
-                        valid_until: u32::MAX,
-                    }),
-                    BatchId(0),
-                ),
-                (
-                    Event::Deposit(Deposit {
-                        user: user(0),
-                        token: token(0),
-                        amount: 10_000_000.into(),
-                        batch_id: 1,
-                    }),
-                    BatchId(1),
-                ),
-                (
-                    Event::Deposit(Deposit {
-                        user: user(0),
-                        token: token(0),
-                        amount: 10_000_000.into(),
-                        batch_id: 2,
-                    }),
-                    BatchId(2),
-                ),
-            ],
-        };
+        let history = ExchangeHistory::from_events(vec![
+            (token_listing(0), BatchId(0)),
+            (token_listing(1), BatchId(0)),
+            (
+                Event::OrderPlacement(OrderPlacement {
+                    owner: user(0),
+                    index: 0,
+                    buy_token: 1,
+                    sell_token: 0,
+                    price_numerator: 1_000_000,
+                    price_denominator: 1_000_000,
+                    valid_from: 1,
+                    valid_until: u32::MAX,
+                }),
+                BatchId(0),
+            ),
+            (
+                Event::Deposit(Deposit {
+                    user: user(0),
+                    token: token(0),
+                    amount: 10_000_000.into(),
+                    batch_id: 1,
+                }),
+                BatchId(1),
+            ),
+            (
+                Event::Deposit(Deposit {
+                    user: user(0),
+                    token: token(0),
+                    amount: 10_000_000.into(),
+                    batch_id: 2,
+                }),
+                BatchId(2),
+            ),
+        ]);
 
         let auction_data = history.auction_data_for_batch(1).unwrap();
         assert_eq!(
