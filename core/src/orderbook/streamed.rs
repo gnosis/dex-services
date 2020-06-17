@@ -18,4 +18,5 @@ type TokenId = u16;
 type BatchId = u32;
 
 pub use block_timestamp_reading::BlockTimestampReading;
+pub use state::State;
 pub use updating_orderbook::UpdatingOrderbook as Orderbook;

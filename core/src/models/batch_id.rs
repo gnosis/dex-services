@@ -1,12 +1,15 @@
-use std::fmt;
-use std::time::{Duration, SystemTime, SystemTimeError};
+use std::{
+    convert::TryInto,
+    fmt,
+    time::{Duration, SystemTime, SystemTimeError},
+};
 
 /// The total time in a batch.
 pub const BATCH_DURATION: Duration = Duration::from_secs(300);
 
 /// Wraps a batch id as in the smart contract to add functionality related to
 /// the current time.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BatchId(pub u64);
 
 impl BatchId {
@@ -38,7 +41,13 @@ impl BatchId {
 
 impl Into<u32> for BatchId {
     fn into(self) -> u32 {
-        self.0 as u32
+        self.0.try_into().expect("batch ID overflows u32")
+    }
+}
+
+impl From<u32> for BatchId {
+    fn from(id: u32) -> Self {
+        BatchId(id as _)
     }
 }
 

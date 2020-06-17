@@ -2,7 +2,7 @@ use super::{state::State, BatchId};
 use crate::{
     contracts::stablex_contract::batch_exchange,
     models::{AccountState, Order},
-    orderbook::{util, StableXOrderBookReading},
+    orderbook::StableXOrderBookReading,
 };
 use anyhow::{Context, Result};
 use ethcontract::{contract::EventData, H256};
@@ -103,11 +103,11 @@ impl Orderbook {
     }
 
     fn create_state(&self) -> Result<State> {
-        self.events
-            .iter()
-            .try_fold(State::default(), |state, (_key, value)| {
-                state.apply_event(&value.event, value.batch_id)
-            })
+        State::from_events(
+            self.events
+                .values()
+                .map(|value| (&value.event, value.batch_id)),
+        )
     }
 
     pub fn into_events(self) -> impl Iterator<Item = (batch_exchange::Event, BatchId)> {
@@ -157,12 +157,9 @@ impl StableXOrderBookReading for Orderbook {
         batch_id_to_solve: u32,
     ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
         async move {
-            let state = self.create_state()?;
             // In order to solve batch t we need the orderbook at the beginning of batch t+1's collection process
-            let (account_state, orders) =
-                state.orderbook_at_beginning_of_batch(batch_id_to_solve + 1)?;
-            let (account_state, orders) = util::normalize_auction_data(account_state, orders);
-            Ok((account_state, orders))
+            self.create_state()?
+                .normalized_auction_state_at_beginning_of_batch(batch_id_to_solve + 1)
         }
         .boxed()
     }
