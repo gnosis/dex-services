@@ -13,7 +13,6 @@ use ethcontract::{Address, U256};
 use futures::future::{BoxFuture, FutureExt as _};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-use std::panic::{self, AssertUnwindSafe};
 use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread::{self, JoinHandle};
 
@@ -39,16 +38,8 @@ impl ShadowedOrderbookReader {
         //   if the primary orderbook is read and the shadow is still reading,
         //   the diff for that specific orderbook is skipped.
         let (shadow_channel_tx, shadow_channel_rx) = mpsc::sync_channel(0);
-        let shadow_thread = thread::spawn(move || {
-            let result = panic::catch_unwind(AssertUnwindSafe(move || {
-                background_shadow_reader(shadow, shadow_channel_rx)
-            }));
-
-            if let Err(err) = result {
-                log::error!("shadow orderbook thread panicked");
-                panic::resume_unwind(err);
-            }
-        });
+        let shadow_thread =
+            thread::spawn(move || background_shadow_reader(shadow, shadow_channel_rx));
 
         ShadowedOrderbookReader {
             primary,
@@ -63,9 +54,8 @@ impl StableXOrderBookReading for ShadowedOrderbookReader {
         async move {
             let orderbook = self.primary.get_auction_data(batch_id_to_solve).await?;
 
-            // NOTE: Ignore errors here as they indicate that the shadow reader
-            //   is already reading an orderbook, or the thread panicked (which
-            //   is logged and shouldn't prevent the driver from running).
+            // NOTE: Ignore errors here as they indicate that the shadow reader is
+            //   already reading an orderbook.
             let _ = self
                 .shadow_channel
                 .try_send((batch_id_to_solve, orderbook.clone()));

@@ -6,7 +6,6 @@ use futures::{
     lock::Mutex,
 };
 use std::collections::HashMap;
-use std::panic::{self, AssertUnwindSafe};
 #[cfg(test)]
 use std::sync::mpsc::Receiver;
 use std::sync::{
@@ -52,37 +51,26 @@ impl ThreadedPriceSource {
 
         let join_handle = thread::spawn({
             let price_map = price_map.clone();
-            let price_map_catch = price_map.clone();
 
             // vk: Clippy notes that the following loop and match can be written
             // as a `while let` loop but I find it clearer to make all cases
             // explicit.
-            move || {
-                #[allow(clippy::while_let_loop)]
-                let result = panic::catch_unwind(AssertUnwindSafe(move || loop {
-                    match receiver.recv_timeout(update_interval) {
-                        Ok(()) | Err(RecvTimeoutError::Timeout) => {
-                            // Make sure we don't hold the mutex while this blocking call happens.
-                            match price_source.get_prices(&tokens).wait() {
-                                Ok(prices) => price_map.lock().wait().extend(prices),
-                                Err(err) => log::warn!("price_source::get_prices failed: {}", err),
-                            }
+            #[allow(clippy::while_let_loop)]
+            move || loop {
+                match receiver.recv_timeout(update_interval) {
+                    Ok(()) | Err(RecvTimeoutError::Timeout) => {
+                        // Make sure we don't hold the mutex while this blocking call happens.
+                        match price_source.get_prices(&tokens).wait() {
+                            Ok(prices) => price_map.lock().wait().extend(prices),
+                            Err(err) => log::warn!("price_source::get_prices failed: {}", err),
                         }
-                        // The owning struct has been dropped.
-                        Err(RecvTimeoutError::Disconnected) => break,
                     }
-
-                    #[cfg(test)]
-                    let _ = test_sender.send(());
-                }));
-
-                if let Err(err) = result {
-                    log::error!("threaded price source thread panicked");
-                    // NOTE: Ensure that we try to clear the price to not report
-                    // outdated ones.
-                    price_map_catch.lock().wait().clear();
-                    panic::resume_unwind(err);
+                    // The owning struct has been dropped.
+                    Err(RecvTimeoutError::Disconnected) => break,
                 }
+
+                #[cfg(test)]
+                let _ = test_sender.send(());
             }
         });
 
