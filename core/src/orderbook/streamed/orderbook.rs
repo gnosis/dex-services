@@ -43,6 +43,13 @@ pub struct Orderbook {
 }
 
 impl Orderbook {
+    pub fn read(mut read: impl Read) -> Result<Self> {
+        let mut contents = Vec::new();
+        read.read_to_end(&mut contents)?;
+
+        Orderbook::try_from(contents.as_slice())
+    }
+
     pub fn handle_event_data(
         &mut self,
         event_data: EventData<batch_exchange::Event>,
@@ -71,6 +78,11 @@ impl Orderbook {
         });
     }
 
+    /// Serializes an `Orderbook` into its bincode representation.
+    pub fn to_bytes(&self) -> Result<Vec<u8>> {
+        Ok(bincode::serialize(self)?)
+    }
+
     pub fn write_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
         // Write to tmp file until complete and then rename.
         let temp_path = path.as_ref().with_extension(".temp");
@@ -78,7 +90,7 @@ impl Orderbook {
         // Create temp file to be written completely before rename
         let mut temp_file = File::create(&temp_path)
             .with_context(|| format!("couldn't create {}", temp_path.display()))?;
-        let file_content = bincode::serialize(self)?;
+        let file_content = self.to_bytes()?;
         temp_file.write_all(file_content.as_ref())?;
 
         // Rename the temp file to the originally specified path.
@@ -97,6 +109,12 @@ impl Orderbook {
                 state.apply_event(&value.event, value.batch_id)
             })
     }
+
+    pub fn into_events(self) -> impl Iterator<Item = (batch_exchange::Event, BatchId)> {
+        self.events
+            .into_iter()
+            .map(|(_, Value { event, batch_id })| (event, batch_id))
+    }
 }
 
 impl TryFrom<&[u8]> for Orderbook {
@@ -111,15 +129,16 @@ impl TryFrom<File> for Orderbook {
     type Error = anyhow::Error;
 
     fn try_from(mut file: File) -> Result<Self> {
-        let mut contents = Vec::new();
-        let bytes_read = file
-            .read_to_end(&mut contents)
+        let orderbook = Orderbook::read(&mut file)
             .with_context(|| format!("Failed to read file: {:?}", file))?;
+
         info!(
-            "Successfully loaded {} bytes from Orderbook file",
-            bytes_read
+            "Successfully loaded {} events in {} bytes from Orderbook file",
+            orderbook.events.len(),
+            file.metadata()?.len(),
         );
-        Orderbook::try_from(contents.as_slice())
+
+        Ok(orderbook)
     }
 }
 
