@@ -12,12 +12,7 @@ pub struct BatchId(pub u64);
 impl BatchId {
     pub fn current(now: SystemTime) -> std::result::Result<Self, SystemTimeError> {
         let time_since_epoch = now.duration_since(SystemTime::UNIX_EPOCH)?;
-        Ok(BatchId::from_timestamp(time_since_epoch.as_secs()))
-    }
-
-    /// Creates a new `BatchId` instance from a unix timestamp.
-    pub fn from_timestamp(timestamp: u64) -> Self {
-        Self(timestamp / BATCH_DURATION.as_secs())
+        Ok(Self(time_since_epoch.as_secs() / BATCH_DURATION.as_secs()))
     }
 
     pub fn currently_being_solved(now: SystemTime) -> std::result::Result<Self, SystemTimeError> {

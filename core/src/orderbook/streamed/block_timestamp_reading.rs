@@ -15,12 +15,11 @@ pub trait BlockTimestampReading {
     fn block_timestamp(&mut self, block_hash: H256) -> BoxFuture<Result<u64>>;
 }
 
-#[cfg_attr(test, mockall::automock)]
 pub trait BlockTimestampBatchReading {
-    fn block_timestamps<'a>(
-        &'a self,
+    fn block_timestamps(
+        &mut self,
         block_hashes: HashSet<H256>,
-    ) -> BoxFuture<'a, Result<Vec<(H256, u64)>>>;
+    ) -> BoxFuture<Result<Vec<(H256, u64)>>>;
 }
 
 /// During normal operation this is implemented by Web3.
@@ -38,7 +37,10 @@ impl BlockTimestampReading for Web3 {
 }
 
 impl BlockTimestampBatchReading for Web3 {
-    fn block_timestamps(&self, block_hashes: HashSet<H256>) -> BoxFuture<Result<Vec<(H256, u64)>>> {
+    fn block_timestamps(
+        &mut self,
+        block_hashes: HashSet<H256>,
+    ) -> BoxFuture<Result<Vec<(H256, u64)>>> {
         let batched_web3 = ethcontract::web3::Web3::new(Batch::new(self.transport().clone()));
         async move {
             let mut result = Vec::with_capacity(block_hashes.len());
@@ -83,7 +85,7 @@ pub struct CachedBlockTimestampReader<T> {
     cache: HashMap<H256, u64>,
 }
 
-impl<T: BlockTimestampBatchReading + Send + Sync> CachedBlockTimestampReader<T> {
+impl<T: BlockTimestampBatchReading + Send> CachedBlockTimestampReader<T> {
     pub fn new(inner: T) -> Self {
         Self {
             inner,
