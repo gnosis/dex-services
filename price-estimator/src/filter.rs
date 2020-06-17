@@ -78,15 +78,17 @@ async fn estimate_buy_amount<T>(
 }
 
 async fn get_markets<T>(
-    _token_pair: TokenPair,
+    token_pair: TokenPair,
     _query: QueryParameters,
-    _orderbook: Arc<Orderbook<T>>,
+    orderbook: Arc<Orderbook<T>>,
 ) -> Result<impl warp::Reply, Infallible> {
-    // TODO: implement
-    Ok(warp::reply::json(&MarketsResult {
-        asks: Vec::new(),
-        bids: Vec::new(),
-    }))
+    let transitive_orderbook = orderbook.get_pricegraph().await.transitive_orderbook(
+        token_pair.sell_token_id,
+        token_pair.buy_token_id,
+        None,
+    );
+    let result = MarketsResult::from(&transitive_orderbook);
+    Ok(warp::reply::json(&result))
 }
 
 #[cfg(test)]
