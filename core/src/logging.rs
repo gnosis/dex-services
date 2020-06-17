@@ -5,6 +5,10 @@ use slog_async::Async;
 use slog_envlogger::LogBuilder;
 use slog_scope::GlobalLoggerGuard;
 use slog_term::{Decorator, TermDecorator};
+use std::{
+    panic::{self, PanicInfo},
+    thread,
+};
 
 /// The channel size for async logging.
 const BUFFER_SIZE: usize = 10000;
@@ -25,7 +29,22 @@ pub fn init(filter: impl AsRef<str>) -> (Logger, GlobalLoggerGuard) {
     let guard = slog_scope::set_global_logger(logger.clone());
     slog_stdlog::init().expect("failed to register logger");
 
+    set_panic_hook();
+
     (logger, guard)
+}
+
+/// Sets a panic hook so panic information is written with the log facilities
+/// instead of directly to STDERR.
+fn set_panic_hook() {
+    fn hook(info: &PanicInfo) {
+        let thread = thread::current();
+        let thread_name = thread.name().unwrap_or("<unnamed>");
+
+        log::error!("thread '{}' {}", thread_name, info);
+    }
+
+    panic::set_hook(Box::new(hook));
 }
 
 /// Uses one decorator for `Error` and `Critical` log messages and the other for

@@ -24,6 +24,28 @@ pub struct TransitiveOrderbook {
     pub bids: Vec<TransitiveOrder>,
 }
 
+impl TransitiveOrderbook {
+    /// Returns an iterator with ask prices (expressed in the quote token) and
+    /// corresponding volumes.
+    ///
+    /// Note that the prices are effective prices and include fees.
+    pub fn ask_prices(&self) -> impl DoubleEndedIterator<Item = (f64, f64)> + '_ {
+        self.asks
+            .iter()
+            .map(|order| ((order.buy / order.sell) * FEE_FACTOR, order.sell))
+    }
+
+    /// Returns an iterator with bid prices (expressed in the quote token) and
+    /// corresponding volumes.
+    ///
+    /// Note that the prices are effective prices and include fees.
+    pub fn bid_prices(&self) -> impl DoubleEndedIterator<Item = (f64, f64)> + '_ {
+        self.bids
+            .iter()
+            .map(|order| ((order.sell / order.buy) / FEE_FACTOR, order.buy))
+    }
+}
+
 /// A struct representing a transitive order for trading between two tokens.
 ///
 /// A transitive order is defined as the transitive combination of multiple
@@ -62,6 +84,7 @@ impl TransitiveOrder {
 
 /// API entry point for computing price estimates and transitive orderbooks for
 /// a give auction.
+#[derive(Clone, Debug)]
 pub struct Pricegraph {
     full_orderbook: Orderbook,
     reduced_orderbook: Orderbook,
@@ -134,11 +157,113 @@ impl Pricegraph {
             sell: sell_amount,
         })
     }
+
+    /// Computes a transitive orderbook for the given market specified by the
+    /// base and quote tokens.
+    ///
+    /// This method optionally accepts a spread that is a decimal fraction that
+    /// defines the maximume transitive order price with the equation:
+    /// `first_transitive_price + first_transitive_price * spread`. This means
+    /// that given a spread of 0.5 (or 50%), and if the cheapest transitive
+    /// order has a price of 1.2, then the maximum price will be `1.8`.
+    ///
+    /// The spread applies to both `asks` and `bids` transitive orders.
+    ///
+    /// # Panics
+    ///
+    /// This method panics if the spread is zero or negative.
+    pub fn transitive_orderbook(
+        &self,
+        base: TokenId,
+        quote: TokenId,
+        spread: Option<f64>,
+    ) -> TransitiveOrderbook {
+        let mut orderbook = self.full_orderbook();
+
+        let mut transitive_orderbook =
+            orderbook.reduce_overlapping_transitive_orderbook(base, quote);
+        transitive_orderbook
+            .asks
+            .extend(orderbook.clone().fill_transitive_orders(
+                TokenPair {
+                    buy: base,
+                    sell: quote,
+                },
+                spread,
+            ));
+        transitive_orderbook
+            .bids
+            .extend(orderbook.fill_transitive_orders(
+                TokenPair {
+                    buy: quote,
+                    sell: base,
+                },
+                spread,
+            ));
+
+        for orders in &mut [
+            &mut transitive_orderbook.asks,
+            &mut transitive_orderbook.bids,
+        ] {
+            orders.sort_unstable_by(|a, b| num::compare(a.exchange_rate(), b.exchange_rate()));
+        }
+
+        transitive_orderbook
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transitive_orderbook_empty_same_token() {
+        let pricegraph = Pricegraph::new(std::iter::empty());
+        let orderbook = pricegraph.transitive_orderbook(0, 0, None);
+        assert!(orderbook.asks.is_empty());
+        assert!(orderbook.bids.is_empty());
+    }
+
+    #[test]
+    fn transitive_orderbook_prices() {
+        let transitive_orderbook = TransitiveOrderbook {
+            asks: vec![
+                TransitiveOrder {
+                    buy: 1_000_000.0,
+                    sell: 2_000_000.0,
+                },
+                TransitiveOrder {
+                    buy: 500_000.0,
+                    sell: 900_000.0,
+                },
+            ],
+            bids: vec![
+                TransitiveOrder {
+                    buy: 20_000_000.0,
+                    sell: 10_000_000.0,
+                },
+                TransitiveOrder {
+                    buy: 1_500_000.0,
+                    sell: 900_000.0,
+                },
+            ],
+        };
+
+        assert_eq!(
+            transitive_orderbook.ask_prices().collect::<Vec<_>>(),
+            vec![
+                (0.5 * FEE_FACTOR, 2_000_000.0),
+                ((1.0 / 1.8) * FEE_FACTOR, 900_000.0)
+            ]
+        );
+        assert_eq!(
+            transitive_orderbook.bid_prices().collect::<Vec<_>>(),
+            vec![
+                (0.5 / FEE_FACTOR, 20_000_000.0),
+                ((0.9 / 1.5) / FEE_FACTOR, 1_500_000.0)
+            ]
+        );
+    }
 
     #[test]
     fn real_orderbooks() {
@@ -151,9 +276,11 @@ mod tests {
 
         let dai_weth = TokenPair { buy: 7, sell: 1 };
         let volume = 1.0 * base_unit;
+        let spread = 0.05;
 
         for (batch_id, raw_orderbook) in data::ORDERBOOKS.iter() {
             let pricegraph = Pricegraph::from_orderbook(Orderbook::read(raw_orderbook).unwrap());
+
             let order = pricegraph.order_for_sell_amount(dai_weth, volume).unwrap();
             println!(
                 "#{}: estimated order for buying {} DAI for {} WETH",
@@ -161,6 +288,36 @@ mod tests {
                 order.buy / base_unit,
                 order.sell / base_unit,
             );
+
+            let TransitiveOrderbook { asks, bids } =
+                pricegraph.transitive_orderbook(dai_weth.buy, dai_weth.sell, Some(spread));
+            println!(
+                "#{}: DAI-WETH market contains {} ask orders and {} bid orders within a {}% spread:",
+                batch_id,
+                asks.len(),
+                bids.len(),
+                100.0 * spread,
+            );
+
+            for (name, buy_token, sell_token, orders) in
+                &[("Ask", "DAI", "WETH", asks), ("Bid", "WETH", "DAI", bids)]
+            {
+                println!(" - {} orders", name);
+
+                let mut last_xrate = orders[0].exchange_rate();
+                for order in orders {
+                    assert!(last_xrate <= order.exchange_rate());
+                    last_xrate = order.exchange_rate();
+
+                    println!(
+                        "    buy {} {} for {} {}",
+                        order.buy / base_unit,
+                        buy_token,
+                        order.sell / base_unit,
+                        sell_token,
+                    );
+                }
+            }
         }
     }
 }

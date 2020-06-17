@@ -55,8 +55,8 @@ impl From<u16> for TokenId {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenInfo {
-    pub alias: String,
-    pub decimals: u8,
+    pub alias: Option<String>,
+    pub decimals: Option<u8>,
     pub external_price: u128,
 }
 
@@ -65,8 +65,8 @@ impl TokenInfo {
     #[cfg(test)]
     pub fn new(alias: impl Into<String>, decimals: u8, external_price: u128) -> Self {
         TokenInfo {
-            alias: alias.into(),
-            decimals,
+            alias: Some(alias.into()),
+            decimals: Some(decimals),
             external_price,
         }
     }

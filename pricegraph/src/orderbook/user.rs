@@ -1,7 +1,7 @@
 //! Module implementing user and user token balance management.
 
 use crate::encoding::{Element, TokenId, UserId};
-use crate::num::{self, MAX_ROUNDING_ERROR};
+use crate::num;
 use std::collections::{hash_map, HashMap};
 
 /// A type definiton for a mapping between user IDs to user data.
@@ -36,7 +36,7 @@ impl User {
             *balance -= amount;
 
             debug_assert!(
-                *balance >= -MAX_ROUNDING_ERROR,
+                *balance >= -num::max_rounding_error(amount),
                 "user balance underflow for token {}",
                 token,
             );

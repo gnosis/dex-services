@@ -147,7 +147,7 @@ mod tests {
         api.expect_get_token_list()
             .returning(|| async { Ok(Vec::new()) }.boxed());
 
-        let tokens = hash_map! { TokenId::from(6) => TokenBaseInfo::new("DAI", 18, 0, true)};
+        let tokens = hash_map! { TokenId::from(6) => TokenBaseInfo::new("DAI", 18, 0)};
         assert!(DexagClient::with_api_and_tokens(api, tokens.into())
             .get_prices(&[6.into()])
             .now_or_never()
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn get_token_prices_initialization_fails_then_works() {
-        let tokens = hash_map! { TokenId::from(1) => TokenBaseInfo::new("ETH", 18, 0, true)};
+        let tokens = hash_map! { TokenId::from(1) => TokenBaseInfo::new("ETH", 18, 0)};
         let mut api = MockDexagApi::new();
         let mut seq = Sequence::new();
 
@@ -208,9 +208,9 @@ mod tests {
         let mut api = MockDexagApi::new();
 
         let tokens = hash_map! {
-            TokenId(6) => TokenBaseInfo::new("DAI", 18, 0, true),
-            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0, true),
-            TokenId(4) => TokenBaseInfo::new("USDC", 6, 0, true),
+            TokenId(6) => TokenBaseInfo::new("DAI", 18, 0),
+            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0),
+            TokenId(4) => TokenBaseInfo::new("USDC", 6, 0),
         };
 
         lazy_static! {
@@ -268,8 +268,8 @@ mod tests {
         let mut api = MockDexagApi::new();
 
         let tokens = hash_map! {
-            TokenId(6) => TokenBaseInfo::new("DAI", 18, 0, true),
-            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0, true)
+            TokenId(6) => TokenBaseInfo::new("DAI", 18, 0),
+            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0)
         };
 
         lazy_static! {
@@ -318,9 +318,9 @@ mod tests {
         let mut api = MockDexagApi::new();
 
         let tokens = hash_map! {
-            TokenId(6) => TokenBaseInfo::new("dai", 18, 0, true),
-            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0, true),
-            TokenId(4) => TokenBaseInfo::new("sUSD", 6, 0, true)
+            TokenId(6) => TokenBaseInfo::new("dai", 18, 0),
+            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0),
+            TokenId(4) => TokenBaseInfo::new("sUSD", 6, 0)
         };
 
         lazy_static! {
@@ -372,16 +372,16 @@ mod tests {
         use std::time::Instant;
 
         let tokens = hash_map! {
-            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0, true),
-            TokenId(2) => TokenBaseInfo::new("USDT", 6, 0, true),
-            TokenId(3) => TokenBaseInfo::new("TUSD", 18, 0, true),
-            TokenId(4) => TokenBaseInfo::new("USDC", 6, 0, true),
-            TokenId(5) => TokenBaseInfo::new("PAX", 18, 0, true),
-            TokenId(6) => TokenBaseInfo::new("GUSD", 2, 0, true),
-            TokenId(7) => TokenBaseInfo::new("DAI", 18, 0, true),
-            TokenId(8) => TokenBaseInfo::new("sETH", 18, 0, true),
-            TokenId(9) => TokenBaseInfo::new("sUSD", 18, 0, true),
-            TokenId(15) => TokenBaseInfo::new("SNX", 18, 0, true)
+            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0),
+            TokenId(2) => TokenBaseInfo::new("USDT", 6, 0),
+            TokenId(3) => TokenBaseInfo::new("TUSD", 18, 0),
+            TokenId(4) => TokenBaseInfo::new("USDC", 6, 0),
+            TokenId(5) => TokenBaseInfo::new("PAX", 18, 0),
+            TokenId(6) => TokenBaseInfo::new("GUSD", 2, 0),
+            TokenId(7) => TokenBaseInfo::new("DAI", 18, 0),
+            TokenId(8) => TokenBaseInfo::new("sETH", 18, 0),
+            TokenId(9) => TokenBaseInfo::new("sUSD", 18, 0),
+            TokenId(15) => TokenBaseInfo::new("SNX", 18, 0)
         };
         let ids: Vec<TokenId> = tokens.keys().copied().collect();
 

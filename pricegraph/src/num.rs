@@ -4,9 +4,34 @@ use primitive_types::U256;
 use std::cmp;
 use std::f64;
 
-/// The maximum rounding error, used for asserting that amounts and balances
-/// remain coherent for tests and when built in `debug` profile.
-pub const MAX_ROUNDING_ERROR: f64 = 0.1;
+/// The maximum rounding error for the specified amount, used for asserting that
+/// amounts and balances remain coherent for tests and for `debug` profile.
+///
+/// The maximum rouding error is calcuated by finding the value of the least
+/// significant digit of quantity. This means that quantities can only be off
+/// by that least significant digit.
+///
+/// Another way of describing this is to compute an `f64::EPSILON` (which is for
+/// `1.0`) equivalent for `quantity`. This implies
+/// `max_rounding_error(1.0) == f64::EPSILON`.
+pub fn max_rounding_error(quantity: f64) -> f64 {
+    // NOTE: For discussion on the derivation of this formula, see:
+    // https://github.com/gnosis/dex-services/pull/1012#discussion_r440627156
+    const SIGN_EXPONENT_MASK: u64 = 0xfff0_0000_0000_0000;
+    f64::from_bits(quantity.to_bits() & SIGN_EXPONENT_MASK) * f64::EPSILON
+}
+
+/// The maximum rouding error with an epsilon. This is because the assertion
+/// `assert_approx_eq` uses `>` and `<` semantics, while the maximum rounding
+/// error expects `>=` and `<=` semantics.
+///
+/// This method computes the next representable `f64` that is greater than
+/// the maximum rounding error for `quantity`.
+#[cfg(test)]
+pub fn max_rounding_error_with_epsilon(quantity: f64) -> f64 {
+    let r = max_rounding_error(quantity);
+    r + max_rounding_error(r)
+}
 
 /// Convert an unsigned 256-bit integer into a `f64`.
 pub fn u256_to_f64(u: U256) -> f64 {
@@ -45,4 +70,40 @@ pub fn min(a: f64, b: f64) -> f64 {
 pub fn compare(a: f64, b: f64) -> cmp::Ordering {
     a.partial_cmp(&b)
         .expect("orderbooks cannot have NaN quantities")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rounding_error_is_least_significant_digit() {
+        fn is_mantissa_1(f: f64) -> bool {
+            // NOTE: All mantissa bits are 0 when mantissa is 1.0.
+            f.to_bits() << 12 == 0
+        }
+
+        for value in &[
+            1.0f64,
+            42.42,
+            83_798_276_971_421_254_262_445_676_335_662_107_162.0,
+            #[allow(clippy::inconsistent_digit_grouping)]
+            f64::from_bits(0b0_10101010101_1111111111111111111111111111111111111111111111111111),
+        ] {
+            let upper_bound = value + max_rounding_error(*value);
+            assert_eq!(upper_bound.to_bits() - value.to_bits(), 1);
+
+            let lower_bound = value - max_rounding_error(*value);
+            assert_eq!(
+                value.to_bits() - lower_bound.to_bits(),
+                if is_mantissa_1(*value) { 2 } else { 1 },
+            );
+        }
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn rounding_error_is_epsilon_for_1() {
+        assert_eq!(max_rounding_error(1.0), f64::EPSILON);
+    }
 }
