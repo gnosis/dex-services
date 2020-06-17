@@ -61,7 +61,7 @@ impl ExchangeHistory {
     /// Returns the finalized orderbook at a historic batch.
     ///
     /// The finalized orderbook includes all account state changes and orders
-    /// that are consisdered by the smart contract for solving the subsequent
+    /// that are considered by the smart contract for solving the specified
     /// batch.
     pub fn auction_data_for_batch(
         &self,
