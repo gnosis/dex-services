@@ -166,6 +166,13 @@ impl Orderbook {
         base: TokenId,
         quote: TokenId,
     ) -> TransitiveOrderbook {
+        if !self.is_token_pair_valid(TokenPair {
+            buy: base,
+            sell: quote,
+        }) {
+            return Default::default();
+        }
+
         let (base, quote) = (node_index(base), node_index(quote));
 
         let mut overlap = TransitiveOrderbook::default();
@@ -578,11 +585,15 @@ impl Orderbook {
         Some((order, user))
     }
 
-    /// Returns `true` if the specified token pair is valid, and `false`
-    /// otherwise.
+    /// Returns whether the specified token pair is valid.
+    ///
+    /// A token pair is considered valid if both the buy and sell token
+    /// exist in the current orderbook and are unequal.
     fn is_token_pair_valid(&self, pair: TokenPair) -> bool {
-        let max_token = (self.projection.node_count() - 1) as u16;
-        pair.buy <= max_token && pair.sell <= max_token
+        let node_count = self.projection.node_count();
+        pair.buy != pair.sell
+            && (pair.buy as usize) < node_count
+            && (pair.sell as usize) < node_count
     }
 }
 

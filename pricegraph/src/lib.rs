@@ -217,6 +217,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn transitive_orderbook_empty_same_token() {
+        let pricegraph = Pricegraph::new(std::iter::empty());
+        let orderbook = pricegraph.transitive_orderbook(0, 0, None);
+        assert!(orderbook.asks.is_empty());
+        assert!(orderbook.bids.is_empty());
+    }
+
+    #[test]
     fn transitive_orderbook_prices() {
         let transitive_orderbook = TransitiveOrderbook {
             asks: vec![
