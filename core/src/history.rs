@@ -1,4 +1,4 @@
-//! This module contains an implementation for quering historic echange data by
+//! This module contains an implementation for querying historic echange data by
 //! inspecting indexed events.
 
 use crate::{
