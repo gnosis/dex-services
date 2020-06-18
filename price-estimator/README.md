@@ -4,7 +4,7 @@ The service exposes the following endpoints:
 
 ### Markets
 
-`GET /markets/:market`
+`GET /api/v1/markets/:market`
 
 * `market` is of the form `<base_token_id>-<quote_token_id>`. The token ids the same as in the smart contract.
 
@@ -12,7 +12,7 @@ Url Query:
 * `atoms`: If set to `true` (for now this is the only implemented method) all amounts will be denominated in the smallest available unit (base quantity) of the token.
 * `hops`: TODO: document this once it has been implemented.
 
-Example Request: `/markets/1-7/?atoms=true`
+Example Request: `/api/v1/markets/1-7/?atoms=true`
 
 Example Response:
 
@@ -31,14 +31,14 @@ Returns the transitive orderbook (containing bids and asks) for the given base a
 
 ### Estimated Buy Amount
 
-`GET /markets/:market/estimated-buy-amount/:sell-amount-in-quote-token`
+`GET /api/v1/markets/:market/estimated-buy-amount/:sell-amount-in-quote-token`
 
 * `market` is as above
 * `sell_amount_in_quote_token` is a positive integer.
 
 Url query is as above.
 
-Example Request: `/markets/1-7/estimated-buy-amount/20000000000000000000?atoms=true`
+Example Request: `/api/v1/markets/1-7/estimated-buy-amount/20000000000000000000?atoms=true`
 
 Example Response:
 

@@ -13,7 +13,7 @@ pub fn all<T: Send + Sync + 'static>(
 }
 
 /// Validate a request of the form
-/// `/markets/<baseTokenId>-<quoteTokenId>/estimated-buy-amount/<sellAmountInQuoteToken>`
+/// `/api/v1/markets/<baseTokenId>-<quoteTokenId>/estimated-buy-amount/<sellAmountInQuoteToken>`
 /// and answer it.
 pub fn estimated_buy_amount<T: Send + Sync + 'static>(
     orderbook: Arc<Orderbook<T>>,
@@ -27,7 +27,7 @@ pub fn estimated_buy_amount<T: Send + Sync + 'static>(
 }
 
 /// Validate a request of the form
-/// `/markets/<baseTokenId>-<quoteTokenId>`
+/// `/api/v1/markets/<baseTokenId>-<quoteTokenId>`
 /// and answer it.
 pub fn markets<T: Send + Sync + 'static>(
     orderbook: Arc<Orderbook<T>>,
@@ -40,14 +40,14 @@ pub fn markets<T: Send + Sync + 'static>(
 
 fn estimated_buy_amount_filter(
 ) -> impl Filter<Extract = (TokenPair, u128, QueryParameters), Error = Rejection> + Copy {
-    warp::path!("markets" / TokenPair / "estimated-buy-amount" / u128)
+    warp::path!("api" / "v1" / "markets" / TokenPair / "estimated-buy-amount" / u128)
         .and(warp::get())
         .and(warp::query::<QueryParameters>())
 }
 
 fn markets_filter() -> impl Filter<Extract = (TokenPair, QueryParameters), Error = Rejection> + Copy
 {
-    warp::path!("markets" / TokenPair)
+    warp::path!("api" / "v1" / "markets" / TokenPair)
         .and(warp::get())
         .and(warp::query::<QueryParameters>())
 }
@@ -99,7 +99,7 @@ mod tests {
     #[test]
     fn estimated_buy_amount_ok() {
         let (token_pair, volume, query) = warp::test::request()
-            .path("/markets/0-65535/estimated-buy-amount/1?atoms=true&hops=2")
+            .path("/api/v1/markets/0-65535/estimated-buy-amount/1?atoms=true&hops=2")
             .filter(&estimated_buy_amount_filter())
             .now_or_never()
             .unwrap()
@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn markets_ok() {
         let (token_pair, query) = warp::test::request()
-            .path("/markets/1-2?atoms=true&hops=3")
+            .path("/api/v1/markets/1-2?atoms=true&hops=3")
             .filter(&markets_filter())
             .now_or_never()
             .unwrap()
@@ -128,7 +128,7 @@ mod tests {
     #[test]
     fn missing_hops_ok() {
         let (_, _, query) = warp::test::request()
-            .path("/markets/0-65535/estimated-buy-amount/1?atoms=true")
+            .path("/api/v1/markets/0-65535/estimated-buy-amount/1?atoms=true")
             .filter(&estimated_buy_amount_filter())
             .now_or_never()
             .unwrap()
@@ -139,7 +139,7 @@ mod tests {
     #[test]
     fn missing_query() {
         assert!(warp::test::request()
-            .path("/markets/0-0/estimated-buy-amount/0")
+            .path("/api/v1/markets/0-0/estimated-buy-amount/0")
             .filter(&estimated_buy_amount_filter())
             .now_or_never()
             .unwrap()
@@ -149,8 +149,8 @@ mod tests {
     #[test]
     fn estimated_buy_amount_too_few_tokens() {
         for path in &[
-            "/markets//estimated-buy-amount/1",
-            "/markets/0/estimated-buy-amount/1",
+            "/api/v1/markets//estimated-buy-amount/1",
+            "/api/v1/markets/0/estimated-buy-amount/1",
         ] {
             assert!(warp::test::request()
                 .path(path)
@@ -164,10 +164,10 @@ mod tests {
     #[test]
     fn estimated_buy_amount_too_many_tokens() {
         for path in &[
-            "/markets/0-1-2/estimated-buy-amount/1",
-            "/markets/0-1-asdf/estimated-buy-amount/1",
-            "/markets/0-1-2-3/estimated-buy-amount/1",
-            "/markets/0-1-/estimated-buy-amount/1",
+            "/api/v1/markets/0-1-2/estimated-buy-amount/1",
+            "/api/v1/markets/0-1-asdf/estimated-buy-amount/1",
+            "/api/v1/markets/0-1-2-3/estimated-buy-amount/1",
+            "/api/v1/markets/0-1-/estimated-buy-amount/1",
         ] {
             assert!(warp::test::request()
                 .path(path)
@@ -181,8 +181,8 @@ mod tests {
     #[test]
     fn estimated_buy_amount_no_sell_amount() {
         for path in &[
-            "/markets/0-1/estimated-buy-amount/",
-            "/markets/0-1/estimated-buy-amount/asdf",
+            "/api/v1/markets/0-1/estimated-buy-amount/",
+            "/api/v1/markets/0-1/estimated-buy-amount/asdf",
         ] {
             assert!(warp::test::request()
                 .path(path)
@@ -196,9 +196,9 @@ mod tests {
     #[test]
     fn estimated_buy_amount_no_float_volume() {
         for path in &[
-            "/markets/0-1/estimated-buy-amount/0.0",
-            "/markets/0-1/estimated-buy-amount/1.0",
-            "/markets/0-1/estimated-buy-amount/0.5",
+            "/api/v1/markets/0-1/estimated-buy-amount/0.0",
+            "/api/v1/markets/0-1/estimated-buy-amount/1.0",
+            "/api/v1/markets/0-1/estimated-buy-amount/0.5",
         ] {
             assert!(warp::test::request()
                 .path(path)
