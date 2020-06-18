@@ -190,9 +190,9 @@ dependencies = [
 
 [[package]]
 name = "blocking"
-version = "0.4.4"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ee77a98872673f1839c1a434e98b7652b3adb54a4c485735ea5937b66da5800"
+checksum = "9d17efb70ce4421e351d61aafd90c16a20fb5bfe339fcdc32a86816280e62ce0"
 dependencies = [
  "futures-channel",
  "futures-util",
