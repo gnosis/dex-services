@@ -9,6 +9,7 @@ edition = "2018"
 cargo-fuzz = true
 
 [dependencies]
+arbitrary = { version = "0.4", features = ["derive"] }
 libfuzzer-sys = "0.3"
 pricegraph = { path = "..", features = ["arbitrary"] }
 
@@ -17,5 +18,5 @@ name = "element_read_all"
 path = "fuzz_targets/element_read_all.rs"
 
 [[bin]]
-name = "orderbook"
-path = "fuzz_targets/orderbook.rs"
+name = "pricegraph"
+path = "fuzz_targets/pricegraph.rs"
