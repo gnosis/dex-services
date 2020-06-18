@@ -4,7 +4,7 @@ mod balance;
 mod bigint_u256;
 mod block_timestamp_reading;
 mod order;
-mod orderbook;
+pub mod orderbook;
 mod state;
 mod updating_orderbook;
 

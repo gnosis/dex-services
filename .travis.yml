@@ -109,7 +109,6 @@ jobs:
       script:
         - true
       deploy:
-        - script:
         - provider: script
           script: ./price-estimator/docker/deploy.sh $TRAVIS_BRANCH
           on:
