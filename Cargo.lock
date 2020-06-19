@@ -42,9 +42,9 @@ checksum = "85bb70cc08ec97ca5450e6eba421deeea5f172c0fc61f78b5357b2a8e8be195f"
 
 [[package]]
 name = "arbitrary"
-version = "0.4.4"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5eb01a9ab8a3369f2f7632b9461c34f5920bd454774bab5b9fc6744f21d6143"
+checksum = "7cb544f1057eaaff4b34f8c4dcf56fc3cd04debd291998405d135017a7c3c0f4"
 dependencies = [
  "derive_arbitrary",
 ]
@@ -606,9 +606,9 @@ dependencies = [
 
 [[package]]
 name = "derive_arbitrary"
-version = "0.4.4"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cee758ebd1c79a9c6fb95f242dcc30bdbf555c28369ae908d21fdaf81537496"
+checksum = "02b43185d3e7ce7dcd44a23ca761ec026359753ebf480283a571e6463853d2ef"
 dependencies = [
  "proc-macro2",
  "quote",
