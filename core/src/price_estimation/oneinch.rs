@@ -4,7 +4,7 @@ use super::{PriceSource, TokenData};
 use crate::http::HttpFactory;
 use crate::models::TokenId;
 use anyhow::{anyhow, Context, Result};
-use api::{DexagApi, DexagHttpApi};
+use api::{OneinchApi, OneinchHttpApi};
 use futures::{
     future::{self, BoxFuture, FutureExt as _},
     lock::Mutex,
@@ -18,7 +18,7 @@ struct ApiTokens {
     stable_coin: api::Token,
 }
 
-pub struct DexagClient<Api> {
+pub struct OneinchClient<Api> {
     api: Api,
     /// Lazily retrieved the first time it is needed when `get_prices` is
     /// called. We don't want to use the network in `new`.
@@ -26,17 +26,17 @@ pub struct DexagClient<Api> {
     tokens: TokenData,
 }
 
-impl DexagClient<DexagHttpApi> {
-    /// Create a DexagClient using DexagHttpApi as the api implementation.
+impl OneinchClient<OneinchHttpApi> {
+    /// Create a OneinchClient using OneinchHttpApi as the api implementation.
     pub fn new(http_factory: &HttpFactory, tokens: TokenData) -> Result<Self> {
-        let api = DexagHttpApi::new(http_factory)?;
+        let api = OneinchHttpApi::new(http_factory)?;
         Ok(Self::with_api_and_tokens(api, tokens))
     }
 }
 
-impl<Api> DexagClient<Api>
+impl<Api> OneinchClient<Api>
 where
-    Api: DexagApi,
+    Api: OneinchApi,
 {
     pub fn with_api_and_tokens(api: Api, tokens: TokenData) -> Self {
         Self {
@@ -53,16 +53,14 @@ where
             .map(|token| (token.symbol.to_uppercase(), token))
             .collect();
 
-        // We need to return prices in OWL but Dexag does not track it. OWL
-        // tracks USD so we use another stable coin as an approximate
-        // USD price.
+        // 1inch does track OWL, but all other price sources use some
+        // USD-equivalent token to compute the price of other tokens.
+        // The price of OWL is far from 1 USD at the time of writing
+        // this comment, for consistency we retrieve prices in DAI.
         const STABLE_COIN: &str = "DAI";
-        let stable_coin = tokens.remove(STABLE_COIN).ok_or_else(|| {
-            anyhow!(
-                "dexag exchange does not track our stable coin {}",
-                STABLE_COIN
-            )
-        })?;
+        let stable_coin = tokens
+            .remove(STABLE_COIN)
+            .ok_or_else(|| anyhow!("1inch exchange does not track {}", STABLE_COIN))?;
 
         Ok(ApiTokens {
             tokens,
@@ -71,9 +69,9 @@ where
     }
 }
 
-impl<Api> PriceSource for DexagClient<Api>
+impl<Api> PriceSource for OneinchClient<Api>
 where
-    Api: DexagApi + Sync + Send,
+    Api: OneinchApi + Sync + Send,
 {
     fn get_prices<'a>(
         &'a self,
@@ -134,7 +132,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::api::MockDexagApi;
+    use super::api::MockOneinchApi;
     use super::*;
     use crate::price_estimation::data::TokenBaseInfo;
     use crate::util::FutureWaitExt as _;
@@ -143,12 +141,12 @@ mod tests {
 
     #[test]
     fn fails_if_stable_coin_does_not_exist() {
-        let mut api = MockDexagApi::new();
+        let mut api = MockOneinchApi::new();
         api.expect_get_token_list()
             .returning(|| async { Ok(Vec::new()) }.boxed());
 
         let tokens = hash_map! { TokenId::from(6) => TokenBaseInfo::new("DAI", 18, 0)};
-        assert!(DexagClient::with_api_and_tokens(api, tokens.into())
+        assert!(OneinchClient::with_api_and_tokens(api, tokens.into())
             .get_prices(&[6.into()])
             .now_or_never()
             .unwrap()
@@ -158,7 +156,7 @@ mod tests {
     #[test]
     fn get_token_prices_initialization_fails_then_works() {
         let tokens = hash_map! { TokenId::from(1) => TokenBaseInfo::new("ETH", 18, 0)};
-        let mut api = MockDexagApi::new();
+        let mut api = MockOneinchApi::new();
         let mut seq = Sequence::new();
 
         api.expect_get_token_list()
@@ -175,12 +173,13 @@ mod tests {
                         name: String::new(),
                         symbol: "DAI".to_string(),
                         address: None,
+                        decimals: 18,
                     }])
                 }
                 .boxed()
             });
 
-        let client = DexagClient::with_api_and_tokens(api, tokens.into());
+        let client = OneinchClient::with_api_and_tokens(api, tokens.into());
         assert!(client
             .get_prices(&[1.into()])
             .now_or_never()
@@ -205,7 +204,7 @@ mod tests {
 
     #[test]
     fn get_token_prices() {
-        let mut api = MockDexagApi::new();
+        let mut api = MockOneinchApi::new();
 
         let tokens = hash_map! {
             TokenId(6) => TokenBaseInfo::new("DAI", 18, 0),
@@ -219,16 +218,19 @@ mod tests {
                     name: String::new(),
                     symbol: "DAI".to_string(),
                     address: None,
+                    decimals: 18,
                 },
                 super::api::Token {
                     name: String::new(),
                     symbol: "ETH".to_string(),
                     address: None,
+                    decimals: 18,
                 },
                 super::api::Token {
                     name: String::new(),
                     symbol: "USDC".to_string(),
                     address: None,
+                    decimals: 18,
                 },
             ];
         }
@@ -247,7 +249,7 @@ mod tests {
             )
             .returning(|_, _| async { Ok(1.2) }.boxed());
 
-        let client = DexagClient::with_api_and_tokens(api, tokens.clone().into());
+        let client = OneinchClient::with_api_and_tokens(api, tokens.clone().into());
         let prices = client
             .get_prices(&[1.into(), 4.into(), 6.into()])
             .now_or_never()
@@ -265,7 +267,7 @@ mod tests {
 
     #[test]
     fn get_token_prices_error() {
-        let mut api = MockDexagApi::new();
+        let mut api = MockOneinchApi::new();
 
         let tokens = hash_map! {
             TokenId(6) => TokenBaseInfo::new("DAI", 18, 0),
@@ -278,11 +280,13 @@ mod tests {
                     name: String::new(),
                     symbol: "DAI".to_string(),
                     address: None,
+                    decimals: 18,
                 },
                 super::api::Token {
                     name: String::new(),
                     symbol: "ETH".to_string(),
                     address: None,
+                    decimals: 18,
                 },
             ];
         }
@@ -298,7 +302,7 @@ mod tests {
             )
             .returning(|_, _| async { Err(anyhow!("")) }.boxed());
 
-        let client = DexagClient::with_api_and_tokens(api, tokens.clone().into());
+        let client = OneinchClient::with_api_and_tokens(api, tokens.clone().into());
         let prices = client
             .get_prices(&[6.into(), 1.into()])
             .now_or_never()
@@ -315,7 +319,7 @@ mod tests {
 
     #[test]
     fn test_case_insensitivity() {
-        let mut api = MockDexagApi::new();
+        let mut api = MockOneinchApi::new();
 
         let tokens = hash_map! {
             TokenId(6) => TokenBaseInfo::new("dai", 18, 0),
@@ -329,16 +333,19 @@ mod tests {
                     name: String::new(),
                     symbol: "DAI".to_string(),
                     address: None,
+                    decimals: 18,
                 },
                 super::api::Token {
                     name: String::new(),
                     symbol: "eth".to_string(),
                     address: None,
+                    decimals: 18,
                 },
                 super::api::Token {
                     name: String::new(),
                     symbol: "Susd".to_string(),
                     address: None,
+                    decimals: 18,
                 },
             ];
         }
@@ -349,7 +356,7 @@ mod tests {
         api.expect_get_price()
             .returning(|_, _| async { Ok(1.0) }.boxed());
 
-        let client = DexagClient::with_api_and_tokens(api, tokens.clone().into());
+        let client = OneinchClient::with_api_and_tokens(api, tokens.clone().into());
         let prices = client
             .get_prices(&[1.into(), 4.into(), 6.into()])
             .now_or_never()
@@ -365,10 +372,10 @@ mod tests {
         );
     }
 
-    // Run with `cargo test online_dexag_client -- --ignored --nocapture`.
+    // Run with `cargo test online_oneinch_client -- --ignored --nocapture`.
     #[test]
     #[ignore]
-    fn online_dexag_client() {
+    fn online_oneinch_client() {
         use std::time::Instant;
 
         let tokens = hash_map! {
@@ -385,7 +392,7 @@ mod tests {
         };
         let mut ids: Vec<TokenId> = tokens.keys().copied().collect();
 
-        let client = DexagClient::new(&HttpFactory::default(), tokens.clone().into()).unwrap();
+        let client = OneinchClient::new(&HttpFactory::default(), tokens.clone().into()).unwrap();
         let before = Instant::now();
         let prices = client.get_prices(&ids).wait().unwrap();
         let after = Instant::now();

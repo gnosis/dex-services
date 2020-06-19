@@ -5,6 +5,7 @@ mod average_price_source;
 pub mod data;
 mod dexag;
 mod kraken;
+mod oneinch;
 mod orderbook_based;
 mod price_source;
 mod threaded_price_source;
@@ -12,6 +13,7 @@ mod threaded_price_source;
 pub use self::data::{TokenBaseInfo, TokenData};
 use self::dexag::DexagClient;
 use self::kraken::KrakenClient;
+use self::oneinch::OneinchClient;
 use self::orderbook_based::PricegraphEstimator;
 use crate::{
     http::HttpFactory,
@@ -69,9 +71,15 @@ impl PriceOracle {
                 DexagClient::new(http_factory, tokens.clone())?,
                 update_interval,
             );
+            let (oneinch_source, _) = ThreadedPriceSource::new(
+                tokens.all_ids(),
+                OneinchClient::new(http_factory, tokens.clone())?,
+                update_interval,
+            );
             Box::new(AveragePriceSource::new(vec![
                 Box::new(kraken_source),
                 Box::new(dexag_source),
+                Box::new(oneinch_source),
                 Box::new(PricegraphEstimator::new(orderbook_reader)),
             ]))
         };
