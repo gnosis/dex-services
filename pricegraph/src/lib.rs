@@ -215,6 +215,7 @@ impl Pricegraph {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use primitive_types::U256;
 
     #[test]
     fn transitive_orderbook_empty_same_token() {
@@ -222,6 +223,42 @@ mod tests {
         let orderbook = pricegraph.transitive_orderbook(0, 0, None);
         assert!(orderbook.asks.is_empty());
         assert!(orderbook.bids.is_empty());
+    }
+
+    #[test]
+    fn transitive_orderbook_simple() {
+        let user0 = UserId::from_low_u64_le(0);
+        let base: u128 = 1_000_000_000_000;
+        let pricegraph = Pricegraph::new(vec![Element {
+            user: user0,
+            balance: U256::from(2) * U256::from(base),
+            pair: TokenPair { buy: 0, sell: 1 },
+            valid: Validity { from: 0, to: 1 },
+            price: Price {
+                numerator: 2 * base,
+                denominator: base,
+            },
+            remaining_sell_amount: base,
+            id: 0,
+        }]);
+        let orderbook = pricegraph.transitive_orderbook(0, 1, None);
+        assert_eq!(
+            orderbook.asks,
+            vec![TransitiveOrder {
+                buy: 2.0 * base as f64,
+                sell: base as f64,
+            }]
+        );
+        assert_eq!(orderbook.bids, vec![]);
+        let orderbook = pricegraph.transitive_orderbook(1, 0, None);
+        assert_eq!(orderbook.asks, vec![]);
+        assert_eq!(
+            orderbook.bids,
+            vec![TransitiveOrder {
+                buy: 2.0 * base as f64,
+                sell: base as f64,
+            }]
+        );
     }
 
     #[test]
