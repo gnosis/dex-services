@@ -83,8 +83,8 @@ async fn get_markets<T>(
     orderbook: Arc<Orderbook<T>>,
 ) -> Result<impl warp::Reply, Infallible> {
     let transitive_orderbook = orderbook.get_pricegraph().await.transitive_orderbook(
-        token_pair.buy_token_id,
         token_pair.sell_token_id,
+        token_pair.buy_token_id,
         None,
     );
     let result = MarketsResult::from(&transitive_orderbook);

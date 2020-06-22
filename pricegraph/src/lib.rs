@@ -16,11 +16,11 @@ const FEE_FACTOR: f64 = 1.0 / 0.999;
 /// A struct representing a transitive orderbook for a base and quote token.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TransitiveOrderbook {
-    /// Transitive "ask" orders, i.e. transitive orders buying the quote token
-    /// and selling the base token.
-    pub asks: Vec<TransitiveOrder>,
-    /// Transitive "bid" orders, i.e. transitive orders buying the base token
+    /// Transitive "ask" orders, i.e. transitive orders buying the base token
     /// and selling the quote token.
+    pub asks: Vec<TransitiveOrder>,
+    /// Transitive "bid" orders, i.e. transitive orders buying the quote token
+    /// and selling the base token.
     pub bids: Vec<TransitiveOrder>,
 }
 
@@ -32,7 +32,7 @@ impl TransitiveOrderbook {
     pub fn ask_prices(&self) -> impl DoubleEndedIterator<Item = (f64, f64)> + '_ {
         self.asks
             .iter()
-            .map(|order| ((order.sell / order.buy) / FEE_FACTOR, order.buy))
+            .map(|order| ((order.buy / order.sell) * FEE_FACTOR, order.sell))
     }
 
     /// Returns an iterator with bid prices (expressed in the quote token) and
@@ -42,7 +42,7 @@ impl TransitiveOrderbook {
     pub fn bid_prices(&self) -> impl DoubleEndedIterator<Item = (f64, f64)> + '_ {
         self.bids
             .iter()
-            .map(|order| ((order.buy / order.sell) * FEE_FACTOR, order.sell))
+            .map(|order| ((order.sell / order.buy) / FEE_FACTOR, order.buy))
     }
 }
 
@@ -186,8 +186,8 @@ impl Pricegraph {
             .asks
             .extend(orderbook.clone().fill_transitive_orders(
                 TokenPair {
-                    buy: quote,
-                    sell: base,
+                    buy: base,
+                    sell: quote,
                 },
                 spread,
             ));
@@ -195,8 +195,8 @@ impl Pricegraph {
             .bids
             .extend(orderbook.fill_transitive_orders(
                 TokenPair {
-                    buy: base,
-                    sell: quote,
+                    buy: quote,
+                    sell: base,
                 },
                 spread,
             ));
@@ -229,16 +229,6 @@ mod tests {
         let transitive_orderbook = TransitiveOrderbook {
             asks: vec![
                 TransitiveOrder {
-                    buy: 20_000_000.0,
-                    sell: 10_000_000.0,
-                },
-                TransitiveOrder {
-                    buy: 1_500_000.0,
-                    sell: 900_000.0,
-                },
-            ],
-            bids: vec![
-                TransitiveOrder {
                     buy: 1_000_000.0,
                     sell: 2_000_000.0,
                 },
@@ -247,20 +237,30 @@ mod tests {
                     sell: 900_000.0,
                 },
             ],
+            bids: vec![
+                TransitiveOrder {
+                    buy: 20_000_000.0,
+                    sell: 10_000_000.0,
+                },
+                TransitiveOrder {
+                    buy: 1_500_000.0,
+                    sell: 900_000.0,
+                },
+            ],
         };
 
         assert_eq!(
             transitive_orderbook.ask_prices().collect::<Vec<_>>(),
             vec![
-                (0.5 / FEE_FACTOR, 20_000_000.0),
-                ((0.9 / 1.5) / FEE_FACTOR, 1_500_000.0)
+                (0.5 * FEE_FACTOR, 2_000_000.0),
+                ((1.0 / 1.8) * FEE_FACTOR, 900_000.0)
             ]
         );
         assert_eq!(
             transitive_orderbook.bid_prices().collect::<Vec<_>>(),
             vec![
-                (0.5 * FEE_FACTOR, 2_000_000.0),
-                ((1.0 / 1.8) * FEE_FACTOR, 900_000.0)
+                (0.5 / FEE_FACTOR, 20_000_000.0),
+                ((0.9 / 1.5) / FEE_FACTOR, 1_500_000.0)
             ]
         );
     }
