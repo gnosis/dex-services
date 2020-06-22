@@ -32,7 +32,7 @@ impl TransitiveOrderbook {
     pub fn ask_prices(&self) -> impl DoubleEndedIterator<Item = (f64, f64)> + '_ {
         self.asks
             .iter()
-            .map(|order| ((order.sell / order.buy) / FEE_FACTOR, order.buy))
+            .map(|order| ((order.buy / order.sell) * FEE_FACTOR, order.sell))
     }
 
     /// Returns an iterator with bid prices (expressed in the quote token) and
@@ -42,7 +42,7 @@ impl TransitiveOrderbook {
     pub fn bid_prices(&self) -> impl DoubleEndedIterator<Item = (f64, f64)> + '_ {
         self.bids
             .iter()
-            .map(|order| ((order.buy / order.sell) * FEE_FACTOR, order.sell))
+            .map(|order| ((order.sell / order.buy) / FEE_FACTOR, order.buy))
     }
 }
 
@@ -215,6 +215,8 @@ impl Pricegraph {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_approx_eq::assert_approx_eq;
+    use primitive_types::U256;
 
     #[test]
     fn transitive_orderbook_empty_same_token() {
@@ -222,6 +224,48 @@ mod tests {
         let orderbook = pricegraph.transitive_orderbook(0, 0, None);
         assert!(orderbook.asks.is_empty());
         assert!(orderbook.bids.is_empty());
+    }
+
+    #[test]
+    fn transitive_orderbook_simple() {
+        let user0 = UserId::from_low_u64_le(0);
+        let base: u128 = 1_000_000_000_000;
+        let pricegraph = Pricegraph::new(vec![Element {
+            user: user0,
+            balance: U256::from(2) * U256::from(base),
+            pair: TokenPair { buy: 0, sell: 1 },
+            valid: Validity { from: 0, to: 1 },
+            price: Price {
+                numerator: 2 * base,
+                denominator: base,
+            },
+            remaining_sell_amount: base,
+            id: 0,
+        }]);
+
+        let orderbook = pricegraph.transitive_orderbook(0, 1, None);
+        assert_eq!(orderbook.asks, vec![]);
+        assert_eq!(
+            orderbook.bids,
+            vec![TransitiveOrder {
+                buy: 2.0 * base as f64,
+                sell: base as f64,
+            }]
+        );
+        let bid_price = orderbook.bid_prices().next().unwrap();
+        assert_approx_eq!(bid_price.0, 0.5 / FEE_FACTOR);
+
+        let orderbook = pricegraph.transitive_orderbook(1, 0, None);
+        assert_eq!(
+            orderbook.asks,
+            vec![TransitiveOrder {
+                buy: 2.0 * base as f64,
+                sell: base as f64,
+            }]
+        );
+        let ask_price = orderbook.ask_prices().next().unwrap();
+        assert_approx_eq!(ask_price.0, 2.0 * FEE_FACTOR);
+        assert_eq!(orderbook.bids, vec![]);
     }
 
     #[test]
@@ -249,20 +293,17 @@ mod tests {
             ],
         };
 
-        assert_eq!(
-            transitive_orderbook.ask_prices().collect::<Vec<_>>(),
-            vec![
-                (0.5 / FEE_FACTOR, 20_000_000.0),
-                ((0.9 / 1.5) / FEE_FACTOR, 1_500_000.0)
-            ]
-        );
-        assert_eq!(
-            transitive_orderbook.bid_prices().collect::<Vec<_>>(),
-            vec![
-                (0.5 * FEE_FACTOR, 2_000_000.0),
-                ((1.0 / 1.8) * FEE_FACTOR, 900_000.0)
-            ]
-        );
+        let ask_prices = transitive_orderbook.ask_prices().collect::<Vec<_>>();
+        assert_approx_eq!(ask_prices[0].0, 2.0 * FEE_FACTOR);
+        assert_approx_eq!(ask_prices[0].1, 10_000_000.0);
+        assert_approx_eq!(ask_prices[1].0, 1.5 / 0.9 * FEE_FACTOR);
+        assert_approx_eq!(ask_prices[1].1, 900_000.0);
+
+        let bid_prices = transitive_orderbook.bid_prices().collect::<Vec<_>>();
+        assert_approx_eq!(bid_prices[0].0, 2.0 / FEE_FACTOR);
+        assert_approx_eq!(bid_prices[0].1, 1_000_000.0);
+        assert_approx_eq!(bid_prices[1].0, 9.0 / 5.0 / FEE_FACTOR);
+        assert_approx_eq!(bid_prices[1].1, 500_000.0);
     }
 
     #[test]
