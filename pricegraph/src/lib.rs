@@ -296,7 +296,7 @@ mod tests {
         let ask_prices = transitive_orderbook.ask_prices().collect::<Vec<_>>();
         assert_approx_eq!(ask_prices[0].0, 2.0 * FEE_FACTOR);
         assert_approx_eq!(ask_prices[0].1, 10_000_000.0);
-        assert_approx_eq!(ask_prices[1].0, 1.5 / 0.9 * FEE_FACTOR);
+        assert_approx_eq!(ask_prices[1].0, (1.5 / 0.9) * FEE_FACTOR);
         assert_approx_eq!(ask_prices[1].1, 900_000.0);
 
         let bid_prices = transitive_orderbook.bid_prices().collect::<Vec<_>>();
