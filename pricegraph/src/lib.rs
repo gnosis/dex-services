@@ -302,7 +302,7 @@ mod tests {
         let bid_prices = transitive_orderbook.bid_prices().collect::<Vec<_>>();
         assert_approx_eq!(bid_prices[0].0, 2.0 / FEE_FACTOR);
         assert_approx_eq!(bid_prices[0].1, 1_000_000.0);
-        assert_approx_eq!(bid_prices[1].0, 9.0 / 5.0 / FEE_FACTOR);
+        assert_approx_eq!(bid_prices[1].0, (9.0 / 5.0) / FEE_FACTOR);
         assert_approx_eq!(bid_prices[1].1, 500_000.0);
     }
 
