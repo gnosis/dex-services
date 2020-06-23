@@ -88,6 +88,10 @@ impl Api for DexagHttpApi {
         }
         .boxed()
     }
+
+    fn stable_coin_symbol() -> String {
+        "DAI".to_string()
+    }
 }
 
 #[cfg(test)]

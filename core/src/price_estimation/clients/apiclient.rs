@@ -40,9 +40,15 @@ pub trait Api: Sized {
     fn bind(http_factory: &HttpFactory) -> Result<Self>;
 
     fn get_token_list<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Self::Token>>>;
+
     /// Returns the price of one unit of `from` expressed in `to`.
     /// For example `get_price("ETH", "DAI")` is ~220.
     fn get_price<'a>(&'a self, from: &Self::Token, to: &Self::Token) -> BoxFuture<'a, Result<f64>>;
+
+    /// Returns a string representing the reference coin in the stead of OWL for this API
+    /// Could be different from "OWL", e.g., when the API does not offer prices with
+    /// respect to OWL
+    fn stable_coin_symbol() -> String;
 }
 
 struct Tokens<T: Api> {
@@ -82,12 +88,10 @@ impl<T: Api> Client<T> {
             .map(|token| (token.symbol().to_uppercase(), token))
             .collect();
 
-        // We need to return prices in OWL but some price sources do not track it.
-        // OWL tracks USD so we use another stable coin as an approximate USD price.
-        const STABLE_COIN: &str = "DAI";
+        let stable_coin_symbol = &T::stable_coin_symbol().to_uppercase();
         let stable_coin = tokens
-            .remove(STABLE_COIN)
-            .ok_or_else(|| anyhow!("exchange does not track {}", STABLE_COIN))?;
+            .remove(stable_coin_symbol)
+            .ok_or_else(|| anyhow!("exchange does not track {}", stable_coin_symbol))?;
 
         Ok(Tokens {
             tokens,
@@ -168,6 +172,8 @@ mod tests {
 
     #[test]
     fn fails_if_stable_coin_does_not_exist() {
+        let ctx = MockApi::stable_coin_symbol_context();
+        ctx.expect().returning(|| "DAI".to_string());
         let mut api = MockApi::new();
         api.expect_get_token_list()
             .returning(|| async { Ok(Vec::new()) }.boxed());
@@ -182,6 +188,8 @@ mod tests {
 
     #[test]
     fn get_token_prices_initialization_fails_then_works() {
+        let ctx = MockApi::stable_coin_symbol_context();
+        ctx.expect().returning(|| "DAI".to_string());
         let tokens = hash_map! { TokenId::from(1) => TokenBaseInfo::new("ETH", 18, 0)};
         let mut api = MockApi::new();
         let mut seq = Sequence::new();
@@ -221,6 +229,8 @@ mod tests {
 
     #[test]
     fn get_token_prices() {
+        let ctx = MockApi::stable_coin_symbol_context();
+        ctx.expect().returning(|| "DAI".to_string());
         let mut api = MockApi::new();
 
         let tokens = hash_map! {
@@ -269,6 +279,8 @@ mod tests {
 
     #[test]
     fn get_token_prices_error() {
+        let ctx = MockApi::stable_coin_symbol_context();
+        ctx.expect().returning(|| "DAI".to_string());
         let mut api = MockApi::new();
 
         let tokens = hash_map! {
@@ -309,6 +321,8 @@ mod tests {
 
     #[test]
     fn test_case_insensitivity() {
+        let ctx = MockApi::stable_coin_symbol_context();
+        ctx.expect().returning(|| "DAI".to_string());
         let mut api = MockApi::new();
 
         let tokens = hash_map! {
