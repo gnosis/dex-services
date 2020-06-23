@@ -71,7 +71,7 @@ where
         const STABLE_COIN: &str = "DAI";
         let stable_coin = tokens
             .remove(STABLE_COIN)
-            .ok_or_else(|| anyhow!("1inch exchange does not track {}", STABLE_COIN))?;
+            .ok_or_else(|| anyhow!("exchange does not track {}", STABLE_COIN))?;
 
         Ok(Tokens {
             tokens,
