@@ -12,18 +12,37 @@ pub trait Symbolic {
     fn symbol(&self) -> &str;
 }
 
-pub trait Api {
+#[cfg(test)]
+#[derive(Clone, Debug, PartialEq)]
+// Cannot autogenerate with Mockall since the derived traits are needed
+// for testing. Symbolic is a trait that is assigned to the internal token
+// representation of the price source, so the output of `.symbol()` isn't
+// expected to change.
+pub struct MockSymbolic(String);
+#[cfg(test)]
+impl Symbolic for MockSymbolic {
+    fn symbol(&self) -> &str {
+        &self.0
+    }
+}
+#[cfg(test)]
+impl MockSymbolic {
+    fn create(name: &str) -> MockSymbolic {
+        MockSymbolic(name.to_string())
+    }
+}
+
+#[cfg_attr(test, mockall::automock(type Token=MockSymbolic;))]
+pub trait Api: Sized {
     type Token: Symbolic + Sync + Send;
+
+    /// Creates a new HTTP interface for connecting to the API
+    fn bind(http_factory: &HttpFactory) -> Result<Self>;
 
     fn get_token_list<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Self::Token>>>;
     /// Returns the price of one unit of `from` expressed in `to`.
     /// For example `get_price("ETH", "DAI")` is ~220.
     fn get_price<'a>(&'a self, from: &Self::Token, to: &Self::Token) -> BoxFuture<'a, Result<f64>>;
-}
-
-pub trait HttpConnecting: Sized {
-    /// Creates a new HTTP interface for connecting to the API
-    fn bind(http_factory: &HttpFactory) -> Result<Self>;
 }
 
 struct Tokens<T: Api> {
@@ -41,10 +60,7 @@ pub struct Client<T: Api> {
     tokens: TokenData,
 }
 
-impl<T> Client<T>
-where
-    T: Api + HttpConnecting,
-{
+impl<T: Api> Client<T> {
     /// Create a Client using the api implementation from HttpConnecting.
     pub fn new(http_factory: &HttpFactory, tokens: TokenData) -> Result<Self> {
         let api = T::bind(http_factory)?;
@@ -82,7 +98,7 @@ where
 
 impl<T> PriceSource for Client<T>
 where
-    T: Api + HttpConnecting + Sync + Send,
+    T: Api + Sync + Send,
 {
     fn get_prices<'a>(
         &'a self,
@@ -144,70 +160,30 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::http::HttpFactory;
     use crate::models::TokenId;
     use crate::price_estimation::data::TokenBaseInfo;
-    use anyhow::{anyhow, Result};
+    use anyhow::anyhow;
     use lazy_static::lazy_static;
-    use mockall::{mock, predicate::*, Sequence};
-
-    #[derive(Clone, Debug, PartialEq)]
-    // Cannot autogenerate with Mockall since the derived traits are needed
-    // for testing. Symbolic is a trait that is assigned to the internal token
-    // representation of the price source, so the output of `.symbol()` isn't
-    // expected to change.
-    pub struct MockSymbolic(String);
-    impl Symbolic for MockSymbolic {
-        fn symbol(&self) -> &str {
-            &self.0
-        }
-    }
-    impl MockSymbolic {
-        fn create(name: &str) -> MockSymbolic {
-            MockSymbolic(name.to_string())
-        }
-    }
-
-    // Generate MockHttpApi, which mocks the two traits Api and HttpConnecting
-    // simultaneously as per Mockall documentation:
-    // https://docs.rs/mockall/0.5.1/mockall/macro.mock.html
-    // Note that trait definitions are not just a copypaste of the originals, since
-    // 1. referencing the associated type in the macro is forbidden, see docs above
-    // 2. must explicitly specify associated type in definition
-    // To get copypaste working, replace `Self::Token` -> `MockSymbolic` and
-    // `type Token` -> `type Token = MockSymbolic`
-    mock! {
-        pub HttpApi {}
-        pub trait Api {
-            type Token = MockSymbolic;
-            fn get_token_list<'a>(&'a self) -> BoxFuture<'a, Result<Vec<MockSymbolic>>>;
-            fn get_price<'a>(&'a self, from: &MockSymbolic, to: &MockSymbolic) -> BoxFuture<'a, Result<f64>>;
-        }
-        pub trait HttpConnecting: Sized {
-            fn bind(http_factory: &HttpFactory) -> Result<Self>;
-        }
-    }
+    use mockall::{predicate::*, Sequence};
 
     #[test]
     fn fails_if_stable_coin_does_not_exist() {
-        let mut api = MockHttpApi::new();
+        let mut api = MockApi::new();
         api.expect_get_token_list()
             .returning(|| async { Ok(Vec::new()) }.boxed());
 
         let tokens = hash_map! { TokenId::from(6) => TokenBaseInfo::new("DAI", 18, 0)};
-        assert!(
-            Client::<MockHttpApi>::with_api_and_tokens(api, tokens.into())
-                .get_prices(&[6.into()])
-                .now_or_never()
-                .unwrap()
-                .is_err()
-        );
+        assert!(Client::<MockApi>::with_api_and_tokens(api, tokens.into())
+            .get_prices(&[6.into()])
+            .now_or_never()
+            .unwrap()
+            .is_err());
     }
 
     #[test]
     fn get_token_prices_initialization_fails_then_works() {
         let tokens = hash_map! { TokenId::from(1) => TokenBaseInfo::new("ETH", 18, 0)};
-        let mut api = MockHttpApi::new();
+        let mut api = MockApi::new();
         let mut seq = Sequence::new();
 
         api.expect_get_token_list()
@@ -220,7 +196,7 @@ mod tests {
             .in_sequence(&mut seq)
             .returning(|| async { Ok(vec![MockSymbolic::create("DAI")]) }.boxed());
 
-        let client = Client::<MockHttpApi>::with_api_and_tokens(api, tokens.into());
+        let client = Client::<MockApi>::with_api_and_tokens(api, tokens.into());
         assert!(client
             .get_prices(&[1.into()])
             .now_or_never()
@@ -245,7 +221,7 @@ mod tests {
 
     #[test]
     fn get_token_prices() {
-        let mut api = MockHttpApi::new();
+        let mut api = MockApi::new();
 
         let tokens = hash_map! {
             TokenId(6) => TokenBaseInfo::new("DAI", 18, 0),
@@ -275,7 +251,7 @@ mod tests {
             )
             .returning(|_, _| async { Ok(1.2) }.boxed());
 
-        let client = Client::<MockHttpApi>::with_api_and_tokens(api, tokens.clone().into());
+        let client = Client::<MockApi>::with_api_and_tokens(api, tokens.clone().into());
         let prices = client
             .get_prices(&[1.into(), 4.into(), 6.into()])
             .now_or_never()
@@ -293,7 +269,7 @@ mod tests {
 
     #[test]
     fn get_token_prices_error() {
-        let mut api = MockHttpApi::new();
+        let mut api = MockApi::new();
 
         let tokens = hash_map! {
             TokenId(6) => TokenBaseInfo::new("DAI", 18, 0),
@@ -316,7 +292,7 @@ mod tests {
             )
             .returning(|_, _| async { Err(anyhow!("")) }.boxed());
 
-        let client = Client::<MockHttpApi>::with_api_and_tokens(api, tokens.clone().into());
+        let client = Client::<MockApi>::with_api_and_tokens(api, tokens.clone().into());
         let prices = client
             .get_prices(&[6.into(), 1.into()])
             .now_or_never()
@@ -333,7 +309,7 @@ mod tests {
 
     #[test]
     fn test_case_insensitivity() {
-        let mut api = MockHttpApi::new();
+        let mut api = MockApi::new();
 
         let tokens = hash_map! {
             TokenId(6) => TokenBaseInfo::new("dai", 18, 0),
@@ -355,7 +331,7 @@ mod tests {
         api.expect_get_price()
             .returning(|_, _| async { Ok(1.0) }.boxed());
 
-        let client = Client::<MockHttpApi>::with_api_and_tokens(api, tokens.clone().into());
+        let client = Client::<MockApi>::with_api_and_tokens(api, tokens.clone().into());
         let prices = client
             .get_prices(&[1.into(), 4.into(), 6.into()])
             .now_or_never()

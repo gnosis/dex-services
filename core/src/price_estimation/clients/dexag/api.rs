@@ -1,4 +1,4 @@
-use super::super::apiclient::{Api, HttpConnecting, Symbolic};
+use super::super::apiclient::{Api, Symbolic};
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::{Context, Result};
 use ethcontract::Address;
@@ -44,15 +44,14 @@ impl DexagHttpApi {
 
 pub const DEFAULT_BASE_URL: &str = "https://api-v2.dex.ag";
 
-impl HttpConnecting for DexagHttpApi {
-    fn bind(http_factory: &HttpFactory) -> Result<Self> {
-        Self::with_url(http_factory, DEFAULT_BASE_URL)
-    }
-}
-
 /// Parts of the dex.ag api.
 impl Api for DexagHttpApi {
     type Token = Token;
+
+    fn bind(http_factory: &HttpFactory) -> Result<Self> {
+        Self::with_url(http_factory, DEFAULT_BASE_URL)
+    }
+
     /// https://docs.dex.ag/api/tokens
     fn get_token_list<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Token>>> {
         async move {
