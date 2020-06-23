@@ -58,7 +58,7 @@ struct Tokens<T: Api> {
     stable_coin: T::Token,
 }
 
-pub struct Client<T: Api> {
+pub struct GenericClient<T: Api> {
     api: T,
     /// Lazily retrieved the first time it is needed when `get_prices` is
     /// called. We don't want to use the network in `new`.
@@ -66,8 +66,8 @@ pub struct Client<T: Api> {
     tokens: TokenData,
 }
 
-impl<T: Api> Client<T> {
-    /// Create a Client using the api implementation from HttpConnecting.
+impl<T: Api> GenericClient<T> {
+    /// Create a GenericClient using the api implementation from HttpConnecting.
     pub fn new(http_factory: &HttpFactory, tokens: TokenData) -> Result<Self> {
         let api = T::bind(http_factory)?;
         Ok(Self::with_api_and_tokens(api, tokens))
@@ -100,7 +100,7 @@ impl<T: Api> Client<T> {
     }
 }
 
-impl<T> PriceSource for Client<T>
+impl<T> PriceSource for GenericClient<T>
 where
     T: Api + Sync + Send,
 {
@@ -179,11 +179,13 @@ mod tests {
             .returning(|| async { Ok(Vec::new()) }.boxed());
 
         let tokens = hash_map! { TokenId::from(6) => TokenBaseInfo::new("DAI", 18, 0)};
-        assert!(Client::<MockApi>::with_api_and_tokens(api, tokens.into())
-            .get_prices(&[6.into()])
-            .now_or_never()
-            .unwrap()
-            .is_err());
+        assert!(
+            GenericClient::<MockApi>::with_api_and_tokens(api, tokens.into())
+                .get_prices(&[6.into()])
+                .now_or_never()
+                .unwrap()
+                .is_err()
+        );
     }
 
     #[test]
@@ -204,7 +206,7 @@ mod tests {
             .in_sequence(&mut seq)
             .returning(|| async { Ok(vec![MockSymbolic::create("DAI")]) }.boxed());
 
-        let client = Client::<MockApi>::with_api_and_tokens(api, tokens.into());
+        let client = GenericClient::<MockApi>::with_api_and_tokens(api, tokens.into());
         assert!(client
             .get_prices(&[1.into()])
             .now_or_never()
@@ -261,7 +263,7 @@ mod tests {
             )
             .returning(|_, _| async { Ok(1.2) }.boxed());
 
-        let client = Client::<MockApi>::with_api_and_tokens(api, tokens.clone().into());
+        let client = GenericClient::<MockApi>::with_api_and_tokens(api, tokens.clone().into());
         let prices = client
             .get_prices(&[1.into(), 4.into(), 6.into()])
             .now_or_never()
@@ -304,7 +306,7 @@ mod tests {
             )
             .returning(|_, _| async { Err(anyhow!("")) }.boxed());
 
-        let client = Client::<MockApi>::with_api_and_tokens(api, tokens.clone().into());
+        let client = GenericClient::<MockApi>::with_api_and_tokens(api, tokens.clone().into());
         let prices = client
             .get_prices(&[6.into(), 1.into()])
             .now_or_never()
@@ -345,7 +347,7 @@ mod tests {
         api.expect_get_price()
             .returning(|_, _| async { Ok(1.0) }.boxed());
 
-        let client = Client::<MockApi>::with_api_and_tokens(api, tokens.clone().into());
+        let client = GenericClient::<MockApi>::with_api_and_tokens(api, tokens.clone().into());
         let prices = client
             .get_prices(&[1.into(), 4.into(), 6.into()])
             .now_or_never()

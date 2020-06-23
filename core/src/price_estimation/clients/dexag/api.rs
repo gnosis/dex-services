@@ -1,4 +1,4 @@
-use super::super::apiclient::{Api, Symbolic};
+use super::super::generic_client::{Api, Symbolic};
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::{Context, Result};
 use ethcontract::Address;

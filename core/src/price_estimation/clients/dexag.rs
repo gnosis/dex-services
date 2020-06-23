@@ -1,9 +1,9 @@
 mod api;
 
-use super::apiclient::Client;
+use super::generic_client::GenericClient;
 use api::DexagHttpApi;
 
-pub type DexagClient = Client<DexagHttpApi>;
+pub type DexagClient = GenericClient<DexagHttpApi>;
 
 #[cfg(test)]
 mod tests {

@@ -1,5 +1,5 @@
-mod apiclient;
 mod dexag;
+mod generic_client;
 mod kraken;
 
 pub use dexag::DexagClient;
