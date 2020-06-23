@@ -1,44 +1,57 @@
-mod api;
-
-use super::{PriceSource, TokenData};
+use super::super::{PriceSource, TokenData};
 use crate::http::HttpFactory;
 use crate::models::TokenId;
 use anyhow::{anyhow, Context, Result};
-use api::{DexagApi, DexagHttpApi};
 use futures::{
     future::{self, BoxFuture, FutureExt as _},
     lock::Mutex,
 };
 use std::collections::HashMap;
 
-struct ApiTokens {
-    // Maps uppercase Token::symbol to Token.
-    // This is cached in the struct because we don't expect it to change often.
-    tokens: HashMap<String, api::Token>,
-    stable_coin: api::Token,
+pub trait Symbolic {
+    fn symbol(&self) -> &str;
 }
 
-pub struct DexagClient<Api> {
-    api: Api,
+pub trait Api {
+    type Token: Symbolic + Sync + Send;
+
+    fn get_token_list<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Self::Token>>>;
+    /// Returns the price of one unit of `from` expressed in `to`.
+    /// For example `get_price("ETH", "DAI")` is ~220.
+    fn get_price<'a>(&'a self, from: &Self::Token, to: &Self::Token) -> BoxFuture<'a, Result<f64>>;
+}
+
+pub trait HttpConnecting: Sized {
+    /// Creates a new HTTP interface for connecting to the API
+    fn bind(http_factory: &HttpFactory) -> Result<Self>;
+}
+
+struct Tokens<T: Api> {
+    // Maps uppercase Token::symbol to Token.
+    // This is cached in the struct because we don't expect it to change often.
+    tokens: HashMap<String, T::Token>,
+    stable_coin: T::Token,
+}
+
+pub struct Client<T: Api> {
+    api: T,
     /// Lazily retrieved the first time it is needed when `get_prices` is
     /// called. We don't want to use the network in `new`.
-    api_tokens: Mutex<Option<ApiTokens>>,
+    api_tokens: Mutex<Option<Tokens<T>>>,
     tokens: TokenData,
 }
 
-impl DexagClient<DexagHttpApi> {
-    /// Create a DexagClient using DexagHttpApi as the api implementation.
+impl<T> Client<T>
+where
+    T: Api + HttpConnecting,
+{
+    /// Create a Client using the api implementation from HttpConnecting.
     pub fn new(http_factory: &HttpFactory, tokens: TokenData) -> Result<Self> {
-        let api = DexagHttpApi::new(http_factory)?;
+        let api = T::bind(http_factory)?;
         Ok(Self::with_api_and_tokens(api, tokens))
     }
-}
 
-impl<Api> DexagClient<Api>
-where
-    Api: DexagApi,
-{
-    pub fn with_api_and_tokens(api: Api, tokens: TokenData) -> Self {
+    pub fn with_api_and_tokens(api: T, tokens: TokenData) -> Self {
         Self {
             api,
             api_tokens: Mutex::new(None),
@@ -46,34 +59,30 @@ where
         }
     }
 
-    async fn create_api_tokens(&self) -> Result<ApiTokens> {
+    async fn create_api_tokens(&self) -> Result<Tokens<T>> {
         let tokens = self.api.get_token_list().await?;
-        let mut tokens: HashMap<String, api::Token> = tokens
+        let mut tokens: HashMap<String, T::Token> = tokens
             .into_iter()
-            .map(|token| (token.symbol.to_uppercase(), token))
+            .map(|token| (token.symbol().to_uppercase(), token))
             .collect();
 
-        // We need to return prices in OWL but Dexag does not track it. OWL
-        // tracks USD so we use another stable coin as an approximate
-        // USD price.
+        // We need to return prices in OWL but some price sources do not track it.
+        // OWL tracks USD so we use another stable coin as an approximate USD price.
         const STABLE_COIN: &str = "DAI";
-        let stable_coin = tokens.remove(STABLE_COIN).ok_or_else(|| {
-            anyhow!(
-                "dexag exchange does not track our stable coin {}",
-                STABLE_COIN
-            )
-        })?;
+        let stable_coin = tokens
+            .remove(STABLE_COIN)
+            .ok_or_else(|| anyhow!("1inch exchange does not track {}", STABLE_COIN))?;
 
-        Ok(ApiTokens {
+        Ok(Tokens {
             tokens,
             stable_coin,
         })
     }
 }
 
-impl<Api> PriceSource for DexagClient<Api>
+impl<T> PriceSource for Client<T>
 where
-    Api: DexagApi + Sync + Send,
+    T: Api + HttpConnecting + Sync + Send,
 {
     fn get_prices<'a>(
         &'a self,
@@ -86,7 +95,7 @@ where
 
             let mut api_tokens_guard = self.api_tokens.lock().await;
             let api_tokens_option = &mut api_tokens_guard;
-            let api_tokens: &ApiTokens = match api_tokens_option.as_ref() {
+            let api_tokens: &Tokens<T> = match api_tokens_option.as_ref() {
                 Some(api_tokens) => api_tokens,
                 None => {
                     let initialized = self
@@ -102,7 +111,7 @@ where
                 .filter_map(|token| -> Option<(&TokenId, BoxFuture<Result<f64>>)> {
                     // api_tokens symbols are converted to uppercase to disambiguate
                     let symbol = self.tokens.info(*token)?.symbol().to_uppercase();
-                    if symbol == api_tokens.stable_coin.symbol {
+                    if symbol == api_tokens.stable_coin.symbol() {
                         Some((token, async { Ok(1.0) }.boxed()))
                     } else if let Some(api_token) = api_tokens.tokens.get(&symbol) {
                         Some((
@@ -134,31 +143,71 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::api::MockDexagApi;
     use super::*;
+    use crate::http::HttpFactory;
+    use crate::models::TokenId;
     use crate::price_estimation::data::TokenBaseInfo;
-    use crate::util::FutureWaitExt as _;
+    use anyhow::{anyhow, Result};
     use lazy_static::lazy_static;
-    use mockall::{predicate::*, Sequence};
+    use mockall::{mock, predicate::*, Sequence};
+
+    #[derive(Clone, Debug, PartialEq)]
+    // Cannot autogenerate with Mockall since the derived traits are needed
+    // for testing. Symbolic is a trait that is assigned to the internal token
+    // representation of the price source, so the output of `.symbol()` isn't
+    // expected to change.
+    pub struct MockSymbolic(String);
+    impl Symbolic for MockSymbolic {
+        fn symbol(&self) -> &str {
+            &self.0
+        }
+    }
+    impl MockSymbolic {
+        fn create(name: &str) -> MockSymbolic {
+            MockSymbolic(name.to_string())
+        }
+    }
+
+    // Generate MockHttpApi, which mocks the two traits Api and HttpConnecting
+    // simultaneously as per Mockall documentation:
+    // https://docs.rs/mockall/0.5.1/mockall/macro.mock.html
+    // Note that trait definitions are not just a copypaste of the originals, since
+    // 1. referencing the associated type in the macro is forbidden, see docs above
+    // 2. must explicitly specify associated type in definition
+    // To get copypaste working, replace `Self::Token` -> `MockSymbolic` and
+    // `type Token` -> `type Token = MockSymbolic`
+    mock! {
+        pub HttpApi {}
+        pub trait Api {
+            type Token = MockSymbolic;
+            fn get_token_list<'a>(&'a self) -> BoxFuture<'a, Result<Vec<MockSymbolic>>>;
+            fn get_price<'a>(&'a self, from: &MockSymbolic, to: &MockSymbolic) -> BoxFuture<'a, Result<f64>>;
+        }
+        pub trait HttpConnecting: Sized {
+            fn bind(http_factory: &HttpFactory) -> Result<Self>;
+        }
+    }
 
     #[test]
     fn fails_if_stable_coin_does_not_exist() {
-        let mut api = MockDexagApi::new();
+        let mut api = MockHttpApi::new();
         api.expect_get_token_list()
             .returning(|| async { Ok(Vec::new()) }.boxed());
 
         let tokens = hash_map! { TokenId::from(6) => TokenBaseInfo::new("DAI", 18, 0)};
-        assert!(DexagClient::with_api_and_tokens(api, tokens.into())
-            .get_prices(&[6.into()])
-            .now_or_never()
-            .unwrap()
-            .is_err());
+        assert!(
+            Client::<MockHttpApi>::with_api_and_tokens(api, tokens.into())
+                .get_prices(&[6.into()])
+                .now_or_never()
+                .unwrap()
+                .is_err()
+        );
     }
 
     #[test]
     fn get_token_prices_initialization_fails_then_works() {
         let tokens = hash_map! { TokenId::from(1) => TokenBaseInfo::new("ETH", 18, 0)};
-        let mut api = MockDexagApi::new();
+        let mut api = MockHttpApi::new();
         let mut seq = Sequence::new();
 
         api.expect_get_token_list()
@@ -169,18 +218,9 @@ mod tests {
         api.expect_get_token_list()
             .times(1)
             .in_sequence(&mut seq)
-            .returning(|| {
-                async {
-                    Ok(vec![super::api::Token {
-                        name: String::new(),
-                        symbol: "DAI".to_string(),
-                        address: None,
-                    }])
-                }
-                .boxed()
-            });
+            .returning(|| async { Ok(vec![MockSymbolic::create("DAI")]) }.boxed());
 
-        let client = DexagClient::with_api_and_tokens(api, tokens.into());
+        let client = Client::<MockHttpApi>::with_api_and_tokens(api, tokens.into());
         assert!(client
             .get_prices(&[1.into()])
             .now_or_never()
@@ -205,7 +245,7 @@ mod tests {
 
     #[test]
     fn get_token_prices() {
-        let mut api = MockDexagApi::new();
+        let mut api = MockHttpApi::new();
 
         let tokens = hash_map! {
             TokenId(6) => TokenBaseInfo::new("DAI", 18, 0),
@@ -214,22 +254,10 @@ mod tests {
         };
 
         lazy_static! {
-            static ref API_TOKENS: [super::api::Token; 3] = [
-                super::api::Token {
-                    name: String::new(),
-                    symbol: "DAI".to_string(),
-                    address: None,
-                },
-                super::api::Token {
-                    name: String::new(),
-                    symbol: "ETH".to_string(),
-                    address: None,
-                },
-                super::api::Token {
-                    name: String::new(),
-                    symbol: "USDC".to_string(),
-                    address: None,
-                },
+            static ref API_TOKENS: [MockSymbolic; 3] = [
+                MockSymbolic::create("DAI"),
+                MockSymbolic::create("ETH"),
+                MockSymbolic::create("USDC")
             ];
         }
 
@@ -247,7 +275,7 @@ mod tests {
             )
             .returning(|_, _| async { Ok(1.2) }.boxed());
 
-        let client = DexagClient::with_api_and_tokens(api, tokens.clone().into());
+        let client = Client::<MockHttpApi>::with_api_and_tokens(api, tokens.clone().into());
         let prices = client
             .get_prices(&[1.into(), 4.into(), 6.into()])
             .now_or_never()
@@ -265,7 +293,7 @@ mod tests {
 
     #[test]
     fn get_token_prices_error() {
-        let mut api = MockDexagApi::new();
+        let mut api = MockHttpApi::new();
 
         let tokens = hash_map! {
             TokenId(6) => TokenBaseInfo::new("DAI", 18, 0),
@@ -273,18 +301,8 @@ mod tests {
         };
 
         lazy_static! {
-            static ref API_TOKENS: [super::api::Token; 2] = [
-                super::api::Token {
-                    name: String::new(),
-                    symbol: "DAI".to_string(),
-                    address: None,
-                },
-                super::api::Token {
-                    name: String::new(),
-                    symbol: "ETH".to_string(),
-                    address: None,
-                },
-            ];
+            static ref API_TOKENS: [MockSymbolic; 2] =
+                [MockSymbolic::create("DAI"), MockSymbolic::create("ETH"),];
         }
 
         api.expect_get_token_list()
@@ -298,7 +316,7 @@ mod tests {
             )
             .returning(|_, _| async { Err(anyhow!("")) }.boxed());
 
-        let client = DexagClient::with_api_and_tokens(api, tokens.clone().into());
+        let client = Client::<MockHttpApi>::with_api_and_tokens(api, tokens.clone().into());
         let prices = client
             .get_prices(&[6.into(), 1.into()])
             .now_or_never()
@@ -315,7 +333,7 @@ mod tests {
 
     #[test]
     fn test_case_insensitivity() {
-        let mut api = MockDexagApi::new();
+        let mut api = MockHttpApi::new();
 
         let tokens = hash_map! {
             TokenId(6) => TokenBaseInfo::new("dai", 18, 0),
@@ -324,22 +342,10 @@ mod tests {
         };
 
         lazy_static! {
-            static ref API_TOKENS: [super::api::Token; 3] = [
-                super::api::Token {
-                    name: String::new(),
-                    symbol: "DAI".to_string(),
-                    address: None,
-                },
-                super::api::Token {
-                    name: String::new(),
-                    symbol: "eth".to_string(),
-                    address: None,
-                },
-                super::api::Token {
-                    name: String::new(),
-                    symbol: "Susd".to_string(),
-                    address: None,
-                },
+            static ref API_TOKENS: [MockSymbolic; 3] = [
+                MockSymbolic::create("DAI"),
+                MockSymbolic::create("eth"),
+                MockSymbolic::create("Susd"),
             ];
         }
 
@@ -349,7 +355,7 @@ mod tests {
         api.expect_get_price()
             .returning(|_, _| async { Ok(1.0) }.boxed());
 
-        let client = DexagClient::with_api_and_tokens(api, tokens.clone().into());
+        let client = Client::<MockHttpApi>::with_api_and_tokens(api, tokens.clone().into());
         let prices = client
             .get_prices(&[1.into(), 4.into(), 6.into()])
             .now_or_never()
@@ -363,43 +369,5 @@ mod tests {
                 TokenId(6) => tokens.get(&6.into()).unwrap().get_owl_price(1.0) as u128
             }
         );
-    }
-
-    // Run with `cargo test online_dexag_client -- --ignored --nocapture`.
-    #[test]
-    #[ignore]
-    fn online_dexag_client() {
-        use std::time::Instant;
-
-        let tokens = hash_map! {
-            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0),
-            TokenId(2) => TokenBaseInfo::new("USDT", 6, 0),
-            TokenId(3) => TokenBaseInfo::new("TUSD", 18, 0),
-            TokenId(4) => TokenBaseInfo::new("USDC", 6, 0),
-            TokenId(5) => TokenBaseInfo::new("PAX", 18, 0),
-            TokenId(6) => TokenBaseInfo::new("GUSD", 2, 0),
-            TokenId(7) => TokenBaseInfo::new("DAI", 18, 0),
-            TokenId(8) => TokenBaseInfo::new("sETH", 18, 0),
-            TokenId(9) => TokenBaseInfo::new("sUSD", 18, 0),
-            TokenId(15) => TokenBaseInfo::new("SNX", 18, 0)
-        };
-        let ids: Vec<TokenId> = tokens.keys().copied().collect();
-
-        let client = DexagClient::new(&HttpFactory::default(), tokens.clone().into()).unwrap();
-        let before = Instant::now();
-        let prices = client.get_prices(&ids).wait().unwrap();
-        let after = Instant::now();
-        println!(
-            "Took {} seconds to get prices.",
-            (after - before).as_secs_f64()
-        );
-
-        for (id, token) in tokens {
-            if let Some(price) = prices.get(&id) {
-                println!("Token {} has OWL price of {}.", token.symbol(), price);
-            } else {
-                println!("Token {} price could not be determined.", token.symbol());
-            }
-        }
     }
 }

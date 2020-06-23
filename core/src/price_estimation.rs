@@ -2,16 +2,14 @@
 //! give good price estimates to the solver for better results.
 
 mod average_price_source;
+mod clients;
 pub mod data;
-mod dexag;
-mod kraken;
 mod orderbook_based;
 mod price_source;
 mod threaded_price_source;
 
+use self::clients::{DexagClient, KrakenClient};
 pub use self::data::{TokenBaseInfo, TokenData};
-use self::dexag::DexagClient;
-use self::kraken::KrakenClient;
 use self::orderbook_based::PricegraphEstimator;
 use crate::{
     http::HttpFactory,

@@ -3,7 +3,7 @@
 mod api;
 
 use self::api::{Asset, AssetPair, KrakenApi, KrakenHttpApi};
-use super::{PriceSource, TokenData};
+use super::super::{PriceSource, TokenData};
 use crate::http::HttpFactory;
 use crate::models::TokenId;
 use anyhow::{anyhow, Context, Result};
