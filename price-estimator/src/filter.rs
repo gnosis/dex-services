@@ -90,7 +90,7 @@ async fn estimate_buy_amount<T>(
         .await
         .order_for_sell_amount(token_pair.into(), sell_amount_in_quote as f64);
     let buy_amount_in_base = transitive_order
-        .map(|order| apply_rounding_buffer(order.buy, price_rounding_buffer))
+        .map(|order| apply_rounding_buffer(order.buy, price_rounding_buffer) as u128)
         .unwrap_or_default();
     let result = EstimatedOrderResult {
         base_token_id: token_pair.buy_token_id,
@@ -123,8 +123,10 @@ async fn estimate_sell_amount<T>(
     orderbook: Arc<Orderbook<T>>,
 ) -> Result<impl warp::Reply, Infallible> {
     // NOTE: The price in quote is `sell_amount / buy_amount` which is the
-    // inverse of an exchange rate.
-    let exchange_rate = 1.0 / price_in_quote;
+    // inverse of an exchange rate. Additionally, we need to apply the price
+    // rounding buffer to the price, which will **increase** the exchange rate,
+    // making it more restrictive and the estimate more pessimistic.
+    let exchange_rate = 1.0 / apply_rounding_buffer(price_in_quote, price_rounding_buffer);
     let transitive_order = orderbook
         .get_pricegraph()
         .await
@@ -132,8 +134,8 @@ async fn estimate_sell_amount<T>(
     let (buy_amount_in_base, sell_amount_in_quote) = transitive_order
         .map(|order| {
             (
-                apply_rounding_buffer(order.buy, price_rounding_buffer),
-                apply_rounding_buffer(order.sell, price_rounding_buffer),
+                apply_rounding_buffer(order.buy, price_rounding_buffer) as u128,
+                order.sell as u128,
             )
         })
         .unwrap_or_default();
@@ -146,7 +148,7 @@ async fn estimate_sell_amount<T>(
     Ok(warp::reply::json(&result))
 }
 
-fn apply_rounding_buffer(amount: f64, price_rounding_buffer: f64) -> u128 {
+fn apply_rounding_buffer(amount: f64, price_rounding_buffer: f64) -> f64 {
     ((1.0 - price_rounding_buffer) * amount) as _
 }
 
