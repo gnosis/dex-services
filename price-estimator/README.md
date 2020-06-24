@@ -56,14 +56,14 @@ Example Response:
 
 ### Estimated Sell Amount
 
-`GET /api/v1/markets/:market/estimated-sell-amount/:price-in-quote`
+`GET /api/v1/markets/:market/estimated-amounts-at-price/:price-in-quote`
 
 * `market` is as above
 * `price_in_quote` is a decimal number.
 
 Url query is as above.
 
-Example Request: `/api/v1/markets/1-7/estimated-sell-amount/245.5?atoms=true`
+Example Request: `/api/v1/markets/1-7/estimated-amounts-at-price/245.5?atoms=true`
 
 Example Response:
 
@@ -71,8 +71,8 @@ Example Response:
 {
     "baseTokenId": "1",
     "quoteTokenId": "7",
-    "buyAmountInBase": "1103276584712580736",
-    "sellAmountInQuote": "271125527074012594176"
+    "buyAmountInBase": "6098377078823660544",
+    "sellAmountInQuote": "1497151572851208749056"
 }
 ```
 

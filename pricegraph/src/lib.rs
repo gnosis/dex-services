@@ -158,30 +158,44 @@ impl Pricegraph {
         })
     }
 
-    /// Estimates a sell amount for the specified token pair and limit exchange
-    /// rate.
-    pub fn estimate_sell_amount(&self, pair: TokenPair, exchange_rate: f64) -> f64 {
-        self.reduced_orderbook()
-            .fill_order_at_price(pair, exchange_rate)
+    /// Returns a transitive order with the smallest buy amount and largest sell
+    /// amount such that its exchange rate is smaller than or equal to the
+    /// specified limit exchange rate and there exists overlapping transitive
+    /// orders to completely fill the order. Returns `None` if no overlapping
+    /// transitive orders exist at the given exchange rate.
+    pub fn order_for_limit_exchange_rate(
+        &self,
+        pair: TokenPair,
+        limit_exchange_rate: f64,
+    ) -> Option<TransitiveOrder> {
+        let (buy, sell) = self
+            .reduced_orderbook()
+            .fill_order_at_price(pair, limit_exchange_rate);
+        if buy == 0.0 {
+            return None;
+        }
+        debug_assert!(sell > 0.0, "zero sell amount for non-zero buy amount");
+
+        Some(TransitiveOrder { buy, sell })
     }
 
-    /// Returns a transitive order with the largest buy and sell amount computed
-    /// such that there exists overlapping transitive orders to completely fill
-    /// the order at the specified limit exchange rate. Returns `None` if no
-    /// overlapping transitive orders exist at the given exchange rate.
-    pub fn order_for_exchange_rate(
+    /// Returns a transitive order with the largest sell amount such that there
+    /// exists overlapping transitive orders to completely fill the order at the
+    /// specified exchange rate. Returns `None` if no overlapping transitive
+    /// orders exist at the given exchange rate.
+    ///
+    /// Note that this method is subtly different to
+    /// `Pricegraph::order_for_limit_exchange_rate` in that the exchange rate
+    /// for the resulting order is equal to the specified exchange rate.
+    pub fn order_at_exchange_rate(
         &self,
         pair: TokenPair,
         exchange_rate: f64,
     ) -> Option<TransitiveOrder> {
-        let sell_amount = self.estimate_sell_amount(pair, exchange_rate);
-        if sell_amount == 0.0 {
-            return None;
-        }
-
+        let order = self.order_for_limit_exchange_rate(pair, exchange_rate)?;
         Some(TransitiveOrder {
-            buy: sell_amount * exchange_rate,
-            sell: sell_amount,
+            buy: order.sell * exchange_rate,
+            sell: order.sell,
         })
     }
 
