@@ -158,11 +158,11 @@ impl Pricegraph {
         })
     }
 
-    /// Returns a transitive order with the smallest buy amount and largest sell
-    /// amount such that its exchange rate is smaller than or equal to the
-    /// specified limit exchange rate and there exists overlapping transitive
-    /// orders to completely fill the order. Returns `None` if no overlapping
-    /// transitive orders exist at the given exchange rate.
+    /// Returns a transitive order with the largest buy and sell amounts such
+    /// that its exchange rate is greater than or equal to the specified limit
+    /// exchange rate and there exists overlapping transitive orders to
+    /// completely fill the order. Returns `None` if no overlapping transitive
+    /// orders exist at the given exchange rate.
     pub fn order_for_limit_exchange_rate(
         &self,
         pair: TokenPair,
