@@ -165,10 +165,10 @@ impl Pricegraph {
             .fill_order_at_price(pair, exchange_rate)
     }
 
-    /// Returns a transitive order with a buy and sell amount computed such that
-    /// there exists overlapping transitive orders to completely fill the order
-    /// at the specified limit exchange rate. Returns `None` if no overlapping
-    /// transitive orders exist at the given exchange rate.
+    /// Returns a transitive order with the largest buy and sell amount computed
+    /// such that there exists overlapping transitive orders to completely fill
+    /// the order at the specified limit exchange rate. Returns `None` if no
+    /// overlapping transitive orders exist at the given exchange rate.
     pub fn order_for_exchange_rate(
         &self,
         pair: TokenPair,
