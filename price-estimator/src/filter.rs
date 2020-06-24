@@ -117,11 +117,14 @@ async fn get_markets<T>(
 
 async fn estimate_sell_amount<T>(
     token_pair: TokenPair,
-    exchange_rate: f64,
+    price_in_quote: f64,
     _query: QueryParameters,
     price_rounding_buffer: f64,
     orderbook: Arc<Orderbook<T>>,
 ) -> Result<impl warp::Reply, Infallible> {
+    // NOTE: The price in quote is `sell_amount / buy_amount` which is the
+    // inverse of an exchange rate.
+    let exchange_rate = 1.0 / price_in_quote;
     let transitive_order = orderbook
         .get_pricegraph()
         .await
