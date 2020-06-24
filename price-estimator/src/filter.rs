@@ -92,7 +92,7 @@ async fn estimate_buy_amount<T>(
     let buy_amount_in_base = transitive_order
         .map(|order| apply_rounding_buffer(order.buy, price_rounding_buffer))
         .unwrap_or_default();
-    let result = EstimatedBuyAmountResult {
+    let result = EstimatedOrderResult {
         base_token_id: token_pair.buy_token_id,
         quote_token_id: token_pair.sell_token_id,
         sell_amount_in_quote,
@@ -134,7 +134,7 @@ async fn estimate_sell_amount<T>(
             )
         })
         .unwrap_or_default();
-    let result = EstimatedBuyAmountResult {
+    let result = EstimatedOrderResult {
         base_token_id: token_pair.buy_token_id,
         quote_token_id: token_pair.sell_token_id,
         sell_amount_in_quote,
@@ -263,5 +263,20 @@ mod tests {
                 .unwrap()
                 .is_err());
         }
+    }
+
+    #[test]
+    fn estimated_sell_amount_ok() {
+        let (token_pair, volume, query) = warp::test::request()
+            .path("/api/v1/markets/0-65535/estimated-sell-amount/0.5?atoms=true")
+            .filter(&estimated_sell_amount_filter())
+            .now_or_never()
+            .unwrap()
+            .unwrap();
+        assert_eq!(token_pair.buy_token_id, 0);
+        assert_eq!(token_pair.sell_token_id, 65535);
+        assert!((volume - 0.5).abs() < f64::EPSILON);
+        assert_eq!(query.atoms, true);
+        assert_eq!(query.hops, None);
     }
 }
