@@ -9,7 +9,12 @@ pub fn all<T: Send + Sync + 'static>(
     orderbook: Arc<Orderbook<T>>,
     price_rounding_buffer: f64,
 ) -> impl Filter<Extract = impl warp::Reply, Error = Rejection> + Clone {
-    markets(orderbook.clone()).or(estimated_buy_amount(orderbook, price_rounding_buffer))
+    markets(orderbook.clone())
+        .or(estimated_buy_amount(
+            orderbook.clone(),
+            price_rounding_buffer,
+        ))
+        .or(estimated_sell_amount(orderbook, price_rounding_buffer))
 }
 
 /// Validate a request of the form
@@ -38,6 +43,20 @@ pub fn markets<T: Send + Sync + 'static>(
         .with(warp::log("price_estimator::api::markets"))
 }
 
+/// Validate a request of the form:
+/// `/api/v1/markets/<baseTokenId>-<quoteTokenId>/estimated-sell-amount/<exchangeRate>`
+/// and answer it.
+pub fn estimated_sell_amount<T: Send + Sync + 'static>(
+    orderbook: Arc<Orderbook<T>>,
+    price_rounding_buffer: f64,
+) -> impl Filter<Extract = impl warp::Reply, Error = Rejection> + Clone {
+    estimated_sell_amount_filter()
+        .and(warp::any().map(move || price_rounding_buffer))
+        .and(warp::any().map(move || orderbook.clone()))
+        .and_then(estimate_sell_amount)
+        .with(warp::log("price_estimator::api::estimate_sell_amount"))
+}
+
 fn estimated_buy_amount_filter(
 ) -> impl Filter<Extract = (TokenPair, u128, QueryParameters), Error = Rejection> + Copy {
     warp::path!("api" / "v1" / "markets" / TokenPair / "estimated-buy-amount" / u128)
@@ -48,6 +67,13 @@ fn estimated_buy_amount_filter(
 fn markets_filter() -> impl Filter<Extract = (TokenPair, QueryParameters), Error = Rejection> + Copy
 {
     warp::path!("api" / "v1" / "markets" / TokenPair)
+        .and(warp::get())
+        .and(warp::query::<QueryParameters>())
+}
+
+fn estimated_sell_amount_filter(
+) -> impl Filter<Extract = (TokenPair, f64, QueryParameters), Error = Rejection> + Copy {
+    warp::path!("api" / "v1" / "markets" / TokenPair / "estimated-sell-amount" / f64)
         .and(warp::get())
         .and(warp::query::<QueryParameters>())
 }
@@ -63,11 +89,9 @@ async fn estimate_buy_amount<T>(
         .get_pricegraph()
         .await
         .order_for_sell_amount(token_pair.into(), sell_amount_in_quote as f64);
-    let buy_amount_in_base = if let Some(order) = transitive_order {
-        (1.0 - price_rounding_buffer) * order.buy
-    } else {
-        0.0
-    } as u128;
+    let buy_amount_in_base = transitive_order
+        .map(|order| apply_rounding_buffer(order.buy, price_rounding_buffer))
+        .unwrap_or_default();
     let result = EstimatedBuyAmountResult {
         base_token_id: token_pair.buy_token_id,
         quote_token_id: token_pair.sell_token_id,
@@ -89,6 +113,38 @@ async fn get_markets<T>(
     );
     let result = MarketsResult::from(&transitive_orderbook);
     Ok(warp::reply::json(&result))
+}
+
+async fn estimate_sell_amount<T>(
+    token_pair: TokenPair,
+    exchange_rate: f64,
+    _query: QueryParameters,
+    price_rounding_buffer: f64,
+    orderbook: Arc<Orderbook<T>>,
+) -> Result<impl warp::Reply, Infallible> {
+    let transitive_order = orderbook
+        .get_pricegraph()
+        .await
+        .order_for_exchange_rate(token_pair.into(), exchange_rate);
+    let (buy_amount_in_base, sell_amount_in_quote) = transitive_order
+        .map(|order| {
+            (
+                apply_rounding_buffer(order.buy, price_rounding_buffer),
+                order.sell as u128,
+            )
+        })
+        .unwrap_or_default();
+    let result = EstimatedBuyAmountResult {
+        base_token_id: token_pair.buy_token_id,
+        quote_token_id: token_pair.sell_token_id,
+        sell_amount_in_quote,
+        buy_amount_in_base,
+    };
+    Ok(warp::reply::json(&result))
+}
+
+fn apply_rounding_buffer(buy_amount: f64, price_rounding_buffer: f64) -> u128 {
+    ((1.0 - price_rounding_buffer) * buy_amount) as _
 }
 
 #[cfg(test)]

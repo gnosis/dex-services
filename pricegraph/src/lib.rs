@@ -158,6 +158,33 @@ impl Pricegraph {
         })
     }
 
+    /// Estimates a sell amount for the specified token pair and limit exchange
+    /// rate.
+    pub fn estimate_sell_amount(&self, pair: TokenPair, exchange_rate: f64) -> f64 {
+        self.reduced_orderbook()
+            .fill_order_at_price(pair, exchange_rate)
+    }
+
+    /// Returns a transitive order with a buy and sell amount computed such that
+    /// there exists overlapping transitive orders to completely fill the order
+    /// at the specified limit exchange rate. Returns `None` if no overlapping
+    /// transitive orders exist at the given exchange rate.
+    pub fn order_for_exchange_rate(
+        &self,
+        pair: TokenPair,
+        exchange_rate: f64,
+    ) -> Option<TransitiveOrder> {
+        let sell_amount = self.estimate_sell_amount(pair, exchange_rate);
+        if sell_amount == 0.0 {
+            return None;
+        }
+
+        Some(TransitiveOrder {
+            buy: sell_amount * exchange_rate,
+            sell: sell_amount,
+        })
+    }
+
     /// Computes a transitive orderbook for the given market specified by the
     /// base and quote tokens.
     ///

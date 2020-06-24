@@ -359,7 +359,7 @@ impl Orderbook {
         Some(invert_price(last_transitive_price))
     }
 
-    /// Fill an order at a given price, returning the estimated buy amount that
+    /// Fill an order at a given price, returning the estimated sell amount that
     /// can be filled at the given price with the current existing orders.
     ///
     /// This is calculated by repeatedly finding the cheapest path between a
@@ -394,8 +394,7 @@ impl Orderbook {
             if transitive_price > max_price {
                 break;
             }
-            // NOTE: Capacity is a sell amount, so convert to a buy amount.
-            total_volume += capacity / transitive_price;
+            total_volume += capacity;
 
             self.fill_path_with_capacity(&path, capacity)
                 .unwrap_or_else(|_| {
