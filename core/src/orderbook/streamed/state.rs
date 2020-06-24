@@ -37,6 +37,15 @@ struct LastSolution {
 }
 
 impl State {
+    /// Creates a new state from an iterator of events with corresponding batch IDs.
+    pub fn from_events<'a>(events: impl IntoIterator<Item = (&'a Event, u32)>) -> Result<Self> {
+        events
+            .into_iter()
+            .try_fold(State::default(), |state, (event, batch_id)| {
+                state.apply_event(event, batch_id)
+            })
+    }
+
     /// Returns the orderbook when the requested batch started collecting orders given all events received so far.
     ///
     /// Errors if State has only received a partial solution which would make the result

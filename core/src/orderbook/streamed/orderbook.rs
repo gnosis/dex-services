@@ -102,12 +102,15 @@ impl Orderbook {
         Some(self.events.iter().next_back()?.0.block_number)
     }
 
-    fn create_state(&self) -> Result<State> {
-        self.events
-            .iter()
-            .try_fold(State::default(), |state, (_key, value)| {
-                state.apply_event(&value.event, value.batch_id)
-            })
+    /// Create a new streamed orderbook auction state with events from batches
+    /// up to and including the specified batch ID.
+    fn create_state(&self, batch_id: u32) -> Result<State> {
+        State::from_events(
+            self.events
+                .values()
+                .take_while(move |entry| entry.batch_id <= batch_id)
+                .map(|entry| (&entry.event, entry.batch_id)),
+        )
     }
 
     pub fn into_events(self) -> impl Iterator<Item = (batch_exchange::Event, BatchId)> {
@@ -157,7 +160,7 @@ impl StableXOrderBookReading for Orderbook {
         batch_id_to_solve: u32,
     ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
         async move {
-            let state = self.create_state()?;
+            let state = self.create_state(batch_id_to_solve)?;
             // In order to solve batch t we need the orderbook at the beginning of batch t+1's collection process
             let (account_state, orders) =
                 state.orderbook_at_beginning_of_batch(batch_id_to_solve + 1)?;
@@ -369,6 +372,57 @@ mod tests {
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
             U256::from(7)
+        );
+    }
+
+    #[test]
+    fn historic_auction_states() {
+        let token_listing_0 = EventData::Added(Event::TokenListing(TokenListing {
+            token: Address::from_low_u64_be(0),
+            id: 0,
+        }));
+        let token_listing_1 = EventData::Added(Event::TokenListing(TokenListing {
+            token: Address::from_low_u64_be(1),
+            id: 1,
+        }));
+        let order_placement = EventData::Added(Event::OrderPlacement(OrderPlacement {
+            owner: Address::from_low_u64_be(2),
+            index: 0,
+            buy_token: 1,
+            sell_token: 0,
+            valid_from: 0,
+            valid_until: 10,
+            price_numerator: 100,
+            price_denominator: 100,
+        }));
+        let deposit_0 = EventData::Added(Event::Deposit(Deposit {
+            user: Address::from_low_u64_be(2),
+            token: Address::from_low_u64_be(0),
+            amount: 42.into(),
+            batch_id: 0,
+        }));
+        let deposit_1 = EventData::Added(Event::Deposit(Deposit {
+            user: Address::from_low_u64_be(2),
+            token: Address::from_low_u64_be(0),
+            amount: 1337.into(),
+            batch_id: 1,
+        }));
+
+        let mut orderbook = Orderbook::default();
+        orderbook.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
+        orderbook.handle_event_data(token_listing_1, 0, 1, H256::zero(), 0);
+        orderbook.handle_event_data(order_placement, 0, 2, H256::zero(), 0);
+        orderbook.handle_event_data(deposit_0, 0, 3, H256::zero(), 0);
+        orderbook.handle_event_data(deposit_1, 1, 0, H256::zero(), 600);
+
+        let auction_data = orderbook
+            .get_auction_data(0)
+            .now_or_never()
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
+            U256::from(42)
         );
     }
 }
