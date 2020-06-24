@@ -1117,23 +1117,23 @@ mod tests {
             orderbook
                 .clone()
                 .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR.powi(2)),
-            1_000_000.0
+            1_000_000.0 * FEE_FACTOR
         );
         assert_approx_eq!(
             orderbook
                 .clone()
                 .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.3),
-            2_000_000.0
+            3_000_000.0 * FEE_FACTOR
         );
         assert_approx_eq!(
             orderbook
                 .clone()
                 .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.25 / FEE_FACTOR.powi(2)),
-            3_000_000.0
+            7_000_000.0 * FEE_FACTOR
         );
         assert_approx_eq!(
             orderbook.fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.1),
-            3_000_000.0
+            7_000_000.0 * FEE_FACTOR
         );
     }
 
@@ -1382,7 +1382,10 @@ mod tests {
         let amount = orderbook.fill_order_at_price(TokenPair { buy: 1, sell: 0 }, 1.0);
         assert_approx_eq!(
             amount,
-            83_798_276_971_421_254_262_445_676_335_662_107_162.0,
+            (83_798_276_971_421_254_262_445_676_335_662_107_162.0
+                / 327_042_228_921_422_829_026_657_257_798_164_547_592.0)
+                * 13_294_906_614_391_990_988_372_451_468_773_477_386.0
+                * FEE_FACTOR,
             num::max_rounding_error_with_epsilon(amount)
         );
     }
