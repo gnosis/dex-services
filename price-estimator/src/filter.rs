@@ -133,7 +133,7 @@ async fn estimate_sell_amount<T>(
         .map(|order| {
             (
                 apply_rounding_buffer(order.buy, price_rounding_buffer),
-                order.sell as u128,
+                apply_rounding_buffer(order.sell, price_rounding_buffer),
             )
         })
         .unwrap_or_default();
@@ -146,8 +146,8 @@ async fn estimate_sell_amount<T>(
     Ok(warp::reply::json(&result))
 }
 
-fn apply_rounding_buffer(buy_amount: f64, price_rounding_buffer: f64) -> u128 {
-    ((1.0 - price_rounding_buffer) * buy_amount) as _
+fn apply_rounding_buffer(amount: f64, price_rounding_buffer: f64) -> u128 {
+    ((1.0 - price_rounding_buffer) * amount) as _
 }
 
 #[cfg(test)]
