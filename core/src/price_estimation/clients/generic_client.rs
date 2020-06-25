@@ -174,7 +174,7 @@ mod tests {
     use mockall::{predicate::*, Sequence};
     use std::sync::Once;
 
-    // Expectations for static traits are shared between multiple tests.
+    // Expectations for static methods are shared between multiple tests.
     // https://docs.rs/mockall/0.6.0/mockall/#static-methods
     // Here we create a shared context once and keep it in memory. Creating
     // new contexts for each test would cause race conditions on execution.
