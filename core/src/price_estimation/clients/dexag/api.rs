@@ -1,4 +1,4 @@
-use super::super::generic_client::{Api, Symbolic};
+use super::super::generic_client::{Api, GenericToken};
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::{Context, Result};
 use ethcontract::Address;
@@ -13,7 +13,7 @@ pub struct Token {
     pub symbol: String,
     pub address: Option<Address>,
 }
-impl Symbolic for Token {
+impl GenericToken for Token {
     fn symbol(&self) -> &str {
         &self.symbol
     }

@@ -8,33 +8,36 @@ use futures::{
 };
 use std::collections::HashMap;
 
-pub trait Symbolic {
+/// Provides a generic interface to communicate in a standardized way
+/// with specific API token implementations
+pub trait GenericToken {
+    /// Symbol describing the ERC20 token represented by the type instance
     fn symbol(&self) -> &str;
 }
 
 #[cfg(test)]
 #[derive(Clone, Debug, PartialEq)]
 // Cannot autogenerate with Mockall since the derived traits are needed
-// for testing. Symbolic is a trait that is assigned to the internal token
-// representation of the price source, so the output of `.symbol()` isn't
-// expected to change.
-pub struct MockSymbolic(String);
+// for testing. GenericToken is a trait that is assigned to the internal
+// token representation of the price source, so the output of `.symbol()`
+// isn't expected to change.
+pub struct MockGenericToken(String);
 #[cfg(test)]
-impl Symbolic for MockSymbolic {
+impl GenericToken for MockGenericToken {
     fn symbol(&self) -> &str {
         &self.0
     }
 }
 #[cfg(test)]
-impl MockSymbolic {
-    fn create(name: &str) -> MockSymbolic {
-        MockSymbolic(name.to_string())
+impl MockGenericToken {
+    fn create(name: &str) -> MockGenericToken {
+        MockGenericToken(name.to_string())
     }
 }
 
-#[cfg_attr(test, mockall::automock(type Token=MockSymbolic;))]
+#[cfg_attr(test, mockall::automock(type Token=MockGenericToken;))]
 pub trait Api: Sized {
-    type Token: Symbolic + Sync + Send;
+    type Token: GenericToken + Sync + Send;
 
     /// Creates a new HTTP interface for connecting to the API
     fn bind(http_factory: &HttpFactory) -> Result<Self>;
@@ -204,7 +207,7 @@ mod tests {
         api.expect_get_token_list()
             .times(1)
             .in_sequence(&mut seq)
-            .returning(|| async { Ok(vec![MockSymbolic::create("DAI")]) }.boxed());
+            .returning(|| async { Ok(vec![MockGenericToken::create("DAI")]) }.boxed());
 
         let client = GenericClient::<MockApi>::with_api_and_tokens(api, tokens.into());
         assert!(client
@@ -242,10 +245,10 @@ mod tests {
         };
 
         lazy_static! {
-            static ref API_TOKENS: [MockSymbolic; 3] = [
-                MockSymbolic::create("DAI"),
-                MockSymbolic::create("ETH"),
-                MockSymbolic::create("USDC")
+            static ref API_TOKENS: [MockGenericToken; 3] = [
+                MockGenericToken::create("DAI"),
+                MockGenericToken::create("ETH"),
+                MockGenericToken::create("USDC")
             ];
         }
 
@@ -291,8 +294,10 @@ mod tests {
         };
 
         lazy_static! {
-            static ref API_TOKENS: [MockSymbolic; 2] =
-                [MockSymbolic::create("DAI"), MockSymbolic::create("ETH"),];
+            static ref API_TOKENS: [MockGenericToken; 2] = [
+                MockGenericToken::create("DAI"),
+                MockGenericToken::create("ETH"),
+            ];
         }
 
         api.expect_get_token_list()
@@ -334,10 +339,10 @@ mod tests {
         };
 
         lazy_static! {
-            static ref API_TOKENS: [MockSymbolic; 3] = [
-                MockSymbolic::create("DAI"),
-                MockSymbolic::create("eth"),
-                MockSymbolic::create("Susd"),
+            static ref API_TOKENS: [MockGenericToken; 3] = [
+                MockGenericToken::create("DAI"),
+                MockGenericToken::create("eth"),
+                MockGenericToken::create("Susd"),
             ];
         }
 
