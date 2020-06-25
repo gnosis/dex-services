@@ -54,7 +54,7 @@ Example Response:
 * `buyAmountInBase` estimates the buy amount (in base tokens) a user can set as a limit order while still expecting to be completely matched when selling the given amount of quote token.
 * The other fields repeat the parameters in the url back.
 
-### Estimated Sell Amount
+### Estimated Amounts At Price
 
 `GET /api/v1/markets/:market/estimated-amounts-at-price/:price-in-quote`
 
@@ -76,8 +76,8 @@ Example Response:
 }
 ```
 
-The following result indicates that if we wanted to buy ETH (token 1) for DAI (token 7) and pay 245.5 DAI per unit of ETH, we would be able to sell an estimated maximum 271.13 DAI.
+The following result indicates that if we wanted to buy ETH (token 2) for DAI (token 7) and pay 245.5 DAI per unit of ETH, we would be able to sell an estimated maximum 1497.15 DAI.
 
 * `sellAmountInBase` estimates the sell amount (in quote tokens) a user can completely fill in the following batch at the specified `price_in_quote`.
-* `buyAmountInBase` is the computed buy amount (in base tokens) for the order from the specified price and estimated sell amount.
+* `buyAmountInBase` is the computed buy amount (in base tokens) for the order from the specified price and estimated sell amount. Note that it might be possible to use a higher buy amount for the same returned sell amount and still likely get completely matched by the solver. This buy amount can be computed with a subsequent estimate buy amount API call using the returned sell amount in quote value.
 * The other fields repeat the parameters in the url back.
