@@ -29,8 +29,8 @@ impl GenericToken for MockGenericToken {
     }
 }
 #[cfg(test)]
-impl MockGenericToken {
-    fn create(name: &str) -> MockGenericToken {
+impl From<&str> for MockGenericToken {
+    fn from(name: &str) -> Self {
         MockGenericToken(name.to_string())
     }
 }
@@ -207,7 +207,7 @@ mod tests {
         api.expect_get_token_list()
             .times(1)
             .in_sequence(&mut seq)
-            .returning(|| async { Ok(vec![MockGenericToken::create("DAI")]) }.boxed());
+            .returning(|| async { Ok(vec!["DAI".into()]) }.boxed());
 
         let client = GenericClient::<MockApi>::with_api_and_tokens(api, tokens.into());
         assert!(client
@@ -245,11 +245,8 @@ mod tests {
         };
 
         lazy_static! {
-            static ref API_TOKENS: [MockGenericToken; 3] = [
-                MockGenericToken::create("DAI"),
-                MockGenericToken::create("ETH"),
-                MockGenericToken::create("USDC")
-            ];
+            static ref API_TOKENS: [MockGenericToken; 3] =
+                ["DAI".into(), "ETH".into(), "USDC".into()];
         }
 
         api.expect_get_token_list()
@@ -294,10 +291,7 @@ mod tests {
         };
 
         lazy_static! {
-            static ref API_TOKENS: [MockGenericToken; 2] = [
-                MockGenericToken::create("DAI"),
-                MockGenericToken::create("ETH"),
-            ];
+            static ref API_TOKENS: [MockGenericToken; 2] = ["DAI".into(), "ETH".into(),];
         }
 
         api.expect_get_token_list()
@@ -339,11 +333,8 @@ mod tests {
         };
 
         lazy_static! {
-            static ref API_TOKENS: [MockGenericToken; 3] = [
-                MockGenericToken::create("DAI"),
-                MockGenericToken::create("eth"),
-                MockGenericToken::create("Susd"),
-            ];
+            static ref API_TOKENS: [MockGenericToken; 3] =
+                ["DAI".into(), "eth".into(), "Susd".into(),];
         }
 
         api.expect_get_token_list()
