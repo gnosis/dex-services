@@ -359,18 +359,21 @@ impl Orderbook {
         Some(invert_price(last_transitive_price))
     }
 
-    /// Fill an order at a given price, returning the estimated buy amount that
-    /// can be filled at the given price with the current existing orders.
+    /// Fill an order at a given price, returning the estimated buy and sell
+    /// amounts that can be filled at the given limit price with the current
+    /// existing orders.
     ///
     /// This is calculated by repeatedly finding the cheapest path between a
     /// token pair that is below the specified price and adding the capacity of
     /// the path to the result.
     ///
     /// Note that the limit price is expressed as an exchange limit price, i.e.
-    /// with implicitely included fees.
-    pub fn fill_order_at_price(&mut self, pair: TokenPair, limit_price: f64) -> f64 {
+    /// with implicitely included fees. Additionally, the invariant
+    /// `buy_amount / sell_amount <= limit_price` holds, but in general the
+    /// ratio of the two amounts does not equal the limit price.
+    pub fn fill_order_at_price(&mut self, pair: TokenPair, limit_price: f64) -> (f64, f64) {
         if !self.is_token_pair_valid(pair) {
-            return 0.0;
+            return (0.0, 0.0);
         }
 
         let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
@@ -380,7 +383,8 @@ impl Orderbook {
         // price that still respects the provided limit price.
         let max_price = (1.0 / limit_price) / FEE_FACTOR;
 
-        let mut total_volume = 0.0;
+        let mut total_buy_volume = 0.0;
+        let mut total_sell_volume = 0.0;
         let mut predecessors = self.reduced_shortest_paths(sell);
         while let Some(path) = path::find_path(&predecessors, sell, buy) {
             let (capacity, transitive_price) =
@@ -394,8 +398,8 @@ impl Orderbook {
             if transitive_price > max_price {
                 break;
             }
-            // NOTE: Capacity is a sell amount, so convert to a buy amount.
-            total_volume += capacity / transitive_price;
+            total_buy_volume += capacity / transitive_price;
+            total_sell_volume += capacity;
 
             self.fill_path_with_capacity(&path, capacity)
                 .unwrap_or_else(|_| {
@@ -409,7 +413,7 @@ impl Orderbook {
                 .1;
         }
 
-        total_volume
+        (total_buy_volume, total_sell_volume)
     }
 
     /// Calculates the shortest paths from the start token to all other tokens
@@ -1106,36 +1110,35 @@ mod tests {
             }
         };
 
-        assert_approx_eq!(
-            orderbook
-                .clone()
-                // NOTE: 1 for 1.001 is not enough to match any volume because
-                // fees need to be applied twice!
-                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR),
-            0.0
-        );
-        assert_approx_eq!(
-            orderbook
-                .clone()
-                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR.powi(2)),
-            1_000_000.0
-        );
-        assert_approx_eq!(
-            orderbook
-                .clone()
-                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.3),
-            2_000_000.0
-        );
-        assert_approx_eq!(
-            orderbook
-                .clone()
-                .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.25 / FEE_FACTOR.powi(2)),
-            3_000_000.0
-        );
-        assert_approx_eq!(
-            orderbook.fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.1),
-            3_000_000.0
-        );
+        let (buy, sell) = orderbook
+            .clone()
+            // NOTE: 1 for 1.001 is not enough to match any volume because
+            // fees need to be applied twice!
+            .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR);
+        assert_approx_eq!(buy, 0.0);
+        assert_approx_eq!(sell, 0.0);
+
+        let (buy, sell) = orderbook
+            .clone()
+            .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR.powi(2));
+        assert_approx_eq!(buy, 1_000_000.0);
+        assert_approx_eq!(sell, 1_000_000.0 * FEE_FACTOR);
+
+        let (buy, sell) = orderbook
+            .clone()
+            .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.3);
+        assert_approx_eq!(buy, 2_000_000.0);
+        assert_approx_eq!(sell, 3_000_000.0 * FEE_FACTOR);
+
+        let (buy, sell) = orderbook
+            .clone()
+            .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.25 / FEE_FACTOR.powi(2));
+        assert_approx_eq!(buy, 3_000_000.0);
+        assert_approx_eq!(sell, 7_000_000.0 * FEE_FACTOR);
+
+        let (buy, sell) = orderbook.fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.1);
+        assert_approx_eq!(buy, 3_000_000.0);
+        assert_approx_eq!(sell, 7_000_000.0 * FEE_FACTOR);
     }
 
     #[test]
@@ -1380,11 +1383,19 @@ mod tests {
             }
         };
 
-        let amount = orderbook.fill_order_at_price(TokenPair { buy: 1, sell: 0 }, 1.0);
+        let (buy, sell) = orderbook.fill_order_at_price(TokenPair { buy: 1, sell: 0 }, 1.0);
         assert_approx_eq!(
-            amount,
+            buy,
             83_798_276_971_421_254_262_445_676_335_662_107_162.0,
-            num::max_rounding_error_with_epsilon(amount)
+            num::max_rounding_error_with_epsilon(buy)
+        );
+        assert_approx_eq!(
+            sell,
+            (83_798_276_971_421_254_262_445_676_335_662_107_162.0
+                / 327_042_228_921_422_829_026_657_257_798_164_547_592.0)
+                * 13_294_906_614_391_990_988_372_451_468_773_477_386.0
+                * FEE_FACTOR,
+            num::max_rounding_error_with_epsilon(sell)
         );
     }
 }
