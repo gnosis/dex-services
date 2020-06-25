@@ -172,12 +172,27 @@ mod tests {
     use anyhow::anyhow;
     use lazy_static::lazy_static;
     use mockall::{predicate::*, Sequence};
+    use std::sync::Once;
+
+    // Expectations for static traits are shared between multiple tests.
+    // https://docs.rs/mockall/0.6.0/mockall/#static-methods
+    // Here we create a shared context once and keep it in memory. Creating
+    // new contexts for each test would cause race conditions on execution.
+    fn initialize_mockapi_context() {
+        static SETUP_ONCE: Once = Once::new();
+
+        SETUP_ONCE.call_once(|| {
+            let ctx = MockApi::stable_coin_symbol_context();
+            ctx.expect().returning(|| "DAI".to_string());
+            std::mem::forget(ctx);
+        });
+    }
 
     #[test]
     fn fails_if_stable_coin_does_not_exist() {
-        let ctx = MockApi::stable_coin_symbol_context();
-        ctx.expect().returning(|| "DAI".to_string());
+        initialize_mockapi_context();
         let mut api = MockApi::new();
+
         api.expect_get_token_list()
             .returning(|| async { Ok(Vec::new()) }.boxed());
 
@@ -193,8 +208,7 @@ mod tests {
 
     #[test]
     fn get_token_prices_initialization_fails_then_works() {
-        let ctx = MockApi::stable_coin_symbol_context();
-        ctx.expect().returning(|| "DAI".to_string());
+        initialize_mockapi_context();
         let tokens = hash_map! { TokenId::from(1) => TokenBaseInfo::new("ETH", 18, 0)};
         let mut api = MockApi::new();
         let mut seq = Sequence::new();
@@ -234,8 +248,7 @@ mod tests {
 
     #[test]
     fn get_token_prices() {
-        let ctx = MockApi::stable_coin_symbol_context();
-        ctx.expect().returning(|| "DAI".to_string());
+        initialize_mockapi_context();
         let mut api = MockApi::new();
 
         let tokens = hash_map! {
@@ -281,8 +294,7 @@ mod tests {
 
     #[test]
     fn get_token_prices_error() {
-        let ctx = MockApi::stable_coin_symbol_context();
-        ctx.expect().returning(|| "DAI".to_string());
+        initialize_mockapi_context();
         let mut api = MockApi::new();
 
         let tokens = hash_map! {
@@ -322,8 +334,7 @@ mod tests {
 
     #[test]
     fn test_case_insensitivity() {
-        let ctx = MockApi::stable_coin_symbol_context();
-        ctx.expect().returning(|| "DAI".to_string());
+        initialize_mockapi_context();
         let mut api = MockApi::new();
 
         let tokens = hash_map! {
