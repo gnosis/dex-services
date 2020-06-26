@@ -31,7 +31,7 @@ pub trait Api: Sized {
     /// Returns a string representing the reference coin in the stead of OWL for this API
     /// Could be different from "OWL", e.g., when the API does not offer prices with
     /// respect to OWL
-    fn stable_coin_symbol() -> String;
+    fn stable_coin_symbol() -> &'static str;
 }
 
 struct Tokens<T: Api> {
@@ -180,7 +180,7 @@ mod tests {
 
         SETUP_ONCE.call_once(|| {
             let ctx = MockApi::stable_coin_symbol_context();
-            ctx.expect().returning(|| "DAI".to_string());
+            ctx.expect().returning(|| &"DAI");
             std::mem::forget(ctx);
         });
     }
