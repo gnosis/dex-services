@@ -15,27 +15,7 @@ pub trait GenericToken {
     fn symbol(&self) -> &str;
 }
 
-#[cfg(test)]
-#[derive(Clone, Debug, PartialEq)]
-// Cannot autogenerate with Mockall since the derived traits are needed
-// for testing. GenericToken is a trait that is assigned to the internal
-// token representation of the price source, so the output of `.symbol()`
-// isn't expected to change.
-pub struct MockGenericToken(String);
-#[cfg(test)]
-impl GenericToken for MockGenericToken {
-    fn symbol(&self) -> &str {
-        &self.0
-    }
-}
-#[cfg(test)]
-impl From<&str> for MockGenericToken {
-    fn from(name: &str) -> Self {
-        MockGenericToken(name.to_string())
-    }
-}
-
-#[cfg_attr(test, mockall::automock(type Token=MockGenericToken;))]
+#[cfg_attr(test, mockall::automock(type Token=tests::MockGenericToken;))]
 pub trait Api: Sized {
     type Token: GenericToken + Sync + Send;
 
@@ -173,6 +153,23 @@ mod tests {
     use lazy_static::lazy_static;
     use mockall::{predicate::*, Sequence};
     use std::sync::Once;
+
+    #[derive(Clone, Debug, PartialEq)]
+    // Cannot autogenerate with Mockall since the derived traits are needed
+    // for testing. GenericToken is a trait that is assigned to the internal
+    // token representation of the price source, so the output of `.symbol()`
+    // isn't expected to change.
+    pub struct MockGenericToken(String);
+    impl GenericToken for MockGenericToken {
+        fn symbol(&self) -> &str {
+            &self.0
+        }
+    }
+    impl From<&str> for MockGenericToken {
+        fn from(name: &str) -> Self {
+            MockGenericToken(name.to_string())
+        }
+    }
 
     // Expectations for static methods are shared between multiple tests.
     // https://docs.rs/mockall/0.6.0/mockall/#static-methods
