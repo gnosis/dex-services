@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_with::rust::display_fromstr;
-use std::{convert::From, num::ParseIntError, str::FromStr};
+use std::{cmp::Ordering, convert::From, num::ParseIntError, str::FromStr};
 
 #[derive(Debug, Copy, Clone)]
 pub struct TokenPair {
@@ -67,7 +67,7 @@ pub struct EstimatedOrderResult {
     pub sell_amount_in_quote: u128,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct TransitiveOrder {
     pub price: f64,
     pub volume: f64,
@@ -79,11 +79,25 @@ pub struct MarketsResult {
     pub bids: Vec<TransitiveOrder>,
 }
 
+/// Sort orders by their price and merge orders with the same price into one.
+fn sanitize_orders(mut orders: Vec<TransitiveOrder>) -> Vec<TransitiveOrder> {
+    orders.sort_unstable_by(|a, b| a.price.partial_cmp(&b.price).unwrap_or(Ordering::Less));
+    let mut result = Vec::<TransitiveOrder>::with_capacity(orders.len());
+    for order in orders.into_iter().filter(|order| !order.price.is_nan()) {
+        match result.last_mut() {
+            #[allow(clippy::float_cmp)]
+            Some(last) if last.price == order.price => last.volume += order.volume,
+            _ => result.push(order),
+        }
+    }
+    result
+}
+
 impl From<&pricegraph::TransitiveOrderbook> for MarketsResult {
     fn from(orderbook: &pricegraph::TransitiveOrderbook) -> Self {
         let to_order = |(price, volume)| TransitiveOrder { price, volume };
-        let asks = orderbook.ask_prices().map(to_order).collect();
-        let bids = orderbook.bid_prices().map(to_order).collect();
+        let asks = sanitize_orders(orderbook.ask_prices().map(to_order).collect());
+        let bids = sanitize_orders(orderbook.bid_prices().map(to_order).collect());
         Self { asks, bids }
     }
 }
@@ -131,5 +145,54 @@ mod tests {
             "bids": [{"price": 3.5, "volume": 4.0}],
         });
         assert_eq!(json, expected);
+    }
+
+    #[test]
+    fn sanitize_orders_sums_volume_at_same_price() {
+        let original = vec![
+            TransitiveOrder {
+                price: 1.0,
+                volume: 1.0,
+            },
+            TransitiveOrder {
+                price: 1.0,
+                volume: 2.0,
+            },
+            TransitiveOrder {
+                price: 2.0,
+                volume: 3.0,
+            },
+            TransitiveOrder {
+                price: 1.0,
+                volume: 4.0,
+            },
+            TransitiveOrder {
+                price: 2.0,
+                volume: 5.0,
+            },
+            TransitiveOrder {
+                price: 3.0,
+                volume: 6.0,
+            },
+            TransitiveOrder {
+                price: 2.0,
+                volume: 7.0,
+            },
+        ];
+        let expected = vec![
+            TransitiveOrder {
+                price: 1.0,
+                volume: 7.0,
+            },
+            TransitiveOrder {
+                price: 2.0,
+                volume: 15.0,
+            },
+            TransitiveOrder {
+                price: 3.0,
+                volume: 6.0,
+            },
+        ];
+        assert_eq!(sanitize_orders(original), expected);
     }
 }
