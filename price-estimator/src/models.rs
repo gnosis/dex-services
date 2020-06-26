@@ -56,7 +56,7 @@ pub struct QueryParameters {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct EstimatedBuyAmountResult {
+pub struct EstimatedOrderResult {
     #[serde(with = "display_fromstr")]
     pub base_token_id: u16,
     #[serde(with = "display_fromstr")]
@@ -109,7 +109,7 @@ mod tests {
 
     #[test]
     fn estimated_buy_amount_serialization() {
-        let original = EstimatedBuyAmountResult {
+        let original = EstimatedOrderResult {
             base_token_id: 1,
             quote_token_id: 2,
             buy_amount_in_base: 3,
