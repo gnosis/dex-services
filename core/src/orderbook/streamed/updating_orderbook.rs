@@ -7,7 +7,7 @@ use crate::{
     models::{AccountState, Order},
     orderbook::StableXOrderBookReading,
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use block_timestamp_reading::{BlockTimestampReading, CachedBlockTimestampReader};
 use ethcontract::{contract::Event, BlockNumber, H256};
 use futures::compat::Future01CompatExt as _;
@@ -107,15 +107,23 @@ impl UpdatingOrderbook {
 
     async fn update_with_events(&self, context: &mut Context) -> Result<()> {
         const BLOCK_RANGE: u64 = 25;
-        let current_block = self.web3.eth().block_number().compat().await?;
+        let current_block = self.web3.eth().block_number().compat().await?.as_u64();
         let from_block = context.last_handled_block.saturating_sub(BLOCK_RANGE);
+        ensure!(
+            from_block <= current_block,
+            format!(
+                "current block number according to node is {} which is more than {} blocks in the \
+                 past compared to previous current block {}",
+                current_block, BLOCK_RANGE, from_block
+            )
+        );
         // We cannot use BlockNumber::Pending here because we are not guaranteed to get metadata for
         // pending blocks but we need the metadata in the functions below.
-        let to_block = BlockNumber::Number(current_block);
+        let to_block = BlockNumber::Number(current_block.into());
         log::info!(
             "Updating event based orderbook with from block {} to block {}.",
             from_block,
-            current_block.as_u64(),
+            current_block,
         );
         let events = self
             .contract
@@ -128,7 +136,7 @@ impl UpdatingOrderbook {
                 error!("Failed to write to orderbook {}", write_error);
             }
         }
-        context.last_handled_block = current_block.as_u64();
+        context.last_handled_block = current_block;
         Ok(())
     }
 
