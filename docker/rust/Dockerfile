@@ -28,13 +28,14 @@ ONBUILD RUN cargo build
 
 # Build Option 2: Copy already compiled binary from host (used e.g. in travis)
 FROM ${SOLVER_BASE} as rust-binary
+ONBUILD ARG BINARY_PATH=target/debug/driver
 
 # Required for listener
 ONBUILD RUN apt-get update \
   && apt-get install -y --no-install-recommends libpq-dev libssl1.0.0 libssl-dev ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-ONBUILD COPY target/debug/driver stablex
+ONBUILD COPY ${BINARY_PATH} stablex
 
 # Trigger actual build
 FROM ${RUST_BASE}
