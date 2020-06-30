@@ -77,7 +77,7 @@ impl EventRegistry {
         });
     }
 
-    /// Serializes an `Orderbook` into its bincode representation.
+    /// Serializes an `EventRegistry` into its bincode representation.
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
         Ok(bincode::serialize(self)?)
     }
@@ -136,7 +136,7 @@ impl TryFrom<File> for EventRegistry {
             .with_context(|| format!("Failed to read file: {:?}", file))?;
 
         info!(
-            "Successfully loaded {} events in {} bytes from Orderbook file",
+            "Successfully loaded {} events in {} bytes from event registry file",
             events.events.len(),
             file.metadata()?.len(),
         );
