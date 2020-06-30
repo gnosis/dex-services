@@ -1,7 +1,7 @@
 use super::*;
-use crate::orderbook::util;
 use crate::contracts::stablex_contract::batch_exchange::{event_data::*, Event};
 use crate::models::{AccountState, Order as ModelOrder};
+use crate::orderbook::util;
 use anyhow::{anyhow, bail, ensure, Result};
 use balance::Balance;
 use order::Order;
