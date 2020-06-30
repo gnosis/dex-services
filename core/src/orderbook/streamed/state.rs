@@ -1,6 +1,7 @@
 use super::*;
 use crate::contracts::stablex_contract::batch_exchange::{event_data::*, Event};
-use crate::models::Order as ModelOrder;
+use crate::models::{AccountState, Order as ModelOrder};
+use crate::orderbook::util;
 use anyhow::{anyhow, bail, ensure, Result};
 use balance::Balance;
 use order::Order;
@@ -70,6 +71,19 @@ impl State {
             "retrieved orderbook with a partially applied solution",
         );
         Ok((self.account_state(batch_id), self.orders(batch_id)))
+    }
+
+    /// Returns the canonicalized auction state when the requested batch started collecting orders given all events received so far.
+    ///
+    /// See `State::orderbook_at_beginning_of_batch` for more details on possible errors.
+    pub fn canonicalized_auction_state_at_beginning_of_batch(
+        &self,
+        batch_id: BatchId,
+    ) -> Result<(AccountState, Vec<ModelOrder>)> {
+        let (account_state, orders) = self.orderbook_at_beginning_of_batch(batch_id)?;
+        let (account_state, orders) = util::canonicalize_auction_data(account_state, orders);
+
+        Ok((account_state, orders))
     }
 
     fn account_state(

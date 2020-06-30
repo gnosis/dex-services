@@ -1,39 +1,36 @@
 //! This module contains an implementation for querying historic echange data by
 //! inspecting indexed events.
 
-use crate::{
-    contracts::stablex_contract::batch_exchange, models::BatchId, orderbook::streamed::orderbook,
-};
+pub mod events;
+
+use self::events::EventRegistry;
 use anyhow::Result;
 use std::{fs::File, io::Read, path::Path};
 
 /// Historic exchange data.
 pub struct ExchangeHistory {
-    _events: Vec<(batch_exchange::Event, BatchId)>,
+    _events: EventRegistry,
 }
 
 impl ExchangeHistory {
-    /// Reads historic exchange events from an `Orderbook` bincode
+    /// Reads historic exchange events from an `EventRegistry` bincode
     /// representation.
     pub fn read(read: impl Read) -> Result<Self> {
-        let orderbook = orderbook::Orderbook::read(read)?;
-        let events = orderbook
-            .into_events()
-            .map(|(event, batch_id)| (event, BatchId(batch_id as _)))
-            .collect();
+        let events = EventRegistry::read(read)?;
 
         Ok(ExchangeHistory { _events: events })
     }
 
-    /// Reads historic exchange events from an `Orderbook` filestore.
-    pub fn from_filestore(orderbook_filestore: impl AsRef<Path>) -> Result<Self> {
-        ExchangeHistory::read(File::open(orderbook_filestore)?)
+    /// Reads historic exchange events from an `EventRegistry` filestore.
+    pub fn from_filestore(filestore: impl AsRef<Path>) -> Result<Self> {
+        ExchangeHistory::read(File::open(filestore)?)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{contracts::stablex_contract::batch_exchange, models::BatchId};
     use ethcontract::{Address, EventData, H256};
     use std::time::SystemTime;
 
@@ -57,43 +54,43 @@ mod tests {
     }
 
     #[test]
-    fn read_orderbook_filestore() {
-        let orderbook_bincode = {
-            let mut orderbook = orderbook::Orderbook::default();
-            orderbook.handle_event_data(
+    fn read_event_filestore() {
+        let bincode = {
+            let mut events = EventRegistry::default();
+            events.handle_event_data(
                 EventData::Added(token_listing(0)),
                 1,
                 0,
                 block_hash(1),
                 batch_timestamp(41),
             );
-            orderbook.handle_event_data(
+            events.handle_event_data(
                 EventData::Added(token_listing(1)),
                 2,
                 0,
                 block_hash(2),
                 batch_timestamp(41),
             );
-            orderbook.handle_event_data(
+            events.handle_event_data(
                 EventData::Added(token_listing(2)),
                 2,
                 1,
                 block_hash(2),
                 batch_timestamp(41),
             );
-            orderbook.handle_event_data(
+            events.handle_event_data(
                 EventData::Added(token_listing(3)),
                 4,
                 0,
                 block_hash(4),
                 batch_timestamp(42),
             );
-            orderbook.to_bytes().unwrap()
+            events.to_bytes().unwrap()
         };
 
-        let history = ExchangeHistory::read(&*orderbook_bincode).unwrap();
+        let history = ExchangeHistory::read(&*bincode).unwrap();
         assert_eq!(
-            history._events,
+            history._events.into_events().collect::<Vec<_>>(),
             vec![
                 (token_listing(0), BatchId(41)),
                 (token_listing(1), BatchId(41)),
