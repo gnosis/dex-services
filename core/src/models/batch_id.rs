@@ -25,8 +25,12 @@ impl BatchId {
         Self::current(now).map(|batch_id| batch_id.prev())
     }
 
+    pub fn as_timestamp(self) -> u64 {
+        self.0 * BATCH_DURATION.as_secs()
+    }
+
     pub fn order_collection_start_time(self) -> SystemTime {
-        SystemTime::UNIX_EPOCH + Duration::from_secs(self.0 * BATCH_DURATION.as_secs())
+        SystemTime::UNIX_EPOCH + Duration::from_secs(self.as_timestamp())
     }
 
     pub fn solve_start_time(self) -> SystemTime {

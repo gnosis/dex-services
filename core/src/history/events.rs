@@ -104,12 +104,9 @@ impl EventRegistry {
     /// Create a new streamed orderbook auction state with events from batches
     /// up to and including the specified batch ID.
     fn create_state(&self, batch_id: impl Into<BatchId>) -> Result<State> {
-        let batch_id = batch_id.into();
         State::from_events(
-            self.events
-                .values()
-                .take_while(move |entry| entry.batch_id <= batch_id)
-                .map(|entry| (&entry.event, entry.batch_id.into())),
+            self.events_until_batch(batch_id)
+                .map(|(event, batch_id)| (event, batch_id.into())),
         )
     }
 
@@ -117,6 +114,40 @@ impl EventRegistry {
         self.events
             .into_iter()
             .map(|(_, Value { event, batch_id })| (event, batch_id))
+    }
+
+    /// Returns an iterator containing all events up to and including the
+    /// specified batch ID.
+    pub fn events_until_batch(
+        &self,
+        batch_id: impl Into<BatchId>,
+    ) -> impl Iterator<Item = (&'_ batch_exchange::Event, BatchId)> + '_ {
+        self.events_for_batch_range(BatchId(0), batch_id.into())
+    }
+
+    /// Returns an iterator containing all events that occured in the specified
+    /// batch ID.
+    pub fn events_for_batch(
+        &self,
+        batch_id: impl Into<BatchId>,
+    ) -> impl Iterator<Item = (&'_ batch_exchange::Event, BatchId)> + '_ {
+        let batch_id = batch_id.into();
+        self.events_for_batch_range(batch_id, batch_id)
+    }
+
+    /// Returns an iterator containing all events in the specified batch range.
+    /// Note that the range is inclusive, which means events that were emitted
+    /// on the starting and ending batches are contained in the iterator.
+    fn events_for_batch_range(
+        &self,
+        start_batch_id: BatchId,
+        end_batch_id: BatchId,
+    ) -> impl Iterator<Item = (&'_ batch_exchange::Event, BatchId)> + '_ {
+        self.events
+            .values()
+            .skip_while(move |entry| entry.batch_id < start_batch_id)
+            .take_while(move |entry| entry.batch_id <= end_batch_id)
+            .map(|entry| (&entry.event, entry.batch_id))
     }
 }
 
@@ -350,7 +381,7 @@ mod tests {
         let mut events = EventRegistry::default();
         events.handle_event_data(token_listing_1, 0, 1, H256::zero(), 0);
         events.handle_event_data(order_placement, 0, 2, H256::zero(), 0);
-        events.handle_event_data(withdraw, 2, 0, H256::zero(), 300);
+        events.handle_event_data(withdraw, 2, 0, H256::zero(), BatchId(1).as_timestamp());
         events.handle_event_data(deposit, 0, 3, H256::zero(), 0);
         events.handle_event_data(withdraw_request, 1, 0, H256::zero(), 0);
         events.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
@@ -400,12 +431,82 @@ mod tests {
         events.handle_event_data(token_listing_1, 0, 1, H256::zero(), 0);
         events.handle_event_data(order_placement, 0, 2, H256::zero(), 0);
         events.handle_event_data(deposit_0, 0, 3, H256::zero(), 0);
-        events.handle_event_data(deposit_1, 1, 0, H256::zero(), 600);
+        events.handle_event_data(deposit_1, 1, 0, H256::zero(), BatchId(2).as_timestamp());
 
         let auction_data = events.get_auction_data(0).now_or_never().unwrap().unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
             U256::from(42)
         );
+    }
+
+    #[test]
+    fn filters_events_by_batch_range() {
+        fn token_listing(token: u16) -> Event {
+            Event::TokenListing(TokenListing {
+                token: Address::repeat_byte(token as _),
+                id: token,
+            })
+        }
+
+        let mut events = EventRegistry::default();
+        events.handle_event_data(
+            EventData::Added(token_listing(0)),
+            0,
+            0,
+            H256::zero(),
+            BatchId(0).as_timestamp(),
+        );
+        events.handle_event_data(
+            EventData::Added(token_listing(1)),
+            0,
+            1,
+            H256::zero(),
+            BatchId(0).as_timestamp(),
+        );
+        events.handle_event_data(
+            EventData::Added(token_listing(2)),
+            1,
+            0,
+            H256::zero(),
+            BatchId(1).as_timestamp(),
+        );
+        events.handle_event_data(
+            EventData::Added(token_listing(3)),
+            2,
+            0,
+            H256::zero(),
+            BatchId(1).as_timestamp(),
+        );
+        events.handle_event_data(
+            EventData::Added(token_listing(4)),
+            3,
+            0,
+            H256::zero(),
+            BatchId(2).as_timestamp(),
+        );
+        events.handle_event_data(
+            EventData::Added(token_listing(5)),
+            4,
+            0,
+            H256::zero(),
+            BatchId(5).as_timestamp(),
+        );
+
+        assert_eq!(
+            events.events_until_batch(1).collect::<Vec<_>>(),
+            vec![
+                (&token_listing(0), BatchId(0)),
+                (&token_listing(1), BatchId(0)),
+                (&token_listing(2), BatchId(1)),
+                (&token_listing(3), BatchId(1)),
+            ]
+        );
+        assert_eq!(
+            events.events_for_batch(2).collect::<Vec<_>>(),
+            vec![(&token_listing(4), BatchId(2)),]
+        );
+        assert_eq!(events.events_for_batch(4).next(), None);
+        assert_eq!(events.events_for_batch(42).next(), None);
     }
 }
