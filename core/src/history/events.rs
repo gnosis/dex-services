@@ -110,10 +110,20 @@ impl EventRegistry {
         )
     }
 
+    /// Returns an iterator over all owned events and their corresponding batch
+    /// IDs.
     pub fn into_events(self) -> impl Iterator<Item = (batch_exchange::Event, BatchId)> {
         self.events
             .into_iter()
             .map(|(_, Value { event, batch_id })| (event, batch_id))
+    }
+
+    /// Returns an iterator of all events and their corresponding batch IDs.
+    /// This is a borrowed version of the `into_events` method.
+    pub fn events(&self) -> impl Iterator<Item = (&'_ batch_exchange::Event, BatchId)> + '_ {
+        self.events
+            .values()
+            .map(|Value { event, batch_id }| (event, *batch_id))
     }
 
     /// Returns an iterator containing all events up to and including the
@@ -122,7 +132,9 @@ impl EventRegistry {
         &self,
         batch_id: impl Into<BatchId>,
     ) -> impl Iterator<Item = (&'_ batch_exchange::Event, BatchId)> + '_ {
-        self.events_for_batch_range(BatchId(0), batch_id.into())
+        let batch_id = batch_id.into();
+        self.events()
+            .take_while(move |(_, event_batch_id)| *event_batch_id <= batch_id)
     }
 
     /// Returns an iterator containing all events that occured in the specified
@@ -132,22 +144,9 @@ impl EventRegistry {
         batch_id: impl Into<BatchId>,
     ) -> impl Iterator<Item = (&'_ batch_exchange::Event, BatchId)> + '_ {
         let batch_id = batch_id.into();
-        self.events_for_batch_range(batch_id, batch_id)
-    }
-
-    /// Returns an iterator containing all events in the specified batch range.
-    /// Note that the range is inclusive, which means events that were emitted
-    /// on the starting and ending batches are contained in the iterator.
-    fn events_for_batch_range(
-        &self,
-        start_batch_id: BatchId,
-        end_batch_id: BatchId,
-    ) -> impl Iterator<Item = (&'_ batch_exchange::Event, BatchId)> + '_ {
-        self.events
-            .values()
-            .skip_while(move |entry| entry.batch_id < start_batch_id)
-            .take_while(move |entry| entry.batch_id <= end_batch_id)
-            .map(|entry| (&entry.event, entry.batch_id))
+        self.events()
+            .skip_while(move |(_, event_batch_id)| *event_batch_id < batch_id)
+            .take_while(move |(_, event_batch_id)| *event_batch_id == batch_id)
     }
 }
 
