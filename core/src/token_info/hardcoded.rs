@@ -20,7 +20,7 @@ use super::{TokenBaseInfo, TokenInfoFetching};
 pub struct TokenData(HashMap<TokenId, TokenBaseInfo>);
 
 impl TokenInfoFetching for TokenData {
-    fn get_token_info<'a>(&self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
+    fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
         let info = self
             .0
             .get(&id)
@@ -29,7 +29,7 @@ impl TokenInfoFetching for TokenData {
         immediate!(info)
     }
 
-    fn all_ids<'a>(&self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
+    fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
         let ids = Vec::from_iter(self.0.keys().copied());
         immediate!(Ok(ids))
     }

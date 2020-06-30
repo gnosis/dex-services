@@ -12,10 +12,10 @@ pub mod hardcoded;
 #[cfg_attr(test, automock)]
 pub trait TokenInfoFetching: Send + Sync {
     /// Retrieves some token information from a token ID.
-    fn get_token_info<'a>(&self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>>;
+    fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>>;
 
     /// Returns a vector with all the token IDs available
-    fn all_ids<'a>(&self) -> BoxFuture<'a, Result<Vec<TokenId>>>;
+    fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>>;
 }
 
 /// Base token info to use for providing token information to the solver. This
