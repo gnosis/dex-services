@@ -4,7 +4,6 @@ mod balance;
 mod bigint_u256;
 mod block_timestamp_reading;
 mod order;
-pub mod orderbook;
 mod state;
 mod updating_orderbook;
 
@@ -19,3 +18,4 @@ type BatchId = u32;
 
 pub use block_timestamp_reading::BlockTimestampReading;
 pub use updating_orderbook::UpdatingOrderbook as Orderbook;
+pub use state::State;
