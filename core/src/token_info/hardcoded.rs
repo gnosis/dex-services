@@ -23,7 +23,7 @@ impl TokenInfoFetching for TokenData {
     fn get_token_info<'a>(&self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
         let info = self
             .0
-            .get(&id.into())
+            .get(&id)
             .cloned()
             .ok_or_else(|| anyhow!("Token {:?} not found in hardcoded data", id));
         immediate!(info)

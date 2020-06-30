@@ -77,6 +77,8 @@ where
     }
 }
 
+type TokenIdAndInfo = (TokenId, TokenBaseInfo);
+
 impl<Api> PriceSource for DexagClient<Api>
 where
     Api: DexagApi + Sync + Send,
@@ -113,10 +115,10 @@ where
                 .collect()
                 .await;
 
-            let (tokens_, futures): (Vec<(TokenId, TokenBaseInfo)>, Vec<_>) = token_infos
+            let (tokens_, futures): (Vec<TokenIdAndInfo>, Vec<_>) = token_infos
                 .iter()
                 .filter_map(
-                    |(token_id, token_info)| -> Option<((TokenId, TokenBaseInfo), BoxFuture<Result<f64>>)> {
+                    |(token_id, token_info)| -> Option<(TokenIdAndInfo, BoxFuture<Result<f64>>)> {
                         // api_tokens symbols are converted to uppercase to disambiguate
                         let symbol = token_info.symbol().to_uppercase();
                         if symbol == api_tokens.stable_coin.symbol {
@@ -141,10 +143,7 @@ where
                 .iter()
                 .zip(results.iter())
                 .filter_map(|(token, result)| match result {
-                    Ok(price) => Some((
-                        token.0,
-                        token.1.get_owl_price(*price),
-                    )),
+                    Ok(price) => Some((token.0, token.1.get_owl_price(*price))),
                     Err(_) => None,
                 })
                 .collect())
