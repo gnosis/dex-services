@@ -133,7 +133,7 @@ impl PriceEstimating for PriceOracle {
                         if let Ok(base_info) = self.token_info_fetcher.get_token_info(token_id) {
                             Some(TokenInfo {
                                 external_price: price.unwrap_or(base_info.external_price),
-                                ..base_info.clone().into()
+                                ..base_info.into()
                             })
                         } else if let Some(price) = price {
                             Some(TokenInfo {

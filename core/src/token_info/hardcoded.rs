@@ -21,9 +21,9 @@ pub struct TokenData(HashMap<TokenId, TokenBaseInfo>);
 impl TokenInfoFetching for TokenData {
     fn get_token_info(&self, id: TokenId) -> Result<TokenBaseInfo> {
         self.0
-            .get(&id.into())
+            .get(&id)
             .cloned()
-            .ok_or(anyhow!("Token {:?} not found in hardcoded data", id))
+            .ok_or_else(|| anyhow!("Token {:?} not found in hardcoded data", id))
     }
 
     fn all_ids(&self) -> Result<Vec<TokenId>> {
