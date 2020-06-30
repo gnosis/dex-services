@@ -21,7 +21,7 @@ use anyhow::Result;
 use average_price_source::AveragePriceSource;
 use futures::future::{BoxFuture, FutureExt as _};
 use log::warn;
-use price_source::{NoopPriceSource, PriceSource};
+use price_source::PriceSource;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter;
 use std::iter::FromIterator;
@@ -55,26 +55,21 @@ impl PriceOracle {
         token_info_fetcher: Arc<dyn TokenInfoFetching>,
         update_interval: Duration,
     ) -> Result<Self> {
-        let source: Box<dyn PriceSource + Send + Sync> = if token_info_fetcher.all_ids()?.is_empty()
-        {
-            Box::new(NoopPriceSource)
-        } else {
-            let (kraken_source, _) = ThreadedPriceSource::new(
-                token_info_fetcher.all_ids()?,
-                KrakenClient::new(http_factory, token_info_fetcher.clone())?,
-                update_interval,
-            );
-            let (dexag_source, _) = ThreadedPriceSource::new(
-                token_info_fetcher.all_ids()?,
-                DexagClient::new(http_factory, token_info_fetcher.clone())?,
-                update_interval,
-            );
-            Box::new(AveragePriceSource::new(vec![
-                Box::new(kraken_source),
-                Box::new(dexag_source),
-                Box::new(PricegraphEstimator::new(orderbook_reader)),
-            ]))
-        };
+        let (kraken_source, _) = ThreadedPriceSource::new(
+            token_info_fetcher.clone(),
+            KrakenClient::new(http_factory, token_info_fetcher.clone())?,
+            update_interval,
+        );
+        let (dexag_source, _) = ThreadedPriceSource::new(
+            token_info_fetcher.clone(),
+            DexagClient::new(http_factory, token_info_fetcher.clone())?,
+            update_interval,
+        );
+        let source = Box::new(AveragePriceSource::new(vec![
+            Box::new(kraken_source),
+            Box::new(dexag_source),
+            Box::new(PricegraphEstimator::new(orderbook_reader)),
+        ]));
 
         Ok(PriceOracle {
             token_info_fetcher,
@@ -125,28 +120,27 @@ impl PriceEstimating for PriceOracle {
                 .get_prices(&Vec::from_iter(token_ids_to_price.clone()))
                 .await;
 
-            token_ids_to_price
-                .into_iter()
-                .map(|token_id| {
-                    let price = prices.get(&token_id).copied();
-                    let token_info =
-                        if let Ok(base_info) = self.token_info_fetcher.get_token_info(token_id) {
-                            Some(TokenInfo {
-                                external_price: price.unwrap_or(base_info.external_price),
-                                ..base_info.into()
-                            })
-                        } else if let Some(price) = price {
-                            Some(TokenInfo {
-                                alias: None,
-                                decimals: None,
-                                external_price: price,
-                            })
-                        } else {
-                            None
-                        };
-                    (token_id, token_info)
-                })
-                .collect()
+            let mut tokens = Tokens::new();
+            for token_id in token_ids_to_price {
+                let price = prices.get(&token_id).copied();
+                let token_info =
+                    if let Ok(base_info) = self.token_info_fetcher.get_token_info(token_id).await {
+                        Some(TokenInfo {
+                            external_price: price.unwrap_or(base_info.external_price),
+                            ..base_info.into()
+                        })
+                    } else if let Some(price) = price {
+                        Some(TokenInfo {
+                            alias: None,
+                            decimals: None,
+                            external_price: price,
+                        })
+                    } else {
+                        None
+                    };
+                tokens.insert(token_id, token_info);
+            }
+            tokens
         }
         .boxed()
     }
@@ -157,7 +151,7 @@ mod tests {
     use super::*;
     use crate::token_info::{hardcoded::TokenData, TokenBaseInfo};
     use anyhow::anyhow;
-    use price_source::MockPriceSource;
+    use price_source::{MockPriceSource, NoopPriceSource};
 
     #[test]
     fn price_oracle_fetches_token_prices() {
