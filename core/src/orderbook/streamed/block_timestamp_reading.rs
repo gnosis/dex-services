@@ -44,7 +44,7 @@ impl BlockTimestampBatchReading for Web3 {
         let batched_web3 = ethcontract::web3::Web3::new(Batch::new(self.transport().clone()));
         async move {
             let mut result = Vec::with_capacity(block_hashes.len());
-            for chunk in Vec::from_iter(block_hashes.into_iter()).chunks(500) {
+            for chunk in Vec::from_iter(block_hashes.into_iter()).chunks(1000) {
                 let partial_result = query_block_timestamps_batched(&batched_web3, chunk).await?;
                 result.extend(partial_result);
             }
