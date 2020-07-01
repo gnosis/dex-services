@@ -1,5 +1,6 @@
 use super::price_source::PriceSource;
 use crate::models::TokenId;
+use crate::token_info::TokenInfoFetching;
 use anyhow::Result;
 use async_std::{
     sync::Mutex,
@@ -25,7 +26,7 @@ impl ThreadedPriceSource {
     /// The join handle represents the task. It can be used to verify that it exits when the struct
     /// is dropped.
     pub fn new<T: 'static + PriceSource + Send + Sync>(
-        tokens: Vec<TokenId>,
+        token_info_fetcher: Arc<dyn TokenInfoFetching>,
         price_source: T,
         update_interval: Duration,
     ) -> (Self, JoinHandle<()>) {
@@ -34,7 +35,7 @@ impl ThreadedPriceSource {
             let price_map = Arc::downgrade(&price_map);
             async move {
                 while let Some(price_map) = price_map.upgrade() {
-                    match price_source.get_prices(&tokens).await {
+                    match update_prices(&price_source, token_info_fetcher.as_ref()).await {
                         Ok(prices) => price_map.lock().await.extend(prices),
                         Err(err) => log::warn!("price_source::get_prices failed: {}", err),
                     }
@@ -44,6 +45,14 @@ impl ThreadedPriceSource {
         });
         (Self { price_map }, join_handle)
     }
+}
+
+async fn update_prices<T: PriceSource>(
+    price_source: &T,
+    token_info_fetching: &dyn TokenInfoFetching,
+) -> Result<HashMap<TokenId, u128>> {
+    let tokens = token_info_fetching.all_ids().await?;
+    price_source.get_prices(&tokens).await
 }
 
 impl PriceSource for ThreadedPriceSource {
@@ -66,6 +75,7 @@ impl PriceSource for ThreadedPriceSource {
 mod tests {
     use super::super::price_source::MockPriceSource;
     use super::*;
+    use crate::token_info::MockTokenInfoFetching;
     use crate::util::FutureWaitExt;
     use futures::future::{self, Either};
     use std::sync::atomic;
@@ -100,8 +110,15 @@ mod tests {
     fn thread_exits_when_owner_is_dropped() {
         let mut ps = MockPriceSource::new();
         ps.expect_get_prices()
-            .returning(|_| async { Ok(HashMap::new()) }.boxed());
-        let (tps, handle) = ThreadedPriceSource::new(TOKENS.to_vec(), ps, UPDATE_INTERVAL);
+            .returning(|_| immediate!(Ok(HashMap::new())));
+
+        let mut token_info_fetcher = MockTokenInfoFetching::new();
+        token_info_fetcher
+            .expect_all_ids()
+            .returning(|| immediate!(Ok(TOKENS.to_vec())));
+
+        let (tps, handle) =
+            ThreadedPriceSource::new(Arc::new(token_info_fetcher), ps, UPDATE_INTERVAL);
         join(tps, handle).wait();
     }
 
@@ -117,8 +134,13 @@ mod tests {
             }
         });
 
+        let mut token_info_fetcher = MockTokenInfoFetching::new();
+        token_info_fetcher
+            .expect_all_ids()
+            .returning(|| immediate!(Ok(TOKENS.to_vec())));
+
         let (tps, handle) =
-            ThreadedPriceSource::new(TOKENS.to_vec(), price_source, UPDATE_INTERVAL);
+            ThreadedPriceSource::new(Arc::new(token_info_fetcher), price_source, UPDATE_INTERVAL);
         let get_prices = || tps.get_prices(&TOKENS[..]).wait().unwrap();
         price.store(1, ORDERING);
         let condition = || get_prices().get(&TOKENS[0]) == Some(&1);

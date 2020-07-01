@@ -6,9 +6,10 @@ use self::api::{Asset, AssetPair, KrakenApi, KrakenHttpApi};
 use super::PriceSource;
 use crate::http::HttpFactory;
 use crate::models::TokenId;
-use crate::token_info::TokenInfoFetching;
+use crate::token_info::{TokenBaseInfo, TokenInfoFetching};
 use anyhow::{anyhow, Context, Result};
 use futures::future::{self, BoxFuture, FutureExt as _};
+use futures::stream::{self, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -32,6 +33,8 @@ impl KrakenClient<KrakenHttpApi> {
     }
 }
 
+type TokenIdAndInfo = (TokenId, TokenBaseInfo);
+
 impl<Api> KrakenClient<Api>
 where
     Api: KrakenApi,
@@ -48,7 +51,10 @@ where
     /// Generates a mapping between Kraken asset pair identifiers and tokens
     /// that are used when computing the price map.
     #[allow(clippy::needless_lifetimes)]
-    async fn get_token_asset_pairs(&self, tokens: &[TokenId]) -> Result<HashMap<String, TokenId>> {
+    async fn get_token_asset_pairs(
+        &self,
+        tokens: &[TokenIdAndInfo],
+    ) -> Result<HashMap<String, TokenIdAndInfo>> {
         // TODO(nlordell): If these calls start taking too long, we can consider
         //   caching this information somehow. The only thing that is
         //   complicated is determining when the cache needs to be invalidated
@@ -57,16 +63,16 @@ where
         let (assets, asset_pairs) =
             future::try_join(self.api.assets(), self.api.asset_pairs()).await?;
 
-        let usd =
-            find_asset("USD", &assets).ok_or_else(|| anyhow!("unable to locate USD asset"))?;
+        let usd = find_asset("USD", &assets)
+            .ok_or_else(|| anyhow!("unable to locate USD asset"))?
+            .to_owned();
 
         let token_assets = tokens
             .iter()
-            .flat_map(|token| {
-                let token_info = &self.token_info_fetcher.get_token_info(*token).ok()?;
+            .filter_map(|(token_id, token_info)| {
                 let asset = find_asset(token_info.symbol(), &assets)?;
-                let pair = find_asset_pair(asset, usd, &asset_pairs)?;
-                Some((pair.to_owned(), *token))
+                let pair = find_asset_pair(asset, &usd, &asset_pairs)?;
+                Some((pair.to_owned(), (*token_id, token_info.clone())))
             })
             .collect();
 
@@ -83,27 +89,34 @@ where
         tokens: &'a [TokenId],
     ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
         async move {
+            let token_infos: Vec<_> = stream::iter(tokens)
+                .filter_map(|token| async move {
+                    Some((
+                        *token,
+                        self.token_info_fetcher.get_token_info(*token).await.ok()?,
+                    ))
+                })
+                .collect()
+                .await;
+
             let token_asset_pairs = self
-                .get_token_asset_pairs(tokens)
+                .get_token_asset_pairs(&token_infos)
                 .await
                 .context("failed to generate asset pairs mapping for tokens")?;
 
             let asset_pairs: Vec<_> = token_asset_pairs.keys().map(String::as_str).collect();
             let ticker_infos = self.api.ticker(&asset_pairs).await?;
 
-            let prices = ticker_infos
-                .iter()
-                .flat_map(|(pair, info)| {
-                    let token = token_asset_pairs.get(pair)?;
-                    let price = self
-                        .token_info_fetcher
-                        .get_token_info(*token)
-                        .ok()?
-                        .get_owl_price(info.p.last_24h());
-
-                    Some((*token, price))
+            let prices = stream::iter(ticker_infos)
+                .filter_map(|(pair, info)| {
+                    let token_id_and_pair = token_asset_pairs.get(&pair);
+                    async move {
+                        let price = token_id_and_pair?.1.get_owl_price(info.p.last_24h());
+                        Some((token_id_and_pair?.0, price))
+                    }
                 })
-                .collect();
+                .collect()
+                .await;
 
             Ok(prices)
         }

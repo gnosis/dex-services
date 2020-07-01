@@ -4,6 +4,7 @@
 use crate::models::TokenId;
 use anyhow::{anyhow, Context, Error, Result};
 
+use futures::future::{BoxFuture, FutureExt};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::iter::FromIterator;
@@ -19,15 +20,18 @@ use super::{TokenBaseInfo, TokenInfoFetching};
 pub struct TokenData(HashMap<TokenId, TokenBaseInfo>);
 
 impl TokenInfoFetching for TokenData {
-    fn get_token_info(&self, id: TokenId) -> Result<TokenBaseInfo> {
-        self.0
+    fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
+        let info = self
+            .0
             .get(&id)
             .cloned()
-            .ok_or_else(|| anyhow!("Token {:?} not found in hardcoded data", id))
+            .ok_or_else(|| anyhow!("Token {:?} not found in hardcoded data", id));
+        immediate!(info)
     }
 
-    fn all_ids(&self) -> Result<Vec<TokenId>> {
-        Ok(Vec::from_iter(self.0.keys().copied()))
+    fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
+        let ids = Vec::from_iter(self.0.keys().copied());
+        immediate!(Ok(ids))
     }
 }
 

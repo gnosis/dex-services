@@ -3,12 +3,13 @@ mod api;
 use super::PriceSource;
 use crate::http::HttpFactory;
 use crate::models::TokenId;
-use crate::token_info::TokenInfoFetching;
+use crate::token_info::{TokenBaseInfo, TokenInfoFetching};
 use anyhow::{anyhow, Context, Result};
 use api::{DexagApi, DexagHttpApi};
 use futures::{
     future::{self, BoxFuture, FutureExt as _},
     lock::Mutex,
+    stream::{self, StreamExt},
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -76,6 +77,8 @@ where
     }
 }
 
+type TokenIdAndInfo = (TokenId, TokenBaseInfo);
+
 impl<Api> PriceSource for DexagClient<Api>
 where
     Api: DexagApi + Sync + Send,
@@ -102,27 +105,34 @@ where
                 }
             };
 
-            let (tokens_, futures): (Vec<TokenId>, Vec<_>) = tokens
-                .iter()
-                .filter_map(|token| -> Option<(&TokenId, BoxFuture<Result<f64>>)> {
-                    // api_tokens symbols are converted to uppercase to disambiguate
-                    let symbol = self
-                        .token_info_fetcher
-                        .get_token_info(*token)
-                        .ok()?
-                        .symbol()
-                        .to_uppercase();
-                    if symbol == api_tokens.stable_coin.symbol {
-                        Some((token, async { Ok(1.0) }.boxed()))
-                    } else if let Some(api_token) = api_tokens.tokens.get(&symbol) {
-                        Some((
-                            token,
-                            self.api.get_price(api_token, &api_tokens.stable_coin),
-                        ))
-                    } else {
-                        None
-                    }
+            let token_infos: Vec<_> = stream::iter(tokens)
+                .filter_map(|token| async move {
+                    Some((
+                        *token,
+                        self.token_info_fetcher.get_token_info(*token).await.ok()?,
+                    ))
                 })
+                .collect()
+                .await;
+
+            let (tokens_, futures): (Vec<TokenIdAndInfo>, Vec<_>) = token_infos
+                .iter()
+                .filter_map(
+                    |(token_id, token_info)| -> Option<(TokenIdAndInfo, BoxFuture<Result<f64>>)> {
+                        // api_tokens symbols are converted to uppercase to disambiguate
+                        let symbol = token_info.symbol().to_uppercase();
+                        if symbol == api_tokens.stable_coin.symbol {
+                            Some(((*token_id, token_info.clone()), immediate!(Ok(1.0))))
+                        } else if let Some(api_token) = api_tokens.tokens.get(&symbol) {
+                            Some((
+                                (*token_id, token_info.clone()),
+                                self.api.get_price(api_token, &api_tokens.stable_coin),
+                            ))
+                        } else {
+                            None
+                        }
+                    },
+                )
                 .unzip();
 
             let joined = future::join_all(futures);
@@ -133,13 +143,7 @@ where
                 .iter()
                 .zip(results.iter())
                 .filter_map(|(token, result)| match result {
-                    Ok(price) => Some((
-                        *token,
-                        self.token_info_fetcher
-                            .get_token_info(*token)
-                            .ok()?
-                            .get_owl_price(*price),
-                    )),
+                    Ok(price) => Some((token.0, token.1.get_owl_price(*price))),
                     Err(_) => None,
                 })
                 .collect())
