@@ -33,7 +33,7 @@ fn main() -> Result<()> {
     let history = ExchangeHistory::from_filestore(&options.orderbook_file)?;
 
     let mut spreads = File::create(&options.output_dir.join("spreads.csv"))?;
-    writeln!(&mut spreads, "market,best_bid,price,best_ask")?;
+    writeln!(&mut spreads, "batch,market,best_bid,price,best_ask")?;
 
     let first_batch = history
         .first_batch()
@@ -51,13 +51,14 @@ fn main() -> Result<()> {
         };
         let auction_elements = history.auction_elements_for_batch(batch)?;
 
-        check_batch_spread(&auction_elements, &settlement, &mut spreads)?;
+        check_batch_spread(batch, &auction_elements, &settlement, &mut spreads)?;
     }
 
     Ok(())
 }
 
 fn check_batch_spread(
+    batch: BatchId,
     auction_elements: &[Element],
     settlement: &Settlement,
     mut output: impl Write,
@@ -97,8 +98,8 @@ fn check_batch_spread(
 
         writeln!(
             &mut output,
-            "{}-{},{},{},{}",
-            buy_token, sell_token, best_bid, price, best_ask
+            "{},{}-{},{},{},{}",
+            batch, buy_token, sell_token, best_bid, price, best_ask
         )?;
     }
 
