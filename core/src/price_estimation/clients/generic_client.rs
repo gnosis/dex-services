@@ -31,7 +31,7 @@ pub trait Api: Sized {
     /// Returns a string representing the reference coin in the stead of OWL for this API
     /// Could be different from "OWL", e.g., when the API does not offer prices with
     /// respect to OWL
-    fn stable_coin_symbol() -> &'static str;
+    fn reference_token_symbol() -> &'static str;
 }
 
 struct Tokens<T: Api> {
@@ -71,10 +71,10 @@ impl<T: Api> GenericClient<T> {
             .map(|token| (token.symbol().to_uppercase(), token))
             .collect();
 
-        let stable_coin_symbol = &T::stable_coin_symbol().to_uppercase();
+        let reference_token_symbol = &T::reference_token_symbol().to_uppercase();
         let stable_coin = tokens
-            .remove(stable_coin_symbol)
-            .ok_or_else(|| anyhow!("exchange does not track {}", stable_coin_symbol))?;
+            .remove(reference_token_symbol)
+            .ok_or_else(|| anyhow!("exchange does not track {}", reference_token_symbol))?;
 
         Ok(Tokens {
             tokens,
@@ -179,7 +179,7 @@ mod tests {
         static SETUP_ONCE: Once = Once::new();
 
         SETUP_ONCE.call_once(|| {
-            let ctx = MockApi::stable_coin_symbol_context();
+            let ctx = MockApi::reference_token_symbol_context();
             ctx.expect().returning(|| &"DAI");
             std::mem::forget(ctx);
         });
