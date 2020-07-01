@@ -2,17 +2,16 @@
 //! give good price estimates to the solver for better results.
 
 mod average_price_source;
-pub mod data;
 mod dexag;
 mod kraken;
 mod orderbook_based;
 mod price_source;
 mod threaded_price_source;
 
-pub use self::data::{TokenBaseInfo, TokenData};
 use self::dexag::DexagClient;
 use self::kraken::KrakenClient;
 use self::orderbook_based::PricegraphEstimator;
+use crate::token_info::TokenInfoFetching;
 use crate::{
     http::HttpFactory,
     models::{Order, TokenId, TokenInfo},
@@ -43,7 +42,7 @@ pub trait PriceEstimating {
 pub struct PriceOracle {
     /// The token data supplied by the environment. This ensures that only
     /// whitelisted tokens get their prices estimated.
-    tokens: TokenData,
+    token_info_fetcher: Arc<dyn TokenInfoFetching>,
     /// The price source to use.
     source: Box<dyn PriceSource + Send + Sync>,
 }
@@ -53,20 +52,21 @@ impl PriceOracle {
     pub fn new(
         http_factory: &HttpFactory,
         orderbook_reader: Arc<dyn StableXOrderBookReading>,
-        tokens: TokenData,
+        token_info_fetcher: Arc<dyn TokenInfoFetching>,
         update_interval: Duration,
     ) -> Result<Self> {
-        let source: Box<dyn PriceSource + Send + Sync> = if tokens.is_empty() {
+        let source: Box<dyn PriceSource + Send + Sync> = if token_info_fetcher.all_ids()?.is_empty()
+        {
             Box::new(NoopPriceSource)
         } else {
             let (kraken_source, _) = ThreadedPriceSource::new(
-                tokens.all_ids(),
-                KrakenClient::new(http_factory, tokens.clone())?,
+                token_info_fetcher.all_ids()?,
+                KrakenClient::new(http_factory, token_info_fetcher.clone())?,
                 update_interval,
             );
             let (dexag_source, _) = ThreadedPriceSource::new(
-                tokens.all_ids(),
-                DexagClient::new(http_factory, tokens.clone())?,
+                token_info_fetcher.all_ids()?,
+                DexagClient::new(http_factory, token_info_fetcher.clone())?,
                 update_interval,
             );
             Box::new(AveragePriceSource::new(vec![
@@ -76,13 +76,19 @@ impl PriceOracle {
             ]))
         };
 
-        Ok(PriceOracle { tokens, source })
+        Ok(PriceOracle {
+            token_info_fetcher,
+            source,
+        })
     }
 
     #[cfg(test)]
-    fn with_source(tokens: TokenData, source: impl PriceSource + Send + Sync + 'static) -> Self {
+    fn with_source(
+        token_info_fetcher: Arc<dyn TokenInfoFetching>,
+        source: impl PriceSource + Send + Sync + 'static,
+    ) -> Self {
         PriceOracle {
-            tokens,
+            token_info_fetcher,
             source: Box::new(source),
         }
     }
@@ -123,20 +129,21 @@ impl PriceEstimating for PriceOracle {
                 .into_iter()
                 .map(|token_id| {
                     let price = prices.get(&token_id).copied();
-                    let token_info = if let Some(base_info) = self.tokens.info(token_id) {
-                        Some(TokenInfo {
-                            external_price: price.unwrap_or(base_info.external_price),
-                            ..base_info.clone().into()
-                        })
-                    } else if let Some(price) = price {
-                        Some(TokenInfo {
-                            alias: None,
-                            decimals: None,
-                            external_price: price,
-                        })
-                    } else {
-                        None
-                    };
+                    let token_info =
+                        if let Ok(base_info) = self.token_info_fetcher.get_token_info(token_id) {
+                            Some(TokenInfo {
+                                external_price: price.unwrap_or(base_info.external_price),
+                                ..base_info.into()
+                            })
+                        } else if let Some(price) = price {
+                            Some(TokenInfo {
+                                alias: None,
+                                decimals: None,
+                                external_price: price,
+                            })
+                        } else {
+                            None
+                        };
                     (token_id, token_info)
                 })
                 .collect()
@@ -148,15 +155,16 @@ impl PriceEstimating for PriceOracle {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::token_info::{hardcoded::TokenData, TokenBaseInfo};
     use anyhow::anyhow;
     use price_source::MockPriceSource;
 
     #[test]
     fn price_oracle_fetches_token_prices() {
-        let tokens = TokenData::from(hash_map! {
+        let tokens = Arc::new(TokenData::from(hash_map! {
             TokenId(1) => TokenBaseInfo::new("WETH", 18, 0),
             TokenId(2) => TokenBaseInfo::new("USDT", 6, 0),
-        });
+        }));
 
         let mut source = MockPriceSource::new();
         source
@@ -200,9 +208,9 @@ mod tests {
 
     #[test]
     fn price_oracle_ignores_source_error() {
-        let tokens = TokenData::from(hash_map! {
+        let tokens = Arc::new(TokenData::from(hash_map! {
             TokenId(1) => TokenBaseInfo::new("WETH", 18, 0),
-        });
+        }));
 
         let mut source = MockPriceSource::new();
         source
@@ -226,7 +234,7 @@ mod tests {
 
     #[test]
     fn price_oracle_always_includes_reference_token() {
-        let oracle = PriceOracle::with_source(TokenData::default(), NoopPriceSource {});
+        let oracle = PriceOracle::with_source(Arc::new(TokenData::default()), NoopPriceSource {});
         let prices = oracle.get_token_prices(&[]).now_or_never().unwrap();
 
         assert_eq!(prices, btree_map! { TokenId(0) => None });
@@ -234,9 +242,9 @@ mod tests {
 
     #[test]
     fn price_oracle_uses_uses_fallback_prices() {
-        let tokens = TokenData::from(hash_map! {
+        let tokens = Arc::new(TokenData::from(hash_map! {
             TokenId(7) => TokenBaseInfo::new("DAI", 18, 1_000_000_000_000_000_000),
-        });
+        }));
 
         let mut source = MockPriceSource::new();
         source
