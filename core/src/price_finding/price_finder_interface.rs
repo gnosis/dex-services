@@ -117,7 +117,11 @@ impl SolverType {
                 input_file,
                 time_limit,
                 min_avg_fee_per_order,
-                if self == SolverType::StandardSolver {OptModel::TwoStage} else {OptModel::Mip},
+                if self == SolverType::StandardSolver {
+                    OptModel::TwoStage
+                } else {
+                    OptModel::Mip
+                },
                 internal_optimizer,
                 self == SolverType::BestRingSolver,
             ),
