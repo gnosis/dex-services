@@ -50,6 +50,33 @@ impl InternalOptimizer {
     }
 }
 
+/// The optimization algorithm used by standard and best-ring solvers.
+#[derive(Clone, Copy, Debug)]
+pub enum OptModel {
+    Mip,
+    TwoStage,
+}
+
+impl FromStr for OptModel {
+    type Err = Error;
+    fn from_str(string: &str) -> Result<Self> {
+        match string {
+            "mip" => Ok(Self::Mip),
+            "two_stage" => Ok(Self::TwoStage),
+            _ => Err(anyhow!("optimization model does not exit")),
+        }
+    }
+}
+
+impl OptModel {
+    fn to_argument(self) -> &'static str {
+        match self {
+            OptModel::Mip => "mip",
+            OptModel::TwoStage => "two_stage",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum SolverType {
     NaiveSolver,
@@ -90,6 +117,7 @@ impl SolverType {
                 input_file,
                 time_limit,
                 min_avg_fee_per_order,
+                if self == SolverType::StandardSolver {OptModel::TwoStage} else {OptModel::Mip},
                 internal_optimizer,
                 self == SolverType::BestRingSolver,
             ),
@@ -128,6 +156,7 @@ pub fn execute_private_solver(
     input_file: &str,
     time_limit: String,
     min_avg_fee_per_order: u128,
+    opt_model: OptModel,
     internal_optimizer: InternalOptimizer,
     search_only_for_best_ring_solution: bool,
 ) -> Result<Output> {
@@ -140,6 +169,7 @@ pub fn execute_private_solver(
         .arg("--logging=WARNING")
         .arg(format!("--timeLimit={}", time_limit))
         .arg(format!("--minAvgFeePerOrder={}", min_avg_fee_per_order))
+        .arg(format!("--optModel={}", opt_model.to_argument()))
         .arg(format!("--solver={}", internal_optimizer.to_argument()))
         .arg(String::from("--useExternalPrices"));
     if search_only_for_best_ring_solution {
