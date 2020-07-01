@@ -102,6 +102,11 @@ impl From<&pricegraph::TransitiveOrderbook> for MarketsResult {
     }
 }
 
+/// A type representing a price estimate result.
+#[derive(Debug, Serialize)]
+#[serde(transparent)]
+pub struct PriceEstimateResult(pub Option<f64>);
+
 #[cfg(test)]
 mod tests {
     use super::*;

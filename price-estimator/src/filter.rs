@@ -198,7 +198,8 @@ async fn estimate_best_ask_price<T>(
             1.0 / apply_rounding_buffer(xrate, price_rounding_buffer)
         });
 
-    Ok(warp::reply::json(&price))
+    let result = PriceEstimateResult(price);
+    Ok(warp::reply::json(&result))
 }
 
 fn apply_rounding_buffer(amount: f64, price_rounding_buffer: f64) -> f64 {
