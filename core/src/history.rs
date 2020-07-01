@@ -191,14 +191,6 @@ mod tests {
             let mut event_data = Vec::new();
             event_data.extend(trades.iter().map(|trade| Event::Trade(trade.clone())));
             event_data.push(Event::SolutionSubmission(solution.clone()));
-            event_data.push(token_listing(42));
-            event_data.extend(
-                trades
-                    .iter()
-                    .map(|trade| Event::TradeReversion(trade_as_reversion(trade))),
-            );
-            event_data.extend(trades.iter().map(|trade| Event::Trade(trade.clone())));
-            event_data.push(Event::SolutionSubmission(solution.clone()));
 
             let mut events = EventRegistry::default();
             for (i, event) in event_data.into_iter().enumerate() {
@@ -217,6 +209,101 @@ mod tests {
         assert_eq!(
             history.settlement_for_batch(batch).unwrap(),
             Settlement { trades, solution },
+        );
+    }
+
+    #[test]
+    fn auction_settlement_with_reversion() {
+        let batch = BatchId(42);
+        let trades_0 = vec![
+            Trade {
+                owner: Address::from_low_u64_be(1),
+                order_id: 0,
+                sell_token: 1,
+                buy_token: 2,
+                executed_sell_amount: 3,
+                executed_buy_amount: 4,
+            },
+            Trade {
+                owner: Address::from_low_u64_be(2),
+                order_id: 0,
+                sell_token: 2,
+                buy_token: 1,
+                executed_sell_amount: 4,
+                executed_buy_amount: 3,
+            },
+        ];
+        let solution_0 = SolutionSubmission {
+            submitter: Address::from_low_u64_be(0),
+            utility: 1000.into(),
+            disregarded_utility: 100.into(),
+            burnt_fees: 1_000_000.into(),
+            last_auction_burnt_fees: 0.into(),
+            prices: vec![1, 2, 3],
+            token_ids_for_price: vec![0, 1, 2],
+        };
+
+        let trades_1 = vec![
+            Trade {
+                owner: Address::from_low_u64_be(3),
+                order_id: 0,
+                sell_token: 3,
+                buy_token: 4,
+                executed_sell_amount: 5,
+                executed_buy_amount: 6,
+            },
+            Trade {
+                owner: Address::from_low_u64_be(2),
+                order_id: 0,
+                sell_token: 4,
+                buy_token: 3,
+                executed_sell_amount: 6,
+                executed_buy_amount: 5,
+            },
+        ];
+        let solution_1 = SolutionSubmission {
+            submitter: Address::from_low_u64_be(422),
+            utility: 1000.into(),
+            disregarded_utility: 100.into(),
+            burnt_fees: 1_000_000.into(),
+            last_auction_burnt_fees: 0.into(),
+            prices: vec![1, 4, 5],
+            token_ids_for_price: vec![0, 3, 4],
+        };
+
+        let history = {
+            let mut event_data = Vec::new();
+            event_data.extend(trades_0.iter().map(|trade| Event::Trade(trade.clone())));
+            event_data.push(Event::SolutionSubmission(solution_0));
+            event_data.push(token_listing(42));
+            event_data.extend(
+                trades_0
+                    .iter()
+                    .map(|trade| Event::TradeReversion(trade_as_reversion(trade))),
+            );
+            event_data.extend(trades_1.iter().map(|trade| Event::Trade(trade.clone())));
+            event_data.push(Event::SolutionSubmission(solution_1.clone()));
+
+            let mut events = EventRegistry::default();
+            for (i, event) in event_data.into_iter().enumerate() {
+                events.handle_event_data(
+                    EventData::Added(event),
+                    1337,
+                    i,
+                    block_hash(0),
+                    batch.next().as_timestamp(),
+                );
+            }
+
+            ExchangeHistory { events }
+        };
+
+        assert_eq!(
+            history.settlement_for_batch(batch).unwrap(),
+            Settlement {
+                trades: trades_1,
+                solution: solution_1
+            },
         );
     }
 
