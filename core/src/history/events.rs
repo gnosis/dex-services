@@ -101,15 +101,6 @@ impl EventRegistry {
         Some(self.events.iter().next_back()?.0.block_number)
     }
 
-    /// Create a new streamed orderbook auction state with events from batches
-    /// up to and including the specified batch ID.
-    fn create_state(&self, batch_id: impl Into<BatchId>) -> Result<State> {
-        State::from_events(
-            self.events_until_batch(batch_id)
-                .map(|(event, batch_id)| (event, batch_id.into())),
-        )
-    }
-
     /// Returns an iterator over all owned events and their corresponding batch
     /// IDs.
     pub fn into_events(self) -> impl Iterator<Item = (batch_exchange::Event, BatchId)> {
@@ -142,11 +133,28 @@ impl EventRegistry {
     pub fn events_for_batch(
         &self,
         batch_id: impl Into<BatchId>,
-    ) -> impl Iterator<Item = (&'_ batch_exchange::Event, BatchId)> + '_ {
+    ) -> impl Iterator<Item = &'_ batch_exchange::Event> + '_ {
         let batch_id = batch_id.into();
         self.events()
             .skip_while(move |(_, event_batch_id)| *event_batch_id < batch_id)
             .take_while(move |(_, event_batch_id)| *event_batch_id == batch_id)
+            .map(|(event, _)| event)
+    }
+
+    /// Create a new streamed orderbook auction state with events from batches
+    /// up to and including the specified batch ID.
+    pub fn auction_state_for_batch(
+        &self,
+        batch_id: impl Into<BatchId>,
+    ) -> Result<(AccountState, Vec<Order>)> {
+        let batch_id = batch_id.into();
+        let state = State::from_events(
+            self.events_until_batch(batch_id)
+                .map(|(event, batch_id)| (event, batch_id.into())),
+        )?;
+        // In order to solve batch t we need the orderbook at the beginning of
+        // batch t+1's collection process
+        state.canonicalized_auction_state_at_beginning_of_batch(batch_id.next().into())
     }
 }
 
@@ -189,12 +197,7 @@ impl StableXOrderBookReading for EventRegistry {
         &'a self,
         batch_id_to_solve: u32,
     ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
-        async move {
-            let state = self.create_state(batch_id_to_solve)?;
-            // In order to solve batch t we need the orderbook at the beginning of batch t+1's collection process
-            state.canonicalized_auction_state_at_beginning_of_batch(batch_id_to_solve + 1)
-        }
-        .boxed()
+        async move { self.auction_state_for_batch(batch_id_to_solve) }.boxed()
     }
 }
 
@@ -503,7 +506,7 @@ mod tests {
         );
         assert_eq!(
             events.events_for_batch(2).collect::<Vec<_>>(),
-            vec![(&token_listing(4), BatchId(2)),]
+            vec![&token_listing(4)],
         );
         assert_eq!(events.events_for_batch(4).next(), None);
         assert_eq!(events.events_for_batch(42).next(), None);
