@@ -15,14 +15,33 @@ pub fn all<T: Send + Sync + 'static>(
                 orderbook.clone(),
                 price_rounding_buffer,
             ))
-            .or(estimated_amounts_at_price(orderbook, price_rounding_buffer)),
+            .or(estimated_amounts_at_price(
+                orderbook.clone(),
+                price_rounding_buffer,
+            ))
+            .or(estimated_best_ask_exchange_rate(
+                orderbook,
+                price_rounding_buffer,
+            )),
     )
+}
+
+/// Validate a request of the form
+/// `/markets/<baseTokenId>-<quoteTokenId>`
+/// and answer it.
+fn markets<T: Send + Sync + 'static>(
+    orderbook: Arc<Orderbook<T>>,
+) -> impl Filter<Extract = impl warp::Reply, Error = Rejection> + Clone {
+    markets_filter()
+        .and(warp::any().map(move || orderbook.clone()))
+        .and_then(get_markets)
+        .with(warp::log("price_estimator::api::markets"))
 }
 
 /// Validate a request of the form
 /// `/markets/<baseTokenId>-<quoteTokenId>/estimated-buy-amount/<sellAmountInQuoteToken>`
 /// and answer it.
-pub fn estimated_buy_amount<T: Send + Sync + 'static>(
+fn estimated_buy_amount<T: Send + Sync + 'static>(
     orderbook: Arc<Orderbook<T>>,
     price_rounding_buffer: f64,
 ) -> impl Filter<Extract = impl warp::Reply, Error = Rejection> + Clone {
@@ -33,22 +52,10 @@ pub fn estimated_buy_amount<T: Send + Sync + 'static>(
         .with(warp::log("price_estimator::api::estimate_buy_amount"))
 }
 
-/// Validate a request of the form
-/// `/markets/<baseTokenId>-<quoteTokenId>`
-/// and answer it.
-pub fn markets<T: Send + Sync + 'static>(
-    orderbook: Arc<Orderbook<T>>,
-) -> impl Filter<Extract = impl warp::Reply, Error = Rejection> + Clone {
-    markets_filter()
-        .and(warp::any().map(move || orderbook.clone()))
-        .and_then(get_markets)
-        .with(warp::log("price_estimator::api::markets"))
-}
-
 /// Validate a request of the form:
 /// `/markets/<baseTokenId>-<quoteTokenId>/estimated-amounts-at-price/<exchangeRate>`
 /// and answer it.
-pub fn estimated_amounts_at_price<T: Send + Sync + 'static>(
+fn estimated_amounts_at_price<T: Send + Sync + 'static>(
     orderbook: Arc<Orderbook<T>>,
     price_rounding_buffer: f64,
 ) -> impl Filter<Extract = impl warp::Reply, Error = Rejection> + Clone {
@@ -57,6 +64,22 @@ pub fn estimated_amounts_at_price<T: Send + Sync + 'static>(
         .and(warp::any().map(move || orderbook.clone()))
         .and_then(estimate_amounts_at_price)
         .with(warp::log("price_estimator::api::estimate_amounts_at_price"))
+}
+
+/// Validate a request of the form:
+/// `/markets/<baseTokenId>-<quoteTokenId>/estimated-amounts-at-price/<exchangeRate>`
+/// and answer it.
+fn estimated_best_ask_exchange_rate<T: Send + Sync + 'static>(
+    orderbook: Arc<Orderbook<T>>,
+    price_rounding_buffer: f64,
+) -> impl Filter<Extract = impl warp::Reply, Error = Rejection> + Clone {
+    estimated_best_ask_exchange_rate_filter()
+        .and(warp::any().map(move || price_rounding_buffer))
+        .and(warp::any().map(move || orderbook.clone()))
+        .and_then(estimate_best_ask_exchange_rate)
+        .with(warp::log(
+            "price_estimator::api::estimate_best_ask_exchange_rate",
+        ))
 }
 
 fn markets_prefix() -> impl Filter<Extract = (TokenPair,), Error = Rejection> + Copy {
@@ -87,6 +110,28 @@ fn estimated_amounts_at_price_filter(
         .and(warp::query::<QueryParameters>())
 }
 
+fn estimated_best_ask_exchange_rate_filter(
+) -> impl Filter<Extract = (TokenPair, QueryParameters), Error = Rejection> + Copy {
+    markets_prefix()
+        .and(warp::path!("estimated-best-ask-exchange-rate"))
+        .and(warp::get())
+        .and(warp::query::<QueryParameters>())
+}
+
+async fn get_markets<T>(
+    token_pair: TokenPair,
+    _query: QueryParameters,
+    orderbook: Arc<Orderbook<T>>,
+) -> Result<impl warp::Reply, Infallible> {
+    let transitive_orderbook = orderbook.get_pricegraph().await.transitive_orderbook(
+        token_pair.buy_token_id,
+        token_pair.sell_token_id,
+        None,
+    );
+    let result = MarketsResult::from(&transitive_orderbook);
+    Ok(warp::reply::json(&result))
+}
+
 async fn estimate_buy_amount<T>(
     token_pair: TokenPair,
     sell_amount_in_quote: u128,
@@ -107,20 +152,6 @@ async fn estimate_buy_amount<T>(
         sell_amount_in_quote,
         buy_amount_in_base,
     };
-    Ok(warp::reply::json(&result))
-}
-
-async fn get_markets<T>(
-    token_pair: TokenPair,
-    _query: QueryParameters,
-    orderbook: Arc<Orderbook<T>>,
-) -> Result<impl warp::Reply, Infallible> {
-    let transitive_orderbook = orderbook.get_pricegraph().await.transitive_orderbook(
-        token_pair.buy_token_id,
-        token_pair.sell_token_id,
-        None,
-    );
-    let result = MarketsResult::from(&transitive_orderbook);
     Ok(warp::reply::json(&result))
 }
 
@@ -155,6 +186,21 @@ async fn estimate_amounts_at_price<T>(
         buy_amount_in_base,
     };
     Ok(warp::reply::json(&result))
+}
+
+async fn estimate_best_ask_exchange_rate<T>(
+    token_pair: TokenPair,
+    _query: QueryParameters,
+    price_rounding_buffer: f64,
+    orderbook: Arc<Orderbook<T>>,
+) -> Result<impl warp::Reply, Infallible> {
+    let exchange_rate = orderbook
+        .get_pricegraph()
+        .await
+        .estimate_exchange_rate(token_pair.into(), 0.0)
+        .map(|xrate| apply_rounding_buffer(xrate, price_rounding_buffer));
+
+    Ok(warp::reply::json(&exchange_rate))
 }
 
 fn apply_rounding_buffer(amount: f64, price_rounding_buffer: f64) -> f64 {
@@ -290,6 +336,20 @@ mod tests {
         assert_eq!(token_pair.buy_token_id, 0);
         assert_eq!(token_pair.sell_token_id, 65535);
         assert!((volume - 0.5).abs() < f64::EPSILON);
+        assert_eq!(query.atoms, true);
+        assert_eq!(query.hops, None);
+    }
+
+    #[test]
+    fn estimated_best_ask_xrate_ok() {
+        let (token_pair, query) = warp::test::request()
+            .path("/markets/0-65535/estimated-best-ask-exchange-rate?atoms=true")
+            .filter(&estimated_best_ask_exchange_rate_filter())
+            .now_or_never()
+            .unwrap()
+            .unwrap();
+        assert_eq!(token_pair.buy_token_id, 0);
+        assert_eq!(token_pair.sell_token_id, 65535);
         assert_eq!(query.atoms, true);
         assert_eq!(query.hops, None);
     }
