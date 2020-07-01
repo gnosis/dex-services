@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 use crate::models::TokenId;
 pub mod hardcoded;
+pub mod onchain;
 
 #[cfg_attr(test, automock)]
 pub trait TokenInfoFetching: Send + Sync {
