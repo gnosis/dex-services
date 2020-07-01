@@ -11,10 +11,11 @@ use core::orderbook::{
     FilteredOrderbookReader, OnchainFilteredOrderBookReader, OrderbookFilter, OrderbookReaderKind,
     ShadowedOrderbookReader, StableXOrderBookReading,
 };
-use core::price_estimation::{PriceOracle, TokenData};
+use core::price_estimation::PriceOracle;
 use core::price_finding;
 use core::price_finding::{Fee, InternalOptimizer, SolverType};
 use core::solution_submission::StableXSolutionSubmitter;
+use core::token_info::hardcoded::TokenData;
 use core::util::FutureWaitExt as _;
 
 use ethcontract::PrivateKey;
@@ -241,7 +242,7 @@ fn main() {
     let price_oracle = PriceOracle::new(
         &http_factory,
         orderbook.clone(),
-        options.token_data.clone(),
+        Arc::new(options.token_data),
         options.price_source_update_interval,
     )
     .unwrap();
