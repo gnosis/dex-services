@@ -35,7 +35,7 @@ impl ThreadedPriceSource {
             let price_map = Arc::downgrade(&price_map);
             async move {
                 while let Some(price_map) = price_map.upgrade() {
-                    match update_prices(&price_source, &token_info_fetcher).await {
+                    match update_prices(&price_source, token_info_fetcher.as_ref()).await {
                         Ok(prices) => price_map.lock().await.extend(prices),
                         Err(err) => log::warn!("price_source::get_prices failed: {}", err),
                     }
@@ -49,7 +49,7 @@ impl ThreadedPriceSource {
 
 async fn update_prices<T: PriceSource>(
     price_source: &T,
-    token_info_fetching: &Arc<dyn TokenInfoFetching>,
+    token_info_fetching: &dyn TokenInfoFetching,
 ) -> Result<HashMap<TokenId, u128>> {
     let tokens = token_info_fetching.all_ids().await?;
     price_source.get_prices(&tokens).await
