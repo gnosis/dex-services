@@ -300,7 +300,7 @@ mod tests {
         };
 
         lazy_static! {
-            static ref API_TOKENS: [MockGenericToken; 2] = ["DAI".into(), "ETH".into(),];
+            static ref API_TOKENS: [MockGenericToken; 2] = ["DAI".into(), "ETH".into()];
         }
 
         api.expect_get_token_list()
@@ -342,7 +342,7 @@ mod tests {
 
         lazy_static! {
             static ref API_TOKENS: [MockGenericToken; 3] =
-                ["DAI".into(), "eth".into(), "Susd".into(),];
+                ["DAI".into(), "eth".into(), "Susd".into()];
         }
 
         api.expect_get_token_list()
