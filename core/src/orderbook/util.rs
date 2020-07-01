@@ -1,9 +1,10 @@
 use crate::models::{AccountState, Order};
 use ethcontract::{Address, U256};
 
-/// Removes empty orders and token balances for which there is
-/// not at least one sell order by that user
-pub fn normalize_auction_data(
+/// Creates a canonical representation of an auction state by removing empty
+/// orders and token balances for which there is not at least one sell order by
+/// that user
+pub fn canonicalize_auction_data(
     account_states: impl IntoIterator<Item = ((Address, u16), U256)>,
     orders: impl IntoIterator<Item = Order>,
 ) -> (AccountState, Vec<Order>) {
@@ -59,7 +60,7 @@ mod tests {
             ((Address::zero(), 2), U256::from(5)),
         ];
 
-        let (account_state, orders) = normalize_auction_data(account_states, orders);
+        let (account_state, orders) = canonicalize_auction_data(account_states, orders);
         assert_eq!(account_state.0.len(), 1);
         assert_eq!(
             account_state.read_balance(1, Address::zero()),
