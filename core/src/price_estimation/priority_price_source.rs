@@ -2,7 +2,6 @@ use super::PriceSource;
 use crate::models::TokenId;
 use anyhow::Result;
 use futures::future::{BoxFuture, FutureExt as _};
-use std::collections::hash_map::RandomState;
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 
@@ -27,8 +26,7 @@ impl PriceSource for PriorityPriceSource {
         tokens: &'a [TokenId],
     ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
         async move {
-            let mut remaining_tokens: HashSet<TokenId, RandomState> =
-                HashSet::from_iter(tokens.iter().cloned());
+            let mut remaining_tokens: HashSet<_> = HashSet::from_iter(tokens.iter().cloned());
             let mut result = HashMap::new();
             for source in &self.sources {
                 let remaining_token_vec = Vec::from_iter(remaining_tokens.iter().cloned());
