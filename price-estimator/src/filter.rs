@@ -19,10 +19,7 @@ pub fn all<T: Send + Sync + 'static>(
                 orderbook.clone(),
                 price_rounding_buffer,
             ))
-            .or(estimated_best_ask_exchange_rate(
-                orderbook,
-                price_rounding_buffer,
-            )),
+            .or(estimated_best_ask_price(orderbook, price_rounding_buffer)),
     )
 }
 
@@ -69,17 +66,15 @@ fn estimated_amounts_at_price<T: Send + Sync + 'static>(
 /// Validate a request of the form:
 /// `/markets/<baseTokenId>-<quoteTokenId>/estimated-amounts-at-price/<exchangeRate>`
 /// and answer it.
-fn estimated_best_ask_exchange_rate<T: Send + Sync + 'static>(
+fn estimated_best_ask_price<T: Send + Sync + 'static>(
     orderbook: Arc<Orderbook<T>>,
     price_rounding_buffer: f64,
 ) -> impl Filter<Extract = impl warp::Reply, Error = Rejection> + Clone {
-    estimated_best_ask_exchange_rate_filter()
+    estimated_best_ask_price_filter()
         .and(warp::any().map(move || price_rounding_buffer))
         .and(warp::any().map(move || orderbook.clone()))
-        .and_then(estimate_best_ask_exchange_rate)
-        .with(warp::log(
-            "price_estimator::api::estimate_best_ask_exchange_rate",
-        ))
+        .and_then(estimate_best_ask_price)
+        .with(warp::log("price_estimator::api::estimate_best_ask_price"))
 }
 
 fn markets_prefix() -> impl Filter<Extract = (TokenPair,), Error = Rejection> + Copy {
@@ -110,10 +105,10 @@ fn estimated_amounts_at_price_filter(
         .and(warp::query::<QueryParameters>())
 }
 
-fn estimated_best_ask_exchange_rate_filter(
+fn estimated_best_ask_price_filter(
 ) -> impl Filter<Extract = (TokenPair, QueryParameters), Error = Rejection> + Copy {
     markets_prefix()
-        .and(warp::path!("estimated-best-ask-exchange-rate"))
+        .and(warp::path!("estimated-best-ask-price"))
         .and(warp::get())
         .and(warp::query::<QueryParameters>())
 }
@@ -188,19 +183,22 @@ async fn estimate_amounts_at_price<T>(
     Ok(warp::reply::json(&result))
 }
 
-async fn estimate_best_ask_exchange_rate<T>(
+async fn estimate_best_ask_price<T>(
     token_pair: TokenPair,
     _query: QueryParameters,
     price_rounding_buffer: f64,
     orderbook: Arc<Orderbook<T>>,
 ) -> Result<impl warp::Reply, Infallible> {
-    let exchange_rate = orderbook
+    let price = orderbook
         .get_pricegraph()
         .await
         .estimate_exchange_rate(token_pair.into(), 0.0)
-        .map(|xrate| apply_rounding_buffer(xrate, price_rounding_buffer));
+        .map(|xrate| {
+            // NOTE: Exchange rate is the inverse of price for an ask order.
+            1.0 / apply_rounding_buffer(xrate, price_rounding_buffer)
+        });
 
-    Ok(warp::reply::json(&exchange_rate))
+    Ok(warp::reply::json(&price))
 }
 
 fn apply_rounding_buffer(amount: f64, price_rounding_buffer: f64) -> f64 {
@@ -343,8 +341,8 @@ mod tests {
     #[test]
     fn estimated_best_ask_xrate_ok() {
         let (token_pair, query) = warp::test::request()
-            .path("/markets/0-65535/estimated-best-ask-exchange-rate?atoms=true")
-            .filter(&estimated_best_ask_exchange_rate_filter())
+            .path("/markets/0-65535/estimated-best-ask-price?atoms=true")
+            .filter(&estimated_best_ask_price_filter())
             .now_or_never()
             .unwrap()
             .unwrap();
