@@ -8,5 +8,4 @@ ethcontract::contract!(pub "dex-contracts/build/contracts/ERC20Mintable.json");
 
 pub mod common;
 pub mod docker_logs;
-pub mod history;
 pub mod stablex;
