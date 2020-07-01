@@ -2,6 +2,7 @@
 //! estimator when prices are not available.
 
 use crate::models::TokenId;
+use crate::price_estimation::price_source::PriceSource;
 use anyhow::{anyhow, Context, Error, Result};
 
 use futures::future::{BoxFuture, FutureExt};
@@ -32,6 +33,21 @@ impl TokenInfoFetching for TokenData {
     fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
         let ids = Vec::from_iter(self.0.keys().copied());
         immediate!(Ok(ids))
+    }
+}
+
+impl PriceSource for TokenData {
+    fn get_prices<'a>(
+        &'a self,
+        tokens: &'a [TokenId],
+    ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
+        let mut result = HashMap::new();
+        for token in tokens {
+            if let Some(info) = self.0.get(token) {
+                result.insert(*token, info.external_price);
+            }
+        }
+        immediate!(Ok(result))
     }
 }
 
