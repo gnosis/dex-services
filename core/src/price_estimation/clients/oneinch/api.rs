@@ -76,8 +76,7 @@ impl Api for OneinchHttpApi {
         // 1inch requires the user to specify the amount traded in atoms.
         // We compute the price when selling one full token to avoid unavoidable rounding
         // artifacts when selling exactly one token atom.
-        let mut one_token_from = String::from("1");
-        one_token_from.push_str(&String::from("0").repeat(from.decimals as usize));
+        let one_token_from = 10_u128.pow(from.decimals as u32).to_string();
         {
             // This is in its own block because we are supposed to drop `q`.
             let mut q = url.query_pairs_mut();
