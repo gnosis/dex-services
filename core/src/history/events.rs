@@ -1,8 +1,7 @@
-use super::{state::State, BatchId};
 use crate::{
     contracts::stablex_contract::batch_exchange,
-    models::{AccountState, Order},
-    orderbook::{util, StableXOrderBookReading},
+    models::{AccountState, BatchId, Order},
+    orderbook::{streamed::State, StableXOrderBookReading},
 };
 use anyhow::{Context, Result};
 use ethcontract::{contract::EventData, H256};
@@ -38,16 +37,16 @@ struct Value {
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
-pub struct Orderbook {
+pub struct EventRegistry {
     events: BTreeMap<EventSortKey, Value>,
 }
 
-impl Orderbook {
+impl EventRegistry {
     pub fn read(mut read: impl Read) -> Result<Self> {
         let mut contents = Vec::new();
         read.read_to_end(&mut contents)?;
 
-        Orderbook::try_from(contents.as_slice())
+        EventRegistry::try_from(contents.as_slice())
     }
 
     pub fn handle_event_data(
@@ -58,7 +57,7 @@ impl Orderbook {
         block_hash: H256,
         block_timestamp: u64,
     ) {
-        let batch_id = block_timestamp as BatchId / 300;
+        let batch_id = BatchId::from_timestamp(block_timestamp);
         let key = EventSortKey {
             block_number,
             block_hash,
@@ -78,7 +77,7 @@ impl Orderbook {
         });
     }
 
-    /// Serializes an `Orderbook` into its bincode representation.
+    /// Serializes an `EventRegistry` into its bincode representation.
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
         Ok(bincode::serialize(self)?)
     }
@@ -102,72 +101,103 @@ impl Orderbook {
         Some(self.events.iter().next_back()?.0.block_number)
     }
 
-    /// Create a new streamed orderbook auction state with events from batches
-    /// up to and including the specified batch ID.
-    fn create_state(&self, batch_id: u32) -> Result<State> {
-        State::from_events(
-            self.events
-                .values()
-                .take_while(move |entry| entry.batch_id <= batch_id)
-                .map(|entry| (&entry.event, entry.batch_id)),
-        )
-    }
-
+    /// Returns an iterator over all owned events and their corresponding batch
+    /// IDs.
     pub fn into_events(self) -> impl Iterator<Item = (batch_exchange::Event, BatchId)> {
         self.events
             .into_iter()
             .map(|(_, Value { event, batch_id })| (event, batch_id))
     }
+
+    /// Returns an iterator of all events and their corresponding batch IDs.
+    /// This is a borrowed version of the `into_events` method.
+    pub fn events(&self) -> impl Iterator<Item = (&'_ batch_exchange::Event, BatchId)> + '_ {
+        self.events
+            .values()
+            .map(|Value { event, batch_id }| (event, *batch_id))
+    }
+
+    /// Returns an iterator containing all events up to and including the
+    /// specified batch ID.
+    pub fn events_until_batch(
+        &self,
+        batch_id: impl Into<BatchId>,
+    ) -> impl Iterator<Item = (&'_ batch_exchange::Event, BatchId)> + '_ {
+        let batch_id = batch_id.into();
+        self.events()
+            .take_while(move |(_, event_batch_id)| *event_batch_id <= batch_id)
+    }
+
+    /// Returns an iterator containing all events that occured in the specified
+    /// batch ID.
+    pub fn events_for_batch(
+        &self,
+        batch_id: impl Into<BatchId>,
+    ) -> impl Iterator<Item = &'_ batch_exchange::Event> + '_ {
+        let batch_id = batch_id.into();
+        self.events()
+            .skip_while(move |(_, event_batch_id)| *event_batch_id < batch_id)
+            .take_while(move |(_, event_batch_id)| *event_batch_id == batch_id)
+            .map(|(event, _)| event)
+    }
+
+    /// Create a new streamed orderbook auction state with events from batches
+    /// up to and including the specified batch ID.
+    pub fn auction_state_for_batch(
+        &self,
+        batch_id: impl Into<BatchId>,
+    ) -> Result<(AccountState, Vec<Order>)> {
+        let batch_id = batch_id.into();
+        let state = State::from_events(
+            self.events_until_batch(batch_id)
+                .map(|(event, batch_id)| (event, batch_id.into())),
+        )?;
+        // In order to solve batch t we need the orderbook at the beginning of
+        // batch t+1's collection process
+        state.canonicalized_auction_state_at_beginning_of_batch(batch_id.next().into())
+    }
 }
 
-impl TryFrom<&[u8]> for Orderbook {
+impl TryFrom<&[u8]> for EventRegistry {
     type Error = anyhow::Error;
 
     fn try_from(bytes: &[u8]) -> Result<Self> {
-        bincode::deserialize(bytes).context("Failed to load orderbook from bytes")
+        bincode::deserialize(bytes).context("Failed to load event registry from bytes")
     }
 }
 
-impl TryFrom<File> for Orderbook {
+impl TryFrom<File> for EventRegistry {
     type Error = anyhow::Error;
 
     fn try_from(mut file: File) -> Result<Self> {
-        let orderbook = Orderbook::read(&mut file)
+        let events = EventRegistry::read(&mut file)
             .with_context(|| format!("Failed to read file: {:?}", file))?;
 
         info!(
-            "Successfully loaded {} events in {} bytes from Orderbook file",
-            orderbook.events.len(),
+            "Successfully loaded {} events in {} bytes from event registry file",
+            events.events.len(),
             file.metadata()?.len(),
         );
 
-        Ok(orderbook)
+        Ok(events)
     }
 }
 
-impl TryFrom<&Path> for Orderbook {
+impl TryFrom<&Path> for EventRegistry {
     type Error = anyhow::Error;
 
     fn try_from(path: &Path) -> Result<Self> {
         let file = File::open(path).with_context(|| format!("couldn't open {}", path.display()))?;
-        Orderbook::try_from(file)
+        EventRegistry::try_from(file)
     }
 }
 
-impl StableXOrderBookReading for Orderbook {
+impl StableXOrderBookReading for EventRegistry {
     fn get_auction_data<'a>(
         &'a self,
         batch_id_to_solve: u32,
     ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
-        async move {
-            let state = self.create_state(batch_id_to_solve)?;
-            // In order to solve batch t we need the orderbook at the beginning of batch t+1's collection process
-            let (account_state, orders) =
-                state.orderbook_at_beginning_of_batch(batch_id_to_solve + 1)?;
-            let (account_state, orders) = util::normalize_auction_data(account_state, orders);
-            Ok((account_state, orders))
-        }
-        .boxed()
+        async move { self.auction_state_for_batch(batch_id_to_solve) }.boxed()
     }
 }
 
@@ -179,7 +209,7 @@ mod tests {
     use ethcontract::{Address, U256};
 
     #[test]
-    fn test_serialize_deserialize_orderbook() {
+    fn test_serialize_deserialize_events() {
         let event_list: Vec<Event> = vec![
             Event::Deposit(Deposit::default()),
             Event::WithdrawRequest(WithdrawRequest::default()),
@@ -205,17 +235,16 @@ mod tests {
                     },
                     Value {
                         event: event.clone(),
-                        batch_id: 0,
+                        batch_id: 0.into(),
                     },
                 )
             })
             .collect();
-        let orderbook = Orderbook { events };
-        let serialized_orderbook =
-            bincode::serialize(&orderbook).expect("Failed to serialize orderbook");
-        let deserialized_orderbook = Orderbook::try_from(&serialized_orderbook[..])
-            .expect("Failed to deserialize orderbook");
-        assert_eq!(orderbook.events, deserialized_orderbook.events);
+        let events = EventRegistry { events };
+        let serialized_events = bincode::serialize(&events).expect("Failed to serialize events");
+        let deserialized_events =
+            EventRegistry::try_from(&serialized_events[..]).expect("Failed to deserialize events");
+        assert_eq!(events.events, deserialized_events.events);
     }
 
     #[test]
@@ -232,17 +261,20 @@ mod tests {
             amount: 1.into(),
             batch_id: 2,
         });
-        let value = Value { event, batch_id: 0 };
+        let value = Value {
+            event,
+            batch_id: 0.into(),
+        };
 
         let mut events = BTreeMap::new();
         events.insert(event_key, value);
-        let initial_orderbook = Orderbook { events };
+        let initial_events = EventRegistry { events };
 
-        let test_path = Path::new("/tmp/my_test_orderbook.ron");
-        initial_orderbook.write_to_file(test_path).unwrap();
+        let test_path = Path::new("/tmp/my_test_events.ron");
+        initial_events.write_to_file(test_path).unwrap();
 
-        let recovered_orderbook = Orderbook::try_from(test_path).unwrap();
-        assert_eq!(initial_orderbook.events, recovered_orderbook.events);
+        let recovered_events = EventRegistry::try_from(test_path).unwrap();
+        assert_eq!(initial_events.events, recovered_events.events);
 
         // Cleanup the file created here.
         assert!(fs::remove_file(test_path).is_ok());
@@ -250,17 +282,17 @@ mod tests {
 
     #[test]
     fn delete_events_starting_at_block() {
-        let mut orderbook = Orderbook::default();
+        let mut events = EventRegistry::default();
         let token_listing_0 = EventData::Added(Event::TokenListing(TokenListing {
             token: Address::from_low_u64_be(0),
             id: 0,
         }));
-        orderbook.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
+        events.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
         let token_listing_1 = EventData::Added(Event::TokenListing(TokenListing {
             token: Address::from_low_u64_be(1),
             id: 1,
         }));
-        orderbook.handle_event_data(token_listing_1, 0, 1, H256::zero(), 0);
+        events.handle_event_data(token_listing_1, 0, 1, H256::zero(), 0);
         let order_placement = EventData::Added(Event::OrderPlacement(OrderPlacement {
             owner: Address::from_low_u64_be(2),
             index: 0,
@@ -271,7 +303,7 @@ mod tests {
             price_numerator: 10,
             price_denominator: 10,
         }));
-        orderbook.handle_event_data(order_placement, 0, 2, H256::zero(), 0);
+        events.handle_event_data(order_placement, 0, 2, H256::zero(), 0);
 
         let deposit_0 = EventData::Added(Event::Deposit(Deposit {
             user: Address::from_low_u64_be(2),
@@ -279,37 +311,29 @@ mod tests {
             amount: 1.into(),
             batch_id: 0,
         }));
-        orderbook.handle_event_data(deposit_0, 0, 3, H256::zero(), 0);
+        events.handle_event_data(deposit_0, 0, 3, H256::zero(), 0);
         let deposit_1 = EventData::Added(Event::Deposit(Deposit {
             user: Address::from_low_u64_be(2),
             token: Address::from_low_u64_be(0),
             amount: 1.into(),
             batch_id: 0,
         }));
-        orderbook.handle_event_data(deposit_1, 1, 0, H256::zero(), 0);
+        events.handle_event_data(deposit_1, 1, 0, H256::zero(), 0);
         let deposit_2 = EventData::Added(Event::Deposit(Deposit {
             user: Address::from_low_u64_be(2),
             token: Address::from_low_u64_be(0),
             amount: 1.into(),
             batch_id: 0,
         }));
-        orderbook.handle_event_data(deposit_2, 2, 0, H256::zero(), 0);
+        events.handle_event_data(deposit_2, 2, 0, H256::zero(), 0);
 
-        let auction_data = orderbook
-            .get_auction_data(2)
-            .now_or_never()
-            .unwrap()
-            .unwrap();
+        let auction_data = events.get_auction_data(2).now_or_never().unwrap().unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
             U256::from(3)
         );
-        orderbook.delete_events_starting_at_block(1);
-        let auction_data = orderbook
-            .get_auction_data(1)
-            .now_or_never()
-            .unwrap()
-            .unwrap();
+        events.delete_events_starting_at_block(1);
+        let auction_data = events.get_auction_data(1).now_or_never().unwrap().unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
             U256::from(1)
@@ -319,7 +343,7 @@ mod tests {
     #[test]
     fn events_get_sorted() {
         // We add a token, deposit that token, request to withdraw that token, withdraw it but give
-        // the events to the orderbook in a shuffled order.
+        // the events to the event registry in a shuffled order.
         let token_listing_0 = EventData::Added(Event::TokenListing(TokenListing {
             token: Address::from_low_u64_be(0),
             id: 0,
@@ -356,19 +380,15 @@ mod tests {
             amount: 3.into(),
         }));
 
-        let mut orderbook = Orderbook::default();
-        orderbook.handle_event_data(token_listing_1, 0, 1, H256::zero(), 0);
-        orderbook.handle_event_data(order_placement, 0, 2, H256::zero(), 0);
-        orderbook.handle_event_data(withdraw, 2, 0, H256::zero(), 300);
-        orderbook.handle_event_data(deposit, 0, 3, H256::zero(), 0);
-        orderbook.handle_event_data(withdraw_request, 1, 0, H256::zero(), 0);
-        orderbook.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
+        let mut events = EventRegistry::default();
+        events.handle_event_data(token_listing_1, 0, 1, H256::zero(), 0);
+        events.handle_event_data(order_placement, 0, 2, H256::zero(), 0);
+        events.handle_event_data(withdraw, 2, 0, H256::zero(), BatchId(1).as_timestamp());
+        events.handle_event_data(deposit, 0, 3, H256::zero(), 0);
+        events.handle_event_data(withdraw_request, 1, 0, H256::zero(), 0);
+        events.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
 
-        let auction_data = orderbook
-            .get_auction_data(2)
-            .now_or_never()
-            .unwrap()
-            .unwrap();
+        let auction_data = events.get_auction_data(2).now_or_never().unwrap().unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
             U256::from(7)
@@ -408,21 +428,87 @@ mod tests {
             batch_id: 1,
         }));
 
-        let mut orderbook = Orderbook::default();
-        orderbook.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
-        orderbook.handle_event_data(token_listing_1, 0, 1, H256::zero(), 0);
-        orderbook.handle_event_data(order_placement, 0, 2, H256::zero(), 0);
-        orderbook.handle_event_data(deposit_0, 0, 3, H256::zero(), 0);
-        orderbook.handle_event_data(deposit_1, 1, 0, H256::zero(), 600);
+        let mut events = EventRegistry::default();
+        events.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
+        events.handle_event_data(token_listing_1, 0, 1, H256::zero(), 0);
+        events.handle_event_data(order_placement, 0, 2, H256::zero(), 0);
+        events.handle_event_data(deposit_0, 0, 3, H256::zero(), 0);
+        events.handle_event_data(deposit_1, 1, 0, H256::zero(), BatchId(2).as_timestamp());
 
-        let auction_data = orderbook
-            .get_auction_data(0)
-            .now_or_never()
-            .unwrap()
-            .unwrap();
+        let auction_data = events.get_auction_data(0).now_or_never().unwrap().unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
             U256::from(42)
         );
+    }
+
+    #[test]
+    fn filters_events_by_batch_range() {
+        fn token_listing(token: u16) -> Event {
+            Event::TokenListing(TokenListing {
+                token: Address::repeat_byte(token as _),
+                id: token,
+            })
+        }
+
+        let mut events = EventRegistry::default();
+        events.handle_event_data(
+            EventData::Added(token_listing(0)),
+            0,
+            0,
+            H256::zero(),
+            BatchId(0).as_timestamp(),
+        );
+        events.handle_event_data(
+            EventData::Added(token_listing(1)),
+            0,
+            1,
+            H256::zero(),
+            BatchId(0).as_timestamp(),
+        );
+        events.handle_event_data(
+            EventData::Added(token_listing(2)),
+            1,
+            0,
+            H256::zero(),
+            BatchId(1).as_timestamp(),
+        );
+        events.handle_event_data(
+            EventData::Added(token_listing(3)),
+            2,
+            0,
+            H256::zero(),
+            BatchId(1).as_timestamp(),
+        );
+        events.handle_event_data(
+            EventData::Added(token_listing(4)),
+            3,
+            0,
+            H256::zero(),
+            BatchId(2).as_timestamp(),
+        );
+        events.handle_event_data(
+            EventData::Added(token_listing(5)),
+            4,
+            0,
+            H256::zero(),
+            BatchId(5).as_timestamp(),
+        );
+
+        assert_eq!(
+            events.events_until_batch(1).collect::<Vec<_>>(),
+            vec![
+                (&token_listing(0), BatchId(0)),
+                (&token_listing(1), BatchId(0)),
+                (&token_listing(2), BatchId(1)),
+                (&token_listing(3), BatchId(1)),
+            ]
+        );
+        assert_eq!(
+            events.events_for_batch(2).collect::<Vec<_>>(),
+            vec![&token_listing(4)],
+        );
+        assert_eq!(events.events_for_batch(4).next(), None);
+        assert_eq!(events.events_for_batch(42).next(), None);
     }
 }

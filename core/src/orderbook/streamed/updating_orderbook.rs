@@ -4,6 +4,7 @@ use crate::{
         stablex_contract::{batch_exchange, StableXContract},
         Web3,
     },
+    history::events::EventRegistry,
     models::{AccountState, Order},
     orderbook::StableXOrderBookReading,
 };
@@ -14,7 +15,6 @@ use futures::compat::Future01CompatExt as _;
 use futures::future::{BoxFuture, FutureExt as _};
 use futures::lock::Mutex;
 use log::{error, info, warn};
-use orderbook::Orderbook;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::path::PathBuf;
@@ -34,7 +34,7 @@ pub struct UpdatingOrderbook {
 }
 
 struct Context {
-    orderbook: Orderbook,
+    orderbook: EventRegistry,
     last_handled_block: u64,
     block_timestamp_reader: CachedBlockTimestampReader<Web3>,
 }
@@ -59,7 +59,7 @@ impl UpdatingOrderbook {
     fn load_orderbook_from_file(&self, context: &mut Context) {
         // TODO: use async file io
         match &self.filestore {
-            Some(path) => match Orderbook::try_from(path.as_path()) {
+            Some(path) => match EventRegistry::try_from(path.as_path()) {
                 Ok(orderbook) => {
                     info!("successfully recovered orderbook from path");
                     context.last_handled_block = orderbook.last_handled_block().unwrap_or(0);
@@ -92,7 +92,7 @@ impl UpdatingOrderbook {
             }
             None => {
                 let mut context = Context {
-                    orderbook: Orderbook::default(),
+                    orderbook: EventRegistry::default(),
                     last_handled_block: 0,
                     block_timestamp_reader: CachedBlockTimestampReader::new(self.web3.clone()),
                 };
