@@ -10,7 +10,8 @@ mod threaded_price_source;
 
 use self::clients::{DexagClient, KrakenClient, OneinchClient};
 use self::orderbook_based::PricegraphEstimator;
-use crate::token_info::{hardcoded::TokenData, TokenInfoFetching};
+use crate::contracts::stablex_contract::StableXContractImpl;
+use crate::token_info::{cached::TokenInfoCache, hardcoded::TokenData, TokenInfoFetching};
 use crate::{
     http::HttpFactory,
     models::{Order, TokenId, TokenInfo},
@@ -52,10 +53,14 @@ impl PriceOracle {
     pub fn new(
         http_factory: &HttpFactory,
         orderbook_reader: Arc<dyn StableXOrderBookReading>,
+        contract: Arc<StableXContractImpl>,
         token_data: TokenData,
         update_interval: Duration,
     ) -> Result<Self> {
-        let token_info_fetcher = Arc::new(token_data.clone());
+        let token_info_fetcher = Arc::new(TokenInfoCache::new_with_cache(
+            contract,
+            token_data.clone().into(),
+        ));
         let (kraken_source, _) = ThreadedPriceSource::new(
             token_info_fetcher.clone(),
             KrakenClient::new(http_factory, token_info_fetcher.clone())?,

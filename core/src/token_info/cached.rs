@@ -10,13 +10,13 @@ use std::sync::Arc;
  * Implementation of TokenInfoFetching that stores previously fetched information in an in-memory cache for fast retrieval.
  * TokenIds will always be fetched from the inner layer, as new tokens could be added at any time.
  */
-struct TokenInfoCache {
+pub struct TokenInfoCache {
     cache: RwLock<HashMap<TokenId, TokenBaseInfo>>,
     inner: Arc<dyn TokenInfoFetching>,
 }
 
 impl TokenInfoCache {
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn new(inner: Arc<dyn TokenInfoFetching>) -> Self {
         Self {
             cache: RwLock::new(HashMap::new()),
