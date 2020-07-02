@@ -102,7 +102,8 @@ impl From<&pricegraph::TransitiveOrderbook> for MarketsResult {
     }
 }
 
-/// A type representing a price estimate result.
+/// A type representing a market price estimate result. Prices in a market are
+/// always represented in the quote token.
 #[derive(Debug, Serialize)]
 #[serde(transparent)]
 pub struct PriceEstimateResult(pub Option<f64>);
