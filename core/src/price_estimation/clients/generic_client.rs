@@ -295,10 +295,8 @@ mod tests {
             )
             .returning(|_, _| async { Ok(1.2) }.boxed());
 
-        let client = GenericClient::<MockApi>::with_api_and_tokens(
-            api,
-            Arc::new(TokenData::from(tokens.clone())),
-        );
+        let client =
+            GenericClient::<MockApi>::with_api_and_tokens(api, Arc::new(TokenData::from(tokens)));
         let prices = client
             .get_prices(&[1.into(), 4.into(), 6.into()])
             .now_or_never()
@@ -339,10 +337,8 @@ mod tests {
             )
             .returning(|_, _| async { Err(anyhow!("")) }.boxed());
 
-        let client = GenericClient::<MockApi>::with_api_and_tokens(
-            api,
-            Arc::new(TokenData::from(tokens.clone())),
-        );
+        let client =
+            GenericClient::<MockApi>::with_api_and_tokens(api, Arc::new(TokenData::from(tokens)));
         let prices = client
             .get_prices(&[6.into(), 1.into()])
             .now_or_never()
@@ -379,10 +375,8 @@ mod tests {
         api.expect_get_price()
             .returning(|_, _| async { Ok(1.0) }.boxed());
 
-        let client = GenericClient::<MockApi>::with_api_and_tokens(
-            api,
-            Arc::new(TokenData::from(tokens.clone())),
-        );
+        let client =
+            GenericClient::<MockApi>::with_api_and_tokens(api, Arc::new(TokenData::from(tokens)));
         let prices = client
             .get_prices(&[1.into(), 4.into(), 6.into()])
             .now_or_never()
