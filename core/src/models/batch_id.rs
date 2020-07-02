@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::time::{Duration, SystemTime, SystemTimeError};
 
@@ -6,21 +7,30 @@ pub const BATCH_DURATION: Duration = Duration::from_secs(300);
 
 /// Wraps a batch id as in the smart contract to add functionality related to
 /// the current time.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(transparent)]
 pub struct BatchId(pub u64);
 
 impl BatchId {
+    pub fn from_timestamp(timestamp: u64) -> Self {
+        Self(timestamp / BATCH_DURATION.as_secs())
+    }
+
     pub fn current(now: SystemTime) -> std::result::Result<Self, SystemTimeError> {
         let time_since_epoch = now.duration_since(SystemTime::UNIX_EPOCH)?;
-        Ok(Self(time_since_epoch.as_secs() / BATCH_DURATION.as_secs()))
+        Ok(Self::from_timestamp(time_since_epoch.as_secs()))
     }
 
     pub fn currently_being_solved(now: SystemTime) -> std::result::Result<Self, SystemTimeError> {
         Self::current(now).map(|batch_id| batch_id.prev())
     }
 
+    pub fn as_timestamp(self) -> u64 {
+        self.0 * BATCH_DURATION.as_secs()
+    }
+
     pub fn order_collection_start_time(self) -> SystemTime {
-        SystemTime::UNIX_EPOCH + Duration::from_secs(self.0 * BATCH_DURATION.as_secs())
+        SystemTime::UNIX_EPOCH + Duration::from_secs(self.as_timestamp())
     }
 
     pub fn solve_start_time(self) -> SystemTime {
@@ -33,6 +43,12 @@ impl BatchId {
 
     fn prev(self) -> BatchId {
         self.0.checked_sub(1).map(BatchId).unwrap()
+    }
+}
+
+impl From<u32> for BatchId {
+    fn from(value: u32) -> Self {
+        BatchId(value as _)
     }
 }
 

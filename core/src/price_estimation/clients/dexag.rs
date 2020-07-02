@@ -10,9 +10,10 @@ mod tests {
     use super::*;
     use crate::http::HttpFactory;
     use crate::models::TokenId;
-    use crate::price_estimation::data::TokenBaseInfo;
     use crate::price_estimation::price_source::PriceSource;
+    use crate::token_info::{hardcoded::TokenData, TokenBaseInfo};
     use crate::util::FutureWaitExt as _;
+    use std::sync::Arc;
 
     // Run with `cargo test online_dexag_client -- --ignored --nocapture`.
     #[test]
@@ -34,7 +35,11 @@ mod tests {
         };
         let mut ids: Vec<TokenId> = tokens.keys().copied().collect();
 
-        let client = DexagClient::new(&HttpFactory::default(), tokens.clone().into()).unwrap();
+        let client = DexagClient::new(
+            &HttpFactory::default(),
+            Arc::new(TokenData::from(tokens.clone())),
+        )
+        .unwrap();
         let before = Instant::now();
         let prices = client.get_prices(&ids).wait().unwrap();
         let after = Instant::now();

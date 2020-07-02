@@ -1,5 +1,5 @@
 [![Build Status](https://travis-ci.com/gnosis/dex-services.svg?branch=master)](https://travis-ci.com/gnosis/dex-services)
-[![Coverage Status](https://coveralls.io/repos/github/gnosis/dex-services/badge.svg)](https://coveralls.io/github/gnosis/dex-services)
+[![Coverage Status](https://coveralls.io/repos/github/gnosis/dex-services/badge.svg?branch=master)](https://coveralls.io/github/gnosis/dex-services)
 
 
 # Contents
@@ -33,7 +33,7 @@ It contains two sub-projects that both implement the market mechanism described 
 ### Requirements
 
 - Rust (stable)
-- NodeJS <=11.0, starting with version 12 some deprecated APIs were removed that cause `scrypt`, `keccak`, `secp256k1`, and `sha3` packages to fail to build
+- Node.js v12 LTS
 - Docker and Docker-compose (stable)
 - libpq - the PostgreSQL library
 

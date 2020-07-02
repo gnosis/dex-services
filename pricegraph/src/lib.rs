@@ -158,6 +158,47 @@ impl Pricegraph {
         })
     }
 
+    /// Returns a transitive order with the largest buy and sell amounts such
+    /// that its exchange rate is greater than or equal to the specified limit
+    /// exchange rate and there exists overlapping transitive orders to
+    /// completely fill the order. Returns `None` if no overlapping transitive
+    /// orders exist at the given exchange rate.
+    pub fn order_for_limit_exchange_rate(
+        &self,
+        pair: TokenPair,
+        limit_exchange_rate: f64,
+    ) -> Option<TransitiveOrder> {
+        let (buy, sell) = self
+            .reduced_orderbook()
+            .fill_order_at_price(pair, limit_exchange_rate);
+        if buy == 0.0 {
+            return None;
+        }
+        debug_assert!(sell > 0.0, "zero sell amount for non-zero buy amount");
+
+        Some(TransitiveOrder { buy, sell })
+    }
+
+    /// Returns a transitive order with the largest sell amount such that there
+    /// exists overlapping transitive orders to completely fill the order at the
+    /// specified exchange rate. Returns `None` if no overlapping transitive
+    /// orders exist at the given exchange rate.
+    ///
+    /// Note that this method is subtly different to
+    /// `Pricegraph::order_for_limit_exchange_rate` in that the exchange rate
+    /// for the resulting order is equal to the specified exchange rate.
+    pub fn order_at_exchange_rate(
+        &self,
+        pair: TokenPair,
+        exchange_rate: f64,
+    ) -> Option<TransitiveOrder> {
+        let order = self.order_for_limit_exchange_rate(pair, exchange_rate)?;
+        Some(TransitiveOrder {
+            buy: order.sell * exchange_rate,
+            sell: order.sell,
+        })
+    }
+
     /// Computes a transitive orderbook for the given market specified by the
     /// base and quote tokens.
     ///

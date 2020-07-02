@@ -97,10 +97,11 @@ impl StableXOrderBookReading for FilteredOrderbookReader {
                     true
                 }
             });
-            Ok(util::normalize_auction_data(state, user_filtered_orders))
+            Ok(util::canonicalize_auction_data(state, user_filtered_orders))
         }
         .boxed()
     }
+
     fn initialize<'b>(&'b self) -> BoxFuture<'b, Result<()>> {
         self.orderbook.initialize()
     }

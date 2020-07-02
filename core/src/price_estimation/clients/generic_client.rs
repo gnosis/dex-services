@@ -1,12 +1,15 @@
-use super::super::{PriceSource, TokenData};
+use super::super::PriceSource;
 use crate::http::HttpFactory;
 use crate::models::TokenId;
+use crate::token_info::{TokenBaseInfo, TokenInfoFetching};
 use anyhow::{anyhow, Context, Result};
 use futures::{
     future::{self, BoxFuture, FutureExt as _},
     lock::Mutex,
+    stream::{self, StreamExt},
 };
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Provides a generic interface to communicate in a standardized way
 /// with specific API token implementations
@@ -46,21 +49,24 @@ pub struct GenericClient<T: Api> {
     /// Lazily retrieved the first time it is needed when `get_prices` is
     /// called. We don't want to use the network in `new`.
     api_tokens: Mutex<Option<Tokens<T>>>,
-    tokens: TokenData,
+    token_info_fetcher: Arc<dyn TokenInfoFetching>,
 }
 
 impl<T: Api> GenericClient<T> {
-    /// Create a GenericClient using the api implementation from HttpConnecting.
-    pub fn new(http_factory: &HttpFactory, tokens: TokenData) -> Result<Self> {
+    /// Create a GenericClient using the api implementation.
+    pub fn new(
+        http_factory: &HttpFactory,
+        token_info_fetcher: Arc<dyn TokenInfoFetching>,
+    ) -> Result<Self> {
         let api = T::bind(http_factory)?;
-        Ok(Self::with_api_and_tokens(api, tokens))
+        Ok(Self::with_api_and_tokens(api, token_info_fetcher))
     }
 
-    pub fn with_api_and_tokens(api: T, tokens: TokenData) -> Self {
+    pub fn with_api_and_tokens(api: T, token_info_fetcher: Arc<dyn TokenInfoFetching>) -> Self {
         Self {
             api,
             api_tokens: Mutex::new(None),
-            tokens,
+            token_info_fetcher,
         }
     }
 
@@ -82,6 +88,8 @@ impl<T: Api> GenericClient<T> {
         })
     }
 }
+
+type TokenIdAndInfo = (TokenId, TokenBaseInfo);
 
 impl<T> PriceSource for GenericClient<T>
 where
@@ -109,22 +117,34 @@ where
                 }
             };
 
-            let (tokens_, futures): (Vec<TokenId>, Vec<_>) = tokens
-                .iter()
-                .filter_map(|token| -> Option<(&TokenId, BoxFuture<Result<f64>>)> {
-                    // api_tokens symbols are converted to uppercase to disambiguate
-                    let symbol = self.tokens.info(*token)?.symbol().to_uppercase();
-                    if symbol == api_tokens.stable_coin.symbol() {
-                        Some((token, async { Ok(1.0) }.boxed()))
-                    } else if let Some(api_token) = api_tokens.tokens.get(&symbol) {
-                        Some((
-                            token,
-                            self.api.get_price(api_token, &api_tokens.stable_coin),
-                        ))
-                    } else {
-                        None
-                    }
+            let token_infos: Vec<_> = stream::iter(tokens)
+                .filter_map(|token| async move {
+                    Some((
+                        *token,
+                        self.token_info_fetcher.get_token_info(*token).await.ok()?,
+                    ))
                 })
+                .collect()
+                .await;
+
+            let (tokens_, futures): (Vec<TokenIdAndInfo>, Vec<_>) = token_infos
+                .iter()
+                .filter_map(
+                    |(token_id, token_info)| -> Option<(TokenIdAndInfo, BoxFuture<Result<f64>>)> {
+                        // api_tokens symbols are converted to uppercase to disambiguate
+                        let symbol = token_info.symbol().to_uppercase();
+                        if symbol == api_tokens.stable_coin.symbol() {
+                            Some(((*token_id, token_info.clone()), immediate!(Ok(1.0))))
+                        } else if let Some(api_token) = api_tokens.tokens.get(&symbol) {
+                            Some((
+                                (*token_id, token_info.clone()),
+                                self.api.get_price(api_token, &api_tokens.stable_coin),
+                            ))
+                        } else {
+                            None
+                        }
+                    },
+                )
                 .unzip();
 
             let joined = future::join_all(futures);
@@ -135,7 +155,7 @@ where
                 .iter()
                 .zip(results.iter())
                 .filter_map(|(token, result)| match result {
-                    Ok(price) => Some((*token, self.tokens.info(*token)?.get_owl_price(*price))),
+                    Ok(price) => Some((token.0, token.1.get_owl_price(*price))),
                     Err(_) => None,
                 })
                 .collect())
@@ -148,7 +168,7 @@ where
 mod tests {
     use super::*;
     use crate::models::TokenId;
-    use crate::price_estimation::data::TokenBaseInfo;
+    use crate::token_info::{hardcoded::TokenData, TokenBaseInfo};
     use anyhow::anyhow;
     use lazy_static::lazy_static;
     use mockall::{predicate::*, Sequence};
@@ -194,13 +214,14 @@ mod tests {
             .returning(|| async { Ok(Vec::new()) }.boxed());
 
         let tokens = hash_map! { TokenId::from(6) => TokenBaseInfo::new("DAI", 18, 0)};
-        assert!(
-            GenericClient::<MockApi>::with_api_and_tokens(api, tokens.into())
-                .get_prices(&[6.into()])
-                .now_or_never()
-                .unwrap()
-                .is_err()
-        );
+        assert!(GenericClient::<MockApi>::with_api_and_tokens(
+            api,
+            Arc::new(TokenData::from(tokens))
+        )
+        .get_prices(&[6.into()])
+        .now_or_never()
+        .unwrap()
+        .is_err());
     }
 
     #[test]
@@ -220,7 +241,8 @@ mod tests {
             .in_sequence(&mut seq)
             .returning(|| async { Ok(vec!["DAI".into()]) }.boxed());
 
-        let client = GenericClient::<MockApi>::with_api_and_tokens(api, tokens.into());
+        let client =
+            GenericClient::<MockApi>::with_api_and_tokens(api, Arc::new(TokenData::from(tokens)));
         assert!(client
             .get_prices(&[1.into()])
             .now_or_never()
@@ -273,7 +295,10 @@ mod tests {
             )
             .returning(|_, _| async { Ok(1.2) }.boxed());
 
-        let client = GenericClient::<MockApi>::with_api_and_tokens(api, tokens.clone().into());
+        let client = GenericClient::<MockApi>::with_api_and_tokens(
+            api,
+            Arc::new(TokenData::from(tokens.clone())),
+        );
         let prices = client
             .get_prices(&[1.into(), 4.into(), 6.into()])
             .now_or_never()
@@ -314,7 +339,10 @@ mod tests {
             )
             .returning(|_, _| async { Err(anyhow!("")) }.boxed());
 
-        let client = GenericClient::<MockApi>::with_api_and_tokens(api, tokens.clone().into());
+        let client = GenericClient::<MockApi>::with_api_and_tokens(
+            api,
+            Arc::new(TokenData::from(tokens.clone())),
+        );
         let prices = client
             .get_prices(&[6.into(), 1.into()])
             .now_or_never()
@@ -351,7 +379,10 @@ mod tests {
         api.expect_get_price()
             .returning(|_, _| async { Ok(1.0) }.boxed());
 
-        let client = GenericClient::<MockApi>::with_api_and_tokens(api, tokens.clone().into());
+        let client = GenericClient::<MockApi>::with_api_and_tokens(
+            api,
+            Arc::new(TokenData::from(tokens.clone())),
+        );
         let prices = client
             .get_prices(&[1.into(), 4.into(), 6.into()])
             .now_or_never()
