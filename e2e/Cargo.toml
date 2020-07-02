@@ -5,5 +5,9 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1"
+core = { path = "../core" }
 ethcontract = "0.7.2"
 futures = { version = "0.3.5", features = ["compat"] }
+pbr = "1.0.3"
+pricegraph = { path = "../pricegraph" }
+structopt = "0.3.15"

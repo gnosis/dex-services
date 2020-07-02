@@ -16,6 +16,15 @@ impl BatchId {
         Self(timestamp / BATCH_DURATION.as_secs())
     }
 
+    /// Creates a new batch ID for the current point in time.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the system clock returns a time earlier than the Unix epoch.
+    pub fn now() -> Self {
+        Self::current(SystemTime::now()).expect("system time earlier than Unix epoch")
+    }
+
     pub fn current(now: SystemTime) -> std::result::Result<Self, SystemTimeError> {
         let time_since_epoch = now.duration_since(SystemTime::UNIX_EPOCH)?;
         Ok(Self::from_timestamp(time_since_epoch.as_secs()))
@@ -55,6 +64,12 @@ impl From<u32> for BatchId {
 impl Into<u32> for BatchId {
     fn into(self) -> u32 {
         self.0 as u32
+    }
+}
+
+impl PartialEq<u32> for BatchId {
+    fn eq(&self, rhs: &u32) -> bool {
+        self.0 as u32 == *rhs
     }
 }
 

@@ -111,7 +111,9 @@ impl EventRegistry {
 
     /// Returns an iterator of all events and their corresponding batch IDs.
     /// This is a borrowed version of the `into_events` method.
-    pub fn events(&self) -> impl Iterator<Item = (&'_ batch_exchange::Event, BatchId)> + '_ {
+    pub fn events(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = (&'_ batch_exchange::Event, BatchId)> + '_ {
         self.events
             .values()
             .map(|Value { event, batch_id }| (event, *batch_id))
