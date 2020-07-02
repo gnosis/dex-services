@@ -30,10 +30,7 @@ impl PriceSource for PriorityPriceSource {
             for source in &self.sources {
                 match source.get_prices(&remaining_tokens).await {
                     Ok(partial_result) => {
-                        remaining_tokens = remaining_tokens
-                            .into_iter()
-                            .filter(|token| !partial_result.contains_key(token))
-                            .collect();
+                        remaining_tokens.retain(|token| !partial_result.contains_key(token));
                         result.extend(partial_result);
                     }
                     Err(err) => log::warn!("Price Source failed: {:?}", err),
