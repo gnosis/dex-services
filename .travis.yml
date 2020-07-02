@@ -44,13 +44,13 @@ jobs:
         # Unit Tests and Linting
         - cargo test
         # Build image with compiled binary
-        - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:$OPEN_SOLVER_VERSION --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
+        - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:$OPEN_SOLVER_VERSION -f docker/rust/Dockerfile .
         # StableX e2e Tests (Ganache) - open solver
         - docker-compose -f docker-compose.yml -f docker-compose.open-solver.yml  up -d stablex
         - cargo test -p e2e ganache -- --nocapture
         - docker-compose logs
         # Build image with compiled binary
-        - docker build --tag stablex-binary-private --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:$PRIVATE_SOLVER_VERSION --build-arg RUST_BASE=rust-binary -f docker/rust/Dockerfile .
+        - docker build --tag stablex-binary-private --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:$PRIVATE_SOLVER_VERSION -f docker/rust/Dockerfile .
         # StableX e2e Tests (Ganache) - private solver
         - docker-compose down
         - ./scripts/setup_contracts.sh
@@ -90,8 +90,8 @@ jobs:
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
       script:
         - cargo build --locked -p driver --release
-        - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:$OPEN_SOLVER_VERSION --build-arg RUST_BASE=rust-binary --build-arg BINARY_PATH=target/release/driver -f docker/rust/Dockerfile .
-        - docker build --tag stablex-binary-private --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:$PRIVATE_SOLVER_VERSION --build-arg RUST_BASE=rust-binary --build-arg BINARY_PATH=target/release/driver -f docker/rust/Dockerfile .
+        - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:$OPEN_SOLVER_VERSION --build-arg BINARY_PATH=target/release/driver -f docker/rust/Dockerfile .
+        - docker build --tag stablex-binary-private --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:$PRIVATE_SOLVER_VERSION --build-arg BINARY_PATH=target/release/driver -f docker/rust/Dockerfile .
       deploy:
         - provider: script
           script: ./docker/deploy.sh $TRAVIS_BRANCH
