@@ -78,13 +78,11 @@ impl Api for OneinchHttpApi {
         // We compute the price when selling one full token to avoid unavoidable rounding
         // artifacts when selling exactly one token atom.
         let one_token_from = 10_u128.pow(from.decimals as u32).to_string();
-        {
-            // This is in its own block because we are supposed to drop `q`.
-            let mut q = url.query_pairs_mut();
-            q.append_pair("fromTokenSymbol", &from.symbol);
-            q.append_pair("toTokenSymbol", &to.symbol);
-            q.append_pair("amount", &one_token_from);
-        }
+        url.query_pairs_mut()
+            .append_pair("fromTokenSymbol", &from.symbol)
+            .append_pair("toTokenSymbol", &to.symbol)
+            .append_pair("amount", &one_token_from);
+
         let decimal_correction: f64 = 10_f64.powi(from.decimals as i32 - to.decimals as i32);
 
         async move {

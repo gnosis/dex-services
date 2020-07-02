@@ -69,14 +69,11 @@ impl Api for DexagHttpApi {
     fn get_price<'a>(&'a self, from: &Token, to: &Token) -> BoxFuture<'a, Result<f64>> {
         let mut url = self.base_url.clone();
         url.set_path("price");
-        {
-            // This is in its own block because we are supposed to drop `q`.
-            let mut q = url.query_pairs_mut();
-            q.append_pair("from", &from.symbol);
-            q.append_pair("to", &to.symbol);
-            q.append_pair("fromAmount", "1");
-            q.append_pair("dex", "ag");
-        }
+        url.query_pairs_mut()
+            .append_pair("from", &from.symbol)
+            .append_pair("to", &to.symbol)
+            .append_pair("fromAmount", "1")
+            .append_pair("dex", "ag");
 
         async move {
             Ok(self
