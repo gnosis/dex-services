@@ -32,6 +32,11 @@ impl ExchangeHistory {
         ExchangeHistory::read(File::open(filestore)?)
     }
 
+    /// Returns the very first batch for the exchange.
+    pub fn first_batch(&self) -> Option<BatchId> {
+        self.events.events().next().map(|(_, batch)| batch)
+    }
+
     /// Returns a collection of auction elements for the specified batch.
     pub fn auction_elements_for_batch(&self, batch: impl Into<BatchId>) -> Result<Vec<Element>> {
         let (accounts, orders) = self.events.auction_state_for_batch(batch)?;
