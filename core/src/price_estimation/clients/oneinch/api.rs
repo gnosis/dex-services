@@ -32,6 +32,7 @@ pub struct OneinchHttpApi {
     api_url: Url,
     client: HttpClient,
 }
+
 impl OneinchHttpApi {
     pub fn with_url(http_factory: &HttpFactory, api_url: &str) -> Result<Self> {
         let client = http_factory
