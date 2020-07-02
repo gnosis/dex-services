@@ -53,14 +53,14 @@ impl InternalOptimizer {
 /// The optimization algorithm used by standard and best-ring solvers.
 #[derive(Clone, Copy, Debug)]
 pub enum OptModel {
-    Mip,
+    MixedInteger,
     TwoStage,
 }
 
 impl OptModel {
     fn to_argument(self) -> &'static str {
         match self {
-            OptModel::Mip => "mip",
+            OptModel::MixedInteger => "mip",
             OptModel::TwoStage => "two_stage",
         }
     }
@@ -109,7 +109,7 @@ impl SolverType {
                 if self == SolverType::StandardSolver {
                     OptModel::TwoStage
                 } else {
-                    OptModel::Mip
+                    OptModel::MixedInteger
                 },
                 internal_optimizer,
                 self == SolverType::BestRingSolver,
