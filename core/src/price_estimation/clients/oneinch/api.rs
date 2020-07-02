@@ -76,22 +76,25 @@ impl Api for OneinchHttpApi {
     }
 
     fn get_price<'a>(&'a self, from: &Token, to: &Token) -> BoxFuture<'a, Result<f64>> {
-        let mut url = self.api_url.join("quote").unwrap();
         // 1inch requires the user to specify the amount traded in atoms.
         // We compute the price when selling one full token to avoid unavoidable rounding
         // artifacts when selling exactly one token atom.
         let one_token_from = 10_u128.pow(from.decimals as u32).to_string();
-        url.query_pairs_mut()
-            .append_pair("fromTokenSymbol", &from.symbol)
-            .append_pair("toTokenSymbol", &to.symbol)
-            .append_pair("amount", &one_token_from);
+
+        let url = self.api_url.join("quote").and_then(move |mut url| {
+            url.query_pairs_mut()
+                .append_pair("fromTokenSymbol", &from.symbol)
+                .append_pair("toTokenSymbol", &to.symbol)
+                .append_pair("amount", &one_token_from);
+            Ok(url)
+        });
 
         let decimal_correction = 10_f64.powi(from.decimals as i32 - to.decimals as i32);
 
         async move {
             let traded_amounts: TradedAmounts = self
                 .client
-                .get_json_async::<_, TradedAmounts>(url.as_str(), HttpLabel::Oneinch)
+                .get_json_async::<_, TradedAmounts>(url?.as_str(), HttpLabel::Oneinch)
                 .await
                 .context("failed to parse price json from 1inch")?;
             let num = traded_amounts.to_token_amount as f64;
