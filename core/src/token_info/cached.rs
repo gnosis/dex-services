@@ -1,9 +1,10 @@
 use super::{TokenBaseInfo, TokenId, TokenInfoFetching};
 
 use anyhow::Result;
+use async_std::sync::RwLock;
 use futures::future::{BoxFuture, FutureExt};
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 /**
  * Implementation of TokenInfoFetching that stores previously fetched information in an in-memory cache for fast retrieval.
@@ -37,18 +38,13 @@ impl TokenInfoCache {
 
 impl TokenInfoFetching for TokenInfoCache {
     fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
-        if let Some(info) = self
-            .cache
-            .read()
-            .ok()
-            .and_then(|cache| cache.get(&id).cloned())
-        {
-            return immediate!(Ok(info));
-        }
         async move {
+            if let Some(info) = self.cache.read().await.get(&id).cloned() {
+                return Ok(info);
+            }
             let info = self.inner.get_token_info(id).await;
-            if let (Ok(info), Ok(mut cache)) = (info.as_ref(), self.cache.write()) {
-                cache.insert(id, info.clone());
+            if let Ok(info) = info.as_ref() {
+                self.cache.write().await.insert(id, info.clone());
             }
             info
         }
