@@ -47,7 +47,6 @@ impl Pricegraph for Orderbook {
 }
 
 impl PricegraphEstimator {
-    #[allow(dead_code)]
     pub fn new(orderbook_reader: Arc<dyn StableXOrderBookReading>) -> Self {
         Self { orderbook_reader }
     }
