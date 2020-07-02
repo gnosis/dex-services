@@ -242,7 +242,7 @@ fn main() {
     let price_oracle = PriceOracle::new(
         &http_factory,
         orderbook.clone(),
-        Arc::new(options.token_data),
+        options.token_data,
         options.price_source_update_interval,
     )
     .unwrap();

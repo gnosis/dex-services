@@ -4,12 +4,13 @@
 mod average_price_source;
 mod clients;
 mod orderbook_based;
-mod price_source;
+pub mod price_source;
+mod priority_price_source;
 mod threaded_price_source;
 
 use self::clients::{DexagClient, KrakenClient};
 use self::orderbook_based::PricegraphEstimator;
-use crate::token_info::TokenInfoFetching;
+use crate::token_info::{hardcoded::TokenData, TokenInfoFetching};
 use crate::{
     http::HttpFactory,
     models::{Order, TokenId, TokenInfo},
@@ -20,6 +21,7 @@ use average_price_source::AveragePriceSource;
 use futures::future::{BoxFuture, FutureExt as _};
 use log::warn;
 use price_source::PriceSource;
+use priority_price_source::PriorityPriceSource;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter;
 use std::iter::FromIterator;
@@ -50,9 +52,10 @@ impl PriceOracle {
     pub fn new(
         http_factory: &HttpFactory,
         orderbook_reader: Arc<dyn StableXOrderBookReading>,
-        token_info_fetcher: Arc<dyn TokenInfoFetching>,
+        token_data: TokenData,
         update_interval: Duration,
     ) -> Result<Self> {
+        let token_info_fetcher = Arc::new(token_data.clone());
         let (kraken_source, _) = ThreadedPriceSource::new(
             token_info_fetcher.clone(),
             KrakenClient::new(http_factory, token_info_fetcher.clone())?,
@@ -63,15 +66,19 @@ impl PriceOracle {
             DexagClient::new(http_factory, token_info_fetcher.clone())?,
             update_interval,
         );
-        let source = Box::new(AveragePriceSource::new(vec![
+        let averaged_source = Box::new(AveragePriceSource::new(vec![
             Box::new(kraken_source),
             Box::new(dexag_source),
             Box::new(PricegraphEstimator::new(orderbook_reader)),
         ]));
+        let prioritized_source = Box::new(PriorityPriceSource::new(vec![
+            Box::new(token_data),
+            averaged_source,
+        ]));
 
         Ok(PriceOracle {
             token_info_fetcher,
-            source,
+            source: prioritized_source,
         })
     }
 
@@ -120,22 +127,20 @@ impl PriceEstimating for PriceOracle {
 
             let mut tokens = Tokens::new();
             for token_id in token_ids_to_price {
-                let price = prices.get(&token_id).copied();
-                let token_info =
-                    if let Ok(base_info) = self.token_info_fetcher.get_token_info(token_id).await {
-                        Some(TokenInfo {
-                            external_price: price.unwrap_or(base_info.external_price),
-                            ..base_info.into()
-                        })
-                    } else if let Some(price) = price {
-                        Some(TokenInfo {
-                            alias: None,
-                            decimals: None,
-                            external_price: price,
-                        })
-                    } else {
-                        None
+                let token_info = if let Some(price) = prices.get(&token_id) {
+                    let mut token_info = TokenInfo {
+                        alias: None,
+                        decimals: None,
+                        external_price: *price,
                     };
+                    if let Ok(base_info) = self.token_info_fetcher.get_token_info(token_id).await {
+                        token_info.alias = Some(base_info.alias);
+                        token_info.decimals = Some(base_info.decimals);
+                    }
+                    Some(token_info)
+                } else {
+                    None
+                };
                 tokens.insert(token_id, token_info);
             }
             tokens
@@ -169,6 +174,7 @@ mod tests {
             .returning(|_| {
                 async {
                     Ok(hash_map! {
+                        TokenId(1) => 0,
                         TokenId(2) => 1_000_000_000_000_000_000,
                     })
                 }
@@ -219,7 +225,7 @@ mod tests {
             prices,
             btree_map! {
                 TokenId(0) => None,
-                TokenId(1) => Some(TokenInfo::new("WETH", 18, 0)),
+                TokenId(1) => None,
             }
         );
     }
@@ -230,31 +236,5 @@ mod tests {
         let prices = oracle.get_token_prices(&[]).now_or_never().unwrap();
 
         assert_eq!(prices, btree_map! { TokenId(0) => None });
-    }
-
-    #[test]
-    fn price_oracle_uses_uses_fallback_prices() {
-        let tokens = Arc::new(TokenData::from(hash_map! {
-            TokenId(7) => TokenBaseInfo::new("DAI", 18, 1_000_000_000_000_000_000),
-        }));
-
-        let mut source = MockPriceSource::new();
-        source
-            .expect_get_prices()
-            .returning(|_| async { Ok(HashMap::new()) }.boxed());
-
-        let oracle = PriceOracle::with_source(tokens, source);
-        let prices = oracle
-            .get_token_prices(&[Order::for_token_pair(0, 7)])
-            .now_or_never()
-            .unwrap();
-
-        assert_eq!(
-            prices,
-            btree_map! {
-                TokenId(0) => None,
-                TokenId(7) => Some(TokenInfo::new("DAI", 18, 1_000_000_000_000_000_000)),
-            }
-        );
     }
 }
