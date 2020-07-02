@@ -10,3 +10,4 @@ README.md
 LICENSE
 .vscode
 !target/debug/driver
+!target/release/driver
