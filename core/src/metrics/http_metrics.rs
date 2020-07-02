@@ -108,6 +108,7 @@ labels! {
         EthBatchRPC => "eth_batch_rpc",
         Kraken => "kraken",
         Dexag => "dexag",
+        Oneinch => "oneinch",
         GasStation => "gas_station",
     }
 }
