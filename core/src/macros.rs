@@ -28,3 +28,9 @@ macro_rules! std_map {
         map
     }}
 }
+
+macro_rules! immediate {
+    ($expression:expr) => {
+        async { $expression }.boxed()
+    };
+}

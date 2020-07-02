@@ -67,7 +67,7 @@ pub struct EstimatedOrderResult {
     pub sell_amount_in_quote: u128,
 }
 
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct TransitiveOrder {
     pub price: f64,
     pub volume: f64,
@@ -79,9 +79,23 @@ pub struct MarketsResult {
     pub bids: Vec<TransitiveOrder>,
 }
 
-/// Sort orders by their price and merge orders with the same price into one.
-fn sanitize_orders(mut orders: Vec<TransitiveOrder>) -> Vec<TransitiveOrder> {
-    orders.sort_unstable_by(|a, b| a.price.partial_cmp(&b.price).unwrap_or(Ordering::Less));
+enum TransitiveOrderbookOrdering {
+    PriceAscending,
+    PriceDescending,
+}
+
+fn sort_and_aggregate_orders_by_price(
+    mut orders: Vec<TransitiveOrder>,
+    ordering: TransitiveOrderbookOrdering,
+) -> Vec<TransitiveOrder> {
+    let compare = |a: &TransitiveOrder, b: &TransitiveOrder| {
+        let (a, b) = match ordering {
+            TransitiveOrderbookOrdering::PriceAscending => (a, b),
+            TransitiveOrderbookOrdering::PriceDescending => (b, a),
+        };
+        a.price.partial_cmp(&b.price).unwrap_or(Ordering::Less)
+    };
+    orders.sort_unstable_by(compare);
     let mut result = Vec::<TransitiveOrder>::with_capacity(orders.len());
     for order in orders.into_iter().filter(|order| !order.price.is_nan()) {
         match result.last_mut() {
@@ -96,8 +110,16 @@ fn sanitize_orders(mut orders: Vec<TransitiveOrder>) -> Vec<TransitiveOrder> {
 impl From<&pricegraph::TransitiveOrderbook> for MarketsResult {
     fn from(orderbook: &pricegraph::TransitiveOrderbook) -> Self {
         let to_order = |(price, volume)| TransitiveOrder { price, volume };
-        let asks = sanitize_orders(orderbook.ask_prices().map(to_order).collect());
-        let bids = sanitize_orders(orderbook.bid_prices().map(to_order).collect());
+        // The frontend currently (2020-30-06) requires a specific ordering of the orders. We
+        // consider this a bug but until it is fixed we need this workaround.
+        let asks = sort_and_aggregate_orders_by_price(
+            orderbook.ask_prices().map(to_order).collect(),
+            TransitiveOrderbookOrdering::PriceAscending,
+        );
+        let bids = sort_and_aggregate_orders_by_price(
+            orderbook.bid_prices().map(to_order).collect(),
+            TransitiveOrderbookOrdering::PriceDescending,
+        );
         Self { asks, bids }
     }
 }
@@ -185,7 +207,7 @@ mod tests {
                 volume: 7.0,
             },
         ];
-        let expected = vec![
+        let mut expected = vec![
             TransitiveOrder {
                 price: 1.0,
                 volume: 7.0,
@@ -199,6 +221,20 @@ mod tests {
                 volume: 6.0,
             },
         ];
-        assert_eq!(sanitize_orders(original), expected);
+        assert_eq!(
+            sort_and_aggregate_orders_by_price(
+                original.clone(),
+                TransitiveOrderbookOrdering::PriceAscending
+            ),
+            expected
+        );
+        expected.reverse();
+        assert_eq!(
+            sort_and_aggregate_orders_by_price(
+                original,
+                TransitiveOrderbookOrdering::PriceDescending
+            ),
+            expected
+        );
     }
 }
