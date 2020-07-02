@@ -25,9 +25,9 @@ impl GenericToken for Token {
 #[serde(rename_all = "camelCase")]
 struct TradedAmounts {
     #[serde(with = "display_fromstr")]
-    to_token_amount: f64,
+    to_token_amount: u128,
     #[serde(with = "display_fromstr")]
-    from_token_amount: f64,
+    from_token_amount: u128,
 }
 
 #[derive(Debug)]
@@ -86,7 +86,7 @@ impl Api for OneinchHttpApi {
             .append_pair("toTokenSymbol", &to.symbol)
             .append_pair("amount", &one_token_from);
 
-        let decimal_correction: f64 = 10_f64.powi(from.decimals as i32 - to.decimals as i32);
+        let decimal_correction = 10_f64.powi(from.decimals as i32 - to.decimals as i32);
 
         async move {
             let traded_amounts: TradedAmounts = self
@@ -94,8 +94,9 @@ impl Api for OneinchHttpApi {
                 .get_json_async::<_, TradedAmounts>(url.as_str(), HttpLabel::Oneinch)
                 .await
                 .context("failed to parse price json from 1inch")?;
-            Ok(decimal_correction * traded_amounts.to_token_amount
-                / traded_amounts.from_token_amount)
+            let num = traded_amounts.to_token_amount as f64;
+            let den = traded_amounts.from_token_amount as f64;
+            Ok(decimal_correction * num / den)
         }
         .boxed()
     }
@@ -115,14 +116,8 @@ mod tests {
     fn deserialize_price() {
         let json = r#"{"fromToken":{"symbol":"ETH","name":"Ethereum","decimals":18,"address":"0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"},"toToken":{"symbol":"DAI","name":"Dai Stablecoin","decimals":18,"address":"0x6b175474e89094c44da98b954eedeac495271d0f"},"toTokenAmount":"23897808590784919590159","fromTokenAmount":"100000000000000000000","exchanges":[{"name":"MultiSplit","part":100},{"name":"Mooniswap","part":0},{"name":"Oasis","part":0},{"name":"Kyber","part":0},{"name":"Uniswap","part":0},{"name":"Balancer","part":0},{"name":"PMM","part":0},{"name":"Uniswap V2","part":0},{"name":"0x Relays","part":0},{"name":"0x API","part":0},{"name":"AirSwap","part":0}]}"#;
         let price: TradedAmounts = serde_json::from_str(json).unwrap();
-        assert_eq!(
-            price.to_token_amount,
-            "23897808590784919590159".parse::<f64>().unwrap()
-        );
-        assert_eq!(
-            price.from_token_amount,
-            "100000000000000000000".parse::<f64>().unwrap()
-        );
+        assert_eq!(price.to_token_amount, 23897808590784919590159);
+        assert_eq!(price.from_token_amount, 100000000000000000000);
     }
 
     #[test]
