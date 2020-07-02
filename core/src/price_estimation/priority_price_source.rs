@@ -2,8 +2,7 @@ use super::PriceSource;
 use crate::models::TokenId;
 use anyhow::Result;
 use futures::future::{BoxFuture, FutureExt as _};
-use std::collections::{HashMap, HashSet};
-use std::iter::FromIterator;
+use std::collections::HashMap;
 
 /**
  * A price source that sequentially queries its inner sources in order and returns the
@@ -26,11 +25,10 @@ impl PriceSource for PriorityPriceSource {
         tokens: &'a [TokenId],
     ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
         async move {
-            let mut remaining_tokens: HashSet<_> = HashSet::from_iter(tokens.iter().cloned());
+            let mut remaining_tokens = tokens.to_vec();
             let mut result = HashMap::new();
             for source in &self.sources {
-                let remaining_token_vec = Vec::from_iter(remaining_tokens.iter().cloned());
-                match source.get_prices(&remaining_token_vec).await {
+                match source.get_prices(&remaining_tokens).await {
                     Ok(partial_result) => {
                         remaining_tokens = remaining_tokens
                             .into_iter()
