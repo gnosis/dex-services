@@ -22,6 +22,17 @@ impl TokenInfoCache {
             inner,
         }
     }
+
+    #[allow(dead_code)]
+    pub fn new_with_existing_cache(
+        inner: Arc<dyn TokenInfoFetching>,
+        cache: HashMap<TokenId, TokenBaseInfo>,
+    ) -> Self {
+        Self {
+            inner,
+            cache: RwLock::new(cache),
+        }
+    }
 }
 
 impl TokenInfoFetching for TokenInfoCache {
@@ -122,5 +133,27 @@ mod tests {
             .now_or_never()
             .expect("Not Immediate")
             .expect("Second fetch failed");
+    }
+
+    #[test]
+    fn can_be_seeded_with_a_cache() {
+        let inner = MockTokenInfoFetching::new();
+        let hardcoded = TokenBaseInfo {
+            alias: "Foo".to_owned(),
+            decimals: 42,
+        };
+        let cache = TokenInfoCache::new_with_existing_cache(
+            Arc::new(inner),
+            hash_map! {
+                TokenId::from(1) => hardcoded.clone()
+            },
+        );
+
+        let info = cache
+            .get_token_info(1.into())
+            .now_or_never()
+            .expect("First fetch not immediate")
+            .expect("First fetch failed");
+        assert_eq!(info, hardcoded);
     }
 }
