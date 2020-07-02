@@ -25,7 +25,7 @@ impl TokenInfoCache {
     }
 
     #[allow(dead_code)]
-    pub fn new_with_existing_cache(
+    pub fn new_with_cache(
         inner: Arc<dyn TokenInfoFetching>,
         cache: HashMap<TokenId, TokenBaseInfo>,
     ) -> Self {
@@ -138,7 +138,7 @@ mod tests {
             alias: "Foo".to_owned(),
             decimals: 42,
         };
-        let cache = TokenInfoCache::new_with_existing_cache(
+        let cache = TokenInfoCache::new_with_cache(
             Arc::new(inner),
             hash_map! {
                 TokenId::from(1) => hardcoded.clone()
