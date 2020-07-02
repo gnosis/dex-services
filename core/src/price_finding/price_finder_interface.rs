@@ -57,17 +57,6 @@ pub enum OptModel {
     TwoStage,
 }
 
-impl FromStr for OptModel {
-    type Err = Error;
-    fn from_str(string: &str) -> Result<Self> {
-        match string {
-            "mip" => Ok(Self::Mip),
-            "two_stage" => Ok(Self::TwoStage),
-            _ => Err(anyhow!("optimization model does not exit")),
-        }
-    }
-}
-
 impl OptModel {
     fn to_argument(self) -> &'static str {
         match self {
