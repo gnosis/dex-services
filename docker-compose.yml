@@ -11,8 +11,7 @@ services:
   truffle:
     command: /app/run.sh
     build:
-      context: .
-      dockerfile: docker/truffle/Dockerfile
+      context: driver/docker/truffle
     depends_on:
       - ganache-cli
     volumes:
@@ -21,9 +20,9 @@ services:
   stablex:
     build:
       context: .
-      dockerfile: docker/rust/Dockerfile
+      dockerfile: driver/docker/rust/Dockerfile
     restart: always
-    env_file: common.env
+    env_file: driver/common.env
     environment:
       - RUST_BACKTRACE=1
     image: stablex
