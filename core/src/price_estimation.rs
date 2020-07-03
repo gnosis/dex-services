@@ -57,7 +57,7 @@ impl PriceOracle {
         token_data: TokenData,
         update_interval: Duration,
     ) -> Result<Self> {
-        let token_info_fetcher = Arc::new(TokenInfoCache::new_with_cache(
+        let token_info_fetcher = Arc::new(TokenInfoCache::with_cache(
             contract,
             token_data.clone().into(),
         ));
