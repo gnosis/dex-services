@@ -119,8 +119,8 @@ mod tests {
     fn deserialize_price() {
         let json = r#"{"fromToken":{"symbol":"ETH","name":"Ethereum","decimals":18,"address":"0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"},"toToken":{"symbol":"DAI","name":"Dai Stablecoin","decimals":18,"address":"0x6b175474e89094c44da98b954eedeac495271d0f"},"toTokenAmount":"23897808590784919590159","fromTokenAmount":"100000000000000000000","exchanges":[{"name":"MultiSplit","part":100},{"name":"Mooniswap","part":0},{"name":"Oasis","part":0},{"name":"Kyber","part":0},{"name":"Uniswap","part":0},{"name":"Balancer","part":0},{"name":"PMM","part":0},{"name":"Uniswap V2","part":0},{"name":"0x Relays","part":0},{"name":"0x API","part":0},{"name":"AirSwap","part":0}]}"#;
         let price: TradedAmounts = serde_json::from_str(json).unwrap();
-        assert_eq!(price.to_token_amount, 23897808590784919590159);
-        assert_eq!(price.from_token_amount, 100000000000000000000);
+        assert_eq!(price.to_token_amount, 23_897_808_590_784_919_590_159);
+        assert_eq!(price.from_token_amount, 100_000_000_000_000_000_000);
     }
 
     #[test]
