@@ -168,7 +168,7 @@ where
 mod tests {
     use super::*;
     use crate::models::TokenId;
-    use crate::token_info::{hardcoded::TokenData, TokenBaseInfo};
+    use crate::token_info::hardcoded::{TokenData, TokenInfoOverride};
     use anyhow::anyhow;
     use lazy_static::lazy_static;
     use mockall::{predicate::*, Sequence};
@@ -213,7 +213,7 @@ mod tests {
         api.expect_get_token_list()
             .returning(|| async { Ok(Vec::new()) }.boxed());
 
-        let tokens = hash_map! { TokenId::from(6) => TokenBaseInfo::new("DAI", 18, 0)};
+        let tokens = hash_map! { TokenId::from(6) => TokenInfoOverride::new("DAI", 18, 0)};
         assert!(GenericClient::<MockApi>::with_api_and_tokens(
             api,
             Arc::new(TokenData::from(tokens))
@@ -227,7 +227,7 @@ mod tests {
     #[test]
     fn get_token_prices_initialization_fails_then_works() {
         initialize_mockapi_context();
-        let tokens = hash_map! { TokenId::from(1) => TokenBaseInfo::new("ETH", 18, 0)};
+        let tokens = hash_map! { TokenId::from(1) => TokenInfoOverride::new("ETH", 18, 0)};
         let mut api = MockApi::new();
         let mut seq = Sequence::new();
 
@@ -271,9 +271,9 @@ mod tests {
         let mut api = MockApi::new();
 
         let tokens = hash_map! {
-            TokenId(6) => TokenBaseInfo::new("DAI", 18, 0),
-            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0),
-            TokenId(4) => TokenBaseInfo::new("USDC", 6, 0),
+            TokenId(6) => TokenInfoOverride::new("DAI", 18, 0),
+            TokenId(1) => TokenInfoOverride::new("ETH", 18, 0),
+            TokenId(4) => TokenInfoOverride::new("USDC", 6, 0),
         };
 
         lazy_static! {
@@ -295,10 +295,8 @@ mod tests {
             )
             .returning(|_, _| async { Ok(1.2) }.boxed());
 
-        let client = GenericClient::<MockApi>::with_api_and_tokens(
-            api,
-            Arc::new(TokenData::from(tokens.clone())),
-        );
+        let client =
+            GenericClient::<MockApi>::with_api_and_tokens(api, Arc::new(TokenData::from(tokens)));
         let prices = client
             .get_prices(&[1.into(), 4.into(), 6.into()])
             .now_or_never()
@@ -307,9 +305,9 @@ mod tests {
         assert_eq!(
             prices,
             hash_map! {
-                TokenId(1) => tokens.get(&1.into()).unwrap().get_owl_price(0.7) as u128,
-                TokenId(4) => tokens.get(&4.into()).unwrap().get_owl_price(1.2) as u128,
-                TokenId(6) => tokens.get(&6.into()).unwrap().get_owl_price(1.0) as u128
+                TokenId(1) => (0.7 * 10f64.powi(18)) as u128,
+                TokenId(4) => (1.2 * 10f64.powi(30)) as u128,
+                TokenId(6) => 10u128.pow(18)
             }
         );
     }
@@ -320,8 +318,8 @@ mod tests {
         let mut api = MockApi::new();
 
         let tokens = hash_map! {
-            TokenId(6) => TokenBaseInfo::new("DAI", 18, 0),
-            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0)
+            TokenId(6) => TokenInfoOverride::new("DAI", 18, 0),
+            TokenId(1) => TokenInfoOverride::new("ETH", 18, 0)
         };
 
         lazy_static! {
@@ -339,10 +337,8 @@ mod tests {
             )
             .returning(|_, _| async { Err(anyhow!("")) }.boxed());
 
-        let client = GenericClient::<MockApi>::with_api_and_tokens(
-            api,
-            Arc::new(TokenData::from(tokens.clone())),
-        );
+        let client =
+            GenericClient::<MockApi>::with_api_and_tokens(api, Arc::new(TokenData::from(tokens)));
         let prices = client
             .get_prices(&[6.into(), 1.into()])
             .now_or_never()
@@ -352,7 +348,7 @@ mod tests {
             prices,
             hash_map! {
                 // No TokenId(1) because we made the price error above.
-                TokenId(6) => tokens.get(&6.into()).unwrap().get_owl_price(1.0) as u128,
+                TokenId(6) => 10u128.pow(18),
             }
         );
     }
@@ -363,9 +359,9 @@ mod tests {
         let mut api = MockApi::new();
 
         let tokens = hash_map! {
-            TokenId(6) => TokenBaseInfo::new("dai", 18, 0),
-            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0),
-            TokenId(4) => TokenBaseInfo::new("sUSD", 6, 0)
+            TokenId(6) => TokenInfoOverride::new("dai", 18, 0),
+            TokenId(1) => TokenInfoOverride::new("ETH", 18, 0),
+            TokenId(4) => TokenInfoOverride::new("sUSD", 6, 0)
         };
 
         lazy_static! {
@@ -379,10 +375,8 @@ mod tests {
         api.expect_get_price()
             .returning(|_, _| async { Ok(1.0) }.boxed());
 
-        let client = GenericClient::<MockApi>::with_api_and_tokens(
-            api,
-            Arc::new(TokenData::from(tokens.clone())),
-        );
+        let client =
+            GenericClient::<MockApi>::with_api_and_tokens(api, Arc::new(TokenData::from(tokens)));
         let prices = client
             .get_prices(&[1.into(), 4.into(), 6.into()])
             .now_or_never()
@@ -391,9 +385,9 @@ mod tests {
         assert_eq!(
             prices,
             hash_map! {
-                TokenId(1) => tokens.get(&1.into()).unwrap().get_owl_price(1.0) as u128,
-                TokenId(4) => tokens.get(&4.into()).unwrap().get_owl_price(1.0) as u128,
-                TokenId(6) => tokens.get(&6.into()).unwrap().get_owl_price(1.0) as u128
+                TokenId(1) => 10f64.powi(18) as u128,
+                TokenId(4) => 10f64.powi(30) as u128,
+                TokenId(6) => 10f64.powi(18) as u128,
             }
         );
     }

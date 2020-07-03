@@ -158,15 +158,15 @@ impl PriceEstimating for PriceOracle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::token_info::{hardcoded::TokenData, TokenBaseInfo};
+    use crate::token_info::hardcoded::{TokenData, TokenInfoOverride};
     use anyhow::anyhow;
     use price_source::{MockPriceSource, NoopPriceSource};
 
     #[test]
     fn price_oracle_fetches_token_prices() {
         let tokens = Arc::new(TokenData::from(hash_map! {
-            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0),
-            TokenId(2) => TokenBaseInfo::new("USDT", 6, 0),
+            TokenId(1) => TokenInfoOverride::new("WETH", 18, 0),
+            TokenId(2) => TokenInfoOverride::new("USDT", 6, 0),
         }));
 
         let mut source = MockPriceSource::new();
@@ -213,7 +213,7 @@ mod tests {
     #[test]
     fn price_oracle_ignores_source_error() {
         let tokens = Arc::new(TokenData::from(hash_map! {
-            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0),
+            TokenId(1) => TokenInfoOverride::new("WETH", 18, 0),
         }));
 
         let mut source = MockPriceSource::new();
