@@ -8,7 +8,7 @@ pub mod price_source;
 mod priority_price_source;
 mod threaded_price_source;
 
-use self::clients::{DexagClient, KrakenClient};
+use self::clients::{DexagClient, KrakenClient, OneinchClient};
 use self::orderbook_based::PricegraphEstimator;
 use crate::token_info::{hardcoded::TokenData, TokenInfoFetching};
 use crate::{
@@ -66,9 +66,15 @@ impl PriceOracle {
             DexagClient::new(http_factory, token_info_fetcher.clone())?,
             update_interval,
         );
+        let (oneinch_source, _) = ThreadedPriceSource::new(
+            token_info_fetcher.clone(),
+            OneinchClient::new(http_factory, token_info_fetcher.clone())?,
+            update_interval,
+        );
         let averaged_source = Box::new(AveragePriceSource::new(vec![
             Box::new(kraken_source),
             Box::new(dexag_source),
+            Box::new(oneinch_source),
             Box::new(PricegraphEstimator::new(orderbook_reader)),
         ]));
         let prioritized_source = Box::new(PriorityPriceSource::new(vec![
