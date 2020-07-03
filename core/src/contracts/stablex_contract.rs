@@ -62,6 +62,18 @@ impl StableXContractImpl {
     pub fn address(&self) -> Address {
         self.instance.address()
     }
+
+    pub async fn num_tokens(&self) -> Result<u16> {
+        self.instance.num_tokens().call().await.map_err(Error::from)
+    }
+
+    pub async fn get_token_info(&self, id: u16) -> Result<(Address, String, u8)> {
+        self.viewer
+            .get_token_info(id)
+            .call()
+            .await
+            .map_err(Error::from)
+    }
 }
 
 /// Information about an order page that where filtered
