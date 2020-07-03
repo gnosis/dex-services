@@ -61,7 +61,7 @@ impl Api for OneinchHttpApi {
 
     fn get_token_list<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Token>>> {
         async move {
-            let url = self.api_url.join("tokens").unwrap();
+            let url = self.api_url.join("tokens")?;
             let token_mapping: HashMap<String, Token> = self
                 .client
                 .get_json_async(url.to_string(), HttpLabel::Oneinch)
