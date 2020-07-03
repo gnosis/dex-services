@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 mod balance;
 mod bigint_u256;
 mod block_timestamp_reading;

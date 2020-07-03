@@ -85,6 +85,23 @@ impl From<HashMap<TokenId, TokenInfoOverride>> for TokenData {
     }
 }
 
+impl Into<HashMap<TokenId, TokenBaseInfo>> for TokenData {
+    fn into(self) -> HashMap<TokenId, TokenBaseInfo> {
+        self.0
+            .into_iter()
+            .map(|(id, info)| {
+                (
+                    id,
+                    TokenBaseInfo {
+                        alias: info.alias,
+                        decimals: info.decimals,
+                    },
+                )
+            })
+            .collect()
+    }
+}
+
 impl FromStr for TokenData {
     type Err = Error;
 

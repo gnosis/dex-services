@@ -13,7 +13,6 @@ pub struct PriorityPriceSource {
 }
 
 impl PriorityPriceSource {
-    #[allow(dead_code)]
     pub fn new(sources: Vec<Box<dyn PriceSource + Send + Sync>>) -> Self {
         Self { sources }
     }
