@@ -106,11 +106,7 @@ impl SolverType {
                 input_file,
                 time_limit,
                 min_avg_fee_per_order,
-                if self == SolverType::StandardSolver {
-                    OptModel::TwoStage
-                } else {
-                    OptModel::MixedInteger
-                },
+                OptModel::TwoStage,
                 internal_optimizer,
                 self == SolverType::BestRingSolver,
             ),
