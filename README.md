@@ -58,11 +58,7 @@ The repo ships with a very naive solver, that can at the moment only match two o
 
 ### Running BatchExchange
 
-```bash
-docker-compose up stablex
-```
-
-You can also run the rust binary locally (without docker). For that you will have to export the following environment variables:
+You can run the rust binary locally (without docker). For that you will have to export the following environment variables:
 - ETHEREUM_NODE_URL (for test environments this is usually http://localhost:8545. You can use an [Infura](https://infura.io/) node for rinkeby/mainnet)
 - NETWORK_ID (chainId, e.g. 5777 for ganache, 4 for rinkeby, 1 for mainnet)
 - PRIVATE_KEY (the hex key without leading 0x that should be used to sign transactions. Needs to be funded with eth for gas)
@@ -154,10 +150,10 @@ USAGE:
     driver [OPTIONS] --network-id <network-id> --node-url <node-url> --private-key <private-key>
 
 FLAGS:
-    -h, --help       
+    -h, --help
             Prints help information
 
-    -V, --version    
+    -V, --version
             Prints version information
 
 
