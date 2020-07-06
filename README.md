@@ -274,5 +274,5 @@ docker-compose build
 In order to start BatchExchange for the Rinkeby network, make sure that the env variables in common-rinkeby.env are up to date and then start the specific docker:
 
 ```
-docker-compose -f docker-compose.yml -f docker-compose.rinkeby.yml up stablex
+docker-compose -f docker-compose.yml -f driver/docker-compose.rinkeby.yml up stablex
 ```
