@@ -185,6 +185,10 @@ async fn retry_with_gas_price_increase(
     const INCREASE_FACTOR: u32 = 2;
     const BLOCK_TIMEOUT: usize = 2;
     const DEFAULT_GAS_PRICE: u64 = 15_000_000_000;
+    // openethereum requires that the gas price of the resubmitted transaction has increased by at
+    // least 12.5%. Rounded to 13% here in case of floating point error or in case the bound becomes
+    // exclusive.
+    const MIN_GAS_PRICE_INCREASE_FACTOR: f64 = 1.13;
 
     let mut gas_price_estimate = U256::from(DEFAULT_GAS_PRICE);
     let mut gas_price_factor = 1;
@@ -219,8 +223,10 @@ async fn retry_with_gas_price_increase(
             )
             .await;
 
+        let gas_price_can_still_increase =
+            gas_price.as_u128() as f64 * MIN_GAS_PRICE_INCREASE_FACTOR < gas_cap.as_u128() as f64;
         // Breaking condition for our loop
-        gas_price < gas_cap
+        gas_price_can_still_increase
             && matches!(
                 result,
                 Err(MethodError {
@@ -330,6 +336,50 @@ mod tests {
         .now_or_never()
         .unwrap()
         .unwrap();
+    }
+
+    #[test]
+    fn test_retry_with_gas_price_respects_minimum_increase() {
+        let mut contract = MockStableXContract::new();
+        contract
+            .expect_submit_solution()
+            .times(1)
+            .with(always(), always(), always(), eq(U256::from(90)), always())
+            .return_once(|_, _, _, _, _| {
+                async {
+                    Err(MethodError::from_parts(
+                    "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
+                        .to_owned(),
+                    ExecutionError::ConfirmTimeout,
+                ))
+                }
+                .boxed()
+            });
+        // There should not be a second call to submit_solution because 90 to 100 is not a large
+        // enough gas price increase.
+
+        let mut gas_station = MockGasPriceEstimating::new();
+        gas_station.expect_estimate_gas_price().returning(|| {
+            async {
+                Ok(GasPrice {
+                    fast: 90.into(),
+                    ..Default::default()
+                })
+            }
+            .boxed()
+        });
+
+        assert!(retry_with_gas_price_increase(
+            &contract,
+            1,
+            Solution::trivial(),
+            1.into(),
+            &gas_station,
+            100.into(),
+        )
+        .now_or_never()
+        .unwrap()
+        .is_err());
     }
 
     #[test]
