@@ -3,11 +3,12 @@ use futures::future::BoxFuture;
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
-use serde::Deserialize;
 use std::collections::HashMap;
 
-use crate::models::{TokenId, TokenInfo};
+use crate::models::TokenId;
+pub mod cached;
 pub mod hardcoded;
+pub mod onchain;
 
 #[cfg_attr(test, automock)]
 pub trait TokenInfoFetching: Send + Sync {
@@ -17,31 +18,20 @@ pub trait TokenInfoFetching: Send + Sync {
     /// Returns a vector with all the token IDs available
     fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>>;
 }
-
-/// Base token info to use for providing token information to the solver. This
-/// differs slightly from the `TokenInfo` type in that is allows some extra
-/// parameters that are used by the `price_estimation` module but do not get
-/// passed to the solver.
 #[cfg_attr(test, derive(Eq, PartialEq))]
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug)]
 pub struct TokenBaseInfo {
-    // NOTE: We have to, unfortunately duplicate fields and cannot use
-    //   `#[serde(flatten)]` as it does not interact correctly with `u128`s:
-    //   https://github.com/serde-rs/json/issues/625
     pub alias: String,
     pub decimals: u8,
-    pub external_price: u128,
 }
 
 impl TokenBaseInfo {
     /// Create new token information from its parameters.
     #[cfg(test)]
-    pub fn new(alias: impl Into<String>, decimals: u8, external_price: u128) -> Self {
+    pub fn new(alias: impl Into<String>, decimals: u8) -> Self {
         TokenBaseInfo {
             alias: alias.into(),
             decimals,
-            external_price,
         }
     }
 
@@ -70,12 +60,37 @@ impl TokenBaseInfo {
     }
 }
 
-impl Into<TokenInfo> for TokenBaseInfo {
-    fn into(self) -> TokenInfo {
-        TokenInfo {
-            alias: Some(self.alias),
-            decimals: Some(self.decimals),
-            external_price: self.external_price,
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn token_get_price() {
+        for (token, usd_price, expected) in &[
+            (TokenBaseInfo::new("USDC", 6), 0.99, 0.99 * 10f64.powi(30)),
+            (TokenBaseInfo::new("DAI", 18), 1.01, 1.01 * 10f64.powi(18)),
+            (TokenBaseInfo::new("FAKE", 32), 1.0, 10f64.powi(4)),
+            (
+                TokenBaseInfo::new("SCAM", 42),
+                10f64.powi(10),
+                10f64.powi(4),
+            ),
+        ] {
+            let owl_price = token.get_owl_price(*usd_price);
+            assert_eq!(owl_price, *expected as u128);
         }
+    }
+
+    #[test]
+    fn token_get_price_without_rounding_error() {
+        assert_eq!(
+            TokenBaseInfo::new("OWL", 18).get_owl_price(1.0),
+            1_000_000_000_000_000_000,
+        );
+    }
+
+    #[test]
+    fn weth_token_symbol_is_eth() {
+        assert_eq!(TokenBaseInfo::new("WETH", 18).symbol(), "ETH");
     }
 }

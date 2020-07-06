@@ -1,11 +1,8 @@
-mod api;
-
-use super::PriceSource;
+use super::super::PriceSource;
 use crate::http::HttpFactory;
 use crate::models::TokenId;
 use crate::token_info::{TokenBaseInfo, TokenInfoFetching};
 use anyhow::{anyhow, Context, Result};
-use api::{DexagApi, DexagHttpApi};
 use futures::{
     future::{self, BoxFuture, FutureExt as _},
     lock::Mutex,
@@ -14,37 +11,58 @@ use futures::{
 use std::collections::HashMap;
 use std::sync::Arc;
 
-struct ApiTokens {
-    // Maps uppercase Token::symbol to Token.
-    // This is cached in the struct because we don't expect it to change often.
-    tokens: HashMap<String, api::Token>,
-    stable_coin: api::Token,
+/// Provides a generic interface to communicate in a standardized way
+/// with specific API token implementations
+pub trait GenericToken {
+    /// Symbol describing the ERC20 token represented by the type instance
+    fn symbol(&self) -> &str;
 }
 
-pub struct DexagClient<Api> {
-    api: Api,
+#[cfg_attr(test, mockall::automock(type Token=tests::MockGenericToken;))]
+pub trait Api: Sized {
+    type Token: GenericToken + Sync + Send;
+
+    /// Creates a new HTTP interface for connecting to the API
+    fn bind(http_factory: &HttpFactory) -> Result<Self>;
+
+    fn get_token_list<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Self::Token>>>;
+
+    /// Returns the price of one unit of `from` expressed in `to`.
+    /// For example `get_price("ETH", "DAI")` is ~220.
+    fn get_price<'a>(&'a self, from: &Self::Token, to: &Self::Token) -> BoxFuture<'a, Result<f64>>;
+
+    /// Returns a string representing the reference coin in the stead of OWL for this API
+    /// Could be different from "OWL", e.g., when the API does not offer prices with
+    /// respect to OWL
+    fn reference_token_symbol() -> &'static str;
+}
+
+struct Tokens<T: Api> {
+    // Maps uppercase Token::symbol to Token.
+    // This is cached in the struct because we don't expect it to change often.
+    tokens: HashMap<String, T::Token>,
+    stable_coin: T::Token,
+}
+
+pub struct GenericClient<T: Api> {
+    api: T,
     /// Lazily retrieved the first time it is needed when `get_prices` is
     /// called. We don't want to use the network in `new`.
-    api_tokens: Mutex<Option<ApiTokens>>,
+    api_tokens: Mutex<Option<Tokens<T>>>,
     token_info_fetcher: Arc<dyn TokenInfoFetching>,
 }
 
-impl DexagClient<DexagHttpApi> {
-    /// Create a DexagClient using DexagHttpApi as the api implementation.
+impl<T: Api> GenericClient<T> {
+    /// Create a GenericClient using the api implementation.
     pub fn new(
         http_factory: &HttpFactory,
         token_info_fetcher: Arc<dyn TokenInfoFetching>,
     ) -> Result<Self> {
-        let api = DexagHttpApi::new(http_factory)?;
+        let api = T::bind(http_factory)?;
         Ok(Self::with_api_and_tokens(api, token_info_fetcher))
     }
-}
 
-impl<Api> DexagClient<Api>
-where
-    Api: DexagApi,
-{
-    pub fn with_api_and_tokens(api: Api, token_info_fetcher: Arc<dyn TokenInfoFetching>) -> Self {
+    pub fn with_api_and_tokens(api: T, token_info_fetcher: Arc<dyn TokenInfoFetching>) -> Self {
         Self {
             api,
             api_tokens: Mutex::new(None),
@@ -52,25 +70,19 @@ where
         }
     }
 
-    async fn create_api_tokens(&self) -> Result<ApiTokens> {
+    async fn create_api_tokens(&self) -> Result<Tokens<T>> {
         let tokens = self.api.get_token_list().await?;
-        let mut tokens: HashMap<String, api::Token> = tokens
+        let mut tokens: HashMap<String, T::Token> = tokens
             .into_iter()
-            .map(|token| (token.symbol.to_uppercase(), token))
+            .map(|token| (token.symbol().to_uppercase(), token))
             .collect();
 
-        // We need to return prices in OWL but Dexag does not track it. OWL
-        // tracks USD so we use another stable coin as an approximate
-        // USD price.
-        const STABLE_COIN: &str = "DAI";
-        let stable_coin = tokens.remove(STABLE_COIN).ok_or_else(|| {
-            anyhow!(
-                "dexag exchange does not track our stable coin {}",
-                STABLE_COIN
-            )
-        })?;
+        let reference_token_symbol = &T::reference_token_symbol().to_uppercase();
+        let stable_coin = tokens
+            .remove(reference_token_symbol)
+            .ok_or_else(|| anyhow!("exchange does not track {}", reference_token_symbol))?;
 
-        Ok(ApiTokens {
+        Ok(Tokens {
             tokens,
             stable_coin,
         })
@@ -79,9 +91,9 @@ where
 
 type TokenIdAndInfo = (TokenId, TokenBaseInfo);
 
-impl<Api> PriceSource for DexagClient<Api>
+impl<T> PriceSource for GenericClient<T>
 where
-    Api: DexagApi + Sync + Send,
+    T: Api + Sync + Send,
 {
     fn get_prices<'a>(
         &'a self,
@@ -94,7 +106,7 @@ where
 
             let mut api_tokens_guard = self.api_tokens.lock().await;
             let api_tokens_option = &mut api_tokens_guard;
-            let api_tokens: &ApiTokens = match api_tokens_option.as_ref() {
+            let api_tokens: &Tokens<T> = match api_tokens_option.as_ref() {
                 Some(api_tokens) => api_tokens,
                 None => {
                     let initialized = self
@@ -121,7 +133,7 @@ where
                     |(token_id, token_info)| -> Option<(TokenIdAndInfo, BoxFuture<Result<f64>>)> {
                         // api_tokens symbols are converted to uppercase to disambiguate
                         let symbol = token_info.symbol().to_uppercase();
-                        if symbol == api_tokens.stable_coin.symbol {
+                        if symbol == api_tokens.stable_coin.symbol() {
                             Some(((*token_id, token_info.clone()), immediate!(Ok(1.0))))
                         } else if let Some(api_token) = api_tokens.tokens.get(&symbol) {
                             Some((
@@ -154,33 +166,69 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::api::MockDexagApi;
     use super::*;
-    use crate::token_info::{hardcoded::TokenData, TokenBaseInfo};
-    use crate::util::FutureWaitExt as _;
+    use crate::models::TokenId;
+    use crate::token_info::hardcoded::{TokenData, TokenInfoOverride};
+    use anyhow::anyhow;
     use lazy_static::lazy_static;
     use mockall::{predicate::*, Sequence};
+    use std::sync::Once;
+
+    #[derive(Clone, Debug, PartialEq)]
+    // Cannot autogenerate with Mockall since the derived traits are needed
+    // for testing. GenericToken is a trait that is assigned to the internal
+    // token representation of the price source, so the output of `.symbol()`
+    // isn't expected to change.
+    pub struct MockGenericToken(String);
+    impl GenericToken for MockGenericToken {
+        fn symbol(&self) -> &str {
+            &self.0
+        }
+    }
+    impl From<&str> for MockGenericToken {
+        fn from(name: &str) -> Self {
+            MockGenericToken(name.to_string())
+        }
+    }
+
+    // Expectations for static methods are shared between multiple tests.
+    // https://docs.rs/mockall/0.6.0/mockall/#static-methods
+    // Here we create a shared context once and keep it in memory. Creating
+    // new contexts for each test would cause race conditions on execution.
+    fn initialize_mockapi_context() {
+        static SETUP_ONCE: Once = Once::new();
+
+        SETUP_ONCE.call_once(|| {
+            let ctx = MockApi::reference_token_symbol_context();
+            ctx.expect().returning(|| &"DAI");
+            std::mem::forget(ctx);
+        });
+    }
 
     #[test]
     fn fails_if_stable_coin_does_not_exist() {
-        let mut api = MockDexagApi::new();
+        initialize_mockapi_context();
+        let mut api = MockApi::new();
+
         api.expect_get_token_list()
             .returning(|| async { Ok(Vec::new()) }.boxed());
 
-        let tokens = hash_map! { TokenId::from(6) => TokenBaseInfo::new("DAI", 18, 0)};
-        assert!(
-            DexagClient::with_api_and_tokens(api, Arc::new(TokenData::from(tokens)))
-                .get_prices(&[6.into()])
-                .now_or_never()
-                .unwrap()
-                .is_err()
-        );
+        let tokens = hash_map! { TokenId::from(6) => TokenInfoOverride::new("DAI", 18, 0)};
+        assert!(GenericClient::<MockApi>::with_api_and_tokens(
+            api,
+            Arc::new(TokenData::from(tokens))
+        )
+        .get_prices(&[6.into()])
+        .now_or_never()
+        .unwrap()
+        .is_err());
     }
 
     #[test]
     fn get_token_prices_initialization_fails_then_works() {
-        let tokens = hash_map! { TokenId::from(1) => TokenBaseInfo::new("ETH", 18, 0)};
-        let mut api = MockDexagApi::new();
+        initialize_mockapi_context();
+        let tokens = hash_map! { TokenId::from(1) => TokenInfoOverride::new("ETH", 18, 0)};
+        let mut api = MockApi::new();
         let mut seq = Sequence::new();
 
         api.expect_get_token_list()
@@ -191,18 +239,10 @@ mod tests {
         api.expect_get_token_list()
             .times(1)
             .in_sequence(&mut seq)
-            .returning(|| {
-                async {
-                    Ok(vec![super::api::Token {
-                        name: String::new(),
-                        symbol: "DAI".to_string(),
-                        address: None,
-                    }])
-                }
-                .boxed()
-            });
+            .returning(|| async { Ok(vec!["DAI".into()]) }.boxed());
 
-        let client = DexagClient::with_api_and_tokens(api, Arc::new(TokenData::from(tokens)));
+        let client =
+            GenericClient::<MockApi>::with_api_and_tokens(api, Arc::new(TokenData::from(tokens)));
         assert!(client
             .get_prices(&[1.into()])
             .now_or_never()
@@ -227,32 +267,18 @@ mod tests {
 
     #[test]
     fn get_token_prices() {
-        let mut api = MockDexagApi::new();
+        initialize_mockapi_context();
+        let mut api = MockApi::new();
 
         let tokens = hash_map! {
-            TokenId(6) => TokenBaseInfo::new("DAI", 18, 0),
-            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0),
-            TokenId(4) => TokenBaseInfo::new("USDC", 6, 0),
+            TokenId(6) => TokenInfoOverride::new("DAI", 18, 0),
+            TokenId(1) => TokenInfoOverride::new("ETH", 18, 0),
+            TokenId(4) => TokenInfoOverride::new("USDC", 6, 0),
         };
 
         lazy_static! {
-            static ref API_TOKENS: [super::api::Token; 3] = [
-                super::api::Token {
-                    name: String::new(),
-                    symbol: "DAI".to_string(),
-                    address: None,
-                },
-                super::api::Token {
-                    name: String::new(),
-                    symbol: "ETH".to_string(),
-                    address: None,
-                },
-                super::api::Token {
-                    name: String::new(),
-                    symbol: "USDC".to_string(),
-                    address: None,
-                },
-            ];
+            static ref API_TOKENS: [MockGenericToken; 3] =
+                ["DAI".into(), "ETH".into(), "USDC".into()];
         }
 
         api.expect_get_token_list()
@@ -270,7 +296,7 @@ mod tests {
             .returning(|_, _| async { Ok(1.2) }.boxed());
 
         let client =
-            DexagClient::with_api_and_tokens(api, Arc::new(TokenData::from(tokens.clone())));
+            GenericClient::<MockApi>::with_api_and_tokens(api, Arc::new(TokenData::from(tokens)));
         let prices = client
             .get_prices(&[1.into(), 4.into(), 6.into()])
             .now_or_never()
@@ -279,35 +305,25 @@ mod tests {
         assert_eq!(
             prices,
             hash_map! {
-                TokenId(1) => tokens.get(&1.into()).unwrap().get_owl_price(0.7) as u128,
-                TokenId(4) => tokens.get(&4.into()).unwrap().get_owl_price(1.2) as u128,
-                TokenId(6) => tokens.get(&6.into()).unwrap().get_owl_price(1.0) as u128
+                TokenId(1) => (0.7 * 10f64.powi(18)) as u128,
+                TokenId(4) => (1.2 * 10f64.powi(30)) as u128,
+                TokenId(6) => 10u128.pow(18)
             }
         );
     }
 
     #[test]
     fn get_token_prices_error() {
-        let mut api = MockDexagApi::new();
+        initialize_mockapi_context();
+        let mut api = MockApi::new();
 
         let tokens = hash_map! {
-            TokenId(6) => TokenBaseInfo::new("DAI", 18, 0),
-            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0)
+            TokenId(6) => TokenInfoOverride::new("DAI", 18, 0),
+            TokenId(1) => TokenInfoOverride::new("ETH", 18, 0)
         };
 
         lazy_static! {
-            static ref API_TOKENS: [super::api::Token; 2] = [
-                super::api::Token {
-                    name: String::new(),
-                    symbol: "DAI".to_string(),
-                    address: None,
-                },
-                super::api::Token {
-                    name: String::new(),
-                    symbol: "ETH".to_string(),
-                    address: None,
-                },
-            ];
+            static ref API_TOKENS: [MockGenericToken; 2] = ["DAI".into(), "ETH".into()];
         }
 
         api.expect_get_token_list()
@@ -322,7 +338,7 @@ mod tests {
             .returning(|_, _| async { Err(anyhow!("")) }.boxed());
 
         let client =
-            DexagClient::with_api_and_tokens(api, Arc::new(TokenData::from(tokens.clone())));
+            GenericClient::<MockApi>::with_api_and_tokens(api, Arc::new(TokenData::from(tokens)));
         let prices = client
             .get_prices(&[6.into(), 1.into()])
             .now_or_never()
@@ -332,39 +348,25 @@ mod tests {
             prices,
             hash_map! {
                 // No TokenId(1) because we made the price error above.
-                TokenId(6) => tokens.get(&6.into()).unwrap().get_owl_price(1.0) as u128,
+                TokenId(6) => 10u128.pow(18),
             }
         );
     }
 
     #[test]
     fn test_case_insensitivity() {
-        let mut api = MockDexagApi::new();
+        initialize_mockapi_context();
+        let mut api = MockApi::new();
 
         let tokens = hash_map! {
-            TokenId(6) => TokenBaseInfo::new("dai", 18, 0),
-            TokenId(1) => TokenBaseInfo::new("ETH", 18, 0),
-            TokenId(4) => TokenBaseInfo::new("sUSD", 6, 0)
+            TokenId(6) => TokenInfoOverride::new("dai", 18, 0),
+            TokenId(1) => TokenInfoOverride::new("ETH", 18, 0),
+            TokenId(4) => TokenInfoOverride::new("sUSD", 6, 0)
         };
 
         lazy_static! {
-            static ref API_TOKENS: [super::api::Token; 3] = [
-                super::api::Token {
-                    name: String::new(),
-                    symbol: "DAI".to_string(),
-                    address: None,
-                },
-                super::api::Token {
-                    name: String::new(),
-                    symbol: "eth".to_string(),
-                    address: None,
-                },
-                super::api::Token {
-                    name: String::new(),
-                    symbol: "Susd".to_string(),
-                    address: None,
-                },
-            ];
+            static ref API_TOKENS: [MockGenericToken; 3] =
+                ["DAI".into(), "eth".into(), "Susd".into()];
         }
 
         api.expect_get_token_list()
@@ -374,7 +376,7 @@ mod tests {
             .returning(|_, _| async { Ok(1.0) }.boxed());
 
         let client =
-            DexagClient::with_api_and_tokens(api, Arc::new(TokenData::from(tokens.clone())));
+            GenericClient::<MockApi>::with_api_and_tokens(api, Arc::new(TokenData::from(tokens)));
         let prices = client
             .get_prices(&[1.into(), 4.into(), 6.into()])
             .now_or_never()
@@ -383,52 +385,10 @@ mod tests {
         assert_eq!(
             prices,
             hash_map! {
-                TokenId(1) => tokens.get(&1.into()).unwrap().get_owl_price(1.0) as u128,
-                TokenId(4) => tokens.get(&4.into()).unwrap().get_owl_price(1.0) as u128,
-                TokenId(6) => tokens.get(&6.into()).unwrap().get_owl_price(1.0) as u128
+                TokenId(1) => 10f64.powi(18) as u128,
+                TokenId(4) => 10f64.powi(30) as u128,
+                TokenId(6) => 10f64.powi(18) as u128,
             }
         );
-    }
-
-    // Run with `cargo test online_dexag_client -- --ignored --nocapture`.
-    #[test]
-    #[ignore]
-    fn online_dexag_client() {
-        use std::time::Instant;
-
-        let tokens = hash_map! {
-            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0),
-            TokenId(2) => TokenBaseInfo::new("USDT", 6, 0),
-            TokenId(3) => TokenBaseInfo::new("TUSD", 18, 0),
-            TokenId(4) => TokenBaseInfo::new("USDC", 6, 0),
-            TokenId(5) => TokenBaseInfo::new("PAX", 18, 0),
-            TokenId(6) => TokenBaseInfo::new("GUSD", 2, 0),
-            TokenId(7) => TokenBaseInfo::new("DAI", 18, 0),
-            TokenId(8) => TokenBaseInfo::new("sETH", 18, 0),
-            TokenId(9) => TokenBaseInfo::new("sUSD", 18, 0),
-            TokenId(15) => TokenBaseInfo::new("SNX", 18, 0)
-        };
-        let ids: Vec<TokenId> = tokens.keys().copied().collect();
-
-        let client = DexagClient::new(
-            &HttpFactory::default(),
-            Arc::new(TokenData::from(tokens.clone())),
-        )
-        .unwrap();
-        let before = Instant::now();
-        let prices = client.get_prices(&ids).wait().unwrap();
-        let after = Instant::now();
-        println!(
-            "Took {} seconds to get prices.",
-            (after - before).as_secs_f64()
-        );
-
-        for (id, token) in tokens {
-            if let Some(price) = prices.get(&id) {
-                println!("Token {} has OWL price of {}.", token.symbol(), price);
-            } else {
-                println!("Token {} price could not be determined.", token.symbol());
-            }
-        }
     }
 }

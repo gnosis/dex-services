@@ -1,3 +1,4 @@
+use super::super::generic_client::{Api, GenericToken};
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::{Context, Result};
 use ethcontract::Address;
@@ -6,22 +7,16 @@ use serde::Deserialize;
 use serde_with::rust::display_fromstr;
 use url::Url;
 
-#[cfg_attr(test, mockall::automock)]
-/// Parts of the dex.ag api.
-pub trait DexagApi {
-    /// https://docs.dex.ag/api/tokens
-    fn get_token_list<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Token>>>;
-    /// https://docs.dex.ag/api/price
-    /// Returns the price of one unit of `from` expressed in `to`.
-    /// For example `get_price("ETH", "DAI")` is ~220.
-    fn get_price<'a>(&'a self, from: &Token, to: &Token) -> BoxFuture<'a, Result<f64>>;
-}
-
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Token {
     pub name: String,
     pub symbol: String,
     pub address: Option<Address>,
+}
+impl GenericToken for Token {
+    fn symbol(&self) -> &str {
+        &self.symbol
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -35,14 +30,7 @@ pub struct DexagHttpApi {
     base_url: Url,
     client: HttpClient,
 }
-
-pub const DEFAULT_BASE_URL: &str = "https://api-v2.dex.ag";
-
 impl DexagHttpApi {
-    pub fn new(http_factory: &HttpFactory) -> Result<Self> {
-        Self::with_url(http_factory, DEFAULT_BASE_URL)
-    }
-
     pub fn with_url(http_factory: &HttpFactory, base_url: &str) -> Result<Self> {
         let client = http_factory
             .create()
@@ -54,7 +42,17 @@ impl DexagHttpApi {
     }
 }
 
-impl DexagApi for DexagHttpApi {
+pub const DEFAULT_BASE_URL: &str = "https://api-v2.dex.ag";
+
+/// Parts of the dex.ag api.
+impl Api for DexagHttpApi {
+    type Token = Token;
+
+    fn bind(http_factory: &HttpFactory) -> Result<Self> {
+        Self::with_url(http_factory, DEFAULT_BASE_URL)
+    }
+
+    /// https://docs.dex.ag/api/tokens
     fn get_token_list<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Token>>> {
         async move {
             let mut url = self.base_url.clone();
@@ -67,17 +65,15 @@ impl DexagApi for DexagHttpApi {
         .boxed()
     }
 
+    /// https://docs.dex.ag/api/price
     fn get_price<'a>(&'a self, from: &Token, to: &Token) -> BoxFuture<'a, Result<f64>> {
         let mut url = self.base_url.clone();
         url.set_path("price");
-        {
-            // This is in its own block because we are supposed to drop `q`.
-            let mut q = url.query_pairs_mut();
-            q.append_pair("from", &from.symbol);
-            q.append_pair("to", &to.symbol);
-            q.append_pair("fromAmount", "1");
-            q.append_pair("dex", "ag");
-        }
+        url.query_pairs_mut()
+            .append_pair("from", &from.symbol)
+            .append_pair("to", &to.symbol)
+            .append_pair("fromAmount", "1")
+            .append_pair("dex", "ag");
 
         async move {
             Ok(self
@@ -88,6 +84,10 @@ impl DexagApi for DexagHttpApi {
                 .price)
         }
         .boxed()
+    }
+
+    fn reference_token_symbol() -> &'static str {
+        &"DAI"
     }
 }
 
@@ -130,7 +130,7 @@ mod tests {
     #[test]
     #[ignore]
     fn online_dexag_api() {
-        let api = DexagHttpApi::new(&HttpFactory::default()).unwrap();
+        let api = DexagHttpApi::bind(&HttpFactory::default()).unwrap();
         let tokens = api.get_token_list().wait().unwrap();
         println!("{:#?}", tokens);
 

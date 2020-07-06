@@ -12,13 +12,41 @@ use std::iter::FromIterator;
 use std::str::FromStr;
 
 use super::{TokenBaseInfo, TokenInfoFetching};
+#[cfg_attr(test, derive(Eq, PartialEq))]
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenInfoOverride {
+    pub alias: String,
+    pub decimals: u8,
+    pub external_price: Option<u128>,
+}
+
+impl TokenInfoOverride {
+    #[cfg(test)]
+    pub fn new(alias: &str, decimals: u8, external_price: u128) -> Self {
+        Self {
+            alias: alias.to_owned(),
+            decimals,
+            external_price: Some(external_price),
+        }
+    }
+}
+
+impl Into<TokenBaseInfo> for TokenInfoOverride {
+    fn into(self) -> TokenBaseInfo {
+        TokenBaseInfo {
+            alias: self.alias,
+            decimals: self.decimals,
+        }
+    }
+}
 
 /// Token fallback data containing all fallback information for tokens that
 /// should be provided to the solver.
 #[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(transparent)]
-pub struct TokenData(HashMap<TokenId, TokenBaseInfo>);
+pub struct TokenData(HashMap<TokenId, TokenInfoOverride>);
 
 impl TokenInfoFetching for TokenData {
     fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
@@ -27,7 +55,7 @@ impl TokenInfoFetching for TokenData {
             .get(&id)
             .cloned()
             .ok_or_else(|| anyhow!("Token {:?} not found in hardcoded data", id));
-        immediate!(info)
+        immediate!(Ok(info?.into()))
     }
 
     fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
@@ -43,17 +71,34 @@ impl PriceSource for TokenData {
     ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
         let mut result = HashMap::new();
         for token in tokens {
-            if let Some(info) = self.0.get(token) {
-                result.insert(*token, info.external_price);
+            if let Some(price) = self.0.get(token).and_then(|info| info.external_price) {
+                result.insert(*token, price);
             }
         }
         immediate!(Ok(result))
     }
 }
 
-impl From<HashMap<TokenId, TokenBaseInfo>> for TokenData {
-    fn from(tokens: HashMap<TokenId, TokenBaseInfo>) -> Self {
+impl From<HashMap<TokenId, TokenInfoOverride>> for TokenData {
+    fn from(tokens: HashMap<TokenId, TokenInfoOverride>) -> Self {
         TokenData(tokens)
+    }
+}
+
+impl Into<HashMap<TokenId, TokenBaseInfo>> for TokenData {
+    fn into(self) -> HashMap<TokenId, TokenBaseInfo> {
+        self.0
+            .into_iter()
+            .map(|(id, info)| {
+                (
+                    id,
+                    TokenBaseInfo {
+                        alias: info.alias,
+                        decimals: info.decimals,
+                    },
+                )
+            })
+            .collect()
     }
 }
 
@@ -89,47 +134,9 @@ mod tests {
         assert_eq!(
             TokenData::from_str(json).unwrap(),
             TokenData::from(hash_map! {
-                TokenId(1) => TokenBaseInfo::new("WETH", 18, 200_000_000_000_000_000_000),
-                TokenId(4) => TokenBaseInfo::new("USDC", 6, 1_000_000_000_000_000_000_000_000_000_000),
+                TokenId(1) => TokenInfoOverride::new("WETH", 18, 200_000_000_000_000_000_000),
+                TokenId(4) => TokenInfoOverride::new("USDC", 6, 1_000_000_000_000_000_000_000_000_000_000),
             })
         );
-    }
-
-    #[test]
-    fn token_get_price() {
-        for (token, usd_price, expected) in &[
-            (
-                TokenBaseInfo::new("USDC", 6, 0),
-                0.99,
-                0.99 * 10f64.powi(30),
-            ),
-            (
-                TokenBaseInfo::new("DAI", 18, 0),
-                1.01,
-                1.01 * 10f64.powi(18),
-            ),
-            (TokenBaseInfo::new("FAKE", 32, 0), 1.0, 10f64.powi(4)),
-            (
-                TokenBaseInfo::new("SCAM", 42, 0),
-                10f64.powi(10),
-                10f64.powi(4),
-            ),
-        ] {
-            let owl_price = token.get_owl_price(*usd_price);
-            assert_eq!(owl_price, *expected as u128);
-        }
-    }
-
-    #[test]
-    fn token_get_price_without_rounding_error() {
-        assert_eq!(
-            TokenBaseInfo::new("OWL", 18, 0).get_owl_price(1.0),
-            1_000_000_000_000_000_000,
-        );
-    }
-
-    #[test]
-    fn weth_token_symbol_is_eth() {
-        assert_eq!(TokenBaseInfo::new("WETH", 18, 0).symbol(), "ETH");
     }
 }

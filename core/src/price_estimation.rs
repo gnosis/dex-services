@@ -2,17 +2,16 @@
 //! give good price estimates to the solver for better results.
 
 mod average_price_source;
-mod dexag;
-mod kraken;
+mod clients;
 mod orderbook_based;
 pub mod price_source;
 mod priority_price_source;
 mod threaded_price_source;
 
-use self::dexag::DexagClient;
-use self::kraken::KrakenClient;
+use self::clients::{DexagClient, KrakenClient, OneinchClient};
 use self::orderbook_based::PricegraphEstimator;
-use crate::token_info::{hardcoded::TokenData, TokenInfoFetching};
+use crate::contracts::stablex_contract::StableXContractImpl;
+use crate::token_info::{cached::TokenInfoCache, hardcoded::TokenData, TokenInfoFetching};
 use crate::{
     http::HttpFactory,
     models::{Order, TokenId, TokenInfo},
@@ -54,10 +53,14 @@ impl PriceOracle {
     pub fn new(
         http_factory: &HttpFactory,
         orderbook_reader: Arc<dyn StableXOrderBookReading>,
+        contract: Arc<StableXContractImpl>,
         token_data: TokenData,
         update_interval: Duration,
     ) -> Result<Self> {
-        let token_info_fetcher = Arc::new(token_data.clone());
+        let token_info_fetcher = Arc::new(TokenInfoCache::with_cache(
+            contract,
+            token_data.clone().into(),
+        ));
         let (kraken_source, _) = ThreadedPriceSource::new(
             token_info_fetcher.clone(),
             KrakenClient::new(http_factory, token_info_fetcher.clone())?,
@@ -68,14 +71,20 @@ impl PriceOracle {
             DexagClient::new(http_factory, token_info_fetcher.clone())?,
             update_interval,
         );
+        let (oneinch_source, _) = ThreadedPriceSource::new(
+            token_info_fetcher.clone(),
+            OneinchClient::new(http_factory, token_info_fetcher.clone())?,
+            update_interval,
+        );
         let averaged_source = Box::new(AveragePriceSource::new(vec![
             Box::new(kraken_source),
             Box::new(dexag_source),
+            Box::new(oneinch_source),
             Box::new(PricegraphEstimator::new(orderbook_reader)),
         ]));
         let prioritized_source = Box::new(PriorityPriceSource::new(vec![
-            Box::new(token_data),
             averaged_source,
+            Box::new(token_data),
         ]));
 
         Ok(PriceOracle {
@@ -154,15 +163,15 @@ impl PriceEstimating for PriceOracle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::token_info::{hardcoded::TokenData, TokenBaseInfo};
+    use crate::token_info::hardcoded::{TokenData, TokenInfoOverride};
     use anyhow::anyhow;
     use price_source::{MockPriceSource, NoopPriceSource};
 
     #[test]
     fn price_oracle_fetches_token_prices() {
         let tokens = Arc::new(TokenData::from(hash_map! {
-            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0),
-            TokenId(2) => TokenBaseInfo::new("USDT", 6, 0),
+            TokenId(1) => TokenInfoOverride::new("WETH", 18, 0),
+            TokenId(2) => TokenInfoOverride::new("USDT", 6, 0),
         }));
 
         let mut source = MockPriceSource::new();
@@ -209,7 +218,7 @@ mod tests {
     #[test]
     fn price_oracle_ignores_source_error() {
         let tokens = Arc::new(TokenData::from(hash_map! {
-            TokenId(1) => TokenBaseInfo::new("WETH", 18, 0),
+            TokenId(1) => TokenInfoOverride::new("WETH", 18, 0),
         }));
 
         let mut source = MockPriceSource::new();
