@@ -1,13 +1,15 @@
-//! Implementation of a graph representation of an orderbook where tokens are
+//! Implementation ofmm a graph representation of an orderbook where tokens are
 //! vertices and orders are edges (with users and balances as auxiliary data
 //! to these edges).
 //!
 //! Storage is optimized for graph-related operations such as listing the edges
 //! (i.e. orders) connecting a token pair.
 
+mod flow;
 mod order;
 mod user;
 
+use self::flow::Flow;
 use self::order::{Order, OrderCollector, OrderMap};
 use self::user::{User, UserMap};
 use crate::encoding::{Element, TokenId, TokenPair};
@@ -219,48 +221,23 @@ impl Orderbook {
             return Vec::new();
         }
 
-        let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
-
         let mut orders = Vec::new();
         let mut spread_limit_price = None;
+        let mut reduce_overlapping_orders = true;
 
-        // NOTE: A subtle difference here is that we are searching for paths in
-        // the same direction as the token pair (as opposed to the opposite
-        // direction when doing price estimates).
-        let mut predecessors = self.reduced_shortest_paths(buy);
-
-        while let Some(path) = path::find_path(&predecessors, buy, sell) {
-            let (capacity, transitive_price) =
-                self.find_path_capacity_and_price(&path).unwrap_or_else(|| {
-                    panic!(
-                        "failed to fill detected shortest path {}",
-                        format_path(&path),
-                    )
-                });
-
-            if let Some(spread) = spread {
-                let spread_limit_price = spread_limit_price
-                    .get_or_insert_with(|| transitive_price + transitive_price * spread);
-
-                if transitive_price > *spread_limit_price {
-                    break;
+        while let Some(flow) =
+            self.fill_optimal_path_if(pair, reduce_overlapping_orders, |flow| {
+                if let Some(spread) = spread {
+                    let spread_limit_price = spread_limit_price
+                        .get_or_insert_with(|| flow.exchange_rate * (1.0 + spread));
+                    flow.exchange_rate <= *spread_limit_price
+                } else {
+                    true
                 }
-            }
-            orders.push(transitive_order_from_capacity_and_price(
-                capacity,
-                transitive_price,
-            ));
-
-            self.fill_path_with_capacity(&path, capacity)
-                .unwrap_or_else(|_| {
-                    panic!(
-                        "failed to fill with capacity along detected path {}",
-                        format_path(&path),
-                    )
-                });
-            predecessors = bellman_ford::search(&self.projection, buy)
-                .expect("unexpected negative cycle in reduced graph")
-                .1;
+            })
+        {
+            orders.push(flow.as_transitive_order());
+            reduce_overlapping_orders = false;
         }
 
         orders
@@ -389,6 +366,65 @@ impl Orderbook {
         }
 
         (total_buy_volume, total_sell_volume)
+    }
+
+    /// Fills the optimal path between a token pair, by pushing flow from the
+    /// buy token to the sell token. This method is similar to
+    /// `Orderbook::fill_optimal_path_if` except it does not check a condition
+    /// on the discovered path's flow before filling.
+    fn fill_optimal_path(&mut self, pair: TokenPair, reduce_negative_cycles: bool) -> Option<Flow> {
+        self.fill_optimal_path_if(pair, reduce_negative_cycles, |_| true)
+    }
+
+    /// Fills the optimal path between a token pair, by pushing flow from the
+    /// buy token to the sell token, if the condition is met. The trading path
+    /// through the orderbook graph is filled to maximum capacity, reducing the
+    /// remaining order amounts and user balances along the way, returning the
+    /// flow along the path. Returns `None` if the condition is not met or there
+    /// is no path between the token pair.
+    fn fill_optimal_path_if(
+        &mut self,
+        pair: TokenPair,
+        reduce_negative_cycles: bool,
+        mut condition: impl FnMut(&Flow) -> bool,
+    ) -> Option<Flow> {
+        let (start, end) = (node_index(pair.buy), node_index(pair.sell));
+
+        let predecessors = if reduce_negative_cycles {
+            self.reduced_shortest_paths(start)
+        } else {
+            bellman_ford::search(&self.projection, start)
+                .expect("unexpected negative cycle in reduced graph")
+                .1
+        };
+        let path = path::find_path(&predecessors, start, end)?;
+        let (capacity, exchange_rate) =
+            self.find_path_capacity_and_price(&path).unwrap_or_else(|| {
+                panic!(
+                    "failed to fill detected shortest path {}",
+                    format_path(&path),
+                )
+            });
+
+        let flow = Flow {
+            path,
+            exchange_rate,
+            capacity,
+        };
+
+        if !condition(&flow) {
+            return None;
+        }
+
+        self.fill_path_with_capacity(&flow.path, capacity)
+            .unwrap_or_else(|_| {
+                panic!(
+                    "failed to fill with capacity along detected path {}",
+                    format_path(&flow.path),
+                )
+            });
+
+        Some(flow)
     }
 
     /// Calculates the shortest paths from the start token to all other tokens

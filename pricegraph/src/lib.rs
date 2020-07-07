@@ -63,9 +63,9 @@ impl TransitiveOrderbook {
 /// Additionally, a transitive order over a single order is equal to that order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TransitiveOrder {
-    /// The effective buy amount for this transient order.
+    /// The effective buy amount for this transitive order.
     pub buy: f64,
-    /// The effective sell amount for this transient order.
+    /// The effective sell amount for this transitive order.
     pub sell: f64,
 }
 
