@@ -185,10 +185,12 @@ async fn retry_with_gas_price_increase(
     const INCREASE_FACTOR: u32 = 2;
     const BLOCK_TIMEOUT: usize = 2;
     const DEFAULT_GAS_PRICE: u64 = 15_000_000_000;
+
     // openethereum requires that the gas price of the resubmitted transaction has increased by at
-    // least 12.5%. Rounded to 13% here in case of floating point error or in case the bound becomes
-    // exclusive.
-    const MIN_GAS_PRICE_INCREASE_FACTOR: f64 = 1.13;
+    // least 12.5%.
+    let min_gas_price_increase_factor: f64 = 1.125 * (1.0 + f64::EPSILON);
+    let effective_gas_cap =
+        U256::from((gas_cap.as_u128() as f64 / min_gas_price_increase_factor).floor() as u128);
 
     let mut gas_price_estimate = U256::from(DEFAULT_GAS_PRICE);
     let mut gas_price_factor = 1;
@@ -223,8 +225,7 @@ async fn retry_with_gas_price_increase(
             )
             .await;
 
-        let gas_price_can_still_increase =
-            gas_price.as_u128() as f64 * MIN_GAS_PRICE_INCREASE_FACTOR < gas_cap.as_u128() as f64;
+        let gas_price_can_still_increase = gas_price < effective_gas_cap;
         // Breaking condition for our loop
         gas_price_can_still_increase
             && matches!(
