@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_with::rust::display_fromstr;
-use std::{cmp::Ordering, convert::From, num::ParseIntError, str::FromStr};
+use std::{cmp::Ordering, num::ParseIntError, str::FromStr};
 
 #[derive(Debug, Copy, Clone)]
 pub struct TokenPair {
@@ -8,11 +8,20 @@ pub struct TokenPair {
     pub sell_token_id: u16,
 }
 
-impl std::convert::Into<pricegraph::TokenPair> for TokenPair {
+impl Into<pricegraph::TokenPair> for TokenPair {
     fn into(self) -> pricegraph::TokenPair {
         pricegraph::TokenPair {
             buy: self.buy_token_id,
             sell: self.sell_token_id,
+        }
+    }
+}
+
+impl Into<pricegraph::Market> for TokenPair {
+    fn into(self) -> pricegraph::Market {
+        pricegraph::Market {
+            base: self.buy_token_id,
+            quote: self.sell_token_id,
         }
     }
 }

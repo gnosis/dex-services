@@ -84,6 +84,37 @@ impl TransitiveOrder {
     }
 }
 
+/// A struct representing a market.
+///
+/// This is used for computing transitive orderbooks.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub struct Market {
+    /// The base token being purchased in a market.
+    pub base: TokenId,
+    /// The quote token being sold in a market. Prices in a market are always
+    /// expressed in the quote token.
+    pub quote: TokenId,
+}
+
+impl Market {
+    /// Returns the token pair for ask orders.
+    pub fn ask_pair(self) -> TokenPair {
+        TokenPair {
+            buy: self.quote,
+            sell: self.base,
+        }
+    }
+
+    /// Returns the token pair for bid orders.
+    pub fn bid_pair(self) -> TokenPair {
+        TokenPair {
+            buy: self.base,
+            sell: self.quote,
+        }
+    }
+}
+
 /// API entry point for computing price estimates and transitive orderbooks for
 /// a give auction.
 #[derive(Clone, Debug)]
@@ -222,8 +253,7 @@ impl Pricegraph {
         })
     }
 
-    /// Computes a transitive orderbook for the given market specified by the
-    /// base and quote tokens.
+    /// Computes a transitive orderbook for the given market.
     ///
     /// This method optionally accepts a spread that is a decimal fraction that
     /// defines the maximume transitive order price with the equation:
@@ -236,34 +266,18 @@ impl Pricegraph {
     /// # Panics
     ///
     /// This method panics if the spread is zero or negative.
-    pub fn transitive_orderbook(
-        &self,
-        base: TokenId,
-        quote: TokenId,
-        spread: Option<f64>,
-    ) -> TransitiveOrderbook {
+    pub fn transitive_orderbook(&self, market: Market, spread: Option<f64>) -> TransitiveOrderbook {
         let mut orderbook = self.full_orderbook();
 
-        let mut transitive_orderbook =
-            orderbook.reduce_overlapping_transitive_orderbook(base, quote);
-        transitive_orderbook
-            .asks
-            .extend(orderbook.clone().fill_transitive_orders(
-                TokenPair {
-                    buy: quote,
-                    sell: base,
-                },
-                spread,
-            ));
+        let mut transitive_orderbook = orderbook.reduce_overlapping_transitive_orderbook(market);
+        transitive_orderbook.asks.extend(
+            orderbook
+                .clone()
+                .fill_transitive_orders(market.ask_pair(), spread),
+        );
         transitive_orderbook
             .bids
-            .extend(orderbook.fill_transitive_orders(
-                TokenPair {
-                    buy: base,
-                    sell: quote,
-                },
-                spread,
-            ));
+            .extend(orderbook.fill_transitive_orders(market.bid_pair(), spread));
 
         for orders in &mut [
             &mut transitive_orderbook.asks,
@@ -285,7 +299,7 @@ mod tests {
     #[test]
     fn transitive_orderbook_empty_same_token() {
         let pricegraph = Pricegraph::new(std::iter::empty());
-        let orderbook = pricegraph.transitive_orderbook(0, 0, None);
+        let orderbook = pricegraph.transitive_orderbook(Market { base: 0, quote: 0 }, None);
         assert!(orderbook.asks.is_empty());
         assert!(orderbook.bids.is_empty());
     }
@@ -307,7 +321,7 @@ mod tests {
             id: 0,
         }]);
 
-        let orderbook = pricegraph.transitive_orderbook(0, 1, None);
+        let orderbook = pricegraph.transitive_orderbook(Market { base: 0, quote: 1 }, None);
         assert_eq!(orderbook.asks, vec![]);
         assert_eq!(
             orderbook.bids,
@@ -319,7 +333,7 @@ mod tests {
         let bid_price = orderbook.bid_prices().next().unwrap();
         assert_approx_eq!(bid_price.0, 0.5 / FEE_FACTOR);
 
-        let orderbook = pricegraph.transitive_orderbook(1, 0, None);
+        let orderbook = pricegraph.transitive_orderbook(Market { base: 1, quote: 0 }, None);
         assert_eq!(
             orderbook.asks,
             vec![TransitiveOrder {
@@ -379,14 +393,16 @@ mod tests {
 
         let base_unit = 10.0f64.powi(18);
 
-        let dai_weth = TokenPair { buy: 7, sell: 1 };
+        let dai_weth = Market { base: 7, quote: 1 };
         let volume = 1.0 * base_unit;
         let spread = 0.05;
 
         for (batch_id, raw_orderbook) in data::ORDERBOOKS.iter() {
             let pricegraph = Pricegraph::read(raw_orderbook).unwrap();
 
-            let order = pricegraph.order_for_sell_amount(dai_weth, volume).unwrap();
+            let order = pricegraph
+                .order_for_sell_amount(dai_weth.bid_pair(), volume)
+                .unwrap();
             println!(
                 "#{}: estimated order for buying {} DAI for {} WETH",
                 batch_id,
@@ -395,7 +411,7 @@ mod tests {
             );
 
             let TransitiveOrderbook { asks, bids } =
-                pricegraph.transitive_orderbook(dai_weth.buy, dai_weth.sell, Some(spread));
+                pricegraph.transitive_orderbook(dai_weth, Some(spread));
             println!(
                 "#{}: DAI-WETH market contains {} ask orders and {} bid orders within a {}% spread:",
                 batch_id,

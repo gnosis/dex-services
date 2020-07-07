@@ -2,7 +2,7 @@
 mod data;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use pricegraph::{Pricegraph, TokenPair};
+use pricegraph::{Pricegraph, TokenPair, Market};
 
 fn read_default_pricegraph() -> Pricegraph {
     Pricegraph::read(&*data::DEFAULT_ORDERBOOK).expect("error reading orderbook")
@@ -14,14 +14,13 @@ pub fn read(c: &mut Criterion) {
 
 pub fn transitive_orderbook(c: &mut Criterion) {
     let pricegraph = read_default_pricegraph();
-    let base = 1;
-    let quote = 7;
+    let dai_weth = Market { base: 7, quote: 1 };
 
     c.bench_with_input(
         BenchmarkId::new("Pricegraph::transitive_orderbook", *data::DEFAULT_BATCH_ID),
-        &(&pricegraph, base, quote),
-        |b, &(pricegraph, base, quote)| {
-            b.iter(|| pricegraph.transitive_orderbook(base, quote, None))
+        &(&pricegraph, dai_weth),
+        |b, &(pricegraph, dai_weth)| {
+            b.iter(|| pricegraph.transitive_orderbook(dai_weth, None))
         },
     );
 }

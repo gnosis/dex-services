@@ -1,7 +1,7 @@
 #![no_main]
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
-use pricegraph::{Element, Pricegraph, TokenId, TokenPair};
+use pricegraph::{Element, Pricegraph, TokenId, TokenPair, Market};
 use std::iter::once;
 
 // Limit the maximum token id that is allowed to appear in the generated orders. Without this we can
@@ -17,8 +17,7 @@ enum Operation {
         sell_amount: f64,
     },
     TransitiveOrderbook {
-        base: TokenId,
-        quote: TokenId,
+        market: Market,
         spread: Option<f64>,
     },
 }
@@ -47,8 +46,7 @@ fuzz_target!(|arguments: Arguments| {
             pricegraph.order_for_sell_amount(pair, sell_amount);
         }
         Operation::TransitiveOrderbook {
-            base,
-            quote,
+            market,
             spread,
         } => {
             if let Some(spread) = spread {
@@ -56,7 +54,7 @@ fuzz_target!(|arguments: Arguments| {
                     return;
                 }
             }
-            pricegraph.transitive_orderbook(base, quote, spread);
+            pricegraph.transitive_orderbook(market, spread);
         }
     };
 });
