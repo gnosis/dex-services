@@ -56,9 +56,9 @@ pub struct EstimatedOrderResult {
     #[serde(with = "display_fromstr")]
     pub quote_token_id: u16,
     #[serde(with = "display_fromstr")]
-    pub buy_amount_in_base: u128,
+    pub buy_amount_in_base: f64,
     #[serde(with = "display_fromstr")]
-    pub sell_amount_in_quote: u128,
+    pub sell_amount_in_quote: f64,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -124,6 +124,11 @@ impl From<&pricegraph::TransitiveOrderbook> for MarketsResult {
 #[serde(transparent)]
 pub struct PriceEstimateResult(pub Option<f64>);
 
+#[derive(Debug, Serialize)]
+pub struct ErrorResult {
+    pub message: &'static str,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,8 +158,8 @@ mod tests {
         let original = EstimatedOrderResult {
             base_token_id: 1,
             quote_token_id: 2,
-            buy_amount_in_base: 3,
-            sell_amount_in_quote: 4,
+            buy_amount_in_base: 3.0,
+            sell_amount_in_quote: 4.0,
         };
         let serialized = serde_json::to_string(&original).unwrap();
         let json: Value = serde_json::from_str(&serialized).unwrap();

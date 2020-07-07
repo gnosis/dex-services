@@ -16,7 +16,6 @@ pub struct TokenInfoCache {
 }
 
 impl TokenInfoCache {
-    #[cfg(test)]
     pub fn new(inner: Arc<dyn TokenInfoFetching>) -> Self {
         Self {
             cache: RwLock::new(HashMap::new()),
