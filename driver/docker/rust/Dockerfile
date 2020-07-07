@@ -18,6 +18,6 @@ CMD ["/stablex"]
 # tini instead.
 # ENV TINI_VERSION v0.18.0
 # ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
-ADD docker/rust/tini /tini
+ADD driver/docker/rust/tini /tini
 RUN chmod +x /tini
 ENTRYPOINT ["/tini", "--"]

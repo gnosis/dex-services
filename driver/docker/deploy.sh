@@ -10,7 +10,7 @@ sudo apt-get update && sudo apt-get install -y python3-pip python3-setuptools &&
 $(aws ecr get-login --no-include-email --region $AWS_REGION)
 
 echo "Tagging latest private image with solver...";
-docker build --tag $REGISTRY_URI:$image_name  -f docker/rust/release/private_solver/Dockerfile .
+docker build --tag $REGISTRY_URI:$image_name  -f driver/docker/rust/release/private_solver/Dockerfile .
 
 echo "Pushing private image";
 docker push $REGISTRY_URI:$image_name
@@ -22,7 +22,7 @@ echo "Docker login"
 echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin;
 
 echo "Pushing public image to Docker-hub";
-docker build --tag gnosispm/dex-services:$image_name -f docker/rust/release/open_solver/Dockerfile .
+docker build --tag gnosispm/dex-services:$image_name -f driver/docker/rust/release/open_solver/Dockerfile .
 
 echo "Pushing public image"
 docker push gnosispm/dex-services:$image_name;
