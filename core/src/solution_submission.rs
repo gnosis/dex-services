@@ -2,17 +2,16 @@
 
 use crate::contracts::stablex_contract::StableXContract;
 use crate::gas_station::GasPriceEstimating;
-use crate::models::Solution;
+use crate::models::{BatchId, Solution};
 
 use anyhow::{Error, Result};
 use ethcontract::errors::{ExecutionError, MethodError};
 use ethcontract::web3::types::TransactionReceipt;
 use ethcontract::U256;
-use futures::future::{BoxFuture, FutureExt as _};
-use log::info;
+use futures::future::{self, BoxFuture, Either, FutureExt as _};
 #[cfg(test)]
 use mockall::automock;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use thiserror::Error;
 
 /// The amount of time the solution submitter should wait between polling the
@@ -108,20 +107,31 @@ impl<'a> StableXSolutionSubmitter<'a> {
         &self,
         batch_index: u32,
         solution: Solution,
-        err: MethodError,
+        err: RetryError,
     ) -> SolutionSubmissionError {
-        if let Some(tx) = extract_transaction_receipt(&err) {
-            if let Some(block_number) = tx.block_number {
-                if let Err(err) = self
-                    .contract
-                    .get_solution_objective_value(batch_index, solution, Some(block_number.into()))
-                    .await
-                {
-                    return SolutionSubmissionError::from(err);
+        match err {
+            RetryError::MethodError(err) => {
+                if let Some(tx) = extract_transaction_receipt(&err) {
+                    if let Some(block_number) = tx.block_number {
+                        if let Err(err) = self
+                            .contract
+                            .get_solution_objective_value(
+                                batch_index,
+                                solution,
+                                Some(block_number.into()),
+                            )
+                            .await
+                        {
+                            return SolutionSubmissionError::from(err);
+                        }
+                    }
                 }
+                SolutionSubmissionError::Unexpected(err.into())
+            }
+            RetryError::TransactionNotConfirmedInTime => {
+                SolutionSubmissionError::Benign("transaction not confirmed in time".to_string())
             }
         }
-        SolutionSubmissionError::Unexpected(err.into())
     }
 }
 
@@ -135,7 +145,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
             // NOTE: Compare with `>=` as the exchange's current batch index is the
             //   one accepting orders and does not yet accept solutions.
             while batch_index >= self.contract.get_current_auction_index().await? {
-                info!("Solved batch is not yet accepting solutions, waiting for next batch.");
+                log::info!("Solved batch is not yet accepting solutions, waiting for next batch.");
                 if POLL_TIMEOUT > Duration::from_secs(0) {
                     futures_timer::Delay::new(POLL_TIMEOUT).await;
                 }
@@ -184,6 +194,12 @@ fn is_confirm_timeout(result: &Result<(), MethodError>) -> bool {
     )
 }
 
+async fn wait_for_deadline(deadline: SystemTime) {
+    if let Ok(remaining) = deadline.duration_since(SystemTime::now()) {
+        async_std::task::sleep(remaining).await
+    }
+}
+
 struct InfallibleGasPriceEstimator<'a> {
     gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
     previous_gas_price: U256,
@@ -222,6 +238,18 @@ fn gas_price(estimated_price: U256, price_increase_count: u32, cap: U256) -> U25
     cap.min(estimated_price * factor)
 }
 
+#[derive(Debug)]
+enum RetryError {
+    MethodError(MethodError),
+    /// The batch solution acceptance period ended before we got confirmation that the transaction
+    /// was mined. Can happen if gas prices in the network are high.
+    TransactionNotConfirmedInTime,
+}
+
+/// Keep retrying to submit the solution with higher gas prices until the transaction completes or
+/// the gas cap or the deadline is reached.
+/// If the transaction did not complete because it did not get enough block confirmations the
+/// transaction is overriden with a noop transaction.
 async fn retry_with_gas_price_increase(
     contract: &(dyn StableXContract + Sync),
     batch_index: u32,
@@ -229,7 +257,7 @@ async fn retry_with_gas_price_increase(
     claimed_objective_value: U256,
     gas_price_estimating: &(dyn GasPriceEstimating + Sync),
     gas_price_cap: U256,
-) -> Result<(), MethodError> {
+) -> std::result::Result<(), RetryError> {
     const BLOCK_TIMEOUT: usize = 2;
     const DEFAULT_GAS_PRICE: u64 = 15_000_000_000;
     // openethereum requires that the gas price of the resubmitted transaction has increased by at
@@ -244,38 +272,88 @@ async fn retry_with_gas_price_increase(
     let mut gas_price_estimator =
         InfallibleGasPriceEstimator::new(gas_price_estimating, DEFAULT_GAS_PRICE.into());
 
+    // Add some extra time in case of desync between real time and ethereum node current block time.
+    let deadline = BatchId::from(batch_index).solve_end_time() + Duration::from_secs(30);
     for gas_price_increase_count in 0u32.. {
         let estimated_price = gas_price_estimator.estimate().await;
         let gas_price = gas_price(estimated_price, gas_price_increase_count, gas_price_cap);
         assert!(gas_price <= gas_price_cap);
-        info!(
+        log::info!(
             "solution submission try {} with gas price {}",
-            gas_price_increase_count, gas_price
+            gas_price_increase_count,
+            gas_price
         );
         let is_last_iteration = gas_price >= effective_gas_price_cap;
+        // In the last iteration there is no block timeout. This is important for the deadline
+        // logic because we assume that in the last iteration the solution future will never be
+        // a confirm timeout so that it either completes in a way we don't need to cancel or we hit
+        // the deadline.
         let block_timeout = if is_last_iteration {
             None
         } else {
             Some(BLOCK_TIMEOUT)
         };
-        let result = contract
-            .submit_solution(
-                batch_index,
-                solution.clone(),
-                claimed_objective_value,
-                gas_price,
-                block_timeout,
-            )
-            .await;
-        // Technically this being the last iteration implies there not being a confirm timeout so
-        // we could drop the check for the last iteration but in practice it is more robust to check
-        // this in case we unexpectedly do get a confirm timeout even though the block timeout is
-        // not set.
-        if !is_confirm_timeout(&result) || is_last_iteration {
-            return result;
+        let solution_future = contract.submit_solution(
+            batch_index,
+            solution.clone(),
+            claimed_objective_value,
+            gas_price,
+            block_timeout,
+        );
+        let deadline_future = wait_for_deadline(deadline);
+        futures::pin_mut!(deadline_future);
+        let select_future = future::select(solution_future, deadline_future);
+        match determine_retry_action(select_future.await, is_last_iteration) {
+            RetryAction::IncreaseGasPrice => (),
+            RetryAction::Cancel => {
+                let gas_price = U256::from(
+                    (gas_price.as_u128() as f64 * MIN_GAS_PRICE_INCREASE_FACTOR).ceil() as u128,
+                );
+                match contract.send_noop_transaction(gas_price).await {
+                    Ok(_) => log::info!(
+                        "cancelled solution submission of batch {} because of deadline",
+                        batch_index
+                    ),
+                    Err(err) => log::error!(
+                        "failed to cancel solution submission of batch {} after deadline: {:?}",
+                        batch_index,
+                        err
+                    ),
+                }
+                return Err(RetryError::TransactionNotConfirmedInTime);
+            }
+            RetryAction::Done(result) => return result,
         }
     }
     unreachable!("increased gas price past expected limit");
+}
+
+#[derive(Debug)]
+enum RetryAction {
+    IncreaseGasPrice,
+    Cancel,
+    Done(std::result::Result<(), RetryError>),
+}
+
+// Either::Left is the solution submission future, Either::Right the deadline future.
+fn determine_retry_action<T0, T1>(
+    either: Either<(Result<(), MethodError>, T0), ((), T1)>,
+    is_last_iteration: bool,
+) -> RetryAction {
+    match either {
+        Either::Left((result, _)) => {
+            // Technically this being the last iteration implies there not being a confirm timeout so
+            // we could drop the check for the last iteration but in practice it is more robust to check
+            // this in case we unexpectedly do get a confirm timeout even though the block timeout is
+            // not set.
+            if !is_confirm_timeout(&result) || is_last_iteration {
+                RetryAction::Done(result.map_err(RetryError::MethodError))
+            } else {
+                RetryAction::IncreaseGasPrice
+            }
+        }
+        Either::Right(_) => RetryAction::Cancel,
+    }
 }
 
 fn extract_transaction_receipt(err: &MethodError) -> Option<&TransactionReceipt> {
@@ -292,8 +370,7 @@ mod tests {
     use crate::gas_station::{GasPrice, MockGasPriceEstimating};
 
     use anyhow::anyhow;
-    use ethcontract::web3::types::H2048;
-    use ethcontract::H256;
+    use ethcontract::{web3::types::H2048, H256};
     use mockall::predicate::{always, eq};
 
     #[test]

@@ -5,12 +5,10 @@ use self::evm::EvmScheduler;
 use self::system::SystemScheduler;
 use crate::contracts::stablex_contract::StableXContract;
 use crate::driver::stablex_driver::StableXDriver;
+use crate::models::batch_id::SOLVING_WINDOW;
 use anyhow::{anyhow, Error, Result};
 use std::str::FromStr;
 use std::time::Duration;
-
-/// The time in a batch where a solution may be submitted.
-const SOLVING_WINDOW: Duration = Duration::from_secs(240);
 
 /// A scheduler that can be started in order to run the driver for each batch.
 pub trait Scheduler {
