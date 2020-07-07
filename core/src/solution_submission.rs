@@ -2,9 +2,9 @@
 
 use crate::contracts::stablex_contract::StableXContract;
 use crate::gas_station::GasPriceEstimating;
-use crate::models::Solution;
+use crate::models::{BatchId, Solution};
 
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Error, Result};
 use ethcontract::errors::{ExecutionError, MethodError};
 use ethcontract::web3::types::TransactionReceipt;
 use ethcontract::U256;
@@ -12,7 +12,7 @@ use futures::future::{BoxFuture, FutureExt as _};
 use log::info;
 #[cfg(test)]
 use mockall::automock;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use thiserror::Error;
 
 /// The amount of time the solution submitter should wait between polling the
@@ -22,6 +22,10 @@ use thiserror::Error;
 const POLL_TIMEOUT: Duration = Duration::from_secs(5);
 #[cfg(test)]
 const POLL_TIMEOUT: Duration = Duration::from_secs(0);
+
+// openethereum requires that the gas price of the resubmitted transaction has increased by at
+// least 12.5%.
+const MIN_GAS_PRICE_INCREASE_FACTOR: f64 = 1.125 * (1.0 + f64::EPSILON);
 
 #[cfg_attr(test, automock)]
 pub trait StableXSolutionSubmitting {
@@ -155,19 +159,48 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
         solution: Solution,
         claimed_objective_value: U256,
     ) -> BoxFuture<Result<(), SolutionSubmissionError>> {
+        const GAS_PRICE_CAP: u64 = 60_000_000_000;
         async move {
-            match retry_with_gas_price_increase(
+            let submit_future = retry_with_gas_price_increase(
                 self.contract,
                 batch_index,
                 solution.clone(),
                 claimed_objective_value,
                 self.gas_price_estimating,
-                60_000_000_000u64.into(),
-            )
-            .await
-            {
-                Ok(()) => Ok(()),
-                Err(err) => Err(self.make_error(batch_index, solution, err).await),
+                GAS_PRICE_CAP.into(),
+            );
+            // Add some extra time in case of desync between real time and ethereum node current block time.
+            let deadline = BatchId::from(batch_index).solve_end_time() + Duration::from_secs(30);
+            let remaining = deadline
+                .duration_since(SystemTime::now())
+                .unwrap_or(Duration::from_secs(0));
+            if let Ok(submit_result) = async_std::future::timeout(remaining, submit_future).await {
+                match submit_result {
+                    Ok(()) => Ok(()),
+                    Err(err) => Err(self.make_error(batch_index, solution, err).await),
+                }
+            } else {
+                let gas_price = U256::from(
+                    (GAS_PRICE_CAP as f64 * MIN_GAS_PRICE_INCREASE_FACTOR).ceil() as u128,
+                );
+                log::info!(
+                    "cancelling transaction because it took too long, using gas price {}",
+                    gas_price
+                );
+                match self.contract.send_noop_transaction(gas_price).await {
+                    Ok(_) => log::info!(
+                        "cancelled solution submission of batch {} because of deadline",
+                        batch_index
+                    ),
+                    Err(err) => log::error!(
+                        "failed to cancel solution submission of batch {} after deadline: {:?}",
+                        batch_index,
+                        err
+                    ),
+                }
+                Err(SolutionSubmissionError::Unexpected(anyhow!(
+                    "solution submission transaction not confirmed in time"
+                )))
             }
         }
         .boxed()
@@ -232,9 +265,6 @@ async fn retry_with_gas_price_increase(
 ) -> Result<(), MethodError> {
     const BLOCK_TIMEOUT: usize = 2;
     const DEFAULT_GAS_PRICE: u64 = 15_000_000_000;
-    // openethereum requires that the gas price of the resubmitted transaction has increased by at
-    // least 12.5%.
-    const MIN_GAS_PRICE_INCREASE_FACTOR: f64 = 1.125 * (1.0 + f64::EPSILON);
 
     let effective_gas_price_cap = U256::from(
         (gas_price_cap.as_u128() as f64 / MIN_GAS_PRICE_INCREASE_FACTOR).floor() as u128,

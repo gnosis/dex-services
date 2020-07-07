@@ -7,11 +7,11 @@ use crate::{
     contracts,
     models::{ExecutedOrder, Solution},
 };
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Context as _, Error, Result};
 use ethcontract::{
     contract::Event,
     errors::{ExecutionError, MethodError},
-    transaction::{confirm::ConfirmParams, GasPrice, ResolveCondition},
+    transaction::{confirm::ConfirmParams, Account, GasPrice, ResolveCondition, TransactionResult},
     Address, BlockNumber, PrivateKey, U256,
 };
 use futures::{
@@ -50,13 +50,8 @@ impl StableXContractImpl {
         Ok(StableXContractImpl { instance, viewer })
     }
 
-    pub fn account(&self) -> Address {
-        self.instance
-            .defaults()
-            .from
-            .as_ref()
-            .map(|from| from.address())
-            .unwrap_or_default()
+    pub fn account(&self) -> Option<Account> {
+        self.instance.defaults().from.clone()
     }
 
     pub fn address(&self) -> Address {
@@ -148,6 +143,13 @@ pub trait StableXContract {
     fn stream_events<'a>(
         &'a self,
     ) -> BoxStream<'a, Result<Event<batch_exchange::Event>, ExecutionError>>;
+
+    /// Create a noop transaction. Useful to cancel a previous transaction that is stuck due to
+    /// low gas price.
+    fn send_noop_transaction<'a>(
+        &'a self,
+        gas_price: U256,
+    ) -> BoxFuture<'a, Result<TransactionResult>>;
 }
 
 impl StableXContract for StableXContractImpl {
@@ -323,6 +325,30 @@ impl StableXContract for StableXContractImpl {
             .from_block(BlockNumber::Latest)
             .stream()
             .boxed()
+    }
+
+    fn send_noop_transaction<'a>(
+        &'a self,
+        gas_price: U256,
+    ) -> BoxFuture<'a, Result<TransactionResult>> {
+        async move {
+            let web3 = self.instance.raw_instance().web3();
+            let account = self.account().ok_or_else(|| anyhow!("no account"))?;
+            let address = account.address();
+            let transaction = ethcontract::transaction::TransactionBuilder::new(web3)
+                .from(account)
+                .to(address)
+                .gas(U256::from(21000))
+                .gas_price(GasPrice::Value(gas_price))
+                .value(U256::zero())
+                .resolve(ResolveCondition::Confirmed(ConfirmParams::mined()));
+            let transaction_result = transaction
+                .send()
+                .await
+                .context("failed to send noop transaction")?;
+            Ok(transaction_result)
+        }
+        .boxed()
     }
 }
 
