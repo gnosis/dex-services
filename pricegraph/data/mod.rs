@@ -15,7 +15,7 @@ lazy_static! {
 
     /// The raw encoded test orderbooks that were retrieved from the mainnet
     /// smart contract for testing.
-    pub static ref ORDERBOOKS: BTreeMap<usize, Vec<u8>> = {
+    pub static ref ORDERBOOKS: BTreeMap<u32, Vec<u8>> = {
         let mut orderbooks = BTreeMap::new();
 
         macro_rules! add_orderbook {
@@ -33,6 +33,9 @@ lazy_static! {
         orderbooks
     };
 
+    /// The default batch ID used for testing and benchmarking.
+    pub static ref DEFAULT_BATCH_ID: u32 = 5_298_183;
+
     /// The default orderbook used for testing and benchmarking.
-    pub static ref DEFAULT_ORDERBOOK: &'static [u8] = &*ORDERBOOKS[&5_298_183];
+    pub static ref DEFAULT_ORDERBOOK: &'static [u8] = &*ORDERBOOKS[&*DEFAULT_BATCH_ID];
 }
