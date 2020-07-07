@@ -3,7 +3,7 @@ use crate::models::{BatchId, TokenId};
 use crate::orderbook::StableXOrderBookReading;
 use anyhow::Result;
 use futures::future::{BoxFuture, FutureExt as _};
-use pricegraph::{Orderbook, TokenPair};
+use pricegraph::{Pricegraph, TokenPair};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -23,26 +23,25 @@ impl PriceSource for PricegraphEstimator {
             let batch = BatchId::currently_being_solved(SystemTime::now())?;
             let (account_state, orders) =
                 self.orderbook_reader.get_auction_data(batch.into()).await?;
-            let mut orderbook = Orderbook::from_elements(orders.iter().map(|order| {
+            let pricegraph = Pricegraph::new(orders.iter().map(|order| {
                 order.to_element(account_state.read_balance(order.sell_token, order.account_id))
             }));
-            orderbook.reduce_overlapping_orders();
-            Ok(self.estimate_prices(tokens, orderbook))
+            Ok(self.estimate_prices(tokens, pricegraph))
         }
         .boxed()
     }
 }
 
-// Private trait to facilitate testing this module
+/// Private trait to facilitate testing this module
 #[cfg_attr(test, mockall::automock)]
-trait Pricegraph {
+trait PriceEstimating {
     fn estimate_price(&self, pair: TokenPair, volume: f64) -> Option<f64>;
 }
 
-impl Pricegraph for Orderbook {
+impl PriceEstimating for Pricegraph {
     fn estimate_price(&self, pair: TokenPair, volume: f64) -> Option<f64> {
         // Clone the pricegraph so that each estimation is independent of one another.
-        self.clone().fill_market_order(pair, volume)
+        self.estimate_exchange_rate(pair, volume)
     }
 }
 
@@ -54,7 +53,7 @@ impl PricegraphEstimator {
     fn estimate_prices(
         &self,
         tokens: &[TokenId],
-        pricegraph: impl Pricegraph,
+        pricegraph: impl PriceEstimating,
     ) -> HashMap<TokenId, u128> {
         tokens
             .iter()
@@ -86,7 +85,7 @@ mod tests {
 
     #[test]
     fn returns_buy_amounts_of_selling_one_owl() {
-        let mut pricegraph = MockPricegraph::new();
+        let mut pricegraph = MockPriceEstimating::new();
         pricegraph
             .expect_estimate_price()
             .with(eq(TokenPair { buy: 1, sell: 0 }), eq(ONE_OWL))
@@ -109,7 +108,7 @@ mod tests {
 
     #[test]
     fn omits_tokens_for_which_estimate_fails() {
-        let mut pricegraph = MockPricegraph::new();
+        let mut pricegraph = MockPriceEstimating::new();
         pricegraph
             .expect_estimate_price()
             .with(eq(TokenPair { buy: 1, sell: 0 }), eq(ONE_OWL))
@@ -131,7 +130,7 @@ mod tests {
 
     #[test]
     fn returns_one_owl_for_estimating_owl() {
-        let pricegraph = MockPricegraph::new();
+        let pricegraph = MockPriceEstimating::new();
         let reader = Arc::new(MockStableXOrderBookReading::new());
         let estimator = PricegraphEstimator::new(reader);
         assert_eq!(
