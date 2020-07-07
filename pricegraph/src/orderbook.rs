@@ -17,6 +17,7 @@ use crate::graph::subgraph::{ControlFlow, Subgraphs};
 use crate::num;
 use crate::{TransitiveOrder, TransitiveOrderbook, FEE_FACTOR};
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
+use petgraph::visit::NodeIndexable;
 use primitive_types::U256;
 use std::cmp;
 use std::f64;
@@ -572,10 +573,10 @@ impl Orderbook {
     /// A token pair is considered valid if both the buy and sell token
     /// exist in the current orderbook and are unequal.
     fn is_token_pair_valid(&self, pair: TokenPair) -> bool {
-        let node_count = self.projection.node_count();
+        let node_bound = self.projection.node_bound();
         pair.buy != pair.sell
-            && (pair.buy as usize) < node_count
-            && (pair.sell as usize) < node_count
+            && (pair.buy as usize) < node_bound
+            && (pair.sell as usize) < node_bound
     }
 }
 
