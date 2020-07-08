@@ -15,7 +15,7 @@ use crate::graph::bellman_ford::{self, NegativeCycle};
 use crate::graph::path;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
 use crate::num;
-use crate::{TransitiveOrder, TransitiveOrderbook, FEE_FACTOR};
+use crate::{Market, TransitiveOrder, TransitiveOrderbook, FEE_FACTOR};
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::NodeIndexable;
 use primitive_types::U256;
@@ -142,17 +142,13 @@ impl Orderbook {
     /// cycles will be removed from the orderbook graph.
     pub fn reduce_overlapping_transitive_orderbook(
         &mut self,
-        base: TokenId,
-        quote: TokenId,
+        market: Market,
     ) -> TransitiveOrderbook {
-        if !self.is_token_pair_valid(TokenPair {
-            buy: base,
-            sell: quote,
-        }) {
+        if !self.is_token_pair_valid(market.bid_pair()) {
             return Default::default();
         }
 
-        let (base, quote) = (node_index(base), node_index(quote));
+        let (base, quote) = (node_index(market.base), node_index(market.quote));
 
         let mut overlap = TransitiveOrderbook::default();
         while let Err(NegativeCycle(predecessors, node)) =
@@ -814,7 +810,8 @@ mod tests {
             }
         };
 
-        let overlap = orderbook.reduce_overlapping_transitive_orderbook(1, 2);
+        let overlap =
+            orderbook.reduce_overlapping_transitive_orderbook(Market { base: 1, quote: 2 });
 
         // Transitive order `2 -> 3 -> 1` buying 2 selling 1
         assert_eq!(overlap.asks.len(), 1);
@@ -852,7 +849,8 @@ mod tests {
             }
         };
 
-        let overlap = orderbook.reduce_overlapping_transitive_orderbook(0, 1);
+        let overlap =
+            orderbook.reduce_overlapping_transitive_orderbook(Market { base: 0, quote: 1 });
 
         // Transitive order `1 -> 0` buying 1 selling 0
         assert_eq!(overlap.asks.len(), 1);

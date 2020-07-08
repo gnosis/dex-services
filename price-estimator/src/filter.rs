@@ -1,5 +1,6 @@
 use crate::models::*;
 use crate::orderbook::Orderbook;
+use pricegraph::TokenPair;
 use std::convert::Infallible;
 use std::sync::Arc;
 use warp::{Filter, Rejection};
@@ -77,12 +78,15 @@ fn estimated_best_ask_price<T: Send + Sync + 'static>(
         .with(warp::log("price_estimator::api::estimate_best_ask_price"))
 }
 
-fn markets_prefix() -> impl Filter<Extract = (TokenPair,), Error = Rejection> + Copy {
-    warp::path!("markets" / TokenPair / ..)
+fn markets_prefix() -> impl Filter<Extract = (Market,), Error = Rejection> + Copy {
+    warp::path!("markets" / Market / ..)
 }
 
-fn markets_filter() -> impl Filter<Extract = (TokenPair, QueryParameters), Error = Rejection> + Copy
-{
+fn markets_bid_prefix() -> impl Filter<Extract = (TokenPair,), Error = Rejection> + Copy {
+    markets_prefix().map(|market: Market| market.bid_pair())
+}
+
+fn markets_filter() -> impl Filter<Extract = (Market, QueryParameters), Error = Rejection> + Copy {
     markets_prefix()
         .and(warp::path::end())
         .and(warp::get())
@@ -91,7 +95,7 @@ fn markets_filter() -> impl Filter<Extract = (TokenPair, QueryParameters), Error
 
 fn estimated_buy_amount_filter(
 ) -> impl Filter<Extract = (TokenPair, u128, QueryParameters), Error = Rejection> + Copy {
-    markets_prefix()
+    markets_bid_prefix()
         .and(warp::path!("estimated-buy-amount" / u128))
         .and(warp::get())
         .and(warp::query::<QueryParameters>())
@@ -99,7 +103,7 @@ fn estimated_buy_amount_filter(
 
 fn estimated_amounts_at_price_filter(
 ) -> impl Filter<Extract = (TokenPair, f64, QueryParameters), Error = Rejection> + Copy {
-    markets_prefix()
+    markets_bid_prefix()
         .and(warp::path!("estimated-amounts-at-price" / f64))
         .and(warp::get())
         .and(warp::query::<QueryParameters>())
@@ -107,22 +111,21 @@ fn estimated_amounts_at_price_filter(
 
 fn estimated_best_ask_price_filter(
 ) -> impl Filter<Extract = (TokenPair, QueryParameters), Error = Rejection> + Copy {
-    markets_prefix()
+    markets_bid_prefix()
         .and(warp::path!("estimated-best-ask-price"))
         .and(warp::get())
         .and(warp::query::<QueryParameters>())
 }
 
 async fn get_markets<T>(
-    token_pair: TokenPair,
+    market: Market,
     _query: QueryParameters,
     orderbook: Arc<Orderbook<T>>,
 ) -> Result<impl warp::Reply, Infallible> {
-    let transitive_orderbook = orderbook.get_pricegraph().await.transitive_orderbook(
-        token_pair.buy_token_id,
-        token_pair.sell_token_id,
-        None,
-    );
+    let transitive_orderbook = orderbook
+        .get_pricegraph()
+        .await
+        .transitive_orderbook(*market, None);
     let result = MarketsResult::from(&transitive_orderbook);
     Ok(warp::reply::json(&result))
 }
@@ -137,13 +140,13 @@ async fn estimate_buy_amount<T>(
     let transitive_order = orderbook
         .get_pricegraph()
         .await
-        .order_for_sell_amount(token_pair.into(), sell_amount_in_quote as f64);
+        .order_for_sell_amount(token_pair, sell_amount_in_quote as f64);
     let buy_amount_in_base = transitive_order
         .map(|order| apply_rounding_buffer(order.buy, price_rounding_buffer) as u128)
         .unwrap_or_default();
     let result = EstimatedOrderResult {
-        base_token_id: token_pair.buy_token_id,
-        quote_token_id: token_pair.sell_token_id,
+        base_token_id: token_pair.buy,
+        quote_token_id: token_pair.sell,
         sell_amount_in_quote,
         buy_amount_in_base,
     };
@@ -165,7 +168,7 @@ async fn estimate_amounts_at_price<T>(
     let transitive_order = orderbook
         .get_pricegraph()
         .await
-        .order_at_exchange_rate(token_pair.into(), exchange_rate);
+        .order_at_exchange_rate(token_pair, exchange_rate);
     let (buy_amount_in_base, sell_amount_in_quote) = transitive_order
         .map(|order| {
             (
@@ -174,9 +177,10 @@ async fn estimate_amounts_at_price<T>(
             )
         })
         .unwrap_or_default();
+
     let result = EstimatedOrderResult {
-        base_token_id: token_pair.buy_token_id,
-        quote_token_id: token_pair.sell_token_id,
+        base_token_id: token_pair.buy,
+        quote_token_id: token_pair.sell,
         sell_amount_in_quote,
         buy_amount_in_base,
     };
@@ -192,7 +196,7 @@ async fn estimate_best_ask_price<T>(
     let price = orderbook
         .get_pricegraph()
         .await
-        .estimate_exchange_rate(token_pair.into(), 0.0)
+        .estimate_exchange_rate(token_pair, 0.0)
         .map(|xrate| {
             // NOTE: Exchange rate is the inverse of price for an ask order.
             1.0 / apply_rounding_buffer(xrate, price_rounding_buffer)
@@ -219,8 +223,8 @@ mod tests {
             .now_or_never()
             .unwrap()
             .unwrap();
-        assert_eq!(token_pair.buy_token_id, 0);
-        assert_eq!(token_pair.sell_token_id, 65535);
+        assert_eq!(token_pair.buy, 0);
+        assert_eq!(token_pair.sell, 65535);
         assert_eq!(volume, 1);
         assert_eq!(query.atoms, true);
         assert_eq!(query.hops, Some(2));
@@ -228,14 +232,14 @@ mod tests {
 
     #[test]
     fn markets_ok() {
-        let (token_pair, query) = warp::test::request()
+        let (market, query) = warp::test::request()
             .path("/markets/1-2?atoms=true&hops=3")
             .filter(&markets_filter())
             .now_or_never()
             .unwrap()
             .unwrap();
-        assert_eq!(token_pair.buy_token_id, 1);
-        assert_eq!(token_pair.sell_token_id, 2);
+        assert_eq!(market.base, 1);
+        assert_eq!(market.quote, 2);
         assert_eq!(query.atoms, true);
         assert_eq!(query.hops, Some(3));
     }
@@ -332,8 +336,8 @@ mod tests {
             .now_or_never()
             .unwrap()
             .unwrap();
-        assert_eq!(token_pair.buy_token_id, 0);
-        assert_eq!(token_pair.sell_token_id, 65535);
+        assert_eq!(token_pair.buy, 0);
+        assert_eq!(token_pair.sell, 65535);
         assert!((volume - 0.5).abs() < f64::EPSILON);
         assert_eq!(query.atoms, true);
         assert_eq!(query.hops, None);
@@ -347,8 +351,8 @@ mod tests {
             .now_or_never()
             .unwrap()
             .unwrap();
-        assert_eq!(token_pair.buy_token_id, 0);
-        assert_eq!(token_pair.sell_token_id, 65535);
+        assert_eq!(token_pair.buy, 0);
+        assert_eq!(token_pair.sell, 65535);
         assert_eq!(query.atoms, true);
         assert_eq!(query.hops, None);
     }

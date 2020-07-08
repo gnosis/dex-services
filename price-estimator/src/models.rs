@@ -1,49 +1,43 @@
 use serde::{Deserialize, Serialize};
 use serde_with::rust::display_fromstr;
-use std::{cmp::Ordering, convert::From, num::ParseIntError, str::FromStr};
+use std::{cmp::Ordering, num::ParseIntError, ops::Deref, str::FromStr};
 
 #[derive(Debug, Copy, Clone)]
-pub struct TokenPair {
-    pub buy_token_id: u16,
-    pub sell_token_id: u16,
-}
+pub struct Market(pub pricegraph::Market);
 
-impl std::convert::Into<pricegraph::TokenPair> for TokenPair {
-    fn into(self) -> pricegraph::TokenPair {
-        pricegraph::TokenPair {
-            buy: self.buy_token_id,
-            sell: self.sell_token_id,
-        }
+impl Deref for Market {
+    type Target = pricegraph::Market;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum ParseTokenPairError {
+pub enum ParseMarketError {
     #[error("wrong number of tokens")]
     WrongNumberOfTokens,
     #[error("parse int error")]
     ParseIntError(#[from] ParseIntError),
 }
 
-impl FromStr for TokenPair {
-    type Err = ParseTokenPairError;
+impl FromStr for Market {
+    type Err = ParseMarketError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut split = s.split('-');
-        let mut next_token_id = || -> Result<u16, ParseTokenPairError> {
-            let token_string = split
-                .next()
-                .ok_or(ParseTokenPairError::WrongNumberOfTokens)?;
+        let mut next_token_id = || -> Result<u16, ParseMarketError> {
+            let token_string = split.next().ok_or(ParseMarketError::WrongNumberOfTokens)?;
             token_string.parse().map_err(From::from)
         };
-        let buy_token_id = next_token_id()?;
-        let sell_token_id = next_token_id()?;
+        let base_token_id = next_token_id()?;
+        let quote_token_id = next_token_id()?;
         if split.next().is_some() {
-            return Err(ParseTokenPairError::WrongNumberOfTokens);
+            return Err(ParseMarketError::WrongNumberOfTokens);
         }
-        Ok(Self {
-            buy_token_id,
-            sell_token_id,
-        })
+        Ok(Self(pricegraph::Market {
+            base: base_token_id,
+            quote: quote_token_id,
+        }))
     }
 }
 
@@ -134,6 +128,25 @@ pub struct PriceEstimateResult(pub Option<f64>);
 mod tests {
     use super::*;
     use serde_json::Value;
+
+    #[test]
+    fn parse_market() {
+        let market = "42-1337".parse::<Market>().unwrap();
+        assert_eq!(
+            *market,
+            pricegraph::Market {
+                base: 42,
+                quote: 1337
+            }
+        );
+        assert_eq!(
+            market.bid_pair(),
+            pricegraph::TokenPair {
+                buy: 42,
+                sell: 1337
+            }
+        );
+    }
 
     #[test]
     fn estimated_buy_amount_serialization() {
