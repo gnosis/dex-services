@@ -90,10 +90,10 @@ impl TransitiveOrder {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Market {
-    /// The base token being purchased in a market.
+    /// The base or transaction token.
     pub base: TokenId,
-    /// The quote token being sold in a market. Prices in a market are always
-    /// expressed in the quote token.
+    /// The quote or counter token to be used as the reference token in the
+    /// market. Prices in a market are always expressed in the quote token.
     pub quote: TokenId,
 }
 
