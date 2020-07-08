@@ -1,6 +1,6 @@
 //! Module containing data for representing flow through the orderbook graph.
 
-use crate::{FEE_FACTOR, TransitiveOrder};
+use crate::{TransitiveOrder, FEE_FACTOR};
 use petgraph::graph::NodeIndex;
 
 /// A reprensentation of a flow of tokens through the orderbook graph.
