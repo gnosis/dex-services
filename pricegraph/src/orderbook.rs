@@ -751,6 +751,34 @@ mod tests {
     }
 
     #[test]
+    fn path_finding_operations_fail_on_overlapping_orders() {
+        //  /---0.5---v
+        // 0          1
+        //  ^---0.5---/
+        let mut orderbook = orderbook! {
+            users {
+                @0 {
+                    token 0 => 10_000_000,
+                }
+                @1 {
+                    token 1 => 20_000_000,
+                }
+            }
+            orders {
+                owner @0 buying 1 [5_000_000] selling 0 [10_000_000],
+                owner @1 buying 0 [5_000_000] selling 1 [10_000_000],
+            }
+        };
+        let pair = TokenPair { buy: 1, sell: 0 };
+
+        assert!(orderbook.is_overlapping());
+        assert!(orderbook.fill_transitive_orders(pair, None).is_err());
+        assert!(orderbook.fill_market_order(pair, 10_000_000.0).is_err());
+        assert!(orderbook.fill_order_at_price(pair, 1.0).is_err());
+        assert!(orderbook.fill_optimal_transitive_order(pair).is_err());
+    }
+
+    #[test]
     fn detects_overlapping_transitive_orders() {
         // 0 --1.0--> 1 --0.5--> 2 --1.0--> 3 --1.0--> 4
         //            ^---------1.0--------/^---0.5---/
