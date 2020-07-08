@@ -304,7 +304,7 @@ impl Orderbook {
     /// orders whose limit exchange rates overlap with the specified limit
     /// exchange rate.
     ///
-    /// Note that the limit exchange rate implicitely included fees.
+    /// Note that the limit exchange rate implicitly includes fees.
     /// Additionally, the invariant `buy_amount / sell_amount <= limit_xrate`
     /// holds, but in general the ratio of the two amounts does not equal the
     /// limit exchange rate.
@@ -339,10 +339,10 @@ impl Orderbook {
         (total_buy_volume, total_sell_volume)
     }
 
-    /// Fills the optimal transitive order for the specified token pair by
-    /// pushing flow from the buy token to the sell token. This method is
-    /// similar to `Orderbook::fill_optimal_transitive_order_if` except it does
-    /// not check a condition on the discovered path's flow before filling.
+    /// Fills the optimal transitive order for the specified token pair. This
+    /// method is similar to `Orderbook::fill_optimal_transitive_order_if`
+    /// except it does not check a condition on the discovered path's flow
+    /// before filling.
     fn fill_optimal_transitive_order(
         &mut self,
         pair: TokenPair,
@@ -351,12 +351,15 @@ impl Orderbook {
         self.fill_optimal_transitive_order_if(pair, reduce_negative_cycles, |_| true)
     }
 
-    /// Fills the optimal transitive order for the specified token pair by
-    /// pushing flow from the buy token to the sell token, if the condition is
-    /// met. The trading path through the orderbook graph is filled to maximum
-    /// capacity, reducing the remaining order amounts and user balances along
-    /// the way, returning the flow for the path. Returns `None` if the
-    /// condition is not met or there is no path between the token pair.
+    /// Fills the optimal transitive order (i.e. with the lowest exchange rate)
+    /// for the specified token pair by pushing flow from the buy token to the
+    /// sell token, if the condition is met. The trading path through the
+    /// orderbook graph is filled to maximum capacity, reducing the remaining
+    /// order amounts and user balances along the way, returning the flow for
+    /// the path.
+    ///
+    /// Returns `None` if the condition is not met or there is no path between
+    /// the token pair.
     fn fill_optimal_transitive_order_if(
         &mut self,
         pair: TokenPair,
