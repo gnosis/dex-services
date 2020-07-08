@@ -1,3 +1,5 @@
+#![deny(clippy::unreadable_literal)]
+
 mod encoding;
 mod graph;
 mod num;
@@ -98,6 +100,27 @@ impl Pricegraph {
     pub fn new(elements: impl IntoIterator<Item = Element>) -> Self {
         let orderbook = Orderbook::from_elements(elements);
         Pricegraph::from_orderbook(orderbook)
+    }
+
+    /// Create a new `Pricegraph` instance from encoded auction elements.
+    ///
+    /// The orderbook is expected to be encoded as an indexed order as encoded
+    /// by `BatchExchangeViewer::getFilteredOrdersPaginated`. Specifically, each
+    /// order has a `114` byte stride with the following values (appearing in
+    /// encoding order, all values are little endian encoded).
+    /// - `20` bytes: owner's address
+    /// - `32` bytes: owners's sell token balance
+    /// - `2` bytes: buy token ID
+    /// - `2` bytes: sell token ID
+    /// - `4` bytes: valid from batch ID
+    /// - `4` bytes: valid until batch ID
+    /// - `16` bytes: price numerator
+    /// - `16` bytes: price denominator
+    /// - `16` bytes: remaining order sell amount
+    /// - `2` bytes: order ID
+    pub fn read(bytes: impl AsRef<[u8]>) -> Result<Self, InvalidLength> {
+        let elements = Element::read_all(bytes.as_ref())?;
+        Ok(Pricegraph::new(elements))
     }
 
     /// Create a new `Pricegraph` instance from an `Orderbook`.
@@ -361,7 +384,7 @@ mod tests {
         let spread = 0.05;
 
         for (batch_id, raw_orderbook) in data::ORDERBOOKS.iter() {
-            let pricegraph = Pricegraph::from_orderbook(Orderbook::read(raw_orderbook).unwrap());
+            let pricegraph = Pricegraph::read(raw_orderbook).unwrap();
 
             let order = pricegraph.order_for_sell_amount(dai_weth, volume).unwrap();
             println!(

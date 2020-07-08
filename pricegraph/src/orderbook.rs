@@ -10,7 +10,7 @@ mod user;
 
 use self::order::{Order, OrderCollector, OrderMap};
 use self::user::{User, UserMap};
-use crate::encoding::{Element, InvalidLength, TokenId, TokenPair};
+use crate::encoding::{Element, TokenId, TokenPair};
 use crate::graph::bellman_ford::{self, NegativeCycle};
 use crate::graph::path;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
@@ -83,28 +83,6 @@ impl Orderbook {
             users,
             projection,
         }
-    }
-
-    /// Reads an orderbook from encoded bytes returning an error if the encoded
-    /// orders are invalid.
-    ///
-    /// The orderbook is expected to be encoded as an indexed order as encoded
-    /// by `BatchExchangeViewer::getFilteredOrdersPaginated`. Specifically, each
-    /// order has a `114` byte stride with the following values (appearing in
-    /// encoding order, all values are little endian encoded).
-    /// - `20` bytes: owner's address
-    /// - `32` bytes: owners's sell token balance
-    /// - `2` bytes: buy token ID
-    /// - `2` bytes: sell token ID
-    /// - `4` bytes: valid from batch ID
-    /// - `4` bytes: valid until batch ID
-    /// - `16` bytes: price numerator
-    /// - `16` bytes: price denominator
-    /// - `16` bytes: remaining order sell amount
-    /// - `2` bytes: order ID
-    pub fn read(bytes: impl AsRef<[u8]>) -> Result<Self, InvalidLength> {
-        let elements = Element::read_all(bytes.as_ref())?;
-        Ok(Orderbook::from_elements(elements))
     }
 
     /// Returns the number of orders in the orderbook.
