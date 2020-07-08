@@ -1,4 +1,4 @@
-//! Implementation ofmm a graph representation of an orderbook where tokens are
+//! Implementation of a graph representation of an orderbook where tokens are
 //! vertices and orders are edges (with users and balances as auxiliary data
 //! to these edges).
 //!
@@ -288,9 +288,9 @@ impl Orderbook {
         }
 
         // NOTE: The exchange rates are for transitive orders in the inverse
-        // direction, so we need to invert the exchange rage and account for
-        // the fees required for the final order in the cycle for the
-        // specified token pair.
+        // direction, so we need to invert the exchange rate and account for
+        // the fees so that the estimated exchange rate actually overlaps with
+        // the last counter transtive order's exchange rate.
         last_exchange_rate.map(|xrate| 1.0 / (xrate * FEE_FACTOR))
     }
 
