@@ -17,6 +17,7 @@ use crate::graph::subgraph::{ControlFlow, Subgraphs};
 use crate::num;
 use crate::{Market, TransitiveOrder, TransitiveOrderbook, FEE_FACTOR};
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
+use petgraph::visit::NodeIndexable;
 use primitive_types::U256;
 use std::cmp;
 use std::f64;
@@ -568,10 +569,10 @@ impl Orderbook {
     /// A token pair is considered valid if both the buy and sell token
     /// exist in the current orderbook and are unequal.
     fn is_token_pair_valid(&self, pair: TokenPair) -> bool {
-        let node_count = self.projection.node_count();
+        let node_bound = self.projection.node_bound();
         pair.buy != pair.sell
-            && (pair.buy as usize) < node_count
-            && (pair.sell as usize) < node_count
+            && (pair.buy as usize) < node_bound
+            && (pair.sell as usize) < node_bound
     }
 }
 
@@ -1303,7 +1304,7 @@ mod tests {
     #[test]
     fn fill_market_order_returns_none_for_invalid_token_pairs() {
         //   /---1.0---v
-        //  0          1          2 --0.5--> 3
+        //  0          1          2 --0.5--> 4
         //  ^---1.0---/
         let mut orderbook = orderbook! {
             users {
@@ -1314,28 +1315,33 @@ mod tests {
                     token 0 => 1_000_000,
                 }
                 @3 {
-                    token 3 => 1_000_000,
+                    token 4 => 1_000_000,
                 }
             }
             orders {
                 owner @1 buying 0 [1_000_000] selling 1 [1_000_000],
                 owner @2 buying 1 [1_000_000] selling 0 [1_000_000],
-                owner @3 buying 2 [1_000_000] selling 3 [1_000_000],
+                owner @3 buying 2 [1_000_000] selling 4 [1_000_000],
             }
         };
 
-        // Token 2 and 1 are not connected.
+        // Token 3 is not part of the orderbook.
         assert_eq!(
-            orderbook.fill_market_order(TokenPair { buy: 2, sell: 1 }, 500_000.0),
+            orderbook.fill_market_order(TokenPair { buy: 1, sell: 3 }, 500_000.0),
             None,
         );
-        // Token 42 does not exist.
+        // Tokens 4 and 1 are not connected.
         assert_eq!(
-            orderbook.fill_market_order(TokenPair { buy: 42, sell: 1 }, 500_000.0),
+            orderbook.fill_market_order(TokenPair { buy: 4, sell: 1 }, 500_000.0),
+            None,
+        );
+        // Tokens 5 and 42 are out of bounds.
+        assert_eq!(
+            orderbook.fill_market_order(TokenPair { buy: 5, sell: 1 }, 500_000.0),
             None,
         );
         assert_eq!(
-            orderbook.fill_market_order(TokenPair { buy: 1, sell: 42 }, 500_000.0),
+            orderbook.fill_market_order(TokenPair { buy: 2, sell: 42 }, 500_000.0),
             None,
         );
     }
