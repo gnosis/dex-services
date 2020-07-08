@@ -225,15 +225,17 @@ impl Orderbook {
         let mut spread_limit_price = None;
         let mut reduce_negative_cycles = true;
 
-        while let Some(flow) = self.fill_optimal_path_if(pair, reduce_negative_cycles, |flow| {
-            if let Some(spread) = spread {
-                let spread_limit_price =
-                    spread_limit_price.get_or_insert_with(|| flow.exchange_rate * (1.0 + spread));
-                flow.exchange_rate <= *spread_limit_price
-            } else {
-                true
-            }
-        }) {
+        while let Some(flow) =
+            self.fill_optimal_transitive_order_if(pair, reduce_negative_cycles, |flow| {
+                if let Some(spread) = spread {
+                    let spread_limit_price = spread_limit_price
+                        .get_or_insert_with(|| flow.exchange_rate * (1.0 + spread));
+                    flow.exchange_rate <= *spread_limit_price
+                } else {
+                    true
+                }
+            })
+        {
             orders.push(flow.as_transitive_order());
             reduce_negative_cycles = false;
         }
@@ -272,7 +274,7 @@ impl Orderbook {
         if volume <= 0.0 {
             // NOTE: For a 0 volume we simulate sending an tiny epsilon of value
             // through the network without actually filling any orders.
-            self.fill_optimal_path_if(inverse_pair, true, |flow| {
+            self.fill_optimal_transitive_order_if(inverse_pair, true, |flow| {
                 last_exchange_rate = Some(flow.exchange_rate);
                 false
             });
@@ -281,7 +283,7 @@ impl Orderbook {
         let mut remaining_volume = volume;
         let mut reduce_negative_cycles = true;
         while remaining_volume > 0.0 {
-            let flow = self.fill_optimal_path(inverse_pair, reduce_negative_cycles)?;
+            let flow = self.fill_optimal_transitive_order(inverse_pair, reduce_negative_cycles)?;
             last_exchange_rate = Some(flow.exchange_rate);
             remaining_volume -= flow.capacity;
             reduce_negative_cycles = false;
@@ -325,7 +327,7 @@ impl Orderbook {
         let mut total_sell_volume = 0.0;
         let mut reduce_negative_cycles = true;
         while let Some(flow) =
-            self.fill_optimal_path_if(inverse_pair, reduce_negative_cycles, |flow| {
+            self.fill_optimal_transitive_order_if(inverse_pair, reduce_negative_cycles, |flow| {
                 flow.exchange_rate <= max_xrate
             })
         {
@@ -337,21 +339,25 @@ impl Orderbook {
         (total_buy_volume, total_sell_volume)
     }
 
-    /// Fills the optimal path between a token pair, by pushing flow from the
-    /// buy token to the sell token. This method is similar to
-    /// `Orderbook::fill_optimal_path_if` except it does not check a condition
-    /// on the discovered path's flow before filling.
-    fn fill_optimal_path(&mut self, pair: TokenPair, reduce_negative_cycles: bool) -> Option<Flow> {
-        self.fill_optimal_path_if(pair, reduce_negative_cycles, |_| true)
+    /// Fills the optimal transitive order for the specified token pair by
+    /// pushing flow from the buy token to the sell token. This method is
+    /// similar to `Orderbook::fill_optimal_transitive_order_if` except it does
+    /// not check a condition on the discovered path's flow before filling.
+    fn fill_optimal_transitive_order(
+        &mut self,
+        pair: TokenPair,
+        reduce_negative_cycles: bool,
+    ) -> Option<Flow> {
+        self.fill_optimal_transitive_order_if(pair, reduce_negative_cycles, |_| true)
     }
 
-    /// Fills the optimal path between a token pair, by pushing flow from the
-    /// buy token to the sell token, if the condition is met. The trading path
-    /// through the orderbook graph is filled to maximum capacity, reducing the
-    /// remaining order amounts and user balances along the way, returning the
-    /// flow along the path. Returns `None` if the condition is not met or there
-    /// is no path between the token pair.
-    fn fill_optimal_path_if(
+    /// Fills the optimal transitive order for the specified token pair by
+    /// pushing flow from the buy token to the sell token, if the condition is
+    /// met. The trading path through the orderbook graph is filled to maximum
+    /// capacity, reducing the remaining order amounts and user balances along
+    /// the way, returning the flow for the path. Returns `None` if the
+    /// condition is not met or there is no path between the token pair.
+    fn fill_optimal_transitive_order_if(
         &mut self,
         pair: TokenPair,
         reduce_negative_cycles: bool,
