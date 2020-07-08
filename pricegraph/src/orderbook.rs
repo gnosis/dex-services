@@ -223,21 +223,19 @@ impl Orderbook {
 
         let mut orders = Vec::new();
         let mut spread_limit_price = None;
-        let mut reduce_overlapping_orders = true;
+        let mut reduce_negative_cycles = true;
 
-        while let Some(flow) =
-            self.fill_optimal_path_if(pair, reduce_overlapping_orders, |flow| {
-                if let Some(spread) = spread {
-                    let spread_limit_price = spread_limit_price
-                        .get_or_insert_with(|| flow.exchange_rate * (1.0 + spread));
-                    flow.exchange_rate <= *spread_limit_price
-                } else {
-                    true
-                }
-            })
-        {
+        while let Some(flow) = self.fill_optimal_path_if(pair, reduce_negative_cycles, |flow| {
+            if let Some(spread) = spread {
+                let spread_limit_price =
+                    spread_limit_price.get_or_insert_with(|| flow.exchange_rate * (1.0 + spread));
+                flow.exchange_rate <= *spread_limit_price
+            } else {
+                true
+            }
+        }) {
             orders.push(flow.as_transitive_order());
-            reduce_overlapping_orders = false;
+            reduce_negative_cycles = false;
         }
 
         orders
@@ -262,107 +260,78 @@ impl Orderbook {
             return None;
         }
 
-        let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
-        let predecessors = self.reduced_shortest_paths(sell);
-        let mut path = path::find_path(&predecessors, sell, buy)?;
+        // NOTE: This method works by searching for the "best" counter
+        // transitive orders, as such we need to search for transitive orders
+        // in the inverse direction: from sell token to the buy token.
+        let inverse_pair = TokenPair {
+            buy: pair.sell,
+            sell: pair.buy,
+        };
 
-        // NOTE: The transitive price of a path is the price of the sell token
-        // (i.e. `sell_amount / buy_amount`). Since we are trying to find the
-        // best price for an order for the specified token pair (i.e. and order
-        // that would create a cycle of weight 0 going from the speicifed sell
-        // token to the buy token over `path` and then directly back to the sell
-        // token), we need to invert the price and account for the fees required
-        // for the final order in the cycle for the specified token pair.
-        fn invert_price(price: f64) -> f64 {
-            1.0 / (price * FEE_FACTOR)
-        }
-
+        let mut last_exchange_rate = None;
         if volume <= 0.0 {
             // NOTE: For a 0 volume we simulate sending an tiny epsilon of value
             // through the network without actually filling any orders.
-            let (_, price) = self.find_path_capacity_and_price(&path).unwrap_or_else(|| {
-                panic!(
-                    "failed to fill detected shortest path {}",
-                    format_path(&path),
-                )
+            self.fill_optimal_path_if(inverse_pair, true, |flow| {
+                last_exchange_rate = Some(flow.exchange_rate);
+                false
             });
-            return Some(invert_price(price));
         }
 
         let mut remaining_volume = volume;
-        let mut last_transitive_price: f64;
-        while {
-            let (capacity, transitive_price) = self.fill_path(&path).unwrap_or_else(|| {
-                panic!(
-                    "failed to fill detected shortest path {}",
-                    format_path(&path),
-                )
-            });
-            remaining_volume -= capacity;
-            last_transitive_price = transitive_price;
-
-            remaining_volume > 0.0
-        } {
-            let (_, predecessors) = bellman_ford::search(&self.projection, sell)
-                .expect("unexpected negative cycle in reduced graph");
-            path = path::find_path(&predecessors, sell, buy)?;
+        let mut reduce_negative_cycles = true;
+        while remaining_volume > 0.0 {
+            let flow = self.fill_optimal_path(inverse_pair, reduce_negative_cycles)?;
+            last_exchange_rate = Some(flow.exchange_rate);
+            remaining_volume -= flow.capacity;
+            reduce_negative_cycles = false;
         }
 
-        Some(invert_price(last_transitive_price))
+        // NOTE: The exchange rates are for transitive orders in the inverse
+        // direction, so we need to invert the exchange rage and account for
+        // the fees required for the final order in the cycle for the
+        // specified token pair.
+        last_exchange_rate.map(|xrate| 1.0 / (xrate * FEE_FACTOR))
     }
 
-    /// Fill an order at a given price, returning the estimated buy and sell
-    /// amounts that can be filled at the given limit price with the current
-    /// existing orders.
+    /// Fill an order at a given exchange rate, returning a buy and sell amount
+    /// such that an order with these amounts would be completely overlapping
+    /// the current existing orders.
     ///
-    /// This is calculated by repeatedly finding the cheapest path between a
-    /// token pair that is below the specified price and adding the capacity of
-    /// the path to the result.
+    /// This is calculated by repeatedly finding the optimal counter transitive
+    /// orders whose limit exchange rates overlap with the specified limit
+    /// exchange rate.
     ///
-    /// Note that the limit price is expressed as an exchange limit price, i.e.
-    /// with implicitely included fees. Additionally, the invariant
-    /// `buy_amount / sell_amount <= limit_price` holds, but in general the
-    /// ratio of the two amounts does not equal the limit price.
-    pub fn fill_order_at_price(&mut self, pair: TokenPair, limit_price: f64) -> (f64, f64) {
+    /// Note that the limit exchange rate implicitely included fees.
+    /// Additionally, the invariant `buy_amount / sell_amount <= limit_xrate`
+    /// holds, but in general the ratio of the two amounts does not equal the
+    /// limit exchange rate.
+    pub fn fill_order_at_price(&mut self, pair: TokenPair, limit_xrate: f64) -> (f64, f64) {
         if !self.is_token_pair_valid(pair) {
             return (0.0, 0.0);
         }
 
-        let (sell, buy) = (node_index(pair.sell), node_index(pair.buy));
-        // NOTE: The limit price is expressed in `buy_amount / sell_amount` for
-        // the specified token pair, but since we are finding transitive orders
-        // in the opposite direction to match this order, calculate the maximum
-        // price that still respects the provided limit price.
-        let max_price = (1.0 / limit_price) / FEE_FACTOR;
+        // NOTE: This method works by searching for the "best" counter
+        // transitive orders, as such we need to search for transitive orders
+        // in the inverse direction, and compute the maximum xrate that still
+        // overlaps with the specified limit xrate.
+        let inverse_pair = TokenPair {
+            buy: pair.sell,
+            sell: pair.buy,
+        };
+        let max_xrate = (1.0 / limit_xrate) / FEE_FACTOR;
 
         let mut total_buy_volume = 0.0;
         let mut total_sell_volume = 0.0;
-        let mut predecessors = self.reduced_shortest_paths(sell);
-        while let Some(path) = path::find_path(&predecessors, sell, buy) {
-            let (capacity, transitive_price) =
-                self.find_path_capacity_and_price(&path).unwrap_or_else(|| {
-                    panic!(
-                        "failed to fill detected shortest path {}",
-                        format_path(&path),
-                    )
-                });
-
-            if transitive_price > max_price {
-                break;
-            }
-            total_buy_volume += capacity / transitive_price;
-            total_sell_volume += capacity;
-
-            self.fill_path_with_capacity(&path, capacity)
-                .unwrap_or_else(|_| {
-                    panic!(
-                        "failed to fill with capacity along detected path {}",
-                        format_path(&path),
-                    )
-                });
-            predecessors = bellman_ford::search(&self.projection, sell)
-                .expect("unexpected negative cycle in reduced graph")
-                .1;
+        let mut reduce_negative_cycles = true;
+        while let Some(flow) =
+            self.fill_optimal_path_if(inverse_pair, reduce_negative_cycles, |flow| {
+                flow.exchange_rate <= max_xrate
+            })
+        {
+            total_buy_volume += flow.capacity / flow.exchange_rate;
+            total_sell_volume += flow.capacity;
+            reduce_negative_cycles = false;
         }
 
         (total_buy_volume, total_sell_volume)
