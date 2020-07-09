@@ -32,7 +32,7 @@ impl OrderCollector {
     pub fn collect(self) -> OrderMap {
         let mut orders = OrderMap(self.0);
         for (_, pair_orders) in orders.all_pairs_mut() {
-            pair_orders.sort_unstable_by(Order::cmp_descending_xrates);
+            pair_orders.sort_unstable_by(Order::cmp_descending_prices);
         }
 
         orders
@@ -130,15 +130,15 @@ pub struct Order {
     /// remaining sell amount. Note that orders are also limited by their user's
     /// balance.
     pub amount: f64,
-    /// The effective exchange rate for this order, that is price for this order
+    /// The effective buy price for this order, that is price for this order
     /// including fees of the buy token expressed in the sell token.
     ///
     /// Specifically, this is the buy amount over the sell amount or price
     /// numerator over price denominator.
     ///
-    /// When using this exchange rate to calculate amounts the equation to use
-    /// is: `sold_amount = buy_amount / exchange_rate`.
-    pub exchange_rate: f64,
+    /// When using this price to calculate amounts the equation to use is:
+    /// `sold_amount = buy_amount / price`.
+    pub price: f64,
 }
 
 impl Order {
@@ -149,34 +149,33 @@ impl Order {
         } else {
             element.remaining_sell_amount as _
         };
-        let exchange_rate = as_effective_exchange_rate(&element.price);
+        let price = as_effective_sell_price(&element.price);
 
         Order {
             user: element.user,
             id: element.id,
             pair: element.pair,
             amount,
-            exchange_rate,
+            price,
         }
     }
 
-    /// Compare two orders by descending exchange rate order.
+    /// Compare two orders by descending price order.
     ///
     /// This method is used for sorting orders, instead of just sorting by key
-    /// on `exchange_rate` field because `f64`s don't implement `Ord` and as
-    /// such cannot be used for sorting. This be because there is no real
-    /// ordering for `NaN`s and `NaN < 0 == false` and `NaN >= 0 == false` (cf.
-    /// IEEE 754-2008 section 5.11), which can cause serious problems with
-    /// sorting.
-    fn cmp_descending_xrates(a: &Order, b: &Order) -> cmp::Ordering {
-        num::compare(b.exchange_rate, a.exchange_rate)
+    /// on `price` field because `f64`s don't implement `Ord` and as such cannot
+    /// be used for sorting. This be because there is no real ordering for
+    /// `NaN`s and `NaN < 0 == false` and `NaN >= 0 == false` (cf. IEEE 754-2008
+    /// section 5.11), which can cause serious problems with sorting.
+    fn cmp_descending_prices(a: &Order, b: &Order) -> cmp::Ordering {
+        num::compare(b.price, a.price)
     }
 
     /// The weight of the order in the graph. This is the base-2 logarithm of
-    /// the exchange rate. This enables transitive exchange rates to be computed
+    /// the price including fees. This enables transitive prices to be computed
     /// using addition.
     pub fn weight(&self) -> f64 {
-        self.exchange_rate.log2()
+        self.price.log2()
     }
 
     /// Retrieves the effective remaining amount for this order based on user
@@ -195,8 +194,8 @@ fn is_unbounded(element: &Element) -> bool {
     element.price.numerator == UNBOUNDED_AMOUNT || element.price.denominator == UNBOUNDED_AMOUNT
 }
 
-/// Calculates an effective exchange rate as a `f64` from a price fraction.
-fn as_effective_exchange_rate(price: &Price) -> f64 {
+/// Calculates an effective price as a `f64` from a price fraction.
+fn as_effective_sell_price(price: &Price) -> f64 {
     TransitiveOrder {
         buy: price.numerator as _,
         sell: price.denominator as _,

@@ -26,7 +26,7 @@ use std::f64;
 use thiserror::Error;
 
 /// The minimum amount where an order is considered a dust order and can be
-/// ignored by the orderbook graph.
+/// ignored in the price graph calculation.
 const MIN_AMOUNT: f64 = 10_000.0;
 
 /// A graph representation of a complete orderbook.
@@ -39,8 +39,8 @@ pub struct Orderbook {
     /// Auxiliary user data containing user balances and order counts. Balances
     /// are important as they affect the capacity of an edge between two tokens.
     users: UserMap,
-    /// A projection of the orderbook onto a graph of tokens as nodes with the
-    /// orders with the lowest exchange rate connecting token pairs.
+    /// A projection of the order book onto a graph of lowest priced orders
+    /// between tokens.
     projection: DiGraph<TokenId, f64>,
 }
 
@@ -98,9 +98,9 @@ impl Orderbook {
     ///
     /// Conceptually, a negative cycle is a trading path starting and ending at
     /// a token (going through an arbitrary number of other distinct tokens)
-    /// where the total weight is less than `0`, i.e. the effective sell
-    /// exchange rate is less than `1`. This means that there is a price overlap
-    /// along this ring trade.
+    /// where the total weight is less than `0`, i.e. the effective sell price
+    /// is less than `1`. This means that there is a price overlap along this
+    /// ring trade.
     pub fn is_overlapping(&self) -> bool {
         // NOTE: We detect negative cycles from each disconnected subgraph.
         Subgraphs::new(self.projection.node_indices().skip(1))
@@ -293,23 +293,23 @@ impl Orderbook {
     /// exchange rate.
     ///
     /// Note that the limit exchange rate implicitly includes fees.
-    /// Additionally, the invariant `buy_amount / sell_amount <= limit_price`
+    /// Additionally, the invariant `buy_amount / sell_amount <= limit_xrate`
     /// holds, but in general the ratio of the two amounts does not equal the
     /// limit exchange rate.
     pub fn fill_order_at_price(
         &mut self,
         pair: TokenPair,
-        limit_price: f64,
+        limit_xrate: f64,
     ) -> Result<(f64, f64), OverlapError> {
         // NOTE: This method works by searching for the "best" counter
         // transitive orders, as such we need to search for transitive orders
         // in the inverse direction, and compute the maximum xrate that still
-        // overlaps with the specified limit price.
+        // overlaps with the specified limit xrate.
         let inverse_pair = TokenPair {
             buy: pair.sell,
             sell: pair.buy,
         };
-        let max_xrate = (1.0 / limit_price) / FEE_FACTOR;
+        let max_xrate = (1.0 / limit_xrate) / FEE_FACTOR;
 
         let mut total_buy_volume = 0.0;
         let mut total_sell_volume = 0.0;
@@ -452,7 +452,7 @@ impl Orderbook {
         let mut exchange_rate = 1.0;
         for pair in pairs_on_path(path) {
             let order = self.orders.best_order_for_pair(pair)?;
-            exchange_rate *= order.exchange_rate;
+            exchange_rate *= order.price;
 
             let sell_amount = order.get_effective_amount(&self.users);
             capacity = num::min(capacity, sell_amount * exchange_rate);
@@ -476,7 +476,7 @@ impl Orderbook {
         for pair in pairs_on_path(path) {
             let (order, user) = self.best_order_with_user_for_pair_mut(pair)?;
 
-            transitive_xrate *= order.exchange_rate;
+            transitive_xrate *= order.price;
 
             // NOTE: `capacity` here is a buy amount, so we need to divide by
             // the price to get the sell amount being filled.
@@ -558,10 +558,9 @@ fn format_path(path: &[NodeIndex]) -> String {
         .join("->")
 }
 
-/// Returns true if an auction element should be included in the orderbook
-/// graph.
+/// Returns true if an auction element should be included in the price graph.
 ///
-/// Currently auction elements are considered invalid if:
+/// Currently auction elements are ignored if:
 /// - They are "dust" orders, that is their remaining amount or balance is less
 ///   than the minimum amount that the exchange allows for trades
 /// - They have a `0` price numerator or denominator
@@ -951,7 +950,7 @@ mod tests {
     }
 
     #[test]
-    fn fills_market_order_with_correct_xrate() {
+    fn fills_market_order_with_correct_price() {
         //    /-101.0--v
         //   /--105.0--v
         //  /---111.0--v
@@ -1038,15 +1037,15 @@ mod tests {
             1.0 / (110.0 * FEE_FACTOR.powi(2))
         );
 
-        let exchange_rate = orderbook
+        let price = orderbook
             .fill_market_order(TokenPair { buy: 2, sell: 1 }, 10_000_000.0)
             .unwrap();
-        assert!(exchange_rate.is_none());
+        assert!(price.is_none());
 
-        let exchange_rate = orderbook
+        let price = orderbook
             .fill_market_order(TokenPair { buy: 1, sell: 2 }, 1_000_000_000.0)
             .unwrap();
-        assert!(exchange_rate.is_none());
+        assert!(price.is_none());
 
         assert_eq!(orderbook.num_orders(), 0);
     }
@@ -1230,7 +1229,7 @@ mod tests {
         assert_approx_eq!(
             orderbook.get_projected_pair_weight(TokenPair { buy: 1, sell: 2 }),
             // NOTE: user 2's order has no more balance so expect the new weight
-            // between tokens 1 and 2 to be user 5's order with the worse xrate
+            // between tokens 1 and 2 to be user 5's order with the worse price
             // of 2:1 (meaning it needs twice as much token 1 to get the same
             // amount of token 2 when pushing flow through that edge).
             (2.0 * FEE_FACTOR).log2()
