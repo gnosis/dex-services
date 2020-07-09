@@ -1,7 +1,7 @@
 use chrono::Utc;
 use slog::Level;
 use slog::{o, Drain, Logger, OwnedKVList, Record};
-use slog_async::Async;
+use slog_async::{Async, OverflowStrategy};
 use slog_envlogger::LogBuilder;
 use slog_scope::GlobalLoggerGuard;
 use slog_term::{Decorator, TermDecorator};
@@ -9,9 +9,6 @@ use std::{
     panic::{self, PanicInfo},
     thread,
 };
-
-/// The channel size for async logging.
-const BUFFER_SIZE: usize = 10000;
 
 /// Initialize driver logging.
 pub fn init(filter: impl AsRef<str>) -> (Logger, GlobalLoggerGuard) {
@@ -22,7 +19,7 @@ pub fn init(filter: impl AsRef<str>) -> (Logger, GlobalLoggerGuard) {
     )
     .fuse();
     let drain = Async::new(LogBuilder::new(format).parse(filter.as_ref()).build())
-        .chan_size(BUFFER_SIZE)
+        .overflow_strategy(OverflowStrategy::Block)
         .build();
     let logger = Logger::root(drain.fuse(), o!());
 
