@@ -1,10 +1,9 @@
 //! Data and logic related to token pair order management.
 
-use super::UserMap;
-use crate::encoding::{Element, OrderId, Price, TokenId, TokenPair, UserId};
+use super::{ExchangeRate, Price, UserMap};
+use crate::encoding::{Element, OrderId, TokenId, TokenPair, UserId};
 use crate::num;
-use crate::TransitiveOrder;
-use std::cmp;
+use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::f64;
 
@@ -32,7 +31,7 @@ impl OrderCollector {
     pub fn collect(self) -> OrderMap {
         let mut orders = OrderMap(self.0);
         for (_, pair_orders) in orders.all_pairs_mut() {
-            pair_orders.sort_unstable_by(Order::cmp_descending_prices);
+            pair_orders.sort_unstable_by_key(|order| Reverse(order.exchange_rate))
         }
 
         orders
@@ -130,52 +129,27 @@ pub struct Order {
     /// remaining sell amount. Note that orders are also limited by their user's
     /// balance.
     pub amount: f64,
-    /// The effective buy price for this order, that is price for this order
-    /// including fees of the buy token expressed in the sell token.
-    ///
-    /// Specifically, this is the buy amount over the sell amount or price
-    /// numerator over price denominator.
-    ///
-    /// When using this price to calculate amounts the equation to use is:
-    /// `sold_amount = buy_amount / price`.
-    pub price: f64,
+    /// The effective exchange rate for this order.
+    pub exchange_rate: ExchangeRate,
 }
 
 impl Order {
     /// Creates a new order from an ID and an orderbook element.
-    pub fn new(element: &Element) -> Self {
+    pub fn new(element: &Element) -> Option<Self> {
         let amount = if is_unbounded(&element) {
             f64::INFINITY
         } else {
             element.remaining_sell_amount as _
         };
-        let price = as_effective_sell_price(&element.price);
+        let exchange_rate = Price::from_fraction(&element.price)?.exchange_rate();
 
-        Order {
+        Some(Order {
             user: element.user,
             id: element.id,
             pair: element.pair,
             amount,
-            price,
-        }
-    }
-
-    /// Compare two orders by descending price order.
-    ///
-    /// This method is used for sorting orders, instead of just sorting by key
-    /// on `price` field because `f64`s don't implement `Ord` and as such cannot
-    /// be used for sorting. This be because there is no real ordering for
-    /// `NaN`s and `NaN < 0 == false` and `NaN >= 0 == false` (cf. IEEE 754-2008
-    /// section 5.11), which can cause serious problems with sorting.
-    fn cmp_descending_prices(a: &Order, b: &Order) -> cmp::Ordering {
-        num::compare(b.price, a.price)
-    }
-
-    /// The weight of the order in the graph. This is the base-2 logarithm of
-    /// the price including fees. This enables transitive prices to be computed
-    /// using addition.
-    pub fn weight(&self) -> f64 {
-        self.price.log2()
+            exchange_rate,
+        })
     }
 
     /// Retrieves the effective remaining amount for this order based on user
@@ -192,13 +166,4 @@ impl Order {
 fn is_unbounded(element: &Element) -> bool {
     const UNBOUNDED_AMOUNT: u128 = u128::max_value();
     element.price.numerator == UNBOUNDED_AMOUNT || element.price.denominator == UNBOUNDED_AMOUNT
-}
-
-/// Calculates an effective price as a `f64` from a price fraction.
-fn as_effective_sell_price(price: &Price) -> f64 {
-    TransitiveOrder {
-        buy: price.numerator as _,
-        sell: price.denominator as _,
-    }
-    .effective_exchange_rate()
 }
