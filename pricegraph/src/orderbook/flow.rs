@@ -22,7 +22,7 @@ impl Flow {
         // - `capacity = sell_amount * price`
         // Solving for `buy_amount` and `sell_amount`, we get:
         let buy = self.capacity / FEE_FACTOR;
-        let sell = self.capacity / *self.exchange_rate;
+        let sell = self.capacity / self.exchange_rate.value();
 
         TransitiveOrder { buy, sell }
     }

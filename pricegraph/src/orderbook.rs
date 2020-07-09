@@ -12,7 +12,7 @@ mod user;
 
 use self::flow::Flow;
 use self::order::{Order, OrderCollector, OrderMap};
-use self::scalar::{ExchangeRate, Price};
+pub use self::scalar::{ExchangeRate, Price};
 use self::user::{User, UserMap};
 use crate::encoding::{Element, TokenId, TokenPair};
 use crate::graph::bellman_ford::{self, NegativeCycle};
@@ -225,7 +225,7 @@ impl Orderbook {
         while let Some(flow) = self.fill_optimal_transitive_order_if(pair, |flow| {
             if let Some(spread) = spread {
                 let max_xrate =
-                    max_xrate.get_or_insert_with(|| *flow.exchange_rate * (1.0 + spread));
+                    max_xrate.get_or_insert_with(|| flow.exchange_rate.value() * (1.0 + spread));
                 flow.exchange_rate <= *max_xrate
             } else {
                 true
@@ -255,7 +255,7 @@ impl Orderbook {
         &mut self,
         pair: TokenPair,
         volume: f64,
-    ) -> Result<Option<f64>, OverlapError> {
+    ) -> Result<Option<Price>, OverlapError> {
         // NOTE: This method works by searching for the "best" counter
         // transitive orders, as such we need to search for transitive orders
         // in the inverse direction: from sell token to the buy token.
@@ -288,7 +288,7 @@ impl Orderbook {
         // direction, so we need to invert the exchange rate and account for
         // the fees so that the estimated exchange rate actually overlaps with
         // the last counter transtive order's exchange rate.
-        Ok(last_exchange_rate.map(|xrate| *xrate.inverse().price()))
+        Ok(last_exchange_rate.map(|xrate| xrate.inverse().price()))
     }
 
     /// Fill an order at a given price, returning a buy and sell amount such
@@ -304,20 +304,16 @@ impl Orderbook {
     pub fn fill_order_at_price(
         &mut self,
         pair: TokenPair,
-        limit_price: f64,
+        limit_price: Price,
     ) -> Result<(f64, f64), OverlapError> {
         // NOTE: This method works by searching for the "best" counter
         // transitive orders, as such we need to search for transitive orders
-        // in the inverse direction, and compute the maximum xrate that still
-        // overlaps with the specified limit xrate.
-        let max_xrate = match Price::new(limit_price) {
-            Some(price) => price.exchange_rate().inverse(),
-            None => return Ok((0.0, 0.0)),
-        };
+        // in the inverse direction and need to invert the limit price.
         let inverse_pair = TokenPair {
             buy: pair.sell,
             sell: pair.buy,
         };
+        let max_xrate = limit_price.exchange_rate().inverse();
 
         let mut total_buy_volume = 0.0;
         let mut total_sell_volume = 0.0;
@@ -326,7 +322,7 @@ impl Orderbook {
         })? {
             // NOTE: The transitive orders being filled are **counter orders**
             // with inverted token pairs.
-            total_buy_volume += flow.capacity / *flow.exchange_rate;
+            total_buy_volume += flow.capacity / flow.exchange_rate.value();
             total_sell_volume += flow.capacity;
         }
 
@@ -467,7 +463,7 @@ impl Orderbook {
             transitive_xrate *= order.exchange_rate;
 
             let sell_amount = order.get_effective_amount(&self.users);
-            capacity = num::min(capacity, sell_amount * *transitive_xrate);
+            capacity = num::min(capacity, sell_amount * transitive_xrate.value());
         }
 
         Some(Flow {
@@ -492,7 +488,7 @@ impl Orderbook {
 
             // NOTE: `capacity` is expressed in the buy token, so we need to
             // divide by the exchange rate to get the sell amount being filled.
-            let fill_amount = flow.capacity / *transitive_xrate;
+            let fill_amount = flow.capacity / transitive_xrate.value();
 
             order.amount -= fill_amount;
             debug_assert!(
@@ -638,7 +634,7 @@ mod tests {
                         from: 0,
                         to: u32::max_value(),
                     },
-                    price: $crate::encoding::Price {
+                    price: $crate::encoding::PriceFraction {
                         numerator: $buy_amount,
                         denominator: $sell_amount,
                     },
@@ -749,7 +745,9 @@ mod tests {
         assert!(orderbook.is_overlapping());
         assert!(orderbook.fill_transitive_orders(pair, None).is_err());
         assert!(orderbook.fill_market_order(pair, 10_000_000.0).is_err());
-        assert!(orderbook.fill_order_at_price(pair, 1.0).is_err());
+        assert!(orderbook
+            .fill_order_at_price(pair, Price::from_raw(1.0))
+            .is_err());
         assert!(orderbook.fill_optimal_transitive_order(pair).is_err());
     }
 
@@ -997,7 +995,8 @@ mod tests {
                 .clone()
                 .fill_market_order(TokenPair { buy: 2, sell: 1 }, 500_000.0)
                 .unwrap()
-                .unwrap(),
+                .unwrap()
+                .value(),
             99.0 / FEE_FACTOR.powi(2)
         );
         assert_approx_eq!(
@@ -1005,7 +1004,8 @@ mod tests {
                 .clone()
                 .fill_market_order(TokenPair { buy: 1, sell: 2 }, 50_000_000.0)
                 .unwrap()
-                .unwrap(),
+                .unwrap()
+                .value(),
             1.0 / (101.0 * FEE_FACTOR.powi(2))
         );
 
@@ -1014,7 +1014,8 @@ mod tests {
                 .clone()
                 .fill_market_order(TokenPair { buy: 2, sell: 1 }, 1_500_000.0)
                 .unwrap()
-                .unwrap(),
+                .unwrap()
+                .value(),
             95.0 / FEE_FACTOR.powi(2)
         );
         assert_approx_eq!(
@@ -1022,7 +1023,8 @@ mod tests {
                 .clone()
                 .fill_market_order(TokenPair { buy: 1, sell: 2 }, 150_000_000.0)
                 .unwrap()
-                .unwrap(),
+                .unwrap()
+                .value(),
             1.0 / (105.0 * FEE_FACTOR.powi(2))
         );
 
@@ -1031,7 +1033,8 @@ mod tests {
                 .clone()
                 .fill_market_order(TokenPair { buy: 2, sell: 1 }, 2_500_000.0)
                 .unwrap()
-                .unwrap(),
+                .unwrap()
+                .value(),
             90.0 / FEE_FACTOR.powi(2)
         );
         assert_approx_eq!(
@@ -1039,7 +1042,8 @@ mod tests {
                 .clone()
                 .fill_market_order(TokenPair { buy: 1, sell: 2 }, 250_000_000.0)
                 .unwrap()
-                .unwrap(),
+                .unwrap()
+                .value(),
             1.0 / (110.0 * FEE_FACTOR.powi(2))
         );
 
@@ -1085,34 +1089,43 @@ mod tests {
             .clone()
             // NOTE: 1 for 1.001 is not enough to match any volume because
             // fees need to be applied twice!
-            .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR)
+            .fill_order_at_price(
+                TokenPair { buy: 2, sell: 1 },
+                Price::from_raw(1.0 / FEE_FACTOR),
+            )
             .unwrap();
         assert_approx_eq!(buy, 0.0);
         assert_approx_eq!(sell, 0.0);
 
         let (buy, sell) = orderbook
             .clone()
-            .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR.powi(2))
+            .fill_order_at_price(
+                TokenPair { buy: 2, sell: 1 },
+                Price::from_raw(1.0 / FEE_FACTOR.powi(2)),
+            )
             .unwrap();
         assert_approx_eq!(buy, 1_000_000.0);
         assert_approx_eq!(sell, 1_000_000.0 * FEE_FACTOR);
 
         let (buy, sell) = orderbook
             .clone()
-            .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.3)
+            .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, Price::from_raw(0.3))
             .unwrap();
         assert_approx_eq!(buy, 2_000_000.0);
         assert_approx_eq!(sell, 3_000_000.0 * FEE_FACTOR);
 
         let (buy, sell) = orderbook
             .clone()
-            .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.25 / FEE_FACTOR.powi(2))
+            .fill_order_at_price(
+                TokenPair { buy: 2, sell: 1 },
+                Price::from_raw(0.25 / FEE_FACTOR.powi(2)),
+            )
             .unwrap();
         assert_approx_eq!(buy, 3_000_000.0);
         assert_approx_eq!(sell, 7_000_000.0 * FEE_FACTOR);
 
         let (buy, sell) = orderbook
-            .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, 0.1)
+            .fill_order_at_price(TokenPair { buy: 2, sell: 1 }, Price::from_raw(0.1))
             .unwrap();
         assert_approx_eq!(buy, 3_000_000.0);
         assert_approx_eq!(sell, 7_000_000.0 * FEE_FACTOR);
@@ -1222,7 +1235,7 @@ mod tests {
             // because some of it gets eaten up by the fees along the way.
             500_000.0 * FEE_FACTOR.powi(2)
         );
-        assert_approx_eq!(*flow.exchange_rate, 0.5 * FEE_FACTOR.powi(4));
+        assert_approx_eq!(flow.exchange_rate.value(), 0.5 * FEE_FACTOR.powi(4));
 
         let filled = orderbook.fill_path(&path).unwrap();
         assert_eq!(filled, flow);
@@ -1296,11 +1309,11 @@ mod tests {
                 .best_order_for_pair(TokenPair { buy: 3, sell: 4 })
                 .unwrap()
                 .amount,
-            2_000_000.0 - flow.capacity / *flow.exchange_rate
+            2_000_000.0 - flow.capacity / flow.exchange_rate.value()
         );
         assert_approx_eq!(
             orderbook.users[&user_id(4)].balance_of(4),
-            10_000_000.0 - flow.capacity / *flow.exchange_rate
+            10_000_000.0 - flow.capacity / flow.exchange_rate.value()
         );
     }
 
@@ -1377,7 +1390,7 @@ mod tests {
         };
 
         let (buy, sell) = orderbook
-            .fill_order_at_price(TokenPair { buy: 1, sell: 0 }, 1.0)
+            .fill_order_at_price(TokenPair { buy: 1, sell: 0 }, Price::from_raw(1.0))
             .unwrap();
         assert_approx_eq!(
             buy,

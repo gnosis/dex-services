@@ -1,7 +1,7 @@
 //! This module contains definitions for measurement scalars used by the
 //! orderbook graph representation.
 
-use crate::encoding;
+use crate::encoding::PriceFraction;
 use crate::FEE_FACTOR;
 use std::cmp;
 use std::ops;
@@ -28,8 +28,17 @@ impl Price {
         }
     }
 
+    /// Creates a new price from a `f64` value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value is not valid.
+    pub fn from_raw(value: f64) -> Self {
+        Self::new(value).expect("invalid price value")
+    }
+
     /// Creates a new price from an exchange price fraction.
-    pub fn from_fraction(price: &encoding::Price) -> Option<Self> {
+    pub fn from_fraction(price: &PriceFraction) -> Option<Self> {
         if price.numerator != 0 && price.denominator != 0 {
             Some(Price(assert_strictly_positive_and_finite(
                 price.numerator as f64 / price.denominator as f64,
@@ -37,6 +46,11 @@ impl Price {
         } else {
             None
         }
+    }
+
+    /// Gets the value as a `f64`.
+    pub fn value(self) -> f64 {
+        self.0
     }
 
     /// Converts a price into an effective exchange rate with explicit fees.
@@ -57,6 +71,11 @@ pub struct ExchangeRate(f64);
 impl ExchangeRate {
     /// The 1:1 exchange rate.
     pub const IDENTITY: ExchangeRate = ExchangeRate(1.0);
+
+    /// Gets the value as a `f64`.
+    pub fn value(self) -> f64 {
+        self.0
+    }
 
     /// Converts an exchange rate into a price with implicit fees.
     pub fn price(self) -> Price {
@@ -99,19 +118,6 @@ impl PartialOrd<f64> for ExchangeRate {
         self.0.partial_cmp(rhs)
     }
 }
-
-macro_rules! impl_deref_f64 {
-    ($($t:ty),*) => {$(
-        impl ops::Deref for $t {
-            type Target = f64;
-            fn deref(&self) -> &Self::Target {
-                &self.0
-            }
-        }
-    )*}
-}
-
-impl_deref_f64!(Price, ExchangeRate);
 
 macro_rules! impl_binop {
     ($(
