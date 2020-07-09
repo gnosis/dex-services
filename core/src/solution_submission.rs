@@ -341,17 +341,16 @@ fn determine_retry_action<T0, T1>(
     is_last_iteration: bool,
 ) -> RetryAction {
     match either {
-        Either::Left((result, _)) => {
-            // Technically this being the last iteration implies there not being a confirm timeout so
-            // we could drop the check for the last iteration but in practice it is more robust to check
-            // this in case we unexpectedly do get a confirm timeout even though the block timeout is
-            // not set.
-            if !is_confirm_timeout(&result) || is_last_iteration {
-                RetryAction::Done(result.map_err(RetryError::MethodError))
-            } else {
-                RetryAction::IncreaseGasPrice
+        Either::Left((result, _)) => match (is_confirm_timeout(&result), is_last_iteration) {
+            (true, false) => RetryAction::IncreaseGasPrice,
+            (true, true) => {
+                // In the last iteration we set the block timeout to None so we expect to never get
+                // a timeout.
+                log::warn!("unexpected confirm timeout");
+                RetryAction::Cancel
             }
-        }
+            (false, _) => RetryAction::Done(result.map_err(RetryError::MethodError)),
+        },
         Either::Right(_) => RetryAction::Cancel,
     }
 }
