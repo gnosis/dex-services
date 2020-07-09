@@ -4,7 +4,7 @@ use crate::contracts::stablex_contract::StableXContract;
 use crate::gas_station::GasPriceEstimating;
 use crate::models::{BatchId, Solution};
 
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Error, Result};
 use ethcontract::errors::{ExecutionError, MethodError};
 use ethcontract::web3::types::TransactionReceipt;
 use ethcontract::U256;
@@ -128,9 +128,9 @@ impl<'a> StableXSolutionSubmitter<'a> {
                 }
                 SolutionSubmissionError::Unexpected(err.into())
             }
-            RetryError::TransactionNotConfirmedInTime => {
-                SolutionSubmissionError::Benign("transaction not confirmed in time".to_string())
-            }
+            RetryError::TransactionNotConfirmedInTime => SolutionSubmissionError::Unexpected(
+                anyhow!("solution submission transaction not confirmed in time"),
+            ),
         }
     }
 }
