@@ -174,77 +174,108 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
     }
 }
 
+fn is_confirm_timeout(result: &Result<(), MethodError>) -> bool {
+    matches!(
+        result,
+        &Err(MethodError {
+            inner: ExecutionError::ConfirmTimeout,
+            ..
+        })
+    )
+}
+
+struct InfallibleGasPriceEstimator<'a> {
+    gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
+    previous_gas_price: U256,
+}
+
+impl<'a> InfallibleGasPriceEstimator<'a> {
+    fn new(
+        gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
+        default_gas_price: U256,
+    ) -> Self {
+        Self {
+            gas_price_estimating,
+            previous_gas_price: default_gas_price,
+        }
+    }
+
+    /// Get a fresh price estimate or if that fails return the most recent previous result.
+    async fn estimate(&mut self) -> U256 {
+        match self.gas_price_estimating.estimate_gas_price().await {
+            Ok(gas_estimate) => {
+                self.previous_gas_price = gas_estimate.fast;
+            }
+            Err(ref err) => {
+                log::warn!(
+                    "failed to get gas price from gnosis safe gas station: {}",
+                    err
+                );
+            }
+        };
+        self.previous_gas_price
+    }
+}
+
+fn gas_price(estimated_price: U256, price_increase_count: u32, cap: U256) -> U256 {
+    let factor = 2u32.pow(price_increase_count);
+    cap.min(estimated_price * factor)
+}
+
 async fn retry_with_gas_price_increase(
     contract: &(dyn StableXContract + Sync),
     batch_index: u32,
     solution: Solution,
     claimed_objective_value: U256,
     gas_price_estimating: &(dyn GasPriceEstimating + Sync),
-    gas_cap: U256,
+    gas_price_cap: U256,
 ) -> Result<(), MethodError> {
-    const INCREASE_FACTOR: u32 = 2;
     const BLOCK_TIMEOUT: usize = 2;
     const DEFAULT_GAS_PRICE: u64 = 15_000_000_000;
-
     // openethereum requires that the gas price of the resubmitted transaction has increased by at
     // least 12.5%.
-    let min_gas_price_increase_factor: f64 = 1.125 * (1.0 + f64::EPSILON);
-    let effective_gas_cap =
-        U256::from((gas_cap.as_u128() as f64 / min_gas_price_increase_factor).floor() as u128);
+    const MIN_GAS_PRICE_INCREASE_FACTOR: f64 = 1.125 * (1.0 + f64::EPSILON);
 
-    let mut gas_price_estimate = U256::from(DEFAULT_GAS_PRICE);
-    let mut gas_price_factor = 1;
-    let mut result;
-    // the following block emulates a do-while loop
-    while {
-        gas_price_estimate = match gas_price_estimating.estimate_gas_price().await {
-            Ok(gas_estimate) => gas_estimate.fast,
-            Err(ref err) => {
-                log::warn!(
-                    "failed to get gas price from gnosis safe gas station: {}",
-                    err
-                );
-                gas_price_estimate
-            }
+    let effective_gas_price_cap = U256::from(
+        (gas_price_cap.as_u128() as f64 / MIN_GAS_PRICE_INCREASE_FACTOR).floor() as u128,
+    );
+    assert!(effective_gas_price_cap <= gas_price_cap);
+
+    let mut gas_price_estimator =
+        InfallibleGasPriceEstimator::new(gas_price_estimating, DEFAULT_GAS_PRICE.into());
+
+    for gas_price_increase_count in 0u32.. {
+        let estimated_price = gas_price_estimator.estimate().await;
+        let gas_price = gas_price(estimated_price, gas_price_increase_count, gas_price_cap);
+        assert!(gas_price <= gas_price_cap);
+        info!(
+            "solution submission try {} with gas price {}",
+            gas_price_increase_count, gas_price
+        );
+        let is_last_iteration = gas_price >= effective_gas_price_cap;
+        let block_timeout = if is_last_iteration {
+            None
+        } else {
+            Some(BLOCK_TIMEOUT)
         };
-        // Never exceed the gas cap.
-        let gas_price = std::cmp::min(gas_price_estimate * gas_price_factor, gas_cap);
-
-        // Submit solution at estimated gas price (not exceeding the cap)
-        result = contract
+        let result = contract
             .submit_solution(
                 batch_index,
                 solution.clone(),
                 claimed_objective_value,
                 gas_price,
-                if gas_price == gas_cap {
-                    None
-                } else {
-                    Some(BLOCK_TIMEOUT)
-                },
+                block_timeout,
             )
             .await;
-
-        let gas_price_can_still_increase = gas_price < effective_gas_cap;
-        // Breaking condition for our loop
-        gas_price_can_still_increase
-            && matches!(
-                result,
-                Err(MethodError {
-                    inner: ExecutionError::ConfirmTimeout,
-                    ..
-                })
-            )
-    } {
-        // Increase gas
-        gas_price_factor *= INCREASE_FACTOR;
-        info!(
-            "retrying solution submission with increased gas price factor of {}",
-            gas_price_factor,
-        );
+        // Technically this being the last iteration implies there not being a confirm timeout so
+        // we could drop the check for the last iteration but in practice it is more robust to check
+        // this in case we unexpectedly do get a confirm timeout even though the block timeout is
+        // not set.
+        if !is_confirm_timeout(&result) || is_last_iteration {
+            return result;
+        }
     }
-
-    result
+    unreachable!("increased gas price past expected limit");
 }
 
 fn extract_transaction_receipt(err: &MethodError) -> Option<&TransactionReceipt> {
@@ -264,6 +295,55 @@ mod tests {
     use ethcontract::web3::types::H2048;
     use ethcontract::H256;
     use mockall::predicate::{always, eq};
+
+    #[test]
+    fn infallible_gas_price_estimator_uses_default_and_previous_result() {
+        let mut gas_station = MockGasPriceEstimating::new();
+        gas_station
+            .expect_estimate_gas_price()
+            .times(1)
+            .return_once(|| immediate!(Err(anyhow!(""))));
+        gas_station
+            .expect_estimate_gas_price()
+            .times(1)
+            .return_once(|| {
+                immediate!(Ok(GasPrice {
+                    fast: 5.into(),
+                    ..Default::default()
+                }))
+            });
+        gas_station
+            .expect_estimate_gas_price()
+            .times(1)
+            .return_once(|| {
+                immediate!(Ok(GasPrice {
+                    fast: 6.into(),
+                    ..Default::default()
+                }))
+            });
+        gas_station
+            .expect_estimate_gas_price()
+            .times(1)
+            .return_once(|| immediate!(Err(anyhow!(""))));
+
+        let mut estimator = InfallibleGasPriceEstimator::new(&gas_station, 3.into());
+        assert_eq!(estimator.estimate().now_or_never().unwrap(), U256::from(3));
+        assert_eq!(estimator.estimate().now_or_never().unwrap(), U256::from(5));
+        assert_eq!(estimator.estimate().now_or_never().unwrap(), U256::from(6));
+        assert_eq!(estimator.estimate().now_or_never().unwrap(), U256::from(6));
+    }
+
+    #[test]
+    fn gas_price_increases_as_expected_and_hits_limit() {
+        let estimated = U256::from(5);
+        let cap = U256::from(50);
+        assert_eq!(gas_price(estimated, 0, cap), U256::from(5));
+        assert_eq!(gas_price(estimated, 1, cap), U256::from(10));
+        assert_eq!(gas_price(estimated, 2, cap), U256::from(20));
+        assert_eq!(gas_price(estimated, 3, cap), U256::from(40));
+        assert_eq!(gas_price(estimated, 4, cap), U256::from(50));
+        assert_eq!(gas_price(estimated, 5, cap), U256::from(50));
+    }
 
     #[test]
     fn solution_submitter_waits_for_solving_batch() {
@@ -388,42 +468,8 @@ mod tests {
         let mut contract = MockStableXContract::new();
         contract
             .expect_submit_solution()
-            .times(1)
-            .with(always(), always(), always(), eq(U256::from(5)), eq(Some(2)))
-            .return_once(|_, _, _, _, _| {
-                async {
-                    Err(MethodError::from_parts(
-                    "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
-                        .to_owned(),
-                    ExecutionError::ConfirmTimeout,
-                ))
-                }
-                .boxed()
-            });
-        contract
-            .expect_submit_solution()
-            .times(1)
-            .with(
-                always(),
-                always(),
-                always(),
-                eq(U256::from(12)),
-                eq(Some(2)),
-            )
-            .return_once(|_, _, _, _, _| {
-                async {
-                    Err(MethodError::from_parts(
-                    "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
-                        .to_owned(),
-                    ExecutionError::ConfirmTimeout,
-                ))
-                }
-                .boxed()
-            });
-        contract
-            .expect_submit_solution()
-            .with(always(), always(), always(), eq(U256::from(15)), eq(None))
-            .return_once(|_, _, _, _, _| {
+            .times(3)
+            .returning(|_, _, _, _, _| {
                 async {
                     Err(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
@@ -437,8 +483,8 @@ mod tests {
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station
             .expect_estimate_gas_price()
-            .times(1)
-            .return_once(|| {
+            .times(3)
+            .returning(|| {
                 async {
                     Ok(GasPrice {
                         fast: 5.into(),
@@ -447,15 +493,6 @@ mod tests {
                 }
                 .boxed()
             });
-        gas_station.expect_estimate_gas_price().returning(|| {
-            async {
-                Ok(GasPrice {
-                    fast: 6.into(),
-                    ..Default::default()
-                })
-            }
-            .boxed()
-        });
 
         assert!(retry_with_gas_price_increase(
             &contract,
