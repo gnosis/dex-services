@@ -26,7 +26,7 @@ use std::f64;
 use thiserror::Error;
 
 /// The minimum amount where an order is considered a dust order and can be
-/// ignored in the price graph calculation.
+/// ignored by the orderbook graph.
 const MIN_AMOUNT: f64 = 10_000.0;
 
 /// A graph representation of a complete orderbook.
@@ -39,8 +39,8 @@ pub struct Orderbook {
     /// Auxiliary user data containing user balances and order counts. Balances
     /// are important as they affect the capacity of an edge between two tokens.
     users: UserMap,
-    /// A projection of the order book onto a graph of lowest priced orders
-    /// between tokens.
+    /// A projection of the orderbook onto a graph of tokens as nodes with the
+    /// orders with the lowest exchange rate connecting token pairs.
     projection: DiGraph<TokenId, f64>,
 }
 
@@ -98,9 +98,9 @@ impl Orderbook {
     ///
     /// Conceptually, a negative cycle is a trading path starting and ending at
     /// a token (going through an arbitrary number of other distinct tokens)
-    /// where the total weight is less than `0`, i.e. the effective sell price
-    /// is less than `1`. This means that there is a price overlap along this
-    /// ring trade.
+    /// where the total weight is less than `0`, i.e. the effective sell
+    /// exchange rate is less than `1`. This means that there is a price overlap
+    /// along this ring trade.
     pub fn is_overlapping(&self) -> bool {
         // NOTE: We detect negative cycles from each disconnected subgraph.
         Subgraphs::new(self.projection.node_indices().skip(1))
@@ -164,21 +164,15 @@ impl Orderbook {
                 if let Some(base_index) = path.iter().position(|node| *node == base) {
                     let (ask, bid) = (&path[0..base_index + 1], &path[base_index..]);
 
-                    let (capacity, transitive_price) = self
+                    let ask = self
                         .fill_path(ask)
                         .expect("ask transitive path not found after being detected");
-                    overlap.asks.push(transitive_order_from_capacity_and_price(
-                        capacity,
-                        transitive_price,
-                    ));
+                    overlap.asks.push(ask.as_transitive_order());
 
-                    let (capacity, transitive_price) = self
+                    let bid = self
                         .fill_path(bid)
                         .expect("bid transitive path not found after being detected");
-                    overlap.bids.push(transitive_order_from_capacity_and_price(
-                        capacity,
-                        transitive_price,
-                    ));
+                    overlap.bids.push(bid.as_transitive_order());
 
                     continue;
                 }
@@ -299,23 +293,23 @@ impl Orderbook {
     /// exchange rate.
     ///
     /// Note that the limit exchange rate implicitly includes fees.
-    /// Additionally, the invariant `buy_amount / sell_amount <= limit_xrate`
+    /// Additionally, the invariant `buy_amount / sell_amount <= limit_price`
     /// holds, but in general the ratio of the two amounts does not equal the
     /// limit exchange rate.
     pub fn fill_order_at_price(
         &mut self,
         pair: TokenPair,
-        limit_xrate: f64,
+        limit_price: f64,
     ) -> Result<(f64, f64), OverlapError> {
         // NOTE: This method works by searching for the "best" counter
         // transitive orders, as such we need to search for transitive orders
         // in the inverse direction, and compute the maximum xrate that still
-        // overlaps with the specified limit xrate.
+        // overlaps with the specified limit price.
         let inverse_pair = TokenPair {
             buy: pair.sell,
             sell: pair.buy,
         };
-        let max_xrate = (1.0 / limit_xrate) / FEE_FACTOR;
+        let max_xrate = (1.0 / limit_price) / FEE_FACTOR;
 
         let mut total_buy_volume = 0.0;
         let mut total_sell_volume = 0.0;
@@ -365,30 +359,22 @@ impl Orderbook {
             None => return Ok(None),
         };
 
-        let (capacity, exchange_rate) =
-            self.find_path_capacity_and_price(&path).unwrap_or_else(|| {
-                panic!(
-                    "failed to fill detected shortest path {}",
-                    format_path(&path),
-                )
-            });
-
-        let flow = Flow {
-            path,
-            exchange_rate,
-            capacity,
-        };
+        let flow = self.find_path_flow(&path).unwrap_or_else(|| {
+            panic!(
+                "failed to fill detected shortest path {}",
+                format_path(&path),
+            )
+        });
         if !condition(&flow) {
             return Ok(None);
         }
 
-        self.fill_path_with_capacity(&flow.path, capacity)
-            .unwrap_or_else(|| {
-                panic!(
-                    "failed to fill with capacity along detected path {}",
-                    format_path(&flow.path),
-                )
-            });
+        self.fill_path_with_flow(&path, flow).unwrap_or_else(|| {
+            panic!(
+                "failed to fill with capacity along detected path {}",
+                format_path(&path),
+            )
+        });
 
         Ok(Some(flow))
     }
@@ -443,40 +429,39 @@ impl Orderbook {
 
     /// Fills a trading path through the orderbook to maximum capacity, reducing
     /// the remaining order amounts and user balances along the way, returning
-    /// the amount of flow that left the first node in the path and the final
-    /// transitive price (i.e. the final price of the last node as a result of
-    /// trading along the path) or `None` if the path was invalid.
+    /// the flow along the trading path or `None` if the path was invalid.
     ///
     /// Note that currently, user buy token balances are not incremented as a
     /// result of filling orders along a path.
-    fn fill_path(&mut self, path: &[NodeIndex]) -> Option<(f64, f64)> {
-        let (capacity, price) = self.find_path_capacity_and_price(path)?;
-        self.fill_path_with_capacity(path, capacity)
-            .unwrap_or_else(|| {
-                panic!(
-                    "failed to fill with capacity along detected path {}",
-                    format_path(path),
-                )
-            });
+    fn fill_path(&mut self, path: &[NodeIndex]) -> Option<Flow> {
+        let flow = self.find_path_flow(path)?;
+        self.fill_path_with_flow(path, flow).unwrap_or_else(|| {
+            panic!(
+                "failed to fill with capacity along detected path {}",
+                format_path(path),
+            )
+        });
 
-        Some((capacity, price))
+        Some(flow)
     }
 
-    /// Finds a transitive trade along a path and returns the maximum capacity
-    /// of the path expressed in an amount of the starting token and the
-    /// transitive price. Returns `None` if the path doesn't exist.
-    fn find_path_capacity_and_price(&self, path: &[NodeIndex]) -> Option<(f64, f64)> {
+    /// Finds a transitive trade along a path and returns the corresponding flow
+    /// for that path or `None` if the path doesn't exist.
+    fn find_path_flow(&self, path: &[NodeIndex]) -> Option<Flow> {
         let mut capacity = f64::INFINITY;
-        let mut transitive_price = 1.0;
+        let mut exchange_rate = 1.0;
         for pair in pairs_on_path(path) {
             let order = self.orders.best_order_for_pair(pair)?;
-            transitive_price *= order.price;
+            exchange_rate *= order.exchange_rate;
 
             let sell_amount = order.get_effective_amount(&self.users);
-            capacity = num::min(capacity, sell_amount * transitive_price);
+            capacity = num::min(capacity, sell_amount * exchange_rate);
         }
 
-        Some((capacity, transitive_price))
+        Some(Flow {
+            capacity,
+            exchange_rate,
+        })
     }
 
     /// Pushes flow through a path of orders reducing order amounts and user
@@ -486,16 +471,16 @@ impl Orderbook {
     ///
     /// Note that currently, user buy token balances are not incremented as a
     /// result of filling orders along a path.
-    fn fill_path_with_capacity(&mut self, path: &[NodeIndex], capacity: f64) -> Option<()> {
-        let mut transitive_price = 1.0;
+    fn fill_path_with_flow(&mut self, path: &[NodeIndex], flow: Flow) -> Option<()> {
+        let mut transitive_xrate = 1.0;
         for pair in pairs_on_path(path) {
             let (order, user) = self.best_order_with_user_for_pair_mut(pair)?;
 
-            transitive_price *= order.price;
+            transitive_xrate *= order.exchange_rate;
 
             // NOTE: `capacity` here is a buy amount, so we need to divide by
             // the price to get the sell amount being filled.
-            let fill_amount = capacity / transitive_price;
+            let fill_amount = flow.capacity / transitive_xrate;
 
             order.amount -= fill_amount;
             debug_assert!(
@@ -573,9 +558,10 @@ fn format_path(path: &[NodeIndex]) -> String {
         .join("->")
 }
 
-/// Returns true if an auction element should be included in the price graph.
+/// Returns true if an auction element should be included in the orderbook
+/// graph.
 ///
-/// Currently auction elements are ignored if:
+/// Currently auction elements are considered invalid if:
 /// - They are "dust" orders, that is their remaining amount or balance is less
 ///   than the minimum amount that the exchange allows for trades
 /// - They have a `0` price numerator or denominator
@@ -588,22 +574,6 @@ fn should_include_auction_element(element: &Element) -> bool {
     let has_valid_price = element.price.numerator != 0 && element.price.denominator != 0;
 
     !is_dust_order && has_valid_price
-}
-
-/// Returns a new transitive order from an orderbook graph price and capacity.
-fn transitive_order_from_capacity_and_price(
-    capacity: f64,
-    transitive_price: f64,
-) -> TransitiveOrder {
-    // NOTE: We now have the capacity and price for this transitive order which
-    // needs to be converted to a buy and sell amount. We have:
-    // - `price = FEE_FACTOR * buy_amount / sell_amount`
-    // - `capacity = sell_amount * price`
-    // Solving for `buy_amount` and `sell_amount`, we get:
-    let buy = capacity / FEE_FACTOR;
-    let sell = capacity / transitive_price;
-
-    TransitiveOrder { buy, sell }
 }
 
 /// An error indicating an invalid operation was performed on an overlapping
@@ -981,7 +951,7 @@ mod tests {
     }
 
     #[test]
-    fn fills_market_order_with_correct_price() {
+    fn fills_market_order_with_correct_xrate() {
         //    /-101.0--v
         //   /--105.0--v
         //  /---111.0--v
@@ -1068,15 +1038,15 @@ mod tests {
             1.0 / (110.0 * FEE_FACTOR.powi(2))
         );
 
-        let price = orderbook
+        let exchange_rate = orderbook
             .fill_market_order(TokenPair { buy: 2, sell: 1 }, 10_000_000.0)
             .unwrap();
-        assert!(price.is_none());
+        assert!(exchange_rate.is_none());
 
-        let price = orderbook
+        let exchange_rate = orderbook
             .fill_market_order(TokenPair { buy: 1, sell: 2 }, 1_000_000_000.0)
             .unwrap();
-        assert!(price.is_none());
+        assert!(exchange_rate.is_none());
 
         assert_eq!(orderbook.num_orders(), 0);
     }
@@ -1237,17 +1207,17 @@ mod tests {
             .map(node_index)
             .collect::<Vec<_>>();
 
-        let (capacity, transitive_price) = orderbook.find_path_capacity_and_price(&path).unwrap();
+        let flow = orderbook.find_path_flow(&path).unwrap();
         assert_approx_eq!(
-            capacity,
+            flow.capacity,
             // NOTE: We can send a little more than the balance limit of user 2
             // because some of it gets eaten up by the fees along the way.
             500_000.0 * FEE_FACTOR.powi(2)
         );
-        assert_approx_eq!(transitive_price, 0.5 * FEE_FACTOR.powi(4));
+        assert_approx_eq!(flow.exchange_rate, 0.5 * FEE_FACTOR.powi(4));
 
         let filled = orderbook.fill_path(&path).unwrap();
-        assert_eq!(filled, (capacity, transitive_price));
+        assert_eq!(filled, flow);
 
         // NOTE: The expected fill amounts are:
         //  Order | buy amt | sell amt | xrate
@@ -1260,7 +1230,7 @@ mod tests {
         assert_approx_eq!(
             orderbook.get_projected_pair_weight(TokenPair { buy: 1, sell: 2 }),
             // NOTE: user 2's order has no more balance so expect the new weight
-            // between tokens 1 and 2 to be user 5's order with the worse price
+            // between tokens 1 and 2 to be user 5's order with the worse xrate
             // of 2:1 (meaning it needs twice as much token 1 to get the same
             // amount of token 2 when pushing flow through that edge).
             (2.0 * FEE_FACTOR).log2()
@@ -1288,18 +1258,18 @@ mod tests {
 
         assert_eq!(orderbook.num_orders(), 3);
 
-        let transitive_price_0_1 = FEE_FACTOR;
+        let transitive_xrate_0_1 = FEE_FACTOR;
         assert_approx_eq!(
             orderbook
                 .orders
                 .best_order_for_pair(TokenPair { buy: 0, sell: 1 })
                 .unwrap()
                 .amount,
-            1_000_000.0 - capacity / transitive_price_0_1
+            1_000_000.0 - flow.capacity / transitive_xrate_0_1
         );
         assert_approx_eq!(
             orderbook.users[&user_id(1)].balance_of(1),
-            1_000_000.0 - capacity / transitive_price_0_1
+            1_000_000.0 - flow.capacity / transitive_xrate_0_1
         );
 
         assert_approx_eq!(
@@ -1318,11 +1288,11 @@ mod tests {
                 .best_order_for_pair(TokenPair { buy: 3, sell: 4 })
                 .unwrap()
                 .amount,
-            2_000_000.0 - capacity / transitive_price
+            2_000_000.0 - flow.capacity / flow.exchange_rate
         );
         assert_approx_eq!(
             orderbook.users[&user_id(4)].balance_of(4),
-            10_000_000.0 - capacity / transitive_price
+            10_000_000.0 - flow.capacity / flow.exchange_rate
         );
     }
 
