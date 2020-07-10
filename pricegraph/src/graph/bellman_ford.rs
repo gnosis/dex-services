@@ -6,7 +6,6 @@ use petgraph::algo::FloatMeasure;
 use petgraph::visit::{
     Data, EdgeRef, GraphBase, IntoEdges, IntoNodeIdentifiers, NodeCount, NodeIndexable,
 };
-use std::fmt;
 
 /// A type definition for the result of a Bellman-Ford shortest path search
 /// containing the weight of the shortest paths and the predecessor vector for
@@ -18,27 +17,15 @@ pub type Paths<G> = (
 
 /// A negative cycle error with the node on which it was detected along with the
 /// predecessor vector that can be used to re-create the cycle path.
-pub struct NegativeCycle<G: Data>(pub Vec<Option<G::NodeId>>, pub G::NodeId);
-
-impl<G> fmt::Debug for NegativeCycle<G>
-where
-    G: Data,
-    G::NodeId: fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_tuple("NegativeCycle")
-            .field(&self.0)
-            .field(&self.1)
-            .finish()
-    }
-}
+#[derive(Debug)]
+pub struct NegativeCycle<N>(pub Vec<Option<N>>, pub N);
 
 /// This implementation is taken from the `petgraph` crate with a small
 /// modification to return the path when a negative cycle is detected.
 ///
 /// The orginal source can be found here:
 /// https://docs.rs/petgraph/0.5.0/src/petgraph/algo/mod.rs.html#745-792
-pub fn search<G>(g: G, source: G::NodeId) -> Result<Paths<G>, NegativeCycle<G>>
+pub fn search<G>(g: G, source: G::NodeId) -> Result<Paths<G>, NegativeCycle<G::NodeId>>
 where
     G: NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
     G::EdgeWeight: FloatMeasure,
