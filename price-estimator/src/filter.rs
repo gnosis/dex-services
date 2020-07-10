@@ -24,11 +24,12 @@ pub fn all<T: Send + Sync + 'static>(
             markets(orderbook.clone())
                 .or(estimated_buy_amount(
                     orderbook.clone(),
-                    token_info,
+                    token_info.clone(),
                     price_rounding_buffer,
                 ))
                 .or(estimated_amounts_at_price(
                     orderbook.clone(),
+                    token_info,
                     price_rounding_buffer,
                 ))
                 .or(estimated_best_ask_price(orderbook, price_rounding_buffer)),
@@ -96,11 +97,13 @@ fn estimated_buy_amount<T: Send + Sync + 'static>(
 /// and answer it.
 fn estimated_amounts_at_price<T: Send + Sync + 'static>(
     orderbook: Arc<Orderbook<T>>,
+    token_info: Arc<dyn TokenInfoFetching>,
     price_rounding_buffer: f64,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     estimated_amounts_at_price_filter()
         .and(warp::any().map(move || price_rounding_buffer))
         .and(warp::any().map(move || orderbook.clone()))
+        .and(warp::any().map(move || token_info.clone()))
         .and_then(estimate_amounts_at_price)
         .with(warp::log("price_estimator::api::estimate_amounts_at_price"))
 }
@@ -220,10 +223,45 @@ async fn estimate_buy_amount<T>(
 async fn estimate_amounts_at_price<T>(
     token_pair: TokenPair,
     price_in_quote: f64,
-    _query: QueryParameters,
+    query: QueryParameters,
     price_rounding_buffer: f64,
     orderbook: Arc<Orderbook<T>>,
-) -> Result<impl Reply, Infallible> {
+    token_infos: Arc<dyn TokenInfoFetching>,
+) -> Result<impl Reply, Rejection> {
+    let result = if query.atoms {
+        estimate_amounts_at_price_atoms(
+            token_pair,
+            price_in_quote,
+            price_rounding_buffer,
+            orderbook,
+        )
+        .await
+    } else {
+        let buy_token_info = get_token_info(token_pair.buy, token_infos.as_ref()).await?;
+        let sell_token_info = get_token_info(token_pair.sell, token_infos.as_ref()).await?;
+        let price_in_quote_atoms = price_in_quote
+            * (sell_token_info.base_unit_in_atoms() / buy_token_info.base_unit_in_atoms());
+        let mut result = estimate_amounts_at_price_atoms(
+            token_pair,
+            price_in_quote_atoms,
+            price_rounding_buffer,
+            orderbook,
+        )
+        .await;
+        result.buy_amount_in_base /= buy_token_info.base_unit_in_atoms();
+        result.sell_amount_in_quote /= sell_token_info.base_unit_in_atoms();
+        result
+    };
+    Ok(warp::reply::json(&result))
+}
+
+/// Like `estimate_amounts_at_price` but the price is given and returned in atoms.
+async fn estimate_amounts_at_price_atoms<T>(
+    token_pair: TokenPair,
+    price_in_quote: f64,
+    price_rounding_buffer: f64,
+    orderbook: Arc<Orderbook<T>>,
+) -> EstimatedOrderResult {
     // NOTE: The price in quote is `sell_amount / buy_amount` which is the
     // inverse of an exchange rate. Additionally, we need to apply the price
     // rounding buffer to the price, which will **increase** the exchange rate,
@@ -241,14 +279,12 @@ async fn estimate_amounts_at_price<T>(
             )
         })
         .unwrap_or_default();
-
-    let result = EstimatedOrderResult {
+    EstimatedOrderResult {
         base_token_id: token_pair.buy,
         quote_token_id: token_pair.sell,
         sell_amount_in_quote,
         buy_amount_in_base,
-    };
-    Ok(warp::reply::json(&result))
+    }
 }
 
 async fn estimate_best_ask_price<T>(
