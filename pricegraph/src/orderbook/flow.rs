@@ -1,16 +1,14 @@
 //! Module containing data for representing flow through the orderbook graph.
 
 use crate::{TransitiveOrder, FEE_FACTOR};
-use petgraph::graph::NodeIndex;
 
 /// A reprensentation of a flow of tokens through the orderbook graph.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Flow {
-    /// The path through the graph for this flow.
-    pub path: Vec<NodeIndex>,
-    /// The optimal effective exchange rate for trading the start token for the
-    /// end token along the path in the graph.
+    /// The effective exchange rate for trading along a path in the graph.
     pub exchange_rate: f64,
-    /// The total capacity the path can accomodate.
+    /// The total capacity the path can accomodate expressed in the starting
+    /// token.
     pub capacity: f64,
 }
 
