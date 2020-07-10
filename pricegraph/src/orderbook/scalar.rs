@@ -6,7 +6,7 @@ use crate::FEE_FACTOR;
 use std::cmp;
 use std::ops;
 
-/// An exchange price. Limit prices on the exchange are represented by a
+/// An exchange limit price. Limit prices on the exchange are represented by a
 /// fraction of two `u128`s representing a buy and sell amount. These limit
 /// prices implicitly include fees, that is they must be respected **after**
 /// fees are applied. As such, the actual exchange rate for a trade (the ratio
@@ -15,14 +15,14 @@ use std::ops;
 ///
 /// Prices are guaranteed to be a strictly positive finite real numbers.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-pub struct Price(f64);
+pub struct LimitPrice(f64);
 
-impl Price {
+impl LimitPrice {
     /// Creates a new price from a `f64` value. Returns `None` if the price
     /// value is not valid. Specifically, it must be in the range `(0, +∞)`.
     pub fn new(value: f64) -> Option<Self> {
         if is_strictly_positive_and_finite(value) {
-            Some(Price(value))
+            Some(LimitPrice(value))
         } else {
             None
         }
@@ -40,7 +40,7 @@ impl Price {
     /// Creates a new price from an exchange price fraction.
     pub fn from_fraction(price: &PriceFraction) -> Option<Self> {
         if price.numerator != 0 && price.denominator != 0 {
-            Some(Price(assert_strictly_positive_and_finite(
+            Some(LimitPrice(assert_strictly_positive_and_finite(
                 price.numerator as f64 / price.denominator as f64,
             )))
         } else {
@@ -78,8 +78,8 @@ impl ExchangeRate {
     }
 
     /// Converts an exchange rate into a price with implicit fees.
-    pub fn price(self) -> Price {
-        Price(assert_strictly_positive_and_finite(self.0 / FEE_FACTOR))
+    pub fn price(self) -> LimitPrice {
+        LimitPrice(assert_strictly_positive_and_finite(self.0 / FEE_FACTOR))
     }
 
     /// Computes the inverse exchange rate.

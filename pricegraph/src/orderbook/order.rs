@@ -1,6 +1,6 @@
 //! Data and logic related to token pair order management.
 
-use super::{ExchangeRate, Price, UserMap};
+use super::{ExchangeRate, LimitPrice, UserMap};
 use crate::encoding::{Element, OrderId, TokenId, TokenPair, UserId};
 use crate::num;
 use std::cmp::Reverse;
@@ -141,7 +141,7 @@ impl Order {
         } else {
             element.remaining_sell_amount as _
         };
-        let exchange_rate = Price::from_fraction(&element.price)?.exchange_rate();
+        let exchange_rate = LimitPrice::from_fraction(&element.price)?.exchange_rate();
 
         Some(Order {
             user: element.user,

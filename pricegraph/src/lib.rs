@@ -228,7 +228,7 @@ impl Pricegraph {
     ) -> Option<TransitiveOrder> {
         let (buy, sell) = self
             .reduced_orderbook()
-            .fill_order_at_price(pair, Price::new(limit_exchange_rate)?)
+            .fill_order_at_price(pair, LimitPrice::new(limit_exchange_rate)?)
             .expect("overlapping orders in reduced orderbook");
         if buy == 0.0 {
             return None;
