@@ -97,7 +97,7 @@ impl ExchangeRate {
     }
 }
 
-// NOTE: We can implement `Eq` for `ExchangeRate` since its value is garanteed
+// NOTE: We can implement `Eq` for `ExchangeRate` since its value is guaranteed
 // to not be `NaN`.
 impl Eq for ExchangeRate {}
 
