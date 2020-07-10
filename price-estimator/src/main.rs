@@ -2,11 +2,13 @@ mod filter;
 mod models;
 mod orderbook;
 
+use anyhow::Context as _;
 use core::{
     contracts::{stablex_contract::StableXContractImpl, web3_provider},
     http::HttpFactory,
     metrics::{HttpMetrics, MetricsServer},
     orderbook::EventBasedOrderbook,
+    token_info::{cached::TokenInfoCache, TokenInfoFetching as _},
     util::FutureWaitExt as _,
 };
 use ethcontract::PrivateKey;
@@ -78,6 +80,10 @@ fn main() {
             .unwrap(),
     );
 
+    let token_info = TokenInfoCache::new(contract.clone());
+    initialize_token_info_cache(&token_info).wait().unwrap();
+    let token_info = Arc::new(token_info);
+
     let orderbook = EventBasedOrderbook::new(contract, web3, options.orderbook_file);
     let orderbook = Arc::new(Orderbook::new(orderbook));
     let _ = orderbook.update().wait();
@@ -94,7 +100,7 @@ fn main() {
         options.orderbook_update_interval,
     ));
 
-    let filter = filter::all(orderbook, price_rounding_buffer);
+    let filter = filter::all(orderbook, token_info, price_rounding_buffer);
     let serve_task = runtime.spawn(warp::serve(filter).run(options.bind_address));
 
     log::info!("Server ready.");
@@ -126,4 +132,19 @@ fn setup_driver_metrics() -> HttpMetrics {
         metric_server.serve(9586);
     });
     HttpMetrics::new(&prometheus_registry).unwrap()
+}
+
+async fn initialize_token_info_cache(cache: &TokenInfoCache) -> anyhow::Result<()> {
+    for token_id in cache.all_ids().await.context("failed to get all ids")? {
+        // Individual tokens might not conform to erc20 in which case we are unable to retrieve
+        // their info.
+        if let Err(err) = cache.get_token_info(token_id).await {
+            log::info!(
+                "failed to get token info for token id {}: {}",
+                token_id.0,
+                err
+            );
+        }
+    }
+    Ok(())
 }
