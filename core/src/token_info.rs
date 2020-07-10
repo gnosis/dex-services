@@ -51,6 +51,11 @@ impl TokenBaseInfo {
         SYMBOL_OVERRIDES.get(&self.alias).unwrap_or(&self.alias)
     }
 
+    /// One unit of the token taking decimals into account, given in number of atoms.
+    pub fn base_unit_in_atoms(&self) -> f64 {
+        10f64.powi(self.decimals as i32)
+    }
+
     /// Converts the prices from USD into the unit expected by the contract.
     /// This price is relative to the OWL token which is considered pegged at
     /// exactly 1 USD with 18 decimals.
@@ -92,5 +97,13 @@ mod tests {
     #[test]
     fn weth_token_symbol_is_eth() {
         assert_eq!(TokenBaseInfo::new("WETH", 18).symbol(), "ETH");
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn base_unit_in_atoms() {
+        assert_eq!(TokenBaseInfo::new("", 0).base_unit_in_atoms(), 1.0);
+        assert_eq!(TokenBaseInfo::new("", 1).base_unit_in_atoms(), 10.0);
+        assert_eq!(TokenBaseInfo::new("", 2).base_unit_in_atoms(), 100.0);
     }
 }

@@ -1,18 +1,25 @@
 ## API
 
+All endpoints use the query part of the url with these key-values:
+
+* `atoms`: Required. If set to `true` all amounts are denominated in the smallest available unit (base quantity) of the token. If `false` all amounts are denominated in the "natural" unit of the respective token given by the number of decimals specified through the ERC20 interface. TODO: `false` is currently only implemented for estimated-buy-amount .
+* `hops`: Optional. TODO: document this once it has been implemented.
+
+Example: `<path>?atoms=true`
+
+The endpoint documentation references these types:
+
+* A *token id* is a natural number >= 0 in decimal notation. It refers to the token ids in the smart contract. Example: `0`
+* A *token amount* is given as a floating point number formatted according to https://doc.rust-lang.org/std/primitive.f64.html#impl-FromStr which resembles numbers in json closely. Examples: `0`, `1.1`.
+* A *market* is of the form `<base token id>-<quote token id>`. Example: `0-1`
+
 The service exposes the following endpoints:
 
 ### Markets
 
 `GET /api/v1/markets/:market`
 
-* `market` is of the form `<base_token_id>-<quote_token_id>`. The token ids the same as in the smart contract.
-
-Url Query:
-* `atoms`: If set to `true` (for now this is the only implemented method) all amounts will be denominated in the smallest available unit (base quantity) of the token.
-* `hops`: TODO: document this once it has been implemented.
-
-Example Request: `/api/v1/markets/1-7/?atoms=true`
+Example Request: `/api/v1/markets/1-7?atoms=true`
 
 Example Response:
 
@@ -33,11 +40,6 @@ Returns the transitive orderbook (containing bids and asks) for the given base a
 
 `GET /api/v1/markets/:market/estimated-buy-amount/:sell-amount-in-quote-token`
 
-* `market` is as above
-* `sell_amount_in_quote_token` is a positive integer.
-
-Url query is as above.
-
 Example Request: `/api/v1/markets/1-7/estimated-buy-amount/20000000000000000000?atoms=true`
 
 Example Response:
@@ -57,11 +59,6 @@ Example Response:
 ### Estimated Amounts At Price
 
 `GET /api/v1/markets/:market/estimated-amounts-at-price/:price-in-quote`
-
-* `market` is as above
-* `price_in_quote` is a decimal number.
-
-Url query is as above.
 
 Example Request: `/api/v1/markets/1-7/estimated-amounts-at-price/245.5?atoms=true`
 
