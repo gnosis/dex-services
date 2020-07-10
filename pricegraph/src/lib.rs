@@ -10,7 +10,7 @@ mod orderbook;
 mod data;
 
 pub use encoding::*;
-pub use orderbook::Orderbook;
+pub use orderbook::*;
 
 /// The fee factor that is applied to each order's buy price.
 const FEE_FACTOR: f64 = 1.0 / 0.999;
@@ -192,9 +192,12 @@ impl Pricegraph {
     /// Note that this price is in exchange format, that is, it is expressed as
     /// the ratio between buy and sell amounts, with implicit fees.
     pub fn estimate_exchange_rate(&self, pair: TokenPair, sell_amount: f64) -> Option<f64> {
-        self.reduced_orderbook()
-            .fill_market_order(pair, sell_amount as _)
-            .expect("overlapping orders in reduced orderbook")
+        Some(
+            self.reduced_orderbook()
+                .fill_market_order(pair, sell_amount as _)
+                .expect("overlapping orders in reduced orderbook")?
+                .value(),
+        )
     }
 
     /// Returns a transitive order with a buy amount calculated such that there
@@ -225,7 +228,7 @@ impl Pricegraph {
     ) -> Option<TransitiveOrder> {
         let (buy, sell) = self
             .reduced_orderbook()
-            .fill_order_at_price(pair, limit_exchange_rate)
+            .fill_order_at_price(pair, LimitPrice::new(limit_exchange_rate)?)
             .expect("overlapping orders in reduced orderbook");
         if buy == 0.0 {
             return None;
@@ -318,7 +321,7 @@ mod tests {
             balance: U256::from(2) * U256::from(base),
             pair: TokenPair { buy: 0, sell: 1 },
             valid: Validity { from: 0, to: 1 },
-            price: Price {
+            price: PriceFraction {
                 numerator: 2 * base,
                 denominator: base,
             },
