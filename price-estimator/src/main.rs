@@ -1,6 +1,7 @@
 mod filter;
 mod models;
 mod orderbook;
+mod solver_rounding_buffer;
 
 use anyhow::Context as _;
 use core::{
