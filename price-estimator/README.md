@@ -2,7 +2,7 @@
 
 All endpoints use the query part of the url with these key-values:
 
-* `atoms`: Required. If set to `true` all amounts are denominated in the smallest available unit (base quantity) of the token. If `false` all amounts are denominated in the "natural" unit of the respective token given by the number of decimals specified through the ERC20 interface. TODO: `false` is currently only implemented for estimated-buy-amount .
+* `atoms`: Required. If set to `true` all amounts are denominated in the smallest available unit (base quantity) of the token. If `false` all amounts are denominated in the "natural" unit of the respective token given by the number of decimals specified through the ERC20 interface. TODO: `false` is currently only implemented for estimated-buy-amount and estimated-amounts-at-price .
 * `hops`: Optional. TODO: document this once it has been implemented.
 
 Example: `<path>?atoms=true`
