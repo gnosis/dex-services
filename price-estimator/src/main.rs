@@ -3,13 +3,12 @@ mod models;
 mod orderbook;
 mod solver_rounding_buffer;
 
-use anyhow::Context as _;
 use core::{
     contracts::{stablex_contract::StableXContractImpl, web3_provider},
     http::HttpFactory,
     metrics::{HttpMetrics, MetricsServer},
     orderbook::EventBasedOrderbook,
-    token_info::{cached::TokenInfoCache, hardcoded::TokenData, TokenInfoFetching as _},
+    token_info::{cached::TokenInfoCache, hardcoded::TokenData},
     util::FutureWaitExt as _,
 };
 use ethcontract::PrivateKey;
@@ -88,7 +87,10 @@ fn main() {
     );
 
     let token_info = TokenInfoCache::with_cache(contract.clone(), options.token_data.into());
-    initialize_token_info_cache(&token_info).wait().unwrap();
+    token_info
+        .cache_all(10)
+        .wait()
+        .expect("failed to cache token infos");
     let token_info = Arc::new(token_info);
 
     let orderbook = EventBasedOrderbook::new(contract, web3, options.orderbook_file);
@@ -139,19 +141,4 @@ fn setup_driver_metrics() -> HttpMetrics {
         metric_server.serve(9586);
     });
     HttpMetrics::new(&prometheus_registry).unwrap()
-}
-
-async fn initialize_token_info_cache(cache: &TokenInfoCache) -> anyhow::Result<()> {
-    for token_id in cache.all_ids().await.context("failed to get all ids")? {
-        // Individual tokens might not conform to erc20 in which case we are unable to retrieve
-        // their info.
-        if let Err(err) = cache.get_token_info(token_id).await {
-            log::info!(
-                "failed to get token info for token id {}: {}",
-                token_id.0,
-                err
-            );
-        }
-    }
-    Ok(())
 }

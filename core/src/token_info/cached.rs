@@ -1,8 +1,11 @@
 use super::{TokenBaseInfo, TokenId, TokenInfoFetching};
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use async_std::sync::RwLock;
-use futures::future::{BoxFuture, FutureExt};
+use futures::{
+    future::{BoxFuture, FutureExt},
+    stream::{self, StreamExt as _},
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -32,6 +35,25 @@ impl TokenInfoCache {
             inner,
             cache: RwLock::new(cache),
         }
+    }
+
+    /// Attempt to retrieve and cache all token info that is not already cached.
+    /// Fails if `all_ids` fails. Does not fail if individual token infos fail.
+    pub async fn cache_all(&self, number_of_parallel_requests: usize) -> Result<()> {
+        stream::iter(self.all_ids().await.context("failed to get all ids")?)
+            .for_each_concurrent(number_of_parallel_requests, |token_id| async move {
+                // Individual tokens might not conform to erc20 in which case we are unable to retrieve
+                // their info.
+                if let Err(err) = self.get_token_info(token_id).await {
+                    log::warn!(
+                        "failed to get token info for token id {}: {}",
+                        token_id.0,
+                        err
+                    );
+                }
+            })
+            .await;
+        Ok(())
     }
 }
 
@@ -150,5 +172,41 @@ mod tests {
             .expect("First fetch not immediate")
             .expect("First fetch failed");
         assert_eq!(info, hardcoded);
+    }
+
+    #[test]
+    fn cache_all_works() {
+        fn token_ids() -> Vec<TokenId> {
+            [0, 1, 2].iter().cloned().map(TokenId).collect()
+        }
+
+        let mut inner = MockTokenInfoFetching::new();
+        inner
+            .expect_all_ids()
+            .times(1)
+            .returning(|| immediate!(Ok(token_ids())));
+        inner.expect_get_token_info().returning(|token_id| {
+            if token_id.0 == 2 {
+                immediate!(Err(anyhow!("")))
+            } else {
+                immediate!(Ok(TokenBaseInfo {
+                    alias: String::new(),
+                    decimals: token_id.0 as u8,
+                }))
+            }
+        });
+
+        let cache = TokenInfoCache::new(Arc::new(inner));
+        cache.cache_all(2).now_or_never().unwrap().unwrap();
+
+        for token_id in token_ids() {
+            let token_info = cache.get_token_info(token_id).now_or_never().unwrap();
+            if token_id.0 == 2 {
+                assert!(token_info.is_err());
+            } else {
+                let token_info = token_info.unwrap();
+                assert_eq!(token_info.decimals, token_id.0 as u8);
+            }
+        }
     }
 }
