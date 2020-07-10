@@ -42,7 +42,7 @@ pub struct Validity {
 /// A price expressed as a fraction of buy and sell amounts.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-pub struct Price {
+pub struct PriceFraction {
     /// The price numerator, or the buy amount.
     pub numerator: u128,
     /// The price denominator, or the sell amount.
@@ -61,7 +61,7 @@ pub struct Element {
     /// The validity of the order.
     pub valid: Validity,
     /// The price fraction for the order.
-    pub price: Price,
+    pub price: PriceFraction,
     /// The remaining sell amount available to this order.
     pub remaining_sell_amount: u128,
     /// The user order id.
@@ -113,7 +113,7 @@ impl Element {
                     from: read!(u32),
                     to: read!(u32),
                 },
-                price: Price {
+                price: PriceFraction {
                     numerator: read!(u128),
                     denominator: read!(u128),
                 },
@@ -140,7 +140,7 @@ mod abitrary_impl {
         balance: [u8; 32],
         pair: TokenPair,
         valid: Validity,
-        price: Price,
+        price: PriceFraction,
         remaining_sell_amount: u128,
         id: OrderId,
     }
@@ -220,7 +220,7 @@ mod tests {
                     from: 0x38393a3b,
                     to: 0x3c3d3e3f,
                 },
-                price: Price {
+                price: PriceFraction {
                     numerator: 0x404142434445464748494a4b4c4d4e4f,
                     denominator: 0x505152535455565758595a5b5c5d5e5f,
                 },

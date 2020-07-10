@@ -10,7 +10,7 @@ mod orderbook;
 mod data;
 
 pub use encoding::*;
-pub use orderbook::Orderbook;
+pub use orderbook::*;
 
 /// The fee factor that is applied to each order's buy price.
 const FEE_FACTOR: f64 = 1.0 / 0.999;
@@ -63,9 +63,9 @@ impl TransitiveOrderbook {
 /// Additionally, a transitive order over a single order is equal to that order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TransitiveOrder {
-    /// The effective buy amount for this transient order.
+    /// The effective buy amount for this transitive order.
     pub buy: f64,
-    /// The effective sell amount for this transient order.
+    /// The effective sell amount for this transitive order.
     pub sell: f64,
 }
 
@@ -192,8 +192,12 @@ impl Pricegraph {
     /// Note that this price is in exchange format, that is, it is expressed as
     /// the ratio between buy and sell amounts, with implicit fees.
     pub fn estimate_exchange_rate(&self, pair: TokenPair, sell_amount: f64) -> Option<f64> {
-        self.reduced_orderbook()
-            .fill_market_order(pair, sell_amount as _)
+        Some(
+            self.reduced_orderbook()
+                .fill_market_order(pair, sell_amount as _)
+                .expect("overlapping orders in reduced orderbook")?
+                .value(),
+        )
     }
 
     /// Returns a transitive order with a buy amount calculated such that there
@@ -224,7 +228,8 @@ impl Pricegraph {
     ) -> Option<TransitiveOrder> {
         let (buy, sell) = self
             .reduced_orderbook()
-            .fill_order_at_price(pair, limit_exchange_rate);
+            .fill_order_at_price(pair, LimitPrice::new(limit_exchange_rate)?)
+            .expect("overlapping orders in reduced orderbook");
         if buy == 0.0 {
             return None;
         }
@@ -273,11 +278,14 @@ impl Pricegraph {
         transitive_orderbook.asks.extend(
             orderbook
                 .clone()
-                .fill_transitive_orders(market.ask_pair(), spread),
+                .fill_transitive_orders(market.ask_pair(), spread)
+                .expect("overlapping orders in reduced orderbook"),
         );
-        transitive_orderbook
-            .bids
-            .extend(orderbook.fill_transitive_orders(market.bid_pair(), spread));
+        transitive_orderbook.bids.extend(
+            orderbook
+                .fill_transitive_orders(market.bid_pair(), spread)
+                .expect("overlapping orders in reduced orderbook"),
+        );
 
         for orders in &mut [
             &mut transitive_orderbook.asks,
@@ -313,7 +321,7 @@ mod tests {
             balance: U256::from(2) * U256::from(base),
             pair: TokenPair { buy: 0, sell: 1 },
             valid: Validity { from: 0, to: 1 },
-            price: Price {
+            price: PriceFraction {
                 numerator: 2 * base,
                 denominator: base,
             },

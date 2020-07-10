@@ -1,7 +1,7 @@
 use super::AccountState;
 use crate::util::CeiledDiv;
 use ethcontract::{Address, U256};
-use pricegraph::{Element, Price, TokenPair, Validity};
+use pricegraph::{Element, PriceFraction, TokenPair, Validity};
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct Order {
@@ -55,7 +55,7 @@ impl Order {
                 from: self.valid_from,
                 to: self.valid_until,
             },
-            price: Price {
+            price: PriceFraction {
                 numerator: self.numerator,
                 denominator: self.denominator,
             },

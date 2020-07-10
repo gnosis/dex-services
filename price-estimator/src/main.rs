@@ -1,6 +1,7 @@
 mod filter;
 mod models;
 mod orderbook;
+mod solver_rounding_buffer;
 
 use anyhow::Context as _;
 use core::{
@@ -8,7 +9,7 @@ use core::{
     http::HttpFactory,
     metrics::{HttpMetrics, MetricsServer},
     orderbook::EventBasedOrderbook,
-    token_info::{cached::TokenInfoCache, TokenInfoFetching as _},
+    token_info::{cached::TokenInfoCache, hardcoded::TokenData, TokenInfoFetching as _},
     util::FutureWaitExt as _,
 };
 use ethcontract::PrivateKey;
@@ -54,6 +55,12 @@ struct Options {
     /// be matched.
     #[structopt(long, env = "PRICE_ROUNDING_BUFFER", default_value = "0.001")]
     price_rounding_buffer: f64,
+
+    /// JSON encoded backup token information like in the driver. Used as an override to the ERC20
+    /// information we fetch from the block chain in case that information is wrong or unavailable
+    /// which can happen for example when tokens do not implement the standard properly.
+    #[structopt(long, env = "TOKEN_DATA", default_value = "{}")]
+    token_data: TokenData,
 }
 
 type Orderbook = orderbook::Orderbook<EventBasedOrderbook>;
@@ -80,7 +87,7 @@ fn main() {
             .unwrap(),
     );
 
-    let token_info = TokenInfoCache::new(contract.clone());
+    let token_info = TokenInfoCache::with_cache(contract.clone(), options.token_data.into());
     initialize_token_info_cache(&token_info).wait().unwrap();
     let token_info = Arc::new(token_info);
 
