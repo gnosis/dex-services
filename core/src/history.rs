@@ -42,9 +42,7 @@ impl ExchangeHistory {
         let (accounts, orders) = self.events.auction_state_for_batch(batch)?;
         Ok(orders
             .into_iter()
-            .map(|order| {
-                order.to_element(accounts.read_balance(order.sell_token, order.account_id))
-            })
+            .map(|order| order.to_element_with_accounts(&accounts))
             .collect())
     }
 

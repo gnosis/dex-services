@@ -1,3 +1,4 @@
+use super::AccountState;
 use crate::util::CeiledDiv;
 use ethcontract::{Address, U256};
 use pricegraph::{Element, Price, TokenPair, Validity};
@@ -61,6 +62,10 @@ impl Order {
             remaining_sell_amount: self.remaining_sell_amount,
             id: self.id,
         }
+    }
+
+    pub fn to_element_with_accounts(&self, accounts: &AccountState) -> Element {
+        self.to_element(accounts.read_balance(self.sell_token, self.account_id))
     }
 }
 
