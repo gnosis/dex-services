@@ -67,6 +67,8 @@ macro_rules! orderbook {
     }};
 }
 
+/// Macro for constructing a pricegraph API instance using a DSL for testing
+/// purposes.
 macro_rules! pricegraph {
     ($($arg:tt)*) => {
         Pricegraph::from_orderbook(orderbook!($($arg)*))
