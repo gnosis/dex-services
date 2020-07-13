@@ -286,7 +286,6 @@ impl Pricegraph {
                 .expect("overlapping orders in reduced orderbook"),
         );
 
-        /*j
         // NOTE: It is possible that there are still negative cycles when
         // searching for the inverse token pair, so reduce overlapping
         // transitive orderbook in the inverse market. However, there should be
@@ -298,7 +297,6 @@ impl Pricegraph {
             });
         debug_assert!(inverse_transitive_orderbook.asks.is_empty());
         debug_assert!(inverse_transitive_orderbook.bids.is_empty());
-        */
 
         transitive_orderbook.bids.extend(
             orderbook
