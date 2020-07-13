@@ -31,6 +31,6 @@ macro_rules! std_map {
 
 macro_rules! immediate {
     ($expression:expr) => {
-        async { $expression }.boxed()
+        async move { $expression }.boxed()
     };
 }
