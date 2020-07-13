@@ -4,6 +4,8 @@ use std::time::{Duration, SystemTime, SystemTimeError};
 
 /// The total time in a batch.
 pub const BATCH_DURATION: Duration = Duration::from_secs(300);
+/// The time in a batch where a solution may be submitted.
+pub const SOLVING_WINDOW: Duration = Duration::from_secs(240);
 
 /// Wraps a batch id as in the smart contract to add functionality related to
 /// the current time.
@@ -44,6 +46,10 @@ impl BatchId {
 
     pub fn solve_start_time(self) -> SystemTime {
         self.order_collection_start_time() + BATCH_DURATION
+    }
+
+    pub fn solve_end_time(self) -> SystemTime {
+        self.solve_start_time() + SOLVING_WINDOW
     }
 
     pub fn next(self) -> BatchId {
