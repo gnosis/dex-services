@@ -1,5 +1,9 @@
 #![deny(clippy::unreadable_literal)]
 
+#[cfg(test)]
+#[macro_use]
+mod test;
+
 mod encoding;
 mod graph;
 mod num;
@@ -9,8 +13,8 @@ mod orderbook;
 #[path = "../data/mod.rs"]
 mod data;
 
-pub use encoding::*;
-pub use orderbook::*;
+pub use self::encoding::*;
+pub use self::orderbook::*;
 
 /// The fee factor that is applied to each order's buy price.
 const FEE_FACTOR: f64 = 1.0 / 0.999;
@@ -281,6 +285,21 @@ impl Pricegraph {
                 .fill_transitive_orders(market.ask_pair(), spread)
                 .expect("overlapping orders in reduced orderbook"),
         );
+
+        /*j
+        // NOTE: It is possible that there are still negative cycles when
+        // searching for the inverse token pair, so reduce overlapping
+        // transitive orderbook in the inverse market. However, there should be
+        // no new transitive orders, so assert as much.
+        let inverse_transitive_orderbook =
+            orderbook.reduce_overlapping_transitive_orderbook(Market {
+                base: market.quote,
+                quote: market.base,
+            });
+        debug_assert!(inverse_transitive_orderbook.asks.is_empty());
+        debug_assert!(inverse_transitive_orderbook.bids.is_empty());
+        */
+
         transitive_orderbook.bids.extend(
             orderbook
                 .fill_transitive_orders(market.bid_pair(), spread)
@@ -448,5 +467,35 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    #[allow(clippy::unreadable_literal)]
+    fn transitive_orderbook_reduces_remaining_negative_cycles_in_inverse_market() {
+        //   /--------------1.0------------\
+        //  /---0.5---v                     v
+        // 0          1          2          3
+        // ^---0.5---/
+        let pricegraph = pricegraph! {
+            users {
+                @0 {
+                    token 0 => 1_000_000,
+                }
+                @1 {
+                    token 0 => 1_000_000,
+                }
+                @2 {
+                    token 1 => 1_000_000,
+                }
+            }
+            orders {
+                owner @0 buying 3 [1_000_000] selling 0 [1_000_000],
+                owner @1 buying 1 [500_000] selling 0 [1_000_000],
+                owner @2 buying 0 [500_000] selling 1 [1_000_000],
+            }
+        };
+        let transitive_orderbook =
+            pricegraph.transitive_orderbook(Market { base: 3, quote: 2 }, None);
+        assert!(transitive_orderbook.asks.is_empty() && transitive_orderbook.bids.is_empty());
     }
 }
