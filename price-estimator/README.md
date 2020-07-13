@@ -46,8 +46,8 @@ Example Response:
 
 ```json
 {
-    "baseTokenId": "1",
-    "quoteTokenId": "7",
+    "baseTokenId": 1,
+    "quoteTokenId": 7,
     "buyAmountInBase": "79480982311034354",
     "sellAmountInQuote": "20000000000000000000",
 }
@@ -66,8 +66,8 @@ Example Response:
 
 ```json
 {
-    "baseTokenId": "1",
-    "quoteTokenId": "7",
+    "baseTokenId": 1,
+    "quoteTokenId": 7,
     "buyAmountInBase": "6098377078823660544",
     "sellAmountInQuote": "1497151572851208749056"
 }
@@ -78,3 +78,19 @@ The following result indicates that if we wanted to buy ETH (token 2) for DAI (t
 * `sellAmountInBase` estimates the sell amount (in quote tokens) a user can completely fill in the following batch at the specified `price_in_quote`.
 * `buyAmountInBase` is the computed buy amount (in base tokens) for the order from the specified price and estimated sell amount. Note that it might be possible to use a higher buy amount for the same returned sell amount and still likely get completely matched by the solver. This buy amount can be computed with a subsequent estimate buy amount API call using the returned sell amount in quote value.
 * The other fields repeat the parameters in the url back.
+
+# Testing
+
+To test a locally running price estimator with the frontend at https://mesa.eth.link/ we need to set our browser to allow websites to access localhost and change the url that the javascript uses for the price estimator. With chromium:
+
+1. `chromium --disable-web-security --user-data-dir=temp/`.
+2. Open the frontend.
+3. Open the developer tools with `F12`.
+4. In the browser console enter `dexPriceEstimatorApi.urlsByNetwork[1] = "http://localhost:8080/api/v1/"`.
+5. Induce a request by changing the sell amount and check that price estimator prints that it handled the request.
+
+It is useful to start the price estimator with logging enabled, using the gnosis staging node url and using a permanent orderbook file:
+
+```
+env RUST_LOG=warn,price_estimator=info,core=info cargo run -p price-estimator -- --node-url https://staging-openethereum.mainnet.gnosisdev.com --orderbook-file ../orderbook-file-mainnet
+```

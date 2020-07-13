@@ -1,7 +1,7 @@
 //! This module implements decoding for the standard `BatchExchange` contract
 //! encoded orders.
 
-use primitive_types::{H160, U256};
+pub use primitive_types::{H160, U256};
 use thiserror::Error;
 
 /// The stride of an orderbook element in bytes.
