@@ -593,7 +593,6 @@ mod tests {
     use super::*;
     use crate::test::prelude::*;
     use crate::FEE_FACTOR;
-    use assert_approx_eq::assert_approx_eq;
 
     impl Orderbook {
         /// Retrieve the weight of an edge in the projection graph. This is used for
