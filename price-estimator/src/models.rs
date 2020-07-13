@@ -51,9 +51,7 @@ pub struct QueryParameters {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EstimatedOrderResult {
-    #[serde(with = "display_fromstr")]
     pub base_token_id: u16,
-    #[serde(with = "display_fromstr")]
     pub quote_token_id: u16,
     #[serde(with = "display_fromstr")]
     pub buy_amount_in_base: f64,
@@ -164,8 +162,8 @@ mod tests {
         let serialized = serde_json::to_string(&original).unwrap();
         let json: Value = serde_json::from_str(&serialized).unwrap();
         let expected = serde_json::json!({
-            "baseTokenId": "1",
-            "quoteTokenId": "2",
+            "baseTokenId": 1,
+            "quoteTokenId": 2,
             "buyAmountInBase": "3",
             "sellAmountInQuote": "4",
         });
