@@ -591,68 +591,8 @@ impl From<NegativeCycle<NodeIndex>> for OverlapError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::encoding::UserId;
+    use crate::test::prelude::*;
     use crate::FEE_FACTOR;
-    use assert_approx_eq::assert_approx_eq;
-
-    /// Returns a `UserId` for a test user index.
-    ///
-    /// This method is meant to be used in conjunction with orderbooks created
-    /// with the `orderbook` macro.
-    fn user_id(id: u8) -> UserId {
-        UserId::repeat_byte(id)
-    }
-
-    /// Macro for constructing an orderbook using a DSL for testing purposes.
-    macro_rules! orderbook {
-        (
-            users {$(
-                @ $user:tt {$(
-                    token $token:tt => $balance:expr,
-                )*}
-            )*}
-            orders {$(
-                owner @ $owner:tt
-                buying $buy:tt [ $buy_amount:expr ]
-                selling $sell:tt [ $sell_amount:expr ] $( ($remaining:expr) )?
-            ,)*}
-        ) => {{
-            let mut balances = std::collections::HashMap::new();
-            $($(
-                balances.insert(($user, $token), primitive_types::U256::from($balance));
-            )*)*
-            let mut users = std::collections::HashMap::new();
-            let elements = vec![$(
-                $crate::encoding::Element {
-                    user: user_id($owner),
-                    balance: balances[&($owner, $sell)],
-                    pair: $crate::encoding::TokenPair {
-                        buy: $buy,
-                        sell: $sell,
-                    },
-                    valid: $crate::encoding::Validity {
-                        from: 0,
-                        to: u32::max_value(),
-                    },
-                    price: $crate::encoding::PriceFraction {
-                        numerator: $buy_amount,
-                        denominator: $sell_amount,
-                    },
-                    remaining_sell_amount: match &[$sell_amount, $($remaining)?][..] {
-                        [_, remaining] => *remaining,
-                        _ => $sell_amount,
-                    },
-                    id: {
-                        let count = users.entry($owner).or_insert(0u16);
-                        let id = *count;
-                        *count += 1;
-                        id
-                    },
-                },
-            )*];
-            Orderbook::from_elements(elements)
-        }};
-    }
 
     impl Orderbook {
         /// Retrieve the weight of an edge in the projection graph. This is used for
