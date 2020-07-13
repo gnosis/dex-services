@@ -1,6 +1,9 @@
 #![deny(clippy::unreadable_literal)]
 
 #[cfg(test)]
+#[path = "../data/mod.rs"]
+mod data;
+#[cfg(test)]
 #[macro_use]
 mod test;
 
@@ -8,10 +11,6 @@ mod encoding;
 mod graph;
 mod num;
 mod orderbook;
-
-#[cfg(test)]
-#[path = "../data/mod.rs"]
-mod data;
 
 pub use self::encoding::*;
 pub use self::orderbook::*;
@@ -330,20 +329,17 @@ mod tests {
 
     #[test]
     fn transitive_orderbook_simple() {
-        let user0 = UserId::from_low_u64_le(0);
         let base: u128 = 1_000_000_000_000;
-        let pricegraph = Pricegraph::new(vec![Element {
-            user: user0,
-            balance: U256::from(2) * U256::from(base),
-            pair: TokenPair { buy: 0, sell: 1 },
-            valid: Validity { from: 0, to: 1 },
-            price: PriceFraction {
-                numerator: 2 * base,
-                denominator: base,
-            },
-            remaining_sell_amount: base,
-            id: 0,
-        }]);
+        let pricegraph = pricegraph! {
+            users {
+                @0 {
+                    token 1 => 2 * base,
+                }
+            }
+            orders {
+                owner @0 buying 0 [2 * base] selling 1 [base],
+            }
+        };
 
         let orderbook = pricegraph.transitive_orderbook(Market { base: 0, quote: 1 }, None);
         assert_eq!(orderbook.asks, vec![]);
