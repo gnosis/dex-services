@@ -189,7 +189,7 @@ impl Orderbook {
     /// negative cycles.
     pub fn fill_market_ring_trade(&mut self, market: Market) -> Option<Ring> {
         if !self.is_token_pair_valid(market.bid_pair()) {
-            return Default::default();
+            return None;
         }
 
         let (base, quote) = (node_index(market.base), node_index(market.quote));
