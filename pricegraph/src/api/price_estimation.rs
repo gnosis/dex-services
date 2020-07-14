@@ -15,7 +15,7 @@ impl Pricegraph {
     ///
     /// Note that this price is in exchange format, that is, it is expressed as
     /// the ratio between buy and sell amounts, with implicit fees.
-    pub fn estimate_limit_price(&self, pair: TokenPair, sell_amount: f64) -> Option<f64> {
+    pub fn estimate_exchange_rate(&self, pair: TokenPair, sell_amount: f64) -> Option<f64> {
         let mut orderbook = self.reduced_orderbook();
 
         // NOTE: This method works by searching for the "best" counter
@@ -60,7 +60,7 @@ impl Pricegraph {
         pair: TokenPair,
         sell_amount: f64,
     ) -> Option<TransitiveOrder> {
-        let price = self.estimate_limit_price(pair, sell_amount)?;
+        let price = self.estimate_exchange_rate(pair, sell_amount)?;
         Some(TransitiveOrder {
             buy: sell_amount * price,
             sell: sell_amount,
@@ -72,7 +72,7 @@ impl Pricegraph {
     /// price and there exists overlapping transitive orders to completely fill
     /// the order. Returns `None` if no overlapping transitive orders exist at
     /// the given limit price.
-    pub fn order_for_limit_price(
+    pub fn order_for_limit_exchange_rate(
         &self,
         pair: TokenPair,
         limit_price: f64,
@@ -111,14 +111,14 @@ impl Pricegraph {
     /// orders exist for the given limit price.
     ///
     /// Note that this method is subtly different to
-    /// `Pricegraph::order_for_limit_price` in that the limit price for the
+    /// `Pricegraph::order_for_limit_exchange_rate` in that the limit price for the
     /// resulting order is always equal to the specified price.
-    pub fn order_at_limit_price(
+    pub fn order_at_exchange_rate(
         &self,
         pair: TokenPair,
         limit_price: f64,
     ) -> Option<TransitiveOrder> {
-        let order = self.order_for_limit_price(pair, limit_price)?;
+        let order = self.order_for_limit_exchange_rate(pair, limit_price)?;
         Some(TransitiveOrder {
             buy: order.sell * limit_price,
             sell: order.sell,
@@ -170,52 +170,53 @@ mod tests {
 
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 2, sell: 1 }, 500_000.0)
+                .estimate_exchange_rate(TokenPair { buy: 2, sell: 1 }, 500_000.0)
                 .unwrap(),
             99.0 / FEE_FACTOR.powi(2)
         );
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 1, sell: 2 }, 50_000_000.0)
+                .estimate_exchange_rate(TokenPair { buy: 1, sell: 2 }, 50_000_000.0)
                 .unwrap(),
             1.0 / (101.0 * FEE_FACTOR.powi(2))
         );
 
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 2, sell: 1 }, 1_500_000.0)
+                .estimate_exchange_rate(TokenPair { buy: 2, sell: 1 }, 1_500_000.0)
                 .unwrap(),
             95.0 / FEE_FACTOR.powi(2)
         );
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 1, sell: 2 }, 150_000_000.0)
+                .estimate_exchange_rate(TokenPair { buy: 1, sell: 2 }, 150_000_000.0)
                 .unwrap(),
             1.0 / (105.0 * FEE_FACTOR.powi(2))
         );
 
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 2, sell: 1 }, 2_500_000.0)
+                .estimate_exchange_rate(TokenPair { buy: 2, sell: 1 }, 2_500_000.0)
                 .unwrap(),
             90.0 / FEE_FACTOR.powi(2)
         );
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 1, sell: 2 }, 250_000_000.0)
+                .estimate_exchange_rate(TokenPair { buy: 1, sell: 2 }, 250_000_000.0)
                 .unwrap(),
             1.0 / (110.0 * FEE_FACTOR.powi(2))
         );
 
-        let price = pricegraph.estimate_limit_price(TokenPair { buy: 2, sell: 1 }, 10_000_000.0);
+        let price = pricegraph.estimate_exchange_rate(TokenPair { buy: 2, sell: 1 }, 10_000_000.0);
         assert!(price.is_none());
 
-        let price = pricegraph.estimate_limit_price(TokenPair { buy: 1, sell: 2 }, 1_000_000_000.0);
+        let price =
+            pricegraph.estimate_exchange_rate(TokenPair { buy: 1, sell: 2 }, 1_000_000_000.0);
         assert!(price.is_none());
     }
 
     #[test]
-    fn order_for_limit_price_has_correct_amounts() {
+    fn order_for_limit_exchange_rate_has_correct_amounts() {
         //    /-1.0---v
         //   /--2.0---v
         //  /---4.0---v
@@ -242,31 +243,31 @@ mod tests {
         let TransitiveOrder { buy, sell } = pricegraph
             // NOTE: 1 for 1.001 is not enough to match any volume because
             // fees need to be applied twice!
-            .order_for_limit_price(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR)
+            .order_for_limit_exchange_rate(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR)
             .unwrap();
         assert_approx_eq!(buy, 0.0);
         assert_approx_eq!(sell, 0.0);
 
         let TransitiveOrder { buy, sell } = pricegraph
-            .order_for_limit_price(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR.powi(2))
+            .order_for_limit_exchange_rate(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR.powi(2))
             .unwrap();
         assert_approx_eq!(buy, 1_000_000.0);
         assert_approx_eq!(sell, 1_000_000.0 * FEE_FACTOR);
 
         let TransitiveOrder { buy, sell } = pricegraph
-            .order_for_limit_price(TokenPair { buy: 2, sell: 1 }, 0.3)
+            .order_for_limit_exchange_rate(TokenPair { buy: 2, sell: 1 }, 0.3)
             .unwrap();
         assert_approx_eq!(buy, 2_000_000.0);
         assert_approx_eq!(sell, 3_000_000.0 * FEE_FACTOR);
 
         let TransitiveOrder { buy, sell } = pricegraph
-            .order_for_limit_price(TokenPair { buy: 2, sell: 1 }, 0.25 / FEE_FACTOR.powi(2))
+            .order_for_limit_exchange_rate(TokenPair { buy: 2, sell: 1 }, 0.25 / FEE_FACTOR.powi(2))
             .unwrap();
         assert_approx_eq!(buy, 3_000_000.0);
         assert_approx_eq!(sell, 7_000_000.0 * FEE_FACTOR);
 
         let TransitiveOrder { buy, sell } = pricegraph
-            .order_for_limit_price(TokenPair { buy: 2, sell: 1 }, 0.1)
+            .order_for_limit_exchange_rate(TokenPair { buy: 2, sell: 1 }, 0.1)
             .unwrap();
         assert_approx_eq!(buy, 3_000_000.0);
         assert_approx_eq!(sell, 7_000_000.0 * FEE_FACTOR);
@@ -288,20 +289,20 @@ mod tests {
         };
 
         let TransitiveOrder { buy, sell } = pricegraph
-            .order_for_limit_price(TokenPair { buy: 2, sell: 1 }, 0.5)
+            .order_for_limit_exchange_rate(TokenPair { buy: 2, sell: 1 }, 0.5)
             .unwrap();
         assert_approx_eq!(buy, 1_000_000.0);
         assert_approx_eq!(sell, 1_000_000.0 * FEE_FACTOR);
 
         let TransitiveOrder { buy, sell } = pricegraph
-            .order_at_limit_price(TokenPair { buy: 2, sell: 1 }, 0.5)
+            .order_at_exchange_rate(TokenPair { buy: 2, sell: 1 }, 0.5)
             .unwrap();
         assert_approx_eq!(buy, 500_000.0 * FEE_FACTOR);
         assert_approx_eq!(sell, 1_000_000.0 * FEE_FACTOR);
     }
 
     #[test]
-    fn estimate_limit_price_returns_none_for_invalid_token_pairs() {
+    fn estimate_exchange_rate_returns_none_for_invalid_token_pairs() {
         //   /---1.0---v
         //  0          1          2 --0.5--> 4
         //  ^---1.0---/
@@ -326,21 +327,21 @@ mod tests {
 
         // Token 3 is not part of the orderbook.
         assert_eq!(
-            pricegraph.estimate_limit_price(TokenPair { buy: 1, sell: 3 }, 500_000.0),
+            pricegraph.estimate_exchange_rate(TokenPair { buy: 1, sell: 3 }, 500_000.0),
             None,
         );
         // Tokens 4 and 1 are not connected.
         assert_eq!(
-            pricegraph.estimate_limit_price(TokenPair { buy: 4, sell: 1 }, 500_000.0),
+            pricegraph.estimate_exchange_rate(TokenPair { buy: 4, sell: 1 }, 500_000.0),
             None,
         );
         // Tokens 5 and 42 are out of bounds.
         assert_eq!(
-            pricegraph.estimate_limit_price(TokenPair { buy: 5, sell: 1 }, 500_000.0),
+            pricegraph.estimate_exchange_rate(TokenPair { buy: 5, sell: 1 }, 500_000.0),
             None,
         );
         assert_eq!(
-            pricegraph.estimate_limit_price(TokenPair { buy: 2, sell: 42 }, 500_000.0),
+            pricegraph.estimate_exchange_rate(TokenPair { buy: 2, sell: 42 }, 500_000.0),
             None,
         );
     }
@@ -365,7 +366,7 @@ mod tests {
         };
 
         let TransitiveOrder { buy, sell } = pricegraph
-            .order_for_limit_price(TokenPair { buy: 1, sell: 0 }, 1.0)
+            .order_for_limit_exchange_rate(TokenPair { buy: 1, sell: 0 }, 1.0)
             .unwrap();
         assert_approx_eq!(
             buy,

@@ -270,7 +270,7 @@ async fn estimate_amounts_at_price_atoms<T>(
     let transitive_order = orderbook
         .get_pricegraph()
         .await
-        .order_at_limit_price(token_pair, exchange_rate);
+        .order_at_exchange_rate(token_pair, exchange_rate);
     let (buy_amount_in_base, sell_amount_in_quote) = transitive_order
         .map(|order| {
             (
@@ -296,7 +296,7 @@ async fn estimate_best_ask_price<T>(
     let price = orderbook
         .get_pricegraph()
         .await
-        .estimate_limit_price(token_pair, 0.0)
+        .estimate_exchange_rate(token_pair, 0.0)
         .map(|xrate| {
             // NOTE: Exchange rate is the inverse of price for an ask order.
             1.0 / apply_rounding_buffer(xrate, price_rounding_buffer)

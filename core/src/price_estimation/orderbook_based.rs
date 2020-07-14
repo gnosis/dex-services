@@ -41,7 +41,7 @@ trait PriceEstimating {
 impl PriceEstimating for Pricegraph {
     fn estimate_price(&self, pair: TokenPair, volume: f64) -> Option<f64> {
         // Clone the pricegraph so that each estimation is independent of one another.
-        self.estimate_limit_price(pair, volume)
+        self.estimate_exchange_rate(pair, volume)
     }
 }
 
