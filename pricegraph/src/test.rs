@@ -1,5 +1,8 @@
 //! Module containing test utilities and macros.
 
+#[path = "../data/mod.rs"]
+pub mod data;
+
 use crate::encoding::UserId;
 
 /// Returns a `UserId` for a test user index.
@@ -63,7 +66,7 @@ macro_rules! orderbook {
                 },
             },
         )*];
-        Orderbook::from_elements(elements)
+        $crate::orderbook::Orderbook::from_elements(elements)
     }};
 }
 
