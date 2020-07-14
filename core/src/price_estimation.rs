@@ -48,6 +48,40 @@ pub struct PriceOracle {
     source: Box<dyn PriceSource + Send + Sync>,
 }
 
+pub fn default_price_source(
+    http_factory: &HttpFactory,
+    orderbook_reader: Arc<dyn StableXOrderBookReading>,
+    token_data: TokenData,
+    token_info_fetcher: Arc<dyn TokenInfoFetching>,
+    update_interval: Duration,
+) -> Result<Box<dyn PriceSource + Send + Sync>> {
+    let (kraken_source, _) = ThreadedPriceSource::new(
+        token_info_fetcher.clone(),
+        KrakenClient::new(http_factory, token_info_fetcher.clone())?,
+        update_interval,
+    );
+    let (dexag_source, _) = ThreadedPriceSource::new(
+        token_info_fetcher.clone(),
+        DexagClient::new(http_factory, token_info_fetcher.clone())?,
+        update_interval,
+    );
+    let (oneinch_source, _) = ThreadedPriceSource::new(
+        token_info_fetcher.clone(),
+        OneinchClient::new(http_factory, token_info_fetcher.clone())?,
+        update_interval,
+    );
+    let averaged_source = Box::new(AveragePriceSource::new(vec![
+        Box::new(kraken_source),
+        Box::new(dexag_source),
+        Box::new(oneinch_source),
+        Box::new(PricegraphEstimator::new(orderbook_reader)),
+    ]));
+    Ok(Box::new(PriorityPriceSource::new(vec![
+        averaged_source,
+        Box::new(token_data),
+    ])))
+}
+
 impl PriceOracle {
     /// Creates a new price oracle from a token whitelist data.
     pub fn new(
@@ -61,35 +95,16 @@ impl PriceOracle {
             contract,
             token_data.clone().into(),
         ));
-        let (kraken_source, _) = ThreadedPriceSource::new(
+        let source = default_price_source(
+            http_factory,
+            orderbook_reader,
+            token_data,
             token_info_fetcher.clone(),
-            KrakenClient::new(http_factory, token_info_fetcher.clone())?,
             update_interval,
-        );
-        let (dexag_source, _) = ThreadedPriceSource::new(
-            token_info_fetcher.clone(),
-            DexagClient::new(http_factory, token_info_fetcher.clone())?,
-            update_interval,
-        );
-        let (oneinch_source, _) = ThreadedPriceSource::new(
-            token_info_fetcher.clone(),
-            OneinchClient::new(http_factory, token_info_fetcher.clone())?,
-            update_interval,
-        );
-        let averaged_source = Box::new(AveragePriceSource::new(vec![
-            Box::new(kraken_source),
-            Box::new(dexag_source),
-            Box::new(oneinch_source),
-            Box::new(PricegraphEstimator::new(orderbook_reader)),
-        ]));
-        let prioritized_source = Box::new(PriorityPriceSource::new(vec![
-            averaged_source,
-            Box::new(token_data),
-        ]));
-
+        )?;
         Ok(PriceOracle {
             token_info_fetcher,
-            source: prioritized_source,
+            source,
         })
     }
 
