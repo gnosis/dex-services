@@ -7,14 +7,16 @@ use core::{
     contracts::{stablex_contract::StableXContractImpl, web3_provider},
     http::HttpFactory,
     metrics::{HttpMetrics, MetricsServer},
-    orderbook::EventBasedOrderbook,
-    token_info::{cached::TokenInfoCache, hardcoded::TokenData},
+    models::TokenId,
+    orderbook::{EventBasedOrderbook, StableXOrderBookReading},
+    price_estimation::{self, price_source},
+    token_info::{cached::TokenInfoCache, hardcoded::TokenData, TokenInfoFetching as _},
     util::FutureWaitExt as _,
 };
 use ethcontract::PrivateKey;
+use orderbook::Orderbook;
 use prometheus::Registry;
-use std::net::SocketAddr;
-use std::{num::ParseIntError, path::PathBuf, sync::Arc, thread, time::Duration};
+use std::{net::SocketAddr, num::ParseIntError, path::PathBuf, sync::Arc, thread, time::Duration};
 use structopt::StructOpt;
 use tokio::{runtime, time};
 use url::Url;
@@ -50,19 +52,26 @@ struct Options {
     )]
     orderbook_update_interval: Duration,
 
-    /// The safety margin to subtract from the estimated price, in order to make it more likely to
-    /// be matched.
-    #[structopt(long, env = "PRICE_ROUNDING_BUFFER", default_value = "0.001")]
-    price_rounding_buffer: f64,
+    #[structopt(
+        long,
+        env = "PRICE_SOURCE_UPDATE_INTERVAL",
+        default_value = "300",
+        parse(try_from_str = duration_secs),
+    )]
+    price_source_update_interval: Duration,
 
     /// JSON encoded backup token information like in the driver. Used as an override to the ERC20
     /// information we fetch from the block chain in case that information is wrong or unavailable
     /// which can happen for example when tokens do not implement the standard properly.
     #[structopt(long, env = "TOKEN_DATA", default_value = "{}")]
     token_data: TokenData,
-}
 
-type Orderbook = orderbook::Orderbook<EventBasedOrderbook>;
+    /// An extra factor multiplied with the rounding buffer calculation. Useful to allow it to be
+    /// more pessimistic in case prices move.
+    /// Can be set to `0` to effectively turn off the rounding buffer.
+    #[structopt(long, env = "ROUNDING_BUFFER_FACTOR", default_value = "2.0")]
+    rounding_buffer_factor: f64,
+}
 
 fn main() {
     let options = Options::from_args();
@@ -71,9 +80,6 @@ fn main() {
         "Starting price estimator with runtime options: {:#?}",
         options
     );
-    let price_rounding_buffer = options.price_rounding_buffer;
-    assert!(price_rounding_buffer.is_finite());
-    assert!(price_rounding_buffer >= 0.0 && price_rounding_buffer <= 1.0);
 
     let driver_http_metrics = setup_driver_metrics();
     let http_factory = HttpFactory::new(options.timeout, driver_http_metrics);
@@ -86,7 +92,9 @@ fn main() {
             .unwrap(),
     );
 
-    let token_info = TokenInfoCache::with_cache(contract.clone(), options.token_data.into());
+    let token_info =
+        TokenInfoCache::with_cache(contract.clone(), options.token_data.clone().into());
+    log::info!("Initializing token information");
     token_info
         .cache_all(10)
         .wait()
@@ -94,9 +102,31 @@ fn main() {
     let token_info = Arc::new(token_info);
 
     let orderbook = EventBasedOrderbook::new(contract, web3, options.orderbook_file);
-    let orderbook = Arc::new(Orderbook::new(orderbook));
+    log::info!("Initializing orderbook.");
+    orderbook.initialize().wait().unwrap();
+    let orderbook_reader: Arc<dyn StableXOrderBookReading> = Arc::new(orderbook);
+    let price_source = price_estimation::default_price_source(
+        &http_factory,
+        orderbook_reader.clone(),
+        options.token_data,
+        token_info.clone(),
+        options.orderbook_update_interval,
+    )
+    .unwrap();
+    log::info!("Initializing price sources.");
+    // This is important so that we have at least the price for the fee so that we can apply the
+    // rounding buffer.
+    price_source::wait_for_price(price_source.as_ref(), TokenId(0)).wait();
+
+    let all_tokens = token_info.all_ids().wait().unwrap();
+    let orderbook = Arc::new(Orderbook::new(
+        orderbook_reader,
+        price_source,
+        all_tokens,
+        options.rounding_buffer_factor,
+    ));
+    log::info!("Initializing orderbook.");
     let _ = orderbook.update().wait();
-    log::info!("Orderbook initialized.");
 
     let mut runtime = runtime::Builder::new()
         .threaded_scheduler()
@@ -109,7 +139,7 @@ fn main() {
         options.orderbook_update_interval,
     ));
 
-    let filter = filter::all(orderbook, token_info, price_rounding_buffer);
+    let filter = filter::all(orderbook, token_info);
     let serve_task = runtime.spawn(warp::serve(filter).run(options.bind_address));
 
     log::info!("Server ready.");
@@ -125,7 +155,7 @@ async fn update_orderbook_forever(orderbook: Arc<Orderbook>, update_interval: Du
     loop {
         time::delay_for(update_interval).await;
         if let Err(err) = orderbook.update().await {
-            log::warn!("error updating orderbook: {:?}", err);
+            log::error!("error updating orderbook: {:?}", err);
         }
     }
 }

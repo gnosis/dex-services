@@ -14,25 +14,16 @@ use warp::{
 };
 
 /// Handles all supported requests under a `/api/v1` root path.
-pub fn all<T: Send + Sync + 'static>(
-    orderbook: Arc<Orderbook<T>>,
+pub fn all(
+    orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
-    price_rounding_buffer: f64,
 ) -> impl Filter<Extract = impl Reply, Error = Infallible> + Clone {
     warp::path!("api" / "v1" / ..)
         .and(
             markets(orderbook.clone())
-                .or(estimated_buy_amount(
-                    orderbook.clone(),
-                    token_info.clone(),
-                    price_rounding_buffer,
-                ))
-                .or(estimated_amounts_at_price(
-                    orderbook.clone(),
-                    token_info,
-                    price_rounding_buffer,
-                ))
-                .or(estimated_best_ask_price(orderbook, price_rounding_buffer)),
+                .or(estimated_buy_amount(orderbook.clone(), token_info.clone()))
+                .or(estimated_amounts_at_price(orderbook.clone(), token_info))
+                .or(estimated_best_ask_price(orderbook)),
         )
         .recover(handle_rejection)
 }
@@ -67,8 +58,8 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
 /// Validate a request of the form
 /// `/markets/<baseTokenId>-<quoteTokenId>`
 /// and answer it.
-fn markets<T: Send + Sync + 'static>(
-    orderbook: Arc<Orderbook<T>>,
+fn markets(
+    orderbook: Arc<Orderbook>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     markets_filter()
         .and(warp::any().map(move || orderbook.clone()))
@@ -79,13 +70,11 @@ fn markets<T: Send + Sync + 'static>(
 /// Validate a request of the form
 /// `/markets/<baseTokenId>-<quoteTokenId>/estimated-buy-amount/<sellAmountInQuoteToken>`
 /// and answer it.
-fn estimated_buy_amount<T: Send + Sync + 'static>(
-    orderbook: Arc<Orderbook<T>>,
+fn estimated_buy_amount(
+    orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
-    price_rounding_buffer: f64,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     estimated_buy_amount_filter()
-        .and(warp::any().map(move || price_rounding_buffer))
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_info.clone()))
         .and_then(estimate_buy_amount)
@@ -95,13 +84,11 @@ fn estimated_buy_amount<T: Send + Sync + 'static>(
 /// Validate a request of the form:
 /// `/markets/<baseTokenId>-<quoteTokenId>/estimated-amounts-at-price/<exchangeRate>`
 /// and answer it.
-fn estimated_amounts_at_price<T: Send + Sync + 'static>(
-    orderbook: Arc<Orderbook<T>>,
+fn estimated_amounts_at_price(
+    orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
-    price_rounding_buffer: f64,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     estimated_amounts_at_price_filter()
-        .and(warp::any().map(move || price_rounding_buffer))
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_info.clone()))
         .and_then(estimate_amounts_at_price)
@@ -111,12 +98,10 @@ fn estimated_amounts_at_price<T: Send + Sync + 'static>(
 /// Validate a request of the form:
 /// `/markets/<baseTokenId>-<quoteTokenId>/estimated-amounts-at-price/<exchangeRate>`
 /// and answer it.
-fn estimated_best_ask_price<T: Send + Sync + 'static>(
-    orderbook: Arc<Orderbook<T>>,
-    price_rounding_buffer: f64,
+fn estimated_best_ask_price(
+    orderbook: Arc<Orderbook>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     estimated_best_ask_price_filter()
-        .and(warp::any().map(move || price_rounding_buffer))
         .and(warp::any().map(move || orderbook.clone()))
         .and_then(estimate_best_ask_price)
         .with(warp::log("price_estimator::api::estimate_best_ask_price"))
@@ -161,13 +146,15 @@ fn estimated_best_ask_price_filter(
         .and(warp::query::<QueryParameters>())
 }
 
-async fn get_markets<T>(
+async fn get_markets(
     market: Market,
     _query: QueryParameters,
-    orderbook: Arc<Orderbook<T>>,
+    orderbook: Arc<Orderbook>,
 ) -> Result<impl Reply, Infallible> {
+    // TODO: should this route make use of the rounding buffer? This wasn't the case with the
+    // previous rounding buffer.
     let transitive_orderbook = orderbook
-        .get_pricegraph()
+        .pricegraph()
         .await
         .transitive_orderbook(*market, None);
     let result = MarketsResult::from(&transitive_orderbook);
@@ -184,12 +171,11 @@ async fn get_token_info(
         .map_err(|_| reject::custom(NoTokenInfo))
 }
 
-async fn estimate_buy_amount<T>(
+async fn estimate_buy_amount(
     token_pair: TokenPair,
     sell_amount_in_quote: f64,
     query: QueryParameters,
-    price_rounding_buffer: f64,
-    orderbook: Arc<Orderbook<T>>,
+    orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
     let sell_amount_in_quote_atoms = if query.atoms {
@@ -198,13 +184,12 @@ async fn estimate_buy_amount<T>(
         let token_info = get_token_info(token_pair.sell, token_infos.as_ref()).await?;
         sell_amount_in_quote * token_info.base_unit_in_atoms()
     };
-    let transitive_order = orderbook
-        .get_pricegraph()
-        .await
-        .order_for_sell_amount(token_pair, sell_amount_in_quote_atoms);
-    let buy_amount_in_base_atoms = transitive_order
-        .map(|order| apply_rounding_buffer(order.buy, price_rounding_buffer))
-        .unwrap_or_default();
+    let rounding_buffer = orderbook.rounding_buffer(token_pair).await;
+    let transitive_order = orderbook.pricegraph().await.order_for_sell_amount(
+        token_pair,
+        f64::max(sell_amount_in_quote_atoms - rounding_buffer, 0.0),
+    );
+    let buy_amount_in_base_atoms = transitive_order.map(|order| order.buy).unwrap_or_default();
     let buy_amount_in_base = if query.atoms {
         buy_amount_in_base_atoms
     } else {
@@ -220,34 +205,22 @@ async fn estimate_buy_amount<T>(
     Ok(warp::reply::json(&result))
 }
 
-async fn estimate_amounts_at_price<T>(
+async fn estimate_amounts_at_price(
     token_pair: TokenPair,
     price_in_quote: f64,
     query: QueryParameters,
-    price_rounding_buffer: f64,
-    orderbook: Arc<Orderbook<T>>,
+    orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
     let result = if query.atoms {
-        estimate_amounts_at_price_atoms(
-            token_pair,
-            price_in_quote,
-            price_rounding_buffer,
-            orderbook,
-        )
-        .await
+        estimate_amounts_at_price_atoms(token_pair, price_in_quote, orderbook).await
     } else {
         let buy_token_info = get_token_info(token_pair.buy, token_infos.as_ref()).await?;
         let sell_token_info = get_token_info(token_pair.sell, token_infos.as_ref()).await?;
         let price_in_quote_atoms = price_in_quote
             * (sell_token_info.base_unit_in_atoms() / buy_token_info.base_unit_in_atoms());
-        let mut result = estimate_amounts_at_price_atoms(
-            token_pair,
-            price_in_quote_atoms,
-            price_rounding_buffer,
-            orderbook,
-        )
-        .await;
+        let mut result =
+            estimate_amounts_at_price_atoms(token_pair, price_in_quote_atoms, orderbook).await;
         result.buy_amount_in_base /= buy_token_info.base_unit_in_atoms();
         result.sell_amount_in_quote /= sell_token_info.base_unit_in_atoms();
         result
@@ -256,29 +229,29 @@ async fn estimate_amounts_at_price<T>(
 }
 
 /// Like `estimate_amounts_at_price` but the price is given and returned in atoms.
-async fn estimate_amounts_at_price_atoms<T>(
+async fn estimate_amounts_at_price_atoms(
     token_pair: TokenPair,
     price_in_quote: f64,
-    price_rounding_buffer: f64,
-    orderbook: Arc<Orderbook<T>>,
+    orderbook: Arc<Orderbook>,
 ) -> EstimatedOrderResult {
-    // NOTE: The price in quote is `sell_amount / buy_amount` which is the
-    // inverse of an exchange rate. Additionally, we need to apply the price
-    // rounding buffer to the price, which will **increase** the exchange rate,
-    // making it more restrictive and the estimate more pessimistic.
-    let exchange_rate = 1.0 / apply_rounding_buffer(price_in_quote, price_rounding_buffer);
+    let exchange_rate = 1.0 / price_in_quote;
     let transitive_order = orderbook
-        .get_pricegraph()
+        .pricegraph()
         .await
         .order_at_exchange_rate(token_pair, exchange_rate);
     let (buy_amount_in_base, sell_amount_in_quote) = transitive_order
-        .map(|order| {
-            (
-                apply_rounding_buffer(order.buy, price_rounding_buffer),
-                order.sell,
-            )
-        })
+        .map(|order| (order.buy, order.sell))
         .unwrap_or_default();
+    // TODO: What to do about the rounding buffer? The order we get with this exchange rate
+    // is too optimistic because the solver will see it as if its sell amount had been reduced by
+    // the rounding buffer.
+    // If we increase the sell amount here to make up for this then buy_amount / sell_amount is no
+    // longer equal to price_in_quote.
+    // This might not be a problem in practice because the orderbook has already been
+    // conservatively worsened with double the rounding buffer than what the solver actually uses.
+    // Or we might be okay with the ratio equality no longer being exactly true.
+    let rounding_buffer = orderbook.rounding_buffer(token_pair).await;
+    let sell_amount_in_quote = sell_amount_in_quote + rounding_buffer;
     EstimatedOrderResult {
         base_token_id: token_pair.buy,
         quote_token_id: token_pair.sell,
@@ -287,35 +260,34 @@ async fn estimate_amounts_at_price_atoms<T>(
     }
 }
 
-async fn estimate_best_ask_price<T>(
+async fn estimate_best_ask_price(
     token_pair: TokenPair,
     _query: QueryParameters,
-    price_rounding_buffer: f64,
-    orderbook: Arc<Orderbook<T>>,
+    orderbook: Arc<Orderbook>,
 ) -> Result<impl Reply, Infallible> {
+    // TODO: Similar rounding buffer issue as above. Here we only have an exchange rate but the true
+    // exchange rate depends on the amounts.
     let price = orderbook
-        .get_pricegraph()
+        .pricegraph()
         .await
         .estimate_exchange_rate(token_pair, 0.0)
         .map(|xrate| {
             // NOTE: Exchange rate is the inverse of price for an ask order.
-            1.0 / apply_rounding_buffer(xrate, price_rounding_buffer)
+            1.0 / xrate
         });
 
     let result = PriceEstimateResult(price);
     Ok(warp::reply::json(&result))
 }
 
-fn apply_rounding_buffer(amount: f64, price_rounding_buffer: f64) -> f64 {
-    ((1.0 - price_rounding_buffer) * amount) as _
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::orderbook::DynPriceSource;
     use anyhow::{anyhow, Result};
-    use core::orderbook::StableXOrderBookReading;
+    use core::{orderbook::StableXOrderBookReading, price_estimation::price_source::PriceSource};
     use futures::future::{BoxFuture, FutureExt as _};
+    use std::collections::HashMap;
 
     fn empty_orderbook() -> impl StableXOrderBookReading {
         struct OrderbookReader {}
@@ -347,10 +319,28 @@ mod tests {
         TokenInfoFetcher {}
     }
 
+    fn empty_price_source() -> DynPriceSource {
+        struct PriceSourceImpl {}
+        impl PriceSource for PriceSourceImpl {
+            fn get_prices<'a>(
+                &'a self,
+                _tokens: &'a [TokenId],
+            ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
+                async { Err(anyhow!("")) }.boxed()
+            }
+        }
+        Box::new(PriceSourceImpl {})
+    }
+
     fn all_filter() -> impl Filter<Extract = impl Reply, Error = Infallible> + Clone {
-        let orderbook = Arc::new(Orderbook::new(empty_orderbook()));
         let token_info = Arc::new(empty_token_info());
-        all(orderbook, token_info, 0.0)
+        let orderbook = Arc::new(Orderbook::new(
+            Arc::new(empty_orderbook()),
+            empty_price_source(),
+            Vec::new(),
+            0.0,
+        ));
+        all(orderbook, token_info)
     }
 
     #[test]
