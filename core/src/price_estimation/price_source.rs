@@ -36,6 +36,48 @@ impl PriceSource for NoopPriceSource {
     }
 }
 
+/// Wait for the price source to have a price for this token.
+/// Useful for ThreadedPriceSource to ensure that it has updated at least once.
+pub async fn wait_for_price(price_source: &dyn PriceSource, token_id: TokenId) {
+    loop {
+        let has_price = match price_source.get_prices(&[token_id]).await {
+            Ok(prices) => prices.get(&token_id).is_some(),
+            Err(_) => false,
+        };
+        if has_price {
+            return;
+        }
+        async_std::task::sleep(std::time::Duration::from_secs(1)).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wait_for_price_returns() {
+        let mut price_source = MockPriceSource::new();
+        price_source
+            .expect_get_prices()
+            .returning(|_| immediate!(Ok(hash_map!(TokenId(0) => 0))));
+        assert!(wait_for_price(&price_source, TokenId(0))
+            .now_or_never()
+            .is_some());
+    }
+
+    #[test]
+    fn wait_for_price_waits() {
+        let mut price_source = MockPriceSource::new();
+        price_source
+            .expect_get_prices()
+            .returning(|_| futures::future::pending().boxed());
+        assert!(wait_for_price(&price_source, TokenId(0))
+            .now_or_never()
+            .is_none());
+    }
+}
+
 // We would like to tag `PriceSource` with `mockall::automock` but mockall does not support the
 // lifetime bounds on `tokens`: https://github.com/asomers/mockall/issues/134 . As a workaround
 // we create a similar trait with simpler lifetimes on which mockall works.

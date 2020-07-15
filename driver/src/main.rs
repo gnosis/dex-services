@@ -247,6 +247,7 @@ fn main() {
         options.price_source_update_interval,
     )
     .unwrap();
+    price_oracle.initialize().wait();
 
     // Setup price.
     let price_finder = price_finding::create_price_finder(

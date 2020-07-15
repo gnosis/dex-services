@@ -70,11 +70,16 @@ pub fn default_price_source(
         OneinchClient::new(http_factory, token_info_fetcher.clone())?,
         update_interval,
     );
+    let (pricegraph_source, _) = ThreadedPriceSource::new(
+        token_info_fetcher.clone(),
+        PricegraphEstimator::new(orderbook_reader),
+        update_interval,
+    );
     let averaged_source = Box::new(AveragePriceSource::new(vec![
         Box::new(kraken_source),
         Box::new(dexag_source),
         Box::new(oneinch_source),
-        Box::new(PricegraphEstimator::new(orderbook_reader)),
+        Box::new(pricegraph_source),
     ]));
     Ok(Box::new(PriorityPriceSource::new(vec![
         averaged_source,
@@ -117,6 +122,11 @@ impl PriceOracle {
             token_info_fetcher,
             source: Box::new(source),
         }
+    }
+
+    /// Wait for the internal price sources to at least have a price for the fee token.
+    pub async fn initialize(&self) {
+        price_source::wait_for_price(self.source.as_ref(), TokenId(0)).await;
     }
 
     /// Gets price estimates for some tokens
