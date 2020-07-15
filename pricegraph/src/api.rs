@@ -72,4 +72,12 @@ impl Market {
             sell: self.quote,
         }
     }
+
+    /// Returns the inverse market.
+    pub fn inverse(self) -> Market {
+        Market {
+            base: self.quote,
+            quote: self.base,
+        }
+    }
 }

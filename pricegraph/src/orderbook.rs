@@ -14,12 +14,12 @@ pub use self::flow::{Flow, Ring};
 use self::order::{Order, OrderCollector, OrderMap};
 pub use self::scalar::{ExchangeRate, LimitPrice};
 use self::user::{User, UserMap};
+use crate::api::Market;
 use crate::encoding::{Element, TokenId, TokenPair};
 use crate::graph::bellman_ford::{self, NegativeCycle};
 use crate::graph::path;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
 use crate::num;
-use crate::{Market, TransitiveOrder, TransitiveOrderbook};
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::NodeIndexable;
 use primitive_types::U256;
@@ -141,42 +141,6 @@ impl Orderbook {
         debug_assert!(!self.is_overlapping());
     }
 
-    /// Find negative cycles in the specified market and splits each one into a
-    /// `base -> quote` (ask) transitive order and a `quote -> base` (bid)
-    /// transitive order, reducing them both. Returns the computed overlapping
-    /// transitive orderbook for that market.
-    ///
-    /// Note that there may exist additional transitive orders that overlap with
-    /// orders in the resulting transitive orderbook. However, all negative
-    /// cycles over the specified market will be removed from the orderbook
-    /// graph. That is, the subgraph(s) containing the `quote` and `base` tokens
-    /// are guaranteed to be fully reduced.
-    pub fn reduce_overlapping_transitive_orderbook(
-        &mut self,
-        market: Market,
-    ) -> TransitiveOrderbook {
-        let mut overlap = TransitiveOrderbook::default();
-        while let Some(Ring { ask, bid }) = self.fill_market_ring_trade(market) {
-            overlap.asks.push(ask.as_transitive_order());
-            overlap.bids.push(bid.as_transitive_order());
-        }
-
-        // NOTE: In the case where the market `quote` and `base` token are in
-        // different disconnected subgraphs, it is possible that the `base`
-        // token's subgraph contains negative cycles. In order to ensure that
-        // the `base` token subgraph is also reduced, fill any remaining
-        // negative cycles in the inverse market. However, there should be no
-        // ring trades over the inverse market (if there were, then the `quote`
-        // and `base` token would be part of the same subgraph), so assert it.
-        let inverse_ring = self.fill_market_ring_trade(Market {
-            base: market.quote,
-            quote: market.base,
-        });
-        debug_assert_eq!(inverse_ring, None);
-
-        overlap
-    }
-
     /// Fills a ring trade over the specified market, and returns the flow
     /// corresponding to both ask and bid segments of the ring. Returns `None`
     /// if there are no overlapping ring trades over the specified market.
@@ -236,48 +200,6 @@ impl Orderbook {
         }
 
         None
-    }
-
-    /// Fills transitive orders along a token pair, optionally specifying a
-    /// maximum spread for the orders.
-    ///
-    /// Returns a vector containing all the transitive orders that were filled.
-    ///
-    /// Note that the spread is a decimal fraction that defines the maximum
-    /// transitive order exchange rate with the equation:
-    /// `first_transitive_xrate + first_transitive_xrate * spread`. This means
-    /// that given a spread of `0.5` (or 50%), and if the cheapest transitive
-    /// order has an exchange rate of `1.2`, then the maximum exchange rate will
-    /// be `1.8`.
-    ///
-    /// # Panics
-    ///
-    /// This method panics if the spread is zero or negative.
-    pub fn fill_transitive_orders(
-        &mut self,
-        pair: TokenPair,
-        spread: Option<f64>,
-    ) -> Result<Vec<TransitiveOrder>, OverlapError> {
-        if let Some(spread) = spread {
-            assert!(spread > 0.0, "invalid spread");
-        }
-
-        let mut orders = Vec::new();
-        let mut max_xrate = None;
-
-        while let Some(flow) = self.fill_optimal_transitive_order_if(pair, |flow| {
-            if let Some(spread) = spread {
-                let max_xrate =
-                    max_xrate.get_or_insert_with(|| flow.exchange_rate.value() * (1.0 + spread));
-                flow.exchange_rate <= *max_xrate
-            } else {
-                true
-            }
-        })? {
-            orders.push(flow.as_transitive_order());
-        }
-
-        Ok(orders)
     }
 
     /// Fill a market order in the current orderbook graph returning the maximum
@@ -376,7 +298,7 @@ impl Orderbook {
     /// method is similar to `Orderbook::fill_optimal_transitive_order_if`
     /// except it does not check a condition on the discovered path's flow
     /// before filling.
-    fn fill_optimal_transitive_order(
+    pub fn fill_optimal_transitive_order(
         &mut self,
         pair: TokenPair,
     ) -> Result<Option<Flow>, OverlapError> {
@@ -392,7 +314,7 @@ impl Orderbook {
     ///
     /// Returns `None` if the condition is not met or there is no path between
     /// the token pair.
-    fn fill_optimal_transitive_order_if(
+    pub fn fill_optimal_transitive_order_if(
         &mut self,
         pair: TokenPair,
         mut condition: impl FnMut(&Flow) -> bool,
@@ -726,214 +648,11 @@ mod tests {
         let pair = TokenPair { buy: 1, sell: 0 };
 
         assert!(orderbook.is_overlapping());
-        assert!(orderbook.fill_transitive_orders(pair, None).is_err());
         assert!(orderbook.fill_market_order(pair, 10_000_000.0).is_err());
         assert!(orderbook
             .fill_order_at_price(pair, LimitPrice::from_raw(1.0))
             .is_err());
         assert!(orderbook.fill_optimal_transitive_order(pair).is_err());
-    }
-
-    #[test]
-    fn detects_overlapping_transitive_orders() {
-        // 0 --1.0--> 1 --0.5--> 2 --1.0--> 3 --1.0--> 4
-        //            ^---------1.0--------/^---0.5---/
-        let mut orderbook = orderbook! {
-            users {
-                @1 {
-                    token 1 => 1_000_000,
-                }
-                @2 {
-                    token 2 => 2_000_000,
-                }
-                @3 {
-                    token 3 => 1_000_000,
-                }
-
-                @4 {
-                    token 4 => 1_000_000,
-                }
-                @5 {
-                    token 3 => 2_000_000,
-                }
-            }
-            orders {
-                owner @1 buying 0 [1_000_000] selling 1 [1_000_000],
-                owner @1 buying 3 [1_000_000] selling 1 [1_000_000],
-                owner @2 buying 1 [1_000_000] selling 2 [2_000_000],
-                owner @3 buying 2 [1_000_000] selling 3 [1_000_000] (500_000),
-
-                owner @4 buying 3 [1_000_000] selling 4 [1_000_000],
-                owner @5 buying 4 [1_000_000] selling 3 [2_000_000],
-            }
-        };
-
-        let overlap =
-            orderbook.reduce_overlapping_transitive_orderbook(Market { base: 1, quote: 2 });
-
-        // Transitive order `2 -> 3 -> 1` buying 2 selling 1
-        assert_eq!(overlap.asks.len(), 1);
-        assert_approx_eq!(overlap.asks[0].buy, 500_000.0);
-        assert_approx_eq!(overlap.asks[0].sell, 500_000.0 / FEE_FACTOR);
-
-        // Transitive order `1 -> 2` buying 1 selling 2
-        assert_eq!(overlap.bids.len(), 1);
-        assert_approx_eq!(overlap.bids[0].buy, 1_000_000.0);
-        assert_approx_eq!(overlap.bids[0].sell, 2_000_000.0);
-    }
-
-    #[test]
-    fn includes_transitive_order_only_once() {
-        // /---0.5---v
-        // 0         1
-        // ^---1.0---/
-        // ^---1.5--/
-        let mut orderbook = orderbook! {
-            users {
-                @1 {
-                    token 1 => 100_000_000,
-                }
-                @2 {
-                    token 0 => 1_000_000,
-                }
-                @3 {
-                    token 0 => 1_000_000,
-                }
-            }
-            orders {
-                owner @1 buying 0 [50_000_000] selling 1 [100_000_000],
-                owner @2 buying 1 [1_000_000] selling 0 [1_000_000],
-                owner @3 buying 1 [1_500_000] selling 0 [1_000_000],
-            }
-        };
-
-        let overlap =
-            orderbook.reduce_overlapping_transitive_orderbook(Market { base: 0, quote: 1 });
-
-        // Transitive order `1 -> 0` buying 1 selling 0
-        assert_eq!(overlap.asks.len(), 1);
-        assert_approx_eq!(overlap.asks[0].buy, 1_000_000.0);
-        assert_approx_eq!(overlap.asks[0].sell, 1_000_000.0);
-
-        // Transitive order `0 -> 1` buying 0 selling 1
-        assert_eq!(overlap.bids.len(), 1);
-        assert_approx_eq!(overlap.bids[0].buy, 50_000_000.0);
-        assert_approx_eq!(overlap.bids[0].sell, 100_000_000.0);
-
-        // NOTE: This is counter-intuitive, but there should only be one
-        // transitive order from `1 -> 0` even if there are two orders that
-        // overlap with the large `0 -> 1` order. This is because whenever a
-        // negative cycle is found, it gets split into two transitive orders,
-        // one from `base -> quote` (ask) and the other from `quote -> base`
-        // (bid). These transitive orders are **completely** reduced, so even if
-        // there are other orders that overlap with the remaining amount of one
-        // of these transitive orders, they might not get found by
-        // `reduce_overlapping_transitive_orderbook`. Rest assured, they will
-        // get found by `fill_transitive_orderbook` and ultimately included in
-        // the final transitive orderbook.
-    }
-
-    #[test]
-    fn fills_transitive_orders_with_maximum_spread() {
-        //    /--1.0--v
-        //   /        v---2.0--\
-        //  /---4.0---v         \
-        // 1          2          3
-        //  \                    ^
-        //   \--------1.0-------/
-        let mut orderbook = orderbook! {
-            users {
-                @1 {
-                    token 2 => 1_000_000,
-                    token 3 => 1_000_000,
-                }
-                @2 {
-                    token 2 => 1_000_000,
-                }
-                @3 {
-                    token 2 => 1_000_000,
-                }
-            }
-            orders {
-                owner @1 buying 1 [1_000_000] selling 2 [1_000_000],
-                owner @2 buying 3 [2_000_000] selling 2 [1_000_000],
-                owner @3 buying 1 [4_000_000] selling 2 [1_000_000],
-
-                owner @1 buying 1 [1_000_000] selling 3 [1_000_000],
-            }
-        };
-        let pair = TokenPair { buy: 1, sell: 2 };
-
-        let orders = orderbook
-            .clone()
-            .fill_transitive_orders(pair, Some(0.5))
-            .unwrap();
-        assert_eq!(orders.len(), 1);
-        assert_approx_eq!(orders[0].buy, 1_000_000.0);
-        assert_approx_eq!(orders[0].sell, 1_000_000.0);
-
-        let orders = orderbook
-            .clone()
-            .fill_transitive_orders(pair, Some(1.0))
-            .unwrap();
-        assert_eq!(orders.len(), 1);
-
-        let orders = orderbook
-            .clone()
-            .fill_transitive_orders(pair, Some((2.0 * FEE_FACTOR) - 1.0))
-            .unwrap();
-        assert_eq!(orders.len(), 2);
-        assert_approx_eq!(orders[1].buy, 1_000_000.0);
-        assert_approx_eq!(orders[1].sell, 500_000.0 / FEE_FACTOR);
-
-        let orders = orderbook.fill_transitive_orders(pair, Some(3.0)).unwrap();
-        assert_eq!(orders.len(), 3);
-        assert_approx_eq!(orders[2].buy, 4_000_000.0);
-        assert_approx_eq!(orders[2].sell, 1_000_000.0);
-    }
-
-    #[test]
-    fn fills_all_transitive_orders_without_maximum_spread() {
-        //    /--1.0--v
-        //   /        v---2.0--\
-        //  /---4.0---v         \
-        // 1          2          3
-        //  \                    ^
-        //   \--------1.0-------/
-        let mut orderbook = orderbook! {
-            users {
-                @1 {
-                    token 2 => 1_000_000,
-                    token 3 => 1_000_000,
-                }
-                @2 {
-                    token 2 => 1_000_000,
-                }
-                @3 {
-                    token 2 => 1_000_000,
-                }
-            }
-            orders {
-                owner @1 buying 1 [1_000_000] selling 2 [1_000_000],
-                owner @2 buying 3 [2_000_000] selling 2 [1_000_000],
-                owner @3 buying 1 [4_000_000] selling 2 [1_000_000],
-
-                owner @1 buying 1 [1_000_000] selling 3 [1_000_000],
-            }
-        };
-        let pair = TokenPair { buy: 1, sell: 2 };
-
-        let orders = orderbook.fill_transitive_orders(pair, None).unwrap();
-        assert_eq!(orders.len(), 3);
-
-        assert_approx_eq!(orders[0].buy, 1_000_000.0);
-        assert_approx_eq!(orders[0].sell, 1_000_000.0);
-
-        assert_approx_eq!(orders[1].buy, 1_000_000.0);
-        assert_approx_eq!(orders[1].sell, 500_000.0 / FEE_FACTOR);
-
-        assert_approx_eq!(orders[2].buy, 4_000_000.0);
-        assert_approx_eq!(orders[2].sell, 1_000_000.0);
     }
 
     #[test]
