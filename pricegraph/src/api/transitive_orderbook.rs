@@ -70,10 +70,7 @@ impl Pricegraph {
         // negative cycles in the inverse market. However, there should be no
         // ring trades over the inverse market (if there were, then the `quote`
         // and `base` token would be part of the same subgraph), so assert it.
-        let inverse_ring = orderbook.fill_market_ring_trade(Market {
-            base: market.quote,
-            quote: market.base,
-        });
+        let inverse_ring = orderbook.fill_market_ring_trade(market.inverse());
         debug_assert_eq!(inverse_ring, None);
 
         transitive_orderbook.asks.extend(
