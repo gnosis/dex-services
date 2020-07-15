@@ -22,7 +22,7 @@ const FEE_FACTOR: f64 = 1.0 / 0.999;
 #[derive(Clone, Debug)]
 pub struct Pricegraph {
     full_orderbook: Orderbook,
-    reduced_orderbook: Orderbook,
+    reduced_orderbook: ReducedOrderbook,
 }
 
 impl Pricegraph {
@@ -57,12 +57,9 @@ impl Pricegraph {
     }
 
     /// Create a new `Pricegraph` instance from an `Orderbook`.
-    pub fn from_orderbook(mut orderbook: Orderbook) -> Self {
+    pub fn from_orderbook(orderbook: Orderbook) -> Self {
         let full_orderbook = orderbook.clone();
-        let reduced_orderbook = {
-            orderbook.reduce_overlapping_orders();
-            orderbook
-        };
+        let reduced_orderbook = orderbook.reduce_overlapping_orders();
 
         Pricegraph {
             full_orderbook,
@@ -80,7 +77,7 @@ impl Pricegraph {
     /// Gets a clone of the reduced orderbook for operations that prefer there
     /// to be no overlapping transitive orders. A clone is returned because
     /// orderbook operations are destructive.
-    pub fn reduced_orderbook(&self) -> Orderbook {
+    pub fn reduced_orderbook(&self) -> ReducedOrderbook {
         self.reduced_orderbook.clone()
     }
 }

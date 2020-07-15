@@ -74,7 +74,7 @@ macro_rules! orderbook {
 /// purposes.
 macro_rules! pricegraph {
     ($($arg:tt)*) => {
-        Pricegraph::from_orderbook(orderbook!($($arg)*))
+        $crate::Pricegraph::from_orderbook(orderbook!($($arg)*))
     };
 }
 
