@@ -200,11 +200,14 @@ impl Orderbook {
             let path = path::find_cycle(&predecessors, node, Some(quote))
                 .expect("negative cycle not found after being detected");
 
-            let base_index = match if path.first() == Some(&quote) {
+            let base_index_search = if path.first() == Some(&quote) {
                 path.iter().position(|node| *node == base)
             } else {
+                // NOTE: If the path doesn't start with the quote token, don't
+                // even need to search for the base token.
                 None
-            } {
+            };
+            let base_index = match base_index_search {
                 Some(value) => value,
                 None => {
                     // NOTE: Skip negative cycles that are not along the
