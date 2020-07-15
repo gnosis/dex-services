@@ -163,9 +163,12 @@ fn estimated_best_ask_price_filter(
 
 async fn get_markets<T>(
     market: Market,
-    _query: QueryParameters,
+    query: QueryParameters,
     orderbook: Arc<Orderbook<T>>,
-) -> Result<impl Reply, Infallible> {
+) -> Result<impl Reply, Rejection> {
+    if !query.atoms {
+        return Err(warp::reject());
+    }
     let transitive_orderbook = orderbook
         .get_pricegraph()
         .await
@@ -289,10 +292,13 @@ async fn estimate_amounts_at_price_atoms<T>(
 
 async fn estimate_best_ask_price<T>(
     token_pair: TokenPair,
-    _query: QueryParameters,
+    query: QueryParameters,
     price_rounding_buffer: f64,
     orderbook: Arc<Orderbook<T>>,
-) -> Result<impl Reply, Infallible> {
+) -> Result<impl Reply, Rejection> {
+    if !query.atoms {
+        return Err(warp::reject());
+    }
     let price = orderbook
         .get_pricegraph()
         .await
