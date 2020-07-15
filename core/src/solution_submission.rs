@@ -667,7 +667,7 @@ mod tests {
         let mut contract = MockStableXContract::new();
         contract
             .expect_send_noop_transaction()
-            .with(eq(U256::from(67_500_000_001u128)))
+            .with(eq(U256::from(101_250_000_001u128)))
             .times(1)
             .returning(|_| immediate!(Err(anyhow!(""))));
         let gas_station = MockGasPriceEstimating::new();
