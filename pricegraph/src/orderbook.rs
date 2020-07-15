@@ -10,7 +10,7 @@ mod order;
 mod scalar;
 mod user;
 
-use self::flow::Flow;
+pub use self::flow::{Flow, Ring};
 use self::order::{Order, OrderCollector, OrderMap};
 pub use self::scalar::{ExchangeRate, LimitPrice};
 use self::user::{User, UserMap};
@@ -146,53 +146,96 @@ impl Orderbook {
     /// transitive order, reducing them both. Returns the computed overlapping
     /// transitive orderbook for that market.
     ///
-    /// Note that there may exist additional transitive orders that may overlap
-    /// with orders in the resulting transitive orderbook. However, all negative
-    /// cycles will be removed from the orderbook graph.
+    /// Note that there may exist additional transitive orders that overlap with
+    /// orders in the resulting transitive orderbook. However, all negative
+    /// cycles over the specified market will be removed from the orderbook
+    /// graph. That is, the subgraph(s) containing the `quote` and `base` tokens
+    /// are guaranteed to be fully reduced.
     pub fn reduce_overlapping_transitive_orderbook(
         &mut self,
         market: Market,
     ) -> TransitiveOrderbook {
+        let mut overlap = TransitiveOrderbook::default();
+        while let Some(Ring { ask, bid }) = self.fill_market_ring_trade(market) {
+            overlap.asks.push(ask.as_transitive_order());
+            overlap.bids.push(bid.as_transitive_order());
+        }
+
+        // NOTE: In the case where the market `quote` and `base` token are in
+        // different disconnected subgraphs, it is possible that the `base`
+        // token's subgraph contains negative cycles. In order to ensure that
+        // the `base` token subgraph is also reduced, fill any remaining
+        // negative cycles in the inverse market. However, there should be no
+        // ring trades over the inverse market (if there were, then the `quote`
+        // and `base` token would be part of the same subgraph), so assert it.
+        let inverse_ring = self.fill_market_ring_trade(Market {
+            base: market.quote,
+            quote: market.base,
+        });
+        debug_assert_eq!(inverse_ring, None);
+
+        overlap
+    }
+
+    /// Fills a ring trade over the specified market, and returns the flow
+    /// corresponding to both ask and bid segments of the ring. Returns `None`
+    /// if there are no overlapping ring trades over the specified market.
+    ///
+    /// Note that if this method returns `None`, then the orderbook is
+    /// **partially** reduced. Specifically, the subgraph containing the market
+    /// `quote` token is fully reduced, however, other not connected subgraphs,
+    /// specifically the market `base`'s subgraph in the case where the `quote`
+    /// and `base` token are not part of the same subgraph, may still contain
+    /// negative cycles.
+    pub fn fill_market_ring_trade(&mut self, market: Market) -> Option<Ring> {
         if !self.is_token_pair_valid(market.bid_pair()) {
-            return Default::default();
+            return None;
         }
 
         let (base, quote) = (node_index(market.base), node_index(market.quote));
 
-        let mut overlap = TransitiveOrderbook::default();
         while let Err(NegativeCycle(predecessors, node)) =
             bellman_ford::search(&self.projection, quote)
         {
             let path = path::find_cycle(&predecessors, node, Some(quote))
                 .expect("negative cycle not found after being detected");
 
-            if path.first() == Some(&quote) {
-                if let Some(base_index) = path.iter().position(|node| *node == base) {
-                    let (ask, bid) = (&path[0..base_index + 1], &path[base_index..]);
-
-                    let ask = self
-                        .fill_path(ask)
-                        .expect("ask transitive path not found after being detected");
-                    overlap.asks.push(ask.as_transitive_order());
-
-                    let bid = self
-                        .fill_path(bid)
-                        .expect("bid transitive path not found after being detected");
-                    overlap.bids.push(bid.as_transitive_order());
+            let base_index_search = if path.first() == Some(&quote) {
+                path.iter().position(|node| *node == base)
+            } else {
+                // NOTE: If the path doesn't start with the quote token, don't
+                // even need to search for the base token.
+                None
+            };
+            let base_index = match base_index_search {
+                Some(value) => value,
+                None => {
+                    // NOTE: Skip negative cycles that are not along the
+                    // specified market.
+                    self.fill_path(&path).unwrap_or_else(|| {
+                        panic!(
+                            "failed to fill path along detected negative cycle {}",
+                            format_path(&path),
+                        )
+                    });
 
                     continue;
                 }
-            }
+            };
 
-            self.fill_path(&path).unwrap_or_else(|| {
-                panic!(
-                    "failed to fill path along detected negative cycle {}",
-                    format_path(&path),
-                )
-            });
+            let (ask, bid) = (&path[0..base_index + 1], &path[base_index..]);
+
+            let ask = self
+                .fill_path(ask)
+                .expect("ask transitive path not found after being detected");
+            let bid = self
+                .fill_path(bid)
+                .expect("bid transitive path not found after being detected");
+
+            return Some(Ring { ask, bid });
         }
 
-        overlap
+        None
     }
 
     /// Fills transitive orders along a token pair, optionally specifying a

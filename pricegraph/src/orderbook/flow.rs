@@ -27,3 +27,15 @@ impl Flow {
         TransitiveOrder { buy, sell }
     }
 }
+
+/// A representation of flow on two halves of a ring trade through the orderbook
+/// graph for a market.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Ring {
+    /// The "ask" flow, starting from a market's quote token and ending at the
+    /// base token.
+    pub ask: Flow,
+    /// The "bid" flow, starting from a market's base token and ending at the
+    /// quote token.
+    pub bid: Flow,
+}

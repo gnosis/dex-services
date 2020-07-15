@@ -284,19 +284,6 @@ impl Pricegraph {
                 .fill_transitive_orders(market.ask_pair(), spread)
                 .expect("overlapping orders in reduced orderbook"),
         );
-
-        // NOTE: It is possible that there are still negative cycles when
-        // searching for the inverse token pair, so reduce overlapping
-        // transitive orderbook in the inverse market. However, there should be
-        // no new transitive orders, so assert as much.
-        let inverse_transitive_orderbook =
-            orderbook.reduce_overlapping_transitive_orderbook(Market {
-                base: market.quote,
-                quote: market.base,
-            });
-        debug_assert!(inverse_transitive_orderbook.asks.is_empty());
-        debug_assert!(inverse_transitive_orderbook.bids.is_empty());
-
         transitive_orderbook.bids.extend(
             orderbook
                 .fill_transitive_orders(market.bid_pair(), spread)
