@@ -52,7 +52,10 @@ pub fn u256_to_f64(u: U256) -> f64 {
 ///
 /// If any of the two floats are NaN.
 pub fn min(a: f64, b: f64) -> f64 {
-    match compare(a, b) {
+    match a
+        .partial_cmp(&b)
+        .expect("orderbooks cannot have NaN quantities")
+    {
         cmp::Ordering::Less => a,
         _ => b,
     }
