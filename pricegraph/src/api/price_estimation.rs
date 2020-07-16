@@ -33,7 +33,7 @@ impl Pricegraph {
             orderbook.fill_optimal_transitive_order_if(inverse_pair, |flow| {
                 last_exchange_rate = Some(flow.exchange_rate);
                 false
-            })?;
+            });
         }
 
         let mut remaining_volume = sell_amount;
