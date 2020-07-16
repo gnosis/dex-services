@@ -18,11 +18,17 @@ fn max_rounding_amount(token_price: f64, fee_token_price: f64) -> f64 {
 
 /// Calculate a single rounding buffer like the solver does. This amount is subtracted from the
 /// denominator of orders selling the sell token and buying the buy token.
-pub fn rounding_buffer(fee_token_price: f64, sell_token_price: f64, buy_token_price: f64) -> f64 {
+pub fn rounding_buffer(
+    fee_token_price: f64,
+    sell_token_price: f64,
+    buy_token_price: f64,
+    extra_factor: f64,
+) -> f64 {
     let estimated_xrate = buy_token_price / sell_token_price;
     max_rounding_amount(buy_token_price, fee_token_price)
         * estimated_xrate
         * PRICE_ESTIMATION_ERROR.powi(2)
+        * extra_factor
 }
 
 /// Perform the same rounding buffer calculation as our solvers in order to increase the correctness
@@ -58,8 +64,12 @@ pub fn apply_rounding_buffer(
 
         // Multiply by an extra factor which the solver doesn't do, as added safety in case the
         // prices move.
-        let rounding_buffer = (rounding_buffer(fee_token_price, sell_token_price, buy_token_price)
-            * extra_factor) as u128;
+        let rounding_buffer = rounding_buffer(
+            fee_token_price,
+            sell_token_price,
+            buy_token_price,
+            extra_factor,
+        ) as u128;
 
         // Update rounding buffer for account balances;
         let entry = account_balance_buffers
