@@ -132,6 +132,7 @@ pub trait StableXContract {
         claimed_objective_value: U256,
         gas_price: U256,
         block_timeout: Option<usize>,
+        nonce: U256,
     ) -> BoxFuture<'a, Result<(), MethodError>>;
 
     fn past_events<'a>(
@@ -149,7 +150,11 @@ pub trait StableXContract {
     fn send_noop_transaction<'a>(
         &'a self,
         gas_price: U256,
+        nonce: U256,
     ) -> BoxFuture<'a, Result<TransactionResult>>;
+
+    /// The current nonce aka transaction_count.
+    fn get_transaction_count<'a>(&'a self) -> BoxFuture<'a, Result<U256>>;
 }
 
 impl StableXContract for StableXContractImpl {
@@ -273,6 +278,7 @@ impl StableXContract for StableXContractImpl {
         claimed_objective_value: U256,
         gas_price: U256,
         block_timeout: Option<usize>,
+        nonce: U256,
     ) -> BoxFuture<'a, Result<(), MethodError>> {
         async move {
             let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
@@ -293,7 +299,8 @@ impl StableXContract for StableXContractImpl {
                 // NOTE: Gas estimate might be off, as we race with other solution
                 //   submissions and thus might have to revert trades which costs
                 //   more gas than expected.
-                .gas(5_500_000.into());
+                .gas(5_500_000.into())
+                .nonce(nonce);
 
             method.tx.resolve = Some(ResolveCondition::Confirmed(ConfirmParams {
                 block_timeout,
@@ -330,6 +337,7 @@ impl StableXContract for StableXContractImpl {
     fn send_noop_transaction<'a>(
         &'a self,
         gas_price: U256,
+        nonce: U256,
     ) -> BoxFuture<'a, Result<TransactionResult>> {
         async move {
             let web3 = self.instance.raw_instance().web3();
@@ -340,6 +348,7 @@ impl StableXContract for StableXContractImpl {
                 .to(address)
                 .gas(U256::from(21000))
                 .gas_price(GasPrice::Value(gas_price))
+                .nonce(nonce)
                 .value(U256::zero())
                 .resolve(ResolveCondition::Confirmed(ConfirmParams::mined()));
             let transaction_result = transaction
@@ -347,6 +356,21 @@ impl StableXContract for StableXContractImpl {
                 .await
                 .context("failed to send noop transaction")?;
             Ok(transaction_result)
+        }
+        .boxed()
+    }
+
+    fn get_transaction_count<'a>(&'a self) -> BoxFuture<'a, Result<U256>> {
+        use futures::compat::Future01CompatExt as _;
+        async move {
+            let web3 = self.instance.raw_instance().web3();
+            let account = self.account().ok_or_else(|| anyhow!("no account"))?;
+            let address = account.address();
+            web3.eth()
+                .transaction_count(address, None)
+                .compat()
+                .await
+                .map_err(From::from)
         }
         .boxed()
     }

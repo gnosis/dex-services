@@ -138,6 +138,7 @@ impl<'a> StableXSolutionSubmitter<'a> {
         batch_index: u32,
         solution: Solution,
         result: std::result::Result<Result<(), MethodError>, TimeoutError>,
+        nonce: U256,
     ) -> Result<(), SolutionSubmissionError> {
         if let Ok(submit_result) = result {
             match submit_result {
@@ -151,7 +152,7 @@ impl<'a> StableXSolutionSubmitter<'a> {
                 "cancelling transaction because it took too long, using gas price {}",
                 gas_price
             );
-            match self.contract.send_noop_transaction(gas_price).await {
+            match self.contract.send_noop_transaction(gas_price, nonce).await {
                 Ok(_) => log::info!(
                     "cancelled solution submission of batch {} because of deadline",
                     batch_index
@@ -200,6 +201,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
         claimed_objective_value: U256,
     ) -> BoxFuture<Result<(), SolutionSubmissionError>> {
         async move {
+            let nonce = self.contract.get_transaction_count().await?;
             let submit_future = retry_with_gas_price_increase(
                 self.contract,
                 batch_index,
@@ -207,6 +209,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
                 claimed_objective_value,
                 self.gas_price_estimating,
                 GAS_PRICE_CAP.into(),
+                nonce,
             );
             // Add some extra time in case of desync between real time and ethereum node current block time.
             let deadline = BatchId::from(batch_index).solve_end_time() + Duration::from_secs(30);
@@ -214,7 +217,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
                 .duration_since(SystemTime::now())
                 .unwrap_or(Duration::from_secs(0));
             let result = async_std::future::timeout(remaining, submit_future).await;
-            self.handle_submit_solution_result(batch_index, solution, result)
+            self.handle_submit_solution_result(batch_index, solution, result, nonce)
                 .await
         }
         .boxed()
@@ -276,6 +279,7 @@ async fn retry_with_gas_price_increase(
     claimed_objective_value: U256,
     gas_price_estimating: &(dyn GasPriceEstimating + Sync),
     gas_price_cap: U256,
+    nonce: U256,
 ) -> Result<(), MethodError> {
     const BLOCK_TIMEOUT: usize = 2;
     const DEFAULT_GAS_PRICE: u64 = 15_000_000_000;
@@ -309,6 +313,7 @@ async fn retry_with_gas_price_increase(
                 claimed_objective_value,
                 gas_price,
                 block_timeout,
+                nonce,
             )
             .await;
         // Technically this being the last iteration implies there not being a confirm timeout so
@@ -423,8 +428,15 @@ mod tests {
         contract
             .expect_submit_solution()
             .times(1)
-            .with(always(), always(), always(), eq(U256::from(5)), eq(Some(2)))
-            .return_once(|_, _, _, _, _| {
+            .with(
+                always(),
+                always(),
+                always(),
+                eq(U256::from(5)),
+                eq(Some(2)),
+                always(),
+            )
+            .return_once(|_, _, _, _, _, _| {
                 async {
                     Err(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
@@ -436,8 +448,15 @@ mod tests {
             });
         contract
             .expect_submit_solution()
-            .with(always(), always(), always(), eq(U256::from(9)), eq(None))
-            .return_once(|_, _, _, _, _| async { Ok(()) }.boxed());
+            .with(
+                always(),
+                always(),
+                always(),
+                eq(U256::from(9)),
+                eq(None),
+                always(),
+            )
+            .return_once(|_, _, _, _, _, _| async { Ok(()) }.boxed());
 
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station.expect_estimate_gas_price().returning(|| {
@@ -457,6 +476,7 @@ mod tests {
             1.into(),
             &gas_station,
             9.into(),
+            U256::from(0),
         )
         .now_or_never()
         .unwrap()
@@ -469,8 +489,15 @@ mod tests {
         contract
             .expect_submit_solution()
             .times(1)
-            .with(always(), always(), always(), eq(U256::from(90)), always())
-            .return_once(|_, _, _, _, _| {
+            .with(
+                always(),
+                always(),
+                always(),
+                eq(U256::from(90)),
+                always(),
+                always(),
+            )
+            .return_once(|_, _, _, _, _, _| {
                 async {
                     Err(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
@@ -501,6 +528,7 @@ mod tests {
             1.into(),
             &gas_station,
             100.into(),
+            0.into()
         )
         .now_or_never()
         .unwrap()
@@ -513,7 +541,7 @@ mod tests {
         contract
             .expect_submit_solution()
             .times(3)
-            .returning(|_, _, _, _, _| {
+            .returning(|_, _, _, _, _, _| {
                 async {
                     Err(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
@@ -545,6 +573,7 @@ mod tests {
             1.into(),
             &gas_station,
             15.into(),
+            0.into()
         )
         .now_or_never()
         .unwrap()
@@ -605,10 +634,13 @@ mod tests {
             logs_bloom: H2048::zero(),
         };
 
+        contract
+            .expect_get_transaction_count()
+            .returning(|| immediate!(Ok(U256::from(0))));
         // Submit Solution returns failed tx
         contract
             .expect_submit_solution()
-            .return_once(move |_, _, _, _, _| {
+            .return_once(move |_, _, _, _, _, _| {
                 async {
                     Err(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
@@ -667,13 +699,13 @@ mod tests {
         let mut contract = MockStableXContract::new();
         contract
             .expect_send_noop_transaction()
-            .with(eq(U256::from(101_250_000_001u128)))
+            .with(eq(U256::from(101_250_000_001u128)), eq(U256::from(0)))
             .times(1)
-            .returning(|_| immediate!(Err(anyhow!(""))));
+            .returning(|_, _| immediate!(Err(anyhow!(""))));
         let gas_station = MockGasPriceEstimating::new();
         let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
         let result = submitter
-            .handle_submit_solution_result(0, Solution::trivial(), Err(timeout_error()))
+            .handle_submit_solution_result(0, Solution::trivial(), Err(timeout_error()), 0.into())
             .now_or_never()
             .unwrap();
         assert!(result.is_err());
@@ -685,7 +717,7 @@ mod tests {
         let gas_station = MockGasPriceEstimating::new();
         let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
         let result = submitter
-            .handle_submit_solution_result(0, Solution::trivial(), Ok(Ok(())))
+            .handle_submit_solution_result(0, Solution::trivial(), Ok(Ok(())), 0.into())
             .now_or_never()
             .unwrap();
         assert!(result.is_ok());
