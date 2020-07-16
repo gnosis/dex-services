@@ -4,13 +4,13 @@ use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
 
 /// Access and update the pricegraph orderbook.
-pub struct Orderbook<T> {
-    orderbook_reading: T,
+pub struct Orderbook {
+    orderbook_reading: Box<dyn StableXOrderBookReading>,
     pricegraph: RwLock<Pricegraph>,
 }
 
-impl<T> Orderbook<T> {
-    pub fn new(orderbook_reading: T) -> Self {
+impl Orderbook {
+    pub fn new(orderbook_reading: Box<dyn StableXOrderBookReading>) -> Self {
         Self {
             orderbook_reading,
             pricegraph: RwLock::new(Pricegraph::new(std::iter::empty())),
@@ -22,7 +22,7 @@ impl<T> Orderbook<T> {
     }
 }
 
-impl<T: StableXOrderBookReading> Orderbook<T> {
+impl Orderbook {
     /// Recreate the pricegraph orderbook.
     pub async fn update(&self) -> anyhow::Result<()> {
         let (account_state, orders) = self
