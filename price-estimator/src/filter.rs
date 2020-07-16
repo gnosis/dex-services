@@ -14,8 +14,8 @@ use warp::{
 };
 
 /// Handles all supported requests under a `/api/v1` root path.
-pub fn all<T: Send + Sync + 'static>(
-    orderbook: Arc<Orderbook<T>>,
+pub fn all(
+    orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
     price_rounding_buffer: f64,
 ) -> impl Filter<Extract = impl Reply, Error = Infallible> + Clone {
@@ -67,8 +67,8 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
 /// Validate a request of the form
 /// `/markets/<baseTokenId>-<quoteTokenId>`
 /// and answer it.
-fn markets<T: Send + Sync + 'static>(
-    orderbook: Arc<Orderbook<T>>,
+fn markets(
+    orderbook: Arc<Orderbook>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     markets_filter()
         .and(warp::any().map(move || orderbook.clone()))
@@ -79,8 +79,8 @@ fn markets<T: Send + Sync + 'static>(
 /// Validate a request of the form
 /// `/markets/<baseTokenId>-<quoteTokenId>/estimated-buy-amount/<sellAmountInQuoteToken>`
 /// and answer it.
-fn estimated_buy_amount<T: Send + Sync + 'static>(
-    orderbook: Arc<Orderbook<T>>,
+fn estimated_buy_amount(
+    orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
     price_rounding_buffer: f64,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -95,8 +95,8 @@ fn estimated_buy_amount<T: Send + Sync + 'static>(
 /// Validate a request of the form:
 /// `/markets/<baseTokenId>-<quoteTokenId>/estimated-amounts-at-price/<exchangeRate>`
 /// and answer it.
-fn estimated_amounts_at_price<T: Send + Sync + 'static>(
-    orderbook: Arc<Orderbook<T>>,
+fn estimated_amounts_at_price(
+    orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
     price_rounding_buffer: f64,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -111,8 +111,8 @@ fn estimated_amounts_at_price<T: Send + Sync + 'static>(
 /// Validate a request of the form:
 /// `/markets/<baseTokenId>-<quoteTokenId>/estimated-amounts-at-price/<exchangeRate>`
 /// and answer it.
-fn estimated_best_ask_price<T: Send + Sync + 'static>(
-    orderbook: Arc<Orderbook<T>>,
+fn estimated_best_ask_price(
+    orderbook: Arc<Orderbook>,
     price_rounding_buffer: f64,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     estimated_best_ask_price_filter()
@@ -161,10 +161,10 @@ fn estimated_best_ask_price_filter(
         .and(warp::query::<QueryParameters>())
 }
 
-async fn get_markets<T>(
+async fn get_markets(
     market: Market,
     query: QueryParameters,
-    orderbook: Arc<Orderbook<T>>,
+    orderbook: Arc<Orderbook>,
 ) -> Result<impl Reply, Rejection> {
     if !query.atoms {
         return Err(warp::reject());
@@ -187,12 +187,12 @@ async fn get_token_info(
         .map_err(|_| reject::custom(NoTokenInfo))
 }
 
-async fn estimate_buy_amount<T>(
+async fn estimate_buy_amount(
     token_pair: TokenPair,
     sell_amount_in_quote: f64,
     query: QueryParameters,
     price_rounding_buffer: f64,
-    orderbook: Arc<Orderbook<T>>,
+    orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
     let sell_amount_in_quote_atoms = if query.atoms {
@@ -223,12 +223,12 @@ async fn estimate_buy_amount<T>(
     Ok(warp::reply::json(&result))
 }
 
-async fn estimate_amounts_at_price<T>(
+async fn estimate_amounts_at_price(
     token_pair: TokenPair,
     price_in_quote: f64,
     query: QueryParameters,
     price_rounding_buffer: f64,
-    orderbook: Arc<Orderbook<T>>,
+    orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
     let result = if query.atoms {
@@ -259,11 +259,11 @@ async fn estimate_amounts_at_price<T>(
 }
 
 /// Like `estimate_amounts_at_price` but the price is given and returned in atoms.
-async fn estimate_amounts_at_price_atoms<T>(
+async fn estimate_amounts_at_price_atoms(
     token_pair: TokenPair,
     price_in_quote: f64,
     price_rounding_buffer: f64,
-    orderbook: Arc<Orderbook<T>>,
+    orderbook: Arc<Orderbook>,
 ) -> EstimatedOrderResult {
     // NOTE: The price in quote is `sell_amount / buy_amount` which is the
     // inverse of an exchange rate. Additionally, we need to apply the price
@@ -290,11 +290,11 @@ async fn estimate_amounts_at_price_atoms<T>(
     }
 }
 
-async fn estimate_best_ask_price<T>(
+async fn estimate_best_ask_price(
     token_pair: TokenPair,
     query: QueryParameters,
     price_rounding_buffer: f64,
-    orderbook: Arc<Orderbook<T>>,
+    orderbook: Arc<Orderbook>,
 ) -> Result<impl Reply, Rejection> {
     if !query.atoms {
         return Err(warp::reject());
@@ -354,7 +354,7 @@ mod tests {
     }
 
     fn all_filter() -> impl Filter<Extract = impl Reply, Error = Infallible> + Clone {
-        let orderbook = Arc::new(Orderbook::new(empty_orderbook()));
+        let orderbook = Arc::new(Orderbook::new(Box::new(empty_orderbook())));
         let token_info = Arc::new(empty_token_info());
         all(orderbook, token_info, 0.0)
     }
