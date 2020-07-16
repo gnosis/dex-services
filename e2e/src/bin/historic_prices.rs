@@ -76,7 +76,7 @@ fn check_batch_spread(
         let (buy_token, sell_token) = (token_ids[i], token_ids[j]);
 
         let best_bid = pricegraph
-            .estimate_exchange_rate(
+            .estimate_limit_price(
                 TokenPair {
                     buy: sell_token,
                     sell: buy_token,
@@ -86,7 +86,7 @@ fn check_batch_spread(
             .unwrap_or(0.0);
         let price = prices[i] as f64 / prices[j] as f64;
         let best_ask = pricegraph
-            .estimate_exchange_rate(
+            .estimate_limit_price(
                 TokenPair {
                     buy: buy_token,
                     sell: sell_token,
