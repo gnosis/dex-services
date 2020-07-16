@@ -30,10 +30,11 @@ impl Pricegraph {
         if sell_amount <= 0.0 {
             // NOTE: For a 0 volume we simulate sending an tiny epsilon of value
             // through the network without actually filling any orders.
-            orderbook.fill_optimal_transitive_order_if(inverse_pair, |flow| {
+            let flow = orderbook.fill_optimal_transitive_order_if(inverse_pair, |flow| {
                 last_exchange_rate = Some(flow.exchange_rate);
                 false
             });
+            debug_assert!(flow.is_none());
         }
 
         let mut remaining_volume = sell_amount;
