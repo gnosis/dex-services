@@ -33,7 +33,7 @@ impl Pricegraph {
             orderbook.fill_optimal_transitive_order_if(inverse_pair, |flow| {
                 last_exchange_rate = Some(flow.exchange_rate);
                 false
-            })?;
+            });
         }
 
         let mut remaining_volume = sell_amount;
@@ -212,6 +212,37 @@ mod tests {
 
         let price = pricegraph.estimate_limit_price(TokenPair { buy: 1, sell: 2 }, 1_000_000_000.0);
         assert!(price.is_none());
+    }
+
+    #[test]
+    fn estimates_epsilon_limit_price() {
+        //   /--------1.0-------\
+        //  /---1.0---v          v
+        // 1          2          3
+        //            ^---0.9---/
+        let pricegraph = pricegraph! {
+            users {
+                @1 {
+                    token 2 => 10_000_000,
+                    token 3 => 10_000_000,
+                }
+                @2 {
+                    token 2 => 10_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 1 [10_000_000] selling 2 [10_000_000],
+                owner @1 buying 1 [10_000_000] selling 3 [10_000_000],
+                owner @2 buying 3 [9_000_000] selling 2 [10_000_000],
+            }
+        };
+
+        assert_approx_eq!(
+            pricegraph
+                .estimate_limit_price(TokenPair { buy: 2, sell: 1 }, 0.0)
+                .unwrap(),
+            (1.0 / 0.9) / FEE_FACTOR.powi(3)
+        );
     }
 
     #[test]
