@@ -34,6 +34,7 @@ pub fn rounding_buffer(
 /// Perform the same rounding buffer calculation as our solvers in order to increase the correctness
 /// of our estimates.
 /// All token prices must be nonzero.
+/// The fee token must have a price.
 #[allow(dead_code)]
 pub fn apply_rounding_buffer(
     token_prices: &TokenPrices,
@@ -51,15 +52,15 @@ pub fn apply_rounding_buffer(
     // Apply rounding buffer to account balances and order sell amounts.
     for order in orders.iter_mut() {
         // If a token doesn't have a price it means it isn't connected to the fee. In this case we
-        // use a price of 1 to get some reasonable default rounding buffer.
+        // reuse the fee token price to get some reasonable default rounding buffer.
         let (sell_token, buy_token) = (TokenId(order.sell_token), TokenId(order.buy_token));
         let buy_token_price = match token_prices.get(&buy_token) {
             Some(price) if *price > 0 => *price as f64,
-            _ => 1.0,
+            _ => fee_token_price,
         };
         let sell_token_price = match token_prices.get(&sell_token) {
             Some(price) if *price > 0 => *price as f64,
-            _ => 1.0,
+            _ => fee_token_price,
         };
 
         // Multiply by an extra factor which the solver doesn't do, as added safety in case the
