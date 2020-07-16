@@ -1,4 +1,8 @@
-use crate::{error, models::*, orderbook::Orderbook};
+use crate::{
+    error,
+    models::*,
+    orderbook::{Orderbook, PricegraphType},
+};
 use core::{
     models::TokenId,
     token_info::{TokenBaseInfo, TokenInfoFetching},
@@ -169,7 +173,7 @@ async fn get_markets(
         return Err(warp::reject());
     }
     let transitive_orderbook = orderbook
-        .get_pricegraph(query.batch_id)
+        .pricegraph(query.batch_id, PricegraphType::Raw)
         .await
         .map_err(error::internal_server_rejection)?
         .transitive_orderbook(*market, None);
@@ -202,7 +206,7 @@ async fn estimate_buy_amount(
         sell_amount_in_quote * token_info.base_unit_in_atoms()
     };
     let transitive_order = orderbook
-        .get_pricegraph(query.batch_id)
+        .pricegraph(query.batch_id, PricegraphType::Raw)
         .await
         .map_err(error::internal_server_rejection)?
         .order_for_sell_amount(token_pair, sell_amount_in_quote_atoms);
@@ -233,7 +237,7 @@ async fn estimate_amounts_at_price(
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
     let pricegraph = orderbook
-        .get_pricegraph(query.batch_id)
+        .pricegraph(query.batch_id, PricegraphType::Raw)
         .await
         .map_err(error::internal_server_rejection)?;
     let result = if query.atoms {
@@ -300,7 +304,7 @@ async fn estimate_best_ask_price(
         return Err(warp::reject());
     }
     let price = orderbook
-        .get_pricegraph(query.batch_id)
+        .pricegraph(query.batch_id, PricegraphType::Raw)
         .await
         .map_err(error::internal_server_rejection)?
         .estimate_limit_price(token_pair, 0.0)
