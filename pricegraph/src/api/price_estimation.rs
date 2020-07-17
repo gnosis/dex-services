@@ -46,48 +46,50 @@ impl Pricegraph {
         }
 
         let mut total_buy_volume = 0.0;
-        let mut maximum_sell_volume = 0.0;
+        let mut maximum_sell_amount = 0.0;
         while let Some(flow) = orderbook.fill_optimal_transitive_order_if(inverse_pair, |flow| {
-            let current_exchange_rate = match LimitPrice::new(sell_amount / total_buy_volume) {
-                Some(price) => price.exchange_rate().inverse(),
+            let current_exchange_rate = match LimitPrice::new(total_buy_volume / sell_amount) {
+                Some(price) => price.exchange_rate(),
                 None => {
                     return true;
                 }
             };
 
-            // NOTE: This implies that the added liquidity from the
-            // transitive order at its exchange rate makes the price
-            // worse, and we are better off just buying off all the
-            // previously discovered liquidity instead of including this
-            // transitive order.
-            current_exchange_rate > flow.exchange_rate
+            // NOTE: This implies that the added liquidity from the counter
+            // transitive order at its exchange rate makes the limit price
+            // worse, and we are better off just buying off all the previously
+            // discovered liquidity instead of including this transitive order.
+            current_exchange_rate < flow.exchange_rate.inverse()
         }) {
-            total_buy_volume += flow.capacity / flow.exchange_rate.value();
+            // NOTE: Compute the largest order that fully overlaps all currently
+            // discovered liquidity.
+            let inverse_limit_price = flow.exchange_rate.inverse().price();
+            total_buy_volume += flow.capacity * inverse_limit_price.value();
+            maximum_sell_amount = total_buy_volume / inverse_limit_price.value();
 
-            // NOTE: Compute the maximum sell amount that can be used to
-            // purchase the total buy volume at the current exchange rate.
-            // Note that this is a sell amount, so it needs use the limit
-            // price and not the exchange rate.
-            maximum_sell_volume = dbg!(total_buy_volume) * flow.exchange_rate.price().value();
+            debug_assert!(
+                {
+                    let largest_order_xrate =
+                        ExchangeRate::from_price_value(total_buy_volume / maximum_sell_amount)
+                            .unwrap()
+                            .value();
+                    let error = largest_order_xrate - flow.exchange_rate.inverse().value();
+                    error.abs() <= num::max_rounding_error(largest_order_xrate)
+                },
+                "largest order exchange rate does not match marginal exchange rate",
+            );
 
             // NOTE: If we only have a `MIN_AMOUNT` left to sell at the
             // current exchange rate, don't try to match new transitive
             // orders since these small dust amounts will be ignored by the
             // solver anyway.
-            if sell_amount - dbg!(maximum_sell_volume) <= MIN_AMOUNT {
+            if sell_amount - maximum_sell_amount <= MIN_AMOUNT {
                 break;
             }
         }
 
-        let limit_price = if sell_amount > maximum_sell_volume {
-            LimitPrice::new(total_buy_volume / sell_amount)?
-        } else {
-            ExchangeRate::from_price_value(maximum_sell_volume / total_buy_volume)?
-                .inverse()
-                .price()
-        };
-
-        Some(limit_price.value())
+        let price = total_buy_volume / sell_amount.max(maximum_sell_amount);
+        Some(LimitPrice::new(price)?.value())
     }
 
     /// Returns a transitive order with a buy amount calculated such that there
@@ -274,38 +276,29 @@ mod tests {
             pricegraph
                 .estimate_limit_price(TokenPair { buy: 2, sell: 1 }, 200_000_000.0)
                 .unwrap(),
-            0.5
-        );
-        /*
-        assert_approx_eq!(
-            pricegraph
-                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 200_000_000.0)
-                .unwrap(),
-            0.5
-        );
-        assert_approx_eq!(
-            pricegraph
-                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 10_000_000_000.0)
-                .unwrap(),
-            0.01
+            0.5 / FEE_FACTOR
         );
 
-        // NOTE: We can buy up to `100_000_000 + 1_000_000` from both 3 -> 4
-        // orders at the `1/100` limit price.
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 10_001_000_000.0 * FEE_FACTOR)
+                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 2_000_000.0)
                 .unwrap(),
-            0.01 / FEE_FACTOR
+            0.5 / FEE_FACTOR
+        );
+        dbg!(pricegraph
+            .order_for_sell_amount(TokenPair { buy: 4, sell: 3 }, 101_000_000.0 * FEE_FACTOR));
+        assert_approx_eq!(
+            pricegraph
+                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 101_000_000.0)
+                .unwrap(),
+            0.01 / FEE_FACTOR.powi(2)
         );
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(TokenPair { buy: 4, sell: 3 }, 101_000_000.0 * FEE_FACTOR.powi(2))
-                .unwrap()
-                .buy,
-            2_000_000.0
+                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 202_000_000.0 * FEE_FACTOR)
+                .unwrap(),
+            0.005 / FEE_FACTOR
         );
-        */
     }
 
     #[test]
@@ -317,29 +310,117 @@ mod tests {
         let pricegraph = pricegraph! {
             users {
                 @1 {
-                    token 2 => 100_000_000,
+                    token 2 => 1_000_000_000,
                 }
             }
             orders {
-                owner @1 buying 1 [100_000] selling 2 [100_000_000],
-                owner @1 buying 1 [200_000] selling 2 [100_000_000],
-                owner @1 buying 1 [400_000] selling 2 [100_000_000],
+                owner @1 buying 1 [1_000_000] selling 2 [100_000_000],
+                owner @1 buying 1 [2_000_000] selling 2 [100_000_000],
+                owner @1 buying 1 [4_000_000] selling 2 [100_000_000],
             }
         };
 
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }, 50_000.0)
+                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }, 500_000.0)
                 .unwrap()
                 .buy,
             50_000_000.0 / FEE_FACTOR.powi(2)
         );
+
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }, 100_000.0 * FEE_FACTOR)
+                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }, 1_000_000.0 * FEE_FACTOR)
                 .unwrap()
                 .buy,
             100_000_000.0 / FEE_FACTOR
+        );
+        assert_approx_eq!(
+            pricegraph
+                .order_for_sell_amount(
+                    TokenPair { buy: 2, sell: 1 },
+                    1_000_000.0 * FEE_FACTOR.powi(2),
+                )
+                .unwrap()
+                .buy,
+            100_000_000.0 / FEE_FACTOR
+        );
+        assert_approx_eq!(
+            pricegraph
+                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }, 1_500_000.0)
+                .unwrap()
+                .buy,
+            100_000_000.0 / FEE_FACTOR
+        );
+
+        assert_approx_eq!(
+            pricegraph
+                .order_for_sell_amount(
+                    TokenPair { buy: 2, sell: 1 },
+                    2_000_000.0 * FEE_FACTOR.powi(1),
+                )
+                .unwrap()
+                .buy,
+            100_000_000.0 / FEE_FACTOR
+        );
+        assert_approx_eq!(
+            pricegraph
+                .order_for_sell_amount(
+                    TokenPair { buy: 2, sell: 1 },
+                    3_000_000.0 * FEE_FACTOR.powi(1),
+                )
+                .unwrap()
+                .buy,
+            150_000_000.0 / FEE_FACTOR
+        );
+        assert_approx_eq!(
+            pricegraph
+                .order_for_sell_amount(
+                    TokenPair { buy: 2, sell: 1 },
+                    4_000_000.0 * FEE_FACTOR.powi(1),
+                )
+                .unwrap()
+                .buy,
+            200_000_000.0 / FEE_FACTOR
+        );
+
+        assert_approx_eq!(
+            pricegraph
+                .order_for_sell_amount(
+                    TokenPair { buy: 2, sell: 1 },
+                    8_000_000.0 * FEE_FACTOR.powi(1),
+                )
+                .unwrap()
+                .buy,
+            200_000_000.0 / FEE_FACTOR
+        );
+        assert_approx_eq!(
+            pricegraph
+                .order_for_sell_amount(
+                    TokenPair { buy: 2, sell: 1 },
+                    10_000_000.0 * FEE_FACTOR.powi(1),
+                )
+                .unwrap()
+                .buy,
+            250_000_000.0 / FEE_FACTOR
+        );
+
+        assert_approx_eq!(
+            pricegraph
+                .order_for_sell_amount(
+                    TokenPair { buy: 2, sell: 1 },
+                    12_000_000.0 * FEE_FACTOR.powi(1),
+                )
+                .unwrap()
+                .buy,
+            300_000_000.0 / FEE_FACTOR
+        );
+        assert_approx_eq!(
+            pricegraph
+                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }, 100_000_000.0)
+                .unwrap()
+                .buy,
+            300_000_000.0 / FEE_FACTOR
         );
     }
 
