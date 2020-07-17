@@ -13,11 +13,6 @@ impl Pricegraph {
     ///
     /// Note that this price is in exchange format, that is, it is expressed as
     /// the ratio between buy and sell amounts, with implicit fees.
-    ///
-    /// # Panics
-    ///
-    /// This method panics if the specified sell amount is not a finite positive
-    /// (or 0.0) real number.
     pub fn estimate_limit_price(&self, pair: TokenPair, sell_amount: f64) -> Option<f64> {
         let mut orderbook = self.reduced_orderbook();
 
