@@ -16,6 +16,7 @@ use self::order::{Order, OrderCollector, OrderMap};
 pub use self::reduced::ReducedOrderbook;
 pub use self::scalar::{ExchangeRate, LimitPrice};
 use self::user::{User, UserMap};
+use crate::MIN_AMOUNT;
 use crate::api::Market;
 use crate::encoding::{Element, TokenId, TokenPair};
 use crate::graph::bellman_ford::{self, NegativeCycle};
@@ -28,10 +29,6 @@ use primitive_types::U256;
 use std::cmp;
 use std::f64;
 use thiserror::Error;
-
-/// The minimum amount where an order is considered a dust order and can be
-/// ignored in the orderbook graph calculation.
-const MIN_AMOUNT: f64 = 10_000.0;
 
 /// A graph representation of a complete orderbook.
 #[derive(Clone, Debug)]

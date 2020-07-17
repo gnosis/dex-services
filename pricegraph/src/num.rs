@@ -72,6 +72,11 @@ pub fn compare(a: f64, b: f64) -> cmp::Ordering {
         .expect("orderbooks cannot have NaN quantities")
 }
 
+/// Returns true if the specified number is within the range `(0.0, +Inf)`.
+pub fn is_strictly_positive_and_finite(value: f64) -> bool {
+    value > 0.0 && value < f64::INFINITY
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -105,5 +110,17 @@ mod tests {
     #[allow(clippy::float_cmp)]
     fn rounding_error_is_epsilon_for_1() {
         assert_eq!(max_rounding_error(1.0), f64::EPSILON);
+    }
+
+    #[test]
+    fn strictly_positive_and_finite_numbers() {
+        assert!(is_strictly_positive_and_finite(f64::EPSILON));
+        assert!(is_strictly_positive_and_finite(42.0));
+
+        assert!(!is_strictly_positive_and_finite(0.0));
+        assert!(!is_strictly_positive_and_finite(f64::NAN));
+        assert!(!is_strictly_positive_and_finite(f64::INFINITY));
+        assert!(!is_strictly_positive_and_finite(f64::NEG_INFINITY));
+        assert!(!is_strictly_positive_and_finite(-1.0));
     }
 }

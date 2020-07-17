@@ -2,19 +2,22 @@
 
 use crate::api::TransitiveOrder;
 use crate::encoding::TokenPair;
-use crate::orderbook::LimitPrice;
-use crate::Pricegraph;
+use crate::num;
+use crate::orderbook::{ExchangeRate, LimitPrice};
+use crate::{Pricegraph, MIN_AMOUNT};
 
 impl Pricegraph {
     /// Estimates an exchange rate for the specified token pair and sell volume.
-    /// Returns `None` if no combination of orders is able to trade this amount
-    /// of the sell token into the buy token. This usually occurs if there is
-    /// not enough buy token liquidity in the exchange or if there is no inverse
-    /// transitive orders buying the specified sell token for the specified buy
-    /// token.
+    /// Returns `None` if no counter transitive orders buying the specified sell
+    /// token for the specified buy token exist.
     ///
     /// Note that this price is in exchange format, that is, it is expressed as
     /// the ratio between buy and sell amounts, with implicit fees.
+    ///
+    /// # Panics
+    ///
+    /// This method panics if the specified sell amount is not a finite positive
+    /// (or 0.0) real number.
     pub fn estimate_limit_price(&self, pair: TokenPair, sell_amount: f64) -> Option<f64> {
         let mut orderbook = self.reduced_orderbook();
 
@@ -26,30 +29,70 @@ impl Pricegraph {
             sell: pair.buy,
         };
 
-        let mut last_exchange_rate = None;
-        if sell_amount <= 0.0 {
+        if sell_amount == 0.0 {
             // NOTE: For a 0 volume we simulate sending an tiny epsilon of value
             // through the network without actually filling any orders.
+            let mut exchange_rate = None;
             let flow = orderbook.fill_optimal_transitive_order_if(inverse_pair, |flow| {
-                last_exchange_rate = Some(flow.exchange_rate);
+                exchange_rate = Some(flow.exchange_rate);
                 false
             });
             debug_assert!(flow.is_none());
+
+            // NOTE: The exchange rates are for transitive orders in the inverse
+            // direction, so we need to invert the exchange rate and account for
+            // the fees so that the estimated exchange rate actually overlaps with
+            // the last counter transtive order's exchange rate.
+            return Some(exchange_rate?.inverse().price().value());
         }
 
-        let mut remaining_volume = sell_amount;
-        while remaining_volume > 0.0 {
-            let flow = orderbook.fill_optimal_transitive_order(inverse_pair)?;
-            last_exchange_rate = Some(flow.exchange_rate);
-            remaining_volume -= flow.capacity;
+        if !num::is_strictly_positive_and_finite(sell_amount) {
+            return None;
         }
 
-        // NOTE: The exchange rates are for transitive orders in the inverse
-        // direction, so we need to invert the exchange rate and account for
-        // the fees so that the estimated exchange rate actually overlaps with
-        // the last counter transtive order's exchange rate.
-        let price = last_exchange_rate?.inverse().price();
-        Some(price.value())
+        let mut total_buy_volume = 0.0;
+        let mut maximum_sell_volume = 0.0;
+        while let Some(flow) = orderbook.fill_optimal_transitive_order_if(inverse_pair, |flow| {
+            let current_exchange_rate = match LimitPrice::new(sell_amount / total_buy_volume) {
+                Some(price) => price.exchange_rate().inverse(),
+                None => {
+                    return true;
+                }
+            };
+
+            // NOTE: This implies that the added liquidity from the
+            // transitive order at its exchange rate makes the price
+            // worse, and we are better off just buying off all the
+            // previously discovered liquidity instead of including this
+            // transitive order.
+            current_exchange_rate > flow.exchange_rate
+        }) {
+            total_buy_volume += flow.capacity / flow.exchange_rate.value();
+
+            // NOTE: Compute the maximum sell amount that can be used to
+            // purchase the total buy volume at the current exchange rate.
+            // Note that this is a sell amount, so it needs use the limit
+            // price and not the exchange rate.
+            maximum_sell_volume = dbg!(total_buy_volume) * flow.exchange_rate.price().value();
+
+            // NOTE: If we only have a `MIN_AMOUNT` left to sell at the
+            // current exchange rate, don't try to match new transitive
+            // orders since these small dust amounts will be ignored by the
+            // solver anyway.
+            if sell_amount - dbg!(maximum_sell_volume) <= MIN_AMOUNT {
+                break;
+            }
+        }
+
+        let limit_price = if sell_amount > maximum_sell_volume {
+            LimitPrice::new(total_buy_volume / sell_amount)?
+        } else {
+            ExchangeRate::from_price_value(maximum_sell_volume / total_buy_volume)?
+                .inverse()
+                .price()
+        };
+
+        Some(limit_price.value())
     }
 
     /// Returns a transitive order with a buy amount calculated such that there
@@ -207,12 +250,102 @@ mod tests {
                 .unwrap(),
             1.0 / (110.0 * FEE_FACTOR.powi(2))
         );
+    }
 
-        let price = pricegraph.estimate_limit_price(TokenPair { buy: 2, sell: 1 }, 10_000_000.0);
-        assert!(price.is_none());
+    #[test]
+    fn estimates_best_buy_amount_for_low_liquidity() {
+        //  /---1.0---v
+        // 1          2
+        //
+        //   /--0.01--v
+        //  /---1.0---v
+        // 3          4
+        let pricegraph = pricegraph! {
+            users {
+                @1 {
+                    token 2 => 100_000_000,
+                    token 4 => 100_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 1 [100_000_000] selling 2 [100_000_000],
 
-        let price = pricegraph.estimate_limit_price(TokenPair { buy: 1, sell: 2 }, 1_000_000_000.0);
-        assert!(price.is_none());
+                owner @1 buying 3 [  1_000_000] selling 4 [1_000_000],
+                owner @1 buying 3 [100_000_000] selling 4 [1_000_000],
+            }
+        };
+
+        assert_approx_eq!(
+            pricegraph
+                .estimate_limit_price(TokenPair { buy: 2, sell: 1 }, 200_000_000.0)
+                .unwrap(),
+            0.5
+        );
+        /*
+        assert_approx_eq!(
+            pricegraph
+                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 200_000_000.0)
+                .unwrap(),
+            0.5
+        );
+        assert_approx_eq!(
+            pricegraph
+                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 10_000_000_000.0)
+                .unwrap(),
+            0.01
+        );
+
+        // NOTE: We can buy up to `100_000_000 + 1_000_000` from both 3 -> 4
+        // orders at the `1/100` limit price.
+        assert_approx_eq!(
+            pricegraph
+                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 10_001_000_000.0 * FEE_FACTOR)
+                .unwrap(),
+            0.01 / FEE_FACTOR
+        );
+        assert_approx_eq!(
+            pricegraph
+                .order_for_sell_amount(TokenPair { buy: 4, sell: 3 }, 101_000_000.0 * FEE_FACTOR.powi(2))
+                .unwrap()
+                .buy,
+            2_000_000.0
+        );
+        */
+    }
+
+    #[test]
+    fn estimated_buy_amount_monotonically_increasing() {
+        //    /-25.0--v
+        //   /--50.0--v
+        //  /--100.0--v
+        // 1          2
+        let pricegraph = pricegraph! {
+            users {
+                @1 {
+                    token 2 => 100_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 1 [100_000] selling 2 [100_000_000],
+                owner @1 buying 1 [200_000] selling 2 [100_000_000],
+                owner @1 buying 1 [400_000] selling 2 [100_000_000],
+            }
+        };
+
+        assert_approx_eq!(
+            pricegraph
+                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }, 50_000.0)
+                .unwrap()
+                .buy,
+            50_000_000.0 / FEE_FACTOR.powi(2)
+        );
+        assert_approx_eq!(
+            pricegraph
+                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }, 100_000.0 * FEE_FACTOR)
+                .unwrap()
+                .buy,
+            100_000_000.0 / FEE_FACTOR
+        );
     }
 
     #[test]
