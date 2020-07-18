@@ -46,7 +46,7 @@ impl Pricegraph {
         }
 
         // NOTE: Iteratively compute the how much total buy volume (liquidity)
-        // is available as successively "worse" exchange rates until all the
+        // is available at successively "worse" exchange rates until all the
         // specified sell amount can be used to buy the available liquidity at
         // the marginal exchange rate.
         let mut total_buy_volume = 0.0;
@@ -242,7 +242,7 @@ mod tests {
         //  /---1.0---v
         // 1          2
         //
-        //   /--0.01--v
+        //   /--100.0-v
         //  /---1.0---v
         // 3          4
         let pricegraph = pricegraph! {
@@ -260,6 +260,8 @@ mod tests {
             }
         };
 
+        // NOTE: If we buy all available token 2 from the 1->2 order, then we
+        // would receive at most `100_000_000 / FEE_FACTOR` of token 2.
         assert_approx_eq!(
             pricegraph
                 .estimate_limit_price(TokenPair { buy: 2, sell: 1 }, 200_000_000.0)
@@ -267,12 +269,19 @@ mod tests {
             0.5 / FEE_FACTOR
         );
 
+        // NOTE: If we buy all available token 4 from the first 3->4 order, then
+        // we would receive at most `1_000_000 / FEE_FACTOR` of token 4. Note
+        // that this yields a better price than buying token 4 from the second
+        // order at `0.01` price.
         assert_approx_eq!(
             pricegraph
                 .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 2_000_000.0)
                 .unwrap(),
             0.5 / FEE_FACTOR
         );
+
+        // NOTE: At this point, it is worth it to start using the liquidity
+        // from the second 3->4 order at the `100:1` limit price.
         assert_approx_eq!(
             pricegraph
                 .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 101_000_000.0 * FEE_FACTOR)
@@ -286,20 +295,22 @@ mod tests {
             0.01 / FEE_FACTOR.powi(2)
         );
 
+        // NOTE: If we buy all available token 4 then would receive at most
+        // `2_000_000 / FEE_FACTOR`.
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 400_000_000.0 * FEE_FACTOR)
+                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 400_000_000.0)
                 .unwrap(),
-            0.005 / FEE_FACTOR.powi(2)
+            0.005 / FEE_FACTOR
         );
     }
 
     #[test]
     fn estimated_buy_amount_monotonically_increasing() {
-        //    /-25.0--v
-        //   /--50.0--v
-        //  /--100.0--v
-        // 1          2
+        //    /-0.04--v
+        //   /--0.02--v
+        //  /---0.01--v
+        // 1           2
         let pricegraph = pricegraph! {
             users {
                 @1 {
@@ -313,6 +324,7 @@ mod tests {
             }
         };
 
+        // NOTE: Partially use liquidity provided by the first order.
         assert_approx_eq!(
             pricegraph
                 .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }, 500_000.0)
@@ -321,6 +333,8 @@ mod tests {
             50_000_000.0 / FEE_FACTOR.powi(2)
         );
 
+        // NOTE: Fully use liquidity provided by the first order. Note that it
+        // can send at most `100_000_000 / FEE_FACTOR` because of fees.
         assert_approx_eq!(
             pricegraph
                 .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }, 1_000_000.0 * FEE_FACTOR)
@@ -328,6 +342,10 @@ mod tests {
                 .buy,
             100_000_000.0 / FEE_FACTOR
         );
+
+        // NOTE: For the next ~1_000_000 sell amount, we continue to fully use
+        // liquidity from the first order, and not include the second order
+        // because its limit price is too high.
         assert_approx_eq!(
             pricegraph
                 .order_for_sell_amount(
@@ -345,69 +363,62 @@ mod tests {
                 .buy,
             100_000_000.0 / FEE_FACTOR
         );
-
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(
-                    TokenPair { buy: 2, sell: 1 },
-                    2_000_000.0 * FEE_FACTOR.powi(1),
-                )
+                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }, 2_000_000.0 * FEE_FACTOR)
                 .unwrap()
                 .buy,
             100_000_000.0 / FEE_FACTOR
         );
+
+        // NOTE: Partially use liquidity from the first and second orders.
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(
-                    TokenPair { buy: 2, sell: 1 },
-                    3_000_000.0 * FEE_FACTOR.powi(1),
-                )
+                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }, 3_000_000.0 * FEE_FACTOR)
                 .unwrap()
                 .buy,
             150_000_000.0 / FEE_FACTOR
         );
+
+        // NOTE: Fully use liquidity from the first and second orders for the
+        // next ~4_000_000 amount sold (until the limit price overlaps with the
+        // third order's limit price).
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(
-                    TokenPair { buy: 2, sell: 1 },
-                    4_000_000.0 * FEE_FACTOR.powi(1),
-                )
+                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }, 4_000_000.0 * FEE_FACTOR)
+                .unwrap()
+                .buy,
+            200_000_000.0 / FEE_FACTOR
+        );
+        assert_approx_eq!(
+            pricegraph
+                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }, 8_000_000.0 * FEE_FACTOR)
                 .unwrap()
                 .buy,
             200_000_000.0 / FEE_FACTOR
         );
 
+        // NOTE: Partially use liquidity from all orders.
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(
-                    TokenPair { buy: 2, sell: 1 },
-                    8_000_000.0 * FEE_FACTOR.powi(1),
-                )
-                .unwrap()
-                .buy,
-            200_000_000.0 / FEE_FACTOR
-        );
-        assert_approx_eq!(
-            pricegraph
-                .order_for_sell_amount(
-                    TokenPair { buy: 2, sell: 1 },
-                    10_000_000.0 * FEE_FACTOR.powi(1),
-                )
+                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }, 10_000_000.0 * FEE_FACTOR)
                 .unwrap()
                 .buy,
             250_000_000.0 / FEE_FACTOR
         );
 
+        // NOTE: Exactly use all liquidity from all orders.
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(
-                    TokenPair { buy: 2, sell: 1 },
-                    12_000_000.0 * FEE_FACTOR.powi(1),
-                )
+                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }, 12_000_000.0 * FEE_FACTOR)
                 .unwrap()
                 .buy,
             300_000_000.0 / FEE_FACTOR
         );
+
+        // NOTE: Completely use liquidity from all orders, note that even as the
+        // sell amount increases, the total buy amount does not and is capped at
+        // the total liquidity in the orderbook.
         assert_approx_eq!(
             pricegraph
                 .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }, 100_000_000.0)
