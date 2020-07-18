@@ -76,7 +76,7 @@ mod tests {
             });
 
         let priority_source =
-            PriorityPriceSource::new(vec![Box::new(second_source), Box::new(first_source)]);
+            PriorityPriceSource::new(vec![Box::new(first_source), Box::new(second_source)]);
         priority_source
             .get_prices(&[1.into(), 2.into()])
             .now_or_never();
