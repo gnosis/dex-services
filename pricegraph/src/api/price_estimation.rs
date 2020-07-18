@@ -45,51 +45,39 @@ impl Pricegraph {
             return None;
         }
 
+        // NOTE: Iteratively compute the how much total buy volume (liquidity)
+        // is available as successively "worse" exchange rates until all the
+        // specified sell amount can be used to buy the available liquidity at
+        // the marginal exchange rate.
         let mut total_buy_volume = 0.0;
-        let mut maximum_sell_amount = 0.0;
+        let mut maximum_sell_volume = 0.0;
         while let Some(flow) = orderbook.fill_optimal_transitive_order_if(inverse_pair, |flow| {
-            let current_exchange_rate = match LimitPrice::new(total_buy_volume / sell_amount) {
-                Some(price) => price.exchange_rate(),
-                None => {
-                    return true;
-                }
+            let current_exchange_rate = match ExchangeRate::new(total_buy_volume / sell_amount) {
+                Some(price) => price,
+                None => return true,
             };
 
             // NOTE: This implies that the added liquidity from the counter
-            // transitive order at its exchange rate makes the limit price
-            // worse, and we are better off just buying off all the previously
-            // discovered liquidity instead of including this transitive order.
+            // transitive order at its exchange rate makes the estimated
+            // exchange rate worse, and we are better off just buying off all
+            // the previously discovered liquidity instead of including new
+            // liquidity from this transitive order.
             current_exchange_rate < flow.exchange_rate.inverse()
         }) {
-            // NOTE: Compute the largest order that fully overlaps all currently
-            // discovered liquidity.
-            let inverse_limit_price = flow.exchange_rate.inverse().price();
-            total_buy_volume += flow.capacity * inverse_limit_price.value();
-            maximum_sell_amount = total_buy_volume / inverse_limit_price.value();
+            total_buy_volume += flow.capacity / flow.exchange_rate.value();
+            maximum_sell_volume = total_buy_volume * flow.exchange_rate.value();
 
-            debug_assert!(
-                {
-                    let largest_order_xrate =
-                        ExchangeRate::from_price_value(total_buy_volume / maximum_sell_amount)
-                            .unwrap()
-                            .value();
-                    let error = largest_order_xrate - flow.exchange_rate.inverse().value();
-                    error.abs() <= num::max_rounding_error(largest_order_xrate)
-                },
-                "largest order exchange rate does not match marginal exchange rate",
-            );
-
-            // NOTE: If we only have a `MIN_AMOUNT` left to sell at the
-            // current exchange rate, don't try to match new transitive
-            // orders since these small dust amounts will be ignored by the
-            // solver anyway.
-            if sell_amount <= maximum_sell_amount {
+            if sell_amount <= maximum_sell_volume {
                 break;
             }
         }
 
-        let price = total_buy_volume / sell_amount.max(maximum_sell_amount);
-        Some(LimitPrice::new(price)?.value())
+        let total_sell_volume = maximum_sell_volume.max(sell_amount);
+        Some(
+            ExchangeRate::new(total_buy_volume / total_sell_volume)?
+                .price()
+                .value(),
+        )
     }
 
     /// Returns a transitive order with a buy amount calculated such that there

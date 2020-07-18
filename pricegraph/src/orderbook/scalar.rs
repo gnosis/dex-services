@@ -73,9 +73,15 @@ impl ExchangeRate {
     /// The 1:1 exchange rate.
     pub const IDENTITY: ExchangeRate = ExchangeRate(1.0);
 
-    /// Creates an exchange rate from a limit price value.
-    pub fn from_price_value(price: f64) -> Option<Self> {
-        Some(LimitPrice::new(price)?.exchange_rate())
+    /// Creates a new exchange rate from a `f64` value. Returns `None` if the
+    /// exchange rate value is not valid. Specifically, it must be in the range
+    /// `(0, +∞)`.
+    pub fn new(value: f64) -> Option<Self> {
+        if num::is_strictly_positive_and_finite(value) {
+            Some(ExchangeRate(value))
+        } else {
+            None
+        }
     }
 
     /// Gets the value as a `f64`.
