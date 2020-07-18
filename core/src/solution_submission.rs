@@ -26,7 +26,7 @@ const POLL_TIMEOUT: Duration = Duration::from_secs(5);
 #[cfg(test)]
 const POLL_TIMEOUT: Duration = Duration::from_secs(0);
 
-const GAS_PRICE_CAP: u64 = 200_000_000_000;
+const GAS_PRICE_CAP: u64 = 90_000_000_000;
 
 // openethereum requires that the gas price of the resubmitted transaction has increased by at
 // least 12.5%.
