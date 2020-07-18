@@ -4,7 +4,7 @@ use crate::api::TransitiveOrder;
 use crate::encoding::TokenPair;
 use crate::num;
 use crate::orderbook::{ExchangeRate, LimitPrice};
-use crate::{Pricegraph, MIN_AMOUNT};
+use crate::Pricegraph;
 
 impl Pricegraph {
     /// Estimates an exchange rate for the specified token pair and sell volume.
@@ -83,7 +83,7 @@ impl Pricegraph {
             // current exchange rate, don't try to match new transitive
             // orders since these small dust amounts will be ignored by the
             // solver anyway.
-            if sell_amount - maximum_sell_amount <= MIN_AMOUNT {
+            if sell_amount <= maximum_sell_amount {
                 break;
             }
         }
@@ -285,19 +285,24 @@ mod tests {
                 .unwrap(),
             0.5 / FEE_FACTOR
         );
-        dbg!(pricegraph
-            .order_for_sell_amount(TokenPair { buy: 4, sell: 3 }, 101_000_000.0 * FEE_FACTOR));
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 101_000_000.0)
+                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 101_000_000.0 * FEE_FACTOR)
                 .unwrap(),
             0.01 / FEE_FACTOR.powi(2)
         );
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 202_000_000.0 * FEE_FACTOR)
+                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 200_000_000.0 * FEE_FACTOR)
                 .unwrap(),
-            0.005 / FEE_FACTOR
+            0.01 / FEE_FACTOR.powi(2)
+        );
+
+        assert_approx_eq!(
+            pricegraph
+                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }, 400_000_000.0 * FEE_FACTOR)
+                .unwrap(),
+            0.005 / FEE_FACTOR.powi(2)
         );
     }
 
