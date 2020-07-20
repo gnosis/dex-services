@@ -186,42 +186,16 @@ impl Orderbook {
                 }
             };
 
-            let (ask_path, bid_path) = (&path[0..base_index + 1], &path[base_index..]);
+            let (ask, bid) = (&path[0..base_index + 1], &path[base_index..]);
 
-            let ask = self.find_path_flow(ask_path).unwrap_or_else(|| {
-                panic!(
-                    "failed to find flow for ask path from negative cycle {}",
-                    format_path(&ask_path),
-                )
-            });
-            let bid = self.find_path_flow(bid_path).unwrap_or_else(|| {
-                panic!(
-                    "failed to find flow for bid path from negative cycle {}",
-                    format_path(&bid_path),
-                )
-            });
-            let is_dust_ring = ask.is_dust_trade() || bid.is_dust_trade();
+            let ask = self
+                .fill_path(ask)
+                .expect("ask transitive path not found after being detected");
+            let bid = self
+                .fill_path(bid)
+                .expect("bid transitive path not found after being detected");
 
-            if ask.is_dust_trade() || !is_dust_ring {
-                self.fill_path_with_flow(ask_path, &ask).unwrap_or_else(|| {
-                    panic!(
-                        "failed to fill detected ask flow for path {}",
-                        format_path(&ask_path),
-                    )
-                });
-            }
-            if bid.is_dust_trade() || !is_dust_ring {
-                self.fill_path_with_flow(bid_path, &bid).unwrap_or_else(|| {
-                    panic!(
-                        "failed to fill detected bid flow for path {}",
-                        format_path(&bid_path),
-                    )
-                });
-            }
-
-            if !is_dust_ring {
-                return Some(Ring { ask, bid });
-            }
+            return Some(Ring { ask, bid });
         }
 
         None
@@ -257,35 +231,30 @@ impl Orderbook {
         }
 
         let (start, end) = (node_index(pair.buy), node_index(pair.sell));
+        let predecessors = bellman_ford::search(&self.projection, start)?.1;
+        let path = match path::find_path(&predecessors, start, end) {
+            Some(path) => path,
+            None => return Ok(None),
+        };
 
-        while let Some(path) = {
-            let predecessors = bellman_ford::search(&self.projection, start)?.1;
-            path::find_path(&predecessors, start, end)
-        } {
-            let flow = self.find_path_flow(&path).unwrap_or_else(|| {
-                panic!(
-                    "failed to fill detected shortest path {}",
-                    format_path(&path),
-                )
-            });
-
-            if !flow.is_dust_trade() && !condition(&flow) {
-                break;
-            }
-
-            self.fill_path_with_flow(&path, &flow).unwrap_or_else(|| {
-                panic!(
-                    "failed to fill with capacity along detected path {}",
-                    format_path(&path),
-                )
-            });
-
-            if !flow.is_dust_trade() {
-                return Ok(Some(flow));
-            }
+        let flow = self.find_path_flow(&path).unwrap_or_else(|| {
+            panic!(
+                "failed to fill detected shortest path {}",
+                format_path(&path),
+            )
+        });
+        if !condition(&flow) {
+            return Ok(None);
         }
 
-        Ok(None)
+        self.fill_path_with_flow(&path, &flow).unwrap_or_else(|| {
+            panic!(
+                "failed to fill with capacity along detected path {}",
+                format_path(&path),
+            )
+        });
+
+        Ok(Some(flow))
     }
 
     /// Updates all projection graph edges that enter a token.
@@ -359,9 +328,9 @@ impl Orderbook {
     fn find_path_flow(&self, path: &[NodeIndex]) -> Option<Flow> {
         // NOTE: Capacity is expressed in the starting token, which is the buy
         // token for the transitive order along the specified path.
+        let mut capacity = f64::INFINITY;
         let mut transitive_xrate = ExchangeRate::IDENTITY;
         let mut max_xrate = ExchangeRate::IDENTITY;
-        let mut capacity = f64::INFINITY;
         for pair in pairs_on_path(path) {
             let order = self.orders.best_order_for_pair(pair)?;
             transitive_xrate *= order.exchange_rate;
@@ -776,116 +745,6 @@ mod tests {
         assert_approx_eq!(
             orderbook.users[&user_id(4)].balance_of(4),
             10_000_000.0 - flow.capacity / flow.exchange_rate.value()
-        );
-    }
-
-    #[test]
-    fn reduces_market_ring_dust_trades() {
-        //  0 --0.1--> 1 --0.1--> 2
-        //  ^                    /
-        //   \-------0.1--------/
-        let mut orderbook = orderbook! {
-            users {
-                @1 {
-                    token 0 => 10_000_000,
-                    token 1 => 10_000_000,
-                    token 2 => 10_000_000,
-                }
-            }
-            orders {
-                owner @1 buying 0 [10_001] selling 1 [100_010],
-                owner @1 buying 1 [10_001] selling 2 [100_010],
-                owner @1 buying 2 [10_001] selling 0 [100_010],
-            }
-        };
-
-        // NOTE: The ask transitive order 1 -> 2 -> 0 is a dust order as it
-        // would trade ~1_000 -> ~10_000 -> 100_000.
-        assert_eq!(
-            orderbook.fill_market_ring_trade(Market { base: 0, quote: 1 }),
-            None,
-        );
-
-        // NOTE: The second segment of the dust trade will be fully reduced, so
-        // ony a two orders should be left in the in the orderbook from 0 -> 1
-        // and a partially filled order from 1 -> 2.
-        assert_eq!(orderbook.num_orders(), 2);
-        assert!(orderbook
-            .get_pair_edge(TokenPair { buy: 0, sell: 1 })
-            .is_some());
-        assert!(orderbook
-            .get_pair_edge(TokenPair { buy: 1, sell: 2 })
-            .is_some());
-    }
-
-    #[test]
-    fn reduces_dust_trades_along_path() {
-        //  0 --10.0-> 1 --0.01-> 2 --0.1--> 3
-        //   \
-        //    \-0.1--> 4
-        //
-        //             5 --1.0--> 6 -100.0-> 7
-        let mut orderbook = orderbook! {
-            users {
-                @1 {
-                    token 1 => 10_000_000,
-                    token 2 => 10_000_000,
-                    token 3 => 10_000_000,
-                }
-                @2 {
-                    token 4 => 10_000_000,
-                }
-                @3 {
-                    token 6 => 10_000_000,
-                    token 7 => 10_000_000,
-                }
-            }
-            orders {
-                owner @1 buying 0 [100_010] selling 1 [   10_001],
-                owner @1 buying 1 [ 10_001] selling 2 [  100_010],
-                owner @1 buying 2 [ 10_001] selling 3 [1_000_100],
-
-                owner @2 buying 0 [9000] selling 4 [90_000],
-
-                owner @3 buying 5 [   10_001] selling 6 [10_001],
-                owner @3 buying 6 [1_000_100] selling 7 [10_001],
-            }
-        };
-
-        // NOTE: There should be no valid transitive orders for the following
-        // token pairs, since the transitive orders require trades with amounts
-        // below the minimum:
-
-        // NOTE: This would trade ~10_000 -> ~1_000 -> ~100_000 -> ~1_000_000
-        assert_eq!(
-            orderbook
-                .fill_optimal_transitive_order(TokenPair { buy: 0, sell: 3 })
-                .unwrap(),
-            None,
-        );
-
-        // NOTE: This would trade ~1_000 -> ~100_000 -> ~1_000_000
-        assert_eq!(
-            orderbook
-                .fill_optimal_transitive_order(TokenPair { buy: 1, sell: 3 })
-                .unwrap(),
-            None,
-        );
-
-        // NOTE: This would trade ~9_000 -> ~90_000
-        assert_eq!(
-            orderbook
-                .fill_optimal_transitive_order(TokenPair { buy: 0, sell: 4 })
-                .unwrap(),
-            None,
-        );
-
-        // NOTE: This would trade ~10_000 -> ~10_000 -> ~100
-        assert_eq!(
-            orderbook
-                .fill_optimal_transitive_order(TokenPair { buy: 5, sell: 7 })
-                .unwrap(),
-            None,
         );
     }
 }
