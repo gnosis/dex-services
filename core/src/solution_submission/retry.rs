@@ -6,11 +6,48 @@ use ethcontract::{
     errors::{ExecutionError, MethodError},
     U256,
 };
+use futures::future::{BoxFuture, FutureExt as _};
 use pricegraph::num;
 
 use super::MIN_GAS_PRICE_INCREASE_FACTOR;
 
 const DEFAULT_GAS_PRICE: u64 = 15_000_000_000;
+
+pub struct Args {
+    pub batch_index: u32,
+    pub solution: Solution,
+    pub claimed_objective_value: U256,
+    pub gas_price_cap: U256,
+    pub nonce: U256,
+}
+
+#[cfg_attr(test, mockall::automock)]
+pub trait SolutionTransactionSending {
+    fn retry<'a>(&'a self, args: Args) -> BoxFuture<'a, Result<(), MethodError>>;
+}
+
+pub struct RetryWithGasPriceIncrease<'a> {
+    contract: &'a (dyn StableXContract + Sync),
+    gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
+}
+
+impl<'a> RetryWithGasPriceIncrease<'a> {
+    pub fn new(
+        contract: &'a (dyn StableXContract + Sync),
+        gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
+    ) -> Self {
+        Self {
+            contract,
+            gas_price_estimating,
+        }
+    }
+}
+
+impl<'a> SolutionTransactionSending for RetryWithGasPriceIncrease<'a> {
+    fn retry<'b>(&'b self, args: Args) -> BoxFuture<'b, Result<(), MethodError>> {
+        retry(self.contract, self.gas_price_estimating, args).boxed()
+    }
+}
 
 fn is_confirm_timeout(result: &Result<(), MethodError>) -> bool {
     matches!(
@@ -62,14 +99,16 @@ fn gas_price(estimated_price: U256, price_increase_count: u32, cap: U256) -> U25
     cap.min(U256::from(new_price as u128))
 }
 
-pub async fn retry_with_gas_price_increase(
+async fn retry(
     contract: &(dyn StableXContract + Sync),
-    batch_index: u32,
-    solution: Solution,
-    claimed_objective_value: U256,
     gas_price_estimating: &(dyn GasPriceEstimating + Sync),
-    gas_price_cap: U256,
-    nonce: U256,
+    Args {
+        batch_index,
+        solution,
+        claimed_objective_value,
+        gas_price_cap,
+        nonce,
+    }: Args,
 ) -> Result<(), MethodError> {
     const BLOCK_TIMEOUT: usize = 2;
 
@@ -125,7 +164,6 @@ mod tests {
         gas_station::{GasPrice, MockGasPriceEstimating},
     };
     use anyhow::anyhow;
-    use futures::future::FutureExt as _;
     use mockall::predicate::*;
 
     #[test]
@@ -206,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    fn test_retry_with_gas_price_increase_once_until_cap_is_reached() {
+    fn test_retry_once() {
         let mut contract = MockStableXContract::new();
         contract
             .expect_submit_solution()
@@ -252,18 +290,17 @@ mod tests {
             .boxed()
         });
 
-        retry_with_gas_price_increase(
-            &contract,
-            1,
-            Solution::trivial(),
-            1.into(),
-            &gas_station,
-            (DEFAULT_GAS_PRICE * 10).into(),
-            U256::from(0),
-        )
-        .now_or_never()
-        .unwrap()
-        .unwrap();
+        let args = Args {
+            batch_index: 1,
+            solution: Solution::trivial(),
+            claimed_objective_value: 1.into(),
+            gas_price_cap: (DEFAULT_GAS_PRICE * 10).into(),
+            nonce: 0.into(),
+        };
+        retry(&contract, &gas_station, args)
+            .now_or_never()
+            .unwrap()
+            .unwrap();
     }
 
     #[test]
@@ -304,22 +341,21 @@ mod tests {
             .boxed()
         });
 
-        assert!(retry_with_gas_price_increase(
-            &contract,
-            1,
-            Solution::trivial(),
-            1.into(),
-            &gas_station,
-            (DEFAULT_GAS_PRICE * 100).into(),
-            0.into()
-        )
-        .now_or_never()
-        .unwrap()
-        .is_err());
+        let args = Args {
+            batch_index: 1,
+            solution: Solution::trivial(),
+            claimed_objective_value: 1.into(),
+            gas_price_cap: (DEFAULT_GAS_PRICE * 100).into(),
+            nonce: 0.into(),
+        };
+        assert!(retry(&contract, &gas_station, args)
+            .now_or_never()
+            .unwrap()
+            .is_err());
     }
 
     #[test]
-    fn test_retry_with_gas_price_increase_timeout() {
+    fn test_retry_timeout() {
         let mut contract = MockStableXContract::new();
         contract
             .expect_submit_solution()
@@ -345,17 +381,16 @@ mod tests {
             .boxed()
         });
 
-        assert!(retry_with_gas_price_increase(
-            &contract,
-            1,
-            Solution::trivial(),
-            1.into(),
-            &gas_station,
-            (DEFAULT_GAS_PRICE * 15).into(),
-            0.into()
-        )
-        .now_or_never()
-        .unwrap()
-        .is_err())
+        let args = Args {
+            batch_index: 1,
+            solution: Solution::trivial(),
+            claimed_objective_value: 1.into(),
+            gas_price_cap: (DEFAULT_GAS_PRICE * 15).into(),
+            nonce: 0.into(),
+        };
+        assert!(retry(&contract, &gas_station, args)
+            .now_or_never()
+            .unwrap()
+            .is_err())
     }
 }
