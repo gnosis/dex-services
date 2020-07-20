@@ -22,7 +22,6 @@ use crate::graph::bellman_ford::{self, NegativeCycle};
 use crate::graph::path;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
 use crate::num;
-use crate::MIN_AMOUNT;
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::NodeIndexable;
 use std::cmp;
