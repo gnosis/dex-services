@@ -678,25 +678,25 @@ mod tests {
 
         // NOTE: This would trade ~10_000 -> ~1_000 -> ~100_000 -> ~1_000_000
         assert_eq!(
-            pricegraph.estimate_limit_price(TokenPair { buy: 0, sell: 3 }, 10_000.0),
+            pricegraph.estimate_limit_price(TokenPair { buy: 0, sell: 3 }, 10_001.0),
             None,
         );
 
         // NOTE: This would trade ~1_000 -> ~100_000 -> ~1_000_000
         assert_eq!(
-            pricegraph.estimate_limit_price(TokenPair { buy: 1, sell: 3 }, 10_000.0),
+            pricegraph.estimate_limit_price(TokenPair { buy: 1, sell: 3 }, 10_001.0),
             None,
         );
 
         // NOTE: This would trade ~9_000 -> ~90_000
         assert_eq!(
-            pricegraph.estimate_limit_price(TokenPair { buy: 0, sell: 4 }, 10_000.0),
+            pricegraph.estimate_limit_price(TokenPair { buy: 0, sell: 4 }, 10_001.0),
             None,
         );
 
         // NOTE: This would trade ~10_000 -> ~10_000 -> ~100
         assert_eq!(
-            pricegraph.estimate_limit_price(TokenPair { buy: 5, sell: 7 }, 10_000.0),
+            pricegraph.estimate_limit_price(TokenPair { buy: 5, sell: 7 }, 10_001.0),
             None,
         );
     }
