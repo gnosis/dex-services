@@ -25,7 +25,6 @@ use crate::num;
 use crate::MIN_AMOUNT;
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::NodeIndexable;
-use primitive_types::U256;
 use std::cmp;
 use std::f64;
 use thiserror::Error;
@@ -187,16 +186,42 @@ impl Orderbook {
                 }
             };
 
-            let (ask, bid) = (&path[0..base_index + 1], &path[base_index..]);
+            let (ask_path, bid_path) = (&path[0..base_index + 1], &path[base_index..]);
 
-            let ask = self
-                .fill_path(ask)
-                .expect("ask transitive path not found after being detected");
-            let bid = self
-                .fill_path(bid)
-                .expect("bid transitive path not found after being detected");
+            let ask = self.find_path_flow(ask_path).unwrap_or_else(|| {
+                panic!(
+                    "failed to find flow for ask path from negative cycle {}",
+                    format_path(&ask_path),
+                )
+            });
+            let bid = self.find_path_flow(bid_path).unwrap_or_else(|| {
+                panic!(
+                    "failed to find flow for bid path from negative cycle {}",
+                    format_path(&bid_path),
+                )
+            });
+            let is_dust_ring = ask.is_dust_trade() || bid.is_dust_trade();
 
-            return Some(Ring { ask, bid });
+            if ask.is_dust_trade() || !is_dust_ring {
+                self.fill_path_with_flow(ask_path, &ask).unwrap_or_else(|| {
+                    panic!(
+                        "failed to fill detected ask flow for path {}",
+                        format_path(&ask_path),
+                    )
+                });
+            }
+            if bid.is_dust_trade() || !is_dust_ring {
+                self.fill_path_with_flow(bid_path, &bid).unwrap_or_else(|| {
+                    panic!(
+                        "failed to fill detected bid flow for path {}",
+                        format_path(&bid_path),
+                    )
+                });
+            }
+
+            if !is_dust_ring {
+                return Some(Ring { ask, bid });
+            }
         }
 
         None
@@ -232,30 +257,35 @@ impl Orderbook {
         }
 
         let (start, end) = (node_index(pair.buy), node_index(pair.sell));
-        let predecessors = bellman_ford::search(&self.projection, start)?.1;
-        let path = match path::find_path(&predecessors, start, end) {
-            Some(path) => path,
-            None => return Ok(None),
-        };
 
-        let flow = self.find_path_flow(&path).unwrap_or_else(|| {
-            panic!(
-                "failed to fill detected shortest path {}",
-                format_path(&path),
-            )
-        });
-        if !condition(&flow) {
-            return Ok(None);
+        while let Some(path) = {
+            let predecessors = bellman_ford::search(&self.projection, start)?.1;
+            path::find_path(&predecessors, start, end)
+        } {
+            let flow = self.find_path_flow(&path).unwrap_or_else(|| {
+                panic!(
+                    "failed to fill detected shortest path {}",
+                    format_path(&path),
+                )
+            });
+
+            if !flow.is_dust_trade() && !condition(&flow) {
+                break;
+            }
+
+            self.fill_path_with_flow(&path, &flow).unwrap_or_else(|| {
+                panic!(
+                    "failed to fill with capacity along detected path {}",
+                    format_path(&path),
+                )
+            });
+
+            if !flow.is_dust_trade() {
+                return Ok(Some(flow));
+            }
         }
 
-        self.fill_path_with_flow(&path, flow).unwrap_or_else(|| {
-            panic!(
-                "failed to fill with capacity along detected path {}",
-                format_path(&path),
-            )
-        });
-
-        Ok(Some(flow))
+        Ok(None)
     }
 
     /// Updates all projection graph edges that enter a token.
@@ -281,7 +311,7 @@ impl Orderbook {
         while let Some(true) = self
             .orders
             .best_order_for_pair(pair)
-            .map(|order| order.get_effective_amount(&self.users) <= MIN_AMOUNT)
+            .map(|order| num::is_dust_amount(order.get_effective_amount(&self.users)))
         {
             self.orders.remove_pair_order(pair);
         }
@@ -314,7 +344,7 @@ impl Orderbook {
     /// result of filling orders along a path.
     fn fill_path(&mut self, path: &[NodeIndex]) -> Option<Flow> {
         let flow = self.find_path_flow(path)?;
-        self.fill_path_with_flow(path, flow).unwrap_or_else(|| {
+        self.fill_path_with_flow(path, &flow).unwrap_or_else(|| {
             panic!(
                 "failed to fill with capacity along detected path {}",
                 format_path(path),
@@ -329,19 +359,22 @@ impl Orderbook {
     fn find_path_flow(&self, path: &[NodeIndex]) -> Option<Flow> {
         // NOTE: Capacity is expressed in the starting token, which is the buy
         // token for the transitive order along the specified path.
-        let mut capacity = f64::INFINITY;
         let mut transitive_xrate = ExchangeRate::IDENTITY;
+        let mut max_xrate = ExchangeRate::IDENTITY;
+        let mut capacity = f64::INFINITY;
         for pair in pairs_on_path(path) {
             let order = self.orders.best_order_for_pair(pair)?;
             transitive_xrate *= order.exchange_rate;
+            max_xrate = cmp::max(max_xrate, transitive_xrate);
 
             let sell_amount = order.get_effective_amount(&self.users);
             capacity = num::min(capacity, sell_amount * transitive_xrate.value());
         }
 
         Some(Flow {
-            capacity,
             exchange_rate: transitive_xrate,
+            capacity,
+            min_trade: capacity / max_xrate.value(),
         })
     }
 
@@ -352,7 +385,7 @@ impl Orderbook {
     ///
     /// Note that currently, user buy token balances are not incremented as a
     /// result of filling orders along a path.
-    fn fill_path_with_flow(&mut self, path: &[NodeIndex], flow: Flow) -> Option<()> {
+    fn fill_path_with_flow(&mut self, path: &[NodeIndex], flow: &Flow) -> Option<()> {
         let mut transitive_xrate = ExchangeRate::IDENTITY;
         for pair in pairs_on_path(path) {
             let (order, user) = self.best_order_with_user_for_pair_mut(pair)?;
@@ -373,10 +406,10 @@ impl Orderbook {
 
             let new_balance = user.deduct_from_balance(pair.sell, fill_amount);
 
-            if new_balance < MIN_AMOUNT {
+            if num::is_dust_amount(new_balance) {
                 user.clear_balance(pair.sell);
                 self.update_projection_graph_node(pair.sell);
-            } else if order.amount < MIN_AMOUNT {
+            } else if num::is_dust_amount(order.amount) {
                 self.update_projection_graph_edge(pair);
             }
         }
@@ -443,10 +476,8 @@ fn format_path(path: &[NodeIndex]) -> String {
 /// amount or balance is less than the minimum amount that the exchange allows
 /// for trades
 fn is_dust_order(element: &Element) -> bool {
-    const MIN_AMOUNT_U128: u128 = MIN_AMOUNT as _;
-    const MIN_AMOUNT_U256: U256 = U256([MIN_AMOUNT as _, 0, 0, 0]);
-
-    element.remaining_sell_amount < MIN_AMOUNT_U128 || element.balance < MIN_AMOUNT_U256
+    num::is_dust_amount(element.remaining_sell_amount as _)
+        || num::is_dust_amount(num::u256_to_f64(element.balance))
 }
 
 /// An error indicating an invalid operation was performed on an overlapping
@@ -745,6 +776,116 @@ mod tests {
         assert_approx_eq!(
             orderbook.users[&user_id(4)].balance_of(4),
             10_000_000.0 - flow.capacity / flow.exchange_rate.value()
+        );
+    }
+
+    #[test]
+    fn reduces_market_ring_dust_trades() {
+        //  0 --0.1--> 1 --0.1--> 2
+        //  ^                    /
+        //   \-------0.1--------/
+        let mut orderbook = orderbook! {
+            users {
+                @1 {
+                    token 0 => 10_000_000,
+                    token 1 => 10_000_000,
+                    token 2 => 10_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 0 [10_001] selling 1 [100_010],
+                owner @1 buying 1 [10_001] selling 2 [100_010],
+                owner @1 buying 2 [10_001] selling 0 [100_010],
+            }
+        };
+
+        // NOTE: The ask transitive order 1 -> 2 -> 0 is a dust order as it
+        // would trade ~1_000 -> ~10_000 -> 100_000.
+        assert_eq!(
+            orderbook.fill_market_ring_trade(Market { base: 0, quote: 1 }),
+            None,
+        );
+
+        // NOTE: The second segment of the dust trade will be fully reduced, so
+        // ony a two orders should be left in the in the orderbook from 0 -> 1
+        // and a partially filled order from 1 -> 2.
+        assert_eq!(orderbook.num_orders(), 2);
+        assert!(orderbook
+            .get_pair_edge(TokenPair { buy: 0, sell: 1 })
+            .is_some());
+        assert!(orderbook
+            .get_pair_edge(TokenPair { buy: 1, sell: 2 })
+            .is_some());
+    }
+
+    #[test]
+    fn reduces_dust_trades_along_path() {
+        //  0 --10.0-> 1 --0.01-> 2 --0.1--> 3
+        //   \
+        //    \-0.1--> 4
+        //
+        //             5 --1.0--> 6 -100.0-> 7
+        let mut orderbook = orderbook! {
+            users {
+                @1 {
+                    token 1 => 10_000_000,
+                    token 2 => 10_000_000,
+                    token 3 => 10_000_000,
+                }
+                @2 {
+                    token 4 => 10_000_000,
+                }
+                @3 {
+                    token 6 => 10_000_000,
+                    token 7 => 10_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 0 [100_010] selling 1 [   10_001],
+                owner @1 buying 1 [ 10_001] selling 2 [  100_010],
+                owner @1 buying 2 [ 10_001] selling 3 [1_000_100],
+
+                owner @2 buying 0 [9000] selling 4 [90_000],
+
+                owner @3 buying 5 [   10_001] selling 6 [10_001],
+                owner @3 buying 6 [1_000_100] selling 7 [10_001],
+            }
+        };
+
+        // NOTE: There should be no valid transitive orders for the following
+        // token pairs, since the transitive orders require trades with amounts
+        // below the minimum:
+
+        // NOTE: This would trade ~10_000 -> ~1_000 -> ~100_000 -> ~1_000_000
+        assert_eq!(
+            orderbook
+                .fill_optimal_transitive_order(TokenPair { buy: 0, sell: 3 })
+                .unwrap(),
+            None,
+        );
+
+        // NOTE: This would trade ~1_000 -> ~100_000 -> ~1_000_000
+        assert_eq!(
+            orderbook
+                .fill_optimal_transitive_order(TokenPair { buy: 1, sell: 3 })
+                .unwrap(),
+            None,
+        );
+
+        // NOTE: This would trade ~9_000 -> ~90_000
+        assert_eq!(
+            orderbook
+                .fill_optimal_transitive_order(TokenPair { buy: 0, sell: 4 })
+                .unwrap(),
+            None,
+        );
+
+        // NOTE: This would trade ~10_000 -> ~10_000 -> ~100
+        assert_eq!(
+            orderbook
+                .fill_optimal_transitive_order(TokenPair { buy: 5, sell: 7 })
+                .unwrap(),
+            None,
         );
     }
 }
