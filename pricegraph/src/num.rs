@@ -1,5 +1,6 @@
 //! Module implementing floating point arithmetic for the price graph.
 
+use crate::MIN_AMOUNT;
 use primitive_types::U256;
 use std::cmp;
 use std::f64;
@@ -75,6 +76,12 @@ pub fn compare(a: f64, b: f64) -> cmp::Ordering {
 /// Returns true if the specified number is within the range `(0.0, +Inf)`.
 pub fn is_strictly_positive_and_finite(value: f64) -> bool {
     value > 0.0 && value < f64::INFINITY
+}
+
+/// Returns true if an amount is considered a dust amount. See `MIN_AMOUNT`
+/// documentation for more details.
+pub fn is_dust_amount(amount: f64) -> bool {
+    amount < MIN_AMOUNT
 }
 
 #[cfg(test)]
