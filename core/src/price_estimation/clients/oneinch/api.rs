@@ -66,7 +66,7 @@ impl Api for OneinchHttpApi {
                 .client
                 .get_json_async(url.to_string(), HttpLabel::Oneinch)
                 .await
-                .context("failed to parse token list json from 1inch response")?;
+                .context("failed to get token list from 1inch response")?;
             Ok(token_mapping
                 .into_iter()
                 .map(|(_token_symbol, token_data)| token_data)
@@ -96,7 +96,7 @@ impl Api for OneinchHttpApi {
                 .client
                 .get_json_async::<_, TradedAmounts>(url?.as_str(), HttpLabel::Oneinch)
                 .await
-                .context("failed to parse price json from 1inch")?;
+                .context("failed to get price from 1inch")?;
             let num = traded_amounts.to_token_amount as f64;
             let den = traded_amounts.from_token_amount as f64;
             Ok(decimal_correction * num / den)
