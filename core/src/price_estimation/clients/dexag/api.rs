@@ -62,7 +62,7 @@ impl Api for DexagHttpApi {
             self.client
                 .get_json_async(url.to_string(), HttpLabel::Dexag)
                 .await
-                .context("failed to parse token list json from dexag response")
+                .context("failed to get token list from dexag response")
         }
         .boxed()
     }
@@ -82,7 +82,7 @@ impl Api for DexagHttpApi {
                 .client
                 .get_json_async::<_, Price>(url.as_str(), HttpLabel::Dexag)
                 .await
-                .context("failed to parse price json from dexag")?
+                .context("failed to get price from dexag")?
                 .price)
         }
         .boxed()
