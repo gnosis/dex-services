@@ -42,11 +42,8 @@ impl<'a> InfallibleGasPriceEstimator<'a> {
     async fn estimate(&mut self) -> U256 {
         match self.gas_price_estimating.estimate_gas_price().await {
             Ok(gas_estimate) => {
-                let price = gas_estimate.fast;
                 // `retry` relies on the gas price always increasing.
-                if price >= self.previous_gas_price {
-                    self.previous_gas_price = gas_estimate.fast;
-                }
+                self.previous_gas_price = self.previous_gas_price.max(gas_estimate.fast);
             }
             Err(ref err) => {
                 log::warn!(
