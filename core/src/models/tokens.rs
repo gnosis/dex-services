@@ -2,7 +2,10 @@
 
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    fmt::{self, Display, Formatter},
+};
 
 /// A token ID wrapper type that implements JSON serialization in the solver
 /// format.
@@ -49,6 +52,12 @@ impl Into<u16> for TokenId {
 impl From<u16> for TokenId {
     fn from(id: u16) -> Self {
         TokenId(id)
+    }
+}
+
+impl Display for TokenId {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        Display::fmt(&self.0, f)
     }
 }
 

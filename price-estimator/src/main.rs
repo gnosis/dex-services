@@ -1,3 +1,4 @@
+mod error;
 mod filter;
 mod models;
 mod orderbook;
@@ -12,6 +13,7 @@ use core::{
     util::FutureWaitExt as _,
 };
 use ethcontract::PrivateKey;
+use orderbook::Orderbook;
 use prometheus::Registry;
 use std::net::SocketAddr;
 use std::{num::ParseIntError, path::PathBuf, sync::Arc, thread, time::Duration};
@@ -62,8 +64,6 @@ struct Options {
     token_data: TokenData,
 }
 
-type Orderbook = orderbook::Orderbook<EventBasedOrderbook>;
-
 fn main() {
     let options = Options::from_args();
     env_logger::init();
@@ -94,7 +94,7 @@ fn main() {
     let token_info = Arc::new(token_info);
 
     let orderbook = EventBasedOrderbook::new(contract, web3, options.orderbook_file);
-    let orderbook = Arc::new(Orderbook::new(orderbook));
+    let orderbook = Arc::new(Orderbook::new(Box::new(orderbook)));
     let _ = orderbook.update().wait();
     log::info!("Orderbook initialized.");
 

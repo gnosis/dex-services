@@ -81,12 +81,12 @@ impl Api for OneinchHttpApi {
         // artifacts when selling exactly one token atom.
         let one_token_from = 10_u128.pow(from.decimals as u32).to_string();
 
-        let url = self.api_url.join("quote").and_then(move |mut url| {
+        let url = self.api_url.join("quote").map(move |mut url| {
             url.query_pairs_mut()
                 .append_pair("fromTokenSymbol", &from.symbol)
                 .append_pair("toTokenSymbol", &to.symbol)
                 .append_pair("amount", &one_token_from);
-            Ok(url)
+            url
         });
 
         let decimal_correction = 10_f64.powi(from.decimals as i32 - to.decimals as i32);

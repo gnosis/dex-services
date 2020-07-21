@@ -4,6 +4,7 @@ All endpoints use the query part of the url with these key-values:
 
 * `atoms`: Required. If set to `true` all amounts are denominated in the smallest available unit (base quantity) of the token. If `false` all amounts are denominated in the "natural" unit of the respective token given by the number of decimals specified through the ERC20 interface. TODO: `false` is currently only implemented for estimated-buy-amount and estimated-amounts-at-price .
 * `hops`: Optional. TODO: document this once it has been implemented.
+* `batchId`: Optional. Specify a specific batch ID to compute the estimate for, only accounting orders that are valid at the specified batch. If no batch ID is specified, the current batch that is collecting orders will be used.
 
 Example: `<path>?atoms=true`
 
