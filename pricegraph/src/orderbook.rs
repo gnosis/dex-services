@@ -139,6 +139,59 @@ impl Orderbook {
         ReducedOrderbook(self)
     }
 
+    /// Fills a ring trade around a token, returning its price spread relative
+    /// the fee token (i.e. token ID 0).
+    ///
+    /// Returns `None` if the subgraph containing `token` is already reduced or
+    /// none of the ring trades are connected to the fee token.
+    pub fn fill_ring_trade_around_token(&mut self, token: TokenId) -> Option<(f64, f64)> {
+        if !self.is_token_pair_valid(fee_pair(token)) {
+            return None;
+        }
+
+        let token = node_index(token);
+        let fee_token = node_index(0);
+        while let Err(NegativeCycle(predecessors, node)) =
+            bellman_ford::search(&self.projection, token)
+        {
+            let path = path::find_cycle(&predecessors, node, Some(token))
+                .expect("negative cycle not found after being detected");
+
+            if path.first() != Some(&token) {
+                continue;
+            }
+
+            let min_price = self.direct_fee_token_price(token);
+            let max_price = min_price;
+
+            for i in 1..=path.len() {
+                let sub_path = &path[..i + 1];
+                let transitive_xrate = self
+                    .find_path_flow(&path[..i])
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "failed to find flow along detected negative cycle sub-path {}",
+                            format_path(&sub_path),
+                        )
+                    })
+                    .exchange_rate;
+
+                let price_in_fee = if sub_path[i] == fee_token {
+                    Some(transitive_xrate)
+                } else {
+                    self.direct_fee_token_price(sub_path[i])
+                        .map(|fee_price| transitive_xrate * fee_price)
+                };
+            }
+
+            if let (Some(min), Some(max)) = (min_price, max_price) {
+                return Some((min.value(), max.value()));
+            }
+        }
+
+        None
+    }
+
     /// Fills a ring trade over the specified market, and returns the flow
     /// corresponding to both ask and bid segments of the ring. Returns `None`
     /// if there are no overlapping ring trades over the specified market.
@@ -411,6 +464,23 @@ impl Orderbook {
         pair.buy != pair.sell
             && (pair.buy as usize) < node_bound
             && (pair.sell as usize) < node_bound
+    }
+
+    /// Gets the direct fee token exchange rate for the specified token. Returns
+    /// `None` if it is not connected to the fee token.
+    fn direct_fee_token_price(&self, token: NodeIndex) -> Option<ExchangeRate> {
+        self.orders
+            .best_order_for_pair(fee_pair(token.index() as _))
+            .map(|order| order.exchange_rate)
+    }
+}
+
+/// Creates a token for selling the fee token, which is required in a solution
+/// in order to ensure token conservation on non-fee tokens.
+fn fee_pair(token: TokenId) -> TokenPair {
+    TokenPair {
+        buy: token,
+        sell: 0,
     }
 }
 
