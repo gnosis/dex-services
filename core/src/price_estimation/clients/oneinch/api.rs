@@ -3,9 +3,10 @@ use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::{Context, Result};
 use ethcontract::Address;
 use futures::future::{BoxFuture, FutureExt as _};
+use isahc::prelude::Configurable;
 use serde::Deserialize;
 use serde_with::rust::display_fromstr;
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 use url::Url;
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -39,7 +40,7 @@ pub struct OneinchHttpApi {
 impl OneinchHttpApi {
     pub fn with_url(http_factory: &HttpFactory, api_url: &str) -> Result<Self> {
         let client = http_factory
-            .create()
+            .with_config(|builder| builder.timeout(Duration::from_secs(30)))
             .context("failed to initialize HTTP client")?;
         let api_url = api_url
             .parse()
