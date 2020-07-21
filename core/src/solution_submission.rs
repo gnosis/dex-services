@@ -701,7 +701,8 @@ mod tests {
             .expect_send_noop_transaction()
             .with(eq(U256::from(101_250_000_001u128)), eq(U256::from(0)))
             .times(1)
-            .returning(|_, _| immediate!(Err(anyhow!(""))));
+            // The specific error doesn't matter.
+            .returning(|_, _| immediate!(Err(ExecutionError::InvalidOpcode)));
         let gas_station = MockGasPriceEstimating::new();
         let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
         let result = submitter
