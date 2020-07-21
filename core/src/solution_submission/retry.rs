@@ -6,6 +6,7 @@ use ethcontract::{
     errors::{ExecutionError, MethodError},
     U256,
 };
+use pricegraph::num;
 
 use super::MIN_GAS_PRICE_INCREASE_FACTOR;
 
@@ -53,8 +54,9 @@ impl<'a> InfallibleGasPriceEstimator<'a> {
 }
 
 fn gas_price(estimated_price: U256, price_increase_count: u32, cap: U256) -> U256 {
-    let factor = 2u32.pow(price_increase_count);
-    cap.min(estimated_price * factor)
+    let factor = 1.5f64.powf(price_increase_count as f64);
+    let new_price = num::u256_to_f64(estimated_price) * factor;
+    cap.min(U256::from(new_price as u128))
 }
 
 pub async fn retry_with_gas_price_increase(
@@ -166,15 +168,16 @@ mod tests {
         let estimated = U256::from(5);
         let cap = U256::from(50);
         assert_eq!(gas_price(estimated, 0, cap), U256::from(5));
-        assert_eq!(gas_price(estimated, 1, cap), U256::from(10));
-        assert_eq!(gas_price(estimated, 2, cap), U256::from(20));
-        assert_eq!(gas_price(estimated, 3, cap), U256::from(40));
-        assert_eq!(gas_price(estimated, 4, cap), U256::from(50));
-        assert_eq!(gas_price(estimated, 5, cap), U256::from(50));
+        assert_eq!(gas_price(estimated, 1, cap), U256::from(7));
+        assert_eq!(gas_price(estimated, 2, cap), U256::from(11));
+        assert_eq!(gas_price(estimated, 3, cap), U256::from(16));
+        assert_eq!(gas_price(estimated, 4, cap), U256::from(25));
+        assert_eq!(gas_price(estimated, 5, cap), U256::from(37));
+        assert_eq!(gas_price(estimated, 6, cap), U256::from(50));
     }
 
     #[test]
-    fn test_retry_with_gas_price_increase_once() {
+    fn test_retry_with_gas_price_increase_once_until_cap_is_reached() {
         let mut contract = MockStableXContract::new();
         contract
             .expect_submit_solution()
@@ -203,7 +206,7 @@ mod tests {
                 always(),
                 always(),
                 always(),
-                eq(U256::from(9)),
+                eq(U256::from(7)),
                 eq(None),
                 always(),
             )
@@ -291,7 +294,6 @@ mod tests {
         let mut contract = MockStableXContract::new();
         contract
             .expect_submit_solution()
-            .times(3)
             .returning(|_, _, _, _, _, _| {
                 async {
                     Err(MethodError::from_parts(
@@ -304,18 +306,15 @@ mod tests {
             });
 
         let mut gas_station = MockGasPriceEstimating::new();
-        gas_station
-            .expect_estimate_gas_price()
-            .times(3)
-            .returning(|| {
-                async {
-                    Ok(GasPrice {
-                        fast: 5.into(),
-                        ..Default::default()
-                    })
-                }
-                .boxed()
-            });
+        gas_station.expect_estimate_gas_price().returning(|| {
+            async {
+                Ok(GasPrice {
+                    fast: 5.into(),
+                    ..Default::default()
+                })
+            }
+            .boxed()
+        });
 
         assert!(retry_with_gas_price_increase(
             &contract,

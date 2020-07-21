@@ -26,7 +26,7 @@ const POLL_TIMEOUT: Duration = Duration::from_secs(5);
 #[cfg(test)]
 const POLL_TIMEOUT: Duration = Duration::from_secs(0);
 
-const GAS_PRICE_CAP: u64 = 90_000_000_000;
+const GAS_PRICE_CAP: u64 = 200_000_000_000;
 
 // openethereum requires that the gas price of the resubmitted transaction has increased by at
 // least 12.5%.
@@ -389,7 +389,7 @@ mod tests {
         let mut contract = MockStableXContract::new();
         contract
             .expect_send_noop_transaction()
-            .with(eq(U256::from(101_250_000_001u128)), eq(U256::from(0)))
+            .with(eq(U256::from(225_000_000_001u128)), eq(U256::from(0)))
             .times(1)
             .returning(|_, _| immediate!(Err(anyhow!(""))));
         let gas_station = MockGasPriceEstimating::new();
