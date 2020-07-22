@@ -13,8 +13,7 @@ use ethcontract::web3::types::TransactionReceipt;
 use ethcontract::U256;
 use futures::future::{BoxFuture, FutureExt as _};
 use log::info;
-#[cfg(test)]
-use mockall::automock;
+use retry::SolutionTransactionSending;
 use std::time::{Duration, SystemTime};
 use thiserror::Error;
 
@@ -32,7 +31,7 @@ const GAS_PRICE_CAP: u64 = 200_000_000_000;
 // least 12.5%.
 const MIN_GAS_PRICE_INCREASE_FACTOR: f64 = 1.125 * (1.0 + f64::EPSILON);
 
-#[cfg_attr(test, automock)]
+#[cfg_attr(test, mockall::automock)]
 pub trait StableXSolutionSubmitting {
     /// Return the objective value for the given solution in the given
     /// batch or an error.
@@ -98,7 +97,7 @@ impl From<Error> for SolutionSubmissionError {
 
 pub struct StableXSolutionSubmitter<'a> {
     contract: &'a (dyn StableXContract + Sync),
-    gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
+    retry_with_gas_price_increase: Box<dyn SolutionTransactionSending + Send + Sync + 'a>,
 }
 
 impl<'a> StableXSolutionSubmitter<'a> {
@@ -106,9 +105,19 @@ impl<'a> StableXSolutionSubmitter<'a> {
         contract: &'a (dyn StableXContract + Sync),
         gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
     ) -> Self {
+        Self::with_retrying(
+            contract,
+            retry::RetryWithGasPriceIncrease::new(contract, gas_price_estimating),
+        )
+    }
+
+    fn with_retrying(
+        contract: &'a (dyn StableXContract + Sync),
+        retry_with_gas_price_increase: impl SolutionTransactionSending + Send + Sync + 'a,
+    ) -> Self {
         Self {
             contract,
-            gas_price_estimating,
+            retry_with_gas_price_increase: Box::new(retry_with_gas_price_increase),
         }
     }
 
@@ -202,15 +211,13 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
     ) -> BoxFuture<Result<(), SolutionSubmissionError>> {
         async move {
             let nonce = self.contract.get_transaction_count().await?;
-            let submit_future = retry::retry_with_gas_price_increase(
-                self.contract,
+            let submit_future = self.retry_with_gas_price_increase.retry(retry::Args {
                 batch_index,
-                solution.clone(),
+                solution: solution.clone(),
                 claimed_objective_value,
-                self.gas_price_estimating,
-                GAS_PRICE_CAP.into(),
+                gas_price_cap: GAS_PRICE_CAP.into(),
                 nonce,
-            );
+            });
             // Add some extra time in case of desync between real time and ethereum node current block time.
             let deadline = BatchId::from(batch_index).solve_end_time() + Duration::from_secs(30);
             let remaining = deadline
@@ -235,7 +242,7 @@ fn extract_transaction_receipt(err: &MethodError) -> Option<&TransactionReceipt>
 mod tests {
     use super::*;
     use crate::contracts::stablex_contract::{MockStableXContract, NoopTransactionError};
-    use crate::gas_station::{GasPrice, MockGasPriceEstimating};
+    use retry::MockSolutionTransactionSending;
 
     use anyhow::anyhow;
     use ethcontract::web3::types::H2048;
@@ -259,13 +266,15 @@ mod tests {
             .expect_get_solution_objective_value()
             .return_once(move |_, _, _| async { Ok(U256::from(42)) }.boxed());
 
-        let gas_station = MockGasPriceEstimating::new();
+        let retry = MockSolutionTransactionSending::new();
 
-        let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
-        let result = submitter
-            .get_solution_objective_value(0, Solution::trivial())
-            .now_or_never()
-            .unwrap();
+        let result = {
+            let submitter = StableXSolutionSubmitter::with_retrying(&contract, retry);
+            submitter
+                .get_solution_objective_value(0, Solution::trivial())
+                .now_or_never()
+                .unwrap()
+        };
         contract.checkpoint();
         assert_eq!(result.unwrap(), U256::from(42));
     }
@@ -289,9 +298,10 @@ mod tests {
                 }
                 .boxed()
             });
-        let gas_station = MockGasPriceEstimating::new();
 
-        let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
+        let retry = MockSolutionTransactionSending::new();
+
+        let submitter = StableXSolutionSubmitter::with_retrying(&contract, retry);
         let result = submitter
             .get_solution_objective_value(0, Solution::trivial())
             .now_or_never()
@@ -327,19 +337,6 @@ mod tests {
         contract
             .expect_get_transaction_count()
             .returning(|| immediate!(Ok(U256::from(0))));
-        // Submit Solution returns failed tx
-        contract
-            .expect_submit_solution()
-            .return_once(move |_, _, _, _, _, _| {
-                async {
-                    Err(MethodError::from_parts(
-                    "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
-                        .to_owned(),
-                    ExecutionError::Failure(Box::new(receipt)),
-                ))
-                }
-                .boxed()
-            });
         // Get objective value on old block number returns revert reason
         contract
             .expect_get_solution_objective_value()
@@ -351,18 +348,17 @@ mod tests {
                     ExecutionError::Revert(Some("Claimed objective doesn't sufficiently improve current solution".to_owned())),
                 )))}.boxed()
             });
-        let mut gas_station = MockGasPriceEstimating::new();
-        gas_station.expect_estimate_gas_price().return_once(|| {
-            async {
-                Ok(GasPrice {
-                    fast: 5.into(),
-                    ..Default::default()
-                })
-            }
-            .boxed()
+
+        let mut retry = MockSolutionTransactionSending::new();
+        retry.expect_retry().times(1).return_once(|_| {
+            immediate!(Err(MethodError::from_parts(
+                "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
+                    .to_owned(),
+                ExecutionError::Failure(Box::new(receipt))
+            )))
         });
 
-        let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
+        let submitter = StableXSolutionSubmitter::with_retrying(&contract, retry);
         let result = submitter
             .submit_solution(0, Solution::trivial(), U256::zero())
             .now_or_never()
@@ -393,8 +389,8 @@ mod tests {
             .times(1)
             // The specific error doesn't matter.
             .returning(|_, _| immediate!(Err(NoopTransactionError::NoAccount)));
-        let gas_station = MockGasPriceEstimating::new();
-        let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
+        let retry = MockSolutionTransactionSending::new();
+        let submitter = StableXSolutionSubmitter::with_retrying(&contract, retry);
         let result = submitter
             .handle_submit_solution_result(0, Solution::trivial(), Err(timeout_error()), 0.into())
             .now_or_never()
@@ -405,8 +401,8 @@ mod tests {
     #[test]
     fn handle_submit_solution_result_ok() {
         let contract = MockStableXContract::new();
-        let gas_station = MockGasPriceEstimating::new();
-        let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
+        let retry = MockSolutionTransactionSending::new();
+        let submitter = StableXSolutionSubmitter::with_retrying(&contract, retry);
         let result = submitter
             .handle_submit_solution_result(0, Solution::trivial(), Ok(Ok(())), 0.into())
             .now_or_never()
