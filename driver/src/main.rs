@@ -185,6 +185,12 @@ struct Options {
 
     #[structopt(long, env = "ORDERBOOK_FILE", parse(from_os_str))]
     orderbook_file: Option<PathBuf>,
+
+    /// We calculate the maximum gas price cap based on the amount of earned fees from solution
+    /// submission. This factor is multiplied with the final result because we do not need to be
+    /// economically viable at the moment.
+    #[structopt(long, env = "GAS_PRICE_CAP_SUBSIDY_FACTOR", default_value = "10.0")]
+    gas_price_cap_subsidy_factor: f64,
 }
 
 fn main() {
@@ -266,6 +272,7 @@ fn main() {
         &*orderbook,
         &solution_submitter,
         &stablex_metrics,
+        options.gas_price_cap_subsidy_factor,
     );
 
     let scheduler_config =
