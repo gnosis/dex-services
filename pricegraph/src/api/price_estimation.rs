@@ -13,7 +13,7 @@ impl Pricegraph {
     ///
     /// Note that this price is in exchange format, that is, it is expressed as
     /// the ratio between buy and sell amounts, with implicit fees.
-    pub fn estimate_limit_price(&self, pair: TokenPair, sell_amount: f64) -> Option<f64> {
+    pub fn estimate_limit_price(&self, pair: TokenPair, max_sell_amount: f64) -> Option<f64> {
         let mut orderbook = self.reduced_orderbook();
 
         // NOTE: This method works by searching for the "best" counter
@@ -24,7 +24,7 @@ impl Pricegraph {
             sell: pair.buy,
         };
 
-        if sell_amount == 0.0 {
+        if max_sell_amount == 0.0 {
             // NOTE: For a 0 volume we simulate sending an tiny epsilon of value
             // through the network without actually filling any orders.
             let mut exchange_rate = None;
@@ -41,7 +41,7 @@ impl Pricegraph {
             return Some(exchange_rate?.inverse().price().value());
         }
 
-        if !num::is_strictly_positive_and_finite(sell_amount) {
+        if !num::is_strictly_positive_and_finite(max_sell_amount) {
             return None;
         }
 
@@ -52,11 +52,11 @@ impl Pricegraph {
         let mut cumulative_buy_volume = 0.0;
         let mut cumulative_sell_volume = 0.0;
         while let Some(flow) = orderbook.fill_optimal_transitive_order_if(inverse_pair, |flow| {
-            let current_exchange_rate = match ExchangeRate::new(cumulative_buy_volume / sell_amount)
-            {
-                Some(price) => price,
-                None => return true,
-            };
+            let current_exchange_rate =
+                match ExchangeRate::new(cumulative_buy_volume / max_sell_amount) {
+                    Some(price) => price,
+                    None => return true,
+                };
 
             // NOTE: This implies that the added liquidity from the counter
             // transitive order at its exchange rate makes the estimated
@@ -70,12 +70,12 @@ impl Pricegraph {
 
             // NOTE: We've found enough liquidity to completely sell the
             // specified sell volume, so we can stop searching.
-            if sell_amount <= cumulative_sell_volume {
+            if cumulative_sell_volume >= max_sell_amount {
                 break;
             }
         }
 
-        let total_sell_volume = sell_amount.max(cumulative_sell_volume);
+        let total_sell_volume = max_sell_amount.max(cumulative_sell_volume);
         Some(
             ExchangeRate::new(cumulative_buy_volume / total_sell_volume)?
                 .price()
