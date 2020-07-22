@@ -145,8 +145,11 @@ impl Orderbook {
     /// the fee token (i.e. token ID 0).
     ///
     /// Returns `None` if the subgraph containing `token` is already reduced or
-    /// none of the ring trades are connected to the fee token.
-    pub fn fill_ring_trade_around_token(&mut self, token: TokenId) -> Option<(f64, f64)> {
+    /// none of the ring trades connect the specified token to the fee token.
+    pub fn fill_ring_trade_around_token(
+        &mut self,
+        token: TokenId,
+    ) -> Option<(LimitPrice, LimitPrice)> {
         if !self.is_token_pair_valid(fee_pair(token)) {
             return None;
         }
@@ -159,35 +162,70 @@ impl Orderbook {
             let path = path::find_cycle(&predecessors, node, Some(token))
                 .expect("negative cycle not found after being detected");
 
-            if path.first() != Some(&token) {
-                continue;
+            let mut min_inverted_price = None;
+            let mut max_inverted_price = None;
+
+            if path.first() == Some(&token) {
+                min_inverted_price = self.direct_fee_token_price(token);
+                max_inverted_price = min_inverted_price;
+
+                for mid in 1..path.len() - 1 {
+                    let mid_fee_price = if path[mid] == fee_token {
+                        ExchangeRate::IDENTITY
+                    } else {
+                        match self.direct_fee_token_price(path[mid]) {
+                            Some(value) => value,
+                            None => continue,
+                        }
+                    };
+
+                    let to_mid = &path[..mid + 1];
+                    let to_mid_xrate = self
+                        .find_path_flow(to_mid)
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "failed to find flow along detected negative cycle sub-path {}",
+                                format_path(&to_mid),
+                            )
+                        })
+                        .exchange_rate;
+                    let to_mid_fee_price = to_mid_xrate * mid_fee_price;
+
+                    let from_mid = &path[mid..];
+                    let from_mid_xrate = self
+                        .find_path_flow(from_mid)
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "failed to find flow along detected negative cycle sub-path {}",
+                                format_path(&from_mid),
+                            )
+                        })
+                        .exchange_rate;
+                    let from_mid_fee_price = from_mid_xrate.inverse() * mid_fee_price;
+
+                    // NOTE: This holds true because negative cycles ensure that
+                    // `to * from < 1.0`.
+                    debug_assert!(to_mid_fee_price < from_mid_fee_price);
+
+                    let min = min_inverted_price.get_or_insert(to_mid_fee_price);
+                    *min = cmp::min(*min, to_mid_fee_price);
+
+                    let max = max_inverted_price.get_or_insert(from_mid_fee_price);
+                    *max = cmp::max(*max, from_mid_fee_price);
+
+                    dbg!((min_inverted_price, max_inverted_price));
+                }
             }
 
-            let min_price = self.direct_fee_token_price(token);
-            let max_price = min_price;
+            self.fill_path(&path).unwrap_or_else(|| {
+                panic!(
+                    "failed to fill path along detected negative cycle {}",
+                    format_path(&path),
+                )
+            });
 
-            for i in 1..=path.len() {
-                let sub_path = &path[..i + 1];
-                let transitive_xrate = self
-                    .find_path_flow(&path[..i])
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "failed to find flow along detected negative cycle sub-path {}",
-                            format_path(&sub_path),
-                        )
-                    })
-                    .exchange_rate;
-
-                let price_in_fee = if sub_path[i] == fee_token {
-                    Some(transitive_xrate)
-                } else {
-                    self.direct_fee_token_price(sub_path[i])
-                        .map(|fee_price| transitive_xrate * fee_price)
-                };
-            }
-
-            if let (Some(min), Some(max)) = (min_price, max_price) {
-                return Some((min.value(), max.value()));
+            if let (Some(min), Some(max)) = (min_inverted_price, max_inverted_price) {
+                return Some((max.price().inverse(), min.price().inverse()));
             }
         }
 
@@ -264,6 +302,25 @@ impl Orderbook {
         pair: TokenPair,
     ) -> Result<Option<Flow>, OverlapError> {
         self.fill_optimal_transitive_order_if(pair, |_| true)
+    }
+
+    /// Finds and returns the optimal transitive order for the specified token
+    /// pair without filling it. Returns `None` if no such transitive order
+    /// exists.
+    ///
+    /// This method returns an error if the orderbook graph is not reduced.
+    pub fn find_optimal_transitive_order(
+        &mut self,
+        pair: TokenPair,
+    ) -> Result<Option<Flow>, OverlapError> {
+        let mut flow = None;
+        let reduced_flow = self.fill_optimal_transitive_order_if(pair, |f| {
+            flow = Some(*f);
+            false
+        })?;
+        debug_assert!(reduced_flow.is_none());
+
+        Ok(flow)
     }
 
     /// Fills the optimal transitive order (i.e. with the lowest exchange rate)
