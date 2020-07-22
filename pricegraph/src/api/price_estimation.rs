@@ -27,18 +27,18 @@ impl Pricegraph {
         if sell_amount == 0.0 {
             // NOTE: For a 0 volume we simulate sending an tiny epsilon of value
             // through the network without actually filling any orders.
-            let mut exchange_rate = None;
-            let flow = orderbook.fill_optimal_transitive_order_if(inverse_pair, |flow| {
-                exchange_rate = Some(flow.exchange_rate);
-                false
-            });
-            debug_assert!(flow.is_none());
-
-            // NOTE: The exchange rates are for transitive orders in the inverse
-            // direction, so we need to invert the exchange rate and account for
-            // the fees so that the estimated exchange rate actually overlaps with
-            // the last counter transtive order's exchange rate.
-            return Some(exchange_rate?.inverse().price().value());
+            // Additionally, the exchange rates are for transitive orders in the
+            // inverse direction, so we need to invert the exchange rate and
+            // account for the fees so that the estimated exchange rate actually
+            // overlaps with the last counter transtive order's exchange rate.
+            return Some(
+                orderbook
+                    .find_optimal_transitive_order(inverse_pair)?
+                    .exchange_rate
+                    .inverse()
+                    .price()
+                    .value(),
+            );
         }
 
         if !num::is_strictly_positive_and_finite(sell_amount) {
