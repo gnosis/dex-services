@@ -337,7 +337,7 @@ fn extract_transaction_receipt(err: &MethodError) -> Option<&TransactionReceipt>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contracts::stablex_contract::MockStableXContract;
+    use crate::contracts::stablex_contract::{MockStableXContract, NoopTransactionError};
     use crate::gas_station::{GasPrice, MockGasPriceEstimating};
 
     use anyhow::anyhow;
@@ -702,7 +702,7 @@ mod tests {
             .with(eq(U256::from(101_250_000_001u128)), eq(U256::from(0)))
             .times(1)
             // The specific error doesn't matter.
-            .returning(|_, _| immediate!(Err(ExecutionError::InvalidOpcode)));
+            .returning(|_, _| immediate!(Err(NoopTransactionError::NoAccount)));
         let gas_station = MockGasPriceEstimating::new();
         let submitter = StableXSolutionSubmitter::new(&contract, &gas_station);
         let result = submitter
