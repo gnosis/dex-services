@@ -10,6 +10,8 @@ use pricegraph::num;
 
 use super::MIN_GAS_PRICE_INCREASE_FACTOR;
 
+const DEFAULT_GAS_PRICE: u64 = 15_000_000_000;
+
 fn is_confirm_timeout(result: &Result<(), MethodError>) -> bool {
     matches!(
         result,
@@ -40,7 +42,8 @@ impl<'a> InfallibleGasPriceEstimator<'a> {
     async fn estimate(&mut self) -> U256 {
         match self.gas_price_estimating.estimate_gas_price().await {
             Ok(gas_estimate) => {
-                self.previous_gas_price = gas_estimate.fast;
+                // `retry` relies on the gas price always increasing.
+                self.previous_gas_price = self.previous_gas_price.max(gas_estimate.fast);
             }
             Err(ref err) => {
                 log::warn!(
@@ -69,7 +72,6 @@ pub async fn retry_with_gas_price_increase(
     nonce: U256,
 ) -> Result<(), MethodError> {
     const BLOCK_TIMEOUT: usize = 2;
-    const DEFAULT_GAS_PRICE: u64 = 15_000_000_000;
 
     let effective_gas_price_cap = U256::from(
         (gas_price_cap.as_u128() as f64 / MIN_GAS_PRICE_INCREASE_FACTOR).floor() as u128,
@@ -164,6 +166,33 @@ mod tests {
     }
 
     #[test]
+    fn infallible_gas_price_estimator_does_not_decrease() {
+        let mut gas_station = MockGasPriceEstimating::new();
+        gas_station
+            .expect_estimate_gas_price()
+            .times(1)
+            .return_once(|| {
+                immediate!(Ok(GasPrice {
+                    fast: 10.into(),
+                    ..Default::default()
+                }))
+            });
+        gas_station
+            .expect_estimate_gas_price()
+            .times(1)
+            .return_once(|| {
+                immediate!(Ok(GasPrice {
+                    fast: 9.into(),
+                    ..Default::default()
+                }))
+            });
+
+        let mut estimator = InfallibleGasPriceEstimator::new(&gas_station, 3.into());
+        assert_eq!(estimator.estimate().now_or_never().unwrap(), U256::from(10));
+        assert_eq!(estimator.estimate().now_or_never().unwrap(), U256::from(10));
+    }
+
+    #[test]
     fn gas_price_increases_as_expected_and_hits_limit() {
         let estimated = U256::from(5);
         let cap = U256::from(50);
@@ -186,7 +215,7 @@ mod tests {
                 always(),
                 always(),
                 always(),
-                eq(U256::from(5)),
+                eq(U256::from(DEFAULT_GAS_PRICE * 6)),
                 eq(Some(2)),
                 always(),
             )
@@ -206,7 +235,7 @@ mod tests {
                 always(),
                 always(),
                 always(),
-                eq(U256::from(7)),
+                eq(U256::from(DEFAULT_GAS_PRICE * 9)),
                 eq(None),
                 always(),
             )
@@ -216,7 +245,7 @@ mod tests {
         gas_station.expect_estimate_gas_price().returning(|| {
             async {
                 Ok(GasPrice {
-                    fast: 5.into(),
+                    fast: (DEFAULT_GAS_PRICE * 6).into(),
                     ..Default::default()
                 })
             }
@@ -229,7 +258,7 @@ mod tests {
             Solution::trivial(),
             1.into(),
             &gas_station,
-            9.into(),
+            (DEFAULT_GAS_PRICE * 10).into(),
             U256::from(0),
         )
         .now_or_never()
@@ -247,7 +276,7 @@ mod tests {
                 always(),
                 always(),
                 always(),
-                eq(U256::from(90)),
+                eq(U256::from(DEFAULT_GAS_PRICE * 90)),
                 always(),
                 always(),
             )
@@ -268,7 +297,7 @@ mod tests {
         gas_station.expect_estimate_gas_price().returning(|| {
             async {
                 Ok(GasPrice {
-                    fast: 90.into(),
+                    fast: (DEFAULT_GAS_PRICE * 90).into(),
                     ..Default::default()
                 })
             }
@@ -281,7 +310,7 @@ mod tests {
             Solution::trivial(),
             1.into(),
             &gas_station,
-            100.into(),
+            (DEFAULT_GAS_PRICE * 100).into(),
             0.into()
         )
         .now_or_never()
@@ -309,7 +338,7 @@ mod tests {
         gas_station.expect_estimate_gas_price().returning(|| {
             async {
                 Ok(GasPrice {
-                    fast: 5.into(),
+                    fast: (DEFAULT_GAS_PRICE * 5).into(),
                     ..Default::default()
                 })
             }
@@ -322,7 +351,7 @@ mod tests {
             Solution::trivial(),
             1.into(),
             &gas_station,
-            15.into(),
+            (DEFAULT_GAS_PRICE * 15).into(),
             0.into()
         )
         .now_or_never()
