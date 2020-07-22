@@ -1,6 +1,7 @@
 //! Module containing data for representing flow through the orderbook graph.
 
 use super::ExchangeRate;
+use crate::num;
 use crate::{TransitiveOrder, FEE_FACTOR};
 
 /// A reprensentation of a flow of tokens through the orderbook graph.
@@ -11,6 +12,8 @@ pub struct Flow {
     /// The total capacity the path can accomodate expressed in the starting
     /// token, which is the buy token for the transitive order along a path.
     pub capacity: f64,
+    /// The minimum traded amount along a path.
+    pub min_trade: f64,
 }
 
 impl Flow {
@@ -25,6 +28,11 @@ impl Flow {
         let sell = self.capacity / self.exchange_rate.value();
 
         TransitiveOrder { buy, sell }
+    }
+
+    /// Returns true if this flow is a dust trade.
+    pub fn is_dust_trade(&self) -> bool {
+        num::is_dust_amount(self.min_trade)
     }
 }
 

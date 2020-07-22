@@ -22,10 +22,8 @@ use crate::graph::bellman_ford::{self, NegativeCycle};
 use crate::graph::path;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
 use crate::num;
-use crate::MIN_AMOUNT;
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::NodeIndexable;
-use primitive_types::U256;
 use std::cmp;
 use std::f64;
 use thiserror::Error;
@@ -267,7 +265,7 @@ impl Orderbook {
             return Ok(None);
         }
 
-        self.fill_path_with_flow(&path, flow).unwrap_or_else(|| {
+        self.fill_path_with_flow(&path, &flow).unwrap_or_else(|| {
             panic!(
                 "failed to fill with capacity along detected path {}",
                 format_path(&path),
@@ -300,7 +298,7 @@ impl Orderbook {
         while let Some(true) = self
             .orders
             .best_order_for_pair(pair)
-            .map(|order| order.get_effective_amount(&self.users) <= MIN_AMOUNT)
+            .map(|order| num::is_dust_amount(order.get_effective_amount(&self.users)))
         {
             self.orders.remove_pair_order(pair);
         }
@@ -333,7 +331,7 @@ impl Orderbook {
     /// result of filling orders along a path.
     fn fill_path(&mut self, path: &[NodeIndex]) -> Option<Flow> {
         let flow = self.find_path_flow(path)?;
-        self.fill_path_with_flow(path, flow).unwrap_or_else(|| {
+        self.fill_path_with_flow(path, &flow).unwrap_or_else(|| {
             panic!(
                 "failed to fill with capacity along detected path {}",
                 format_path(path),
@@ -350,17 +348,20 @@ impl Orderbook {
         // token for the transitive order along the specified path.
         let mut capacity = f64::INFINITY;
         let mut transitive_xrate = ExchangeRate::IDENTITY;
+        let mut max_xrate = ExchangeRate::IDENTITY;
         for pair in pairs_on_path(path) {
             let order = self.orders.best_order_for_pair(pair)?;
             transitive_xrate *= order.exchange_rate;
+            max_xrate = cmp::max(max_xrate, transitive_xrate);
 
             let sell_amount = order.get_effective_amount(&self.users);
             capacity = num::min(capacity, sell_amount * transitive_xrate.value());
         }
 
         Some(Flow {
-            capacity,
             exchange_rate: transitive_xrate,
+            capacity,
+            min_trade: capacity / max_xrate.value(),
         })
     }
 
@@ -371,7 +372,7 @@ impl Orderbook {
     ///
     /// Note that currently, user buy token balances are not incremented as a
     /// result of filling orders along a path.
-    fn fill_path_with_flow(&mut self, path: &[NodeIndex], flow: Flow) -> Option<()> {
+    fn fill_path_with_flow(&mut self, path: &[NodeIndex], flow: &Flow) -> Option<()> {
         let mut transitive_xrate = ExchangeRate::IDENTITY;
         for pair in pairs_on_path(path) {
             let (order, user) = self.best_order_with_user_for_pair_mut(pair)?;
@@ -392,10 +393,10 @@ impl Orderbook {
 
             let new_balance = user.deduct_from_balance(pair.sell, fill_amount);
 
-            if new_balance < MIN_AMOUNT {
+            if num::is_dust_amount(new_balance) {
                 user.clear_balance(pair.sell);
                 self.update_projection_graph_node(pair.sell);
-            } else if order.amount < MIN_AMOUNT {
+            } else if num::is_dust_amount(order.amount) {
                 self.update_projection_graph_edge(pair);
             }
         }
@@ -462,10 +463,8 @@ fn format_path(path: &[NodeIndex]) -> String {
 /// amount or balance is less than the minimum amount that the exchange allows
 /// for trades
 fn is_dust_order(element: &Element) -> bool {
-    const MIN_AMOUNT_U128: u128 = MIN_AMOUNT as _;
-    const MIN_AMOUNT_U256: U256 = U256([MIN_AMOUNT as _, 0, 0, 0]);
-
-    element.remaining_sell_amount < MIN_AMOUNT_U128 || element.balance < MIN_AMOUNT_U256
+    num::is_dust_amount(element.remaining_sell_amount as _)
+        || num::is_dust_amount(num::u256_to_f64(element.balance))
 }
 
 /// An error indicating an invalid operation was performed on an overlapping

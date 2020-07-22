@@ -65,6 +65,10 @@ impl Pricegraph {
             // liquidity from this transitive order.
             current_exchange_rate < flow.exchange_rate.inverse()
         }) {
+            if flow.is_dust_trade() {
+                continue;
+            }
+
             cumulative_buy_volume += flow.capacity / flow.exchange_rate.value();
             cumulative_sell_volume = cumulative_buy_volume * flow.exchange_rate.value();
 
@@ -125,6 +129,10 @@ impl Pricegraph {
         while let Some(flow) = orderbook
             .fill_optimal_transitive_order_if(inverse_pair, |flow| flow.exchange_rate <= max_xrate)
         {
+            if flow.is_dust_trade() {
+                continue;
+            }
+
             // NOTE: The transitive orders being filled are **counter orders**
             // with inverted token pairs.
             total_buy_volume += flow.capacity / flow.exchange_rate.value();
@@ -627,6 +635,69 @@ mod tests {
                 * 13_294_906_614_391_990_988_372_451_468_773_477_386.0
                 * FEE_FACTOR,
             num::max_rounding_error_with_epsilon(sell)
+        );
+    }
+
+    #[test]
+    fn skips_dust_trades() {
+        //  0 --10.0-> 1 --0.01-> 2 --0.1--> 3
+        //   \
+        //    \-0.1--> 4
+        //
+        //             5 --1.0--> 6 -100.0-> 7
+        let pricegraph = pricegraph! {
+            users {
+                @1 {
+                    token 1 => 10_000_000,
+                    token 2 => 10_000_000,
+                    token 3 => 10_000_000,
+                }
+                @2 {
+                    token 4 => 10_000_000,
+                }
+                @3 {
+                    token 6 => 10_000_000,
+                    token 7 => 10_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 0 [100_010] selling 1 [   10_001],
+                owner @1 buying 1 [ 10_001] selling 2 [  100_010],
+                owner @1 buying 2 [ 10_001] selling 3 [1_000_100],
+
+                owner @2 buying 0 [9000] selling 4 [90_000],
+
+                owner @3 buying 5 [   10_001] selling 6 [10_001],
+                owner @3 buying 6 [1_000_100] selling 7 [10_001],
+            }
+        };
+
+        // NOTE: There should be no valid transitive orders for the following
+        // token pairs, since the transitive orders require trades with amounts
+        // below the minimum:
+
+        // NOTE: This would trade ~10_000 -> ~1_000 -> ~100_000 -> ~1_000_000
+        assert_eq!(
+            pricegraph.estimate_limit_price(TokenPair { buy: 0, sell: 3 }, 10_001.0),
+            None,
+        );
+
+        // NOTE: This would trade ~1_000 -> ~100_000 -> ~1_000_000
+        assert_eq!(
+            pricegraph.estimate_limit_price(TokenPair { buy: 1, sell: 3 }, 10_001.0),
+            None,
+        );
+
+        // NOTE: This would trade ~9_000 -> ~90_000
+        assert_eq!(
+            pricegraph.estimate_limit_price(TokenPair { buy: 0, sell: 4 }, 10_001.0),
+            None,
+        );
+
+        // NOTE: This would trade ~10_000 -> ~10_000 -> ~100
+        assert_eq!(
+            pricegraph.estimate_limit_price(TokenPair { buy: 5, sell: 7 }, 10_001.0),
+            None,
         );
     }
 }
