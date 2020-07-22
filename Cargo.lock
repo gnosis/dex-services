@@ -1288,7 +1288,7 @@ dependencies = [
  "indexmap",
  "log 0.4.11",
  "slab 0.4.2",
- "tokio 0.2.21",
+ "tokio 0.2.22",
  "tokio-util",
 ]
 
@@ -1474,7 +1474,7 @@ dependencies = [
  "pin-project",
  "socket2",
  "time",
- "tokio 0.2.21",
+ "tokio 0.2.22",
  "tower-service",
  "want 0.3.0",
 ]
@@ -2325,7 +2325,7 @@ dependencies = [
  "serde_with",
  "structopt",
  "thiserror",
- "tokio 0.2.21",
+ "tokio 0.2.22",
  "url 2.1.1",
  "warp",
 ]
@@ -3388,9 +3388,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "0.2.21"
+version = "0.2.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d099fa27b9702bed751524694adbe393e18b36b204da91eb1cbbbbb4a5ee2d58"
+checksum = "5d34ca54d84bf2b5b4d7d31e901a8464f7b60ac145a284fba25ceb801f2ddccd"
 dependencies = [
  "bytes 0.5.4",
  "fnv",
@@ -3601,7 +3601,7 @@ dependencies = [
  "futures 0.3.5",
  "log 0.4.11",
  "pin-project",
- "tokio 0.2.21",
+ "tokio 0.2.22",
  "tungstenite",
 ]
 
@@ -3666,7 +3666,7 @@ dependencies = [
  "futures-sink",
  "log 0.4.11",
  "pin-project-lite",
- "tokio 0.2.21",
+ "tokio 0.2.22",
 ]
 
 [[package]]
@@ -3957,7 +3957,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "tokio 0.2.21",
+ "tokio 0.2.22",
  "tokio-tungstenite",
  "tower-service",
  "tracing",
