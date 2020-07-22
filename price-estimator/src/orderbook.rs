@@ -61,10 +61,7 @@ impl Orderbook {
 
         // TODO: Move this cpu heavy computation out of the async function using spawn_blocking.
         let pricegraph = pricegraph_from_auction_data(&auction_data);
-        self.pricegraph_cache
-            .write()
-            .await
-            .pricegraph_with_rounding_buffer = pricegraph;
+        self.pricegraph_cache.write().await.pricegraph_raw = pricegraph;
 
         self.apply_rounding_buffer_to_auction_data(&mut auction_data)
             .await;
