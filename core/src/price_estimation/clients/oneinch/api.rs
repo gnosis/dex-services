@@ -3,9 +3,10 @@ use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::{Context, Result};
 use ethcontract::Address;
 use futures::future::{BoxFuture, FutureExt as _};
+use isahc::prelude::Configurable;
 use serde::Deserialize;
 use serde_with::rust::display_fromstr;
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 use url::Url;
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -39,7 +40,7 @@ pub struct OneinchHttpApi {
 impl OneinchHttpApi {
     pub fn with_url(http_factory: &HttpFactory, api_url: &str) -> Result<Self> {
         let client = http_factory
-            .create()
+            .with_config(|builder| builder.timeout(Duration::from_secs(30)))
             .context("failed to initialize HTTP client")?;
         let api_url = api_url
             .parse()
@@ -66,7 +67,7 @@ impl Api for OneinchHttpApi {
                 .client
                 .get_json_async(url.to_string(), HttpLabel::Oneinch)
                 .await
-                .context("failed to parse token list json from 1inch response")?;
+                .context("failed to get token list from 1inch response")?;
             Ok(token_mapping
                 .into_iter()
                 .map(|(_token_symbol, token_data)| token_data)
@@ -81,12 +82,12 @@ impl Api for OneinchHttpApi {
         // artifacts when selling exactly one token atom.
         let one_token_from = 10_u128.pow(from.decimals as u32).to_string();
 
-        let url = self.api_url.join("quote").and_then(move |mut url| {
+        let url = self.api_url.join("quote").map(move |mut url| {
             url.query_pairs_mut()
                 .append_pair("fromTokenSymbol", &from.symbol)
                 .append_pair("toTokenSymbol", &to.symbol)
                 .append_pair("amount", &one_token_from);
-            Ok(url)
+            url
         });
 
         let decimal_correction = 10_f64.powi(from.decimals as i32 - to.decimals as i32);
@@ -96,7 +97,7 @@ impl Api for OneinchHttpApi {
                 .client
                 .get_json_async::<_, TradedAmounts>(url?.as_str(), HttpLabel::Oneinch)
                 .await
-                .context("failed to parse price json from 1inch")?;
+                .context("failed to get price from 1inch")?;
             let num = traded_amounts.to_token_amount as f64;
             let den = traded_amounts.from_token_amount as f64;
             Ok(decimal_correction * num / den)

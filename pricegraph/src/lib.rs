@@ -7,7 +7,7 @@ mod test;
 mod api;
 mod encoding;
 mod graph;
-mod num;
+pub mod num;
 mod orderbook;
 
 pub use self::api::*;

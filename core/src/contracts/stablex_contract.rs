@@ -7,7 +7,7 @@ use crate::{
     contracts,
     models::{ExecutedOrder, Solution},
 };
-use anyhow::{anyhow, Context as _, Error, Result};
+use anyhow::{anyhow, Error, Result};
 use ethcontract::{
     contract::Event,
     errors::{ExecutionError, MethodError},
@@ -78,6 +78,14 @@ pub struct FilteredOrderPage {
     pub has_next_page: bool,
     pub next_page_user: Address,
     pub next_page_user_offset: u16,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum NoopTransactionError {
+    #[error("no account")]
+    NoAccount,
+    #[error("execution error: {0}")]
+    ExecutedOrder(#[from] ExecutionError),
 }
 
 #[cfg_attr(test, automock)]
@@ -151,7 +159,7 @@ pub trait StableXContract {
         &'a self,
         gas_price: U256,
         nonce: U256,
-    ) -> BoxFuture<'a, Result<TransactionResult>>;
+    ) -> BoxFuture<'a, Result<TransactionResult, NoopTransactionError>>;
 
     /// The current nonce aka transaction_count.
     fn get_transaction_count<'a>(&'a self) -> BoxFuture<'a, Result<U256>>;
@@ -338,10 +346,10 @@ impl StableXContract for StableXContractImpl {
         &'a self,
         gas_price: U256,
         nonce: U256,
-    ) -> BoxFuture<'a, Result<TransactionResult>> {
+    ) -> BoxFuture<'a, Result<TransactionResult, NoopTransactionError>> {
         async move {
             let web3 = self.instance.raw_instance().web3();
-            let account = self.account().ok_or_else(|| anyhow!("no account"))?;
+            let account = self.account().ok_or(NoopTransactionError::NoAccount)?;
             let address = account.address();
             let transaction = ethcontract::transaction::TransactionBuilder::new(web3)
                 .from(account)
@@ -351,11 +359,7 @@ impl StableXContract for StableXContractImpl {
                 .nonce(nonce)
                 .value(U256::zero())
                 .resolve(ResolveCondition::Confirmed(ConfirmParams::mined()));
-            let transaction_result = transaction
-                .send()
-                .await
-                .context("failed to send noop transaction")?;
-            Ok(transaction_result)
+            transaction.send().await.map_err(From::from)
         }
         .boxed()
     }
