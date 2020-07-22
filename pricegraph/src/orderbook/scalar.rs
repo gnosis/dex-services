@@ -58,11 +58,6 @@ impl LimitPrice {
     pub fn exchange_rate(self) -> ExchangeRate {
         ExchangeRate(assert_strictly_positive_and_finite(self.0 * FEE_FACTOR))
     }
-
-    /// Computes the inverse limit price.
-    pub fn inverse(self) -> Self {
-        LimitPrice(assert_strictly_positive_and_finite(1.0 / self.0))
-    }
 }
 
 /// An effective exchange rate that explicitly includes fees. As such, the
