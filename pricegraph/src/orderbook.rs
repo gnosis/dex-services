@@ -22,16 +22,13 @@ use crate::graph::bellman_ford::{self, NegativeCycle};
 use crate::graph::path;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
 use crate::num;
+use crate::MIN_AMOUNT;
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::NodeIndexable;
 use primitive_types::U256;
 use std::cmp;
 use std::f64;
 use thiserror::Error;
-
-/// The minimum amount where an order is considered a dust order and can be
-/// ignored in the orderbook graph calculation.
-const MIN_AMOUNT: f64 = 10_000.0;
 
 /// A graph representation of a complete orderbook.
 #[derive(Clone, Debug)]
