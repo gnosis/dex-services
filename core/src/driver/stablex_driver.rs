@@ -16,6 +16,13 @@ use std::{
     time::{Duration, Instant},
 };
 
+// Used when we cannot calculate the amount of burned fees.
+const DEFAULT_GAS_PRICE_CAP: u64 = 200_000_000_000;
+// This is approximate. Depends on reversion of previous solution.
+const GAS_PER_TRADE: f64 = 120_000.0;
+// Will be removed in a future PR where we are going to fetch the current price.
+const PRICE_OF_ETHER_IN_OWL: f64 = 200.0;
+
 #[derive(Debug)]
 pub enum DriverResult {
     Ok,
@@ -135,7 +142,6 @@ impl<'a> StableXDriverImpl<'a> {
                         cap
                     }
                     Err(err) => {
-                        const DEFAULT_GAS_PRICE_CAP: u64 = 200_000_000_000;
                         log::error!(
                             "Failed to calculate burnt fees: {:?}. Using default gas price cap {}",
                             err,
@@ -236,9 +242,6 @@ fn burnt_fees(orders: &[Order], solution: &Solution) -> Result<U256> {
 }
 
 fn gas_price_cap(burnt_fees: U256, num_trades: usize) -> U256 {
-    // This is approximate. Depends on reversion of previous solution.
-    const GAS_PER_TRADE: f64 = 120_000.0;
-    const PRICE_OF_ETHER_IN_OWL: f64 = 200.0;
     // The previous two values are approximations and we do not need to be economically viable at
     // this point in time. So be more lenient with respect go gas prices.
     const EXTRA_FACTOR: f64 = 10.0;
@@ -647,7 +650,7 @@ mod tests {
     }
 
     #[test]
-    fn burnt_fees_ok() {
+    fn burnt_fees_is_half_imbalance_of_reference_token_sold_and_bought() {
         let orders = vec![
             Order {
                 id: 0,
