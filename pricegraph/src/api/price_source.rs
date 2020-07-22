@@ -2,7 +2,7 @@
 //! it can be used for OWL price estimates to the solver.
 
 use crate::encoding::{TokenId, TokenPair};
-use crate::Pricegraph;
+use crate::{Pricegraph, FEE_TOKEN};
 use std::cmp;
 
 impl Pricegraph {
@@ -11,7 +11,7 @@ impl Pricegraph {
     ///
     /// The fee token is defined as the token with ID 0.
     pub fn token_price_spread(&self, token: TokenId) -> Option<(f64, f64)> {
-        if token == 0 {
+        if token == FEE_TOKEN {
             return Some((1.0, 1.0));
         }
 
@@ -31,7 +31,7 @@ impl Pricegraph {
             let fee_price = orderbook
                 .find_optimal_transitive_order(TokenPair {
                     buy: token,
-                    sell: 0,
+                    sell: FEE_TOKEN,
                 })
                 .expect("negative cycle in reduced orderbook")?
                 .exchange_rate

@@ -14,6 +14,9 @@ pub use self::api::*;
 pub use self::encoding::*;
 pub use self::orderbook::*;
 
+/// The fee token ID.
+const FEE_TOKEN: TokenId = 0;
+
 /// The fee factor that is applied to each order's buy price.
 const FEE_FACTOR: f64 = 1.0 / 0.999;
 

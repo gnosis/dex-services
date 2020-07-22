@@ -22,7 +22,7 @@ use crate::graph::bellman_ford::{self, NegativeCycle};
 use crate::graph::path;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
 use crate::num;
-use crate::MIN_AMOUNT;
+use crate::{FEE_TOKEN, MIN_AMOUNT};
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::NodeIndexable;
 use primitive_types::U256;
@@ -155,7 +155,7 @@ impl Orderbook {
         }
 
         let token = node_index(token);
-        let fee_token = node_index(0);
+        let fee_token = node_index(FEE_TOKEN);
         while let Err(NegativeCycle(predecessors, node)) =
             bellman_ford::search(&self.projection, token)
         {
@@ -536,7 +536,7 @@ impl Orderbook {
 fn fee_pair(token: TokenId) -> TokenPair {
     TokenPair {
         buy: token,
-        sell: 0,
+        sell: FEE_TOKEN,
     }
 }
 
