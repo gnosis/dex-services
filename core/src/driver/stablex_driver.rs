@@ -714,4 +714,14 @@ mod tests {
         let result = burnt_fees(&orders, &solution).unwrap();
         assert_eq!(result, U256::from(3));
     }
+
+    #[test]
+    fn gas_price_cap_example() {
+        assert_eq!(
+            // 50 owl fee
+            gas_price_cap(U256::from(50e18 as u128), 3, 1.0),
+            // ~700 gwei
+            U256::from(694_444_444_444u128)
+        );
+    }
 }
