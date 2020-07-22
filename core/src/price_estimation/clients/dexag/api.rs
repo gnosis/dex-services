@@ -3,8 +3,10 @@ use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::{Context, Result};
 use ethcontract::Address;
 use futures::future::{BoxFuture, FutureExt as _};
+use isahc::prelude::Configurable;
 use serde::Deserialize;
 use serde_with::rust::display_fromstr;
+use std::time::Duration;
 use url::Url;
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -33,7 +35,7 @@ pub struct DexagHttpApi {
 impl DexagHttpApi {
     pub fn with_url(http_factory: &HttpFactory, base_url: &str) -> Result<Self> {
         let client = http_factory
-            .create()
+            .with_config(|builder| builder.timeout(Duration::from_secs(30)))
             .context("failed to initialize HTTP client")?;
         let base_url = base_url
             .parse()
@@ -60,7 +62,7 @@ impl Api for DexagHttpApi {
             self.client
                 .get_json_async(url.to_string(), HttpLabel::Dexag)
                 .await
-                .context("failed to parse token list json from dexag response")
+                .context("failed to get token list from dexag response")
         }
         .boxed()
     }
@@ -80,7 +82,7 @@ impl Api for DexagHttpApi {
                 .client
                 .get_json_async::<_, Price>(url.as_str(), HttpLabel::Dexag)
                 .await
-                .context("failed to parse price json from dexag")?
+                .context("failed to get price from dexag")?
                 .price)
         }
         .boxed()

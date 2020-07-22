@@ -156,7 +156,7 @@ where
                     Ok(price) => Some((*token_id, token_info.get_owl_price(*price))),
                     Err(err) => {
                         log::warn!(
-                            "error retrieving {} prices for token ID {} ({}): {}",
+                            "failed to retrieve {} prices for token ID {} ({}): {:?}",
                             any::type_name::<T>(),
                             token_id,
                             token_info.symbol(),
