@@ -215,7 +215,7 @@ mod tests {
                 always(),
                 always(),
                 always(),
-                eq(U256::from(DEFAULT_GAS_PRICE * 5)),
+                eq(U256::from(DEFAULT_GAS_PRICE * 6)),
                 eq(Some(2)),
                 always(),
             )
@@ -235,7 +235,7 @@ mod tests {
                 always(),
                 always(),
                 always(),
-                eq(U256::from(DEFAULT_GAS_PRICE * 7)),
+                eq(U256::from(DEFAULT_GAS_PRICE * 9)),
                 eq(None),
                 always(),
             )
@@ -245,7 +245,7 @@ mod tests {
         gas_station.expect_estimate_gas_price().returning(|| {
             async {
                 Ok(GasPrice {
-                    fast: (DEFAULT_GAS_PRICE * 5).into(),
+                    fast: (DEFAULT_GAS_PRICE * 6).into(),
                     ..Default::default()
                 })
             }
@@ -258,7 +258,7 @@ mod tests {
             Solution::trivial(),
             1.into(),
             &gas_station,
-            (DEFAULT_GAS_PRICE * 9).into(),
+            (DEFAULT_GAS_PRICE * 10).into(),
             U256::from(0),
         )
         .now_or_never()
