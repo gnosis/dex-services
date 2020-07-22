@@ -58,6 +58,11 @@ impl LimitPrice {
     pub fn exchange_rate(self) -> ExchangeRate {
         ExchangeRate(assert_strictly_positive_and_finite(self.0 * FEE_FACTOR))
     }
+
+    /// Computes the inverse limit price.
+    pub fn inverse(self) -> Self {
+        LimitPrice(assert_strictly_positive_and_finite(1.0 / self.0))
+    }
 }
 
 /// An effective exchange rate that explicitly includes fees. As such, the
@@ -109,44 +114,48 @@ impl ExchangeRate {
     }
 }
 
-// NOTE: We can implement `Eq` for `ExchangeRate` since its value is guaranteed
-// to not be `NaN`.
-impl Eq for ExchangeRate {}
+macro_rules! impl_cmp {
+    ($($t:ty),*) => {$(
+        impl Eq for $t {}
 
-impl Ord for ExchangeRate {
-    fn cmp(&self, rhs: &Self) -> cmp::Ordering {
-        self.partial_cmp(rhs).expect("exchange rate cannot be NaN")
-    }
+        impl Ord for $t {
+            fn cmp(&self, rhs: &Self) -> cmp::Ordering {
+                self.partial_cmp(rhs).expect("exchange rate cannot be NaN")
+            }
+        }
+
+        impl PartialEq<f64> for $t {
+            fn eq(&self, rhs: &f64) -> bool {
+                self.0 == *rhs
+            }
+        }
+
+        impl PartialOrd<f64> for $t {
+            fn partial_cmp(&self, rhs: &f64) -> Option<cmp::Ordering> {
+                self.0.partial_cmp(rhs)
+            }
+        }
+    )*};
 }
 
-impl PartialEq<f64> for ExchangeRate {
-    fn eq(&self, rhs: &f64) -> bool {
-        self.0 == *rhs
-    }
-}
-
-impl PartialOrd<f64> for ExchangeRate {
-    fn partial_cmp(&self, rhs: &f64) -> Option<cmp::Ordering> {
-        self.0.partial_cmp(rhs)
-    }
-}
+impl_cmp! { LimitPrice, ExchangeRate }
 
 macro_rules! impl_binop {
     ($(
-        $op:tt => {
+        $op:tt for $t:ty => {
             $trait:ident :: $method:ident,
             $trait_assign:ident :: $method_assign:ident
         }
     )*) => {$(
-        impl ops::$trait for ExchangeRate {
-            type Output = ExchangeRate;
+        impl ops::$trait for $t {
+            type Output = $t;
 
             fn $method(self, rhs: Self) -> Self::Output {
-                ExchangeRate(assert_strictly_positive_and_finite(self.0 $op rhs.0))
+                Self(assert_strictly_positive_and_finite(self.0 $op rhs.0))
             }
         }
 
-        impl ops::$trait_assign for ExchangeRate {
+        impl ops::$trait_assign for $t {
             fn $method_assign(&mut self, rhs: Self) {
                 self.0 = assert_strictly_positive_and_finite(self.0 $op rhs.0);
             }
@@ -155,7 +164,7 @@ macro_rules! impl_binop {
 }
 
 impl_binop! {
-    * => { Mul::mul, MulAssign::mul_assign }
+    * for ExchangeRate => { Mul::mul, MulAssign::mul_assign }
 }
 
 /// Internal method for asserting values are strictly positive and finite. This
