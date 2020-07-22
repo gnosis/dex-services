@@ -84,8 +84,8 @@ pub struct FilteredOrderPage {
 pub enum NoopTransactionError {
     #[error("no account")]
     NoAccount,
-    #[error("execution error")]
-    ExecutedOrder(ExecutionError),
+    #[error("execution error: {0}")]
+    ExecutedOrder(#[from] ExecutionError),
 }
 
 #[cfg_attr(test, automock)]
@@ -359,10 +359,7 @@ impl StableXContract for StableXContractImpl {
                 .nonce(nonce)
                 .value(U256::zero())
                 .resolve(ResolveCondition::Confirmed(ConfirmParams::mined()));
-            transaction
-                .send()
-                .await
-                .map_err(NoopTransactionError::ExecutedOrder)
+            transaction.send().await.map_err(From::from)
         }
         .boxed()
     }
