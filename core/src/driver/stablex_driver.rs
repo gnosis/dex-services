@@ -1,12 +1,20 @@
-use crate::metrics::StableXMetrics;
-use crate::models::{account_state::AccountState, order::Order, Solution};
-use crate::orderbook::StableXOrderBookReading;
-use crate::price_finding::PriceFinding;
-use crate::solution_submission::{SolutionSubmissionError, StableXSolutionSubmitting};
-use anyhow::{Error, Result};
+use crate::{
+    bigint_u256,
+    metrics::StableXMetrics,
+    models::{account_state::AccountState, order::Order, Solution},
+    orderbook::StableXOrderBookReading,
+    price_finding::PriceFinding,
+    solution_submission::{SolutionSubmissionError, StableXSolutionSubmitting},
+};
+use anyhow::{anyhow, Error, Result};
+use ethcontract::U256;
 use futures::future::{BoxFuture, FutureExt as _};
 use log::{info, warn};
-use std::time::{Duration, Instant};
+use num::{BigInt, Zero as _};
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
 
 #[derive(Debug)]
 pub enum DriverResult {
@@ -118,9 +126,28 @@ impl<'a> StableXDriverImpl<'a> {
         };
 
         let submitted = if let Some(objective_value) = verified {
+            let gas_price_cap = {
+                let num_trades = solution.executed_orders.len();
+                match burnt_fees(&orders, &solution) {
+                    Ok(fee) => {
+                        let cap = gas_price_cap(fee, num_trades);
+                        log::info!("Using gas price cap {} based on fee {}", cap, fee);
+                        cap
+                    }
+                    Err(err) => {
+                        const DEFAULT_GAS_PRICE_CAP: u64 = 200_000_000_000;
+                        log::error!(
+                            "Failed to calculate burnt fees: {:?}. Using default gas price cap {}",
+                            err,
+                            DEFAULT_GAS_PRICE_CAP
+                        );
+                        U256::from(DEFAULT_GAS_PRICE_CAP)
+                    }
+                }
+            };
             let submission_result = self
                 .solution_submitter
-                .submit_solution(batch_to_solve, solution, objective_value)
+                .submit_solution(batch_to_solve, solution, objective_value, gas_price_cap)
                 .await;
             self.metrics
                 .auction_solution_submitted(batch_to_solve, &submission_result);
@@ -189,17 +216,49 @@ impl<'a> StableXDriver for StableXDriverImpl<'a> {
     }
 }
 
+fn burnt_fees(orders: &[Order], solution: &Solution) -> Result<U256> {
+    let orders: HashMap<u16, &Order> = orders.iter().map(|order| (order.id, order)).collect();
+    let mut fee_token_imbalance = BigInt::zero();
+    for executed_order in solution.executed_orders.iter() {
+        let id = executed_order.order_id;
+        let order = orders
+            .get(&id)
+            .ok_or_else(|| anyhow!("order {} not found", id))?;
+        if order.sell_token == 0 {
+            fee_token_imbalance += executed_order.sell_amount;
+        }
+        if order.buy_token == 0 {
+            fee_token_imbalance -= executed_order.buy_amount;
+        }
+    }
+    bigint_u256::bigint_to_u256(&fee_token_imbalance)
+        .ok_or_else(|| anyhow!("invalid burnt fee amount: {}", fee_token_imbalance))
+}
+
+fn gas_price_cap(burnt_fees: U256, num_trades: usize) -> U256 {
+    // This is approximate. Depends on reversion of previous solution.
+    const GAS_PER_TRADE: f64 = 120_000.0;
+    const PRICE_OF_ETHER_IN_OWL: f64 = 200.0;
+    // The previous two values are approximations and we do not need to be economically viable at
+    // this point in time. So be more lenient with respect go gas prices.
+    const EXTRA_FACTOR: f64 = 10.0;
+    let burnt_fees = pricegraph::num::u256_to_f64(burnt_fees);
+    let gas_use = GAS_PER_TRADE * (num_trades as f64);
+    let result = (burnt_fees / (PRICE_OF_ETHER_IN_OWL * gas_use)) * EXTRA_FACTOR;
+    U256::from(result as u128)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::models::order::test_util::{create_order_for_test, order_to_executed_order};
-    use crate::models::AccountState;
+    use crate::models::{AccountState, ExecutedOrder};
     use crate::orderbook::MockStableXOrderBookReading;
     use crate::price_finding::price_finder_interface::MockPriceFinding;
     use crate::solution_submission::MockStableXSolutionSubmitting;
     use crate::util::test_util::map_from_slice;
     use anyhow::anyhow;
-    use ethcontract::U256;
+    use ethcontract::{H160, U256};
     use mockall::predicate::*;
     use std::thread;
 
@@ -254,8 +313,8 @@ mod tests {
 
         submitter
             .expect_submit_solution()
-            .with(eq(batch), always(), eq(U256::from(1337)))
-            .returning(|_, _, _| async { Ok(()) }.boxed());
+            .with(eq(batch), always(), eq(U256::from(1337)), always())
+            .returning(|_, _, _, _| async { Ok(()) }.boxed());
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
@@ -324,8 +383,8 @@ mod tests {
 
         submitter
             .expect_submit_solution()
-            .with(eq(batch), always(), eq(U256::from(1337)))
-            .returning(|_, _, _| async { Ok(()) }.boxed());
+            .with(eq(batch), always(), eq(U256::from(1337)), always())
+            .returning(|_, _, _, _| async { Ok(()) }.boxed());
 
         pf.expect_find_prices()
             .returning(|_, _, _| async { Err(anyhow!("Error")) }.boxed());
@@ -529,8 +588,8 @@ mod tests {
             .returning(|_, _| async { Ok(42.into()) }.boxed());
         submitter
             .expect_submit_solution()
-            .with(eq(batch), always(), eq(U256::from(42)))
-            .returning(|_, _, _| {
+            .with(eq(batch), always(), eq(U256::from(42)), always())
+            .returning(|_, _, _, _| {
                 async { Err(SolutionSubmissionError::Benign("Benign Error".to_owned())) }.boxed()
             });
 
@@ -585,5 +644,69 @@ mod tests {
             .now_or_never()
             .unwrap()
             .is_ok());
+    }
+
+    #[test]
+    fn burnt_fees_ok() {
+        let orders = vec![
+            Order {
+                id: 0,
+                account_id: H160::zero(),
+                buy_token: 0,
+                sell_token: 1,
+                numerator: 1,
+                denominator: 1,
+                remaining_sell_amount: 1,
+                valid_from: 0,
+                valid_until: 0,
+            },
+            Order {
+                id: 1,
+                account_id: H160::zero(),
+                buy_token: 1,
+                sell_token: 0,
+                numerator: 4,
+                denominator: 4,
+                remaining_sell_amount: 2,
+                valid_from: 0,
+                valid_until: 0,
+            },
+            Order {
+                id: 2,
+                account_id: H160::zero(),
+                buy_token: 1,
+                sell_token: 1,
+                numerator: 5,
+                denominator: 5,
+                remaining_sell_amount: 3,
+                valid_from: 0,
+                valid_until: 0,
+            },
+        ];
+        let solution = Solution {
+            prices: HashMap::new(),
+            executed_orders: vec![
+                ExecutedOrder {
+                    account_id: H160::zero(),
+                    order_id: 0,
+                    sell_amount: 1,
+                    buy_amount: 1,
+                },
+                ExecutedOrder {
+                    account_id: H160::zero(),
+                    order_id: 1,
+                    sell_amount: 4,
+                    buy_amount: 4,
+                },
+                ExecutedOrder {
+                    account_id: H160::zero(),
+                    order_id: 2,
+                    sell_amount: 5,
+                    buy_amount: 5,
+                },
+            ],
+        };
+        let result = burnt_fees(&orders, &solution).unwrap();
+        assert_eq!(result, U256::from(3));
     }
 }

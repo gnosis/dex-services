@@ -13,6 +13,7 @@ use ethcontract::web3::types::TransactionReceipt;
 use ethcontract::U256;
 use futures::future::{BoxFuture, FutureExt as _};
 use log::info;
+use pricegraph::num;
 use retry::SolutionTransactionSending;
 use std::time::{Duration, SystemTime};
 use thiserror::Error;
@@ -24,8 +25,6 @@ use thiserror::Error;
 const POLL_TIMEOUT: Duration = Duration::from_secs(5);
 #[cfg(test)]
 const POLL_TIMEOUT: Duration = Duration::from_secs(0);
-
-const GAS_PRICE_CAP: u64 = 200_000_000_000;
 
 // openethereum requires that the gas price of the resubmitted transaction has increased by at
 // least 12.5%.
@@ -58,6 +57,7 @@ pub trait StableXSolutionSubmitting {
         batch_index: u32,
         solution: Solution,
         claimed_objective_value: U256,
+        gas_price_cap: U256,
     ) -> BoxFuture<'a, Result<(), SolutionSubmissionError>>;
 }
 
@@ -147,6 +147,7 @@ impl<'a> StableXSolutionSubmitter<'a> {
         batch_index: u32,
         solution: Solution,
         result: std::result::Result<Result<(), MethodError>, TimeoutError>,
+        gas_price_cap: U256,
         nonce: U256,
     ) -> Result<(), SolutionSubmissionError> {
         if let Ok(submit_result) = result {
@@ -155,8 +156,9 @@ impl<'a> StableXSolutionSubmitter<'a> {
                 Err(err) => Err(self.make_error(batch_index, solution, err).await),
             }
         } else {
-            let gas_price =
-                U256::from((GAS_PRICE_CAP as f64 * MIN_GAS_PRICE_INCREASE_FACTOR).ceil() as u128);
+            let gas_price = U256::from(
+                (num::u256_to_f64(gas_price_cap) * MIN_GAS_PRICE_INCREASE_FACTOR).ceil() as u128,
+            );
             log::info!(
                 "cancelling transaction because it took too long, using gas price {}",
                 gas_price
@@ -208,6 +210,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
         batch_index: u32,
         solution: Solution,
         claimed_objective_value: U256,
+        gas_price_cap: U256,
     ) -> BoxFuture<Result<(), SolutionSubmissionError>> {
         async move {
             let nonce = self.contract.get_transaction_count().await?;
@@ -215,7 +218,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
                 batch_index,
                 solution: solution.clone(),
                 claimed_objective_value,
-                gas_price_cap: GAS_PRICE_CAP.into(),
+                gas_price_cap,
                 nonce,
             });
             // Add some extra time in case of desync between real time and ethereum node current block time.
@@ -224,7 +227,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
                 .duration_since(SystemTime::now())
                 .unwrap_or(Duration::from_secs(0));
             let result = async_std::future::timeout(remaining, submit_future).await;
-            self.handle_submit_solution_result(batch_index, solution, result, nonce)
+            self.handle_submit_solution_result(batch_index, solution, result, gas_price_cap, nonce)
                 .await
         }
         .boxed()
@@ -360,7 +363,7 @@ mod tests {
 
         let submitter = StableXSolutionSubmitter::with_retrying(&contract, retry);
         let result = submitter
-            .submit_solution(0, Solution::trivial(), U256::zero())
+            .submit_solution(0, Solution::trivial(), U256::zero(), U256::zero())
             .now_or_never()
             .unwrap();
 
@@ -392,7 +395,13 @@ mod tests {
         let retry = MockSolutionTransactionSending::new();
         let submitter = StableXSolutionSubmitter::with_retrying(&contract, retry);
         let result = submitter
-            .handle_submit_solution_result(0, Solution::trivial(), Err(timeout_error()), 0.into())
+            .handle_submit_solution_result(
+                0,
+                Solution::trivial(),
+                Err(timeout_error()),
+                U256::from(200_000_000_000u128),
+                0.into(),
+            )
             .now_or_never()
             .unwrap();
         assert!(result.is_err());
@@ -404,7 +413,7 @@ mod tests {
         let retry = MockSolutionTransactionSending::new();
         let submitter = StableXSolutionSubmitter::with_retrying(&contract, retry);
         let result = submitter
-            .handle_submit_solution_result(0, Solution::trivial(), Ok(Ok(())), 0.into())
+            .handle_submit_solution_result(0, Solution::trivial(), Ok(Ok(())), 0.into(), 0.into())
             .now_or_never()
             .unwrap();
         assert!(result.is_ok());
