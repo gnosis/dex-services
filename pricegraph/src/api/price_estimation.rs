@@ -45,14 +45,15 @@ impl Pricegraph {
             return None;
         }
 
-        // NOTE: Iteratively compute the how much total buy volume (liquidity)
-        // is available at successively "worse" exchange rates until all the
+        // NOTE: Iteratively compute the how much cumulative buy volume is
+        // available at successively "worse" exchange rates until all the
         // specified sell amount can be used to buy the available liquidity at
         // the marginal exchange rate.
-        let mut total_buy_volume = 0.0;
-        let mut maximum_sell_volume = 0.0;
+        let mut cumulative_buy_volume = 0.0;
+        let mut cumulative_sell_volume = 0.0;
         while let Some(flow) = orderbook.fill_optimal_transitive_order_if(inverse_pair, |flow| {
-            let current_exchange_rate = match ExchangeRate::new(total_buy_volume / sell_amount) {
+            let current_exchange_rate = match ExchangeRate::new(cumulative_buy_volume / sell_amount)
+            {
                 Some(price) => price,
                 None => return true,
             };
@@ -64,17 +65,19 @@ impl Pricegraph {
             // liquidity from this transitive order.
             current_exchange_rate < flow.exchange_rate.inverse()
         }) {
-            total_buy_volume += flow.capacity / flow.exchange_rate.value();
-            maximum_sell_volume = total_buy_volume * flow.exchange_rate.value();
+            cumulative_buy_volume += flow.capacity / flow.exchange_rate.value();
+            cumulative_sell_volume = cumulative_buy_volume * flow.exchange_rate.value();
 
-            if sell_amount <= maximum_sell_volume {
+            // NOTE: We've found enough liquidity to completely sell the
+            // specified sell volume, so we can stop searching.
+            if sell_amount <= cumulative_sell_volume {
                 break;
             }
         }
 
-        let total_sell_volume = maximum_sell_volume.max(sell_amount);
+        let total_sell_volume = sell_amount.max(cumulative_sell_volume);
         Some(
-            ExchangeRate::new(total_buy_volume / total_sell_volume)?
+            ExchangeRate::new(cumulative_buy_volume / total_sell_volume)?
                 .price()
                 .value(),
         )
@@ -350,7 +353,7 @@ mod tests {
             pricegraph
                 .order_for_sell_amount(
                     TokenPair { buy: 2, sell: 1 },
-                    1_000_000.0 * FEE_FACTOR.powi(2),
+                    1_000_000.0 * FEE_FACTOR + 1.0,
                 )
                 .unwrap()
                 .buy,
