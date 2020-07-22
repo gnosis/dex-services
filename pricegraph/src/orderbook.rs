@@ -213,6 +213,25 @@ impl Orderbook {
         self.fill_optimal_transitive_order_if(pair, |_| true)
     }
 
+    /// Finds and returns the optimal transitive order for the specified token
+    /// pair without filling it. Returns `None` if no such transitive order
+    /// exists.
+    ///
+    /// This method returns an error if the orderbook graph is not reduced.
+    pub fn find_optimal_transitive_order(
+        &mut self,
+        pair: TokenPair,
+    ) -> Result<Option<Flow>, OverlapError> {
+        let mut flow = None;
+        let reduced_flow = self.fill_optimal_transitive_order_if(pair, |f| {
+            flow = Some(*f);
+            false
+        })?;
+        debug_assert!(reduced_flow.is_none());
+
+        Ok(flow)
+    }
+
     /// Fills the optimal transitive order (i.e. with the lowest exchange rate)
     /// for the specified token pair by pushing flow from the buy token to the
     /// sell token, if the condition is met. The trading path through the

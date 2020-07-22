@@ -22,6 +22,15 @@ impl ReducedOrderbook {
         self.fill_optimal_transitive_order_if(pair, |_| true)
     }
 
+    /// Finds and returns the optimal transitive order for the specified token
+    /// pair without filling it. Returns `None` if no such transitive order
+    /// exists.
+    pub fn find_optimal_transitive_order(&mut self, pair: TokenPair) -> Option<Flow> {
+        self.0
+            .find_optimal_transitive_order(pair)
+            .expect("negative cycle in reduced orderbook")
+    }
+
     /// Fills the optimal transitive order (i.e. with the lowest exchange rate)
     /// for the specified token pair by pushing flow from the buy token to the
     /// sell token, if the condition is met. The trading path through the
