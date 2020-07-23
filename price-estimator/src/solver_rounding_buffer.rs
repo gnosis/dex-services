@@ -1,9 +1,11 @@
-use core::models::{AccountState, Order, TokenId};
+use core::models::{AccountState, Order, TokenId, TokenInfo};
 use ethcontract::{Address, U256};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 // This code is closely related to dex-solver/src/opt/process/Rounding.py .
 // Discussion of motivation happened in https://github.com/gnosis/dex-services/issues/970 .
+
+type Tokens = BTreeMap<TokenId, TokenInfo>;
 
 const MAX_ROUNDING_VOLUME: f64 = 100_000_000_000.0;
 const PRICE_ESTIMATION_ERROR: f64 = 10.0;
@@ -14,49 +16,45 @@ fn max_rounding_amount(token_price: f64, fee_token_price: f64) -> f64 {
     max_rounding_amount.max(1.0)
 }
 
-/// Calculate a single rounding buffer like the solver does. This amount is subtracted from the
-/// denominator of orders selling the sell token and buying the buy token.
-pub fn rounding_buffer(
-    fee_token_price: f64,
-    sell_token_price: f64,
-    buy_token_price: f64,
-    extra_factor: f64,
-) -> f64 {
-    let estimated_xrate = buy_token_price / sell_token_price;
-    max_rounding_amount(buy_token_price, fee_token_price)
-        * estimated_xrate
-        * PRICE_ESTIMATION_ERROR.powi(2)
-        * extra_factor
-}
-
 /// Perform the same rounding buffer calculation as our solvers in order to increase the correctness
 /// of our estimates.
-/// token_prices returns the price of a token like in PriceSource::get_prices. All token prices
-/// must be nonzero.
+/// All token prices must be nonzero.
 #[allow(dead_code)]
 pub fn apply_rounding_buffer(
-    token_prices: impl Fn(TokenId) -> u128,
+    tokens: &Tokens,
     orders: &mut Vec<Order>,
     account_state: &mut AccountState,
-    extra_factor: f64,
+    pessimistic_factor: f64,
 ) {
-    let fee_token_price = token_prices(TokenId(0)) as f64;
+    let fee_token_price = tokens
+        .get(&TokenId(0))
+        .expect("fee token does not have price")
+        .external_price as f64;
+    assert!(fee_token_price > 0.0, "fee token price is 0");
+
     // The maximum rounding buffer over all orders from this address selling this token.
     let mut account_balance_buffers = HashMap::<(Address, TokenId), u128>::new();
     // Apply rounding buffer to account balances and order sell amounts.
     for order in orders.iter_mut() {
+        // Compute rounding buffer.
+        // If a token doesn't have a price it means it isn't connected to the fee. In this case we
+        // use a price of 1 to get some reasonable default rounding buffer.
         let (sell_token, buy_token) = (TokenId(order.sell_token), TokenId(order.buy_token));
-        let buy_token_price = token_prices(buy_token) as f64;
-        let sell_token_price = token_prices(sell_token) as f64;
-
+        let estimated_buy_token_price = match tokens.get(&buy_token) {
+            Some(TokenInfo { external_price, .. }) if *external_price > 0 => *external_price as f64,
+            _ => 1.0,
+        };
+        let estimated_sell_token_price = match tokens.get(&sell_token) {
+            Some(TokenInfo { external_price, .. }) if *external_price > 0 => *external_price as f64,
+            _ => 1.0,
+        };
+        let estimated_xrate = estimated_buy_token_price / estimated_sell_token_price;
+        let rounding_buffer = max_rounding_amount(estimated_buy_token_price, fee_token_price)
+            * estimated_xrate
+            * PRICE_ESTIMATION_ERROR.powi(2);
         // Multiply by an extra factor which the solver doesn't do, as added safety in case the
         // prices move.
-        let rounding_buffer = rounding_buffer(
-            fee_token_price,
-            sell_token_price,
-            buy_token_price,
-            extra_factor,
-        ) as u128;
+        let rounding_buffer = (pessimistic_factor * rounding_buffer) as u128;
 
         // Update rounding buffer for account balances;
         let entry = account_balance_buffers
@@ -90,6 +88,14 @@ mod tests {
         ((address(address_), token), U256::from(balance))
     }
 
+    fn token_info(external_price: u128) -> TokenInfo {
+        TokenInfo {
+            alias: None,
+            decimals: None,
+            external_price,
+        }
+    }
+
     fn order(
         id: u16,
         address_: u64,
@@ -113,12 +119,10 @@ mod tests {
 
     #[test]
     fn apply_rounding_buffer_ok() {
-        let token_prices = |token_id: TokenId| match token_id.0 {
-            0 => 1,
-            1 => 2,
-            2 => 10,
-            _ => unreachable!(),
-        };
+        let mut tokens = Tokens::new();
+        tokens.insert(TokenId(0), token_info(1));
+        tokens.insert(TokenId(1), token_info(2));
+        tokens.insert(TokenId(2), token_info(10));
 
         let accounts = vec![
             account(0, 0, 100_000_000_000_000_000),
@@ -136,7 +140,7 @@ mod tests {
             order(5, 0, 1, 2, 600_000_000_000_000, 500_000_000_000_000),
         ];
 
-        apply_rounding_buffer(token_prices, &mut orders, &mut account_state, 1.0);
+        apply_rounding_buffer(&tokens, &mut orders, &mut account_state, 1.0);
 
         let expected_orders = vec![
             order(0, 0, 1, 0, 600_000_000_000_000, 490_000_000_000_000),

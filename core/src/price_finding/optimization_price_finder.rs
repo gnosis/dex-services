@@ -281,15 +281,18 @@ impl PriceFinding for OptimisationPriceFinder {
             let solver_type = self.solver_type;
             let min_avg_fee_per_order = self.min_avg_fee_per_order;
             let internal_optimizer = self.internal_optimizer;
-            let result = blocking::unblock!(io_methods.run_solver(
-                &input_file,
-                &serde_json::to_string(&input)?,
-                &result_folder,
-                solver_type,
-                time_limit,
-                min_avg_fee_per_order,
-                internal_optimizer,
-            ))
+            let result = blocking::unblock(move || {
+                io_methods.run_solver(
+                    &input_file,
+                    &serde_json::to_string(&input)?,
+                    &result_folder,
+                    solver_type,
+                    time_limit,
+                    min_avg_fee_per_order,
+                    internal_optimizer,
+                )
+            })
+            .await
             .with_context(|| format!("error running {:?} solver", self.solver_type))?;
             let solution =
                 deserialize_result(result).context("error deserializing solver output")?;

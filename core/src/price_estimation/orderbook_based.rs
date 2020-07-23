@@ -12,12 +12,6 @@ pub struct PricegraphEstimator {
     orderbook_reader: Arc<dyn StableXOrderBookReading>,
 }
 
-impl PricegraphEstimator {
-    pub fn new(orderbook_reader: Arc<dyn StableXOrderBookReading>) -> Self {
-        Self { orderbook_reader }
-    }
-}
-
 const ONE_OWL: f64 = 1_000_000_000_000_000_000.0;
 
 impl PriceSource for PricegraphEstimator {
@@ -32,19 +26,35 @@ impl PriceSource for PricegraphEstimator {
             let pricegraph = Pricegraph::new(orders.iter().map(|order| {
                 order.to_element(account_state.read_balance(order.sell_token, order.account_id))
             }));
-            pricegraph.get_prices(tokens).await
+            Ok(self.estimate_prices(tokens, pricegraph))
         }
         .boxed()
     }
 }
 
-use inner::LimitPriceEstimating;
-impl<T: LimitPriceEstimating> PriceSource for T {
-    fn get_prices<'a>(
-        &'a self,
-        tokens: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
-        let result = tokens
+/// Private trait to facilitate testing this module
+#[cfg_attr(test, mockall::automock)]
+trait PriceEstimating {
+    fn estimate_price(&self, pair: TokenPair, volume: f64) -> Option<f64>;
+}
+
+impl PriceEstimating for Pricegraph {
+    fn estimate_price(&self, pair: TokenPair, volume: f64) -> Option<f64> {
+        self.estimate_limit_price(pair, volume)
+    }
+}
+
+impl PricegraphEstimator {
+    pub fn new(orderbook_reader: Arc<dyn StableXOrderBookReading>) -> Self {
+        Self { orderbook_reader }
+    }
+
+    fn estimate_prices(
+        &self,
+        tokens: &[TokenId],
+        pricegraph: impl PriceEstimating,
+    ) -> HashMap<TokenId, u128> {
+        tokens
             .iter()
             .flat_map(|token| {
                 let price_in_token = if token == &TokenId::reference() {
@@ -57,95 +67,76 @@ impl<T: LimitPriceEstimating> PriceSource for T {
                         buy: token.0,
                         sell: TokenId::reference().0,
                     };
-                    self.estimate_limit_price(pair, ONE_OWL)?
+                    pricegraph.estimate_price(pair, ONE_OWL)?
                 };
                 let price_in_reference = 1.0 / price_in_token;
                 Some((*token, (ONE_OWL * price_in_reference) as u128))
             })
-            .collect();
-        immediate!(Ok(result))
-    }
-}
-
-/// Trait to facilitate testing this module. This is in a private inner module because the trait
-/// itself has to be public (`rustc --explain E0445`) but there is no reason for anyone else to
-/// implement it.
-mod inner {
-    use pricegraph::{Pricegraph, TokenPair};
-
-    #[cfg_attr(test, mockall::automock)]
-    pub trait LimitPriceEstimating {
-        fn estimate_limit_price(&self, pair: TokenPair, sell_amount: f64) -> Option<f64>;
-    }
-
-    impl LimitPriceEstimating for Pricegraph {
-        fn estimate_limit_price(&self, pair: TokenPair, sell_amount: f64) -> Option<f64> {
-            self.estimate_limit_price(pair, sell_amount)
-        }
+            .collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use inner::MockLimitPriceEstimating;
+    use crate::orderbook::MockStableXOrderBookReading;
     use mockall::predicate::eq;
 
     #[test]
     fn returns_buy_amounts_of_selling_one_owl() {
-        let mut pricegraph = MockLimitPriceEstimating::new();
+        let mut pricegraph = MockPriceEstimating::new();
         pricegraph
-            .expect_estimate_limit_price()
+            .expect_estimate_price()
             .with(eq(TokenPair { buy: 1, sell: 0 }), eq(ONE_OWL))
             .return_const(2.0);
         pricegraph
-            .expect_estimate_limit_price()
+            .expect_estimate_price()
             .with(eq(TokenPair { buy: 2, sell: 0 }), eq(ONE_OWL))
             .return_const(0.5);
 
-        let result = pricegraph
-            .get_prices(&[1.into(), 2.into()])
-            .now_or_never()
-            .unwrap()
-            .unwrap();
-        let expected = hash_map! {
-            TokenId(1) => 500_000_000_000_000_000,
-            TokenId(2) => 2_000_000_000_000_000_000,
-        };
-        assert_eq!(result, expected);
+        let reader = Arc::new(MockStableXOrderBookReading::new());
+        let estimator = PricegraphEstimator::new(reader);
+        assert_eq!(
+            estimator.estimate_prices(&[1.into(), 2.into()], pricegraph),
+            hash_map! {
+                TokenId(1) => 500_000_000_000_000_000,
+                TokenId(2) => 2_000_000_000_000_000_000,
+            }
+        );
     }
 
     #[test]
     fn omits_tokens_for_which_estimate_fails() {
-        let mut pricegraph = MockLimitPriceEstimating::new();
+        let mut pricegraph = MockPriceEstimating::new();
         pricegraph
-            .expect_estimate_limit_price()
+            .expect_estimate_price()
             .with(eq(TokenPair { buy: 1, sell: 0 }), eq(ONE_OWL))
             .return_const(0.5);
         pricegraph
-            .expect_estimate_limit_price()
+            .expect_estimate_price()
             .with(eq(TokenPair { buy: 2, sell: 0 }), eq(ONE_OWL))
             .return_const(None);
 
-        let result = pricegraph
-            .get_prices(&[1.into(), 2.into()])
-            .now_or_never()
-            .unwrap()
-            .unwrap();
-        let expected = hash_map! { TokenId(1) => 2_000_000_000_000_000_000 };
-        assert_eq!(result, expected);
+        let reader = Arc::new(MockStableXOrderBookReading::new());
+        let estimator = PricegraphEstimator::new(reader);
+        assert_eq!(
+            estimator.estimate_prices(&[1.into(), 2.into()], pricegraph),
+            hash_map! {
+                TokenId(1) => 2_000_000_000_000_000_000,
+            }
+        );
     }
 
     #[test]
     fn returns_one_owl_for_estimating_owl() {
-        let pricegraph = MockLimitPriceEstimating::new();
-
-        let result = pricegraph
-            .get_prices(&[0.into()])
-            .now_or_never()
-            .unwrap()
-            .unwrap();
-        let expected = hash_map! { TokenId(0) => 1_000_000_000_000_000_000 };
-        assert_eq!(result, expected);
+        let pricegraph = MockPriceEstimating::new();
+        let reader = Arc::new(MockStableXOrderBookReading::new());
+        let estimator = PricegraphEstimator::new(reader);
+        assert_eq!(
+            estimator.estimate_prices(&[0.into()], pricegraph),
+            hash_map! {
+                TokenId(0) => 1_000_000_000_000_000_000,
+            }
+        );
     }
 }
