@@ -1,23 +1,16 @@
 use crate::{
-    bigint_u256,
     metrics::StableXMetrics,
     models::{account_state::AccountState, order::Order, Solution},
     orderbook::StableXOrderBookReading,
     price_finding::PriceFinding,
     solution_submission::{SolutionSubmissionError, StableXSolutionSubmitting},
 };
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result};
 use ethcontract::U256;
 use futures::future::{BoxFuture, FutureExt as _};
 use log::{info, warn};
-use num::{BigInt, Zero as _};
-use std::{
-    collections::HashMap,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
-// Used when we cannot calculate the amount of burned fees.
-const DEFAULT_GAS_PRICE_CAP: u64 = 200_000_000_000;
 // This is approximate. Depends on reversion of previous solution.
 const GAS_PER_TRADE: f64 = 120_000.0;
 // Will be removed in a future PR where we are going to fetch the current price.
@@ -136,24 +129,13 @@ impl<'a> StableXDriverImpl<'a> {
         };
 
         let submitted = if let Some(objective_value) = verified {
-            let gas_price_cap = {
-                let num_trades = solution.executed_orders.len();
-                match burnt_fees(&orders, &solution) {
-                    Ok(fee) => {
-                        let cap = gas_price_cap(fee, num_trades, self.gas_price_cap_subsidy_factor);
-                        log::info!("Using gas price cap {} based on fee {}", cap, fee);
-                        cap
-                    }
-                    Err(err) => {
-                        log::error!(
-                            "Failed to calculate burnt fees: {:?}. Using default gas price cap {}",
-                            err,
-                            DEFAULT_GAS_PRICE_CAP
-                        );
-                        U256::from(DEFAULT_GAS_PRICE_CAP)
-                    }
-                }
-            };
+            let fee = solution.burnt_fees();
+            let num_trades = solution.executed_orders.len();
+            let gas_price_cap = gas_price_cap(fee, num_trades, self.gas_price_cap_subsidy_factor);
+            info!(
+                "Using gas price cap {} based on num_trades {} and fee {}",
+                gas_price_cap, fee, num_trades
+            );
             let submission_result = self
                 .solution_submitter
                 .submit_solution(batch_to_solve, solution, objective_value, gas_price_cap)
@@ -225,25 +207,7 @@ impl<'a> StableXDriver for StableXDriverImpl<'a> {
     }
 }
 
-fn burnt_fees(orders: &[Order], solution: &Solution) -> Result<U256> {
-    let orders: HashMap<u16, &Order> = orders.iter().map(|order| (order.id, order)).collect();
-    let mut fee_token_imbalance = BigInt::zero();
-    for executed_order in solution.executed_orders.iter() {
-        let id = executed_order.order_id;
-        let order = orders
-            .get(&id)
-            .ok_or_else(|| anyhow!("order {} not found", id))?;
-        if order.sell_token == 0 {
-            fee_token_imbalance += executed_order.sell_amount;
-        }
-        if order.buy_token == 0 {
-            fee_token_imbalance -= executed_order.buy_amount;
-        }
-    }
-    bigint_u256::bigint_to_u256(&fee_token_imbalance)
-        .ok_or_else(|| anyhow!("invalid burnt fee amount: {}", fee_token_imbalance))
-}
-
+/// The gas price cap is selected so that submitting solution is still roughly profitable.
 fn gas_price_cap(burnt_fees: U256, num_trades: usize, subsidy_factor: f64) -> U256 {
     // The previous two values are approximations and we do not need to be economically viable at
     // this point in time. So be more lenient with respect go gas prices.
@@ -257,13 +221,13 @@ fn gas_price_cap(burnt_fees: U256, num_trades: usize, subsidy_factor: f64) -> U2
 mod tests {
     use super::*;
     use crate::models::order::test_util::{create_order_for_test, order_to_executed_order};
-    use crate::models::{AccountState, ExecutedOrder};
+    use crate::models::AccountState;
     use crate::orderbook::MockStableXOrderBookReading;
     use crate::price_finding::price_finder_interface::MockPriceFinding;
     use crate::solution_submission::MockStableXSolutionSubmitting;
     use crate::util::test_util::map_from_slice;
     use anyhow::anyhow;
-    use ethcontract::{H160, U256};
+    use ethcontract::U256;
     use mockall::predicate::*;
     use std::thread;
 
@@ -649,70 +613,6 @@ mod tests {
             .now_or_never()
             .unwrap()
             .is_ok());
-    }
-
-    #[test]
-    fn burnt_fees_is_half_imbalance_of_reference_token_sold_and_bought() {
-        let orders = vec![
-            Order {
-                id: 0,
-                account_id: H160::zero(),
-                buy_token: 0,
-                sell_token: 1,
-                numerator: 1,
-                denominator: 1,
-                remaining_sell_amount: 1,
-                valid_from: 0,
-                valid_until: 0,
-            },
-            Order {
-                id: 1,
-                account_id: H160::zero(),
-                buy_token: 1,
-                sell_token: 0,
-                numerator: 4,
-                denominator: 4,
-                remaining_sell_amount: 2,
-                valid_from: 0,
-                valid_until: 0,
-            },
-            Order {
-                id: 2,
-                account_id: H160::zero(),
-                buy_token: 1,
-                sell_token: 1,
-                numerator: 5,
-                denominator: 5,
-                remaining_sell_amount: 3,
-                valid_from: 0,
-                valid_until: 0,
-            },
-        ];
-        let solution = Solution {
-            prices: HashMap::new(),
-            executed_orders: vec![
-                ExecutedOrder {
-                    account_id: H160::zero(),
-                    order_id: 0,
-                    sell_amount: 1,
-                    buy_amount: 1,
-                },
-                ExecutedOrder {
-                    account_id: H160::zero(),
-                    order_id: 1,
-                    sell_amount: 4,
-                    buy_amount: 4,
-                },
-                ExecutedOrder {
-                    account_id: H160::zero(),
-                    order_id: 2,
-                    sell_amount: 5,
-                    buy_amount: 5,
-                },
-            ],
-        };
-        let result = burnt_fees(&orders, &solution).unwrap();
-        assert_eq!(result, U256::from(3));
     }
 
     #[test]

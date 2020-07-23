@@ -189,7 +189,7 @@ struct Options {
     /// We calculate the maximum gas price cap based on the amount of earned fees from solution
     /// submission. This factor is multiplied with the final result because we do not need to be
     /// economically viable at the moment.
-    #[structopt(long, env = "GAS_PRICE_CAP_SUBSIDY_FACTOR", default_value = "10.0")]
+    #[structopt(long, env = "GAS_PRICE_CAP_SUBSIDY_FACTOR", default_value = "2.0")]
     gas_price_cap_subsidy_factor: f64,
 }
 
