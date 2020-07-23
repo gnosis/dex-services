@@ -83,8 +83,8 @@ impl PriceOracle {
             Box::new(PricegraphEstimator::new(orderbook_reader)),
         ]));
         let prioritized_source = Box::new(PriorityPriceSource::new(vec![
-            averaged_source,
             Box::new(token_data),
+            averaged_source,
         ]));
 
         Ok(PriceOracle {
