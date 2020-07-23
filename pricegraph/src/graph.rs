@@ -5,3 +5,5 @@
 pub mod bellman_ford;
 pub mod path;
 pub mod subgraph;
+
+pub type IntegerNodeIndex = usize;

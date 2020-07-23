@@ -18,17 +18,22 @@ pub use self::scalar::{ExchangeRate, LimitPrice};
 use self::user::{User, UserMap};
 use crate::api::Market;
 use crate::encoding::{Element, TokenId, TokenPair};
-use crate::graph::bellman_ford::{self, NegativeCycle};
-use crate::graph::path;
+use crate::graph::bellman_ford::{self, NegativeCycle2};
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
+use crate::graph::IntegerNodeIndex;
 use crate::num;
-use crate::MIN_AMOUNT;
-use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
+use petgraph::graph::{DiGraph, EdgeIndex};
 use petgraph::visit::NodeIndexable;
 use primitive_types::U256;
 use std::cmp;
 use std::f64;
 use thiserror::Error;
+
+/// The minimum amount where an order is considered a dust order and can be
+/// ignored in the orderbook graph calculation.
+const MIN_AMOUNT: f64 = 10_000.0;
+
+type OrderbookGraph = DiGraph<TokenId, f64>;
 
 /// A graph representation of a complete orderbook.
 #[derive(Clone, Debug)]
@@ -42,7 +47,7 @@ pub struct Orderbook {
     users: UserMap,
     /// A projection of the orderbook onto a graph with nodes as tokens and
     /// edges as the lowest order exchange rate between token pairs.
-    projection: DiGraph<TokenId, f64>,
+    projection: OrderbookGraph,
 }
 
 impl Orderbook {
@@ -108,34 +113,34 @@ impl Orderbook {
     /// this ring trade.
     pub fn is_overlapping(&self) -> bool {
         // NOTE: We detect negative cycles from each disconnected subgraph.
-        Subgraphs::new(self.projection.node_indices().skip(1))
-            .for_each_until(
-                |token| match bellman_ford::search(&self.projection, token) {
-                    Ok((_, predecessor)) => ControlFlow::Continue(predecessor),
-                    Err(NegativeCycle(..)) => ControlFlow::Break(true),
-                },
-            )
+        Subgraphs::new(&self.projection, self.projection.node_indices().skip(1))
+            .for_each_until(&self.projection, |token| {
+                match bellman_ford::search(&self.projection, self.projection.from_index(token), None) {
+                    Ok(shortest_path_graph) => ControlFlow::Continue(shortest_path_graph),
+                    Err(NegativeCycle2(..)) => ControlFlow::Break(true),
+                }
+            })
             .unwrap_or(false)
     }
 
     /// Reduces the orderbook by matching all overlapping ring trades.
     pub fn reduce_overlapping_orders(mut self) -> ReducedOrderbook {
-        Subgraphs::new(self.projection.node_indices()).for_each(|token| loop {
-            match bellman_ford::search(&self.projection, token) {
-                Ok((_, predecessors)) => break predecessors,
-                Err(NegativeCycle(predecessors, node)) => {
-                    let path = path::find_cycle(&predecessors, node, None)
-                        .expect("negative cycle not found after being detected");
-
-                    self.fill_path(&path).unwrap_or_else(|| {
-                        panic!(
-                            "failed to fill path along detected negative cycle {}",
-                            format_path(&path),
-                        )
-                    });
+        Subgraphs::new(&self.projection, self.projection.node_indices()).for_each(
+            &self.projection,
+            |token| loop {
+                match bellman_ford::search(&self.projection, self.projection.from_index(token), None) {
+                    Ok(shortest_path_graph) => break shortest_path_graph,
+                    Err(NegativeCycle2(cycle)) => {
+                        self.fill_path(&cycle.0).unwrap_or_else(|| {
+                            panic!(
+                                "failed to fill path along detected negative cycle {}",
+                                format_path(&cycle.0),
+                            )
+                        });
+                    }
                 }
-            }
-        });
+            },
+        );
 
         debug_assert!(!self.is_overlapping());
         ReducedOrderbook(self)
@@ -158,45 +163,39 @@ impl Orderbook {
 
         let (base, quote) = (node_index(market.base), node_index(market.quote));
 
-        while let Err(NegativeCycle(predecessors, node)) =
-            bellman_ford::search(&self.projection, quote)
-        {
-            let path = path::find_cycle(&predecessors, node, Some(quote))
-                .expect("negative cycle not found after being detected");
+        while let Err(NegativeCycle2(cycle)) = bellman_ford::search(&self.projection, quote, None) {
+            let cycle_without_path = match cycle.change_starting_node(quote) {
+                Ok(cycle) => {
+                    let base_index_search = cycle.0.iter().position(|node| *node == base);
+                    match base_index_search {
+                        Some(base_index) => {
+                            let (ask, bid) = (&cycle.0[0..base_index + 1], &cycle.0[base_index..]);
 
-            let base_index_search = if path.first() == Some(&quote) {
-                path.iter().position(|node| *node == base)
-            } else {
-                // NOTE: If the path doesn't start with the quote token, don't
-                // even need to search for the base token.
-                None
-            };
-            let base_index = match base_index_search {
-                Some(value) => value,
-                None => {
-                    // NOTE: Skip negative cycles that are not along the
-                    // specified market.
-                    self.fill_path(&path).unwrap_or_else(|| {
-                        panic!(
-                            "failed to fill path along detected negative cycle {}",
-                            format_path(&path),
-                        )
-                    });
+                            let ask = self
+                                .fill_path(ask)
+                                .expect("ask transitive path not found after being detected");
+                            let bid = self
+                                .fill_path(bid)
+                                .expect("bid transitive path not found after being detected");
 
-                    continue;
+                            return Some(Ring { ask, bid });
+                        }
+                        None => cycle,
+                    }
                 }
+                Err(cycle) => cycle,
             };
 
-            let (ask, bid) = (&path[0..base_index + 1], &path[base_index..]);
+            // NOTE: Skip negative cycles that are not along the
+            // specified market.
+            self.fill_path(&cycle_without_path.0).unwrap_or_else(|| {
+                panic!(
+                    "failed to fill path along detected negative cycle {}",
+                    format_path(&cycle_without_path.0),
+                )
+            });
 
-            let ask = self
-                .fill_path(ask)
-                .expect("ask transitive path not found after being detected");
-            let bid = self
-                .fill_path(bid)
-                .expect("bid transitive path not found after being detected");
-
-            return Some(Ring { ask, bid });
+            continue;
         }
 
         None
@@ -232,8 +231,8 @@ impl Orderbook {
         }
 
         let (start, end) = (node_index(pair.buy), node_index(pair.sell));
-        let predecessors = bellman_ford::search(&self.projection, start)?.1;
-        let path = match path::find_path(&predecessors, start, end) {
+        let shortest_path_graph = bellman_ford::search(&self.projection, start, None)?;
+        let path = match shortest_path_graph.find_path_to(end) {
             Some(path) => path,
             None => return Ok(None),
         };
@@ -312,7 +311,7 @@ impl Orderbook {
     ///
     /// Note that currently, user buy token balances are not incremented as a
     /// result of filling orders along a path.
-    fn fill_path(&mut self, path: &[NodeIndex]) -> Option<Flow> {
+    fn fill_path(&mut self, path: &[IntegerNodeIndex]) -> Option<Flow> {
         let flow = self.find_path_flow(path)?;
         self.fill_path_with_flow(path, flow).unwrap_or_else(|| {
             panic!(
@@ -326,7 +325,7 @@ impl Orderbook {
 
     /// Finds a transitive trade along a path and returns the corresponding flow
     /// for that path or `None` if the path doesn't exist.
-    fn find_path_flow(&self, path: &[NodeIndex]) -> Option<Flow> {
+    fn find_path_flow(&self, path: &[IntegerNodeIndex]) -> Option<Flow> {
         // NOTE: Capacity is expressed in the starting token, which is the buy
         // token for the transitive order along the specified path.
         let mut capacity = f64::INFINITY;
@@ -352,7 +351,7 @@ impl Orderbook {
     ///
     /// Note that currently, user buy token balances are not incremented as a
     /// result of filling orders along a path.
-    fn fill_path_with_flow(&mut self, path: &[NodeIndex], flow: Flow) -> Option<()> {
+    fn fill_path_with_flow(&mut self, path: &[IntegerNodeIndex], flow: Flow) -> Option<()> {
         let mut transitive_xrate = ExchangeRate::IDENTITY;
         for pair in pairs_on_path(path) {
             let (order, user) = self.best_order_with_user_for_pair_mut(pair)?;
@@ -414,17 +413,17 @@ impl Orderbook {
 }
 
 /// Create a node index from a token ID.
-fn node_index(token: TokenId) -> NodeIndex {
-    NodeIndex::new(token as _)
+fn node_index(token: TokenId) -> IntegerNodeIndex {
+    IntegerNodeIndex::new(token as _)
 }
 
 /// Create a token ID from a node index.
-fn token_id(node: NodeIndex) -> TokenId {
+fn token_id(node: IntegerNodeIndex) -> TokenId {
     node.index() as _
 }
 
 /// Returns an iterator with all pairs on a path.
-fn pairs_on_path(path: &[NodeIndex]) -> impl Iterator<Item = TokenPair> + '_ {
+fn pairs_on_path(path: &[IntegerNodeIndex]) -> impl Iterator<Item = TokenPair> + '_ {
     path.windows(2).map(|segment| TokenPair {
         buy: token_id(segment[0]),
         sell: token_id(segment[1]),
@@ -432,7 +431,7 @@ fn pairs_on_path(path: &[NodeIndex]) -> impl Iterator<Item = TokenPair> + '_ {
 }
 
 /// Formats a token path into a string.
-fn format_path(path: &[NodeIndex]) -> String {
+fn format_path(path: &[IntegerNodeIndex]) -> String {
     path.iter()
         .map(|segment| segment.index().to_string())
         .collect::<Vec<_>>()
@@ -453,10 +452,10 @@ fn is_dust_order(element: &Element) -> bool {
 /// orderbook.
 #[derive(Debug, Error)]
 #[error("invalid operation on an overlapping orderbook")]
-pub struct OverlapError(pub NegativeCycle<NodeIndex>);
+pub struct OverlapError(pub NegativeCycle2);
 
-impl From<NegativeCycle<NodeIndex>> for OverlapError {
-    fn from(cycle: NegativeCycle<NodeIndex>) -> Self {
+impl From<NegativeCycle2> for OverlapError {
+    fn from(cycle: NegativeCycle2) -> Self {
         OverlapError(cycle)
     }
 }

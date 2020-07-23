@@ -1,6 +1,5 @@
 use ethcontract::U256;
-use futures::future::{BoxFuture, FutureExt as _};
-use std::{future::Future, time::Duration};
+use std::future::Future;
 
 pub trait CeiledDiv {
     /// Panics on overflow.
@@ -57,15 +56,6 @@ where
         futures::executor::block_on(self)
     }
 }
-
-#[cfg_attr(test, mockall::automock)]
-pub trait AsyncSleeping: Send + Sync {
-    fn sleep(&self, duration: Duration) -> BoxFuture<'static, ()> {
-        async_std::task::sleep(duration).boxed()
-    }
-}
-pub struct AsyncSleep;
-impl AsyncSleeping for AsyncSleep {}
 
 #[cfg(test)]
 pub mod test_util {

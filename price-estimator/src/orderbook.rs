@@ -1,109 +1,53 @@
-use anyhow::Result;
-use core::{
-    models::{AccountState, BatchId, Order},
-    orderbook::StableXOrderBookReading,
-};
+use core::orderbook::StableXOrderBookReading;
 use pricegraph::Pricegraph;
+use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
-
-#[derive(Debug)]
-pub enum PricegraphKind {
-    // pricegraph instance with the original orders from the orderbook
-    Raw,
-    // pricegraph instance with the orders to which the rounding buffer has been applied
-    #[allow(dead_code)]
-    WithRoundingBuffer,
-}
-
-struct PricegraphCache {
-    pricegraph_raw: Pricegraph,
-    pricegraph_with_rounding_buffer: Pricegraph,
-}
 
 /// Access and update the pricegraph orderbook.
 pub struct Orderbook {
     orderbook_reading: Box<dyn StableXOrderBookReading>,
-    pricegraph_cache: RwLock<PricegraphCache>,
+    pricegraph: RwLock<Pricegraph>,
 }
 
 impl Orderbook {
     pub fn new(orderbook_reading: Box<dyn StableXOrderBookReading>) -> Self {
         Self {
             orderbook_reading,
-            pricegraph_cache: RwLock::new(PricegraphCache {
-                pricegraph_raw: Pricegraph::new(std::iter::empty()),
-                pricegraph_with_rounding_buffer: Pricegraph::new(std::iter::empty()),
-            }),
+            pricegraph: RwLock::new(Pricegraph::new(std::iter::empty())),
         }
     }
 
-    pub async fn pricegraph(
-        &self,
-        batch_id: Option<BatchId>,
-        pricegraph_type: PricegraphKind,
-    ) -> Result<Pricegraph> {
-        match batch_id {
-            Some(batch_id) => {
-                let mut auction_data = self.auction_data(batch_id).await?;
-                if matches!(pricegraph_type, PricegraphKind::WithRoundingBuffer) {
-                    self.apply_rounding_buffer_to_auction_data(&mut auction_data)
-                        .await;
-                }
-                Ok(pricegraph_from_auction_data(&auction_data))
-            }
-            None => Ok(self.cached_pricegraph(pricegraph_type).await),
-        }
-    }
-
-    /// Recreate the pricegraph orderbook.
-    pub async fn update(&self) -> Result<()> {
-        let mut auction_data = self.auction_data(BatchId::now()).await?;
-
-        // TODO: Move this cpu heavy computation out of the async function using spawn_blocking.
-        let pricegraph = pricegraph_from_auction_data(&auction_data);
-        self.pricegraph_cache
-            .write()
-            .await
-            .pricegraph_with_rounding_buffer = pricegraph;
-
-        self.apply_rounding_buffer_to_auction_data(&mut auction_data)
-            .await;
-        let pricegraph = pricegraph_from_auction_data(&auction_data);
-        self.pricegraph_cache
-            .write()
-            .await
-            .pricegraph_with_rounding_buffer = pricegraph;
-
-        Ok(())
-    }
-
-    async fn auction_data(&self, batch_id: BatchId) -> Result<AuctionData> {
-        self.orderbook_reading
-            .get_auction_data(batch_id.into())
-            .await
-    }
-
-    async fn apply_rounding_buffer_to_auction_data(&self, _auction_data: &mut AuctionData) {
-        // TODO
-    }
-
-    async fn cached_pricegraph(&self, pricegraph_type: PricegraphKind) -> Pricegraph {
-        let cache = self.pricegraph_cache.read().await;
-        match pricegraph_type {
-            PricegraphKind::Raw => &cache.pricegraph_raw,
-            PricegraphKind::WithRoundingBuffer => &cache.pricegraph_with_rounding_buffer,
-        }
-        .clone()
+    pub async fn get_pricegraph(&self) -> Pricegraph {
+        self.pricegraph.read().await.clone()
     }
 }
 
-type AuctionData = (AccountState, Vec<Order>);
+impl Orderbook {
+    /// Recreate the pricegraph orderbook.
+    pub async fn update(&self) -> anyhow::Result<()> {
+        let (account_state, orders) = self
+            .orderbook_reading
+            .get_auction_data(current_batch_id() as u32)
+            .await?;
 
-fn pricegraph_from_auction_data(auction_data: &AuctionData) -> Pricegraph {
-    Pricegraph::new(
-        auction_data
-            .1
-            .iter()
-            .map(|order| order.to_element_with_accounts(&auction_data.0)),
-    )
+        // TODO: Move this cpu heavy computation out of the async function using spawn_blocking.
+        let pricegraph = Pricegraph::new(
+            orders
+                .iter()
+                .map(|order| order.to_element_with_accounts(&account_state)),
+        );
+
+        *self.pricegraph.write().await = pricegraph;
+        Ok(())
+    }
+}
+
+/// Current batch id based on system time.
+fn current_batch_id() -> u64 {
+    const BATCH_DURATION: Duration = Duration::from_secs(300);
+    let now = SystemTime::now();
+    let time_since_epoch = now
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .expect("unix epoch is not in the past");
+    time_since_epoch.as_secs() / BATCH_DURATION.as_secs()
 }

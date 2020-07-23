@@ -7,7 +7,7 @@ mod test;
 mod api;
 mod encoding;
 mod graph;
-pub mod num;
+mod num;
 mod orderbook;
 
 pub use self::api::*;
@@ -16,10 +16,6 @@ pub use self::orderbook::*;
 
 /// The fee factor that is applied to each order's buy price.
 const FEE_FACTOR: f64 = 1.0 / 0.999;
-
-/// The minimum amount where an order is considered a dust order and cannot be
-/// traded.
-const MIN_AMOUNT: f64 = 10_000.0;
 
 /// API entry point for computing price estimates and transitive orderbooks for
 /// a give auction.

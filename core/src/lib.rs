@@ -1,6 +1,4 @@
-// Mockall triggers this warning for every mocked trait. This is fixed in Mockall master but not
-// released.
-#![cfg_attr(test, allow(clippy::unused_unit))]
+#![recursion_limit = "256"]
 
 #[macro_use]
 pub mod macros;
