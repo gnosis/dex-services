@@ -52,8 +52,8 @@ impl TokenBaseInfo {
     }
 
     /// One unit of the token taking decimals into account, given in number of atoms.
-    pub fn base_unit_in_atoms(&self) -> f64 {
-        10f64.powi(self.decimals as i32)
+    pub fn base_unit_in_atoms(&self) -> u128 {
+        10u128.pow(self.decimals as u32)
     }
 
     /// Converts the prices from USD into the unit expected by the contract.
@@ -102,8 +102,8 @@ mod tests {
     #[test]
     #[allow(clippy::float_cmp)]
     fn base_unit_in_atoms() {
-        assert_eq!(TokenBaseInfo::new("", 0).base_unit_in_atoms(), 1.0);
-        assert_eq!(TokenBaseInfo::new("", 1).base_unit_in_atoms(), 10.0);
-        assert_eq!(TokenBaseInfo::new("", 2).base_unit_in_atoms(), 100.0);
+        assert_eq!(TokenBaseInfo::new("", 0).base_unit_in_atoms(), 1);
+        assert_eq!(TokenBaseInfo::new("", 1).base_unit_in_atoms(), 10);
+        assert_eq!(TokenBaseInfo::new("", 2).base_unit_in_atoms(), 100);
     }
 }
