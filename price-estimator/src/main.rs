@@ -1,4 +1,3 @@
-mod error;
 mod filter;
 mod models;
 mod orderbook;

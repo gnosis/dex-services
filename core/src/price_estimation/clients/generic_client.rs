@@ -8,7 +8,8 @@ use futures::{
     lock::Mutex,
     stream::{self, StreamExt},
 };
-use std::{any, collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Provides a generic interface to communicate in a standardized way
 /// with specific API token implementations
@@ -104,14 +105,15 @@ where
             }
 
             let mut api_tokens_guard = self.api_tokens.lock().await;
-            let api_tokens: &Tokens<T> = match api_tokens_guard.as_ref() {
+            let api_tokens_option = &mut api_tokens_guard;
+            let api_tokens: &Tokens<T> = match api_tokens_option.as_ref() {
                 Some(api_tokens) => api_tokens,
                 None => {
                     let initialized = self
                         .create_api_tokens()
                         .await
                         .with_context(|| anyhow!("failed to perform lazy initialization"))?;
-                    api_tokens_guard.get_or_insert(initialized)
+                    api_tokens_option.get_or_insert(initialized)
                 }
             };
 
@@ -152,18 +154,9 @@ where
             Ok(tokens_
                 .iter()
                 .zip(results.iter())
-                .filter_map(|((token_id, token_info), result)| match result {
-                    Ok(price) => Some((*token_id, token_info.get_owl_price(*price))),
-                    Err(err) => {
-                        log::warn!(
-                            "failed to retrieve {} prices for token ID {} ({}): {:?}",
-                            any::type_name::<T>(),
-                            token_id,
-                            token_info.symbol(),
-                            err,
-                        );
-                        None
-                    }
+                .filter_map(|(token, result)| match result {
+                    Ok(price) => Some((token.0, token.1.get_owl_price(*price))),
+                    Err(_) => None,
                 })
                 .collect())
         }
@@ -174,6 +167,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::TokenId;
     use crate::token_info::hardcoded::{TokenData, TokenInfoOverride};
     use anyhow::anyhow;
     use lazy_static::lazy_static;

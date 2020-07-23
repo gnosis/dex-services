@@ -3,7 +3,7 @@
 
 pub use crate::metrics::HttpLabel;
 use crate::metrics::HttpMetrics;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use isahc::http::{Error as HttpError, Uri};
 use isahc::prelude::{Configurable, Request};
 use isahc::{HttpClientBuilder, ResponseExt};
@@ -104,8 +104,7 @@ impl HttpClient {
         let size = json.len();
         self.metrics.request(label, start.elapsed(), size);
 
-        let result = serde_json::from_str(&json)
-            .with_context(|| format!("failed to parse JSON '{}'", json))?;
+        let result = serde_json::from_str(&json)?;
         Ok(result)
     }
 }

@@ -2,7 +2,6 @@
 //! orderbook graph representation.
 
 use crate::encoding::PriceFraction;
-use crate::num;
 use crate::FEE_FACTOR;
 use std::cmp;
 use std::ops;
@@ -22,7 +21,7 @@ impl LimitPrice {
     /// Creates a new price from a `f64` value. Returns `None` if the price
     /// value is not valid. Specifically, it must be in the range `(0, +∞)`.
     pub fn new(value: f64) -> Option<Self> {
-        if num::is_strictly_positive_and_finite(value) {
+        if is_strictly_positive_and_finite(value) {
             Some(LimitPrice(value))
         } else {
             None
@@ -72,17 +71,6 @@ pub struct ExchangeRate(f64);
 impl ExchangeRate {
     /// The 1:1 exchange rate.
     pub const IDENTITY: ExchangeRate = ExchangeRate(1.0);
-
-    /// Creates a new exchange rate from a `f64` value. Returns `None` if the
-    /// exchange rate value is not valid. Specifically, it must be in the range
-    /// `(0, +∞)`.
-    pub fn new(value: f64) -> Option<Self> {
-        if num::is_strictly_positive_and_finite(value) {
-            Some(ExchangeRate(value))
-        } else {
-            None
-        }
-    }
 
     /// Gets the value as a `f64`.
     pub fn value(self) -> f64 {
@@ -158,10 +146,14 @@ impl_binop! {
     * => { Mul::mul, MulAssign::mul_assign }
 }
 
+fn is_strictly_positive_and_finite(value: f64) -> bool {
+    value > 0.0 && value < f64::INFINITY
+}
+
 /// Internal method for asserting values are strictly positive and finite. This
 /// is used in debug builds to ensure assumptions about price and exchange rate
 /// operations hold. In release mode, this method does nothing.
 fn assert_strictly_positive_and_finite(value: f64) -> f64 {
-    debug_assert!(num::is_strictly_positive_and_finite(value));
+    debug_assert!(is_strictly_positive_and_finite(value));
     value
 }

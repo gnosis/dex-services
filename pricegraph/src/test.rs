@@ -32,7 +32,7 @@ macro_rules! orderbook {
             (u8, $crate::encoding::TokenId), $crate::encoding::U256,
         >::new();
         $($(
-            balances.insert(($user, $token), $crate::U256::from($balance as u128));
+            balances.insert(($user, $token), $crate::U256::from($balance));
         )*)*
         #[allow(unused_mut, unused_variables)]
         let mut users = std::collections::HashMap::<

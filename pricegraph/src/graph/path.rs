@@ -1,66 +1,9 @@
 //! Utilities for finding paths from predecessor vectors.
 
 use petgraph::graph::NodeIndex;
-
-/// Finds a cycle by searching from the provided `search` node and returns a
-/// vector representing a path along the cycle. This method returns a path,
-/// which means that the first and last nodes will always be the same.
-///
-/// Optionally, an `origin` node can be provided so that the first element of
-/// the cycle vector is `origin` if and only if `origin` is part of the cycle.
-///
-/// Returns `None` if no cycle can be found.
-pub fn find_cycle(
-    predecessor: &[Option<NodeIndex>],
-    search: NodeIndex,
-    origin: Option<NodeIndex>,
-) -> Option<Vec<NodeIndex>> {
-    // NOTE: First find a node that is actually on the cycle, this is done
-    // because a negative cycle can be detected on any node connected to the
-    // cycle and not just nodes on the cycle itself.
-    let mut visited = vec![0; predecessor.len()];
-    let mut cursor = search;
-    let mut step = 1;
-    visited[cursor.index()] = step;
-    loop {
-        cursor = predecessor[cursor.index()]?;
-        if visited[cursor.index()] > 0 {
-            break;
-        }
-        step += 1;
-        visited[cursor.index()] = step;
-    }
-
-    // NOTE: Allocate the cycle vector with enough capacity for the negative
-    // cycle path, that is the length of the negative cycle plus one (which is
-    // used by the final segment of the path to return to the starting node).
-    let len = step + 1 - visited[cursor.index()];
-    let mut path = Vec::with_capacity(len + 1);
-
-    // NOTE: `cursor` is now guaranteed to be on the cycle. Furthermore, if
-    // `origin` was visited after `cursor`, then it is on the cycle as well.
-    let start = match origin {
-        Some(origin) if visited[origin.index()] > visited[cursor.index()] => origin,
-        _ => cursor,
-    };
-
-    // NOTE: Now we have found the cycle starting at `start`, walk backwards
-    // until we reach the `start` node again.
-    let mut cursor = start;
-    path.push(cursor);
-    loop {
-        cursor = predecessor[cursor.index()]?;
-        path.push(cursor);
-        if cursor == start {
-            break;
-        }
-    }
-
-    // NOTE: `path` is in reverse order, since it was built by walking the cycle
-    // backwards, so reverse it and done!
-    path.reverse();
-    Some(path)
-}
+use petgraph::visit::NodeIndexable;
+use std::collections::HashMap;
+use std::hash::Hash;
 
 /// Finds a path between two tokens. Returns `None` if no such path exists.
 pub fn find_path(
@@ -85,7 +28,7 @@ pub fn find_path(
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
+    //use super::*;
     use crate::graph::bellman_ford::{self, NegativeCycle};
     use petgraph::Graph;
 
@@ -102,17 +45,20 @@ pub mod tests {
             (4, 3, 200.0),
         ]);
 
-        let NegativeCycle(predecessor, node) = bellman_ford::search(&graph, 0.into()).unwrap_err();
+        let search_result = bellman_ford::search(&graph, 0.into(), None);
+        let cycle = match search_result {
+            Err(NegativeCycle(cycle)) => cycle,
+            _ => panic!("Negative cycle not found"),
+        };
 
-        let cycle = find_cycle(&predecessor, node, None).unwrap();
         assert_eq!(cycle, &[1.into(), 2.into(), 3.into(), 1.into()]);
 
-        let cycle = find_cycle(&predecessor, node, Some(2.into())).unwrap();
+        let cycle = cycle.change_starting_node(2.into()).unwrap();
         assert_eq!(cycle, &[2.into(), 3.into(), 1.into(), 2.into()]);
 
         // NOTE: if `origin` is provided, but not part of the cycle, then the
         // first node in the vector cycle can be any node.
-        let cycle = find_cycle(&predecessor, node, Some(4.into())).unwrap();
+        let cycle = cycle.change_starting_node(4.into()).unwrap_err();
         assert_eq!(cycle, &[1.into(), 2.into(), 3.into(), 1.into()]);
     }
 
@@ -137,8 +83,8 @@ pub mod tests {
             (3, 4, 1.0),
         ]);
 
-        let (_, predecessor) = bellman_ford::search(&graph, 0.into()).unwrap();
-        let path = find_path(&predecessor, 0.into(), 5.into()).unwrap();
+        let shortest_path_graph = bellman_ford::search(&graph, 0.into(), None).unwrap();
+        let path = shortest_path_graph.find_path_to(5.into()).unwrap();
 
         assert_eq!(path, &[0.into(), 3.into(), 4.into(), 5.into()]);
     }
