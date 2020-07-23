@@ -1,7 +1,7 @@
 use anyhow::Result;
 use core::{history::Settlement, models::BatchId};
 use e2e::cmd;
-use pricegraph::{Element, Pricegraph, TokenPair};
+use pricegraph::{Element, Pricegraph};
 use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
 
@@ -26,7 +26,7 @@ fn main() -> Result<()> {
     let options = Options::from_args();
 
     let mut spreads = File::create(&options.output_dir.join("spreads.csv"))?;
-    writeln!(&mut spreads, "batch,market,best_bid,price,best_ask")?;
+    writeln!(&mut spreads, "batch,token,price,estimate")?;
 
     cmd::for_each_batch(&options.orderbook_file, |history, batch| {
         let settlement = match history.settlement_for_batch(batch) {
@@ -35,13 +35,13 @@ fn main() -> Result<()> {
         };
 
         let auction_elements = history.auction_elements_for_batch(batch)?;
-        check_batch_spread(batch, &auction_elements, &settlement, &mut spreads)?;
+        check_batch_prices(batch, &auction_elements, &settlement, &mut spreads)?;
 
         Ok(())
     })
 }
 
-fn check_batch_spread(
+fn check_batch_prices(
     batch: BatchId,
     auction_elements: &[Element],
     settlement: &Settlement,
@@ -56,40 +56,17 @@ fn check_batch_spread(
     );
 
     let pricegraph = Pricegraph::new(auction_elements.iter().cloned());
-    for (i, j) in unique_pairs(token_ids.len()) {
-        let (buy_token, sell_token) = (token_ids[i], token_ids[j]);
+    for (token_index, token) in token_ids
+        .iter()
+        .copied()
+        .enumerate()
+        .filter(|(_, token)| *token != 0)
+    {
+        let price = prices[token_index];
+        let estimate = pricegraph.estimate_token_price(token).unwrap_or(0.0) as u128;
 
-        let best_bid = pricegraph
-            .estimate_limit_price(
-                TokenPair {
-                    buy: sell_token,
-                    sell: buy_token,
-                },
-                0.0,
-            )
-            .unwrap_or(0.0);
-        let price = prices[i] as f64 / prices[j] as f64;
-        let best_ask = pricegraph
-            .estimate_limit_price(
-                TokenPair {
-                    buy: buy_token,
-                    sell: sell_token,
-                },
-                0.0,
-            )
-            .map(|xrate| 1.0 / xrate)
-            .unwrap_or(f64::INFINITY);
-
-        writeln!(
-            &mut output,
-            "{},{}-{},{},{},{}",
-            batch, buy_token, sell_token, best_bid, price, best_ask
-        )?;
+        writeln!(&mut output, "{},{},{},{}", batch, token, price, estimate)?;
     }
 
     Ok(())
-}
-
-fn unique_pairs(len: usize) -> impl Iterator<Item = (usize, usize)> {
-    (0..len - 1).flat_map(move |i| (i + 1..len).map(move |j| (i, j)))
 }

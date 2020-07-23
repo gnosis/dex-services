@@ -3,7 +3,7 @@ use crate::models::{BatchId, TokenId};
 use crate::orderbook::StableXOrderBookReading;
 use anyhow::Result;
 use futures::future::{BoxFuture, FutureExt as _};
-use pricegraph::{Pricegraph, TokenPair};
+use pricegraph::Pricegraph;
 use std::collections::HashMap;
 use std::num::NonZeroU128;
 use std::sync::Arc;
@@ -18,8 +18,6 @@ impl PricegraphEstimator {
         Self { orderbook_reader }
     }
 }
-
-const ONE_OWL: f64 = 1_000_000_000_000_000_000.0;
 
 impl PriceSource for PricegraphEstimator {
     fn get_prices<'a>(
@@ -39,8 +37,8 @@ impl PriceSource for PricegraphEstimator {
     }
 }
 
-use inner::LimitPriceEstimating;
-impl<T: LimitPriceEstimating> PriceSource for T {
+use inner::TokenPriceEstimating;
+impl<T: TokenPriceEstimating> PriceSource for T {
     fn get_prices<'a>(
         &'a self,
         tokens: &'a [TokenId],
@@ -48,24 +46,8 @@ impl<T: LimitPriceEstimating> PriceSource for T {
         let result = tokens
             .iter()
             .flat_map(|token| {
-                let price_in_token = if token == &TokenId::reference() {
-                    1.0
-                } else {
-                    // Estimate price by selling 1 unit of the reference token for each token.
-                    // We sell rather than buy the reference token because volume is denominated
-                    // in the sell token, for which we know the number of decimals.
-                    let pair = TokenPair {
-                        buy: token.0,
-                        sell: TokenId::reference().0,
-                    };
-                    self.estimate_limit_price(pair, ONE_OWL)?
-                };
-                let price_in_reference = 1.0 / price_in_token;
-                log::debug!("Fetched price for token {}: {}", token, price_in_reference);
-                Some((
-                    *token,
-                    NonZeroU128::new((ONE_OWL * price_in_reference) as u128)?,
-                ))
+                let price_in_reference = self.estimate_token_price(*token)?;
+                Some((*token, NonZeroU128::new(price_in_reference as _)?))
             })
             .collect();
         immediate!(Ok(result))
@@ -76,37 +58,40 @@ impl<T: LimitPriceEstimating> PriceSource for T {
 /// itself has to be public (`rustc --explain E0445`) but there is no reason for anyone else to
 /// implement it.
 mod inner {
-    use pricegraph::{Pricegraph, TokenPair};
+    use super::{Pricegraph, TokenId};
 
     #[cfg_attr(test, mockall::automock)]
-    pub trait LimitPriceEstimating {
-        fn estimate_limit_price(&self, pair: TokenPair, sell_amount: f64) -> Option<f64>;
+    pub trait TokenPriceEstimating {
+        fn estimate_token_price(&self, token: TokenId) -> Option<f64>;
     }
 
-    impl LimitPriceEstimating for Pricegraph {
-        fn estimate_limit_price(&self, pair: TokenPair, sell_amount: f64) -> Option<f64> {
-            self.estimate_limit_price(pair, sell_amount)
+    impl TokenPriceEstimating for Pricegraph {
+        fn estimate_token_price(&self, token: TokenId) -> Option<f64> {
+            let estimate = self.estimate_token_price(token.0)?;
+            Some(estimate)
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::inner::MockTokenPriceEstimating;
     use super::*;
-    use inner::MockLimitPriceEstimating;
     use mockall::predicate::eq;
+
+    const ONE_OWL: f64 = 1_000_000_000_000_000_000.0;
 
     #[test]
     fn returns_buy_amounts_of_selling_one_owl() {
-        let mut pricegraph = MockLimitPriceEstimating::new();
+        let mut pricegraph = MockTokenPriceEstimating::new();
         pricegraph
-            .expect_estimate_limit_price()
-            .with(eq(TokenPair { buy: 1, sell: 0 }), eq(ONE_OWL))
-            .return_const(2.0);
+            .expect_estimate_token_price()
+            .with(eq(TokenId(1)))
+            .return_const(0.5 * ONE_OWL);
         pricegraph
-            .expect_estimate_limit_price()
-            .with(eq(TokenPair { buy: 2, sell: 0 }), eq(ONE_OWL))
-            .return_const(0.5);
+            .expect_estimate_token_price()
+            .with(eq(TokenId(2)))
+            .return_const(2.0 * ONE_OWL);
 
         let result = pricegraph
             .get_prices(&[1.into(), 2.into()])
@@ -122,14 +107,14 @@ mod tests {
 
     #[test]
     fn omits_tokens_for_which_estimate_fails() {
-        let mut pricegraph = MockLimitPriceEstimating::new();
+        let mut pricegraph = MockTokenPriceEstimating::new();
         pricegraph
-            .expect_estimate_limit_price()
-            .with(eq(TokenPair { buy: 1, sell: 0 }), eq(ONE_OWL))
-            .return_const(0.5);
+            .expect_estimate_token_price()
+            .with(eq(TokenId(1)))
+            .return_const(0.5 * ONE_OWL);
         pricegraph
-            .expect_estimate_limit_price()
-            .with(eq(TokenPair { buy: 2, sell: 0 }), eq(ONE_OWL))
+            .expect_estimate_token_price()
+            .with(eq(TokenId(2)))
             .return_const(None);
 
         let result = pricegraph
@@ -137,13 +122,13 @@ mod tests {
             .now_or_never()
             .unwrap()
             .unwrap();
-        let expected = hash_map! { TokenId(1) => nonzero!(2_000_000_000_000_000_000) };
+        let expected = hash_map! { TokenId(1) => nonzero!(500_000_000_000_000_000) };
         assert_eq!(result, expected);
     }
 
     #[test]
     fn returns_one_owl_for_estimating_owl() {
-        let pricegraph = MockLimitPriceEstimating::new();
+        let pricegraph = MockTokenPriceEstimating::new();
 
         let result = pricegraph
             .get_prices(&[0.into()])
