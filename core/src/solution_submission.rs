@@ -139,21 +139,6 @@ impl<'a> StableXSolutionSubmitter<'a> {
         solution: Solution,
         err: MethodError,
     ) -> SolutionSubmissionError {
-        // There is a race condition that will be fixed in a future PR that results in this
-        // error when there was actually no problem. In that PR we will remove this code.
-        match &err.inner {
-            ExecutionError::Web3(Web3Error::Rpc(RpcError { code, message, .. }))
-                if code.code() == -32010
-                    && message.find("Transaction nonce is too low.").is_some() =>
-            {
-                return SolutionSubmissionError::Benign(format!(
-                    "Likely benign nonce error: {:?}",
-                    err
-                ));
-            }
-            _ => (),
-        }
-
         if let Some(tx) = extract_transaction_receipt(&err) {
             if let Some(block_number) = tx.block_number {
                 if let Err(err) = self
@@ -599,7 +584,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    fn nonce_error() -> ExecutionError {
+    pub fn nonce_error() -> ExecutionError {
         ExecutionError::Web3(Web3Error::Rpc(RpcError {
             code: ethcontract::jsonrpc::types::ErrorCode::ServerError(-32010),
             message: "Transaction nonce is too low.".to_string(),
