@@ -5,6 +5,7 @@
 #[macro_use]
 pub mod macros;
 
+pub mod bigint_u256;
 pub mod contracts;
 pub mod driver;
 pub mod gas_station;

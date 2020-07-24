@@ -10,6 +10,14 @@ pub fn bigint_to_u256(n: &BigInt) -> Option<U256> {
     }
 }
 
+pub fn bigint_to_u256_saturating(n: &BigInt) -> U256 {
+    match n.to_bytes_le() {
+        (Sign::NoSign, _) | (Sign::Minus, _) => U256::zero(),
+        (Sign::Plus, bytes) if bytes.len() <= 256 / 8 => U256::from_little_endian(&bytes),
+        (Sign::Plus, _) => U256::max_value(),
+    }
+}
+
 pub fn u256_to_biguint(n: U256) -> BigUint {
     let mut bytes = [0u8; 256 / 8];
     n.to_little_endian(&mut bytes);

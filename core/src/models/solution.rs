@@ -1,4 +1,6 @@
-use ethcontract::Address;
+use crate::bigint_u256;
+use ethcontract::{Address, U256};
+use num::{BigInt, Zero as _};
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -29,6 +31,19 @@ impl Solution {
         self.executed_orders
             .iter()
             .any(|order| order.sell_amount > 0)
+    }
+
+    pub fn burnt_fees(&self) -> U256 {
+        // We expect that only the fee token has an imbalance so by calculating the total imbalance
+        // this must be equal to the fee token imbalance. This allows us to calculate the burnt fees
+        // without accessing the orderbook solely based on the solution.
+        let mut token_imbalance = BigInt::zero();
+        for executed_order in self.executed_orders.iter() {
+            token_imbalance += executed_order.sell_amount;
+            token_imbalance -= executed_order.buy_amount;
+        }
+        token_imbalance /= 2;
+        bigint_u256::bigint_to_u256_saturating(&token_imbalance)
     }
 }
 
@@ -90,5 +105,33 @@ pub mod tests {
     fn test_max_token() {
         assert_eq!(generic_non_trivial_solution().max_token().unwrap(), 2);
         assert_eq!(Solution::trivial().max_token(), None);
+    }
+
+    #[test]
+    fn burnt_fees_is_half_total_token_imbalance() {
+        let solution = Solution {
+            prices: HashMap::new(),
+            executed_orders: vec![
+                ExecutedOrder {
+                    account_id: Address::zero(),
+                    order_id: 0,
+                    sell_amount: 2,
+                    buy_amount: 1,
+                },
+                ExecutedOrder {
+                    account_id: Address::zero(),
+                    order_id: 1,
+                    sell_amount: 4,
+                    buy_amount: 3,
+                },
+                ExecutedOrder {
+                    account_id: Address::zero(),
+                    order_id: 2,
+                    sell_amount: 6,
+                    buy_amount: 4,
+                },
+            ],
+        };
+        assert_eq!(solution.burnt_fees(), U256::from(2));
     }
 }

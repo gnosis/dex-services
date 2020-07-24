@@ -1,12 +1,20 @@
-use crate::metrics::StableXMetrics;
-use crate::models::{account_state::AccountState, order::Order, Solution};
-use crate::orderbook::StableXOrderBookReading;
-use crate::price_finding::PriceFinding;
-use crate::solution_submission::{SolutionSubmissionError, StableXSolutionSubmitting};
+use crate::{
+    metrics::StableXMetrics,
+    models::{account_state::AccountState, order::Order, Solution},
+    orderbook::StableXOrderBookReading,
+    price_finding::PriceFinding,
+    solution_submission::{SolutionSubmissionError, StableXSolutionSubmitting},
+};
 use anyhow::{Error, Result};
+use ethcontract::U256;
 use futures::future::{BoxFuture, FutureExt as _};
 use log::{info, warn};
 use std::time::{Duration, Instant};
+
+// This is approximate. Depends on reversion of previous solution.
+const GAS_PER_TRADE: f64 = 120_000.0;
+// Will be removed in a future PR where we are going to fetch the current price.
+const PRICE_OF_ETHER_IN_OWL: f64 = 200.0;
 
 #[derive(Debug)]
 pub enum DriverResult {
@@ -27,6 +35,7 @@ pub struct StableXDriverImpl<'a> {
     orderbook_reader: &'a (dyn StableXOrderBookReading),
     solution_submitter: &'a (dyn StableXSolutionSubmitting + Sync),
     metrics: &'a StableXMetrics,
+    gas_price_cap_subsidy_factor: f64,
 }
 
 impl<'a> StableXDriverImpl<'a> {
@@ -35,12 +44,14 @@ impl<'a> StableXDriverImpl<'a> {
         orderbook_reader: &'a (dyn StableXOrderBookReading),
         solution_submitter: &'a (dyn StableXSolutionSubmitting + Sync),
         metrics: &'a StableXMetrics,
+        gas_price_cap_subsidy_factor: f64,
     ) -> Self {
         Self {
             price_finder,
             orderbook_reader,
             solution_submitter,
             metrics,
+            gas_price_cap_subsidy_factor,
         }
     }
 
@@ -118,9 +129,16 @@ impl<'a> StableXDriverImpl<'a> {
         };
 
         let submitted = if let Some(objective_value) = verified {
+            let fee = solution.burnt_fees();
+            let num_trades = solution.executed_orders.len();
+            let gas_price_cap = gas_price_cap(fee, num_trades, self.gas_price_cap_subsidy_factor);
+            info!(
+                "Using gas price cap {} based on num_trades {} and fee {}",
+                gas_price_cap, fee, num_trades
+            );
             let submission_result = self
                 .solution_submitter
-                .submit_solution(batch_to_solve, solution, objective_value)
+                .submit_solution(batch_to_solve, solution, objective_value, gas_price_cap)
                 .await;
             self.metrics
                 .auction_solution_submitted(batch_to_solve, &submission_result);
@@ -189,6 +207,16 @@ impl<'a> StableXDriver for StableXDriverImpl<'a> {
     }
 }
 
+/// The gas price cap is selected so that submitting solution is still roughly profitable.
+fn gas_price_cap(burnt_fees: U256, num_trades: usize, subsidy_factor: f64) -> U256 {
+    // The previous two values are approximations and we do not need to be economically viable at
+    // this point in time. So be more lenient with respect go gas prices.
+    let burnt_fees = pricegraph::num::u256_to_f64(burnt_fees);
+    let gas_use = GAS_PER_TRADE * (num_trades as f64);
+    let result = (burnt_fees / (PRICE_OF_ETHER_IN_OWL * gas_use)) * subsidy_factor;
+    U256::from(result as u128)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -254,8 +282,8 @@ mod tests {
 
         submitter
             .expect_submit_solution()
-            .with(eq(batch), always(), eq(U256::from(1337)))
-            .returning(|_, _, _| async { Ok(()) }.boxed());
+            .with(eq(batch), always(), eq(U256::from(1337)), always())
+            .returning(|_, _, _, _| async { Ok(()) }.boxed());
 
         let solution = Solution {
             prices: map_from_slice(&[(0, 1), (1, 2)]),
@@ -268,7 +296,7 @@ mod tests {
             .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
             .return_once(move |_, _, _| async { Ok(solution) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
         assert!(driver
             .run(batch, time_limit)
             .now_or_never()
@@ -287,7 +315,7 @@ mod tests {
             .expect_get_auction_data()
             .returning(|_| async { Err(anyhow!("Error")) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
 
         assert!(driver
             .run(42, Duration::default())
@@ -324,13 +352,13 @@ mod tests {
 
         submitter
             .expect_submit_solution()
-            .with(eq(batch), always(), eq(U256::from(1337)))
-            .returning(|_, _, _| async { Ok(()) }.boxed());
+            .with(eq(batch), always(), eq(U256::from(1337)), always())
+            .returning(|_, _, _, _| async { Ok(()) }.boxed());
 
         pf.expect_find_prices()
             .returning(|_, _, _| async { Err(anyhow!("Error")) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
 
         assert!(driver
             .run(batch, time_limit)
@@ -357,7 +385,7 @@ mod tests {
             .with(eq(batch))
             .return_once(move |_| async { Ok((state, orders)) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
         assert!(driver
             .run(batch, time_limit)
             .now_or_never()
@@ -393,7 +421,7 @@ mod tests {
 
         submitter.expect_submit_solution().times(0);
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
         assert!(driver
             .run(batch, time_limit)
             .now_or_never()
@@ -446,7 +474,7 @@ mod tests {
             .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
             .return_once(move |_, _, _| async { Ok(solution) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
         assert!(driver
             .run(batch, time_limit)
             .now_or_never()
@@ -494,7 +522,7 @@ mod tests {
             .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
             .return_once(move |_, _, _| async { Ok(solution) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
         assert!(driver
             .run(batch, time_limit)
             .now_or_never()
@@ -529,8 +557,8 @@ mod tests {
             .returning(|_, _| async { Ok(42.into()) }.boxed());
         submitter
             .expect_submit_solution()
-            .with(eq(batch), always(), eq(U256::from(42)))
-            .returning(|_, _, _| {
+            .with(eq(batch), always(), eq(U256::from(42)), always())
+            .returning(|_, _, _, _| {
                 async { Err(SolutionSubmissionError::Benign("Benign Error".to_owned())) }.boxed()
             });
 
@@ -545,7 +573,7 @@ mod tests {
             .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
             .return_once(move |_, _, _| async { Ok(solution) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
         assert!(driver
             .run(batch, time_limit)
             .now_or_never()
@@ -579,11 +607,21 @@ mod tests {
                 async { Ok((state, orders)) }.boxed()
             });
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
         assert!(driver
             .run(batch, time_limit)
             .now_or_never()
             .unwrap()
             .is_ok());
+    }
+
+    #[test]
+    fn gas_price_cap_example() {
+        assert_eq!(
+            // 50 owl fee
+            gas_price_cap(U256::from(50e18 as u128), 3, 1.0),
+            // ~700 gwei
+            U256::from(694_444_444_444u128)
+        );
     }
 }
