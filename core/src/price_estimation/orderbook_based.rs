@@ -125,17 +125,4 @@ mod tests {
         let expected = hash_map! { TokenId(1) => nonzero!(500_000_000_000_000_000) };
         assert_eq!(result, expected);
     }
-
-    #[test]
-    fn returns_one_owl_for_estimating_owl() {
-        let pricegraph = MockTokenPriceEstimating::new();
-
-        let result = pricegraph
-            .get_prices(&[0.into()])
-            .now_or_never()
-            .unwrap()
-            .unwrap();
-        let expected = hash_map! { TokenId(0) => nonzero!(1_000_000_000_000_000_000) };
-        assert_eq!(result, expected);
-    }
 }
