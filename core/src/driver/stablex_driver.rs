@@ -134,7 +134,7 @@ impl<'a> StableXDriverImpl<'a> {
             let gas_price_cap = gas_price_cap(fee, num_trades, self.gas_price_cap_subsidy_factor);
             info!(
                 "Using gas price cap {} based on num_trades {} and fee {}",
-                gas_price_cap, fee, num_trades
+                gas_price_cap, num_trades, fee
             );
             let submission_result = self
                 .solution_submitter
