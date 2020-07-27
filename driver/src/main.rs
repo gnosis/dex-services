@@ -252,6 +252,7 @@ fn main() {
         options.token_data,
         options.price_source_update_interval,
     )
+    .wait()
     .unwrap();
 
     // Setup price.

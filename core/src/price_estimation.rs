@@ -50,7 +50,7 @@ pub struct PriceOracle {
 
 impl PriceOracle {
     /// Creates a new price oracle from a token whitelist data.
-    pub fn new(
+    pub async fn new(
         http_factory: &HttpFactory,
         orderbook_reader: Arc<dyn StableXOrderBookReading>,
         contract: Arc<StableXContractImpl>,
@@ -61,6 +61,7 @@ impl PriceOracle {
             contract,
             token_data.clone().into(),
         ));
+        token_info_fetcher.cache_all(10).await?;
         let (kraken_source, _) = ThreadedPriceSource::new(
             token_info_fetcher.clone(),
             KrakenClient::new(http_factory, token_info_fetcher.clone())?,
