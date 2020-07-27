@@ -1,9 +1,9 @@
-use crate::models::{self, TokenId, TokenInfo};
-use crate::price_estimation::PriceEstimating;
-use crate::price_finding::price_finder_interface::{
-    Fee, InternalOptimizer, PriceFinding, SolverType,
+use crate::{
+    gas_station::GasPriceEstimating,
+    models::{self, TokenId, TokenInfo},
+    price_estimation::PriceEstimating,
+    price_finding::price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
 };
-
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use ethcontract::U256;
@@ -193,8 +193,10 @@ pub struct OptimisationPriceFinder {
     io_methods: Arc<dyn Io + Send + Sync>,
     fee: Option<Fee>,
     solver_type: SolverType,
-    price_oracle: Box<dyn PriceEstimating + Sync>,
-    min_avg_fee_per_order: u128,
+    price_oracle: Box<dyn PriceEstimating + Send + Sync>,
+    gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
+    min_avg_fee_subsidy_factor: f64,
+    default_min_avg_fee_per_order: u128,
     internal_optimizer: InternalOptimizer,
 }
 
@@ -202,8 +204,10 @@ impl OptimisationPriceFinder {
     pub fn new(
         fee: Option<Fee>,
         solver_type: SolverType,
-        price_oracle: impl PriceEstimating + Sync + 'static,
-        min_avg_fee_per_order: u128,
+        price_oracle: impl PriceEstimating + Send + Sync + 'static,
+        gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
+        min_avg_fee_subsidy_factor: f64,
+        default_min_avg_fee_per_order: u128,
         internal_optimizer: InternalOptimizer,
     ) -> Self {
         OptimisationPriceFinder {
@@ -211,9 +215,31 @@ impl OptimisationPriceFinder {
             fee,
             solver_type,
             price_oracle: Box::new(price_oracle),
-            min_avg_fee_per_order,
+            gas_station,
+            min_avg_fee_subsidy_factor,
+            default_min_avg_fee_per_order,
             internal_optimizer,
         }
+    }
+
+    async fn compute_min_average_fee_per_order(&self) -> u128 {
+        let eth_owl_xrate = match self.price_oracle.get_eth_price().await {
+            Some(owl_price) => 10f64.powi(18) / (owl_price as f64),
+            None => {
+                log::warn!("failed to find ETH price estimate");
+                return self.default_min_avg_fee_per_order;
+            }
+        };
+        let gas_estimate = match self.gas_station.estimate_gas_price().await {
+            Ok(gas) => pricegraph::num::u256_to_f64(gas.fast),
+            Err(err) => {
+                log::warn!("failed to estimate gas {:?}", err);
+                return self.default_min_avg_fee_per_order;
+            }
+        };
+
+        let min_avg_fee = (gas_estimate * eth_owl_xrate) / self.min_avg_fee_subsidy_factor;
+        min_avg_fee as _
     }
 }
 
@@ -279,7 +305,7 @@ impl PriceFinding for OptimisationPriceFinder {
             // `blocking::unblock` requires the closure to be 'static.
             let io_methods = self.io_methods.clone();
             let solver_type = self.solver_type;
-            let min_avg_fee_per_order = self.min_avg_fee_per_order;
+            let min_avg_fee_per_order = self.compute_min_average_fee_per_order().await;
             let internal_optimizer = self.internal_optimizer;
             let result = blocking::unblock!(io_methods.run_solver(
                 &input_file,
@@ -362,13 +388,16 @@ impl Io for DefaultIo {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::models::AccountState;
-    use crate::price_estimation::MockPriceEstimating;
-    use crate::util::test_util::map_from_slice;
-    use crate::util::FutureWaitExt as _;
+    use crate::{
+        gas_station::{GasPrice, MockGasPriceEstimating},
+        models::AccountState,
+        price_estimation::MockPriceEstimating,
+        util::test_util::map_from_slice,
+        util::FutureWaitExt as _,
+    };
     use ethcontract::Address;
     use serde_json::json;
-    use std::collections::BTreeMap;
+    use std::{collections::BTreeMap, sync::Arc};
 
     #[test]
     fn token_id_serialization() {
@@ -630,6 +659,13 @@ pub mod tests {
                 }
                 .boxed()
             });
+        let mut gas_station = MockGasPriceEstimating::new();
+        gas_station.expect_estimate_gas_price().returning(|| {
+            immediate!(Ok(GasPrice {
+                fast: 42_000_000_000u128.into(),
+                ..Default::default()
+            }))
+        });
 
         let mut io_methods = MockIo::new();
         io_methods
@@ -647,9 +683,11 @@ pub mod tests {
         let solver = OptimisationPriceFinder {
             io_methods: Arc::new(io_methods),
             fee: Some(fee),
-            min_avg_fee_per_order: 0,
+            default_min_avg_fee_per_order: 0,
+            min_avg_fee_subsidy_factor: 10.0,
             solver_type: SolverType::StandardSolver,
             price_oracle: Box::new(price_oracle),
+            gas_station: Arc::new(gas_station),
             internal_optimizer: InternalOptimizer::Scip,
         };
         let orders = vec![];

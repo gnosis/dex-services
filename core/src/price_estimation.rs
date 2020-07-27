@@ -38,7 +38,14 @@ type Tokens = BTreeMap<TokenId, Option<TokenInfo>>;
 /// tokens included in the current orderbook.
 #[cfg_attr(test, mockall::automock)]
 pub trait PriceEstimating {
+    /// Retrieves price estimates for all token in the specified orders on a
+    /// best-effort basis. Critically, it is not considered an error to not be
+    /// able to retrieve a price estimate for a given token.
     fn get_token_prices<'a>(&'a self, orders: &[Order]) -> BoxFuture<'a, Tokens>;
+
+    /// Retrieves a price estimate for ETH in OWL.
+    #[allow(clippy::needless_lifetimes)]
+    fn get_eth_price<'a>(&'a self) -> BoxFuture<'a, Option<u128>>;
 }
 
 pub struct PriceOracle {
@@ -141,6 +148,11 @@ impl PriceEstimating for PriceOracle {
             tokens
         }
         .boxed()
+    }
+
+    fn get_eth_price(&self) -> BoxFuture<'_, Option<u128>> {
+        // TODO: Implement ETH price estimation.
+        immediate!(None)
     }
 }
 
