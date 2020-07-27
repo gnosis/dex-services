@@ -9,6 +9,7 @@ use futures::future::{BoxFuture, FutureExt};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::iter::FromIterator;
+use std::num::NonZeroU128;
 use std::str::FromStr;
 
 use super::{TokenBaseInfo, TokenInfoFetching};
@@ -18,16 +19,16 @@ use super::{TokenBaseInfo, TokenInfoFetching};
 pub struct TokenInfoOverride {
     pub alias: String,
     pub decimals: u8,
-    pub external_price: Option<u128>,
+    pub external_price: Option<NonZeroU128>,
 }
 
 impl TokenInfoOverride {
     #[cfg(test)]
-    pub fn new(alias: &str, decimals: u8, external_price: u128) -> Self {
+    pub fn new(alias: &str, decimals: u8, external_price: Option<NonZeroU128>) -> Self {
         Self {
             alias: alias.to_owned(),
             decimals,
-            external_price: Some(external_price),
+            external_price,
         }
     }
 }
@@ -68,7 +69,7 @@ impl PriceSource for TokenData {
     fn get_prices<'a>(
         &'a self,
         tokens: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
+    ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
         let mut result = HashMap::new();
         for token in tokens {
             if let Some(price) = self.0.get(token).and_then(|info| info.external_price) {
@@ -134,8 +135,8 @@ mod tests {
         assert_eq!(
             TokenData::from_str(json).unwrap(),
             TokenData::from(hash_map! {
-                TokenId(1) => TokenInfoOverride::new("WETH", 18, 200_000_000_000_000_000_000),
-                TokenId(4) => TokenInfoOverride::new("USDC", 6, 1_000_000_000_000_000_000_000_000_000_000),
+                TokenId(1) => TokenInfoOverride::new("WETH", 18, Some(nonzero!(200_000_000_000_000_000_000))),
+                TokenId(4) => TokenInfoOverride::new("USDC", 6, Some(nonzero!(1_000_000_000_000_000_000_000_000_000_000))),
             })
         );
     }

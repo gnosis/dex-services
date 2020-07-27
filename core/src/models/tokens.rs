@@ -5,6 +5,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     borrow::Cow,
     fmt::{self, Display, Formatter},
+    num::NonZeroU128,
 };
 
 /// A token ID wrapper type that implements JSON serialization in the solver
@@ -66,7 +67,7 @@ impl Display for TokenId {
 pub struct TokenInfo {
     pub alias: Option<String>,
     pub decimals: Option<u8>,
-    pub external_price: u128,
+    pub external_price: NonZeroU128,
 }
 
 impl TokenInfo {
@@ -76,7 +77,7 @@ impl TokenInfo {
         TokenInfo {
             alias: Some(alias.into()),
             decimals: Some(decimals),
-            external_price,
+            external_price: nonzero!(external_price),
         }
     }
 }
