@@ -224,7 +224,7 @@ impl OptimisationPriceFinder {
 
     async fn compute_min_average_fee_per_order(&self) -> u128 {
         let eth_owl_xrate = match self.price_oracle.get_eth_price().await {
-            Some(owl_price) => 10f64.powi(18) / (owl_price as f64),
+            Some(owl_price) => (owl_price as f64) / 10f64.powi(18),
             None => {
                 log::warn!("failed to find ETH price estimate");
                 return self.default_min_avg_fee_per_order;
@@ -238,7 +238,12 @@ impl OptimisationPriceFinder {
             }
         };
 
-        let min_avg_fee = (gas_estimate * eth_owl_xrate) / self.min_avg_fee_subsidy_factor;
+        let subsidized_gas_price = (gas_estimate * eth_owl_xrate) / self.min_avg_fee_subsidy_factor;
+
+        const GAS_PER_ORDER: f64 = 120_000.0;
+        const FEE_ADJUSTMENT: f64 = 1_000.0;
+        let min_avg_fee = subsidized_gas_price * GAS_PER_ORDER * FEE_ADJUSTMENT;
+
         min_avg_fee as _
     }
 }
@@ -659,6 +664,10 @@ pub mod tests {
                 }
                 .boxed()
             });
+        price_oracle
+            .expect_get_eth_price()
+            .returning(|| immediate!(Some(200 * 10u128.pow(18))));
+
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station.expect_estimate_gas_price().returning(|| {
             immediate!(Ok(GasPrice {
@@ -667,17 +676,22 @@ pub mod tests {
             }))
         });
 
+        // NOTE: Min average fee is computed by:
+        //   gas_per_order * gas_price * eth_owl_xrate * inverse_fee_ratio / subsidy_factor
+        let expected_min_avg_fee = 120_000u128 * 42_000_000_000 * 200 * 1000 / 10;
+
         let mut io_methods = MockIo::new();
         io_methods
             .expect_run_solver()
             .times(1)
-            .withf(|_, content: &str, _, _, _, _, _| {
+            .withf(move |_, content: &str, _, _, _, min_avg_fee: &u128, _| {
                 let json: serde_json::value::Value = serde_json::from_str(content).unwrap();
                 json["fee"]
                     == json!({
                         "token": "T0000",
                         "ratio": 0.001
                     })
+                    && min_avg_fee == &expected_min_avg_fee
             })
             .returning(|_, _, _, _, _, _, _| Err(anyhow!("")));
         let solver = OptimisationPriceFinder {
