@@ -223,7 +223,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
                 Ok(gas_price) => {
                     if gas_price_cap < gas_price.fast {
                         return Err(SolutionSubmissionError::Benign(format!(
-                            "not submitting solution because gas price cap {} < fast gas price {}",
+                            "Solution does not generate enough fees for the transaction to execute quickly enough: price cap {} < fast gas price {}",
                             gas_price_cap, gas_price.fast
                         )));
                     }
