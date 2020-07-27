@@ -163,7 +163,7 @@ struct Options {
 
     /// The default minimum average fee per order. This is passed to the solver
     /// in case the computing its value fails. Its unit is [OWL]
-    #[structopt(long, env = "DEFAULT_MIN_AVG_FEE_PER_ORDER", default_value = "0")]
+    #[structopt(long, env = "MIN_AVG_FEE_PER_ORDER", default_value = "0")]
     default_min_avg_fee_per_order: u128,
 
     /// The kind of scheduler to use.
