@@ -8,9 +8,12 @@ use crate::{
 
 use anyhow::{anyhow, Error, Result};
 use async_std::future::TimeoutError;
-use ethcontract::errors::{ExecutionError, MethodError};
-use ethcontract::web3::types::TransactionReceipt;
-use ethcontract::U256;
+use ethcontract::{
+    errors::{ExecutionError, MethodError},
+    jsonrpc::types::Error as RpcError,
+    web3::{error::Error as Web3Error, types::TransactionReceipt},
+    U256,
+};
 use futures::future::{BoxFuture, FutureExt as _};
 use log::info;
 use pricegraph::num;
@@ -97,6 +100,7 @@ impl From<Error> for SolutionSubmissionError {
 
 pub struct StableXSolutionSubmitter<'a> {
     contract: &'a (dyn StableXContract + Sync),
+    gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
     retry_with_gas_price_increase: Box<dyn SolutionTransactionSending + Send + Sync + 'a>,
 }
 
@@ -107,16 +111,19 @@ impl<'a> StableXSolutionSubmitter<'a> {
     ) -> Self {
         Self::with_retrying(
             contract,
+            gas_price_estimating,
             retry::RetryWithGasPriceIncrease::new(contract, gas_price_estimating),
         )
     }
 
     fn with_retrying(
         contract: &'a (dyn StableXContract + Sync),
+        gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
         retry_with_gas_price_increase: impl SolutionTransactionSending + Send + Sync + 'a,
     ) -> Self {
         Self {
             contract,
+            gas_price_estimating,
             retry_with_gas_price_increase: Box::new(retry_with_gas_price_increase),
         }
     }
@@ -128,6 +135,21 @@ impl<'a> StableXSolutionSubmitter<'a> {
         solution: Solution,
         err: MethodError,
     ) -> SolutionSubmissionError {
+        // There is a race condition that will be fixed in a future PR that results in this
+        // error when there was actually no problem. In that PR we will remove this code.
+        match &err.inner {
+            ExecutionError::Web3(Web3Error::Rpc(RpcError { code, message, .. }))
+                if code.code() == -32010
+                    && message.find("Transaction nonce is too low.").is_some() =>
+            {
+                return SolutionSubmissionError::Benign(format!(
+                    "Likely benign nonce error: {:?}",
+                    err
+                ));
+            }
+            _ => (),
+        }
+
         if let Some(tx) = extract_transaction_receipt(&err) {
             if let Some(block_number) = tx.block_number {
                 if let Err(err) = self
@@ -213,6 +235,19 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
         gas_price_cap: U256,
     ) -> BoxFuture<Result<(), SolutionSubmissionError>> {
         async move {
+            // If the gas price cap is not at least the fast gas price then submitting the solution
+            // is not feasible because it would take too long.
+            match self.gas_price_estimating.estimate_gas_price().await {
+                Ok(gas_price) => {
+                    if gas_price_cap < gas_price.fast {
+                        return Err(SolutionSubmissionError::Benign(format!(
+                            "Solution does not generate enough fees for the transaction to execute quickly enough: price cap {} < fast gas price {}",
+                            gas_price_cap, gas_price.fast
+                        )));
+                    }
+                }
+                Err(err) => log::warn!("failed to estimate gas price: {:?}", err),
+            }
             let nonce = self.contract.get_transaction_count().await?;
             let submit_future = self.retry_with_gas_price_increase.retry(retry::Args {
                 batch_index,
@@ -244,13 +279,24 @@ fn extract_transaction_receipt(err: &MethodError) -> Option<&TransactionReceipt>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contracts::stablex_contract::{MockStableXContract, NoopTransactionError};
+    use crate::{
+        contracts::stablex_contract::{MockStableXContract, NoopTransactionError},
+        gas_station::MockGasPriceEstimating,
+    };
     use retry::MockSolutionTransactionSending;
 
     use anyhow::anyhow;
     use ethcontract::web3::types::H2048;
     use ethcontract::H256;
     use mockall::predicate::{always, eq};
+
+    fn erroring_gas_station() -> impl GasPriceEstimating {
+        let mut gas_price_estimating = MockGasPriceEstimating::new();
+        gas_price_estimating
+            .expect_estimate_gas_price()
+            .returning(|| immediate!(Err(anyhow!(""))));
+        gas_price_estimating
+    }
 
     #[test]
     fn solution_submitter_waits_for_solving_batch() {
@@ -270,9 +316,10 @@ mod tests {
             .return_once(move |_, _, _| async { Ok(U256::from(42)) }.boxed());
 
         let retry = MockSolutionTransactionSending::new();
+        let gas_price = erroring_gas_station();
 
         let result = {
-            let submitter = StableXSolutionSubmitter::with_retrying(&contract, retry);
+            let submitter = StableXSolutionSubmitter::with_retrying(&contract, &gas_price, retry);
             submitter
                 .get_solution_objective_value(0, Solution::trivial())
                 .now_or_never()
@@ -303,8 +350,9 @@ mod tests {
             });
 
         let retry = MockSolutionTransactionSending::new();
+        let gas_price = erroring_gas_station();
 
-        let submitter = StableXSolutionSubmitter::with_retrying(&contract, retry);
+        let submitter = StableXSolutionSubmitter::with_retrying(&contract, &gas_price, retry);
         let result = submitter
             .get_solution_objective_value(0, Solution::trivial())
             .now_or_never()
@@ -361,7 +409,8 @@ mod tests {
             )))
         });
 
-        let submitter = StableXSolutionSubmitter::with_retrying(&contract, retry);
+        let gas_price = erroring_gas_station();
+        let submitter = StableXSolutionSubmitter::with_retrying(&contract, &gas_price, retry);
         let result = submitter
             .submit_solution(0, Solution::trivial(), U256::zero(), U256::zero())
             .now_or_never()
@@ -393,7 +442,8 @@ mod tests {
             // The specific error doesn't matter.
             .returning(|_, _| immediate!(Err(NoopTransactionError::NoAccount)));
         let retry = MockSolutionTransactionSending::new();
-        let submitter = StableXSolutionSubmitter::with_retrying(&contract, retry);
+        let gas_price = erroring_gas_station();
+        let submitter = StableXSolutionSubmitter::with_retrying(&contract, &gas_price, retry);
         let result = submitter
             .handle_submit_solution_result(
                 0,
@@ -411,11 +461,31 @@ mod tests {
     fn handle_submit_solution_result_ok() {
         let contract = MockStableXContract::new();
         let retry = MockSolutionTransactionSending::new();
-        let submitter = StableXSolutionSubmitter::with_retrying(&contract, retry);
+        let gas_price = erroring_gas_station();
+        let submitter = StableXSolutionSubmitter::with_retrying(&contract, &gas_price, retry);
         let result = submitter
             .handle_submit_solution_result(0, Solution::trivial(), Ok(Ok(())), 0.into(), 0.into())
             .now_or_never()
             .unwrap();
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn benign_error_if_gas_price_too_low() {
+        let contract = MockStableXContract::new();
+        let retry = MockSolutionTransactionSending::new();
+        let mut gas_price = MockGasPriceEstimating::new();
+        gas_price.expect_estimate_gas_price().returning(|| {
+            immediate!(Ok(crate::gas_station::GasPrice {
+                fast: 10.into(),
+                ..Default::default()
+            }))
+        });
+        let submitter = StableXSolutionSubmitter::with_retrying(&contract, &gas_price, retry);
+        let result = submitter
+            .submit_solution(0, Solution::trivial(), 0.into(), 9.into())
+            .now_or_never()
+            .unwrap();
+        assert!(matches!(result, Err(SolutionSubmissionError::Benign(_))));
     }
 }
