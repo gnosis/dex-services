@@ -12,8 +12,11 @@ use core::orderbook::{
     ShadowedOrderbookReader, StableXOrderBookReading,
 };
 use core::price_estimation::PriceOracle;
-use core::price_finding;
-use core::price_finding::{Fee, InternalOptimizer, SolverType};
+use core::price_finding::{
+    self,
+    min_avg_fee::{ApproximateMinAverageFee, FixedMinAverageFee, PriorityMinAverageFee},
+    Fee, InternalOptimizer, SolverType,
+};
 use core::solution_submission::StableXSolutionSubmitter;
 use core::token_info::hardcoded::TokenData;
 use core::util::FutureWaitExt as _;
@@ -252,23 +255,32 @@ fn main() {
         Arc::new(*filtered_orderbook)
     };
 
-    let price_oracle = PriceOracle::new(
-        &http_factory,
-        orderbook.clone(),
-        contract.clone(),
-        options.token_data,
-        options.price_source_update_interval,
-    )
-    .unwrap();
+    let price_oracle = Arc::new(
+        PriceOracle::new(
+            &http_factory,
+            orderbook.clone(),
+            contract.clone(),
+            options.token_data,
+            options.price_source_update_interval,
+        )
+        .unwrap(),
+    );
+
+    let min_avg_fee = Arc::new(PriorityMinAverageFee::new(vec![
+        Box::new(ApproximateMinAverageFee::new(
+            price_oracle.clone(),
+            gas_station.clone(),
+            options.min_avg_fee_subsidy_factor,
+        )),
+        Box::new(FixedMinAverageFee(options.default_min_avg_fee_per_order)),
+    ]));
 
     // Setup price.
     let price_finder = price_finding::create_price_finder(
         Some(Fee::default()),
         options.solver_type,
         price_oracle,
-        gas_station.clone(),
-        options.min_avg_fee_subsidy_factor,
-        options.default_min_avg_fee_per_order,
+        min_avg_fee,
         options.solver_internal_optimizer,
     );
 

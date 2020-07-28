@@ -1,8 +1,10 @@
 use crate::{
-    gas_station::GasPriceEstimating,
     models::{self, TokenId, TokenInfo},
     price_estimation::PriceEstimating,
-    price_finding::price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
+    price_finding::{
+        min_avg_fee::MinAverageFeeComputing,
+        price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
+    },
 };
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
@@ -193,10 +195,8 @@ pub struct OptimisationPriceFinder {
     io_methods: Arc<dyn Io + Send + Sync>,
     fee: Option<Fee>,
     solver_type: SolverType,
-    price_oracle: Box<dyn PriceEstimating + Send + Sync>,
-    gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
-    min_avg_fee_subsidy_factor: f64,
-    default_min_avg_fee_per_order: u128,
+    price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
+    min_avg_fee: Arc<dyn MinAverageFeeComputing>,
     internal_optimizer: InternalOptimizer,
 }
 
@@ -204,47 +204,18 @@ impl OptimisationPriceFinder {
     pub fn new(
         fee: Option<Fee>,
         solver_type: SolverType,
-        price_oracle: impl PriceEstimating + Send + Sync + 'static,
-        gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
-        min_avg_fee_subsidy_factor: f64,
-        default_min_avg_fee_per_order: u128,
+        price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
+        min_avg_fee: Arc<dyn MinAverageFeeComputing>,
         internal_optimizer: InternalOptimizer,
     ) -> Self {
         OptimisationPriceFinder {
             io_methods: Arc::new(DefaultIo),
             fee,
             solver_type,
-            price_oracle: Box::new(price_oracle),
-            gas_station,
-            min_avg_fee_subsidy_factor,
-            default_min_avg_fee_per_order,
+            price_oracle,
+            min_avg_fee,
             internal_optimizer,
         }
-    }
-
-    async fn compute_min_average_fee_per_order(&self) -> u128 {
-        let eth_owl_xrate = match self.price_oracle.get_eth_price().await {
-            Some(owl_price) => (owl_price as f64) / 10f64.powi(18),
-            None => {
-                log::warn!("failed to find ETH price estimate");
-                return self.default_min_avg_fee_per_order;
-            }
-        };
-        let gas_estimate = match self.gas_station.estimate_gas_price().await {
-            Ok(gas) => pricegraph::num::u256_to_f64(gas.fast),
-            Err(err) => {
-                log::warn!("failed to estimate gas {:?}", err);
-                return self.default_min_avg_fee_per_order;
-            }
-        };
-
-        let subsidized_gas_price = (gas_estimate * eth_owl_xrate) / self.min_avg_fee_subsidy_factor;
-
-        const GAS_PER_ORDER: f64 = 120_000.0;
-        const FEE_ADJUSTMENT: f64 = 1_000.0;
-        let min_avg_fee = subsidized_gas_price * GAS_PER_ORDER * FEE_ADJUSTMENT;
-
-        min_avg_fee as _
     }
 }
 
@@ -310,7 +281,7 @@ impl PriceFinding for OptimisationPriceFinder {
             // `blocking::unblock` requires the closure to be 'static.
             let io_methods = self.io_methods.clone();
             let solver_type = self.solver_type;
-            let min_avg_fee_per_order = self.compute_min_average_fee_per_order().await;
+            let min_avg_fee_per_order = self.min_avg_fee.current().await?;
             let internal_optimizer = self.internal_optimizer;
             let result = blocking::unblock!(io_methods.run_solver(
                 &input_file,
@@ -394,10 +365,8 @@ impl Io for DefaultIo {
 pub mod tests {
     use super::*;
     use crate::{
-        gas_station::{GasPrice, MockGasPriceEstimating},
-        models::AccountState,
-        price_estimation::MockPriceEstimating,
-        util::test_util::map_from_slice,
+        models::AccountState, price_estimation::MockPriceEstimating,
+        price_finding::min_avg_fee::MockMinAverageFeeComputing, util::test_util::map_from_slice,
         util::FutureWaitExt as _,
     };
     use ethcontract::Address;
@@ -664,44 +633,31 @@ pub mod tests {
                 }
                 .boxed()
             });
-        price_oracle
-            .expect_get_eth_price()
-            .returning(|| immediate!(Some(200 * 10u128.pow(18))));
 
-        let mut gas_station = MockGasPriceEstimating::new();
-        gas_station.expect_estimate_gas_price().returning(|| {
-            immediate!(Ok(GasPrice {
-                fast: 42_000_000_000u128.into(),
-                ..Default::default()
-            }))
-        });
-
-        // NOTE: Min average fee is computed by:
-        //   gas_per_order * gas_price * eth_owl_xrate * inverse_fee_ratio / subsidy_factor
-        let expected_min_avg_fee = 120_000u128 * 42_000_000_000 * 200 * 1000 / 10;
+        let mut min_avg_fee = MockMinAverageFeeComputing::new();
+        min_avg_fee
+            .expect_current()
+            .returning(|| immediate!(Ok(10u128.pow(18))));
 
         let mut io_methods = MockIo::new();
         io_methods
             .expect_run_solver()
             .times(1)
-            .withf(move |_, content: &str, _, _, _, min_avg_fee: &u128, _| {
+            .withf(move |_, content: &str, _, _, _, _, _| {
                 let json: serde_json::value::Value = serde_json::from_str(content).unwrap();
                 json["fee"]
                     == json!({
                         "token": "T0000",
                         "ratio": 0.001
                     })
-                    && min_avg_fee == &expected_min_avg_fee
             })
             .returning(|_, _, _, _, _, _, _| Err(anyhow!("")));
         let solver = OptimisationPriceFinder {
             io_methods: Arc::new(io_methods),
             fee: Some(fee),
-            default_min_avg_fee_per_order: 0,
-            min_avg_fee_subsidy_factor: 10.0,
             solver_type: SolverType::StandardSolver,
-            price_oracle: Box::new(price_oracle),
-            gas_station: Arc::new(gas_station),
+            price_oracle: Arc::new(price_oracle),
+            min_avg_fee: Arc::new(min_avg_fee),
             internal_optimizer: InternalOptimizer::Scip,
         };
         let orders = vec![];
