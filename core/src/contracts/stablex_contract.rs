@@ -139,7 +139,6 @@ pub trait StableXContract {
         solution: Solution,
         claimed_objective_value: U256,
         gas_price: U256,
-        block_timeout: Option<usize>,
         nonce: U256,
     ) -> BoxFuture<'a, Result<(), MethodError>>;
 
@@ -286,7 +285,6 @@ impl StableXContract for StableXContractImpl {
         solution: Solution,
         claimed_objective_value: U256,
         gas_price: U256,
-        block_timeout: Option<usize>,
         nonce: U256,
     ) -> BoxFuture<'a, Result<(), MethodError>> {
         async move {
@@ -310,11 +308,7 @@ impl StableXContract for StableXContractImpl {
                 //   more gas than expected.
                 .gas(5_500_000.into())
                 .nonce(nonce);
-
-            method.tx.resolve = Some(ResolveCondition::Confirmed(ConfirmParams {
-                block_timeout,
-                ..Default::default()
-            }));
+            method.tx.resolve = Some(ResolveCondition::Confirmed(ConfirmParams::mined()));
             method.send().await.map(|_| ())
         }
         .boxed()
