@@ -153,11 +153,7 @@ where
                 .iter()
                 .zip(results.iter())
                 .filter_map(|((token_id, token_info), result)| match result {
-                    Ok(price) => {
-                        let owl_price = token_info.get_owl_price(*price);
-                        log::info!("Fetched price for token {}: {}", token_id, owl_price);
-                        Some((*token_id, owl_price))
-                    }
+                    Ok(price) => Some((*token_id, token_info.get_owl_price(*price))),
                     Err(err) => {
                         log::warn!(
                             "failed to retrieve {} prices for token ID {} ({}): {:?}",
