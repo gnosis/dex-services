@@ -9,7 +9,7 @@ dist: bionic
 language: rust
 env:
   global:
-    - OPEN_SOLVER_VERSION=v0.0.10
+    - OPEN_SOLVER_VERSION=v0.0.11
     - PRIVATE_SOLVER_VERSION=v0.8.1
 
 install:

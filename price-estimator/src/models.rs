@@ -1,4 +1,4 @@
-use core::models::BatchId;
+use core::{models::BatchId, token_info::TokenBaseInfo};
 use serde::{Deserialize, Serialize};
 use serde_with::rust::display_fromstr;
 use std::{cmp::Ordering, num::ParseIntError, ops::Deref, str::FromStr};
@@ -56,16 +56,49 @@ pub struct QueryParameters {
 pub struct EstimatedOrderResult {
     pub base_token_id: u16,
     pub quote_token_id: u16,
-    #[serde(with = "display_fromstr")]
-    pub buy_amount_in_base: f64,
-    #[serde(with = "display_fromstr")]
-    pub sell_amount_in_quote: f64,
+    pub buy_amount_in_base: Amount,
+    pub sell_amount_in_quote: Amount,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct TransitiveOrder {
     pub price: f64,
     pub volume: f64,
+}
+
+/// Type used for modeling token amounts in either fractional base units or
+/// whole atoms.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum Amount {
+    Atoms(#[serde(with = "display_fromstr")] u128),
+    BaseUnits(#[serde(with = "display_fromstr")] f64),
+}
+
+impl Amount {
+    /// Converts an amount into base units for the specified token.
+    pub fn into_base_units(self, token: &TokenBaseInfo) -> Self {
+        match self {
+            Amount::Atoms(atoms) => Amount::BaseUnits(atoms as f64 / token.base_unit_in_atoms()),
+            base_units => base_units,
+        }
+    }
+
+    /// Converts an amount into atoms for the specified token.
+    pub fn into_atoms(self, token: &TokenBaseInfo) -> Self {
+        match self {
+            Amount::BaseUnits(units) => Amount::Atoms((units * token.base_unit_in_atoms()) as _),
+            atoms => atoms,
+        }
+    }
+
+    /// Returns the amount in atoms.
+    pub fn as_atoms(self, token: &TokenBaseInfo) -> u128 {
+        match self.into_atoms(token) {
+            Amount::Atoms(atoms) => atoms,
+            _ => unreachable!("amount converted into atoms"),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -159,8 +192,8 @@ mod tests {
         let original = EstimatedOrderResult {
             base_token_id: 1,
             quote_token_id: 2,
-            buy_amount_in_base: 3.0,
-            sell_amount_in_quote: 4.0,
+            buy_amount_in_base: Amount::Atoms(3),
+            sell_amount_in_quote: Amount::BaseUnits(4.2),
         };
         let serialized = serde_json::to_string(&original).unwrap();
         let json: Value = serde_json::from_str(&serialized).unwrap();
@@ -168,7 +201,7 @@ mod tests {
             "baseTokenId": 1,
             "quoteTokenId": 2,
             "buyAmountInBase": "3",
-            "sellAmountInQuote": "4",
+            "sellAmountInQuote": "4.2",
         });
         assert_eq!(json, expected);
     }
@@ -255,5 +288,28 @@ mod tests {
             ),
             expected
         );
+    }
+
+    #[test]
+    fn amount_unit_conversion() {
+        let owl = TokenBaseInfo {
+            alias: "OWL".into(),
+            decimals: 18,
+        };
+        let usdc = TokenBaseInfo {
+            alias: "USDC".into(),
+            decimals: 6,
+        };
+
+        let amount = Amount::BaseUnits(4.2);
+
+        assert_eq!(
+            amount.into_atoms(&owl),
+            Amount::Atoms(4_200_000_000_000_000_000)
+        );
+        assert_eq!(amount.into_atoms(&usdc), Amount::Atoms(4_200_000));
+
+        assert_eq!(amount.into_atoms(&owl).into_base_units(&owl), amount);
+        assert_eq!(amount.into_atoms(&usdc).into_base_units(&usdc), amount);
     }
 }

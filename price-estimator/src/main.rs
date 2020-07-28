@@ -62,6 +62,11 @@ struct Options {
     /// which can happen for example when tokens do not implement the standard properly.
     #[structopt(long, env = "TOKEN_DATA", default_value = "{}")]
     token_data: TokenData,
+
+    /// The number of blocks to fetch events for at a time for constructing the
+    /// orderbook.
+    #[structopt(long, env = "AUCTION_DATA_PAGE_SIZE", default_value = "500")]
+    auction_data_page_size: usize,
 }
 
 fn main() {
@@ -93,7 +98,12 @@ fn main() {
         .expect("failed to cache token infos");
     let token_info = Arc::new(token_info);
 
-    let orderbook = EventBasedOrderbook::new(contract, web3, options.orderbook_file);
+    let orderbook = EventBasedOrderbook::new(
+        contract,
+        web3,
+        options.auction_data_page_size,
+        options.orderbook_file,
+    );
     let orderbook = Arc::new(Orderbook::new(Box::new(orderbook)));
     let _ = orderbook.update().wait();
     log::info!("Orderbook initialized.");
