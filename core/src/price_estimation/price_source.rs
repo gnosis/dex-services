@@ -2,6 +2,7 @@ use crate::models::{TokenId, TokenInfo};
 use anyhow::Result;
 use futures::future::{BoxFuture, FutureExt as _};
 use std::collections::HashMap;
+use std::num::NonZeroU128;
 
 /// A token representation.
 #[cfg_attr(test, derive(Eq, PartialEq))]
@@ -24,14 +25,14 @@ pub trait PriceSource {
     fn get_prices<'a>(
         &'a self,
         tokens: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>>;
+    ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>>;
 }
 
 /// A no-op price source that always succeeds and finds no prices.
 pub struct NoopPriceSource;
 
 impl PriceSource for NoopPriceSource {
-    fn get_prices(&self, _: &[TokenId]) -> BoxFuture<Result<HashMap<TokenId, u128>>> {
+    fn get_prices(&self, _: &[TokenId]) -> BoxFuture<Result<HashMap<TokenId, NonZeroU128>>> {
         async { Ok(HashMap::new()) }.boxed()
     }
 }
@@ -47,11 +48,14 @@ mod mock {
         fn get_prices<'a>(
             &'a self,
             tokens: &[TokenId],
-        ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>>;
+        ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>>;
     }
 
     impl PriceSource for MockPriceSource_ {
-        fn get_prices(&self, tokens: &[TokenId]) -> BoxFuture<Result<HashMap<TokenId, u128>>> {
+        fn get_prices(
+            &self,
+            tokens: &[TokenId],
+        ) -> BoxFuture<Result<HashMap<TokenId, NonZeroU128>>> {
             PriceSource_::get_prices(self, tokens)
         }
     }

@@ -26,6 +26,7 @@ use priority_price_source::PriorityPriceSource;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter;
 use std::iter::FromIterator;
+use std::num::NonZeroU128;
 use std::sync::Arc;
 use std::time::Duration;
 use threaded_price_source::ThreadedPriceSource;
@@ -88,7 +89,7 @@ impl PriceOracle {
     }
 
     /// Gets price estimates for some tokens
-    async fn get_prices(&self, tokens: &[TokenId]) -> HashMap<TokenId, u128> {
+    async fn get_prices(&self, tokens: &[TokenId]) -> HashMap<TokenId, NonZeroU128> {
         if tokens.is_empty() {
             return HashMap::new();
         }
@@ -177,8 +178,8 @@ mod tests {
     #[test]
     fn price_oracle_fetches_token_prices() {
         let tokens = Arc::new(TokenData::from(hash_map! {
-            TokenId(1) => TokenInfoOverride::new("WETH", 18, 0),
-            TokenId(2) => TokenInfoOverride::new("USDT", 6, 0),
+            TokenId(1) => TokenInfoOverride::new("WETH", 18, None),
+            TokenId(2) => TokenInfoOverride::new("USDT", 6, None),
         }));
 
         let mut source = MockPriceSource::new();
@@ -192,8 +193,8 @@ mod tests {
             .returning(|_| {
                 async {
                     Ok(hash_map! {
-                        TokenId(1) => 0,
-                        TokenId(2) => 1_000_000_000_000_000_000,
+                        TokenId(1) => nonzero!(100_000),
+                        TokenId(2) => nonzero!(1_000_000_000_000_000_000),
                     })
                 }
                 .boxed()
@@ -215,7 +216,7 @@ mod tests {
             prices,
             btree_map! {
                 TokenId(0) => None,
-                TokenId(1) => Some(TokenInfo::new("WETH", 18, 0)),
+                TokenId(1) => Some(TokenInfo::new("WETH", 18, 100_000)),
                 TokenId(2) => Some(TokenInfo::new("USDT", 6, 1_000_000_000_000_000_000)),
                 TokenId(3) => None,
             }
@@ -225,7 +226,7 @@ mod tests {
     #[test]
     fn price_oracle_ignores_source_error() {
         let tokens = Arc::new(TokenData::from(hash_map! {
-            TokenId(1) => TokenInfoOverride::new("WETH", 18, 0),
+            TokenId(1) => TokenInfoOverride::new("WETH", 18, None),
         }));
 
         let mut source = MockPriceSource::new();

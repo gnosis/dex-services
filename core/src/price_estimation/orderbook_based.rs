@@ -5,6 +5,7 @@ use anyhow::Result;
 use futures::future::{BoxFuture, FutureExt as _};
 use pricegraph::{Pricegraph, TokenPair};
 use std::collections::HashMap;
+use std::num::NonZeroU128;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -24,7 +25,7 @@ impl PriceSource for PricegraphEstimator {
     fn get_prices<'a>(
         &'a self,
         tokens: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
+    ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
         async move {
             let batch = BatchId::currently_being_solved(SystemTime::now())?;
             let (account_state, orders) =
@@ -43,7 +44,7 @@ impl<T: LimitPriceEstimating> PriceSource for T {
     fn get_prices<'a>(
         &'a self,
         tokens: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
+    ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
         let result = tokens
             .iter()
             .flat_map(|token| {
@@ -60,7 +61,10 @@ impl<T: LimitPriceEstimating> PriceSource for T {
                     self.estimate_limit_price(pair, ONE_OWL)?
                 };
                 let price_in_reference = 1.0 / price_in_token;
-                Some((*token, (ONE_OWL * price_in_reference) as u128))
+                Some((
+                    *token,
+                    NonZeroU128::new((ONE_OWL * price_in_reference) as u128)?,
+                ))
             })
             .collect();
         immediate!(Ok(result))
@@ -109,8 +113,8 @@ mod tests {
             .unwrap()
             .unwrap();
         let expected = hash_map! {
-            TokenId(1) => 500_000_000_000_000_000,
-            TokenId(2) => 2_000_000_000_000_000_000,
+            TokenId(1) => nonzero!(500_000_000_000_000_000),
+            TokenId(2) => nonzero!(2_000_000_000_000_000_000),
         };
         assert_eq!(result, expected);
     }
@@ -132,7 +136,7 @@ mod tests {
             .now_or_never()
             .unwrap()
             .unwrap();
-        let expected = hash_map! { TokenId(1) => 2_000_000_000_000_000_000 };
+        let expected = hash_map! { TokenId(1) => nonzero!(2_000_000_000_000_000_000) };
         assert_eq!(result, expected);
     }
 
@@ -145,7 +149,7 @@ mod tests {
             .now_or_never()
             .unwrap()
             .unwrap();
-        let expected = hash_map! { TokenId(0) => 1_000_000_000_000_000_000 };
+        let expected = hash_map! { TokenId(0) => nonzero!(1_000_000_000_000_000_000) };
         assert_eq!(result, expected);
     }
 }

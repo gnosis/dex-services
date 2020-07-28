@@ -8,6 +8,7 @@ use async_std::{
 };
 use futures::future::{BoxFuture, FutureExt as _};
 use std::collections::HashMap;
+use std::num::NonZeroU128;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,7 +17,7 @@ use std::time::Duration;
 pub struct ThreadedPriceSource {
     // Shared between this struct and the task. The task writes the prices and `get_prices` reads
     // them.
-    price_map: Arc<Mutex<HashMap<TokenId, u128>>>,
+    price_map: Arc<Mutex<HashMap<TokenId, NonZeroU128>>>,
 }
 
 impl ThreadedPriceSource {
@@ -50,7 +51,7 @@ impl ThreadedPriceSource {
 async fn update_prices<T: PriceSource>(
     price_source: &T,
     token_info_fetching: &dyn TokenInfoFetching,
-) -> Result<HashMap<TokenId, u128>> {
+) -> Result<HashMap<TokenId, NonZeroU128>> {
     let tokens = token_info_fetching.all_ids().await?;
     price_source.get_prices(&tokens).await
 }
@@ -59,7 +60,7 @@ impl PriceSource for ThreadedPriceSource {
     fn get_prices<'a>(
         &'a self,
         tokens: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
+    ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
         async move {
             let price_map = self.price_map.lock().await;
             Ok(tokens
@@ -125,12 +126,13 @@ mod tests {
     #[test]
     fn update_triggered_by_interval() {
         let mut price_source = MockPriceSource::new();
-        let price = Arc::new(atomic::AtomicU8::new(0));
+        let price = Arc::new(atomic::AtomicU8::new(1));
         price_source.expect_get_prices().returning({
             let price = price.clone();
             move |_| {
                 let price_ = price.clone();
-                async move { Ok(hash_map! { TOKENS[0] => price_.load(ORDERING) as u128 }) }.boxed()
+                async move { Ok(hash_map! { TOKENS[0] => nonzero!(price_.load(ORDERING).into()) }) }
+                    .boxed()
             }
         });
 
@@ -142,11 +144,11 @@ mod tests {
         let (tps, handle) =
             ThreadedPriceSource::new(Arc::new(token_info_fetcher), price_source, UPDATE_INTERVAL);
         let get_prices = || tps.get_prices(&TOKENS[..]).wait().unwrap();
-        price.store(1, ORDERING);
-        let condition = || get_prices().get(&TOKENS[0]) == Some(&1);
-        wait_for_condition(condition, Instant::now() + THREAD_TIMEOUT);
         price.store(2, ORDERING);
-        let condition = || get_prices().get(&TOKENS[0]) == Some(&2);
+        let condition = || get_prices().get(&TOKENS[0]).map(|p| p.get()) == Some(2);
+        wait_for_condition(condition, Instant::now() + THREAD_TIMEOUT);
+        price.store(3, ORDERING);
+        let condition = || get_prices().get(&TOKENS[0]).map(|p| p.get()) == Some(3);
         wait_for_condition(condition, Instant::now() + THREAD_TIMEOUT);
         join(tps, handle).wait();
     }
