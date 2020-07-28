@@ -5,9 +5,12 @@ use crate::{
 };
 use anyhow::Result;
 use ethcontract::{errors::MethodError, U256};
-use futures::future::{self, BoxFuture, FutureExt as _};
+use futures::{
+    future::{BoxFuture, FutureExt as _},
+    stream::{futures_unordered::FuturesUnordered, StreamExt as _},
+};
 use pricegraph::num;
-use std::{future::Future, time::Duration};
+use std::time::Duration;
 
 use super::MIN_GAS_PRICE_INCREASE_FACTOR;
 
@@ -106,42 +109,9 @@ fn gas_price(estimated_price: U256, price_increase_count: u32, cap: U256) -> U25
     cap.min(U256::from(new_price as u128))
 }
 
-/// The output type of futures used in `select_all`.
-enum SelectFutureOutput {
+enum FutureOutput {
     SolutionSubmission(Result<(), MethodError>),
     Timeout,
-}
-
-// Return the first future result, skipping nonce errors unless the nonce error is the last result.
-//
-// `futures` contains all solution submission attempts and optionally a timeout. Unfinished futures
-//  stay in the vector when the function returns.
-//
-// # Panics
-//
-// If `futures` is empty.
-async fn select_ignoring_nonce_errors(
-    futures: &mut Vec<impl Future<Output = SelectFutureOutput> + Unpin>,
-) -> SelectFutureOutput {
-    loop {
-        match future::select_all(futures.split_off(0)).await {
-            (SelectFutureOutput::SolutionSubmission(result), _, remaining_futures) => {
-                if remaining_futures.is_empty() {
-                    // All transactions resulted in a nonce error and there was no timeout future.
-                    return SelectFutureOutput::SolutionSubmission(result);
-                }
-                *futures = remaining_futures;
-                if !result.is_nonce_error() {
-                    return SelectFutureOutput::SolutionSubmission(result);
-                }
-                // Continue going with the other futures.
-            }
-            (SelectFutureOutput::Timeout, _, remaining_futures) => {
-                *futures = remaining_futures;
-                return SelectFutureOutput::Timeout;
-            }
-        }
-    }
 }
 
 async fn retry(
@@ -162,7 +132,7 @@ async fn retry(
     assert!(effective_gas_price_cap <= gas_price_cap);
     let mut gas_price_estimator =
         InfallibleGasPriceEstimator::new(gas_price_estimating, DEFAULT_GAS_PRICE.into());
-    let mut futures = Vec::new();
+    let mut futures = FuturesUnordered::new();
 
     for gas_price_increase_count in 0u32.. {
         let estimated_price = gas_price_estimator.estimate().await;
@@ -182,14 +152,14 @@ async fn retry(
                 gas_price,
                 nonce,
             )
-            .map(SelectFutureOutput::SolutionSubmission);
+            .map(FutureOutput::SolutionSubmission);
         futures.push(solution_submission_future.boxed());
 
         let is_last_iteration = gas_price >= effective_gas_price_cap;
         if !is_last_iteration {
             let timeout_future = async_sleep
                 .sleep(SINGLE_ATTEMPT_TIMEOUT)
-                .map(|()| SelectFutureOutput::Timeout);
+                .map(|()| FutureOutput::Timeout);
             futures.push(timeout_future.boxed());
         }
 
@@ -197,9 +167,12 @@ async fn retry(
         // we observe a nonce error from one future before the completion of another. It is also
         // possible that a previous submission transaction completes first instead of the most
         // recent one.
-        match select_ignoring_nonce_errors(&mut futures).await {
-            SelectFutureOutput::SolutionSubmission(result) => return result,
-            SelectFutureOutput::Timeout => (), // continue with next loop
+        // Unwrap because we always add the solution future above and every iteration here checks
+        // that there are still futures left.
+        while let FutureOutput::SolutionSubmission(result) = futures.next().await.unwrap() {
+            if !result.is_nonce_error() || futures.is_empty() {
+                return result;
+            }
         }
     }
     unreachable!("increased gas price past expected limit");
@@ -214,6 +187,7 @@ mod tests {
         util::{FutureWaitExt as _, MockAsyncSleeping},
     };
     use anyhow::anyhow;
+    use futures::future;
     use mockall::predicate::*;
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
@@ -465,38 +439,5 @@ mod tests {
         };
         let result = retry(&contract, &gas_station, &sleep, args).wait();
         assert!(result.is_ok());
-    }
-
-    #[test]
-    fn select_returns_first_ready_future() {
-        let future0 = || future::pending().boxed();
-        let future1 = || immediate!(SelectFutureOutput::Timeout);
-        for futures_vec in vec![vec![future0(), future1()], vec![future1(), future0()]].iter_mut() {
-            let result = select_ignoring_nonce_errors(futures_vec)
-                .now_or_never()
-                .unwrap();
-            assert!(matches!(result, SelectFutureOutput::Timeout));
-            assert_eq!(futures_vec.len(), 1);
-        }
-    }
-
-    #[test]
-    fn select_returns_nonce_error_if_last_future() {
-        let future = || immediate!(SelectFutureOutput::SolutionSubmission(Err(nonce_error())));
-        let mut futures = vec![future(), future()];
-        let result = select_ignoring_nonce_errors(&mut futures)
-            .now_or_never()
-            .unwrap();
-        assert!(matches!(result, SelectFutureOutput::SolutionSubmission(_)));
-        assert_eq!(futures.len(), 0)
-    }
-
-    #[test]
-    fn select_skips_nonce_error_if_not_last_future() {
-        let future0 = immediate!(SelectFutureOutput::SolutionSubmission(Err(nonce_error())));
-        let future1 = future::pending().boxed();
-        let mut futures = vec![future0, future1];
-        let result = select_ignoring_nonce_errors(&mut futures).now_or_never();
-        assert!(result.is_none());
     }
 }
