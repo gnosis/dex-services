@@ -85,7 +85,7 @@ pub enum NoopTransactionError {
     #[error("no account")]
     NoAccount,
     #[error("execution error: {0}")]
-    ExecutedOrder(#[from] ExecutionError),
+    ExecutionError(#[from] ExecutionError),
 }
 
 #[cfg_attr(test, automock)]
