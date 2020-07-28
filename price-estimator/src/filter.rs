@@ -214,18 +214,17 @@ async fn estimate_buy_amount(
         .await
         .map_err(error::internal_server_rejection)?
         .order_for_sell_amount(token_pair, sell_amount_in_quote_atoms);
-    let buy_amount_in_base_atoms = Amount::Atoms(
+
+    let mut buy_amount_in_base = Amount::Atoms(
         transitive_order
             .map(|order| apply_rounding_buffer(order.buy, price_rounding_buffer))
             .unwrap_or_default() as _,
     );
-
-    let buy_amount_in_base = if query.atoms {
-        buy_amount_in_base_atoms
-    } else {
+    if !query.atoms {
         let token_info = get_token_info(token_pair.buy, token_infos.as_ref()).await?;
-        buy_amount_in_base_atoms.into_base_units(&token_info)
+        buy_amount_in_base = buy_amount_in_base.into_base_units(&token_info)
     };
+
     let result = EstimatedOrderResult {
         base_token_id: token_pair.buy,
         quote_token_id: token_pair.sell,
