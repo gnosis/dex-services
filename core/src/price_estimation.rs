@@ -61,10 +61,10 @@ impl PriceOracle {
             contract,
             token_data.clone().into(),
         ));
-        let mut external_price_sources =
+        let mut price_sources =
             external_price_sources(http_factory, token_info_fetcher.clone(), update_interval)?;
-        external_price_sources.push(Box::new(PricegraphEstimator::new(orderbook_reader)));
-        let averaged_source = Box::new(AveragePriceSource::new(external_price_sources));
+        price_sources.push(Box::new(PricegraphEstimator::new(orderbook_reader)));
+        let averaged_source = Box::new(AveragePriceSource::new(price_sources));
         let prioritized_source = Box::new(PriorityPriceSource::new(vec![
             Box::new(token_data),
             averaged_source,
@@ -155,7 +155,7 @@ pub fn external_price_sources(
     Ok(vec![
         thread_and_box(kraken, token_info_fetcher.clone(), update_interval),
         thread_and_box(dexag, token_info_fetcher.clone(), update_interval),
-        thread_and_box(oneinch, token_info_fetcher.clone(), update_interval),
+        thread_and_box(oneinch, token_info_fetcher, update_interval),
     ])
 }
 
