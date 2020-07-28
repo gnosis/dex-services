@@ -68,7 +68,7 @@ pub struct TransitiveOrder {
 
 /// Type used for modeling token amounts in either fractional base units or
 /// whole atoms.
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(untagged)]
 pub enum Amount {
     Atoms(#[serde(with = "display_fromstr")] u128),
@@ -288,5 +288,28 @@ mod tests {
             ),
             expected
         );
+    }
+
+    #[test]
+    fn amount_unit_conversion() {
+        let owl = TokenBaseInfo {
+            alias: "OWL".into(),
+            decimals: 18,
+        };
+        let usdc = TokenBaseInfo {
+            alias: "USDC".into(),
+            decimals: 6,
+        };
+
+        let amount = Amount::BaseUnits(4.2);
+
+        assert_eq!(
+            amount.into_atoms(&owl),
+            Amount::Atoms(4_200_000_000_000_000_000)
+        );
+        assert_eq!(amount.into_atoms(&usdc), Amount::Atoms(4_200_000));
+
+        assert_eq!(amount.into_atoms(&owl).into_base_units(&owl), amount);
+        assert_eq!(amount.into_atoms(&usdc).into_base_units(&usdc), amount);
     }
 }
