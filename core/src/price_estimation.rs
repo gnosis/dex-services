@@ -43,7 +43,9 @@ pub trait PriceEstimating {
     /// able to retrieve a price estimate for a given token.
     fn get_token_prices<'a>(&'a self, orders: &[Order]) -> BoxFuture<'a, Tokens>;
 
-    /// Retrieves a price estimate for ETH in OWL.
+    /// Retrieves a price estimate for ETH in OWL atoms. This price is in the
+    /// same format as is expected by the Smart Contract and the solver, so
+    /// the amount of OWL in atoms to purchase 1.0 ETH.
     #[allow(clippy::needless_lifetimes)]
     fn get_eth_price<'a>(&'a self) -> BoxFuture<'a, Option<u128>>;
 }
