@@ -62,27 +62,10 @@ impl PriceOracle {
             contract,
             token_data.clone().into(),
         ));
-        let (kraken_source, _) = ThreadedPriceSource::new(
-            token_info_fetcher.clone(),
-            KrakenClient::new(http_factory, token_info_fetcher.clone())?,
-            update_interval,
-        );
-        let (dexag_source, _) = ThreadedPriceSource::new(
-            token_info_fetcher.clone(),
-            DexagClient::new(http_factory, token_info_fetcher.clone())?,
-            update_interval,
-        );
-        let (oneinch_source, _) = ThreadedPriceSource::new(
-            token_info_fetcher.clone(),
-            OneinchClient::new(http_factory, token_info_fetcher.clone())?,
-            update_interval,
-        );
-        let averaged_source = Box::new(AveragePriceSource::new(vec![
-            Box::new(kraken_source),
-            Box::new(dexag_source),
-            Box::new(oneinch_source),
-            Box::new(PricegraphEstimator::new(orderbook_reader)),
-        ]));
+        let mut price_sources =
+            external_price_sources(http_factory, token_info_fetcher.clone(), update_interval)?;
+        price_sources.push(Box::new(PricegraphEstimator::new(orderbook_reader)));
+        let averaged_source = Box::new(AveragePriceSource::new(price_sources));
         let prioritized_source = Box::new(PriorityPriceSource::new(vec![
             Box::new(token_data),
             averaged_source,
@@ -159,6 +142,30 @@ impl PriceEstimating for PriceOracle {
         }
         .boxed()
     }
+}
+
+/// Create the external price sources used by PriceOracle.
+pub fn external_price_sources(
+    http_factory: &HttpFactory,
+    token_info_fetcher: Arc<dyn TokenInfoFetching>,
+    update_interval: Duration,
+) -> Result<Vec<Box<dyn PriceSource + Send + Sync>>> {
+    let kraken = KrakenClient::new(http_factory, token_info_fetcher.clone())?;
+    let dexag = DexagClient::new(http_factory, token_info_fetcher.clone())?;
+    let oneinch = OneinchClient::new(http_factory, token_info_fetcher.clone())?;
+    Ok(vec![
+        thread_and_box(kraken, token_info_fetcher.clone(), update_interval),
+        thread_and_box(dexag, token_info_fetcher.clone(), update_interval),
+        thread_and_box(oneinch, token_info_fetcher, update_interval),
+    ])
+}
+
+fn thread_and_box(
+    price_source: impl PriceSource + Send + Sync + 'static,
+    token_info_fetcher: Arc<dyn TokenInfoFetching>,
+    update_interval: Duration,
+) -> Box<dyn PriceSource + Send + Sync> {
+    Box::new(ThreadedPriceSource::new(token_info_fetcher, price_source, update_interval).0)
 }
 
 #[cfg(test)]

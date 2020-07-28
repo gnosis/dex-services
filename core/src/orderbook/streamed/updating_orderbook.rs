@@ -24,6 +24,7 @@ use std::sync::Arc;
 pub struct UpdatingOrderbook {
     contract: Arc<dyn StableXContract + Send + Sync>,
     web3: Web3,
+    block_page_size: usize,
     /// We need a mutex because otherwise the struct wouldn't be Sync which is needed because we use
     /// the orderbook in multiple threads. The mutex is locked in `get_auction_data` while the
     /// orderbook is updated with new events.
@@ -45,11 +46,13 @@ impl UpdatingOrderbook {
     pub fn new(
         contract: Arc<dyn StableXContract + Send + Sync>,
         web3: Web3,
+        block_page_size: usize,
         path: Option<PathBuf>,
     ) -> Self {
         Self {
             contract,
             web3,
+            block_page_size,
             context: Mutex::new(None),
             filestore: path,
         }
@@ -127,7 +130,11 @@ impl UpdatingOrderbook {
         );
         let events = self
             .contract
-            .past_events(BlockNumber::Number(from_block.into()), to_block)
+            .past_events(
+                BlockNumber::Number(from_block.into()),
+                to_block,
+                self.block_page_size as _,
+            )
             .await?;
         self.handle_events(context, events, from_block).await?;
         // Update the orderbook on disk before exit.
@@ -159,7 +166,7 @@ impl UpdatingOrderbook {
             .collect::<Result<HashSet<H256>>>()?;
         context
             .block_timestamp_reader
-            .prepare_cache(block_hashes)
+            .prepare_cache(block_hashes, self.block_page_size)
             .await?;
         context
             .orderbook

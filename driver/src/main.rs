@@ -110,8 +110,10 @@ struct Options {
     #[structopt(short = "k", long, env = "PRIVATE_KEY", hide_env_values = true)]
     private_key: PrivateKey,
 
-    /// The page size with which to read orders from the smart contract.
-    #[structopt(long, env = "AUCTION_DATA_PAGE_SIZE", default_value = "100")]
+    /// For storage based orderbook reading, the page size with which to read
+    /// orders from the smart contract. For event based orderbook reading, the
+    /// number of blocks to fetch events for at a time.
+    #[structopt(long, env = "AUCTION_DATA_PAGE_SIZE", default_value = "500")]
     auction_data_page_size: u16,
 
     /// The timeout in milliseconds of web3 JSON RPC calls, defaults to 10000ms
