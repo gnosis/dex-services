@@ -19,6 +19,7 @@ pub trait BlockTimestampBatchReading {
     fn block_timestamps(
         &mut self,
         block_hashes: HashSet<H256>,
+        block_batch_size: usize,
     ) -> BoxFuture<Result<Vec<(H256, u64)>>>;
 }
 
@@ -40,11 +41,12 @@ impl BlockTimestampBatchReading for Web3 {
     fn block_timestamps(
         &mut self,
         block_hashes: HashSet<H256>,
+        block_batch_size: usize,
     ) -> BoxFuture<Result<Vec<(H256, u64)>>> {
         let batched_web3 = ethcontract::web3::Web3::new(Batch::new(self.transport().clone()));
         async move {
             let mut result = Vec::with_capacity(block_hashes.len());
-            for chunk in Vec::from_iter(block_hashes.into_iter()).chunks(1000) {
+            for chunk in Vec::from_iter(block_hashes.into_iter()).chunks(block_batch_size) {
                 let partial_result = query_block_timestamps_batched(&batched_web3, chunk).await?;
                 result.extend(partial_result);
             }
@@ -93,14 +95,21 @@ impl<T: BlockTimestampBatchReading + Send> CachedBlockTimestampReader<T> {
         }
     }
 
-    pub fn prepare_cache(&mut self, block_hashes: HashSet<H256>) -> BoxFuture<Result<()>> {
+    pub fn prepare_cache(
+        &mut self,
+        block_hashes: HashSet<H256>,
+        block_batch_size: usize,
+    ) -> BoxFuture<Result<()>> {
         let missing_hashes = block_hashes
             .into_iter()
             .filter(|hash| !self.cache.contains_key(&hash))
             .collect();
         async move {
-            self.cache
-                .extend(self.inner.block_timestamps(missing_hashes).await?);
+            self.cache.extend(
+                self.inner
+                    .block_timestamps(missing_hashes, block_batch_size)
+                    .await?,
+            );
             Ok(())
         }
         .boxed()
