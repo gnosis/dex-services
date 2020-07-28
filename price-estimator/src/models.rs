@@ -80,7 +80,7 @@ impl Amount {
     pub fn into_base_units(self, token: &TokenBaseInfo) -> Self {
         match self {
             Amount::Atoms(atoms) => {
-                Amount::BaseUnits(atoms as f64 / token.base_unit_in_atoms() as f64)
+                Amount::BaseUnits(atoms as f64 / token.base_unit_in_atoms().get() as f64)
             }
             base_units => base_units,
         }
@@ -90,7 +90,7 @@ impl Amount {
     pub fn into_atoms(self, token: &TokenBaseInfo) -> Self {
         match self {
             Amount::BaseUnits(units) => {
-                Amount::Atoms((units * token.base_unit_in_atoms() as f64) as _)
+                Amount::Atoms((units * token.base_unit_in_atoms().get() as f64) as _)
             }
             atoms => atoms,
         }

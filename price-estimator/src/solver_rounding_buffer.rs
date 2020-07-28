@@ -1,6 +1,6 @@
 use core::models::{AccountState, Order, TokenId};
 use ethcontract::{Address, U256};
-use std::collections::HashMap;
+use std::{collections::HashMap, num::NonZeroU128};
 
 // This code is closely related to dex-solver/src/opt/process/Rounding.py .
 // Discussion of motivation happened in https://github.com/gnosis/dex-services/issues/970 .
@@ -33,21 +33,20 @@ pub fn rounding_buffer(
 /// of our estimates.
 /// token_prices returns the price of a token like in PriceSource::get_prices. All token prices
 /// must be nonzero.
-#[allow(dead_code)]
 pub fn apply_rounding_buffer(
-    token_prices: impl Fn(TokenId) -> u128,
+    token_prices: impl Fn(TokenId) -> NonZeroU128,
     orders: &mut Vec<Order>,
     account_state: &mut AccountState,
     extra_factor: f64,
 ) {
-    let fee_token_price = token_prices(TokenId(0)) as f64;
+    let fee_token_price = token_prices(TokenId(0)).get() as f64;
     // The maximum rounding buffer over all orders from this address selling this token.
     let mut account_balance_buffers = HashMap::<(Address, TokenId), u128>::new();
     // Apply rounding buffer to account balances and order sell amounts.
     for order in orders.iter_mut() {
         let (sell_token, buy_token) = (TokenId(order.sell_token), TokenId(order.buy_token));
-        let buy_token_price = token_prices(buy_token) as f64;
-        let sell_token_price = token_prices(sell_token) as f64;
+        let buy_token_price = token_prices(buy_token).get() as f64;
+        let sell_token_price = token_prices(sell_token).get() as f64;
 
         // Multiply by an extra factor which the solver doesn't do, as added safety in case the
         // prices move.
@@ -113,11 +112,14 @@ mod tests {
 
     #[test]
     fn apply_rounding_buffer_ok() {
-        let token_prices = |token_id: TokenId| match token_id.0 {
-            0 => 1,
-            1 => 2,
-            2 => 10,
-            _ => unreachable!(),
+        let token_prices = |token_id: TokenId| {
+            NonZeroU128::new(match token_id.0 {
+                0 => 1,
+                1 => 2,
+                2 => 10,
+                _ => unreachable!(),
+            })
+            .unwrap()
         };
 
         let accounts = vec![
