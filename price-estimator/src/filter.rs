@@ -199,25 +199,32 @@ async fn estimate_buy_amount(
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
-    let sell_amount_in_quote_atoms = if query.atoms {
-        sell_amount_in_quote
+    let (sell_amount_in_quote, sell_amount_in_quote_atoms) = if query.atoms {
+        (
+            Amount::Atoms(sell_amount_in_quote as _),
+            sell_amount_in_quote,
+        )
     } else {
         let token_info = get_token_info(token_pair.sell, token_infos.as_ref()).await?;
-        sell_amount_in_quote * token_info.base_unit_in_atoms()
+        let amount = Amount::BaseUnits(sell_amount_in_quote);
+        (amount, amount.as_atoms(&token_info) as _)
     };
     let transitive_order = orderbook
         .pricegraph(query.batch_id, PricegraphKind::Raw)
         .await
         .map_err(error::internal_server_rejection)?
         .order_for_sell_amount(token_pair, sell_amount_in_quote_atoms);
-    let buy_amount_in_base_atoms = transitive_order
-        .map(|order| apply_rounding_buffer(order.buy, price_rounding_buffer))
-        .unwrap_or_default();
+    let buy_amount_in_base_atoms = Amount::Atoms(
+        transitive_order
+            .map(|order| apply_rounding_buffer(order.buy, price_rounding_buffer))
+            .unwrap_or_default() as _,
+    );
+
     let buy_amount_in_base = if query.atoms {
         buy_amount_in_base_atoms
     } else {
         let token_info = get_token_info(token_pair.buy, token_infos.as_ref()).await?;
-        buy_amount_in_base_atoms / token_info.base_unit_in_atoms()
+        buy_amount_in_base_atoms.into_base_units(&token_info)
     };
     let result = EstimatedOrderResult {
         base_token_id: token_pair.buy,
@@ -258,8 +265,10 @@ async fn estimate_amounts_at_price(
             price_rounding_buffer,
             pricegraph,
         );
-        result.buy_amount_in_base /= buy_token_info.base_unit_in_atoms();
-        result.sell_amount_in_quote /= sell_token_info.base_unit_in_atoms();
+        result.buy_amount_in_base = result.buy_amount_in_base.into_base_units(&buy_token_info);
+        result.sell_amount_in_quote = result
+            .sell_amount_in_quote
+            .into_base_units(&sell_token_info);
         result
     };
     Ok(warp::reply::json(&result))
@@ -289,8 +298,8 @@ fn estimate_amounts_at_price_atoms(
     EstimatedOrderResult {
         base_token_id: token_pair.buy,
         quote_token_id: token_pair.sell,
-        sell_amount_in_quote,
-        buy_amount_in_base,
+        sell_amount_in_quote: Amount::Atoms(sell_amount_in_quote as _),
+        buy_amount_in_base: Amount::Atoms(buy_amount_in_base as _),
     }
 }
 
