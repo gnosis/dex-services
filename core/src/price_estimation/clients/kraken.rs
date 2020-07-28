@@ -111,8 +111,10 @@ where
                 .filter_map(|(pair, info)| {
                     let token_id_and_pair = token_asset_pairs.get(&pair);
                     async move {
-                        let price = token_id_and_pair?.1.get_owl_price(info.p.last_24h());
-                        Some((token_id_and_pair?.0, price))
+                        let token_id_and_pair = token_id_and_pair?;
+                        let price = token_id_and_pair.1.get_owl_price(info.p.last_24h());
+                        log::debug!("Fetched price for token {}: {}", token_id_and_pair.0, price);
+                        Some((token_id_and_pair.0, price))
                     }
                 })
                 .collect()
