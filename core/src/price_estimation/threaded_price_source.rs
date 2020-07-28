@@ -145,10 +145,10 @@ mod tests {
             ThreadedPriceSource::new(Arc::new(token_info_fetcher), price_source, UPDATE_INTERVAL);
         let get_prices = || tps.get_prices(&TOKENS[..]).wait().unwrap();
         price.store(1, ORDERING);
-        let condition = || get_prices().get(&TOKENS[0]) == Some(&nonzero!(1));
+        let condition = || get_prices().get(&TOKENS[0]).map(|p| p.get()) == Some(1);
         wait_for_condition(condition, Instant::now() + THREAD_TIMEOUT);
         price.store(2, ORDERING);
-        let condition = || get_prices().get(&TOKENS[0]) == Some(&nonzero!(2));
+        let condition = || get_prices().get(&TOKENS[0]).map(|p| p.get()) == Some(2);
         wait_for_condition(condition, Instant::now() + THREAD_TIMEOUT);
         join(tps, handle).wait();
     }
