@@ -147,6 +147,7 @@ pub trait StableXContract {
         &'a self,
         from_block: BlockNumber,
         to_block: BlockNumber,
+        block_page_size: u64,
     ) -> BoxFuture<'a, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>;
 
     fn stream_events<'a>(
@@ -323,11 +324,13 @@ impl StableXContract for StableXContractImpl {
         &'a self,
         from_block: BlockNumber,
         to_block: BlockNumber,
+        block_page_size: u64,
     ) -> BoxFuture<'a, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>> {
         self.instance
             .all_events()
             .from_block(from_block)
             .to_block(to_block)
+            .block_page_size(block_page_size)
             .query_past_events_paginated()
             .boxed()
     }
