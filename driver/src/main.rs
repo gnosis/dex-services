@@ -160,9 +160,13 @@ struct Options {
     solver_time_limit: Duration,
 
     /// Subsidy factor used to compute the minimum average fee per order in a
-    /// solution.
-    #[structopt(long, env = "MIN_AVG_FEE_SUBSIDY_FACTOR", default_value = "10.0")]
-    min_avg_fee_subsidy_factor: f64,
+    /// solution as well as the gas cap for economically viable solution.
+    #[structopt(
+        long,
+        env = "ECONOMIC_VIABILITY_SUBSIDY_FACTOR",
+        default_value = "10.0"
+    )]
+    economic_viability_subsidy_factor: f64,
 
     /// The default minimum average fee per order. This is passed to the solver
     /// in case the computing its value fails. Its unit is [OWL]
@@ -195,12 +199,6 @@ struct Options {
 
     #[structopt(long, env = "ORDERBOOK_FILE", parse(from_os_str))]
     orderbook_file: Option<PathBuf>,
-
-    /// We calculate the maximum gas price cap based on the amount of earned fees from solution
-    /// submission. This factor is multiplied with the final result because we do not need to be
-    /// economically viable at the moment.
-    #[structopt(long, env = "GAS_PRICE_CAP_SUBSIDY_FACTOR", default_value = "2.0")]
-    gas_price_cap_subsidy_factor: f64,
 }
 
 fn main() {
@@ -270,7 +268,7 @@ fn main() {
         Box::new(ApproximateMinAverageFee::new(
             price_oracle.clone(),
             gas_station.clone(),
-            options.min_avg_fee_subsidy_factor,
+            options.economic_viability_subsidy_factor,
         )),
         Box::new(FixedMinAverageFee(options.default_min_avg_fee_per_order)),
     ]));
@@ -293,7 +291,7 @@ fn main() {
         &*orderbook,
         &solution_submitter,
         &stablex_metrics,
-        options.gas_price_cap_subsidy_factor,
+        options.economic_viability_subsidy_factor,
     );
 
     let scheduler_config =
