@@ -1,8 +1,10 @@
 //! This module contains an implementation for querying historic echange data by
 //! inspecting indexed events.
 
+pub mod batches;
 pub mod events;
 
+use self::batches::Batches;
 use self::events::EventRegistry;
 use crate::contracts::stablex_contract::batch_exchange::{
     event_data::{SolutionSubmission, Trade},
@@ -34,7 +36,16 @@ impl ExchangeHistory {
 
     /// Returns the very first batch for the exchange.
     pub fn first_batch(&self) -> Option<BatchId> {
-        self.events.events().next().map(|(_, batch)| batch)
+        let (_, batch) = self.events.events().next()?;
+        Some(batch)
+    }
+
+    /// Returns an iterator over all batches until the current
+    pub fn batches_until_now(&self) -> Batches {
+        match self.first_batch() {
+            Some(start) => Batches::from_batch(start),
+            None => Batches::empty(),
+        }
     }
 
     /// Returns a collection of auction elements for the specified batch.
