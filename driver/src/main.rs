@@ -12,8 +12,11 @@ use core::orderbook::{
     ShadowedOrderbookReader, StableXOrderBookReading,
 };
 use core::price_estimation::PriceOracle;
-use core::price_finding;
-use core::price_finding::{Fee, InternalOptimizer, SolverType};
+use core::price_finding::{
+    self,
+    min_avg_fee::{ApproximateMinAverageFee, FixedMinAverageFee, PriorityMinAverageFee},
+    Fee, InternalOptimizer, SolverType,
+};
 use core::solution_submission::StableXSolutionSubmitter;
 use core::token_info::hardcoded::TokenData;
 use core::util::FutureWaitExt as _;
@@ -156,10 +159,19 @@ struct Options {
     )]
     solver_time_limit: Duration,
 
-    /// Solver parameter: minimal average fee per order
-    /// Its unit is [OWL]
+    /// Subsidy factor used to compute the minimum average fee per order in a
+    /// solution as well as the gas cap for economically viable solution.
+    #[structopt(
+        long,
+        env = "ECONOMIC_VIABILITY_SUBSIDY_FACTOR",
+        default_value = "10.0"
+    )]
+    economic_viability_subsidy_factor: f64,
+
+    /// The default minimum average fee per order. This is passed to the solver
+    /// in case the computing its value fails. Its unit is [OWL]
     #[structopt(long, env = "MIN_AVG_FEE_PER_ORDER", default_value = "0")]
-    min_avg_fee_per_order: u128,
+    default_min_avg_fee_per_order: u128,
 
     /// The kind of scheduler to use.
     #[structopt(long, env = "SCHEDULER", default_value = "system")]
@@ -187,12 +199,6 @@ struct Options {
 
     #[structopt(long, env = "ORDERBOOK_FILE", parse(from_os_str))]
     orderbook_file: Option<PathBuf>,
-
-    /// We calculate the maximum gas price cap based on the amount of earned fees from solution
-    /// submission. This factor is multiplied with the final result because we do not need to be
-    /// economically viable at the moment.
-    #[structopt(long, env = "GAS_PRICE_CAP_SUBSIDY_FACTOR", default_value = "2.0")]
-    gas_price_cap_subsidy_factor: f64,
 }
 
 fn main() {
@@ -247,26 +253,37 @@ fn main() {
         Arc::new(*filtered_orderbook)
     };
 
-    let price_oracle = PriceOracle::new(
-        &http_factory,
-        orderbook.clone(),
-        contract.clone(),
-        options.token_data,
-        options.price_source_update_interval,
-    )
-    .unwrap();
+    let price_oracle = Arc::new(
+        PriceOracle::new(
+            &http_factory,
+            orderbook.clone(),
+            contract.clone(),
+            options.token_data,
+            options.price_source_update_interval,
+        )
+        .unwrap(),
+    );
+
+    let min_avg_fee = Arc::new(PriorityMinAverageFee::new(vec![
+        Box::new(ApproximateMinAverageFee::new(
+            price_oracle.clone(),
+            gas_station.clone(),
+            options.economic_viability_subsidy_factor,
+        )),
+        Box::new(FixedMinAverageFee(options.default_min_avg_fee_per_order)),
+    ]));
 
     // Setup price.
     let price_finder = price_finding::create_price_finder(
         Some(Fee::default()),
         options.solver_type,
         price_oracle,
-        options.min_avg_fee_per_order,
+        min_avg_fee,
         options.solver_internal_optimizer,
     );
 
     // Set up solution submitter.
-    let solution_submitter = StableXSolutionSubmitter::new(&*contract, &gas_station);
+    let solution_submitter = StableXSolutionSubmitter::new(&*contract, &*gas_station);
 
     // Set up the driver and start the run-loop.
     let driver = StableXDriverImpl::new(
@@ -274,7 +291,7 @@ fn main() {
         &*orderbook,
         &solution_submitter,
         &stablex_metrics,
-        options.gas_price_cap_subsidy_factor,
+        options.economic_viability_subsidy_factor,
     );
 
     let scheduler_config =
@@ -305,10 +322,10 @@ fn setup_metrics() -> (StableXMetrics, HttpMetrics) {
 fn setup_http_services(
     http_factory: &HttpFactory,
     options: &Options,
-) -> (Web3, GnosisSafeGasStation) {
+) -> (Web3, Arc<GnosisSafeGasStation>) {
     let web3 = web3_provider(http_factory, options.node_url.as_str(), options.rpc_timeout).unwrap();
     let gas_station = GnosisSafeGasStation::new(&http_factory, gas_station::DEFAULT_URI).unwrap();
-    (web3, gas_station)
+    (web3, Arc::new(gas_station))
 }
 
 fn duration_millis(s: &str) -> Result<Duration, ParseIntError> {
