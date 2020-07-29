@@ -1,3 +1,6 @@
+// TODO(nlordell): Remove this lint once we release a new `ethcontract` version
+// that does not trigger this lint.
+#![allow(unused_braces)]
 // NOTE: Required for automock.
 #![cfg_attr(test, allow(clippy::ptr_arg))]
 
