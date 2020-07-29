@@ -6,8 +6,19 @@ use isahc::http::uri::Uri;
 use serde::Deserialize;
 use uint::FromDecStrErr;
 
-/// The default uri at which the gas station api is available under.
-pub const DEFAULT_URI: &str = "https://safe-relay.gnosis.io/api/v1/gas-station/";
+/// The default uris at which the gas station api is available under.
+const DEFAULT_MAINNET_URI: &str = "https://safe-relay.gnosis.io/api/v1/gas-station/";
+const DEFAULT_RINKEBY_URI: &str = "https://safe-relay.rinkeby.gnosis.io/api/v1/gas-station/";
+
+pub fn api_url_from_network_id(network_id: u64) -> Option<&'static str> {
+    match network_id {
+        1 => Some(DEFAULT_MAINNET_URI),
+        4 => Some(DEFAULT_RINKEBY_URI),
+        // Using Rinkeby gas estimates for local ganache testing
+        5777 => Some(DEFAULT_RINKEBY_URI),
+        _ => None,
+    }
+}
 
 /// Result of the api call. Prices are in wei.
 #[derive(Deserialize, Debug, Default, Eq, PartialEq)]
@@ -101,7 +112,8 @@ pub mod tests {
     #[test]
     #[ignore]
     fn real_request() {
-        let gas_station = GnosisSafeGasStation::new(&HttpFactory::default(), DEFAULT_URI).unwrap();
+        let gas_station =
+            GnosisSafeGasStation::new(&HttpFactory::default(), DEFAULT_MAINNET_URI).unwrap();
         let gas_price = gas_station.estimate_gas_price().wait().unwrap();
         println!("{:?}", gas_price);
     }
