@@ -309,7 +309,8 @@ fn setup_http_services(
     let web3 = web3_provider(http_factory, options.node_url.as_str(), options.rpc_timeout).unwrap();
     let gas_station = GnosisSafeGasStation::new(
         &http_factory,
-        gas_station::api_url_from_network_id(options.network_id),
+        gas_station::api_url_from_network_id(options.network_id)
+            .expect("no gas station available for network_id"),
     )
     .unwrap();
     (web3, gas_station)
