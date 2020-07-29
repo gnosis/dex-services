@@ -21,41 +21,44 @@ impl PriceSource for AveragePriceSource {
         &'a self,
         tokens: &'a [TokenId],
     ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
-        async move {
-            let price_futures =
-                future::join_all(self.sources.iter().map(|s| s.get_prices(tokens))).await;
-
-            let acquired_prices: Vec<HashMap<TokenId, NonZeroU128>> = price_futures
-                .into_iter()
-                .filter_map(|f| match f {
-                    Ok(prices) => Some(prices),
-                    Err(err) => {
-                        log::warn!("Price source failed: {}", err);
-                        None
-                    }
-                })
-                .collect();
-
-            if !acquired_prices.is_empty() {
-                Ok(average_prices(acquired_prices))
-            } else {
-                Err(anyhow!("All price sources failed!"))
-            }
-        }
+        average_price_sources(
+            self.sources
+                .iter()
+                .map(|source| -> &dyn PriceSource { source.as_ref() }),
+            tokens,
+        )
         .boxed()
     }
 }
 
-/// Lossless merger of a collection of maps puts all available values into a list for each available key
-fn lossless_merge<T: Eq + Hash, U>(map_collection: Vec<HashMap<T, U>>) -> HashMap<T, Vec<U>> {
-    let mut gathered_maps: HashMap<T, Vec<U>> = HashMap::new();
-    for (key, value) in map_collection.into_iter().flatten() {
-        gathered_maps.entry(key).or_default().push(value);
+/// Get the price from each price source and apply `average_prices` to them.
+/// Errors if all price sources fail. If some but not all fail then the failure is logged and the
+/// failures are not part of the average but no error is returned.
+pub async fn average_price_sources(
+    sources: impl Iterator<Item = &dyn PriceSource>,
+    tokens: &[TokenId],
+) -> Result<HashMap<TokenId, NonZeroU128>> {
+    let futures = future::join_all(sources.map(|s| s.get_prices(tokens))).await;
+    let acquired_prices: Vec<_> = futures
+        .into_iter()
+        .filter_map(|f| match f {
+            Ok(prices) => Some(prices),
+            Err(err) => {
+                log::warn!("Price source failed: {}", err);
+                None
+            }
+        })
+        .collect();
+    if !acquired_prices.is_empty() {
+        Ok(average_prices(acquired_prices))
+    } else {
+        Err(anyhow!("All price sources failed!"))
     }
-    gathered_maps
 }
 
-fn average_prices(price_maps: Vec<HashMap<TokenId, NonZeroU128>>) -> HashMap<TokenId, NonZeroU128> {
+pub fn average_prices(
+    price_maps: Vec<HashMap<TokenId, NonZeroU128>>,
+) -> HashMap<TokenId, NonZeroU128> {
     // Lossless merger of the collection of hash maps. That is, putting all
     // available prices for each token into a list to be averaged at the end.
     lossless_merge(price_maps)
@@ -70,6 +73,15 @@ fn average_prices(price_maps: Vec<HashMap<TokenId, NonZeroU128>>) -> HashMap<Tok
             )
         })
         .collect()
+}
+
+/// Lossless merger of a collection of maps puts all available values into a list for each available key
+fn lossless_merge<T: Eq + Hash, U>(map_collection: Vec<HashMap<T, U>>) -> HashMap<T, Vec<U>> {
+    let mut gathered_maps: HashMap<T, Vec<U>> = HashMap::new();
+    for (key, value) in map_collection.into_iter().flatten() {
+        gathered_maps.entry(key).or_default().push(value);
+    }
+    gathered_maps
 }
 
 #[cfg(test)]
