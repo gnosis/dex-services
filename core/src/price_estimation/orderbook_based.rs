@@ -61,6 +61,7 @@ impl<T: LimitPriceEstimating> PriceSource for T {
                     self.estimate_limit_price(pair, ONE_OWL)?
                 };
                 let price_in_reference = 1.0 / price_in_token;
+                log::debug!("Fetched price for token {}: {}", token, price_in_reference);
                 Some((
                     *token,
                     NonZeroU128::new((ONE_OWL * price_in_reference) as u128)?,
