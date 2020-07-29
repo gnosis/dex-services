@@ -32,6 +32,7 @@ pub trait GasPriceEstimating {
     fn estimate_gas_price<'a>(&'a self) -> BoxFuture<'a, Result<GasPrice>>;
 }
 
+#[derive(Debug)]
 pub struct GnosisSafeGasStation {
     client: HttpClient,
     uri: Uri,
