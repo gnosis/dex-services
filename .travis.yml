@@ -24,7 +24,7 @@ jobs:
   include:
     - name: "Build and Local Testing"
       if: type = pull_request
-      rust: 1.43.0
+      rust: stable
       cache:
         directories:
           - $HOME/.cache/yarn
