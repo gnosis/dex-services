@@ -11,6 +11,7 @@ use anyhow::{anyhow, Context, Result};
 use futures::future::{self, BoxFuture, FutureExt as _};
 use futures::stream::{self, StreamExt};
 use std::collections::HashMap;
+use std::num::NonZeroU128;
 use std::sync::Arc;
 
 /// A client to the Kraken exchange.
@@ -87,7 +88,7 @@ where
     fn get_prices<'a>(
         &'a self,
         tokens: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
+    ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
         async move {
             let token_infos: Vec<_> = stream::iter(tokens)
                 .filter_map(|token| async move {
@@ -111,8 +112,10 @@ where
                 .filter_map(|(pair, info)| {
                     let token_id_and_pair = token_asset_pairs.get(&pair);
                     async move {
-                        let price = token_id_and_pair?.1.get_owl_price(info.p.last_24h());
-                        Some((token_id_and_pair?.0, price))
+                        let token_id_and_pair = token_id_and_pair?;
+                        let price = token_id_and_pair.1.get_owl_price(info.p.last_24h());
+                        log::debug!("Fetched price for token {}: {}", token_id_and_pair.0, price);
+                        Some((token_id_and_pair.0, NonZeroU128::new(price)?))
                     }
                 })
                 .collect()
@@ -163,9 +166,9 @@ mod tests {
     #[test]
     fn get_token_prices() {
         let tokens = hash_map! {
-            TokenId(1) => TokenInfoOverride::new("ETH", 18, 0),
-            TokenId(4) => TokenInfoOverride::new("USDC", 6, 0),
-            TokenId(5) => TokenInfoOverride::new("PAX", 18, 0),
+            TokenId(1) => TokenInfoOverride::new("ETH", 18, None),
+            TokenId(4) => TokenInfoOverride::new("USDC", 6, None),
+            TokenId(5) => TokenInfoOverride::new("PAX", 18, None),
         };
 
         let mut api = MockKrakenApi::new();
@@ -213,8 +216,8 @@ mod tests {
         assert_eq!(
             prices,
             hash_map! {
-                TokenId(1) => (99.0 * 10f64.powi(18)) as u128,
-                TokenId(4) => (1.01 * 10f64.powi(30)) as u128,
+                TokenId(1) => nonzero!((99.0 * 10f64.powi(18)) as u128),
+                TokenId(4) => nonzero!((1.01 * 10f64.powi(30)) as u128),
             }
         );
     }
@@ -231,16 +234,16 @@ mod tests {
         // ```
 
         let tokens = hash_map! {
-            TokenId(1) => TokenInfoOverride::new("WETH", 18, 0),
-            TokenId(2) => TokenInfoOverride::new("USDT", 6, 0),
-            TokenId(3) => TokenInfoOverride::new("TUSD", 18, 0),
-            TokenId(4) => TokenInfoOverride::new("USDC", 6, 0),
-            TokenId(5) => TokenInfoOverride::new("PAX", 18, 0),
-            TokenId(6) => TokenInfoOverride::new("GUSD", 2, 0),
-            TokenId(7) => TokenInfoOverride::new("DAI", 18, 0),
-            TokenId(8) => TokenInfoOverride::new("sETH", 18, 0),
-            TokenId(9) => TokenInfoOverride::new("sUSD", 18, 0),
-            TokenId(15) => TokenInfoOverride::new("SNX", 18, 0)
+            TokenId(1) => TokenInfoOverride::new("WETH", 18, None),
+            TokenId(2) => TokenInfoOverride::new("USDT", 6, None),
+            TokenId(3) => TokenInfoOverride::new("TUSD", 18, None),
+            TokenId(4) => TokenInfoOverride::new("USDC", 6, None),
+            TokenId(5) => TokenInfoOverride::new("PAX", 18, None),
+            TokenId(6) => TokenInfoOverride::new("GUSD", 2, None),
+            TokenId(7) => TokenInfoOverride::new("DAI", 18, None),
+            TokenId(8) => TokenInfoOverride::new("sETH", 18, None),
+            TokenId(9) => TokenInfoOverride::new("sUSD", 18, None),
+            TokenId(15) => TokenInfoOverride::new("SNX", 18, None),
         };
         let token_ids: Vec<TokenId> = tokens.keys().copied().collect();
 

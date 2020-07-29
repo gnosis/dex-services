@@ -1,3 +1,6 @@
+// TODO(nlordell): Remove this lint once we release a new `ethcontract` version
+// that does not trigger this lint.
+#![allow(unused_braces)]
 // NOTE: Required for automock.
 #![cfg_attr(test, allow(clippy::ptr_arg))]
 
@@ -85,7 +88,7 @@ pub enum NoopTransactionError {
     #[error("no account")]
     NoAccount,
     #[error("execution error: {0}")]
-    ExecutedOrder(#[from] ExecutionError),
+    ExecutionError(#[from] ExecutionError),
 }
 
 #[cfg_attr(test, automock)]
@@ -139,7 +142,6 @@ pub trait StableXContract {
         solution: Solution,
         claimed_objective_value: U256,
         gas_price: U256,
-        block_timeout: Option<usize>,
         nonce: U256,
     ) -> BoxFuture<'a, Result<(), MethodError>>;
 
@@ -147,6 +149,7 @@ pub trait StableXContract {
         &'a self,
         from_block: BlockNumber,
         to_block: BlockNumber,
+        block_page_size: u64,
     ) -> BoxFuture<'a, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>;
 
     fn stream_events<'a>(
@@ -285,7 +288,6 @@ impl StableXContract for StableXContractImpl {
         solution: Solution,
         claimed_objective_value: U256,
         gas_price: U256,
-        block_timeout: Option<usize>,
         nonce: U256,
     ) -> BoxFuture<'a, Result<(), MethodError>> {
         async move {
@@ -309,11 +311,7 @@ impl StableXContract for StableXContractImpl {
                 //   more gas than expected.
                 .gas(5_500_000.into())
                 .nonce(nonce);
-
-            method.tx.resolve = Some(ResolveCondition::Confirmed(ConfirmParams {
-                block_timeout,
-                ..Default::default()
-            }));
+            method.tx.resolve = Some(ResolveCondition::Confirmed(ConfirmParams::mined()));
             method.send().await.map(|_| ())
         }
         .boxed()
@@ -323,11 +321,13 @@ impl StableXContract for StableXContractImpl {
         &'a self,
         from_block: BlockNumber,
         to_block: BlockNumber,
+        block_page_size: u64,
     ) -> BoxFuture<'a, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>> {
         self.instance
             .all_events()
             .from_block(from_block)
             .to_block(to_block)
+            .block_page_size(block_page_size)
             .query_past_events_paginated()
             .boxed()
     }

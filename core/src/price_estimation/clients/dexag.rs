@@ -22,16 +22,16 @@ mod tests {
         use std::time::Instant;
 
         let tokens = hash_map! {
-            TokenId(1) => TokenInfoOverride::new("WETH", 18, 0),
-            TokenId(2) => TokenInfoOverride::new("USDT", 6, 0),
-            TokenId(3) => TokenInfoOverride::new("TUSD", 18, 0),
-            TokenId(4) => TokenInfoOverride::new("USDC", 6, 0),
-            TokenId(5) => TokenInfoOverride::new("PAX", 18, 0),
-            TokenId(6) => TokenInfoOverride::new("GUSD", 2, 0),
-            TokenId(7) => TokenInfoOverride::new("DAI", 18, 0),
-            TokenId(8) => TokenInfoOverride::new("sETH", 18, 0),
-            TokenId(9) => TokenInfoOverride::new("sUSD", 18, 0),
-            TokenId(15) => TokenInfoOverride::new("SNX", 18, 0)
+            TokenId(1) => TokenInfoOverride::new("WETH", 18, None),
+            TokenId(2) => TokenInfoOverride::new("USDT", 6, None),
+            TokenId(3) => TokenInfoOverride::new("TUSD", 18, None),
+            TokenId(4) => TokenInfoOverride::new("USDC", 6, None),
+            TokenId(5) => TokenInfoOverride::new("PAX", 18, None),
+            TokenId(6) => TokenInfoOverride::new("GUSD", 2, None),
+            TokenId(7) => TokenInfoOverride::new("DAI", 18, None),
+            TokenId(8) => TokenInfoOverride::new("sETH", 18, None),
+            TokenId(9) => TokenInfoOverride::new("sUSD", 18, None),
+            TokenId(15) => TokenInfoOverride::new("SNX", 18, None)
         };
         let mut ids: Vec<TokenId> = tokens.keys().copied().collect();
 

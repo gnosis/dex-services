@@ -4,6 +4,7 @@ use anyhow::{anyhow, Result};
 use futures::future::{self, BoxFuture, FutureExt as _};
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::num::NonZeroU128;
 
 pub struct AveragePriceSource {
     sources: Vec<Box<dyn PriceSource + Send + Sync>>,
@@ -19,12 +20,12 @@ impl PriceSource for AveragePriceSource {
     fn get_prices<'a>(
         &'a self,
         tokens: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
+    ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
         async move {
             let price_futures =
                 future::join_all(self.sources.iter().map(|s| s.get_prices(tokens))).await;
 
-            let acquired_prices: Vec<HashMap<TokenId, u128>> = price_futures
+            let acquired_prices: Vec<HashMap<TokenId, NonZeroU128>> = price_futures
                 .into_iter()
                 .filter_map(|f| match f {
                     Ok(prices) => Some(prices),
@@ -54,12 +55,20 @@ fn lossless_merge<T: Eq + Hash, U>(map_collection: Vec<HashMap<T, U>>) -> HashMa
     gathered_maps
 }
 
-fn average_prices(price_maps: Vec<HashMap<TokenId, u128>>) -> HashMap<TokenId, u128> {
+fn average_prices(price_maps: Vec<HashMap<TokenId, NonZeroU128>>) -> HashMap<TokenId, NonZeroU128> {
     // Lossless merger of the collection of hash maps. That is, putting all
     // available prices for each token into a list to be averaged at the end.
     lossless_merge(price_maps)
         .iter()
-        .map(|(token, prices)| (*token, prices.iter().sum::<u128>() / prices.len() as u128))
+        .map(|(token, prices)| {
+            (
+                *token,
+                NonZeroU128::new(
+                    prices.iter().map(|p| p.get()).sum::<u128>() / prices.len() as u128,
+                )
+                .expect("Averaging non-zero number will stay non-zero"),
+            )
+        })
         .collect()
 }
 
@@ -85,23 +94,21 @@ mod tests {
     #[test]
     fn average_prices_() {
         let p0 = hash_map! {
-            TokenId(0) => 0,
-            TokenId(1) => 1,
-            TokenId(2) => 10,
+            TokenId(1) => nonzero!(1),
+            TokenId(2) => nonzero!(10),
         };
         let p1 = hash_map! {
-            TokenId(1) => 3,
-            TokenId(2) => 10,
+            TokenId(1) => nonzero!(3),
+            TokenId(2) => nonzero!(10),
         };
         let p2 = hash_map! {
-            TokenId(2) => 20,
+            TokenId(2) => nonzero!(20),
         };
 
         let result = average_prices(vec![p0, p1, p2]);
         let expected = hash_map! {
-            TokenId(0) => 0,
-            TokenId(1) => 2,
-            TokenId(2) => 13,
+            TokenId(1) => nonzero!(2),
+            TokenId(2) => nonzero!(13),
         };
         assert_eq!(result, expected);
     }

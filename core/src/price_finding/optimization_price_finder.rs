@@ -1,9 +1,11 @@
-use crate::models::{self, TokenId, TokenInfo};
-use crate::price_estimation::PriceEstimating;
-use crate::price_finding::price_finder_interface::{
-    Fee, InternalOptimizer, PriceFinding, SolverType,
+use crate::{
+    models::{self, TokenId, TokenInfo},
+    price_estimation::PriceEstimating,
+    price_finding::{
+        min_avg_fee::MinAverageFeeComputing,
+        price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
+    },
 };
-
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use ethcontract::U256;
@@ -193,8 +195,8 @@ pub struct OptimisationPriceFinder {
     io_methods: Arc<dyn Io + Send + Sync>,
     fee: Option<Fee>,
     solver_type: SolverType,
-    price_oracle: Box<dyn PriceEstimating + Sync>,
-    min_avg_fee_per_order: u128,
+    price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
+    min_avg_fee: Arc<dyn MinAverageFeeComputing>,
     internal_optimizer: InternalOptimizer,
 }
 
@@ -202,16 +204,16 @@ impl OptimisationPriceFinder {
     pub fn new(
         fee: Option<Fee>,
         solver_type: SolverType,
-        price_oracle: impl PriceEstimating + Sync + 'static,
-        min_avg_fee_per_order: u128,
+        price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
+        min_avg_fee: Arc<dyn MinAverageFeeComputing>,
         internal_optimizer: InternalOptimizer,
     ) -> Self {
         OptimisationPriceFinder {
             io_methods: Arc::new(DefaultIo),
             fee,
             solver_type,
-            price_oracle: Box::new(price_oracle),
-            min_avg_fee_per_order,
+            price_oracle,
+            min_avg_fee,
             internal_optimizer,
         }
     }
@@ -279,7 +281,7 @@ impl PriceFinding for OptimisationPriceFinder {
             // `blocking::unblock` requires the closure to be 'static.
             let io_methods = self.io_methods.clone();
             let solver_type = self.solver_type;
-            let min_avg_fee_per_order = self.min_avg_fee_per_order;
+            let min_avg_fee_per_order = self.min_avg_fee.current().await?;
             let internal_optimizer = self.internal_optimizer;
             let result = blocking::unblock!(io_methods.run_solver(
                 &input_file,
@@ -362,13 +364,14 @@ impl Io for DefaultIo {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::models::AccountState;
-    use crate::price_estimation::MockPriceEstimating;
-    use crate::util::test_util::map_from_slice;
-    use crate::util::FutureWaitExt as _;
+    use crate::{
+        models::AccountState, price_estimation::MockPriceEstimating,
+        price_finding::min_avg_fee::MockMinAverageFeeComputing, util::test_util::map_from_slice,
+        util::FutureWaitExt as _,
+    };
     use ethcontract::Address;
     use serde_json::json;
-    use std::collections::BTreeMap;
+    use std::{collections::BTreeMap, sync::Arc};
 
     #[test]
     fn token_id_serialization() {
@@ -631,11 +634,16 @@ pub mod tests {
                 .boxed()
             });
 
+        let mut min_avg_fee = MockMinAverageFeeComputing::new();
+        min_avg_fee
+            .expect_current()
+            .returning(|| immediate!(Ok(10u128.pow(18))));
+
         let mut io_methods = MockIo::new();
         io_methods
             .expect_run_solver()
             .times(1)
-            .withf(|_, content: &str, _, _, _, _, _| {
+            .withf(move |_, content: &str, _, _, _, _, _| {
                 let json: serde_json::value::Value = serde_json::from_str(content).unwrap();
                 json["fee"]
                     == json!({
@@ -647,9 +655,9 @@ pub mod tests {
         let solver = OptimisationPriceFinder {
             io_methods: Arc::new(io_methods),
             fee: Some(fee),
-            min_avg_fee_per_order: 0,
             solver_type: SolverType::StandardSolver,
-            price_oracle: Box::new(price_oracle),
+            price_oracle: Arc::new(price_oracle),
+            min_avg_fee: Arc::new(min_avg_fee),
             internal_optimizer: InternalOptimizer::Scip,
         };
         let orders = vec![];

@@ -3,6 +3,7 @@ use crate::models::TokenId;
 use anyhow::Result;
 use futures::future::{BoxFuture, FutureExt as _};
 use std::collections::HashMap;
+use std::num::NonZeroU128;
 
 /**
  * A price source that sequentially queries its inner sources in order and returns the
@@ -22,7 +23,7 @@ impl PriceSource for PriorityPriceSource {
     fn get_prices<'a>(
         &'a self,
         tokens: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
+    ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
         async move {
             let mut remaining_tokens = tokens.to_vec();
             let mut result = HashMap::new();
@@ -61,7 +62,7 @@ mod tests {
             .withf(|token| token == &[TokenId::from(1), TokenId::from(2)][..])
             .returning(|_| {
                 immediate!(Ok(hash_map! {
-                        TokenId::from(1) => 100
+                        TokenId::from(1) => nonzero!(100)
                 }))
             });
         // Expect second source to be called with missing tokens
@@ -71,7 +72,7 @@ mod tests {
             .withf(|token| token == &[TokenId::from(2)][..])
             .returning(|_| {
                 immediate!(Ok(hash_map! {
-                    TokenId::from(2) => 50
+                    TokenId::from(2) => nonzero!(50)
                 }))
             });
 
@@ -92,7 +93,7 @@ mod tests {
             .returning(|_| immediate!(Err(anyhow!("Error"))));
         second_source.expect_get_prices().returning(|_| {
             immediate!(Ok(hash_map! {
-                TokenId::from(1) => 50
+                TokenId::from(1) => nonzero!(50)
             }))
         });
 
@@ -105,7 +106,7 @@ mod tests {
                 .unwrap()
                 .unwrap(),
             hash_map! {
-                TokenId::from(1) => 50
+                TokenId::from(1) => nonzero!(50)
             }
         );
     }
@@ -116,7 +117,7 @@ mod tests {
 
         source.expect_get_prices().returning(|_| {
             immediate!(Ok(hash_map! {
-                TokenId::from(2) => 50
+                TokenId::from(2) => nonzero!(50)
             }))
         });
 
@@ -128,7 +129,7 @@ mod tests {
                 .unwrap()
                 .unwrap(),
             hash_map! {
-                TokenId::from(2) => 50
+                TokenId::from(2) => nonzero!(50)
             }
         );
     }
