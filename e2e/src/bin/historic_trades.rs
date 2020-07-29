@@ -4,11 +4,12 @@ use core::{
     models::BatchId,
 };
 use e2e::cmd;
-use pricegraph::{Element, Pricegraph, TokenPair};
+use pricegraph::{Element, Pricegraph, TokenPair, U256};
 use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
 
 const FULLY_FILLED_THREASHOLD: f64 = 0.95;
+const MIN_AMOUNT: u128 = 10_000;
 
 /// Common options for analyzing historic batch data.
 #[derive(Debug, StructOpt)]
@@ -29,7 +30,9 @@ struct Options {
 
 fn main() -> Result<()> {
     let options = Options::from_args();
-    let mut report = Report::new(File::create(options.output_dir.join("trades.csv"))?)?;
+
+    let mut report = Report::new(File::create(options.output_dir.join("trades.csv"))?);
+    report.header()?;
 
     cmd::for_each_batch(&options.orderbook_file, |history, batch| {
         let auction_elements = history.auction_elements_for_batch(batch)?;
@@ -38,8 +41,10 @@ fn main() -> Result<()> {
         let new_orders = auction_elements
             .iter()
             .filter(|order| batch == order.valid.from)
-            .filter(|order| order.price.numerator != 0 && order.price.denominator != 0);
+            .filter(|order| order.price.numerator != 0 && order.price.denominator > MIN_AMOUNT)
+            .filter(|order| order.balance > U256::from(MIN_AMOUNT));
         for order in new_orders {
+            let settlement = settlement.as_ref();
             let pricegraph = Pricegraph::new(
                 auction_elements
                     .iter()
@@ -47,51 +52,14 @@ fn main() -> Result<()> {
                     .cloned(),
             );
 
-            let limit_price = order.price.numerator as f64 / order.price.denominator as f64;
-            let effective_amount =
-                pricegraph::num::u256_to_f64(order.balance).min(order.remaining_sell_amount as _);
-            let estimated_limit_price =
-                pricegraph.estimate_limit_price(order.pair, effective_amount);
-
-            if limit_price > estimated_limit_price.unwrap_or_default() {
-                let settled_xrate = settlement
-                    .as_ref()
-                    .and_then(|settlement| find_settled_exchange_rate(settlement, order.pair));
-                match settled_xrate {
-                    Some(xrate) if xrate > limit_price => {
-                        report.overly_pessimistic_estimate(batch, &order, xrate)?
-                    }
-                    _ => report.unreasonable_order(batch, &order)?,
-                };
-
-                continue;
-            }
-
-            let settlement = match settlement.as_ref() {
-                Some(value) => value,
-                None => {
-                    report.no_solution(batch, &order)?;
-                    continue;
-                }
+            let meta = OrderMetadata::compute(settlement, order, &pricegraph);
+            let result = if meta.is_resonable_order() {
+                process_reasonable_order(settlement, order, &meta)
+            } else {
+                process_unreasonable_order(&meta)
             };
 
-            match find_trade(settlement, order) {
-                Some(trade) => {
-                    let trade_ratio = trade.executed_sell_amount as f64 / effective_amount;
-                    if trade_ratio > FULLY_FILLED_THREASHOLD {
-                        report.fully_matched(batch, &order, &trade)?;
-                    } else {
-                        report.fully_matched(batch, &order, &trade)?;
-                    }
-                }
-                None => match find_settled_exchange_rate(settlement, order.pair) {
-                    Some(xrate) if xrate > limit_price => {
-                        report.disregarded_order(batch, &order)?
-                    }
-                    Some(xrate) => report.incorrect_estimate(batch, &order, xrate)?,
-                    None => report.not_traded(batch, &order)?,
-                },
-            }
+            report.record_result(batch, settlement, order, &meta, result)?;
         }
 
         Ok(())
@@ -100,11 +68,82 @@ fn main() -> Result<()> {
     report.summary()
 }
 
-fn find_trade<'a>(settlement: &'a Settlement, order: &Element) -> Option<&'a Trade> {
+struct OrderMetadata {
+    effective_sell_amount: f64,
+    limit_price: f64,
+    estimated_limit_price: Option<f64>,
+    settled_xrate: Option<f64>,
+    trade: Option<Trade>,
+}
+
+impl OrderMetadata {
+    fn compute(settlement: Option<&Settlement>, order: &Element, pricegraph: &Pricegraph) -> Self {
+        let effective_sell_amount =
+            pricegraph::num::u256_to_f64(order.balance).min(order.remaining_sell_amount as _);
+        let limit_price = order.price.numerator as f64 / order.price.denominator as f64;
+        let estimated_limit_price =
+            pricegraph.estimate_limit_price(order.pair, effective_sell_amount);
+        let settled_xrate =
+            settlement.and_then(|settlement| find_settled_exchange_rate(settlement, order.pair));
+        let trade = settlement.and_then(|settlement| find_trade(settlement, order));
+
+        OrderMetadata {
+            effective_sell_amount,
+            limit_price,
+            estimated_limit_price,
+            settled_xrate,
+            trade,
+        }
+    }
+
+    fn is_resonable_order(&self) -> bool {
+        match self.estimated_limit_price {
+            Some(estimated_limit_price) => self.limit_price <= estimated_limit_price,
+            None => false,
+        }
+    }
+
+    fn fill_ratio(&self) -> Option<f64> {
+        self.trade
+            .as_ref()
+            .map(|trade| trade.executed_sell_amount as f64 / self.effective_sell_amount)
+    }
+}
+
+fn process_reasonable_order(
+    settlement: Option<&Settlement>,
+    order: &Element,
+    meta: &OrderMetadata,
+) -> TradeResult {
+    let settlement = match settlement {
+        Some(value) => value,
+        None => return TradeResult::NoSolution,
+    };
+
+    match meta.fill_ratio() {
+        Some(trade_ratio) if trade_ratio > FULLY_FILLED_THREASHOLD => TradeResult::FullyMatched,
+        Some(_) => TradeResult::PartiallyMatched,
+        None => match find_settled_exchange_rate(settlement, order.pair) {
+            Some(xrate) if xrate > meta.limit_price => TradeResult::SkippedMatchableOrder,
+            Some(_) => TradeResult::OverlyOptimistic,
+            None => TradeResult::NotTraded,
+        },
+    }
+}
+
+fn process_unreasonable_order(meta: &OrderMetadata) -> TradeResult {
+    match meta.settled_xrate {
+        Some(xrate) if xrate > meta.limit_price => TradeResult::OverlyPessimistic,
+        _ => TradeResult::UnreasonableOrderNotMatched,
+    }
+}
+
+fn find_trade(settlement: &Settlement, order: &Element) -> Option<Trade> {
     settlement
         .trades
         .iter()
         .find(|trade| (trade.owner, trade.order_id) == (order.user, order.id))
+        .cloned()
 }
 
 fn find_settled_exchange_rate(settlement: &Settlement, pair: TokenPair) -> Option<f64> {
@@ -133,6 +172,19 @@ fn find_settled_exchange_rate(settlement: &Settlement, pair: TokenPair) -> Optio
     )
 }
 
+enum TradeResult {
+    FullyMatched,
+    UnreasonableOrderNotMatched,
+
+    OverlyPessimistic,
+    SkippedMatchableOrder,
+
+    PartiallyMatched,
+    OverlyOptimistic,
+    NoSolution,
+    NotTraded,
+}
+
 struct Report<T> {
     output: T,
     skipped: usize,
@@ -144,67 +196,81 @@ impl<T> Report<T>
 where
     T: Write,
 {
-    fn new(mut output: T) -> Result<Self> {
-        write!(&mut output, "")?;
-        Ok(Report {
+    fn new(output: T) -> Self {
+        Report {
             output,
             skipped: 0,
             success: 0,
             failed: 0,
-        })
+        }
     }
 
-    fn unreasonable_order(&mut self, batch: BatchId, order: &Element) -> Result<()> {
-        self.skipped += 1;
+    fn header(&mut self) -> Result<()> {
+        let rows = [
+            "batch",
+            "order",
+            "solved",
+            "sellAmount",
+            "limitPrice",
+            "estimatedXrate",
+            "settledXrate",
+            "fillAmount",
+        ];
+        writeln!(&mut self.output, "{}", rows.join(","))?;
         Ok(())
     }
 
-    fn overly_pessimistic_estimate(
+    fn record_result(
         &mut self,
         batch: BatchId,
+        settlement: Option<&Settlement>,
         order: &Element,
-        settled_price: f64,
+        meta: &OrderMetadata,
+        result: TradeResult,
     ) -> Result<()> {
-        self.skipped += 1;
-        Ok(())
-    }
+        let order_uid = format!("{}-{}", order.user, order.id);
+        let solved = settlement.is_some();
 
-    fn no_solution(&mut self, batch: BatchId, order: &Element) -> Result<()> {
-        self.skipped += 1;
-        Ok(())
-    }
+        writeln!(
+            &mut self.output,
+            "{},{},{},{},{},{},{},{}",
+            batch,
+            order_uid,
+            solved,
+            meta.effective_sell_amount,
+            meta.limit_price,
+            meta.estimated_limit_price.unwrap_or_default(),
+            meta.settled_xrate.unwrap_or_default(),
+            meta.fill_ratio().unwrap_or_default(),
+        )?;
 
-    fn fully_matched(&mut self, batch: BatchId, order: &Element, trade: &Trade) -> Result<()> {
-        self.success += 1;
-        Ok(())
-    }
+        match result {
+            TradeResult::FullyMatched | TradeResult::UnreasonableOrderNotMatched => {
+                self.success += 1
+            }
+            TradeResult::OverlyPessimistic | TradeResult::SkippedMatchableOrder => {
+                self.skipped += 1
+            }
+            TradeResult::PartiallyMatched
+            | TradeResult::OverlyOptimistic
+            | TradeResult::NoSolution
+            | TradeResult::NotTraded => self.failed += 1,
+        };
 
-    fn partially_matched(&mut self, batch: BatchId, order: &Element, trade: &Trade) -> Result<()> {
-        self.failed += 1;
-        Ok(())
-    }
-
-    fn disregarded_order(&mut self, batch: BatchId, order: &Element) -> Result<()> {
-        self.skipped += 1;
-        Ok(())
-    }
-
-    fn incorrect_estimate(
-        &mut self,
-        batch: BatchId,
-        order: &Element,
-        settled_price: f64,
-    ) -> Result<()> {
-        self.failed += 1;
-        Ok(())
-    }
-
-    fn not_traded(&mut self, batch: BatchId, order: &Element) -> Result<()> {
-        self.failed += 1;
         Ok(())
     }
 
     fn summary(&mut self) -> Result<()> {
+        let total = self.success + self.skipped + self.failed;
+        let percent = |value: usize| 100.0 * value as f64 / total as f64;
+        println!(
+            "Processed {} orders: {:.2}% correct, {:.2}% failed, {:.2}% skipped.",
+            total,
+            percent(self.success),
+            percent(self.skipped),
+            percent(self.failed),
+        );
+
         Ok(())
     }
 }
