@@ -442,6 +442,7 @@ name = "core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "assert_approx_eq",
  "async-std",
  "bincode",
  "blocking 0.5.0",

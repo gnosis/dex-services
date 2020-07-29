@@ -144,6 +144,7 @@ Afterwards, when you run your environment e.g. with `docker-compose up stablex` 
 The binary can be configured via command line options and environment variables: `cargo run -- --help`
 
 ```
+driver 0.1.0
 Gnosis Exchange protocol driver.
 
 USAGE:
@@ -159,18 +160,23 @@ FLAGS:
 
 OPTIONS:
         --auction-data-page-size <auction-data-page-size>
-            The page size with which to read orders from the smart contract [env: AUCTION_DATA_PAGE_SIZE=]  [default:
-            100]
+            For storage based orderbook reading, the page size with which to read orders from the smart contract. For
+            event based orderbook reading, the number of blocks to fetch events for at a time [env:
+            AUCTION_DATA_PAGE_SIZE=]  [default: 500]
+        --default-min-avg-fee-per-order <default-min-avg-fee-per-order>
+            The default minimum average fee per order. This is passed to the solver in case the computing its value
+            fails. Its unit is [OWL] [env: MIN_AVG_FEE_PER_ORDER=]  [default: 0]
+        --economic-viability-subsidy-factor <economic-viability-subsidy-factor>
+            Subsidy factor used to compute the minimum average fee per order in a solution as well as the gas cap for
+            economically viable solution [env: ECONOMIC_VIABILITY_SUBSIDY_FACTOR=]  [default: 10.0]
         --http-timeout <http-timeout>
             The default timeout in milliseconds of HTTP requests to remote services such as the Gnosis Safe gas station
             and exchange REST APIs for fetching price estimates [env: HTTP_TIMEOUT=]  [default: 10000]
         --log-filter <log-filter>
             The log filter to use.
+
             This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug'). [env: DFUSION_LOG=]  [default:
-            warn,driver=info]
-        --min-avg-fee-per-order <min-avg-fee-per-order>
-            Solver parameter: minimal average fee per order Its unit is [OWL] [env: MIN_AVG_FEE_PER_ORDER=]  [default:
-            0]
+            warn,driver=info,core=info]
     -i, --network-id <network-id>
             The network ID used for signing transactions (e.g. 1 for mainnet, 4 for rinkeby, 5777 for ganache) [env:
             NETWORK_ID=]
@@ -182,6 +188,7 @@ OPTIONS:
 
         --orderbook-filter <orderbook-filter>
             JSON encoded object of which tokens/orders to ignore.
+
             For example: '{ "tokens": {"Whitelist": [1, 2]}, "users": { "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A": {
             "OrderIds": [0, 1] }, "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B": "All" } }' More examples can be found in
             the tests of orderbook/filtered_orderboook.rs [env: ORDERBOOK_FILTER=]  [default: {}]
@@ -189,8 +196,8 @@ OPTIONS:
             Time interval in seconds in which price sources should be updated [env: PRICE_SOURCE_UPDATE_INTERVAL=]
             [default: 300]
         --primary-orderbook <primary-orderbook>
-            Primary method for orderbook retrieval ("Paginated" or "OnchainFiltered") [env: PRIMARY_ORDERBOOK=]
-            [default: paginated]
+            Primary method for orderbook retrieval [env: PRIMARY_ORDERBOOK=]  [default: eventbased]
+
     -k, --private-key <private-key>
             The private key used by the driver to sign transactions [env: PRIVATE_KEY]
 
@@ -216,6 +223,7 @@ OPTIONS:
             TARGET_START_SOLVE_TIME=]  [default: 30]
         --token-data <token-data>
             JSON encoded backup token information to provide to the solver.
+
             For example: '{ "T0001": { "alias": "WETH", "decimals": 18, "externalPrice": 200000000000000000000,
             "shouldEstimatePrice": false }, "T0004": { "alias": "USDC", "decimals": 6, "externalPrice":
             1000000000000000000000000000000, "shouldEstimatePrice": true } }' [env: TOKEN_DATA=]  [default: {}]
