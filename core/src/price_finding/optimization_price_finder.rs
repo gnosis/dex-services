@@ -261,9 +261,9 @@ impl PriceFinding for OptimisationPriceFinder {
             // We are solving the batch before the current one
             let batch_id = (now.timestamp() / 300) - 1;
             let date = now.format("%Y-%m-%d");
-            let pwd = env::current_dir()?;
+            let current_directory = env::current_dir()?;
 
-            let input_folder = format!("{}/instances/{}", pwd.display(), &date);
+            let input_folder = format!("{}/instances/{}", current_directory.display(), &date);
             let input_file = format!(
                 "{}/instance_{}_{}.json",
                 &input_folder,
@@ -273,7 +273,7 @@ impl PriceFinding for OptimisationPriceFinder {
 
             let result_folder = format!(
                 "{}/results/{}/instance_{}_{}/",
-                &pwd.display(),
+                &current_directory.display(),
                 &date,
                 &batch_id,
                 &now.to_rfc3339()
