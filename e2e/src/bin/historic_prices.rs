@@ -1,7 +1,7 @@
 use anyhow::Result;
 use core::{history::Settlement, models::BatchId};
 use e2e::cmd;
-use pricegraph::{Element, Pricegraph};
+use pricegraph::{Element, Pricegraph, TokenId};
 use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
 
@@ -24,10 +24,9 @@ struct Options {
 
 fn main() -> Result<()> {
     let options = Options::from_args();
+    let mut report = Report::new(File::create(&options.output_dir.join("prices.csv"))?);
 
-    let mut spreads = File::create(&options.output_dir.join("spreads.csv"))?;
-    writeln!(&mut spreads, "batch,token,price,estimate")?;
-
+    report.header()?;
     cmd::for_each_batch(&options.orderbook_file, |history, batch| {
         let settlement = match history.settlement_for_batch(batch) {
             Some(value) => value,
@@ -35,18 +34,23 @@ fn main() -> Result<()> {
         };
 
         let auction_elements = history.auction_elements_for_batch(batch)?;
-        check_batch_prices(batch, &auction_elements, &settlement, &mut spreads)?;
+        check_batch_prices(&mut report, batch, &auction_elements, &settlement)?;
 
         Ok(())
-    })
+    })?;
+
+    report.summary()
 }
 
-fn check_batch_prices(
+fn check_batch_prices<T>(
+    report: &mut Report<T>,
     batch: BatchId,
     auction_elements: &[Element],
     settlement: &Settlement,
-    mut output: impl Write,
-) -> Result<()> {
+) -> Result<()>
+where
+    T: Write,
+{
     let token_ids = &settlement.solution.token_ids_for_price;
     let prices = &settlement.solution.prices;
     debug_assert_eq!(
@@ -65,8 +69,55 @@ fn check_batch_prices(
         let price = prices[token_index];
         let estimate = pricegraph.estimate_token_price(token).unwrap_or(0.0) as u128;
 
-        writeln!(&mut output, "{},{},{},{}", batch, token, price, estimate)?;
+        report.row(batch, token, price, estimate)?;
     }
 
     Ok(())
+}
+
+struct Report<T> {
+    output: T,
+    samples: usize,
+    total_error: f64,
+}
+
+impl<T> Report<T>
+where
+    T: Write,
+{
+    fn new(output: T) -> Self {
+        Report {
+            output,
+            total_error: 0.0,
+            samples: 0,
+        }
+    }
+
+    fn header(&mut self) -> Result<()> {
+        writeln!(&mut self.output, "batch,token,price,estimate,error")?;
+        Ok(())
+    }
+
+    fn row(&mut self, batch: BatchId, token: TokenId, price: u128, estimate: u128) -> Result<()> {
+        let error = (estimate as f64 - price as f64).abs() / price as f64;
+        writeln!(
+            &mut self.output,
+            "{},{},{},{},{}",
+            batch, token, price, estimate, error,
+        )?;
+
+        self.samples += 1;
+        self.total_error += error;
+
+        Ok(())
+    }
+
+    fn summary(&self) -> Result<()> {
+        println!(
+            "Processed {} token prices: average error {:.2}%.",
+            self.samples,
+            100.0 * self.total_error / self.samples as f64,
+        );
+        Ok(())
+    }
 }
