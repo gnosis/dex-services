@@ -9,7 +9,7 @@ use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
 
 const FULLY_FILLED_THREASHOLD: f64 = 0.95;
-const MIN_AMOUNT: u128 = 10_000;
+const MIN_AMOUNT: u128 = pricegraph::MIN_AMOUNT as _;
 
 /// Common options for analyzing historic batch data.
 #[derive(Debug, StructOpt)]
