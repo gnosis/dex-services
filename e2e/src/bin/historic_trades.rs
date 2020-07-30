@@ -8,7 +8,7 @@ use pricegraph::{Element, Pricegraph, TokenPair, U256};
 use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
 
-const FULLY_FILLED_THREASHOLD: f64 = 0.95;
+const FULLY_FILLED_THRESHOLD: f64 = 0.95;
 const MIN_AMOUNT: u128 = pricegraph::MIN_AMOUNT as _;
 
 /// Common options for analyzing historic batch data.
@@ -53,7 +53,7 @@ fn main() -> Result<()> {
             );
 
             let meta = OrderMetadata::compute(settlement, order, &pricegraph);
-            let result = if meta.is_resonable_order() {
+            let result = if meta.is_reasonably_priced_order() {
                 process_reasonable_order(settlement, order, &meta)
             } else {
                 process_unreasonable_order(&meta)
@@ -68,6 +68,34 @@ fn main() -> Result<()> {
     report.summary()
 }
 
+fn process_reasonable_order(
+    settlement: Option<&Settlement>,
+    order: &Element,
+    meta: &OrderMetadata,
+) -> TradeResult {
+    let settlement = match settlement {
+        Some(value) => value,
+        None => return TradeResult::NoSolution,
+    };
+
+    match meta.fill_ratio() {
+        Some(trade_ratio) if trade_ratio > FULLY_FILLED_THRESHOLD => TradeResult::FullyMatched,
+        Some(_) => TradeResult::PartiallyMatched,
+        None => match find_settled_exchange_rate(settlement, order.pair) {
+            Some(xrate) if xrate > meta.limit_price => TradeResult::SkippedMatchableOrder,
+            Some(_) => TradeResult::OverlyOptimistic,
+            None => TradeResult::NotTraded,
+        },
+    }
+}
+
+fn process_unreasonable_order(meta: &OrderMetadata) -> TradeResult {
+    match meta.settled_xrate {
+        Some(xrate) if xrate > meta.limit_price => TradeResult::OverlyPessimistic,
+        _ => TradeResult::UnreasonableOrderNotMatched,
+    }
+}
+
 struct OrderMetadata {
     effective_sell_amount: f64,
     limit_price: f64,
@@ -77,6 +105,8 @@ struct OrderMetadata {
 }
 
 impl OrderMetadata {
+    /// Computes order metadata based on a batch settlement (solution), order
+    /// data and a `Pricegraph` instance.
     fn compute(settlement: Option<&Settlement>, order: &Element, pricegraph: &Pricegraph) -> Self {
         let effective_sell_amount =
             pricegraph::num::u256_to_f64(order.balance).min(order.remaining_sell_amount as _);
@@ -96,45 +126,25 @@ impl OrderMetadata {
         }
     }
 
-    fn is_resonable_order(&self) -> bool {
+    /// Returns `true` if an order is considered reasonably priced, `false`
+    /// otherwise. An order is considered reasonably priced if its limit price
+    /// is lower (or "worse" for the order owner) than the `Pricegraph`
+    /// estimated limit price for the order's token pair.
+    fn is_reasonably_priced_order(&self) -> bool {
         match self.estimated_limit_price {
             Some(estimated_limit_price) => self.limit_price <= estimated_limit_price,
             None => false,
         }
     }
 
+    /// The ratio at which the order is filled - `0` being not filled at all and
+    /// `1` if the order is fully filled.
+    ///
+    /// Returns `None` if the order was not traded.
     fn fill_ratio(&self) -> Option<f64> {
         self.trade
             .as_ref()
             .map(|trade| trade.executed_sell_amount as f64 / self.effective_sell_amount)
-    }
-}
-
-fn process_reasonable_order(
-    settlement: Option<&Settlement>,
-    order: &Element,
-    meta: &OrderMetadata,
-) -> TradeResult {
-    let settlement = match settlement {
-        Some(value) => value,
-        None => return TradeResult::NoSolution,
-    };
-
-    match meta.fill_ratio() {
-        Some(trade_ratio) if trade_ratio > FULLY_FILLED_THREASHOLD => TradeResult::FullyMatched,
-        Some(_) => TradeResult::PartiallyMatched,
-        None => match find_settled_exchange_rate(settlement, order.pair) {
-            Some(xrate) if xrate > meta.limit_price => TradeResult::SkippedMatchableOrder,
-            Some(_) => TradeResult::OverlyOptimistic,
-            None => TradeResult::NotTraded,
-        },
-    }
-}
-
-fn process_unreasonable_order(meta: &OrderMetadata) -> TradeResult {
-    match meta.settled_xrate {
-        Some(xrate) if xrate > meta.limit_price => TradeResult::OverlyPessimistic,
-        _ => TradeResult::UnreasonableOrderNotMatched,
     }
 }
 
@@ -173,15 +183,33 @@ fn find_settled_exchange_rate(settlement: &Settlement, pair: TokenPair) -> Optio
 }
 
 enum TradeResult {
+    /// Order was reasonably priced and fully matched by the solver.
     FullyMatched,
+    /// Order was unreasonably priced and not matched at all by the solver.
     UnreasonableOrderNotMatched,
 
+    /// The order's price estimate was overly pessimistic. It was considered an
+    /// unreasonably priced order but still partially or fully matched by the
+    /// solver.
     OverlyPessimistic,
+    /// The order's limit price overlaps with the solutions price vector. This
+    /// indicates that the order's limit price and estimated limit price were
+    /// "good", but the order was not used by the solver in its solution.
     SkippedMatchableOrder,
 
+    /// The order was reasonably priced but only partially matched by the
+    /// solver.
     PartiallyMatched,
+    /// The order was reasonably priced, but the solver's solution produced a
+    /// price vector such that the order's limit price was not overlapping. This
+    /// indicates that the `pricegraph` price estimate was wrong.
     OverlyOptimistic,
+    /// No solution was submitted despite existing overlapping orders. This
+    /// could indicate that additional solver constraints are not properly
+    /// being accounted for.
     NoSolution,
+    /// The token pair for the order was not traded. This has similar
+    /// implications to the `NoSolution` variant.
     NotTraded,
 }
 
