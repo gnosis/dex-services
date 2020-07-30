@@ -12,6 +12,7 @@ use log::error;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::display_fromstr;
 use std::collections::BTreeMap;
+use std::env;
 use std::fmt::{Debug, Display};
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
@@ -260,8 +261,9 @@ impl PriceFinding for OptimisationPriceFinder {
             // We are solving the batch before the current one
             let batch_id = (now.timestamp() / 300) - 1;
             let date = now.format("%Y-%m-%d");
+            let pwd = env::current_dir()?;
 
-            let input_folder = format!("instances/{}", &date);
+            let input_folder = format!("{}/instances/{}", pwd.display(), &date);
             let input_file = format!(
                 "{}/instance_{}_{}.json",
                 &input_folder,
@@ -270,7 +272,8 @@ impl PriceFinding for OptimisationPriceFinder {
             );
 
             let result_folder = format!(
-                "results/{}/instance_{}_{}/",
+                "{}/results/{}/instance_{}_{}/",
+                &pwd.display(),
                 &date,
                 &batch_id,
                 &now.to_rfc3339()
