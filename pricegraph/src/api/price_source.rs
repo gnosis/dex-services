@@ -7,9 +7,13 @@ use crate::{Pricegraph, FEE_TOKEN};
 const OWL_BASE_UNIT: f64 = 1_000_000_000_000_000_000.0;
 
 impl Pricegraph {
-    /// Estimates the fee token price in WEI for the specified token. Returns
-    /// `None` if there token is not connected to the fee token (that is, there
-    /// is no transitive order buying the fee token for the specified token).
+    /// Estimates the fee token price in atoms for the specified token.
+    /// Specifically, this price repesents the number of OWL atoms required to
+    /// buy 10e18 atoms of the specified token.
+    ///
+    /// Returns `None` if there token is not connected to the fee token (that
+    /// is, there is no transitive order buying the fee token for the specified
+    /// token).
     ///
     /// The fee token is defined as the token with ID 0.
     pub fn estimate_token_price(&self, token: TokenId) -> Option<f64> {
@@ -17,10 +21,10 @@ impl Pricegraph {
             return Some(OWL_BASE_UNIT);
         }
 
-        // Estimate price of selling 1 unit of the reference token for each
-        // token. We sell rather than buy the reference token because volume is
-        // denominated in the sell token, for which we know the number of
-        // decimals.
+        // NOTE: Estimate price of selling 1 unit of the reference token for the
+        // specified token. We sell rather than buy the reference token because
+        // volume is denominated in the sell token, for which we know the number
+        // of decimals.
         let pair = TokenPair {
             buy: token,
             sell: FEE_TOKEN,
