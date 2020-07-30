@@ -17,7 +17,7 @@ use crate::{
     models::{Order, TokenId, TokenInfo},
     orderbook::StableXOrderBookReading,
 };
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use average_price_source::AveragePriceSource;
 use futures::future::{BoxFuture, FutureExt as _};
 use log::warn;
@@ -116,14 +116,10 @@ impl PriceOracle {
         }
     }
 
-    async fn eth_token_id(&self) -> Result<TokenId> {
-        for token_id in self.token_info_fetcher.all_ids().await? {
-            let info = self.token_info_fetcher.get_token_info(token_id).await?;
-            if info.symbol() == "ETH" {
-                return Ok(token_id);
-            }
-        }
-        Err(anyhow!("no token with ETH symbol found"))
+    fn eth_token_id(&self) -> TokenId {
+        // This is the token id for WETH on the mainnet deployment. Can make this configurable later
+        // if needed.
+        TokenId(1)
     }
 }
 
@@ -168,7 +164,7 @@ impl PriceEstimating for PriceOracle {
 
     fn get_eth_price(&self) -> BoxFuture<'_, Option<NonZeroU128>> {
         async move {
-            let token_id = self.eth_token_id().await.ok()?;
+            let token_id = self.eth_token_id();
             let prices = self.source.get_prices(&[token_id]).await.ok()?;
             prices.get(&token_id).copied()
         }
