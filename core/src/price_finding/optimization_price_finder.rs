@@ -1,10 +1,8 @@
 use crate::{
+    economic_viability::EconomicViabilityComputing,
     models::{self, TokenId, TokenInfo},
     price_estimation::PriceEstimating,
-    price_finding::{
-        min_avg_fee::EconomicViabilityComputing,
-        price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
-    },
+    price_finding::price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
 };
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
@@ -368,9 +366,9 @@ impl Io for DefaultIo {
 pub mod tests {
     use super::*;
     use crate::{
-        models::AccountState, price_estimation::MockPriceEstimating,
-        price_finding::min_avg_fee::MockEconomicViabilityComputing,
-        util::test_util::map_from_slice, util::FutureWaitExt as _,
+        economic_viability::MockEconomicViabilityComputing, models::AccountState,
+        price_estimation::MockPriceEstimating, util::test_util::map_from_slice,
+        util::FutureWaitExt as _,
     };
     use ethcontract::Address;
     use serde_json::json;
@@ -637,8 +635,8 @@ pub mod tests {
                 .boxed()
             });
 
-        let mut min_avg_fee = MockEconomicViabilityComputing::new();
-        min_avg_fee
+        let mut economic_viablity = MockEconomicViabilityComputing::new();
+        economic_viablity
             .expect_min_average_fee()
             .returning(|| immediate!(Ok(10u128.pow(18))));
 
@@ -660,7 +658,7 @@ pub mod tests {
             fee: Some(fee),
             solver_type: SolverType::StandardSolver,
             price_oracle: Arc::new(price_oracle),
-            economic_viability: Arc::new(min_avg_fee),
+            economic_viability: Arc::new(economic_viablity),
             internal_optimizer: InternalOptimizer::Scip,
         };
         let orders = vec![];
