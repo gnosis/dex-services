@@ -5,6 +5,9 @@ use pricegraph::{Element, Pricegraph, TokenId};
 use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
 
+/// Threshold at which a price estimate is considered "bad"; currently 10%.
+const BAD_ESTIMATE_THRESHOLD: f64 = 0.1;
+
 /// Common options for analyzing historic batch data.
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -78,6 +81,7 @@ where
 struct Report<T> {
     output: T,
     samples: usize,
+    bad_estimates: usize,
     total_error: f64,
 }
 
@@ -88,8 +92,9 @@ where
     fn new(output: T) -> Self {
         Report {
             output,
-            total_error: 0.0,
             samples: 0,
+            bad_estimates: 0,
+            total_error: 0.0,
         }
     }
 
@@ -107,6 +112,7 @@ where
         )?;
 
         self.samples += 1;
+        self.bad_estimates += (error > BAD_ESTIMATE_THRESHOLD) as usize;
         self.total_error += error;
 
         Ok(())
@@ -114,8 +120,9 @@ where
 
     fn summary(&self) -> Result<()> {
         println!(
-            "Processed {} token prices: average error {:.2}%.",
+            "Processed {} token prices: bad estimates {:.2}%, average error {:.2}%.",
             self.samples,
+            100.0 * self.bad_estimates as f64 / self.samples as f64,
             100.0 * self.total_error / self.samples as f64,
         );
         Ok(())
