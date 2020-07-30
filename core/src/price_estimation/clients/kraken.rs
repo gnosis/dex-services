@@ -216,8 +216,8 @@ mod tests {
         assert_eq!(
             prices,
             hash_map! {
-                TokenId(1) => nonzero!((99.0 * 10f64.powi(18)) as u128),
-                TokenId(4) => nonzero!((1.01 * 10f64.powi(30)) as u128),
+                TokenId(1) => nonzero!(99e18 as u128),
+                TokenId(4) => nonzero!(1.01e30 as u128),
             }
         );
     }

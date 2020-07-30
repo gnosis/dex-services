@@ -315,9 +315,9 @@ mod tests {
         assert_eq!(
             prices,
             hash_map! {
-                TokenId(1) => nonzero!((0.7 * 10f64.powi(18)) as u128),
-                TokenId(4) => nonzero!((1.2 * 10f64.powi(30)) as u128),
-                TokenId(6) => nonzero!(10u128.pow(18))
+                TokenId(1) => nonzero!(0.7e18 as u128),
+                TokenId(4) => nonzero!(1.2e30 as u128),
+                TokenId(6) => nonzero!(1e18 as u128)
             }
         );
     }
@@ -395,9 +395,9 @@ mod tests {
         assert_eq!(
             prices,
             hash_map! {
-                TokenId(1) => nonzero!(10f64.powi(18) as u128),
-                TokenId(4) => nonzero!(10f64.powi(30) as u128),
-                TokenId(6) => nonzero!(10f64.powi(18) as u128),
+                TokenId(1) => nonzero!(1e18 as u128),
+                TokenId(4) => nonzero!(1e30 as u128),
+                TokenId(6) => nonzero!(1e18 as u128),
             }
         );
     }

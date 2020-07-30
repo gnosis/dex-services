@@ -22,11 +22,7 @@ fn time<T>(f: impl FnOnce() -> T) -> (T, f64) {
 #[wasm_bindgen_test]
 fn estimate_price() {
     let (estimator, load_time) = time(|| PriceEstimator::new(&*data::DEFAULT_ORDERBOOK).unwrap());
-    let (price, estimate_time) = time(|| {
-        estimator
-            .estimate_price(7, 1, 100.0 * 10.0f64.powi(18))
-            .unwrap()
-    });
+    let (price, estimate_time) = time(|| estimator.estimate_price(7, 1, 100e18).unwrap());
 
     console_log!(
         "DAI-WETH price for selling 100 WETH: 1 WETH = {} DAI (load {}ms, estimate {}ms)",

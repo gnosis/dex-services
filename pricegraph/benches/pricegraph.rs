@@ -26,7 +26,7 @@ pub fn transitive_orderbook(c: &mut Criterion) {
 pub fn estimate_limit_price(c: &mut Criterion) {
     let pricegraph = read_default_pricegraph();
     let dai_weth = TokenPair { buy: 7, sell: 1 };
-    let eth = 10.0f64.powi(18);
+    let eth = 1e18;
     let volumes = &[0.1 * eth, eth, 10.0 * eth, 100.0 * eth, 1000.0 * eth];
 
     let mut group = c.benchmark_group("Pricegraph::estimate_limit_price");
