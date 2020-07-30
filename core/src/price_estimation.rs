@@ -17,7 +17,7 @@ use crate::{
     models::{Order, TokenId, TokenInfo},
     orderbook::StableXOrderBookReading,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use average_price_source::AveragePriceSource;
 use futures::future::{BoxFuture, FutureExt as _};
 use log::warn;
@@ -51,7 +51,7 @@ pub trait PriceEstimating {
     /// same format as the above method, so the amount of OWL in atoms to
     /// purchase 1.0 ETH (or 1e18 wei).
     #[allow(clippy::needless_lifetimes)]
-    fn get_eth_price<'a>(&'a self) -> BoxFuture<'a, Option<u128>>;
+    fn get_eth_price<'a>(&'a self) -> BoxFuture<'a, Option<NonZeroU128>>;
 }
 
 pub struct PriceOracle {
@@ -115,6 +115,16 @@ impl PriceOracle {
             }
         }
     }
+
+    async fn eth_token_id(&self) -> Result<TokenId> {
+        for token_id in self.token_info_fetcher.all_ids().await? {
+            let info = self.token_info_fetcher.get_token_info(token_id).await?;
+            if info.symbol() == "ETH" {
+                return Ok(token_id);
+            }
+        }
+        Err(anyhow!("no token with ETH symbol found"))
+    }
 }
 
 impl PriceEstimating for PriceOracle {
@@ -156,9 +166,13 @@ impl PriceEstimating for PriceOracle {
         .boxed()
     }
 
-    fn get_eth_price(&self) -> BoxFuture<'_, Option<u128>> {
-        // TODO: Implement ETH price estimation.
-        immediate!(None)
+    fn get_eth_price(&self) -> BoxFuture<'_, Option<NonZeroU128>> {
+        async move {
+            let token_id = self.eth_token_id().await.ok()?;
+            let prices = self.source.get_prices(&[token_id]).await.ok()?;
+            prices.get(&token_id).copied()
+        }
+        .boxed()
     }
 }
 
