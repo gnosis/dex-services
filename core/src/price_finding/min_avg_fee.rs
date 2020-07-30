@@ -71,7 +71,7 @@ impl MinAverageFeeComputing for ApproximateMinAverageFee {
 fn compute_min_average_fee(eth_price: f64, gas_price: f64) -> f64 {
     const GAS_PER_ORDER: f64 = 120_000.0;
 
-    let owl_per_eth = eth_price / 10f64.powi(18);
+    let owl_per_eth = eth_price / 1e18;
     let gas_price_in_owl = owl_per_eth * gas_price;
 
     GAS_PER_ORDER * gas_price_in_owl
@@ -128,8 +128,8 @@ mod tests {
 
     #[test]
     fn computes_min_average_fee() {
-        let gas_price = 40.0 * 10.0f64.powi(9);
-        let eth_price = 240.0 * 10.0f64.powi(18);
+        let gas_price = 40e9;
+        let eth_price = 240e18;
 
         assert_approx_eq!(
             compute_min_average_fee(eth_price, gas_price),

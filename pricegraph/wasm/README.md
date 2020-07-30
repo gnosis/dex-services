@@ -15,7 +15,7 @@ const estimator = new PriceEstimator(encodedOrders);
 const [WETH, DAI] = [1, 7];
 console.log(
     "WETH/DAI price estimate:",
-    estimator.estimatePrice(WETH, DAI, 100 * 10e18),
+    estimator.estimatePrice(WETH, DAI, 100e18),
 );
 esimator.free();
 ```
