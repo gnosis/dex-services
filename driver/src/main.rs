@@ -172,6 +172,11 @@ struct Options {
     #[structopt(long, env = "MIN_AVG_FEE_PER_ORDER", default_value = "0")]
     default_min_avg_fee_per_order: u128,
 
+    /// The default maximum gas price. This is used when computing the maximum gas price based on
+    /// ether price in owl fails.
+    #[structopt(long, env = "DEFAULT_MAX_GAS_PRICE", default_value = "10000000000")]
+    default_max_gas_price: u128,
+
     /// The kind of scheduler to use.
     #[structopt(long, env = "SCHEDULER", default_value = "system")]
     scheduler: SchedulerKind,
@@ -271,7 +276,7 @@ fn main() {
         )),
         Box::new(FixedEconomicViabilityComputer::new(
             Some(options.default_min_avg_fee_per_order),
-            None,
+            Some(options.default_max_gas_price.into()),
         )),
     ]));
 
