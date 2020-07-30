@@ -5,11 +5,10 @@ use pricegraph::{Element, Pricegraph, TokenPair};
 use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
 
-/// Common options for analyzing historic batch data.
 #[derive(Debug, StructOpt)]
 #[structopt(
     name = "historic_prices",
-    about = "Utility for computing historic exchange prices.",
+    about = "Utility for computing historic exchange token prices.",
     rename_all = "kebab"
 )]
 struct Options {

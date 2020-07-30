@@ -4,7 +4,7 @@ use core::{
     models::BatchId,
 };
 use e2e::cmd;
-use pricegraph::{Element, Pricegraph, TokenPair, U256};
+use pricegraph::{Element, ExchangeRate, Pricegraph, TokenPair, U256};
 use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
 
@@ -54,7 +54,7 @@ fn main() -> Result<()> {
 
             let meta = OrderMetadata::compute(settlement, order, &pricegraph);
             let result = if meta.is_reasonably_priced_order() {
-                process_reasonable_order(settlement, order, &meta)
+                process_reasonable_order(&meta)
             } else {
                 process_unreasonable_order(&meta)
             };
@@ -68,20 +68,11 @@ fn main() -> Result<()> {
     report.summary()
 }
 
-fn process_reasonable_order(
-    settlement: Option<&Settlement>,
-    order: &Element,
-    meta: &OrderMetadata,
-) -> TradeResult {
-    let settlement = match settlement {
-        Some(value) => value,
-        None => return TradeResult::NoSolution,
-    };
-
+fn process_reasonable_order(meta: &OrderMetadata) -> TradeResult {
     match meta.fill_ratio() {
         Some(trade_ratio) if trade_ratio > FULLY_FILLED_THRESHOLD => TradeResult::FullyMatched,
         Some(_) => TradeResult::PartiallyMatched,
-        None => match find_settled_exchange_rate(settlement, order.pair) {
+        None => match meta.settled_price {
             Some(xrate) if xrate > meta.limit_price => TradeResult::SkippedMatchableOrder,
             Some(_) => TradeResult::OverlyOptimistic,
             None => TradeResult::NotTraded,
@@ -90,7 +81,10 @@ fn process_reasonable_order(
 }
 
 fn process_unreasonable_order(meta: &OrderMetadata) -> TradeResult {
-    match meta.settled_xrate {
+    match meta.settled_price {
+        // NOTE: Compare the settled exchange rate to the limit price, this is
+        // because the limit price must be respected by the actual executed
+        // exchange rate.
         Some(xrate) if xrate > meta.limit_price => TradeResult::OverlyPessimistic,
         _ => TradeResult::UnreasonableOrderNotMatched,
     }
@@ -100,7 +94,7 @@ struct OrderMetadata {
     effective_sell_amount: f64,
     limit_price: f64,
     estimated_limit_price: Option<f64>,
-    settled_xrate: Option<f64>,
+    settled_price: Option<f64>,
     trade: Option<Trade>,
 }
 
@@ -113,15 +107,35 @@ impl OrderMetadata {
         let limit_price = order.price.numerator as f64 / order.price.denominator as f64;
         let estimated_limit_price =
             pricegraph.estimate_limit_price(order.pair, effective_sell_amount);
-        let settled_xrate =
-            settlement.and_then(|settlement| find_settled_exchange_rate(settlement, order.pair));
+        let settled_price = settlement.and_then(|settlement| {
+            Some(
+                find_settled_exchange_rate(settlement, order.pair)?
+                    .price()
+                    .value(),
+            )
+        });
         let trade = settlement.and_then(|settlement| find_trade(settlement, order));
+
+        #[cfg(debug_assertions)]
+        {
+            if let (Some(price), Some(trade)) = (settled_price, trade.as_ref()) {
+                // NOTE: check that the settled exchange rate matches the trade
+                // exchange rate.
+                let trade_price =
+                    trade.executed_buy_amount as f64 / trade.executed_sell_amount as f64;
+
+                // NOTE: Assert that the error between settled price and traded
+                // price is significantly smaller than the fees, so make sure
+                // that they were added in the correct direction.
+                assert!((price - trade_price).abs() / price < 0.0001);
+            }
+        }
 
         OrderMetadata {
             effective_sell_amount,
             limit_price,
             estimated_limit_price,
-            settled_xrate,
+            settled_price,
             trade,
         }
     }
@@ -152,11 +166,18 @@ fn find_trade(settlement: &Settlement, order: &Element) -> Option<Trade> {
     settlement
         .trades
         .iter()
-        .find(|trade| (trade.owner, trade.order_id) == (order.user, order.id))
-        .cloned()
+        .filter(|trade| (trade.owner, trade.order_id) == (order.user, order.id))
+        .fold(None, |acc, trade| match acc {
+            Some(acc) => Some(Trade {
+                executed_buy_amount: acc.executed_buy_amount + trade.executed_buy_amount,
+                executed_sell_amount: acc.executed_sell_amount + trade.executed_sell_amount,
+                ..acc
+            }),
+            None => Some(trade.clone()),
+        })
 }
 
-fn find_settled_exchange_rate(settlement: &Settlement, pair: TokenPair) -> Option<f64> {
+fn find_settled_exchange_rate(settlement: &Settlement, pair: TokenPair) -> Option<ExchangeRate> {
     let buy_token_index = settlement
         .solution
         .token_ids_for_price
@@ -168,15 +189,16 @@ fn find_settled_exchange_rate(settlement: &Settlement, pair: TokenPair) -> Optio
         .iter()
         .position(|&id| id == pair.sell)?;
 
-    // NOTE: This is unintuitive, but the echange rate is computed as the sell
-    // price over the buy price. This is best illustrated by an example:
-    // - The price of WETH is ~200 OWL
-    // - The price of DAI is ~1 OWL
-    // - The limit price for an order buying WETH and selling DAI would be
-    //   `buy_amount / sell_amount` which sould be around `1 / 200` since you
-    //   would only be able to buy around 1 WETH for 200 DAI
-    // So, by example, the `xrate = sell_price / buy_price`.
-    Some(
+    // NOTE: Because of unit coherence, the echange rate is computed as the sell
+    // price over the buy price. Prices `p` are denoted in OWL per token, and
+    // exchange rates are expressed as a buy amount over a sell amount. Solving
+    // for two tokens `buy` and `sell`:
+    // ```
+    // p(sell) / p(buy) = (OWL / t_sell) / (OWL / t_buy)
+    //                  = t_buy / t_sell
+    //                  = xrate(buy, sell)
+    // ```
+    ExchangeRate::new(
         settlement.solution.prices[sell_token_index] as f64
             / settlement.solution.prices[buy_token_index] as f64,
     )
@@ -268,7 +290,7 @@ where
             meta.effective_sell_amount,
             meta.limit_price,
             meta.estimated_limit_price.unwrap_or_default(),
-            meta.settled_xrate.unwrap_or_default(),
+            meta.settled_price.unwrap_or_default(),
             meta.fill_ratio().unwrap_or_default(),
         )?;
 
