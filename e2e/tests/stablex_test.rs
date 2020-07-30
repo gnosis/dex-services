@@ -32,7 +32,7 @@ fn test_with_ganache() {
 
     // Using realistic prices helps non naive solvers find a solution in case
     // they filter out orders that are extremely small.
-    let usd_price_in_fee = u128::pow(10, 18);
+    let usd_price_in_fee = 10u128.pow(18);
 
     instance
         .deposit(tokens[0].address(), (3000 * usd_price_in_fee).into())

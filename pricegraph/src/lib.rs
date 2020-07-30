@@ -100,7 +100,7 @@ mod tests {
         // cargo test -p pricegraph real_orderbooks -- --nocapture
         // ```
 
-        let base_unit = 10.0f64.powi(18);
+        let base_unit = 1e18;
 
         let dai_weth = Market { base: 7, quote: 1 };
         let volume = 1.0 * base_unit;
