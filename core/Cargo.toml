@@ -38,7 +38,7 @@ url = "2.1.1"
 
 [dev-dependencies]
 assert_approx_eq = "1"
-mockall = "0.7.1"
+mockall = "0.7.2"
 
 [build-dependencies]
 ethcontract-generate = "0.7.2"
