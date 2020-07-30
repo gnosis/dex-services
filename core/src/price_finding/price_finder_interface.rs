@@ -126,10 +126,9 @@ pub fn execute_open_solver(
     let open_solver_command = command
         .current_dir("/app/open_solver")
         .args(&["-m", "src.match"])
-        .arg(format!("{}{}", "/app/", input_file.to_owned()))
+        .arg(input_file)
         .arg(format!(
-            "--solution={}{}{}",
-            "/app/",
+            "--solution={}{}",
             result_folder.to_owned(),
             "06_solution_int_valid.json",
         ))
@@ -153,8 +152,8 @@ pub fn execute_private_solver(
     let mut private_solver_command = command
         .current_dir("/app/batchauctions")
         .args(&["-m", "src._run"])
-        .arg(format!("{}{}", "/app/", input_file.to_owned()))
-        .arg(format!("--outputDir={}{}", "/app/", result_folder))
+        .arg(input_file)
+        .arg(format!("--outputDir={}", result_folder))
         .arg("--logging=WARNING")
         .arg(format!("--timeLimit={}", time_limit))
         .arg(format!("--minAvgFeePerOrder={}", min_avg_fee_per_order))
