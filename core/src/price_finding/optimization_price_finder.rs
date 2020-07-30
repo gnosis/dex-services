@@ -2,7 +2,7 @@ use crate::{
     models::{self, TokenId, TokenInfo},
     price_estimation::PriceEstimating,
     price_finding::{
-        min_avg_fee::MinAverageFeeComputing,
+        min_avg_fee::EconomicViabilityComputing,
         price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
     },
 };
@@ -196,7 +196,7 @@ pub struct OptimisationPriceFinder {
     fee: Option<Fee>,
     solver_type: SolverType,
     price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
-    min_avg_fee: Arc<dyn MinAverageFeeComputing>,
+    economic_viability: Arc<dyn EconomicViabilityComputing>,
     internal_optimizer: InternalOptimizer,
 }
 
@@ -205,7 +205,7 @@ impl OptimisationPriceFinder {
         fee: Option<Fee>,
         solver_type: SolverType,
         price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
-        min_avg_fee: Arc<dyn MinAverageFeeComputing>,
+        economic_viability: Arc<dyn EconomicViabilityComputing>,
         internal_optimizer: InternalOptimizer,
     ) -> Self {
         OptimisationPriceFinder {
@@ -213,7 +213,7 @@ impl OptimisationPriceFinder {
             fee,
             solver_type,
             price_oracle,
-            min_avg_fee,
+            economic_viability,
             internal_optimizer,
         }
     }
@@ -281,7 +281,7 @@ impl PriceFinding for OptimisationPriceFinder {
             // `blocking::unblock` requires the closure to be 'static.
             let io_methods = self.io_methods.clone();
             let solver_type = self.solver_type;
-            let min_avg_fee_per_order = self.min_avg_fee.current().await?;
+            let min_avg_fee_per_order = self.economic_viability.min_average_fee().await?;
             let internal_optimizer = self.internal_optimizer;
             let result = blocking::unblock!(io_methods.run_solver(
                 &input_file,
@@ -366,8 +366,8 @@ pub mod tests {
     use super::*;
     use crate::{
         models::AccountState, price_estimation::MockPriceEstimating,
-        price_finding::min_avg_fee::MockMinAverageFeeComputing, util::test_util::map_from_slice,
-        util::FutureWaitExt as _,
+        price_finding::min_avg_fee::MockEconomicViabilityComputing,
+        util::test_util::map_from_slice, util::FutureWaitExt as _,
     };
     use ethcontract::Address;
     use serde_json::json;
@@ -634,9 +634,9 @@ pub mod tests {
                 .boxed()
             });
 
-        let mut min_avg_fee = MockMinAverageFeeComputing::new();
+        let mut min_avg_fee = MockEconomicViabilityComputing::new();
         min_avg_fee
-            .expect_current()
+            .expect_min_average_fee()
             .returning(|| immediate!(Ok(10u128.pow(18))));
 
         let mut io_methods = MockIo::new();
@@ -657,7 +657,7 @@ pub mod tests {
             fee: Some(fee),
             solver_type: SolverType::StandardSolver,
             price_oracle: Arc::new(price_oracle),
-            min_avg_fee: Arc::new(min_avg_fee),
+            economic_viability: Arc::new(min_avg_fee),
             internal_optimizer: InternalOptimizer::Scip,
         };
         let orders = vec![];
