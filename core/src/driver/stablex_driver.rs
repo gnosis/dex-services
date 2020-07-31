@@ -129,7 +129,7 @@ impl<'a> StableXDriverImpl<'a> {
         };
 
         let submitted = if let Some(objective_value) = verified {
-            let fee = solution.burnt_fees();
+            let fee = solution.earned_fee();
             let num_trades = solution.executed_orders.len();
             let gas_price_cap = gas_price_cap(fee, num_trades, self.gas_price_cap_subsidy_factor);
             info!(

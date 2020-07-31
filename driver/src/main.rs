@@ -14,7 +14,10 @@ use core::orderbook::{
 use core::price_estimation::PriceOracle;
 use core::price_finding::{
     self,
-    min_avg_fee::{ApproximateMinAverageFee, FixedMinAverageFee, PriorityMinAverageFee},
+    min_avg_fee::{
+        EconomicViabilityComputer, FixedEconomicViabilityComputer,
+        PriorityEconomicViabilityComputer,
+    },
     Fee, InternalOptimizer, SolverType,
 };
 use core::solution_submission::StableXSolutionSubmitter;
@@ -264,13 +267,16 @@ fn main() {
         .unwrap(),
     );
 
-    let min_avg_fee = Arc::new(PriorityMinAverageFee::new(vec![
-        Box::new(ApproximateMinAverageFee::new(
+    let min_avg_fee = Arc::new(PriorityEconomicViabilityComputer::new(vec![
+        Box::new(EconomicViabilityComputer::new(
             price_oracle.clone(),
             gas_station.clone(),
             options.economic_viability_subsidy_factor,
         )),
-        Box::new(FixedMinAverageFee(options.default_min_avg_fee_per_order)),
+        Box::new(FixedEconomicViabilityComputer::new(
+            Some(options.default_min_avg_fee_per_order),
+            None,
+        )),
     ]));
 
     // Setup price.
