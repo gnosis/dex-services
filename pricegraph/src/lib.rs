@@ -17,6 +17,9 @@ pub use self::orderbook::*;
 /// The fee factor that is applied to each order's buy price.
 const FEE_FACTOR: f64 = 1.0 / 0.999;
 
+/// The fee token ID.
+const FEE_TOKEN: TokenId = 0;
+
 /// The minimum amount that must be traded for an order to be valid within a
 /// solution. Orders with effective sell amounts smaller than this amount can
 /// safely be ignored, and transitive orders with flows that trade amounts
