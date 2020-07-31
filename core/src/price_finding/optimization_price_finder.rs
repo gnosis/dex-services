@@ -1,10 +1,8 @@
 use crate::{
+    economic_viability::EconomicViabilityComputing,
     models::{self, TokenId, TokenInfo},
     price_estimation::PriceEstimating,
-    price_finding::{
-        min_avg_fee::MinAverageFeeComputing,
-        price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
-    },
+    price_finding::price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
 };
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
@@ -14,6 +12,7 @@ use log::error;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::display_fromstr;
 use std::collections::BTreeMap;
+use std::env;
 use std::fmt::{Debug, Display};
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
@@ -196,7 +195,7 @@ pub struct OptimisationPriceFinder {
     fee: Option<Fee>,
     solver_type: SolverType,
     price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
-    min_avg_fee: Arc<dyn MinAverageFeeComputing>,
+    economic_viability: Arc<dyn EconomicViabilityComputing>,
     internal_optimizer: InternalOptimizer,
 }
 
@@ -205,7 +204,7 @@ impl OptimisationPriceFinder {
         fee: Option<Fee>,
         solver_type: SolverType,
         price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
-        min_avg_fee: Arc<dyn MinAverageFeeComputing>,
+        economic_viability: Arc<dyn EconomicViabilityComputing>,
         internal_optimizer: InternalOptimizer,
     ) -> Self {
         OptimisationPriceFinder {
@@ -213,7 +212,7 @@ impl OptimisationPriceFinder {
             fee,
             solver_type,
             price_oracle,
-            min_avg_fee,
+            economic_viability,
             internal_optimizer,
         }
     }
@@ -262,8 +261,9 @@ impl PriceFinding for OptimisationPriceFinder {
             // We are solving the batch before the current one
             let batch_id = (now.timestamp() / 300) - 1;
             let date = now.format("%Y-%m-%d");
+            let current_directory = env::current_dir()?;
 
-            let input_folder = format!("instances/{}", &date);
+            let input_folder = format!("{}/instances/{}", current_directory.display(), &date);
             let input_file = format!(
                 "{}/instance_{}_{}.json",
                 &input_folder,
@@ -272,7 +272,8 @@ impl PriceFinding for OptimisationPriceFinder {
             );
 
             let result_folder = format!(
-                "results/{}/instance_{}_{}/",
+                "{}/results/{}/instance_{}_{}/",
+                &current_directory.display(),
                 &date,
                 &batch_id,
                 &now.to_rfc3339()
@@ -281,7 +282,7 @@ impl PriceFinding for OptimisationPriceFinder {
             // `blocking::unblock` requires the closure to be 'static.
             let io_methods = self.io_methods.clone();
             let solver_type = self.solver_type;
-            let min_avg_fee_per_order = self.min_avg_fee.current().await?;
+            let min_avg_fee_per_order = self.economic_viability.min_average_fee().await?;
             let internal_optimizer = self.internal_optimizer;
             let result = blocking::unblock!(io_methods.run_solver(
                 &input_file,
@@ -365,8 +366,8 @@ impl Io for DefaultIo {
 pub mod tests {
     use super::*;
     use crate::{
-        models::AccountState, price_estimation::MockPriceEstimating,
-        price_finding::min_avg_fee::MockMinAverageFeeComputing, util::test_util::map_from_slice,
+        economic_viability::MockEconomicViabilityComputing, models::AccountState,
+        price_estimation::MockPriceEstimating, util::test_util::map_from_slice,
         util::FutureWaitExt as _,
     };
     use ethcontract::Address;
@@ -634,9 +635,9 @@ pub mod tests {
                 .boxed()
             });
 
-        let mut min_avg_fee = MockMinAverageFeeComputing::new();
-        min_avg_fee
-            .expect_current()
+        let mut economic_viablity = MockEconomicViabilityComputing::new();
+        economic_viablity
+            .expect_min_average_fee()
             .returning(|| immediate!(Ok(10u128.pow(18))));
 
         let mut io_methods = MockIo::new();
@@ -657,7 +658,7 @@ pub mod tests {
             fee: Some(fee),
             solver_type: SolverType::StandardSolver,
             price_oracle: Arc::new(price_oracle),
-            min_avg_fee: Arc::new(min_avg_fee),
+            economic_viability: Arc::new(economic_viablity),
             internal_optimizer: InternalOptimizer::Scip,
         };
         let orders = vec![];

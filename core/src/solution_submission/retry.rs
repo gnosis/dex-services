@@ -1,4 +1,4 @@
-use super::IsNonceError as _;
+use super::IsOpenEthereumTransactionError as _;
 use crate::util::AsyncSleeping;
 use crate::{
     contracts::stablex_contract::StableXContract, gas_station::GasPriceEstimating, models::Solution,
@@ -170,7 +170,7 @@ async fn retry(
         // Unwrap because we always add the solution future above and every iteration here checks
         // that there are still futures left.
         while let FutureOutput::SolutionSubmission(result) = futures.next().await.unwrap() {
-            if !result.is_nonce_error() || futures.is_empty() {
+            if !result.is_transaction_error() || futures.is_empty() {
                 return result;
             }
         }

@@ -95,10 +95,10 @@ impl<'a> EvmScheduler<'a> {
                 self.last_batch = Some(batch_id);
             }
             DriverResult::Retry(err) => {
-                error!("driver retryable error for batch {}: {}", batch_id, err);
+                error!("driver retryable error for batch {}: {:?}", batch_id, err);
             }
             DriverResult::Skip(err) => {
-                error!("driver error for batch {}: {}", batch_id, err);
+                error!("driver error for batch {}: {:?}", batch_id, err);
                 self.last_batch = Some(batch_id);
             }
         }

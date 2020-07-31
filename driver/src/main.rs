@@ -3,6 +3,9 @@ use core::driver::{
     scheduler::{AuctionTimingConfiguration, SchedulerKind},
     stablex_driver::StableXDriverImpl,
 };
+use core::economic_viability::{
+    EconomicViabilityComputer, FixedEconomicViabilityComputer, PriorityEconomicViabilityComputer,
+};
 use core::gas_station::{self, GnosisSafeGasStation};
 use core::http::HttpFactory;
 use core::logging;
@@ -12,11 +15,7 @@ use core::orderbook::{
     ShadowedOrderbookReader, StableXOrderBookReading,
 };
 use core::price_estimation::PriceOracle;
-use core::price_finding::{
-    self,
-    min_avg_fee::{ApproximateMinAverageFee, FixedMinAverageFee, PriorityMinAverageFee},
-    Fee, InternalOptimizer, SolverType,
-};
+use core::price_finding::{self, Fee, InternalOptimizer, SolverType};
 use core::solution_submission::StableXSolutionSubmitter;
 use core::token_info::hardcoded::TokenData;
 use core::util::FutureWaitExt as _;
@@ -173,6 +172,11 @@ struct Options {
     #[structopt(long, env = "MIN_AVG_FEE_PER_ORDER", default_value = "0")]
     default_min_avg_fee_per_order: u128,
 
+    /// The default maximum gas price. This is used when computing the maximum gas price based on
+    /// ether price in owl fails.
+    #[structopt(long, env = "DEFAULT_MAX_GAS_PRICE", default_value = "10000000000")]
+    default_max_gas_price: u128,
+
     /// The kind of scheduler to use.
     #[structopt(long, env = "SCHEDULER", default_value = "system")]
     scheduler: SchedulerKind,
@@ -264,13 +268,16 @@ fn main() {
         .unwrap(),
     );
 
-    let min_avg_fee = Arc::new(PriorityMinAverageFee::new(vec![
-        Box::new(ApproximateMinAverageFee::new(
+    let economic_viability = Arc::new(PriorityEconomicViabilityComputer::new(vec![
+        Box::new(EconomicViabilityComputer::new(
             price_oracle.clone(),
             gas_station.clone(),
             options.economic_viability_subsidy_factor,
         )),
-        Box::new(FixedMinAverageFee(options.default_min_avg_fee_per_order)),
+        Box::new(FixedEconomicViabilityComputer::new(
+            Some(options.default_min_avg_fee_per_order),
+            Some(options.default_max_gas_price.into()),
+        )),
     ]));
 
     // Setup price.
@@ -278,7 +285,7 @@ fn main() {
         Some(Fee::default()),
         options.solver_type,
         price_oracle,
-        min_avg_fee,
+        economic_viability.clone(),
         options.solver_internal_optimizer,
     );
 
@@ -290,8 +297,8 @@ fn main() {
         &*price_finder,
         &*orderbook,
         &solution_submitter,
+        economic_viability,
         &stablex_metrics,
-        options.economic_viability_subsidy_factor,
     );
 
     let scheduler_config =

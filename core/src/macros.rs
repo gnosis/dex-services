@@ -38,6 +38,6 @@ macro_rules! immediate {
 #[cfg(test)]
 macro_rules! nonzero {
     ($expression:expr) => {
-        NonZeroU128::new($expression).unwrap()
+        std::num::NonZeroU128::new($expression).unwrap()
     };
 }

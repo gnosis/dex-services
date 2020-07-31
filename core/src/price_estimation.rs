@@ -51,7 +51,7 @@ pub trait PriceEstimating {
     /// same format as the above method, so the amount of OWL in atoms to
     /// purchase 1.0 ETH (or 1e18 wei).
     #[allow(clippy::needless_lifetimes)]
-    fn get_eth_price<'a>(&'a self) -> BoxFuture<'a, Option<u128>>;
+    fn get_eth_price<'a>(&'a self) -> BoxFuture<'a, Option<NonZeroU128>>;
 }
 
 pub struct PriceOracle {
@@ -115,6 +115,12 @@ impl PriceOracle {
             }
         }
     }
+
+    fn eth_token_id(&self) -> TokenId {
+        // This is the token id for WETH on the mainnet deployment. Can make this configurable later
+        // if needed.
+        TokenId(1)
+    }
 }
 
 impl PriceEstimating for PriceOracle {
@@ -156,9 +162,13 @@ impl PriceEstimating for PriceOracle {
         .boxed()
     }
 
-    fn get_eth_price(&self) -> BoxFuture<'_, Option<u128>> {
-        // TODO: Implement ETH price estimation.
-        immediate!(None)
+    fn get_eth_price(&self) -> BoxFuture<'_, Option<NonZeroU128>> {
+        async move {
+            let token_id = self.eth_token_id();
+            let prices = self.source.get_prices(&[token_id]).await.ok()?;
+            prices.get(&token_id).copied()
+        }
+        .boxed()
     }
 }
 
