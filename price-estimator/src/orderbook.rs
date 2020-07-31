@@ -1,9 +1,11 @@
+use crate::{infallible_price_source::InfalliblePriceSource, solver_rounding_buffer};
 use anyhow::Result;
 use core::{
-    models::{AccountState, BatchId, Order},
+    models::{AccountState, BatchId, Order, TokenId},
     orderbook::StableXOrderBookReading,
 };
-use pricegraph::Pricegraph;
+use pricegraph::{Pricegraph, TokenPair};
+use std::collections::HashMap;
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
@@ -24,6 +26,8 @@ struct PricegraphCache {
 pub struct Orderbook {
     orderbook_reading: Box<dyn StableXOrderBookReading>,
     pricegraph_cache: RwLock<PricegraphCache>,
+    extra_rounding_buffer_factor: f64,
+    infallible_price_source: InfalliblePriceSource,
 }
 
 impl Orderbook {
@@ -34,6 +38,10 @@ impl Orderbook {
                 pricegraph_raw: Pricegraph::new(std::iter::empty()),
                 pricegraph_with_rounding_buffer: Pricegraph::new(std::iter::empty()),
             }),
+            // TODO: pass this from command line argument
+            extra_rounding_buffer_factor: 2.0,
+            // TODO: pass real token infos, and update it with a real price source in a future PR
+            infallible_price_source: InfalliblePriceSource::new(HashMap::new()),
         }
     }
 
@@ -47,7 +55,7 @@ impl Orderbook {
                 let mut auction_data = self.auction_data(batch_id).await?;
                 if matches!(pricegraph_type, PricegraphKind::WithRoundingBuffer) {
                     self.apply_rounding_buffer_to_auction_data(&mut auction_data)
-                        .await;
+                        .await?;
                 }
                 Ok(pricegraph_from_auction_data(&auction_data))
             }
@@ -64,24 +72,29 @@ impl Orderbook {
         self.pricegraph_cache.write().await.pricegraph_raw = pricegraph;
 
         self.apply_rounding_buffer_to_auction_data(&mut auction_data)
-            .await;
+            .await?;
         let pricegraph = pricegraph_from_auction_data(&auction_data);
         self.pricegraph_cache
             .write()
             .await
             .pricegraph_with_rounding_buffer = pricegraph;
-
         Ok(())
+    }
+
+    // TODO: this function is going to be used in some routes
+    pub async fn _rounding_buffer(&self, token_pair: TokenPair) -> Result<f64> {
+        Ok(solver_rounding_buffer::rounding_buffer(
+            self.infallible_price_source.price(TokenId(0)) as f64,
+            self.infallible_price_source.price(TokenId(token_pair.sell)) as f64,
+            self.infallible_price_source.price(TokenId(token_pair.buy)) as f64,
+            self.extra_rounding_buffer_factor,
+        ))
     }
 
     async fn auction_data(&self, batch_id: BatchId) -> Result<AuctionData> {
         self.orderbook_reading
             .get_auction_data(batch_id.into())
             .await
-    }
-
-    async fn apply_rounding_buffer_to_auction_data(&self, _auction_data: &mut AuctionData) {
-        // TODO
     }
 
     async fn cached_pricegraph(&self, pricegraph_type: PricegraphKind) -> Pricegraph {
@@ -91,6 +104,20 @@ impl Orderbook {
             PricegraphKind::WithRoundingBuffer => &cache.pricegraph_with_rounding_buffer,
         }
         .clone()
+    }
+
+    async fn apply_rounding_buffer_to_auction_data(
+        &self,
+        auction_data: &mut AuctionData,
+    ) -> Result<()> {
+        let prices = |token_id| self.infallible_price_source.price(token_id);
+        solver_rounding_buffer::apply_rounding_buffer(
+            prices,
+            &mut auction_data.1,
+            &mut auction_data.0,
+            self.extra_rounding_buffer_factor,
+        );
+        Ok(())
     }
 }
 
