@@ -49,7 +49,7 @@ impl EconomicViabilityComputer {
         self.price_oracle
             .get_eth_price()
             .await
-            .map(|price| price as f64)
+            .map(|price| price.get() as f64)
             .ok_or_else(|| anyhow!("failed to find ETH price estimate"))
     }
 
@@ -209,7 +209,7 @@ mod tests {
         let mut price_oracle = MockPriceEstimating::new();
         price_oracle
             .expect_get_eth_price()
-            .returning(|| immediate!(Some(240e18 as u128)));
+            .returning(|| immediate!(Some(nonzero!(240e18 as u128))));
 
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station.expect_estimate_gas_price().returning(|| {
