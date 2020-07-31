@@ -34,3 +34,10 @@ macro_rules! immediate {
         async move { $expression }.boxed()
     };
 }
+
+#[cfg(test)]
+macro_rules! nonzero {
+    ($expression:expr) => {
+        std::num::NonZeroU128::new($expression).unwrap()
+    };
+}

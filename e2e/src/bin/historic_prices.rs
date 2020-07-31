@@ -1,17 +1,11 @@
-use anyhow::{anyhow, Result};
-use core::{
-    history::{ExchangeHistory, Settlement},
-    models::BatchId,
-};
-use pbr::ProgressBar;
+use anyhow::Result;
+use core::{history::Settlement, models::BatchId};
+use e2e::cmd;
 use pricegraph::{Element, Pricegraph, TokenPair};
-use std::{
-    fs::File,
-    io::{self, Write},
-    path::PathBuf,
-};
+use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
 
+/// Common options for analyzing historic batch data.
 #[derive(Debug, StructOpt)]
 #[structopt(
     name = "historic_prices",
@@ -30,31 +24,21 @@ struct Options {
 
 fn main() -> Result<()> {
     let options = Options::from_args();
-    let history = ExchangeHistory::from_filestore(&options.orderbook_file)?;
 
     let mut spreads = File::create(&options.output_dir.join("spreads.csv"))?;
     writeln!(&mut spreads, "batch,market,best_bid,price,best_ask")?;
 
-    let first_batch = history
-        .first_batch()
-        .ok_or_else(|| anyhow!("exchange has no events"))?;
-    let (count, batches) = batches_until_now_from(first_batch);
-
-    let mut progress = ProgressBar::on(io::stderr(), count);
-    for batch in batches {
-        progress.inc();
-
-        let settlement = if let Some(value) = history.settlement_for_batch(batch) {
-            value
-        } else {
-            continue;
+    cmd::for_each_batch(&options.orderbook_file, |history, batch| {
+        let settlement = match history.settlement_for_batch(batch) {
+            Some(value) => value,
+            None => return Ok(()),
         };
+
         let auction_elements = history.auction_elements_for_batch(batch)?;
-
         check_batch_spread(batch, &auction_elements, &settlement, &mut spreads)?;
-    }
 
-    Ok(())
+        Ok(())
+    })
 }
 
 fn check_batch_spread(
@@ -104,14 +88,6 @@ fn check_batch_spread(
     }
 
     Ok(())
-}
-
-fn batches_until_now_from(starting_batch: BatchId) -> (u64, impl Iterator<Item = BatchId>) {
-    let current_batch = BatchId::now();
-    (
-        current_batch.0.saturating_sub(starting_batch.0),
-        (starting_batch.0..current_batch.0).map(BatchId),
-    )
 }
 
 fn unique_pairs(len: usize) -> impl Iterator<Item = (usize, usize)> {

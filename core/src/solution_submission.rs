@@ -139,21 +139,6 @@ impl<'a> StableXSolutionSubmitter<'a> {
         solution: Solution,
         err: MethodError,
     ) -> SolutionSubmissionError {
-        // There is a race condition that will be fixed in a future PR that results in this
-        // error when there was actually no problem. In that PR we will remove this code.
-        match &err.inner {
-            ExecutionError::Web3(Web3Error::Rpc(RpcError { code, message, .. }))
-                if code.code() == -32010
-                    && message.find("Transaction nonce is too low.").is_some() =>
-            {
-                return SolutionSubmissionError::Benign(format!(
-                    "Likely benign nonce error: {:?}",
-                    err
-                ));
-            }
-            _ => (),
-        }
-
         if let Some(tx) = extract_transaction_receipt(&err) {
             if let Some(block_number) = tx.block_number {
                 if let Err(err) = self
@@ -269,7 +254,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
             futures::pin_mut!(cancel_future);
             match future::select(submit_future, cancel_future).await {
                 Either::Left((submit_result, cancel_future)) => {
-                    if submit_result.is_nonce_error() {
+                    if submit_result.is_transaction_error() {
                         log::info!("solution submission transaction is nonce error");
                         Err(convert_cancel_result(cancel_future.await))
                     } else {
@@ -279,7 +264,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
                     }
                 }
                 Either::Right((cancel_result, submit_future)) => {
-                    if cancel_result.is_nonce_error() {
+                    if cancel_result.is_transaction_error() {
                         log::info!("cancel transaction is nonce error");
                         self.convert_submit_result(batch_index, solution, submit_future.await)
                             .await
@@ -312,40 +297,34 @@ fn convert_cancel_result(result: Result<(), NoopTransactionError>) -> SolutionSu
     }
 }
 
-trait IsNonceError {
-    fn is_nonce_error(&self) -> bool;
+trait IsOpenEthereumTransactionError {
+    /// Is this an error with the transaction itself instead of an evm related error.
+    fn is_transaction_error(&self) -> bool;
 }
 
-impl IsNonceError for ExecutionError {
-    fn is_nonce_error(&self) -> bool {
-        // This is the error as we've seen it on openethereum nodes.
+impl IsOpenEthereumTransactionError for ExecutionError {
+    fn is_transaction_error(&self) -> bool {
+        // This is the error as we've seen it on openethereum nodes. The code and error messages can
+        // be found in openethereum's source code in `rpc/src/v1/helpers/errors.rs`.
         // TODO: check how this looks on geth and infura. Not recognizing the error is not a serious
         // problem but it will make us sometimes log an error when there actually was no problem.
-        match self {
-            ExecutionError::Web3(Web3Error::Rpc(RpcError { code, message, .. }))
-                if code.code() == -32010
-                    && message.find("Transaction nonce is too low.").is_some() =>
-            {
-                true
-            }
-            _ => false,
-        }
+        matches!(self, ExecutionError::Web3(Web3Error::Rpc(RpcError { code, .. })) if code.code() == -32010)
     }
 }
 
-impl IsNonceError for Result<(), MethodError> {
-    fn is_nonce_error(&self) -> bool {
+impl IsOpenEthereumTransactionError for Result<(), MethodError> {
+    fn is_transaction_error(&self) -> bool {
         match self {
             Ok(()) => false,
-            Err(MethodError { inner, .. }) => inner.is_nonce_error(),
+            Err(MethodError { inner, .. }) => inner.is_transaction_error(),
         }
     }
 }
 
-impl IsNonceError for Result<(), NoopTransactionError> {
-    fn is_nonce_error(&self) -> bool {
+impl IsOpenEthereumTransactionError for Result<(), NoopTransactionError> {
+    fn is_transaction_error(&self) -> bool {
         match self {
-            Err(NoopTransactionError::ExecutionError(err)) => err.is_nonce_error(),
+            Err(NoopTransactionError::ExecutionError(err)) => err.is_transaction_error(),
             _ => false,
         }
     }
@@ -599,7 +578,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    fn nonce_error() -> ExecutionError {
+    pub fn nonce_error() -> ExecutionError {
         ExecutionError::Web3(Web3Error::Rpc(RpcError {
             code: ethcontract::jsonrpc::types::ErrorCode::ServerError(-32010),
             message: "Transaction nonce is too low.".to_string(),

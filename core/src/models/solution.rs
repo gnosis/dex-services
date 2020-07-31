@@ -18,6 +18,12 @@ pub struct Solution {
     pub executed_orders: Vec<ExecutedOrder>,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub struct EconomicViabilityInfo {
+    pub num_executed_orders: usize,
+    pub earned_fee: U256,
+}
+
 impl Solution {
     pub fn trivial() -> Self {
         Solution {
@@ -33,7 +39,14 @@ impl Solution {
             .any(|order| order.sell_amount > 0)
     }
 
-    pub fn burnt_fees(&self) -> U256 {
+    pub fn economic_viability_info(&self) -> EconomicViabilityInfo {
+        EconomicViabilityInfo {
+            num_executed_orders: self.executed_orders.len(),
+            earned_fee: self.earned_fee(),
+        }
+    }
+
+    pub fn earned_fee(&self) -> U256 {
         // We expect that only the fee token has an imbalance so by calculating the total imbalance
         // this must be equal to the fee token imbalance. This allows us to calculate the burnt fees
         // without accessing the orderbook solely based on the solution.
@@ -108,7 +121,7 @@ pub mod tests {
     }
 
     #[test]
-    fn burnt_fees_is_half_total_token_imbalance() {
+    fn earned_fee_is_half_total_token_imbalance() {
         let solution = Solution {
             prices: HashMap::new(),
             executed_orders: vec![
@@ -132,6 +145,6 @@ pub mod tests {
                 },
             ],
         };
-        assert_eq!(solution.burnt_fees(), U256::from(2));
+        assert_eq!(solution.earned_fee(), U256::from(2));
     }
 }

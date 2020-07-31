@@ -26,6 +26,7 @@ use priority_price_source::PriorityPriceSource;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter;
 use std::iter::FromIterator;
+use std::num::NonZeroU128;
 use std::sync::Arc;
 use std::time::Duration;
 use threaded_price_source::ThreadedPriceSource;
@@ -37,7 +38,20 @@ type Tokens = BTreeMap<TokenId, Option<TokenInfo>>;
 /// tokens included in the current orderbook.
 #[cfg_attr(test, mockall::automock)]
 pub trait PriceEstimating {
+    /// Retrieves price estimates for all token in the specified orders on a
+    /// best-effort basis. Critically, it is not considered an error to not be
+    /// able to retrieve a price estimate for a given token.
+    ///
+    /// Prices are in the same format as is expected by the Smart Contract and
+    /// the solver, so the amount of OWL in atoms to purchase 1e18 of the
+    /// corresponding token.
     fn get_token_prices<'a>(&'a self, orders: &[Order]) -> BoxFuture<'a, Tokens>;
+
+    /// Retrieves a price estimate for ETH in OWL atoms. This price is in the
+    /// same format as the above method, so the amount of OWL in atoms to
+    /// purchase 1.0 ETH (or 1e18 wei).
+    #[allow(clippy::needless_lifetimes)]
+    fn get_eth_price<'a>(&'a self) -> BoxFuture<'a, Option<NonZeroU128>>;
 }
 
 pub struct PriceOracle {
@@ -61,27 +75,10 @@ impl PriceOracle {
             contract,
             token_data.clone().into(),
         ));
-        let (kraken_source, _) = ThreadedPriceSource::new(
-            token_info_fetcher.clone(),
-            KrakenClient::new(http_factory, token_info_fetcher.clone())?,
-            update_interval,
-        );
-        let (dexag_source, _) = ThreadedPriceSource::new(
-            token_info_fetcher.clone(),
-            DexagClient::new(http_factory, token_info_fetcher.clone())?,
-            update_interval,
-        );
-        let (oneinch_source, _) = ThreadedPriceSource::new(
-            token_info_fetcher.clone(),
-            OneinchClient::new(http_factory, token_info_fetcher.clone())?,
-            update_interval,
-        );
-        let averaged_source = Box::new(AveragePriceSource::new(vec![
-            Box::new(kraken_source),
-            Box::new(dexag_source),
-            Box::new(oneinch_source),
-            Box::new(PricegraphEstimator::new(orderbook_reader)),
-        ]));
+        let mut price_sources =
+            external_price_sources(http_factory, token_info_fetcher.clone(), update_interval)?;
+        price_sources.push(Box::new(PricegraphEstimator::new(orderbook_reader)));
+        let averaged_source = Box::new(AveragePriceSource::new(price_sources));
         let prioritized_source = Box::new(PriorityPriceSource::new(vec![
             Box::new(token_data),
             averaged_source,
@@ -105,7 +102,7 @@ impl PriceOracle {
     }
 
     /// Gets price estimates for some tokens
-    async fn get_prices(&self, tokens: &[TokenId]) -> HashMap<TokenId, u128> {
+    async fn get_prices(&self, tokens: &[TokenId]) -> HashMap<TokenId, NonZeroU128> {
         if tokens.is_empty() {
             return HashMap::new();
         }
@@ -117,6 +114,12 @@ impl PriceOracle {
                 HashMap::new()
             }
         }
+    }
+
+    fn eth_token_id(&self) -> TokenId {
+        // This is the token id for WETH on the mainnet deployment. Can make this configurable later
+        // if needed.
+        TokenId(1)
     }
 }
 
@@ -158,6 +161,39 @@ impl PriceEstimating for PriceOracle {
         }
         .boxed()
     }
+
+    fn get_eth_price(&self) -> BoxFuture<'_, Option<NonZeroU128>> {
+        async move {
+            let token_id = self.eth_token_id();
+            let prices = self.source.get_prices(&[token_id]).await.ok()?;
+            prices.get(&token_id).copied()
+        }
+        .boxed()
+    }
+}
+
+/// Create the external price sources used by PriceOracle.
+pub fn external_price_sources(
+    http_factory: &HttpFactory,
+    token_info_fetcher: Arc<dyn TokenInfoFetching>,
+    update_interval: Duration,
+) -> Result<Vec<Box<dyn PriceSource + Send + Sync>>> {
+    let kraken = KrakenClient::new(http_factory, token_info_fetcher.clone())?;
+    let dexag = DexagClient::new(http_factory, token_info_fetcher.clone())?;
+    let oneinch = OneinchClient::new(http_factory, token_info_fetcher.clone())?;
+    Ok(vec![
+        thread_and_box(kraken, token_info_fetcher.clone(), update_interval),
+        thread_and_box(dexag, token_info_fetcher.clone(), update_interval),
+        thread_and_box(oneinch, token_info_fetcher, update_interval),
+    ])
+}
+
+fn thread_and_box(
+    price_source: impl PriceSource + Send + Sync + 'static,
+    token_info_fetcher: Arc<dyn TokenInfoFetching>,
+    update_interval: Duration,
+) -> Box<dyn PriceSource + Send + Sync> {
+    Box::new(ThreadedPriceSource::new(token_info_fetcher, price_source, update_interval).0)
 }
 
 #[cfg(test)]
@@ -170,8 +206,8 @@ mod tests {
     #[test]
     fn price_oracle_fetches_token_prices() {
         let tokens = Arc::new(TokenData::from(hash_map! {
-            TokenId(1) => TokenInfoOverride::new("WETH", 18, 0),
-            TokenId(2) => TokenInfoOverride::new("USDT", 6, 0),
+            TokenId(1) => TokenInfoOverride::new("WETH", 18, None),
+            TokenId(2) => TokenInfoOverride::new("USDT", 6, None),
         }));
 
         let mut source = MockPriceSource::new();
@@ -185,8 +221,8 @@ mod tests {
             .returning(|_| {
                 async {
                     Ok(hash_map! {
-                        TokenId(1) => 0,
-                        TokenId(2) => 1_000_000_000_000_000_000,
+                        TokenId(1) => nonzero!(100_000),
+                        TokenId(2) => nonzero!(1_000_000_000_000_000_000),
                     })
                 }
                 .boxed()
@@ -208,7 +244,7 @@ mod tests {
             prices,
             btree_map! {
                 TokenId(0) => None,
-                TokenId(1) => Some(TokenInfo::new("WETH", 18, 0)),
+                TokenId(1) => Some(TokenInfo::new("WETH", 18, 100_000)),
                 TokenId(2) => Some(TokenInfo::new("USDT", 6, 1_000_000_000_000_000_000)),
                 TokenId(3) => None,
             }
@@ -218,7 +254,7 @@ mod tests {
     #[test]
     fn price_oracle_ignores_source_error() {
         let tokens = Arc::new(TokenData::from(hash_map! {
-            TokenId(1) => TokenInfoOverride::new("WETH", 18, 0),
+            TokenId(1) => TokenInfoOverride::new("WETH", 18, None),
         }));
 
         let mut source = MockPriceSource::new();

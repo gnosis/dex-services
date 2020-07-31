@@ -8,6 +8,7 @@ use futures::{
     lock::Mutex,
     stream::{self, StreamExt},
 };
+use std::num::NonZeroU128;
 use std::{any, collections::HashMap, sync::Arc};
 
 /// Provides a generic interface to communicate in a standardized way
@@ -97,7 +98,7 @@ where
     fn get_prices<'a>(
         &'a self,
         tokens: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, u128>>> {
+    ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
         async move {
             if tokens.is_empty() {
                 return Ok(HashMap::new());
@@ -153,7 +154,11 @@ where
                 .iter()
                 .zip(results.iter())
                 .filter_map(|((token_id, token_info), result)| match result {
-                    Ok(price) => Some((*token_id, token_info.get_owl_price(*price))),
+                    Ok(price) => {
+                        let owl_price = token_info.get_owl_price(*price);
+                        log::debug!("Fetched price for token {}: {}", token_id, owl_price);
+                        Some((*token_id, NonZeroU128::new(owl_price)?))
+                    }
                     Err(err) => {
                         log::warn!(
                             "failed to retrieve {} prices for token ID {} ({}): {:?}",
@@ -219,7 +224,7 @@ mod tests {
         api.expect_get_token_list()
             .returning(|| async { Ok(Vec::new()) }.boxed());
 
-        let tokens = hash_map! { TokenId::from(6) => TokenInfoOverride::new("DAI", 18, 0)};
+        let tokens = hash_map! { TokenId::from(6) => TokenInfoOverride::new("DAI", 18, None)};
         assert!(GenericClient::<MockApi>::with_api_and_tokens(
             api,
             Arc::new(TokenData::from(tokens))
@@ -233,7 +238,7 @@ mod tests {
     #[test]
     fn get_token_prices_initialization_fails_then_works() {
         initialize_mockapi_context();
-        let tokens = hash_map! { TokenId::from(1) => TokenInfoOverride::new("ETH", 18, 0)};
+        let tokens = hash_map! { TokenId::from(1) => TokenInfoOverride::new("ETH", 18, None)};
         let mut api = MockApi::new();
         let mut seq = Sequence::new();
 
@@ -277,11 +282,10 @@ mod tests {
         let mut api = MockApi::new();
 
         let tokens = hash_map! {
-            TokenId(6) => TokenInfoOverride::new("DAI", 18, 0),
-            TokenId(1) => TokenInfoOverride::new("ETH", 18, 0),
-            TokenId(4) => TokenInfoOverride::new("USDC", 6, 0),
+            TokenId(6) => TokenInfoOverride::new("DAI", 18, None),
+            TokenId(1) => TokenInfoOverride::new("ETH", 18, None),
+            TokenId(4) => TokenInfoOverride::new("USDC", 6, None),
         };
-
         lazy_static! {
             static ref API_TOKENS: [MockGenericToken; 3] =
                 ["DAI".into(), "ETH".into(), "USDC".into()];
@@ -311,9 +315,9 @@ mod tests {
         assert_eq!(
             prices,
             hash_map! {
-                TokenId(1) => (0.7 * 10f64.powi(18)) as u128,
-                TokenId(4) => (1.2 * 10f64.powi(30)) as u128,
-                TokenId(6) => 10u128.pow(18)
+                TokenId(1) => nonzero!(0.7e18 as u128),
+                TokenId(4) => nonzero!(1.2e30 as u128),
+                TokenId(6) => nonzero!(1e18 as u128)
             }
         );
     }
@@ -324,8 +328,8 @@ mod tests {
         let mut api = MockApi::new();
 
         let tokens = hash_map! {
-            TokenId(6) => TokenInfoOverride::new("DAI", 18, 0),
-            TokenId(1) => TokenInfoOverride::new("ETH", 18, 0)
+            TokenId(6) => TokenInfoOverride::new("DAI", 18, None),
+            TokenId(1) => TokenInfoOverride::new("ETH", 18, None)
         };
 
         lazy_static! {
@@ -354,7 +358,7 @@ mod tests {
             prices,
             hash_map! {
                 // No TokenId(1) because we made the price error above.
-                TokenId(6) => 10u128.pow(18),
+                TokenId(6) => nonzero!(10u128.pow(18)),
             }
         );
     }
@@ -365,9 +369,9 @@ mod tests {
         let mut api = MockApi::new();
 
         let tokens = hash_map! {
-            TokenId(6) => TokenInfoOverride::new("dai", 18, 0),
-            TokenId(1) => TokenInfoOverride::new("ETH", 18, 0),
-            TokenId(4) => TokenInfoOverride::new("sUSD", 6, 0)
+            TokenId(6) => TokenInfoOverride::new("dai", 18, None),
+            TokenId(1) => TokenInfoOverride::new("ETH", 18, None),
+            TokenId(4) => TokenInfoOverride::new("sUSD", 6, None)
         };
 
         lazy_static! {
@@ -391,10 +395,41 @@ mod tests {
         assert_eq!(
             prices,
             hash_map! {
-                TokenId(1) => 10f64.powi(18) as u128,
-                TokenId(4) => 10f64.powi(30) as u128,
-                TokenId(6) => 10f64.powi(18) as u128,
+                TokenId(1) => nonzero!(1e18 as u128),
+                TokenId(4) => nonzero!(1e30 as u128),
+                TokenId(6) => nonzero!(1e18 as u128),
             }
         );
+    }
+
+    #[test]
+    fn ignores_zero_responses() {
+        initialize_mockapi_context();
+        let mut api = MockApi::new();
+
+        let tokens = hash_map! {
+            TokenId(6) => TokenInfoOverride::new("DAI", 18, None),
+            TokenId(1) => TokenInfoOverride::new("ETH", 18, None)
+        };
+
+        lazy_static! {
+            static ref API_TOKENS: [MockGenericToken; 2] = ["DAI".into(), "ETH".into()];
+        }
+
+        api.expect_get_token_list()
+            .returning(|| async { Ok(API_TOKENS.to_vec()) }.boxed());
+
+        api.expect_get_price()
+            .with(eq(API_TOKENS[1].clone()), eq(API_TOKENS[0].clone()))
+            .returning(|_, _| async { Ok(0.0) }.boxed());
+
+        let client =
+            GenericClient::<MockApi>::with_api_and_tokens(api, Arc::new(TokenData::from(tokens)));
+        let prices = client
+            .get_prices(&[1.into()])
+            .now_or_never()
+            .unwrap()
+            .unwrap();
+        assert_eq!(prices, hash_map! {});
     }
 }

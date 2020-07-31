@@ -1,9 +1,9 @@
-use crate::models::{self, TokenId, TokenInfo};
-use crate::price_estimation::PriceEstimating;
-use crate::price_finding::price_finder_interface::{
-    Fee, InternalOptimizer, PriceFinding, SolverType,
+use crate::{
+    economic_viability::EconomicViabilityComputing,
+    models::{self, TokenId, TokenInfo},
+    price_estimation::PriceEstimating,
+    price_finding::price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
 };
-
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use ethcontract::U256;
@@ -12,6 +12,7 @@ use log::error;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::display_fromstr;
 use std::collections::BTreeMap;
+use std::env;
 use std::fmt::{Debug, Display};
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Read, Write};
@@ -193,8 +194,8 @@ pub struct OptimisationPriceFinder {
     io_methods: Arc<dyn Io + Send + Sync>,
     fee: Option<Fee>,
     solver_type: SolverType,
-    price_oracle: Box<dyn PriceEstimating + Sync>,
-    min_avg_fee_per_order: u128,
+    price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
+    economic_viability: Arc<dyn EconomicViabilityComputing>,
     internal_optimizer: InternalOptimizer,
 }
 
@@ -202,16 +203,16 @@ impl OptimisationPriceFinder {
     pub fn new(
         fee: Option<Fee>,
         solver_type: SolverType,
-        price_oracle: impl PriceEstimating + Sync + 'static,
-        min_avg_fee_per_order: u128,
+        price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
+        economic_viability: Arc<dyn EconomicViabilityComputing>,
         internal_optimizer: InternalOptimizer,
     ) -> Self {
         OptimisationPriceFinder {
             io_methods: Arc::new(DefaultIo),
             fee,
             solver_type,
-            price_oracle: Box::new(price_oracle),
-            min_avg_fee_per_order,
+            price_oracle,
+            economic_viability,
             internal_optimizer,
         }
     }
@@ -260,8 +261,9 @@ impl PriceFinding for OptimisationPriceFinder {
             // We are solving the batch before the current one
             let batch_id = (now.timestamp() / 300) - 1;
             let date = now.format("%Y-%m-%d");
+            let current_directory = env::current_dir()?;
 
-            let input_folder = format!("instances/{}", &date);
+            let input_folder = format!("{}/instances/{}", current_directory.display(), &date);
             let input_file = format!(
                 "{}/instance_{}_{}.json",
                 &input_folder,
@@ -270,7 +272,8 @@ impl PriceFinding for OptimisationPriceFinder {
             );
 
             let result_folder = format!(
-                "results/{}/instance_{}_{}/",
+                "{}/results/{}/instance_{}_{}/",
+                &current_directory.display(),
                 &date,
                 &batch_id,
                 &now.to_rfc3339()
@@ -279,7 +282,7 @@ impl PriceFinding for OptimisationPriceFinder {
             // `blocking::unblock` requires the closure to be 'static.
             let io_methods = self.io_methods.clone();
             let solver_type = self.solver_type;
-            let min_avg_fee_per_order = self.min_avg_fee_per_order;
+            let min_avg_fee_per_order = self.economic_viability.min_average_fee().await?;
             let internal_optimizer = self.internal_optimizer;
             let result = blocking::unblock!(io_methods.run_solver(
                 &input_file,
@@ -362,13 +365,14 @@ impl Io for DefaultIo {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::models::AccountState;
-    use crate::price_estimation::MockPriceEstimating;
-    use crate::util::test_util::map_from_slice;
-    use crate::util::FutureWaitExt as _;
+    use crate::{
+        economic_viability::MockEconomicViabilityComputing, models::AccountState,
+        price_estimation::MockPriceEstimating, util::test_util::map_from_slice,
+        util::FutureWaitExt as _,
+    };
     use ethcontract::Address;
     use serde_json::json;
-    use std::collections::BTreeMap;
+    use std::{collections::BTreeMap, sync::Arc};
 
     #[test]
     fn token_id_serialization() {
@@ -631,11 +635,16 @@ pub mod tests {
                 .boxed()
             });
 
+        let mut economic_viablity = MockEconomicViabilityComputing::new();
+        economic_viablity
+            .expect_min_average_fee()
+            .returning(|| immediate!(Ok(10u128.pow(18))));
+
         let mut io_methods = MockIo::new();
         io_methods
             .expect_run_solver()
             .times(1)
-            .withf(|_, content: &str, _, _, _, _, _| {
+            .withf(move |_, content: &str, _, _, _, _, _| {
                 let json: serde_json::value::Value = serde_json::from_str(content).unwrap();
                 json["fee"]
                     == json!({
@@ -647,9 +656,9 @@ pub mod tests {
         let solver = OptimisationPriceFinder {
             io_methods: Arc::new(io_methods),
             fee: Some(fee),
-            min_avg_fee_per_order: 0,
             solver_type: SolverType::StandardSolver,
-            price_oracle: Box::new(price_oracle),
+            price_oracle: Arc::new(price_oracle),
+            economic_viability: Arc::new(economic_viablity),
             internal_optimizer: InternalOptimizer::Scip,
         };
         let orders = vec![];
