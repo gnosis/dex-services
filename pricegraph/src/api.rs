@@ -1,6 +1,7 @@
 //! Module containing the high-level `Pricegraph` API operation implementations.
 
 mod price_estimation;
+mod price_source;
 mod transitive_orderbook;
 
 pub use self::transitive_orderbook::TransitiveOrderbook;
