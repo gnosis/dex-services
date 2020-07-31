@@ -11,8 +11,8 @@ impl Pricegraph {
     /// Specifically, this price repesents the number of OWL atoms required to
     /// buy 1e18 atoms of the specified token.
     ///
-    /// Returns `None` if there token is not connected to the fee token (that
-    /// is, there is no transitive order buying the fee token for the specified
+    /// Returns `None` if the token is not connected to the fee token (that is,
+    /// there is no transitive order buying the fee token for the specified
     /// token).
     ///
     /// The fee token is defined as the token with ID 0.
