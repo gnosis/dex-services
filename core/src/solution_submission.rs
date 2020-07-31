@@ -203,7 +203,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
             while batch_index >= self.contract.get_current_auction_index().await? {
                 info!("Solved batch is not yet accepting solutions, waiting for next batch.");
                 if POLL_TIMEOUT > Duration::from_secs(0) {
-                    futures_timer::Delay::new(POLL_TIMEOUT).await;
+                    async_std::task::sleep(POLL_TIMEOUT).await;
                 }
             }
 
