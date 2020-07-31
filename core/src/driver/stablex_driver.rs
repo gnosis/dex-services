@@ -1,4 +1,5 @@
 use crate::{
+    economic_viability::EconomicViabilityComputing,
     metrics::StableXMetrics,
     models::{account_state::AccountState, order::Order, Solution},
     orderbook::StableXOrderBookReading,
@@ -6,15 +7,12 @@ use crate::{
     solution_submission::{SolutionSubmissionError, StableXSolutionSubmitting},
 };
 use anyhow::{Error, Result};
-use ethcontract::U256;
 use futures::future::{BoxFuture, FutureExt as _};
 use log::{info, warn};
-use std::time::{Duration, Instant};
-
-// This is approximate. Depends on reversion of previous solution.
-const GAS_PER_TRADE: f64 = 120_000.0;
-// Will be removed in a future PR where we are going to fetch the current price.
-const PRICE_OF_ETHER_IN_OWL: f64 = 200.0;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 #[derive(Debug)]
 pub enum DriverResult {
@@ -34,8 +32,8 @@ pub struct StableXDriverImpl<'a> {
     price_finder: &'a (dyn PriceFinding + Sync),
     orderbook_reader: &'a (dyn StableXOrderBookReading),
     solution_submitter: &'a (dyn StableXSolutionSubmitting + Sync),
+    economic_viability: Arc<dyn EconomicViabilityComputing + Sync>,
     metrics: &'a StableXMetrics,
-    gas_price_cap_subsidy_factor: f64,
 }
 
 impl<'a> StableXDriverImpl<'a> {
@@ -43,15 +41,15 @@ impl<'a> StableXDriverImpl<'a> {
         price_finder: &'a (dyn PriceFinding + Sync),
         orderbook_reader: &'a (dyn StableXOrderBookReading),
         solution_submitter: &'a (dyn StableXSolutionSubmitting + Sync),
+        economic_viability: Arc<dyn EconomicViabilityComputing + Sync>,
         metrics: &'a StableXMetrics,
-        gas_price_cap_subsidy_factor: f64,
     ) -> Self {
         Self {
             price_finder,
             orderbook_reader,
             solution_submitter,
             metrics,
-            gas_price_cap_subsidy_factor,
+            economic_viability,
         }
     }
 
@@ -129,13 +127,10 @@ impl<'a> StableXDriverImpl<'a> {
         };
 
         let submitted = if let Some(objective_value) = verified {
-            let fee = solution.earned_fee();
-            let num_trades = solution.executed_orders.len();
-            let gas_price_cap = gas_price_cap(fee, num_trades, self.gas_price_cap_subsidy_factor);
-            info!(
-                "Using gas price cap {} based on num_trades {} and fee {}",
-                gas_price_cap, num_trades, fee
-            );
+            let gas_price_cap = self
+                .economic_viability
+                .max_gas_price(solution.economic_viability_info())
+                .await?;
             let submission_result = self
                 .solution_submitter
                 .submit_solution(batch_to_solve, solution, objective_value, gas_price_cap)
@@ -207,25 +202,20 @@ impl<'a> StableXDriver for StableXDriverImpl<'a> {
     }
 }
 
-/// The gas price cap is selected so that submitting solution is still roughly profitable.
-fn gas_price_cap(burnt_fees: U256, num_trades: usize, subsidy_factor: f64) -> U256 {
-    // The previous two values are approximations and we do not need to be economically viable at
-    // this point in time. So be more lenient with respect go gas prices.
-    let burnt_fees = pricegraph::num::u256_to_f64(burnt_fees);
-    let gas_use = GAS_PER_TRADE * (num_trades as f64);
-    let result = (burnt_fees / (PRICE_OF_ETHER_IN_OWL * gas_use)) * subsidy_factor;
-    U256::from(result as u128)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::order::test_util::{create_order_for_test, order_to_executed_order};
-    use crate::models::AccountState;
-    use crate::orderbook::MockStableXOrderBookReading;
-    use crate::price_finding::price_finder_interface::MockPriceFinding;
-    use crate::solution_submission::MockStableXSolutionSubmitting;
-    use crate::util::test_util::map_from_slice;
+    use crate::{
+        economic_viability::{FixedEconomicViabilityComputer, MockEconomicViabilityComputing},
+        models::{
+            order::test_util::{create_order_for_test, order_to_executed_order},
+            AccountState,
+        },
+        orderbook::MockStableXOrderBookReading,
+        price_finding::price_finder_interface::MockPriceFinding,
+        solution_submission::MockStableXSolutionSubmitting,
+        util::test_util::map_from_slice,
+    };
     use anyhow::anyhow;
     use ethcontract::U256;
     use mockall::predicate::*;
@@ -259,6 +249,8 @@ mod tests {
         let mut reader = MockStableXOrderBookReading::default();
         let mut submitter = MockStableXSolutionSubmitting::default();
         let mut pf = MockPriceFinding::default();
+        let economic_viability =
+            Arc::new(FixedEconomicViabilityComputer::new(None, Some(0.into())));
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
@@ -296,7 +288,7 @@ mod tests {
             .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
             .return_once(move |_, _, _| async { Ok(solution) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
         assert!(driver
             .run(batch, time_limit)
             .now_or_never()
@@ -310,12 +302,13 @@ mod tests {
         let submitter = MockStableXSolutionSubmitting::default();
         let pf = MockPriceFinding::default();
         let metrics = StableXMetrics::default();
+        let economic_viability = Arc::new(MockEconomicViabilityComputing::new());
 
         reader
             .expect_get_auction_data()
             .returning(|_| async { Err(anyhow!("Error")) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
 
         assert!(driver
             .run(42, Duration::default())
@@ -329,6 +322,8 @@ mod tests {
         let mut reader = MockStableXOrderBookReading::default();
         let mut submitter = MockStableXSolutionSubmitting::default();
         let mut pf = MockPriceFinding::default();
+        let economic_viability =
+            Arc::new(FixedEconomicViabilityComputer::new(None, Some(0.into())));
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
@@ -358,7 +353,7 @@ mod tests {
         pf.expect_find_prices()
             .returning(|_, _, _| async { Err(anyhow!("Error")) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
 
         assert!(driver
             .run(batch, time_limit)
@@ -372,6 +367,7 @@ mod tests {
         let mut reader = MockStableXOrderBookReading::default();
         let submitter = MockStableXSolutionSubmitting::default();
         let pf = MockPriceFinding::default();
+        let economic_viability = Arc::new(MockEconomicViabilityComputing::new());
         let metrics = StableXMetrics::default();
 
         let orders = vec![];
@@ -385,7 +381,7 @@ mod tests {
             .with(eq(batch))
             .return_once(move |_| async { Ok((state, orders)) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
         assert!(driver
             .run(batch, time_limit)
             .now_or_never()
@@ -398,6 +394,7 @@ mod tests {
         let mut reader = MockStableXOrderBookReading::default();
         let mut submitter = MockStableXSolutionSubmitting::default();
         let mut pf = MockPriceFinding::default();
+        let economic_viability = Arc::new(MockEconomicViabilityComputing::new());
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
@@ -421,7 +418,7 @@ mod tests {
 
         submitter.expect_submit_solution().times(0);
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
         assert!(driver
             .run(batch, time_limit)
             .now_or_never()
@@ -434,6 +431,7 @@ mod tests {
         let mut reader = MockStableXOrderBookReading::default();
         let mut submitter = MockStableXSolutionSubmitting::default();
         let mut pf = MockPriceFinding::default();
+        let economic_viability = Arc::new(MockEconomicViabilityComputing::new());
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
@@ -474,7 +472,7 @@ mod tests {
             .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
             .return_once(move |_, _, _| async { Ok(solution) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
         assert!(driver
             .run(batch, time_limit)
             .now_or_never()
@@ -487,6 +485,7 @@ mod tests {
         let mut reader = MockStableXOrderBookReading::default();
         let mut submitter = MockStableXSolutionSubmitting::default();
         let mut pf = MockPriceFinding::default();
+        let economic_viability = Arc::new(MockEconomicViabilityComputing::new());
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
@@ -522,7 +521,7 @@ mod tests {
             .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
             .return_once(move |_, _, _| async { Ok(solution) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
         assert!(driver
             .run(batch, time_limit)
             .now_or_never()
@@ -535,6 +534,8 @@ mod tests {
         let mut reader = MockStableXOrderBookReading::default();
         let mut submitter = MockStableXSolutionSubmitting::default();
         let mut pf = MockPriceFinding::default();
+        let economic_viability =
+            Arc::new(FixedEconomicViabilityComputer::new(None, Some(0.into())));
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
@@ -573,7 +574,7 @@ mod tests {
             .withf(move |o, s, t| o == orders.as_slice() && *s == state && *t <= time_limit)
             .return_once(move |_, _, _| async { Ok(solution) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
         assert!(driver
             .run(batch, time_limit)
             .now_or_never()
@@ -586,6 +587,7 @@ mod tests {
         let mut reader = MockStableXOrderBookReading::default();
         let submitter = MockStableXSolutionSubmitting::default();
         let pf = MockPriceFinding::default();
+        let economic_viability = Arc::new(MockEconomicViabilityComputing::new());
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
@@ -607,21 +609,11 @@ mod tests {
                 async { Ok((state, orders)) }.boxed()
             });
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, &metrics, 1.0);
+        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
         assert!(driver
             .run(batch, time_limit)
             .now_or_never()
             .unwrap()
             .is_ok());
-    }
-
-    #[test]
-    fn gas_price_cap_example() {
-        assert_eq!(
-            // 50 owl fee
-            gas_price_cap(U256::from(50e18 as u128), 3, 1.0),
-            // ~700 gwei
-            U256::from(694_444_444_444u128)
-        );
     }
 }
