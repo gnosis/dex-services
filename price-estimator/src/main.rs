@@ -1,5 +1,6 @@
 mod error;
 mod filter;
+mod infallible_price_source;
 mod models;
 mod orderbook;
 mod solver_rounding_buffer;

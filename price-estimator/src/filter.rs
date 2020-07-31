@@ -257,7 +257,8 @@ async fn estimate_amounts_at_price(
         let buy_token_info = get_token_info(token_pair.buy, token_infos.as_ref()).await?;
         let sell_token_info = get_token_info(token_pair.sell, token_infos.as_ref()).await?;
         let price_in_quote_atoms = price_in_quote
-            * (sell_token_info.base_unit_in_atoms() / buy_token_info.base_unit_in_atoms());
+            * (sell_token_info.base_unit_in_atoms() as f64
+                / buy_token_info.base_unit_in_atoms() as f64);
         let mut result = estimate_amounts_at_price_atoms(
             token_pair,
             price_in_quote_atoms,
