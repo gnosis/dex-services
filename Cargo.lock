@@ -746,10 +746,12 @@ version = "1.0.0"
 dependencies = [
  "anyhow",
  "core",
+ "crossbeam",
  "ethcontract",
  "futures 0.3.5",
  "pbr",
  "pricegraph",
+ "rayon",
  "structopt",
 ]
 
