@@ -12,7 +12,7 @@ const BAD_ESTIMATE_THRESHOLD: f64 = 0.1;
 #[derive(Debug, StructOpt)]
 #[structopt(
     name = "historic_prices",
-    about = "Utility for computing historic exchange prices.",
+    about = "Utility for computing historic exchange token prices.",
     rename_all = "kebab"
 )]
 struct Options {
