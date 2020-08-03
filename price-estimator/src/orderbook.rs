@@ -143,3 +143,50 @@ fn pricegraph_from_auction_data(auction_data: &AuctionData) -> Pricegraph {
             .map(|order| order.to_element_with_accounts(&auction_data.0)),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::{
+        models::TokenId, orderbook::NoopOrderbook, price_estimation::price_source::PriceSource,
+    };
+    use futures::future::{BoxFuture, FutureExt as _};
+    use std::{collections::HashMap, num::NonZeroU128};
+
+    #[test]
+    fn updates_infallible_price_source() {
+        struct PriceSource_ {};
+        impl PriceSource for PriceSource_ {
+            fn get_prices<'a>(
+                &'a self,
+                _tokens: &'a [TokenId],
+            ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
+                futures::future::ready(Ok(vec![(TokenId(1), NonZeroU128::new(3).unwrap())]
+                    .into_iter()
+                    .collect()))
+                .boxed()
+            }
+        }
+
+        let infallible = UpdatingInfalliblePriceSource::new(
+            Vec::new(),
+            HashMap::new(),
+            vec![Box::new(PriceSource_ {})],
+        );
+        let orderbook = Orderbook::new(Box::new(NoopOrderbook {}), infallible);
+        let price = || {
+            orderbook
+                .infallible_price_source
+                .inner()
+                .now_or_never()
+                .unwrap()
+                .price(TokenId(1))
+        };
+
+        let before_update_price = price();
+        orderbook.update().now_or_never().unwrap().unwrap();
+        let after_update_price = price();
+        assert!(before_update_price != after_update_price);
+        assert_eq!(after_update_price.get(), 3);
+    }
+}

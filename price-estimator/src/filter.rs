@@ -334,22 +334,8 @@ fn apply_rounding_buffer(amount: f64, price_rounding_buffer: f64) -> f64 {
 mod tests {
     use super::*;
     use anyhow::{anyhow, Result};
-    use core::orderbook::StableXOrderBookReading;
+    use core::orderbook::NoopOrderbook;
     use futures::future::{BoxFuture, FutureExt as _};
-
-    fn empty_orderbook() -> impl StableXOrderBookReading {
-        struct OrderbookReader {}
-        impl StableXOrderBookReading for OrderbookReader {
-            fn get_auction_data<'a>(
-                &'a self,
-                _: u32,
-            ) -> BoxFuture<'a, Result<(core::models::AccountState, Vec<core::models::Order>)>>
-            {
-                async { Ok(Default::default()) }.boxed()
-            }
-        }
-        OrderbookReader {}
-    }
 
     fn empty_token_info() -> impl TokenInfoFetching {
         struct TokenInfoFetcher {}
@@ -369,7 +355,7 @@ mod tests {
 
     fn all_filter() -> impl Filter<Extract = impl Reply, Error = Infallible> + Clone {
         let orderbook = Arc::new(Orderbook::new(
-            Box::new(empty_orderbook()),
+            Box::new(NoopOrderbook {}),
             Default::default(),
         ));
         let token_info = Arc::new(empty_token_info());
