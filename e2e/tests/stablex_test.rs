@@ -1,11 +1,11 @@
 use contracts::{BatchExchange, IERC20};
 use e2e::{
-    common::{wait_for_condition, FutureBuilderExt, FutureWaitExt},
+    common::{wait_for_condition, FutureBuilderExt as _, FutureWaitExt as _},
     docker_logs,
     stablex::{close_auction, setup_stablex},
 };
-use ethcontract::{web3::futures::Future as _, Account, PrivateKey, U256};
-use futures::future::join_all;
+use ethcontract::{Account, PrivateKey, U256};
+use futures::future::{join_all, FutureExt as _};
 use services_core::{contracts::Web3, http::HttpFactory};
 use std::{
     env,
@@ -151,34 +151,40 @@ fn test_rinkeby() {
         .gas(1_000_000.into())
         .gas_price(8_000_000_000u64.into())
         .from(account.clone())
-        .send();
+        .send()
+        .boxed();
     let second_approve = IERC20::at(&web3, token_b)
         .approve(instance.address(), 1_000_000.into())
         .nonce(nonce + 1)
         .gas(1_000_000.into())
         .gas_price(8_000_000_000u64.into())
         .from(account)
-        .send();
+        .send()
+        .boxed();
 
     // Deposit Funds
     let first_deposit = instance
         .deposit(token_a, 1_000_000.into())
         .nonce(nonce + 2)
-        .send();
+        .send()
+        .boxed();
     let second_deposit = instance
         .deposit(token_b, 1_000_000.into())
         .nonce(nonce + 3)
-        .send();
+        .send()
+        .boxed();
 
     // Place orders
     let first_order = instance
         .place_order(0, 7, batch + 2, 1_000_000, 10_000_000)
         .nonce(nonce + 4)
-        .send();
+        .send()
+        .boxed();
     let second_order = instance
         .place_order(7, 0, batch + 1, 1_000_000, 10_000_000)
         .nonce(nonce + 5)
-        .send();
+        .send()
+        .boxed();
 
     // Wait for all transactions to be confirmed
     println!("Waiting for transactions to be confirmed");
