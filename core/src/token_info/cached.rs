@@ -284,6 +284,8 @@ mod tests {
     #[test]
     fn token_infos_fetched_once() {
         let mut inner = MockTokenInfoFetching::new();
+        // NOTE: Use `return_once` to ensure this test panics if there is
+        // more than one request.
         inner.expect_get_token_info().return_once(|_| {
             immediate!(Ok(TokenBaseInfo {
                 alias: "FOO".to_string(),
