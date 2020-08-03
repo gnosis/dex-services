@@ -1,5 +1,12 @@
-use core::{models::TokenId, token_info::TokenBaseInfo};
+use anyhow::Result;
+use core::{
+    models::TokenId,
+    price_estimation::{average_price_source, price_source::PriceSource},
+    token_info::TokenBaseInfo,
+};
+use pricegraph::Pricegraph;
 use std::{collections::HashMap, num::NonZeroU128};
+use tokio::sync::{RwLock, RwLockReadGuard};
 
 /// Roughly like `PriceSource` but is updated externally and cannot fail.
 #[derive(Debug, Default)]
@@ -9,14 +16,14 @@ pub struct InfalliblePriceSource {
 }
 
 impl InfalliblePriceSource {
-    pub fn new(token_infos: HashMap<TokenId, TokenBaseInfo>) -> Self {
+    fn new(token_infos: HashMap<TokenId, TokenBaseInfo>) -> Self {
         Self {
             token_infos,
             prices: HashMap::new(),
         }
     }
 
-    pub fn update(&mut self, prices: &HashMap<TokenId, NonZeroU128>) {
+    fn update(&mut self, prices: &HashMap<TokenId, NonZeroU128>) {
         self.prices.extend(prices.iter());
     }
 
@@ -35,6 +42,49 @@ impl InfalliblePriceSource {
                     .unwrap_or_else(|| NonZeroU128::new(10u128.pow(18)).unwrap()),
             },
         }
+    }
+}
+
+/// Infallible price source that is updated with the average of external price sources and the
+/// pricegraph price source.
+#[derive(Default)]
+pub struct UpdatingInfalliblePriceSource {
+    all_tokens: Vec<TokenId>,
+    external_price_sources: Vec<Box<dyn PriceSource + Send + Sync>>,
+    inner: RwLock<InfalliblePriceSource>,
+}
+
+impl UpdatingInfalliblePriceSource {
+    #[allow(dead_code)]
+    pub fn new(
+        all_tokens: Vec<TokenId>,
+        token_infos: HashMap<TokenId, TokenBaseInfo>,
+        external_price_sources: Vec<Box<dyn PriceSource + Send + Sync>>,
+    ) -> Self {
+        Self {
+            all_tokens,
+            external_price_sources,
+            inner: RwLock::new(InfalliblePriceSource::new(token_infos)),
+        }
+    }
+
+    pub async fn inner(&self) -> RwLockReadGuard<'_, InfalliblePriceSource> {
+        self.inner.read().await
+    }
+
+    pub async fn update(&self, pricegraph: &Pricegraph) -> Result<()> {
+        let prices = average_price_source::average_price_sources(
+            self.external_price_sources
+                .iter()
+                .map(|source| source.as_ref() as &(dyn PriceSource + Send + Sync))
+                .chain(std::iter::once(
+                    pricegraph as &(dyn PriceSource + Send + Sync),
+                )),
+            &self.all_tokens,
+        )
+        .await?;
+        self.inner.write().await.update(&prices);
+        Ok(())
     }
 }
 

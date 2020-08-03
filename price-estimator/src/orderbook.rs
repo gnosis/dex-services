@@ -1,12 +1,10 @@
-use crate::{infallible_price_source::InfalliblePriceSource, solver_rounding_buffer};
+use crate::{infallible_price_source::UpdatingInfalliblePriceSource, solver_rounding_buffer};
 use anyhow::Result;
 use core::{
     models::{AccountState, BatchId, Order, TokenId},
     orderbook::StableXOrderBookReading,
-    price_estimation::{average_price_source, price_source::PriceSource},
 };
 use pricegraph::{Pricegraph, TokenPair};
-use std::collections::HashMap;
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
@@ -28,13 +26,14 @@ pub struct Orderbook {
     orderbook_reading: Box<dyn StableXOrderBookReading>,
     pricegraph_cache: RwLock<PricegraphCache>,
     extra_rounding_buffer_factor: f64,
-    infallible_price_source: RwLock<InfalliblePriceSource>,
-    external_price_sources: Vec<Box<dyn PriceSource + Send + Sync>>,
-    all_tokens: Vec<TokenId>,
+    infallible_price_source: UpdatingInfalliblePriceSource,
 }
 
 impl Orderbook {
-    pub fn new(orderbook_reading: Box<dyn StableXOrderBookReading>) -> Self {
+    pub fn new(
+        orderbook_reading: Box<dyn StableXOrderBookReading>,
+        infallible_price_source: UpdatingInfalliblePriceSource,
+    ) -> Self {
         Self {
             orderbook_reading,
             pricegraph_cache: RwLock::new(PricegraphCache {
@@ -43,12 +42,7 @@ impl Orderbook {
             }),
             // TODO: pass this from command line argument
             extra_rounding_buffer_factor: 2.0,
-            // TODO: pass real token infos
-            infallible_price_source: RwLock::new(InfalliblePriceSource::new(HashMap::new())),
-            // TODO: use real external price sources
-            external_price_sources: Vec::new(),
-            // TODO: use real token ids
-            all_tokens: Vec::new(),
+            infallible_price_source,
         }
     }
 
@@ -93,7 +87,7 @@ impl Orderbook {
 
     // TODO: this function is going to be used in some routes
     pub async fn _rounding_buffer(&self, token_pair: TokenPair) -> Result<f64> {
-        let price_source = self.infallible_price_source.read().await;
+        let price_source = self.infallible_price_source.inner().await;
         Ok(solver_rounding_buffer::rounding_buffer(
             price_source.price(TokenId(0)).get() as f64,
             price_source.price(TokenId(token_pair.sell)).get() as f64,
@@ -105,18 +99,7 @@ impl Orderbook {
     /// Update the infallible price source with the averaged prices of the external price sources
     /// and the pricegraph prices.
     async fn update_infallible_price_source(&self, pricegraph: &Pricegraph) -> Result<()> {
-        let prices = average_price_source::average_price_sources(
-            self.external_price_sources
-                .iter()
-                .map(|source| source.as_ref() as &(dyn PriceSource + Send + Sync))
-                .chain(std::iter::once(
-                    pricegraph as &(dyn PriceSource + Send + Sync),
-                )),
-            &self.all_tokens,
-        )
-        .await?;
-        self.infallible_price_source.write().await.update(&prices);
-        Ok(())
+        self.infallible_price_source.update(pricegraph).await
     }
 
     async fn auction_data(&self, batch_id: BatchId) -> Result<AuctionData> {
@@ -138,7 +121,7 @@ impl Orderbook {
         &self,
         auction_data: &mut AuctionData,
     ) -> Result<()> {
-        let price_source = self.infallible_price_source.read().await;
+        let price_source = self.infallible_price_source.inner().await;
         let prices = |token_id| price_source.price(token_id);
         solver_rounding_buffer::apply_rounding_buffer(
             prices,

@@ -368,7 +368,10 @@ mod tests {
     }
 
     fn all_filter() -> impl Filter<Extract = impl Reply, Error = Infallible> + Clone {
-        let orderbook = Arc::new(Orderbook::new(Box::new(empty_orderbook())));
+        let orderbook = Arc::new(Orderbook::new(
+            Box::new(empty_orderbook()),
+            Default::default(),
+        ));
         let token_info = Arc::new(empty_token_info());
         all(orderbook, token_info, 0.0)
     }
