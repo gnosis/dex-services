@@ -15,13 +15,16 @@ pub use self::encoding::*;
 pub use self::orderbook::*;
 
 /// The fee factor that is applied to each order's buy price.
-const FEE_FACTOR: f64 = 1.0 / 0.999;
+pub const FEE_FACTOR: f64 = 1.0 / 0.999;
+
+/// The fee token ID.
+const FEE_TOKEN: TokenId = 0;
 
 /// The minimum amount that must be traded for an order to be valid within a
 /// solution. Orders with effective sell amounts smaller than this amount can
 /// safely be ignored, and transitive orders with flows that trade amounts
 /// smaller than this are not considered for price estimates.
-const MIN_AMOUNT: f64 = 10_000.0;
+pub const MIN_AMOUNT: f64 = 10_000.0;
 
 /// API entry point for computing price estimates and transitive orderbooks for
 /// a give auction.
