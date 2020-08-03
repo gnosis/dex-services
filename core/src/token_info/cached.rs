@@ -1,27 +1,35 @@
 use super::{TokenBaseInfo, TokenId, TokenInfoFetching};
 
-use anyhow::{Context as _, Result};
-use async_std::sync::RwLock;
+use anyhow::{anyhow, Context as _, Result};
+use async_std::sync::{Mutex, RwLock};
 use futures::{
-    future::{BoxFuture, FutureExt},
+    future::{BoxFuture, FutureExt, Shared},
     stream::{self, StreamExt as _},
 };
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/**
- * Implementation of TokenInfoFetching that stores previously fetched information in an in-memory cache for fast retrieval.
- * TokenIds will always be fetched from the inner layer, as new tokens could be added at any time.
- */
+/// Implementation of TokenInfoFetching that stores previously fetched information in an in-memory cache for fast retrieval.
+/// TokenIds will always be fetched from the inner layer, as new tokens could be added at any time.
 pub struct TokenInfoCache {
-    cache: RwLock<HashMap<TokenId, TokenBaseInfo>>,
+    cache: Arc<Cache>,
     inner: Arc<dyn TokenInfoFetching>,
 }
+
+/// The cache used for the token info.
+#[derive(Debug, Default)]
+struct Cache {
+    infos: RwLock<HashMap<TokenId, TokenBaseInfo>>,
+    pending: Mutex<HashMap<TokenId, PendingTokenInfo>>,
+}
+
+/// Type alias for shared token info fetching futures.
+type PendingTokenInfo = Shared<BoxFuture<'static, Result<(), String>>>;
 
 impl TokenInfoCache {
     pub fn new(inner: Arc<dyn TokenInfoFetching>) -> Self {
         Self {
-            cache: RwLock::new(HashMap::new()),
+            cache: Default::default(),
             inner,
         }
     }
@@ -32,8 +40,11 @@ impl TokenInfoCache {
         cache: HashMap<TokenId, TokenBaseInfo>,
     ) -> Self {
         Self {
+            cache: Arc::new(Cache {
+                infos: RwLock::new(cache),
+                pending: Default::default(),
+            }),
             inner,
-            cache: RwLock::new(cache),
         }
     }
 
@@ -55,19 +66,78 @@ impl TokenInfoCache {
             .await;
         Ok(())
     }
+
+    /// Gets the cached token information if available. Returns `None` if the
+    /// token info is not yet cached.
+    async fn get_cached_token_info(&self, id: TokenId) -> Option<TokenBaseInfo> {
+        self.cache.infos.read().await.get(&id).cloned()
+    }
+
+    /// Creates a shared future for retrieiving token info.
+    ///
+    /// These are used to guarantee that concurrent fibers fetching token info
+    /// don't "double fetch".
+    async fn fetch_and_cache_token_info(&self, id: TokenId) -> Result<()> {
+        // NOTE: Because `Shared` futures require the output type to be `Clone`,
+        // and `anyhow::Error: !Clone` we cannot propagate the error directly,
+        // so we only propagate the error message and log the full error stack.
+        let fetch_info = {
+            let mut pending = self.cache.pending.lock().await;
+            pending
+                .entry(id)
+                .or_insert_with(|| {
+                    let cache = self.cache.clone();
+                    let inner = self.inner.clone();
+
+                    async move {
+                        let result = match inner.get_token_info(id).await {
+                            Ok(info) => {
+                                cache.infos.write().await.insert(id, info);
+                                Ok(())
+                            }
+                            Err(err) => {
+                                log::debug!(
+                                    "failed to fetch and cache info for token {}: {:?}",
+                                    id,
+                                    err
+                                );
+                                Err(err.to_string())
+                            }
+                        };
+
+                        cache.pending.lock().await.remove(&id);
+                        result
+                    }
+                    .boxed()
+                    .shared()
+                })
+                .clone()
+        };
+
+        fetch_info.await.map_err(|message| {
+            anyhow!(
+                "error fetching and caching info for token {}: {}",
+                id,
+                message,
+            )
+        })?;
+
+        Ok(())
+    }
 }
 
 impl TokenInfoFetching for TokenInfoCache {
     fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
         async move {
-            if let Some(info) = self.cache.read().await.get(&id).cloned() {
+            if let Some(info) = self.get_cached_token_info(id).await {
                 return Ok(info);
             }
-            let info = self.inner.get_token_info(id).await;
-            if let Ok(info) = info.as_ref() {
-                self.cache.write().await.insert(id, info.clone());
-            }
-            info
+
+            self.fetch_and_cache_token_info(id).await?;
+            Ok(self
+                .get_cached_token_info(id)
+                .await
+                .expect("missing token info after succesfully fetching and caching"))
         }
         .boxed()
     }
@@ -79,9 +149,10 @@ impl TokenInfoFetching for TokenInfoCache {
 
 #[cfg(test)]
 mod tests {
-    use super::super::MockTokenInfoFetching;
     use super::*;
+    use crate::{token_info::MockTokenInfoFetching, util::FutureWaitExt as _};
     use anyhow::anyhow;
+    use futures::future;
 
     #[test]
     fn calls_inner_once_per_token_id_on_success() {
@@ -208,5 +279,24 @@ mod tests {
                 assert_eq!(token_info.decimals, token_id.0 as u8);
             }
         }
+    }
+
+    #[test]
+    fn token_infos_fetched_once() {
+        let mut inner = MockTokenInfoFetching::new();
+        inner.expect_get_token_info().return_once(|_| {
+            immediate!(Ok(TokenBaseInfo {
+                alias: "FOO".to_string(),
+                decimals: 42,
+            }))
+        });
+
+        let cache = TokenInfoCache::new(Arc::new(inner));
+
+        let fetch1 = cache.get_token_info(0.into());
+        let fetch2 = cache.get_token_info(0.into());
+
+        let (info1, info2) = future::join(fetch1, fetch2).wait();
+        assert_eq!(info1.unwrap(), info2.unwrap());
     }
 }
