@@ -34,8 +34,8 @@ impl PriceSource for AveragePriceSource {
 /// Get the price from each price source and apply `average_prices` to them.
 /// Errors if all price sources fail. If some but not all fail then the failure is logged and the
 /// failures are not part of the average but no error is returned.
-pub async fn average_price_sources(
-    sources: impl Iterator<Item = &dyn PriceSource>,
+pub async fn average_price_sources<'a>(
+    sources: impl Iterator<Item = &'a (impl PriceSource + 'a + ?Sized)>,
     tokens: &[TokenId],
 ) -> Result<HashMap<TokenId, NonZeroU128>> {
     let futures = future::join_all(sources.map(|s| s.get_prices(tokens))).await;

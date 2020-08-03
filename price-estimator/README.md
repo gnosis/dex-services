@@ -80,6 +80,21 @@ The following result indicates that if we wanted to buy ETH (token 2) for DAI (t
 * `buyAmountInBase` is the computed buy amount (in base tokens) for the order from the specified price and estimated sell amount. Note that it might be possible to use a higher buy amount for the same returned sell amount and still likely get completely matched by the solver. This buy amount can be computed with a subsequent estimate buy amount API call using the returned sell amount in quote value.
 * The other fields repeat the parameters in the url back.
 
+### Estimated Best Ask Price
+
+`GET /api/v1/markets/:market/estimated-best-ask-price`
+
+Example Request: `/api/v1/markets/1-7/estimated-best-ask-price?atoms=true`
+
+Example Responses:
+
+```json
+297.8
+```
+
+The response is a json number or `null`.
+It represents the exchange rate for the market. In the example we can exchange ~300 DAI (token 7) for 1 ETH (token 1). Note that the true exchange rate depends on the buy amount whereas this exchange rate is for a theoretical 0 amount.
+
 # Testing
 
 To test a locally running price estimator with the frontend at https://mesa.eth.link/ we need to set our browser to allow websites to access localhost and change the url that the javascript uses for the price estimator. With chromium:
