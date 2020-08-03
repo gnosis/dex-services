@@ -224,9 +224,8 @@ OPTIONS:
         --token-data <token-data>
             JSON encoded backup token information to provide to the solver.
 
-            For example: '{ "T0001": { "alias": "WETH", "decimals": 18, "externalPrice": 200000000000000000000,
-            "shouldEstimatePrice": false }, "T0004": { "alias": "USDC", "decimals": 6, "externalPrice":
-            1000000000000000000000000000000, "shouldEstimatePrice": true } }' [env: TOKEN_DATA=]  [default: {}]
+            For example: '{ "T0001": { "alias": "WETH", "decimals": 18, "externalPrice": 200000000000000000000 }, "T0004": { "alias": "USDC", "decimals": 6, "externalPrice":
+            1000000000000000000000000000000 } }' [env: TOKEN_DATA=]  [default: {}]
         --use-shadowed-orderbook <use-shadowed-orderbook>
             Use a shadowed orderbook reader along side a primary reader so that the queried data can be compared and
             produce log errors in case they disagree [env: USE_SHADOWED_ORDERBOOK=]  [default: false]
