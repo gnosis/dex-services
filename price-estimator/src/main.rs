@@ -105,7 +105,8 @@ fn main() {
         options.auction_data_page_size,
         options.orderbook_file,
     );
-    let orderbook = Arc::new(Orderbook::new(Box::new(orderbook)));
+    // TODO: Use real price source instead of default.
+    let orderbook = Arc::new(Orderbook::new(Box::new(orderbook), Default::default()));
     let _ = orderbook.update().wait();
     log::info!("Orderbook initialized.");
 
