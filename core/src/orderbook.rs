@@ -41,6 +41,15 @@ pub trait StableXOrderBookReading: Send + Sync {
     }
 }
 
+/// Always suceeds with empty orderbook.
+pub struct NoopOrderbook {}
+
+impl StableXOrderBookReading for NoopOrderbook {
+    fn get_auction_data<'a>(&'a self, _: u32) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
+        immediate!(Ok(Default::default()))
+    }
+}
+
 /// The different kinds of orderbook readers.
 #[derive(Clone, Debug)]
 pub enum OrderbookReaderKind {
