@@ -1,10 +1,10 @@
 use anyhow::Result;
 use contracts::{
-    ethcontract::{Address, Http, Web3},
+    ethcontract::{Address, Web3},
     BatchExchange, BatchExchangeViewer,
 };
 use env_logger::Env;
-use futures::compat::Future01CompatExt as _;
+use ethcontract::Http;
 use std::{
     env,
     fs::File,
@@ -30,15 +30,14 @@ async fn run() -> Result<()> {
         "https://mainnet.infura.io/v3/{}",
         env::var("INFURA_PROJECT_ID")?,
     );
-    let (eloop, http) = Http::new(&url)?;
+    let http = Http::new(&url)?;
     let web3 = Web3::new(http);
-    eloop.into_remote();
 
     let exchange = BatchExchange::deployed(&web3).await?;
     let viewer = BatchExchangeViewer::deployed(&web3).await?;
 
     let block_number = {
-        let latest_block = web3.eth().block_number().compat().await?;
+        let latest_block = web3.eth().block_number().await?;
         latest_block - CONFIRMATIONS
     };
 
