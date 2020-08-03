@@ -1,5 +1,6 @@
 use crate::common::{
-    approve, create_accounts_with_funded_tokens, wait_for, FutureBuilderExt, FutureWaitExt, MAX_GAS,
+    approve, create_accounts_with_funded_tokens, wait_for, FutureBuilderExt as _,
+    FutureWaitExt as _, MAX_GAS,
 };
 use contracts::{BatchExchange, TokenOWL, IERC20};
 use ethcontract::{Account, Address, U256};

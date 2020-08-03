@@ -1,12 +1,12 @@
 use contracts::{ERC20Mintable, IERC20};
 use ethcontract::{
-    contract::{
-        CallFuture, Deploy, DeployBuilder, DeployFuture, Detokenizable, MethodBuilder,
-        MethodSendFuture, ViewMethodBuilder,
-    },
-    web3::{futures::Future as F, Transport},
+    contract::{Deploy, DeployBuilder, Detokenizable, MethodBuilder, ViewMethodBuilder},
+    errors::{DeployError, MethodError},
+    transaction::TransactionResult,
+    web3::Transport,
     Account, Address, U256,
 };
+use futures::future::{FutureExt as _, LocalBoxFuture};
 use services_core::contracts::Web3;
 use std::{
     fmt::Debug,
@@ -53,37 +53,37 @@ pub trait FutureBuilderExt: Sized {
 
 impl<T, R> FutureBuilderExt for MethodBuilder<T, R>
 where
-    T: Transport,
-    R: Detokenizable,
+    T: Transport + 'static,
+    R: Detokenizable + 'static,
 {
-    type Future = MethodSendFuture<T>;
+    type Future = LocalBoxFuture<'static, Result<TransactionResult, MethodError>>;
 
     fn into_future(self) -> Self::Future {
-        self.send()
+        self.send().boxed_local()
     }
 }
 
 impl<T, R> FutureBuilderExt for ViewMethodBuilder<T, R>
 where
-    T: Transport,
-    R: Detokenizable,
+    T: Transport + 'static,
+    R: Detokenizable + 'static,
 {
-    type Future = CallFuture<T, R>;
+    type Future = LocalBoxFuture<'static, Result<R::Output, MethodError>>;
 
     fn into_future(self) -> Self::Future {
-        self.call()
+        self.call().boxed_local()
     }
 }
 
 impl<T, I> FutureBuilderExt for DeployBuilder<T, I>
 where
-    T: Transport,
-    I: Deploy<T>,
+    T: Transport + 'static,
+    I: Deploy<T> + 'static,
 {
-    type Future = DeployFuture<T, I>;
+    type Future = LocalBoxFuture<'static, Result<I, DeployError>>;
 
     fn into_future(self) -> Self::Future {
-        self.deploy()
+        self.deploy().boxed_local()
     }
 }
 
