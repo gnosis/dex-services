@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
 use ethcontract::{prelude::Web3, transport::DynTransport, web3::types::Block, BlockNumber, H256};
-use futures::compat::Future01CompatExt as _;
 
 fn get_block_batch_id<T>(block: &Block<T>) -> u32 {
     const BATCH_DURATION: u64 = 300;
@@ -13,7 +12,6 @@ async fn get_block(
 ) -> Result<ethcontract::web3::types::Block<H256>> {
     web3.eth()
         .block(block_number.into())
-        .compat()
         .await?
         .ok_or_else(|| anyhow!("block {:?} is missing", block_number))
 }

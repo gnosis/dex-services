@@ -96,7 +96,7 @@ mod tests {
     use super::*;
     use crate::models::BatchId;
     use contracts::batch_exchange;
-    use ethcontract::{Address, EventData, H256};
+    use ethcontract::{Address, H256};
 
     fn block_hash(block_number: u64) -> H256 {
         H256::from_low_u64_be(block_number)
@@ -128,34 +128,10 @@ mod tests {
     fn read_event_filestore() {
         let bincode = {
             let mut events = EventRegistry::default();
-            events.handle_event_data(
-                EventData::Added(token_listing(0)),
-                1,
-                0,
-                block_hash(1),
-                batch_timestamp(41),
-            );
-            events.handle_event_data(
-                EventData::Added(token_listing(1)),
-                2,
-                0,
-                block_hash(2),
-                batch_timestamp(41),
-            );
-            events.handle_event_data(
-                EventData::Added(token_listing(2)),
-                2,
-                1,
-                block_hash(2),
-                batch_timestamp(41),
-            );
-            events.handle_event_data(
-                EventData::Added(token_listing(3)),
-                4,
-                0,
-                block_hash(4),
-                batch_timestamp(42),
-            );
+            events.handle_event_data(token_listing(0), 1, 0, block_hash(1), batch_timestamp(41));
+            events.handle_event_data(token_listing(1), 2, 0, block_hash(2), batch_timestamp(41));
+            events.handle_event_data(token_listing(2), 2, 1, block_hash(2), batch_timestamp(41));
+            events.handle_event_data(token_listing(3), 4, 0, block_hash(4), batch_timestamp(42));
             events.to_bytes().unwrap()
         };
 
@@ -210,7 +186,7 @@ mod tests {
             let mut events = EventRegistry::default();
             for (i, event) in event_data.into_iter().enumerate() {
                 events.handle_event_data(
-                    EventData::Added(event),
+                    event,
                     1337,
                     i,
                     block_hash(0),
@@ -302,7 +278,7 @@ mod tests {
             let mut events = EventRegistry::default();
             for (i, event) in event_data.into_iter().enumerate() {
                 events.handle_event_data(
-                    EventData::Added(event),
+                    event,
                     1337,
                     i,
                     block_hash(0),

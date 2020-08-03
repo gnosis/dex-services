@@ -1,5 +1,5 @@
 use crate::common::{
-    approve, create_accounts_with_funded_tokens, wait_for, FutureBuilderExt, FutureWaitExt, MAX_GAS,
+    approve, create_accounts_with_funded_tokens, wait_for, FutureWaitExt, MAX_GAS,
 };
 use contracts::{BatchExchange, TokenOWL, IERC20};
 use ethcontract::{Account, Address, Http, Web3, U256};
@@ -21,15 +21,19 @@ pub fn setup_stablex(
     // Set up OWL manually
     let owl_address = instance
         .token_id_to_address_map(0)
+        .call()
         .wait_and_expect("Cannot get address of OWL Token");
     let owl = TokenOWL::at(web3, owl_address);
     owl.set_minter(accounts[0])
+        .send()
         .wait_and_expect("Cannot set minter");
     for account in &accounts {
         owl.mint_owl(*account, U256::exp10(22) * token_minted)
+            .send()
             .wait_and_expect("Cannot mint OWl");
         owl.approve(instance.address(), U256::exp10(22) * token_minted)
             .from(Account::Local(*account, None))
+            .send()
             .wait_and_expect("Cannot approve OWL for burning");
     }
 
@@ -37,6 +41,7 @@ pub fn setup_stablex(
     for token in &tokens {
         instance
             .add_token(token.address())
+            .send()
             .wait_and_expect("Cannot add token");
     }
     tokens.insert(0, IERC20::at(&web3, owl_address));
@@ -46,6 +51,7 @@ pub fn setup_stablex(
 pub fn close_auction(web3: &Web3<Http>, instance: &BatchExchange) {
     let seconds_remaining = instance
         .get_seconds_remaining_in_batch()
+        .call()
         .wait_and_expect("Cannot get seconds remaining in batch");
     wait_for(web3, seconds_remaining.as_u32());
 }

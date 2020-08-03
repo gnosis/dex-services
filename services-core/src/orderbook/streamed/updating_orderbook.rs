@@ -7,9 +7,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail, ensure, Result};
 use block_timestamp_reading::{BlockTimestampReading, CachedBlockTimestampReader};
-use contracts::batch_exchange;
 use ethcontract::{contract::Event, BlockNumber, H256};
-use futures::compat::Future01CompatExt as _;
 use futures::future::{BoxFuture, FutureExt as _};
 use futures::lock::Mutex;
 use log::{error, info, warn};
@@ -112,7 +110,7 @@ impl UpdatingOrderbook {
     }
 
     async fn update_with_events(&self, context: &mut Context) -> Result<()> {
-        let current_block = self.web3.eth().block_number().compat().await?.as_u64();
+        let current_block = self.web3.eth().block_number().await?.as_u64();
         let from_block = context
             .last_handled_block
             .saturating_sub(BLOCK_CONFIRMATION_COUNT);
@@ -155,7 +153,7 @@ impl UpdatingOrderbook {
     async fn handle_events(
         &self,
         context: &mut Context,
-        events: Vec<Event<batch_exchange::Event>>,
+        events: Vec<Event<contracts::batch_exchange::Event>>,
         delete_events_starting_at_block: u64,
         latest_block: u64,
     ) -> Result<()> {
@@ -188,7 +186,7 @@ impl UpdatingOrderbook {
     async fn handle_event(
         &self,
         context: &mut Context,
-        event: Event<batch_exchange::Event>,
+        event: Event<contracts::batch_exchange::Event>,
     ) -> Result<()> {
         match event {
             Event {

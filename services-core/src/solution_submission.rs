@@ -391,6 +391,7 @@ mod tests {
             contract_address: None,
             logs: vec![],
             status: None,
+            root: None,
             logs_bloom: H2048::zero(),
         };
 

@@ -4,7 +4,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use contracts::batch_exchange;
-use ethcontract::{contract::EventData, BlockNumber, H256};
+use ethcontract::{BlockNumber, H256};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -49,7 +49,7 @@ impl EventRegistry {
 
     pub fn handle_event_data(
         &mut self,
-        event_data: EventData<batch_exchange::Event>,
+        event: batch_exchange::Event,
         block_number: u64,
         log_index: usize,
         block_hash: H256,
@@ -61,10 +61,7 @@ impl EventRegistry {
             block_hash,
             log_index,
         };
-        match event_data {
-            EventData::Added(event) => self.events.insert(key, Value { event, batch_id }),
-            EventData::Removed(_event) => self.events.remove(&key),
-        };
+        self.events.insert(key, Value { event, batch_id });
     }
 
     pub fn delete_events_starting_at_block(&mut self, block_number: u64) {
@@ -310,17 +307,17 @@ mod tests {
     #[test]
     fn delete_events_starting_at_block() {
         let mut events = EventRegistry::default();
-        let token_listing_0 = EventData::Added(Event::TokenListing(TokenListing {
+        let token_listing_0 = Event::TokenListing(TokenListing {
             token: Address::from_low_u64_be(0),
             id: 0,
-        }));
+        });
         events.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
-        let token_listing_1 = EventData::Added(Event::TokenListing(TokenListing {
+        let token_listing_1 = Event::TokenListing(TokenListing {
             token: Address::from_low_u64_be(1),
             id: 1,
-        }));
+        });
         events.handle_event_data(token_listing_1, 0, 1, H256::zero(), 0);
-        let order_placement = EventData::Added(Event::OrderPlacement(OrderPlacement {
+        let order_placement = Event::OrderPlacement(OrderPlacement {
             owner: Address::from_low_u64_be(2),
             index: 0,
             buy_token: 1,
@@ -329,29 +326,29 @@ mod tests {
             valid_until: 10,
             price_numerator: 10,
             price_denominator: 10,
-        }));
+        });
         events.handle_event_data(order_placement, 0, 2, H256::zero(), 0);
 
-        let deposit_0 = EventData::Added(Event::Deposit(Deposit {
+        let deposit_0 = Event::Deposit(Deposit {
             user: Address::from_low_u64_be(2),
             token: Address::from_low_u64_be(0),
             amount: 1.into(),
             batch_id: 0,
-        }));
+        });
         events.handle_event_data(deposit_0, 0, 3, H256::zero(), 0);
-        let deposit_1 = EventData::Added(Event::Deposit(Deposit {
+        let deposit_1 = Event::Deposit(Deposit {
             user: Address::from_low_u64_be(2),
             token: Address::from_low_u64_be(0),
             amount: 1.into(),
             batch_id: 0,
-        }));
+        });
         events.handle_event_data(deposit_1, 1, 0, H256::zero(), 0);
-        let deposit_2 = EventData::Added(Event::Deposit(Deposit {
+        let deposit_2 = Event::Deposit(Deposit {
             user: Address::from_low_u64_be(2),
             token: Address::from_low_u64_be(0),
             amount: 1.into(),
             batch_id: 0,
-        }));
+        });
         events.handle_event_data(deposit_2, 2, 0, H256::zero(), 0);
 
         let auction_data = events.auction_state_for_batch(2).unwrap();
@@ -371,15 +368,15 @@ mod tests {
     fn events_get_sorted() {
         // We add a token, deposit that token, request to withdraw that token, withdraw it but give
         // the events to the event registry in a shuffled order.
-        let token_listing_0 = EventData::Added(Event::TokenListing(TokenListing {
+        let token_listing_0 = Event::TokenListing(TokenListing {
             token: Address::from_low_u64_be(0),
             id: 0,
-        }));
-        let token_listing_1 = EventData::Added(Event::TokenListing(TokenListing {
+        });
+        let token_listing_1 = Event::TokenListing(TokenListing {
             token: Address::from_low_u64_be(1),
             id: 1,
-        }));
-        let order_placement = EventData::Added(Event::OrderPlacement(OrderPlacement {
+        });
+        let order_placement = Event::OrderPlacement(OrderPlacement {
             owner: Address::from_low_u64_be(2),
             index: 0,
             buy_token: 1,
@@ -388,24 +385,24 @@ mod tests {
             valid_until: 10,
             price_numerator: 10,
             price_denominator: 10,
-        }));
-        let deposit = EventData::Added(Event::Deposit(Deposit {
+        });
+        let deposit = Event::Deposit(Deposit {
             user: Address::from_low_u64_be(2),
             token: Address::from_low_u64_be(0),
             amount: 10.into(),
             batch_id: 0,
-        }));
-        let withdraw_request = EventData::Added(Event::WithdrawRequest(WithdrawRequest {
+        });
+        let withdraw_request = Event::WithdrawRequest(WithdrawRequest {
             user: Address::from_low_u64_be(2),
             token: Address::from_low_u64_be(0),
             amount: 5.into(),
             batch_id: 0,
-        }));
-        let withdraw = EventData::Added(Event::Withdraw(Withdraw {
+        });
+        let withdraw = Event::Withdraw(Withdraw {
             user: Address::from_low_u64_be(2),
             token: Address::from_low_u64_be(0),
             amount: 3.into(),
-        }));
+        });
 
         let mut events = EventRegistry::default();
         events.handle_event_data(token_listing_1, 0, 1, H256::zero(), 0);
@@ -424,15 +421,15 @@ mod tests {
 
     #[test]
     fn historic_auction_states() {
-        let token_listing_0 = EventData::Added(Event::TokenListing(TokenListing {
+        let token_listing_0 = Event::TokenListing(TokenListing {
             token: Address::from_low_u64_be(0),
             id: 0,
-        }));
-        let token_listing_1 = EventData::Added(Event::TokenListing(TokenListing {
+        });
+        let token_listing_1 = Event::TokenListing(TokenListing {
             token: Address::from_low_u64_be(1),
             id: 1,
-        }));
-        let order_placement = EventData::Added(Event::OrderPlacement(OrderPlacement {
+        });
+        let order_placement = Event::OrderPlacement(OrderPlacement {
             owner: Address::from_low_u64_be(2),
             index: 0,
             buy_token: 1,
@@ -441,19 +438,19 @@ mod tests {
             valid_until: 10,
             price_numerator: 100,
             price_denominator: 100,
-        }));
-        let deposit_0 = EventData::Added(Event::Deposit(Deposit {
+        });
+        let deposit_0 = Event::Deposit(Deposit {
             user: Address::from_low_u64_be(2),
             token: Address::from_low_u64_be(0),
             amount: 42.into(),
             batch_id: 0,
-        }));
-        let deposit_1 = EventData::Added(Event::Deposit(Deposit {
+        });
+        let deposit_1 = Event::Deposit(Deposit {
             user: Address::from_low_u64_be(2),
             token: Address::from_low_u64_be(0),
             amount: 1337.into(),
             batch_id: 1,
-        }));
+        });
 
         let mut events = EventRegistry::default();
         events.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
@@ -471,15 +468,15 @@ mod tests {
 
     #[test]
     fn auction_state_at_block_for_batch() {
-        let token_listing_0 = EventData::Added(Event::TokenListing(TokenListing {
+        let token_listing_0 = Event::TokenListing(TokenListing {
             token: Address::from_low_u64_be(0),
             id: 0,
-        }));
-        let token_listing_1 = EventData::Added(Event::TokenListing(TokenListing {
+        });
+        let token_listing_1 = Event::TokenListing(TokenListing {
             token: Address::from_low_u64_be(1),
             id: 1,
-        }));
-        let order_placement = EventData::Added(Event::OrderPlacement(OrderPlacement {
+        });
+        let order_placement = Event::OrderPlacement(OrderPlacement {
             owner: Address::from_low_u64_be(2),
             index: 0,
             buy_token: 1,
@@ -488,25 +485,25 @@ mod tests {
             valid_until: 10,
             price_numerator: 100,
             price_denominator: 100,
-        }));
-        let deposit_0 = EventData::Added(Event::Deposit(Deposit {
+        });
+        let deposit_0 = Event::Deposit(Deposit {
             user: Address::from_low_u64_be(2),
             token: Address::from_low_u64_be(0),
             amount: 42.into(),
             batch_id: 0,
-        }));
-        let deposit_1 = EventData::Added(Event::Deposit(Deposit {
+        });
+        let deposit_1 = Event::Deposit(Deposit {
             user: Address::from_low_u64_be(2),
             token: Address::from_low_u64_be(0),
             amount: 1337.into(),
             batch_id: 0,
-        }));
-        let deposit_2 = EventData::Added(Event::Deposit(Deposit {
+        });
+        let deposit_2 = Event::Deposit(Deposit {
             user: Address::from_low_u64_be(2),
             token: Address::from_low_u64_be(0),
             amount: 1337.into(),
             batch_id: 1,
-        }));
+        });
 
         let mut events = EventRegistry::default();
         events.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
@@ -531,10 +528,10 @@ mod tests {
 
     #[test]
     fn errors_when_requesting_past_batch_in_future_block() {
-        let token_listing = EventData::Added(Event::TokenListing(TokenListing {
+        let token_listing = Event::TokenListing(TokenListing {
             token: Address::from_low_u64_be(0),
             id: 0,
-        }));
+        });
 
         let mut events = EventRegistry::default();
         events.handle_event_data(
@@ -561,42 +558,42 @@ mod tests {
 
         let mut events = EventRegistry::default();
         events.handle_event_data(
-            EventData::Added(token_listing(0)),
+            token_listing(0),
             0,
             0,
             H256::zero(),
             BatchId(0).as_timestamp(),
         );
         events.handle_event_data(
-            EventData::Added(token_listing(1)),
+            token_listing(1),
             0,
             1,
             H256::zero(),
             BatchId(0).as_timestamp(),
         );
         events.handle_event_data(
-            EventData::Added(token_listing(2)),
+            token_listing(2),
             1,
             0,
             H256::zero(),
             BatchId(1).as_timestamp(),
         );
         events.handle_event_data(
-            EventData::Added(token_listing(3)),
+            token_listing(3),
             2,
             0,
             H256::zero(),
             BatchId(1).as_timestamp(),
         );
         events.handle_event_data(
-            EventData::Added(token_listing(4)),
+            token_listing(4),
             3,
             0,
             H256::zero(),
             BatchId(2).as_timestamp(),
         );
         events.handle_event_data(
-            EventData::Added(token_listing(5)),
+            token_listing(5),
             4,
             0,
             H256::zero(),

@@ -1,11 +1,11 @@
 use contracts::{BatchExchange, IERC20};
 use e2e::{
-    common::{wait_for_condition, FutureBuilderExt, FutureWaitExt},
+    common::{wait_for_condition, FutureWaitExt},
     docker_logs,
     stablex::{close_auction, setup_stablex},
 };
-use ethcontract::{web3::futures::Future as _, Account, Http, PrivateKey, Web3, U256};
-use futures::future::join_all;
+use ethcontract::{Account, Http, PrivateKey, Web3, U256};
+use futures::future::{join_all, FutureExt as _};
 use std::{
     env,
     time::{Duration, Instant},
@@ -13,8 +13,7 @@ use std::{
 
 #[test]
 fn test_with_ganache() {
-    let (eloop, http) = Http::new("http://localhost:8545").expect("transport failed");
-    eloop.into_remote();
+    let http = Http::new("http://localhost:8545").expect("transport failed");
     let web3 = Web3::new(http);
     let (instance, accounts, tokens) = setup_stablex(&web3, 3, 3, 100);
 
@@ -22,10 +21,12 @@ fn test_with_ganache() {
     // even if other tokens have already been added
     let first_token_id = instance
         .token_address_to_id_map(tokens[0].address())
+        .call()
         .wait_and_expect("Cannot get first token id");
 
     let second_token_id = instance
         .token_address_to_id_map(tokens[1].address())
+        .call()
         .wait_and_expect("Cannot get second token id");
 
     // Using realistic prices helps non naive solvers find a solution in case
@@ -35,15 +36,18 @@ fn test_with_ganache() {
     instance
         .deposit(tokens[0].address(), (3000 * usd_price_in_fee).into())
         .from(Account::Local(accounts[0], None))
+        .send()
         .wait_and_expect("Failed to send first deposit");
 
     instance
         .deposit(tokens[1].address(), (3000 * usd_price_in_fee).into())
         .from(Account::Local(accounts[1], None))
+        .send()
         .wait_and_expect("Failed to send second deposit");
 
     let batch = instance
         .get_current_batch_id()
+        .call()
         .wait_and_expect("Cannot get batchId");
 
     instance
@@ -55,6 +59,7 @@ fn test_with_ganache() {
             2_000 * usd_price_in_fee,
         )
         .from(Account::Local(accounts[0], None))
+        .send()
         .wait_and_expect("Cannot place first order");
 
     instance
@@ -66,6 +71,7 @@ fn test_with_ganache() {
             999 * usd_price_in_fee,
         )
         .from(Account::Local(accounts[1], None))
+        .send()
         .wait_and_expect("Cannot place first order");
     close_auction(&web3, &instance);
 
@@ -74,6 +80,7 @@ fn test_with_ganache() {
         || {
             instance
                 .get_current_objective_value()
+                .call()
                 .wait_and_expect("Cannot get objective value")
                 > U256::zero()
         },
@@ -84,19 +91,23 @@ fn test_with_ganache() {
     instance
         .request_withdraw(tokens[1].address(), (999 * usd_price_in_fee).into())
         .from(Account::Local(accounts[0], None))
+        .send()
         .wait_and_expect("Cannot place request withdraw");
     close_auction(&web3, &instance);
 
     let balance_before = tokens[1]
         .balance_of(accounts[0])
+        .call()
         .wait_and_expect("Cannot get balance before");
 
     instance
         .withdraw(accounts[0], tokens[1].address())
+        .send()
         .wait_and_expect("Cannot withdraw");
 
     let balance_after = tokens[1]
         .balance_of(accounts[0])
+        .call()
         .wait_and_expect("Cannot get balance after");
     let balance_change = (balance_after - balance_before).as_u128();
     let expected_balance_change = 999 * usd_price_in_fee;
@@ -110,8 +121,7 @@ fn test_with_ganache() {
 #[test]
 fn test_rinkeby() {
     // Setup instance and default tx params
-    let (eloop, http) = Http::new("https://node.rinkeby.gnosisdev.com/").expect("transport failed");
-    eloop.into_remote();
+    let http = Http::new("https://node.rinkeby.gnosisdev.com/").expect("transport failed");
     let web3 = Web3::new(http);
     let mut instance =
         BatchExchange::deployed(&web3).wait_and_expect("Cannot get deployed Batch Exchange");
@@ -134,12 +144,15 @@ fn test_rinkeby() {
     // Gather token and batch info
     let token_a = instance
         .token_id_to_address_map(0)
+        .call()
         .wait_and_expect("Cannot get first Token address");
     let token_b = instance
         .token_id_to_address_map(7)
+        .call()
         .wait_and_expect("Cannot get second Token address");
     let batch = instance
         .get_current_batch_id()
+        .call()
         .wait_and_expect("Cannot get batchId");
 
     // Approve Funds
@@ -149,34 +162,40 @@ fn test_rinkeby() {
         .gas(1_000_000.into())
         .gas_price(8_000_000_000u64.into())
         .from(account.clone())
-        .send();
+        .send()
+        .boxed();
     let second_approve = IERC20::at(&web3, token_b)
         .approve(instance.address(), 1_000_000.into())
         .nonce(nonce + 1)
         .gas(1_000_000.into())
         .gas_price(8_000_000_000u64.into())
         .from(account)
-        .send();
+        .send()
+        .boxed();
 
     // Deposit Funds
     let first_deposit = instance
         .deposit(token_a, 1_000_000.into())
         .nonce(nonce + 2)
-        .send();
+        .send()
+        .boxed();
     let second_deposit = instance
         .deposit(token_b, 1_000_000.into())
         .nonce(nonce + 3)
-        .send();
+        .send()
+        .boxed();
 
     // Place orders
     let first_order = instance
         .place_order(0, 7, batch + 2, 1_000_000, 10_000_000)
         .nonce(nonce + 4)
-        .send();
+        .send()
+        .boxed();
     let second_order = instance
         .place_order(7, 0, batch + 1, 1_000_000, 10_000_000)
         .nonce(nonce + 5)
-        .send();
+        .send()
+        .boxed();
 
     // Wait for all transactions to be confirmed
     println!("Waiting for transactions to be confirmed");
@@ -196,6 +215,7 @@ fn test_rinkeby() {
     // Wait for solution to be applied
     let sleep_time = instance
         .get_seconds_remaining_in_batch()
+        .call()
         .wait_and_expect("Cannot get seconds remaining in batch")
         .low_u64()
         + 60;

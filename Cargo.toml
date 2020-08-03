@@ -19,8 +19,3 @@ default-members = [
     "price-estimator",
     "pricegraph",
 ]
-
-[patch.crates-io]
-# Needed to make coverage work on MacOS (https://github.com/servo/core-foundation-rs/pull/357)
-core-foundation = { git = "https://github.com/servo/core-foundation-rs", tag="v0.20.1"}
-core-foundation-sys = { git = "https://github.com/servo/core-foundation-rs", tag="v0.20.1"}
