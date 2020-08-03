@@ -7,24 +7,6 @@ use pbr::ProgressBar;
 use rayon::prelude::*;
 use std::{io, path::Path, sync::mpsc};
 
-/// DEPRECATED: Runs a closure for each batch for the specified event history.
-pub fn for_each_batch_sync(
-    orderbook_file: impl AsRef<Path>,
-    mut f: impl FnMut(&ExchangeHistory, BatchId) -> Result<()>,
-) -> Result<()> {
-    let history = ExchangeHistory::from_filestore(orderbook_file)?;
-
-    let batches = history.batches_until_now();
-    let mut progress = ProgressBar::on(io::stderr(), batches.batch_count());
-
-    for batch in batches {
-        progress.inc();
-        f(&history, batch)?;
-    }
-
-    Ok(())
-}
-
 /// Runs a closure for each batch for the specified event history.
 pub fn for_each_batch<R, F>(
     orderbook_file: impl AsRef<Path>,
