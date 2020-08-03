@@ -2,29 +2,26 @@ use anyhow::Result;
 use core::{
     models::TokenId,
     price_estimation::{average_price_source, price_source::PriceSource},
-    token_info::TokenBaseInfo,
+    token_info::{TokenBaseInfo, TokenInfoFetching},
 };
 use pricegraph::Pricegraph;
-use std::{collections::HashMap, num::NonZeroU128};
+use std::{collections::HashMap, num::NonZeroU128, sync::Arc};
 use tokio::sync::{RwLock, RwLockReadGuard};
 
 /// Roughly like `PriceSource` but is updated externally and cannot fail.
 #[derive(Debug, Default)]
-pub struct InfalliblePriceSource {
-    token_infos: HashMap<TokenId, TokenBaseInfo>,
+pub struct PriceCache {
+    tokens: HashMap<TokenId, TokenBaseInfo>,
     prices: HashMap<TokenId, NonZeroU128>,
 }
 
-impl InfalliblePriceSource {
-    fn new(token_infos: HashMap<TokenId, TokenBaseInfo>) -> Self {
-        Self {
-            token_infos,
-            prices: HashMap::new(),
-        }
+impl PriceCache {
+    fn update_prices(&mut self, prices: &HashMap<TokenId, NonZeroU128>) {
+        self.prices.extend(prices.iter());
     }
 
-    fn update(&mut self, prices: &HashMap<TokenId, NonZeroU128>) {
-        self.prices.extend(prices.iter());
+    pub fn update_tokens(&mut self, tokens: HashMap<TokenId, TokenBaseInfo>) {
+        self.tokens.extend(tokens.into_iter());
     }
 
     /// Tries to use the current price from the first source, if that fails one base unit of the
@@ -33,7 +30,7 @@ impl InfalliblePriceSource {
     pub fn price(&self, token_id: TokenId) -> NonZeroU128 {
         match self.prices.get(&token_id) {
             Some(price) => *price,
-            None => match self.token_infos.get(&token_id) {
+            None => match self.tokens.get(&token_id) {
                 Some(token_info) => token_info.base_unit_in_atoms(),
                 None => self
                     .prices
@@ -47,32 +44,38 @@ impl InfalliblePriceSource {
 
 /// Infallible price source that is updated with the average of external price sources and the
 /// pricegraph price source.
-#[derive(Default)]
-pub struct UpdatingInfalliblePriceSource {
-    all_tokens: Vec<TokenId>,
+pub struct PriceCacheUpdater {
+    token_info: Arc<dyn TokenInfoFetching>,
     external_price_sources: Vec<Box<dyn PriceSource + Send + Sync>>,
-    inner: RwLock<InfalliblePriceSource>,
+    inner: RwLock<PriceCache>,
 }
 
-impl UpdatingInfalliblePriceSource {
+impl PriceCacheUpdater {
     #[allow(dead_code)]
     pub fn new(
-        all_tokens: Vec<TokenId>,
-        token_infos: HashMap<TokenId, TokenBaseInfo>,
+        token_info: Arc<dyn TokenInfoFetching>,
         external_price_sources: Vec<Box<dyn PriceSource + Send + Sync>>,
     ) -> Self {
         Self {
-            all_tokens,
+            token_info,
             external_price_sources,
-            inner: RwLock::new(InfalliblePriceSource::new(token_infos)),
+            inner: Default::default(),
         }
     }
 
-    pub async fn inner(&self) -> RwLockReadGuard<'_, InfalliblePriceSource> {
+    pub async fn inner(&self) -> RwLockReadGuard<'_, PriceCache> {
         self.inner.read().await
     }
 
-    pub async fn update(&self, pricegraph: &Pricegraph) -> Result<()> {
+    pub async fn update_tokens(&self) -> Result<()> {
+        let all_tokens = self.token_info.all_ids().await?;
+        let tokens = self.token_info.get_token_infos(&all_tokens).await?;
+        self.inner.write().await.update_tokens(tokens);
+        Ok(())
+    }
+
+    pub async fn update_prices(&self, pricegraph: &Pricegraph) -> Result<()> {
+        let all_tokens = self.token_info.all_ids().await?;
         let prices = average_price_source::average_price_sources(
             self.external_price_sources
                 .iter()
@@ -80,10 +83,10 @@ impl UpdatingInfalliblePriceSource {
                 .chain(std::iter::once(
                     pricegraph as &(dyn PriceSource + Send + Sync),
                 )),
-            &self.all_tokens,
+            &all_tokens,
         )
         .await?;
-        self.inner.write().await.update(&prices);
+        self.inner.write().await.update_prices(&prices);
         Ok(())
     }
 }
@@ -96,8 +99,8 @@ mod tests {
     fn use_existing_price() {
         let token = TokenId(1);
         let price = NonZeroU128::new(1).unwrap();
-        let mut ips = InfalliblePriceSource::default();
-        ips.update(&[(token, price)].iter().copied().collect());
+        let mut ips = PriceCache::default();
+        ips.update_prices(&[(token, price)].iter().copied().collect());
         assert_eq!(ips.price(token), price);
     }
 
@@ -108,15 +111,16 @@ mod tests {
             alias: String::new(),
             decimals: 1,
         };
-        let ips = InfalliblePriceSource::new([(token, token_info)].iter().cloned().collect());
+        let mut ips = PriceCache::default();
+        ips.update_tokens([(token, token_info)].iter().cloned().collect());
         assert_eq!(ips.price(token).get(), 10);
     }
 
     #[test]
     fn fallback_to_fee() {
         let token = TokenId(1);
-        let mut ips = InfalliblePriceSource::default();
-        ips.update(
+        let mut ips = PriceCache::default();
+        ips.update_prices(
             &[(TokenId(0), NonZeroU128::new(1).unwrap())]
                 .iter()
                 .copied()

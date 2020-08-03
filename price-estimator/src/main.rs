@@ -14,6 +14,7 @@ use core::{
     util::FutureWaitExt as _,
 };
 use ethcontract::PrivateKey;
+use infallible_price_source::PriceCacheUpdater;
 use orderbook::Orderbook;
 use prometheus::Registry;
 use std::{
@@ -54,6 +55,15 @@ struct Options {
         parse(try_from_str = duration_secs),
     )]
     orderbook_update_interval: Duration,
+
+    /// Time interval in seconds in which the external price sources should be updated.
+    #[structopt(
+        long,
+        env = "PRICE_SOURCE_UPDATE_INTERVAL",
+        default_value = "60",
+        parse(try_from_str = duration_secs),
+    )]
+    price_source_update_interval: Duration,
 
     /// The safety margin to subtract from the estimated price, in order to make it more likely to
     /// be matched.
@@ -108,8 +118,17 @@ fn main() {
         options.auction_data_page_size,
         options.orderbook_file,
     );
-    // TODO: Use real price source instead of default.
-    let orderbook = Arc::new(Orderbook::new(Box::new(orderbook), Default::default()));
+
+    let external_price_sources = core::price_estimation::external_price_sources(
+        &http_factory,
+        token_info.clone(),
+        options.price_source_update_interval,
+    )
+    .expect("failed to create external price sources");
+    let infallible_price_source =
+        PriceCacheUpdater::new(token_info.clone(), external_price_sources);
+
+    let orderbook = Arc::new(Orderbook::new(Box::new(orderbook), infallible_price_source));
     let _ = orderbook.update().wait();
     log::info!("Orderbook initialized.");
 
@@ -140,7 +159,7 @@ async fn update_orderbook_forever(orderbook: Arc<Orderbook>, update_interval: Du
     loop {
         time::delay_for(update_interval).await;
         if let Err(err) = orderbook.update().await {
-            log::warn!("error updating orderbook: {:?}", err);
+            log::error!("error updating orderbook: {:?}", err);
         }
     }
 }
