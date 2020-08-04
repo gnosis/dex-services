@@ -34,7 +34,7 @@ fn main() -> Result<()> {
     let mut report = Report::new(File::create(options.output_dir.join("trades.csv"))?);
     report.header()?;
 
-    cmd::for_each_batch(&options.orderbook_file, |history, batch| {
+    cmd::for_each_batch_sync(&options.orderbook_file, |history, batch| {
         let auction_elements = history.auction_elements_for_batch(batch)?;
         let settlement = history.settlement_for_batch(batch);
 
