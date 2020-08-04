@@ -165,6 +165,16 @@ struct Options {
     )]
     economic_viability_subsidy_factor: f64,
 
+    /// We multiply the economically viable min average fee by this amount to ensure that if a
+    /// solution has this minimum amount it will still be end up economically viable even when the
+    /// gas or eth price moves slightly between solution computation and submission.
+    #[structopt(
+        long,
+        env = "ECONOMIC_VIABILITY_MIN_AVG_FEE_FACTOR",
+        default_value = "1.1"
+    )]
+    economic_viability_min_avg_fee_factor: f64,
+
     /// The default minimum average fee per order. This is passed to the solver
     /// in case the computing its value fails. Its unit is [OWL]
     #[structopt(long, env = "MIN_AVG_FEE_PER_ORDER", default_value = "0")]
@@ -271,6 +281,7 @@ fn main() {
             price_oracle.clone(),
             gas_station.clone(),
             options.economic_viability_subsidy_factor,
+            options.economic_viability_min_avg_fee_factor,
         )),
         Box::new(FixedEconomicViabilityComputer::new(
             Some(options.default_min_avg_fee_per_order),
