@@ -59,7 +59,7 @@ where
 
         while let Ok(result) = samples_rx.recv() {
             match result? {
-                Some(sample) => report.sample(sample)?,
+                Some(sample) => report.record_sample(sample)?,
                 None => {
                     progress.inc();
                 }
@@ -85,7 +85,7 @@ impl<T> Clone for Sampler<T> {
 
 impl<T> Sampler<T> {
     /// Sends a sample to the recording instance.
-    pub fn sample(&self, sample: T) -> Result<()> {
+    pub fn record_sample(&self, sample: T) -> Result<()> {
         self.send(Some(sample))
     }
 
@@ -117,7 +117,7 @@ pub trait Reporting {
     type Summary;
 
     /// Record a sample.
-    fn sample(&mut self, sample: Self::Sample) -> Result<()>;
+    fn record_sample(&mut self, sample: Self::Sample) -> Result<()>;
 
     /// Finilize the recording of samples.
     fn finalize(self) -> Result<Self::Summary>;

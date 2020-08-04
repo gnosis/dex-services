@@ -73,7 +73,7 @@ fn check_batch_prices(
         let price = prices[token_index];
         let estimate = pricegraph.estimate_token_price(token).unwrap_or(0.0) as u128;
 
-        sampler.sample(Row {
+        sampler.record_sample(Row {
             batch,
             token,
             price,
@@ -124,7 +124,7 @@ where
     type Sample = Row;
     type Summary = ();
 
-    fn sample(
+    fn record_sample(
         &mut self,
         Row {
             batch,
