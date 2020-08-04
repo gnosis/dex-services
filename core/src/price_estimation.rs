@@ -71,10 +71,8 @@ impl PriceOracle {
         token_data: TokenData,
         update_interval: Duration,
     ) -> Result<Self> {
-        let token_info_fetcher = Arc::new(TokenInfoCache::with_cache(
-            contract,
-            token_data.clone().into(),
-        ));
+        let cache: HashMap<_, _> = token_data.clone().into();
+        let token_info_fetcher = Arc::new(TokenInfoCache::with_cache(contract, cache));
         let mut price_sources =
             external_price_sources(http_factory, token_info_fetcher.clone(), update_interval)?;
         price_sources.push(Box::new(PricegraphEstimator::new(orderbook_reader)));

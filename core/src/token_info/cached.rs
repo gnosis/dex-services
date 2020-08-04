@@ -1,7 +1,8 @@
 use super::{TokenBaseInfo, TokenId, TokenInfoFetching};
 
-use anyhow::{Context as _, Result};
+use anyhow::{anyhow, Context as _, Error, Result};
 use async_std::sync::RwLock;
+use ethcontract::errors::{ExecutionError, MethodError};
 use futures::{
     future::{BoxFuture, FutureExt},
     stream::{self, StreamExt as _},
@@ -14,8 +15,16 @@ use std::sync::Arc;
  * TokenIds will always be fetched from the inner layer, as new tokens could be added at any time.
  */
 pub struct TokenInfoCache {
-    cache: RwLock<HashMap<TokenId, TokenBaseInfo>>,
+    cache: RwLock<HashMap<TokenId, CacheEntry>>,
     inner: Arc<dyn TokenInfoFetching>,
+}
+
+#[derive(Debug)]
+enum CacheEntry {
+    TokenBaseInfo(TokenBaseInfo),
+    /// For contract calls that revert. In this case we are unlikely to ever be able to get the
+    /// token info so it does not make sense to keep retrying.
+    UnretryableError(String),
 }
 
 impl TokenInfoCache {
@@ -29,11 +38,16 @@ impl TokenInfoCache {
     #[allow(dead_code)]
     pub fn with_cache(
         inner: Arc<dyn TokenInfoFetching>,
-        cache: HashMap<TokenId, TokenBaseInfo>,
+        cache: impl IntoIterator<Item = (TokenId, TokenBaseInfo)>,
     ) -> Self {
         Self {
             inner,
-            cache: RwLock::new(cache),
+            cache: RwLock::new(
+                cache
+                    .into_iter()
+                    .map(|(key, value)| (key, CacheEntry::TokenBaseInfo(value)))
+                    .collect(),
+            ),
         }
     }
 
@@ -60,14 +74,32 @@ impl TokenInfoCache {
 impl TokenInfoFetching for TokenInfoCache {
     fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
         async move {
-            if let Some(info) = self.cache.read().await.get(&id).cloned() {
-                return Ok(info);
+            match self.cache.read().await.get(&id) {
+                Some(CacheEntry::TokenBaseInfo(info)) => return Ok(info.clone()),
+                Some(CacheEntry::UnretryableError(reason)) => {
+                    return Err(anyhow!(reason.clone()).context("cached error"));
+                }
+                None => (),
             }
             let info = self.inner.get_token_info(id).await;
-            if let Ok(info) = info.as_ref() {
-                self.cache.write().await.insert(id, info.clone());
+            match info {
+                Ok(info) => {
+                    self.cache
+                        .write()
+                        .await
+                        .insert(id, CacheEntry::TokenBaseInfo(info.clone()));
+                    Ok(info)
+                }
+                Err(err) if is_revert(&err) => {
+                    log::debug!("unretryable error: {:?}", err);
+                    self.cache
+                        .write()
+                        .await
+                        .insert(id, CacheEntry::UnretryableError(err.to_string()));
+                    Err(err)
+                }
+                Err(err) => Err(err),
             }
-            info
         }
         .boxed()
     }
@@ -77,11 +109,29 @@ impl TokenInfoFetching for TokenInfoCache {
     }
 }
 
+fn is_revert(err: &Error) -> bool {
+    matches!(
+        err.downcast_ref::<MethodError>(),
+        Some(MethodError {
+            inner: ExecutionError::Revert(_),
+            ..
+        })
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::MockTokenInfoFetching;
     use super::*;
     use anyhow::anyhow;
+
+    fn revert_error() -> Error {
+        MethodError {
+            signature: String::new(),
+            inner: ExecutionError::Revert(None),
+        }
+        .into()
+    }
 
     #[test]
     fn calls_inner_once_per_token_id_on_success() {
@@ -116,6 +166,28 @@ mod tests {
             .expect_get_token_info()
             .times(2)
             .returning(|_| immediate!(Err(anyhow!("error"))));
+
+        let cache = TokenInfoCache::new(Arc::new(inner));
+        cache
+            .get_token_info(1.into())
+            .now_or_never()
+            .expect("First fetch not immediate")
+            .expect_err("Fetch should return error");
+        cache
+            .get_token_info(1.into())
+            .now_or_never()
+            .expect("Second fetch not immediate")
+            .expect_err("Fetch should return error");
+    }
+
+    #[test]
+    fn does_not_call_inner_again_on_revert_error() {
+        let mut inner = MockTokenInfoFetching::new();
+
+        inner
+            .expect_get_token_info()
+            .times(1)
+            .returning(|_| immediate!(Err(revert_error())));
 
         let cache = TokenInfoCache::new(Arc::new(inner));
         cache
