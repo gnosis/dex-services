@@ -144,7 +144,7 @@ impl StableXMetrics {
         batch: u32,
         res: &Result<U256, SolutionSubmissionError>,
     ) {
-        let stage_label = &[ProcessingStage::Solved.as_ref()];
+        let stage_label = &[ProcessingStage::Verified.as_ref()];
         self.processing_times
             .with_label_values(stage_label)
             .set(time_elapsed_since_batch_start(batch));
