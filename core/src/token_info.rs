@@ -3,7 +3,7 @@ use futures::future::BoxFuture;
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
-use std::collections::HashMap;
+use std::{collections::HashMap, num::NonZeroU128};
 
 use crate::models::TokenId;
 pub mod cached;
@@ -52,8 +52,8 @@ impl TokenBaseInfo {
     }
 
     /// One unit of the token taking decimals into account, given in number of atoms.
-    pub fn base_unit_in_atoms(&self) -> u128 {
-        10u128.pow(self.decimals as u32)
+    pub fn base_unit_in_atoms(&self) -> NonZeroU128 {
+        NonZeroU128::new(10u128.pow(self.decimals as u32)).unwrap()
     }
 
     /// Converts the prices from USD into the unit expected by the contract.
@@ -98,8 +98,8 @@ mod tests {
     #[test]
     #[allow(clippy::float_cmp)]
     fn base_unit_in_atoms() {
-        assert_eq!(TokenBaseInfo::new("", 0).base_unit_in_atoms(), 1);
-        assert_eq!(TokenBaseInfo::new("", 1).base_unit_in_atoms(), 10);
-        assert_eq!(TokenBaseInfo::new("", 2).base_unit_in_atoms(), 100);
+        assert_eq!(TokenBaseInfo::new("", 0).base_unit_in_atoms().get(), 1);
+        assert_eq!(TokenBaseInfo::new("", 1).base_unit_in_atoms().get(), 10);
+        assert_eq!(TokenBaseInfo::new("", 2).base_unit_in_atoms().get(), 100);
     }
 }

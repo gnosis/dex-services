@@ -1,7 +1,7 @@
 //! Module responsible for aggregating price estimates from various sources to
 //! give good price estimates to the solver for better results.
 
-mod average_price_source;
+pub mod average_price_source;
 mod clients;
 mod orderbook_based;
 pub mod price_source;

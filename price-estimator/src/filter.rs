@@ -257,8 +257,8 @@ async fn estimate_amounts_at_price(
         let buy_token_info = get_token_info(token_pair.buy, token_infos.as_ref()).await?;
         let sell_token_info = get_token_info(token_pair.sell, token_infos.as_ref()).await?;
         let price_in_quote_atoms = price_in_quote
-            * (sell_token_info.base_unit_in_atoms() as f64
-                / buy_token_info.base_unit_in_atoms() as f64);
+            * (sell_token_info.base_unit_in_atoms().get() as f64
+                / buy_token_info.base_unit_in_atoms().get() as f64);
         let mut result = estimate_amounts_at_price_atoms(
             token_pair,
             price_in_quote_atoms,
@@ -334,22 +334,8 @@ fn apply_rounding_buffer(amount: f64, price_rounding_buffer: f64) -> f64 {
 mod tests {
     use super::*;
     use anyhow::{anyhow, Result};
-    use core::orderbook::StableXOrderBookReading;
+    use core::orderbook::NoopOrderbook;
     use futures::future::{BoxFuture, FutureExt as _};
-
-    fn empty_orderbook() -> impl StableXOrderBookReading {
-        struct OrderbookReader {}
-        impl StableXOrderBookReading for OrderbookReader {
-            fn get_auction_data<'a>(
-                &'a self,
-                _: u32,
-            ) -> BoxFuture<'a, Result<(core::models::AccountState, Vec<core::models::Order>)>>
-            {
-                async { Ok(Default::default()) }.boxed()
-            }
-        }
-        OrderbookReader {}
-    }
 
     fn empty_token_info() -> impl TokenInfoFetching {
         struct TokenInfoFetcher {}
@@ -368,7 +354,10 @@ mod tests {
     }
 
     fn all_filter() -> impl Filter<Extract = impl Reply, Error = Infallible> + Clone {
-        let orderbook = Arc::new(Orderbook::new(Box::new(empty_orderbook())));
+        let orderbook = Arc::new(Orderbook::new(
+            Box::new(NoopOrderbook {}),
+            Default::default(),
+        ));
         let token_info = Arc::new(empty_token_info());
         all(orderbook, token_info, 0.0)
     }
