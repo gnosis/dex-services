@@ -127,8 +127,7 @@ mod tests {
           "T0004": {
             "alias": "USDC",
             "decimals": 6,
-            "externalPrice": 1000000000000000000000000000000,
-            "shouldEstimatePrice": true
+            "externalPrice": 1000000000000000000000000000000
           }
         }"#;
 

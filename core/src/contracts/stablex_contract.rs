@@ -17,10 +17,7 @@ use ethcontract::{
     transaction::{confirm::ConfirmParams, Account, GasPrice, ResolveCondition, TransactionResult},
     Address, BlockNumber, PrivateKey, U256,
 };
-use futures::{
-    future::{BoxFuture, FutureExt as _},
-    stream::{BoxStream, StreamExt as _},
-};
+use futures::future::{BoxFuture, FutureExt as _};
 use lazy_static::lazy_static;
 #[cfg(test)]
 use mockall::automock;
@@ -151,10 +148,6 @@ pub trait StableXContract {
         to_block: BlockNumber,
         block_page_size: u64,
     ) -> BoxFuture<'a, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>;
-
-    fn stream_events<'a>(
-        &'a self,
-    ) -> BoxStream<'a, Result<Event<batch_exchange::Event>, ExecutionError>>;
 
     /// Create a noop transaction. Useful to cancel a previous transaction that is stuck due to
     /// low gas price.
@@ -329,16 +322,6 @@ impl StableXContract for StableXContractImpl {
             .to_block(to_block)
             .block_page_size(block_page_size)
             .query_past_events_paginated()
-            .boxed()
-    }
-
-    fn stream_events<'a>(
-        &'a self,
-    ) -> BoxStream<'a, Result<Event<batch_exchange::Event>, ExecutionError>> {
-        self.instance
-            .all_events()
-            .from_block(BlockNumber::Latest)
-            .stream()
             .boxed()
     }
 

@@ -79,13 +79,11 @@ struct Options {
     ///     "alias": "WETH",
     ///     "decimals": 18,
     ///     "externalPrice": 200000000000000000000,
-    ///     "shouldEstimatePrice": false
     ///   },
     ///   "T0004": {
     ///     "alias": "USDC",
     ///     "decimals": 6,
     ///     "externalPrice": 1000000000000000000000000000000,
-    ///     "shouldEstimatePrice": true
     ///   }
     /// }'
     #[structopt(long, env = "TOKEN_DATA", default_value = "{}")]
