@@ -1,5 +1,5 @@
 use crate::{
-    error,
+    error::{self, InternalError},
     models::*,
     orderbook::{Orderbook, PricegraphKind},
 };
@@ -54,6 +54,10 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
     } else if let Some(NoTokenInfo) = err.find() {
         code = StatusCode::BAD_REQUEST;
         message = "request with atoms=true for token we don't have erc20 info for";
+    } else if let Some(InternalError(err)) = err.find() {
+        log::warn!("internal server error: {:?}", err);
+        code = StatusCode::INTERNAL_SERVER_ERROR;
+        message = "internal server error";
     } else if let Some(warp::reject::InvalidQuery { .. }) = err.find() {
         code = StatusCode::BAD_REQUEST;
         message = "invalid url query";
