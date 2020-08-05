@@ -17,6 +17,8 @@ const GAS_PER_TRADE: f64 = 120_000.0;
 #[cfg_attr(test, mockall::automock)]
 pub trait EconomicViabilityComputing: Send + Sync + 'static {
     /// Used by the solver so that it only considers solution that are economically viable.
+    /// This is the minimum average amount of earned fees per order. The total amount of paid fees
+    /// is twice this because half of the fee is burnt.
     fn min_average_fee<'a>(&'a self) -> BoxFuture<'a, Result<u128>>;
     /// The maximum gas price at which submitting the solution is still economically viable.
     fn max_gas_price<'a>(
