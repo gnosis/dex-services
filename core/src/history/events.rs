@@ -1,8 +1,8 @@
 use crate::{
-    contracts::stablex_contract::batch_exchange,
     models::{AccountState, BatchId, Order},
     orderbook::{streamed::State, StableXOrderBookReading},
 };
+use contracts::batch_exchange;
 use anyhow::{Context, Result};
 use ethcontract::{contract::EventData, H256};
 use futures::future::{BoxFuture, FutureExt as _};
@@ -206,8 +206,7 @@ impl StableXOrderBookReading for EventRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contracts::stablex_contract::batch_exchange::event_data::*;
-    use crate::contracts::stablex_contract::batch_exchange::Event;
+    use contracts::batch_exchange::{event_data::*, Event};
     use ethcontract::{Address, U256};
 
     #[test]
