@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "contracts",
     "core",
     "driver",
     "e2e",
@@ -9,6 +10,7 @@ members = [
     "pricegraph/wasm",
 ]
 default-members = [
+    "contracts",
     "core",
     "driver",
     "price-estimator",
