@@ -2,8 +2,8 @@ use crate::{
     models::{AccountState, BatchId, Order},
     orderbook::{streamed::State, StableXOrderBookReading},
 };
-use contracts::batch_exchange;
 use anyhow::{Context, Result};
+use contracts::batch_exchange;
 use ethcontract::{contract::EventData, H256};
 use futures::future::{BoxFuture, FutureExt as _};
 use log::info;
