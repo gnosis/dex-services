@@ -6,7 +6,6 @@ use anyhow::{anyhow, Context, Result};
 use futures::{
     future::{self, BoxFuture, FutureExt as _},
     lock::Mutex,
-    stream::{self, StreamExt},
 };
 use std::num::NonZeroU128;
 use std::{any, collections::HashMap, sync::Arc};
@@ -116,27 +115,18 @@ where
                 }
             };
 
-            let token_infos: Vec<_> = stream::iter(tokens)
-                .filter_map(|token| async move {
-                    Some((
-                        *token,
-                        self.token_info_fetcher.get_token_info(*token).await.ok()?,
-                    ))
-                })
-                .collect()
-                .await;
-
+            let token_infos = self.token_info_fetcher.get_token_infos(tokens).await?;
             let (tokens_, futures): (Vec<TokenIdAndInfo>, Vec<_>) = token_infos
-                .iter()
+                .into_iter()
                 .filter_map(
                     |(token_id, token_info)| -> Option<(TokenIdAndInfo, BoxFuture<Result<f64>>)> {
                         // api_tokens symbols are converted to uppercase to disambiguate
                         let symbol = token_info.symbol().to_uppercase();
                         if symbol == api_tokens.stable_coin.symbol() {
-                            Some(((*token_id, token_info.clone()), immediate!(Ok(1.0))))
+                            Some(((token_id, token_info), immediate!(Ok(1.0))))
                         } else if let Some(api_token) = api_tokens.tokens.get(&symbol) {
                             Some((
-                                (*token_id, token_info.clone()),
+                                (token_id, token_info),
                                 self.api.get_price(api_token, &api_tokens.stable_coin),
                             ))
                         } else {

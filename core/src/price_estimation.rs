@@ -132,10 +132,14 @@ impl PriceEstimating for PriceOracle {
             //   it should always be considered.
             .chain(iter::once(TokenId::reference()))
             .collect();
+        let token_ids_to_price = Vec::<_>::from_iter(token_ids_to_price);
         async move {
-            let prices = self
-                .get_prices(&Vec::from_iter(token_ids_to_price.clone()))
-                .await;
+            let prices = self.get_prices(&token_ids_to_price).await;
+            let mut token_infos = self
+                .token_info_fetcher
+                .get_token_infos(&token_ids_to_price)
+                .await
+                .unwrap_or_default();
 
             let mut tokens = Tokens::new();
             for token_id in token_ids_to_price {
@@ -145,7 +149,7 @@ impl PriceEstimating for PriceOracle {
                         decimals: None,
                         external_price: *price,
                     };
-                    if let Ok(base_info) = self.token_info_fetcher.get_token_info(token_id).await {
+                    if let Some(base_info) = token_infos.remove(&token_id) {
                         token_info.alias = Some(base_info.alias);
                         token_info.decimals = Some(base_info.decimals);
                     }
