@@ -34,19 +34,23 @@ async fn run() -> Result<()> {
     macro_rules! deploy {
             ($contract:ident) => { deploy!($contract ()) };
             ($contract:ident ( $($param:expr),* $(,)? )) => {{
-                log::debug!(concat!("deploying ", stringify!($contract), "..."));
+                const NAME: &str = stringify!($contract);
+
+                log::debug!("deploying {}...", NAME);
                 let instance = $contract::builder(&web3 $(, $param)*)
                     .gas(8_000_000.into())
                     .deploy()
                     .await
-                    .context(concat!("failed to deploy ", stringify!($contract)))?;
-                log::debug!("deployed to {:?}", instance.address());
-                write_contract_address(stringify!($contract), instance.address())
-                    .context(concat!(
-                        "failed to write contract address for ",
-                        stringify!($contract),
-                    ))?;
+                    .with_context(|| format!("failed to deploy {}", NAME))?;
 
+                log::debug!(
+                    "writing deployment to {}",
+                    paths::contract_address_file(NAME).display(),
+                );
+                write_contract_address(stringify!($contract), instance.address())
+                    .with_context(|| format!("failed to write contract address for {}", NAME))?;
+
+                log::info!("deployed to {:?}", instance.address());
                 instance
             }};
         }
