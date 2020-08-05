@@ -3,7 +3,7 @@ use core::{
     contracts::stablex_contract::batch_exchange::event_data::Trade, history::Settlement,
     models::BatchId,
 };
-use e2e::cmd;
+use e2e::cmd::{self, Reporting};
 use pricegraph::{Element, Pricegraph, TokenPair, FEE_FACTOR, U256};
 use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
@@ -34,38 +34,46 @@ fn main() -> Result<()> {
     let mut report = Report::new(File::create(options.output_dir.join("trades.csv"))?);
     report.header()?;
 
-    cmd::for_each_batch_sync(&options.orderbook_file, |history, batch| {
-        let auction_elements = history.auction_elements_for_batch(batch)?;
-        let settlement = history.settlement_for_batch(batch);
+    cmd::for_each_batch(
+        &options.orderbook_file,
+        report,
+        |samples, history, batch| {
+            let auction_elements = history.auction_elements_for_batch(batch)?;
+            let settlement = history.settlement_for_batch(batch);
 
-        let new_orders = auction_elements
-            .iter()
-            .filter(|order| batch == order.valid.from)
-            .filter(|order| order.price.numerator != 0 && order.price.denominator > MIN_AMOUNT)
-            .filter(|order| order.balance > U256::from(MIN_AMOUNT));
-        for order in new_orders {
-            let settlement = settlement.as_ref();
-            let pricegraph = Pricegraph::new(
-                auction_elements
-                    .iter()
-                    .filter(|element| (element.user, element.id) != (order.user, order.id))
-                    .cloned(),
-            );
+            let new_orders = auction_elements
+                .iter()
+                .filter(|order| batch == order.valid.from)
+                .filter(|order| order.price.numerator != 0 && order.price.denominator > MIN_AMOUNT)
+                .filter(|order| order.balance > U256::from(MIN_AMOUNT));
+            for order in new_orders {
+                let settlement = settlement.as_ref();
+                let pricegraph = Pricegraph::new(
+                    auction_elements
+                        .iter()
+                        .filter(|element| (element.user, element.id) != (order.user, order.id))
+                        .cloned(),
+                );
 
-            let meta = OrderMetadata::compute(settlement, order, &pricegraph);
-            let result = if meta.is_reasonably_priced_order() {
-                process_reasonable_order(&meta)
-            } else {
-                process_unreasonable_order(&meta)
-            };
+                let meta = OrderMetadata::compute(settlement, order, &pricegraph);
+                let result = if meta.is_reasonably_priced_order() {
+                    process_reasonable_order(&meta)
+                } else {
+                    process_unreasonable_order(&meta)
+                };
 
-            report.record_result(batch, settlement, order, &meta, result)?;
-        }
+                samples.record_sample(Row {
+                    batch,
+                    solved: settlement.is_some(),
+                    order_uid: format!("{}-{}", order.user, order.id),
+                    meta,
+                    result,
+                })?;
+            }
 
-        Ok(())
-    })?;
-
-    report.summary()
+            Ok(())
+        },
+    )
 }
 
 fn process_reasonable_order(meta: &OrderMetadata) -> TradeResult {
@@ -234,6 +242,14 @@ enum TradeResult {
     NotTraded,
 }
 
+struct Row {
+    batch: BatchId,
+    solved: bool,
+    order_uid: String,
+    meta: OrderMetadata,
+    result: TradeResult,
+}
+
 struct Report<T> {
     output: T,
     skipped: usize,
@@ -257,8 +273,8 @@ where
     fn header(&mut self) -> Result<()> {
         let rows = [
             "batch",
-            "order",
             "solved",
+            "order",
             "sellAmount",
             "limitPrice",
             "estimatedXrate",
@@ -268,32 +284,30 @@ where
         writeln!(&mut self.output, "{}", rows.join(","))?;
         Ok(())
     }
+}
 
-    fn record_result(
-        &mut self,
-        batch: BatchId,
-        settlement: Option<&Settlement>,
-        order: &Element,
-        meta: &OrderMetadata,
-        result: TradeResult,
-    ) -> Result<()> {
-        let order_uid = format!("{}-{}", order.user, order.id);
-        let solved = settlement.is_some();
+impl<T> Reporting for Report<T>
+where
+    T: Write,
+{
+    type Sample = Row;
+    type Summary = ();
 
+    fn record_sample(&mut self, row: Row) -> Result<()> {
         writeln!(
             &mut self.output,
             "{},{},{},{},{},{},{},{}",
-            batch,
-            order_uid,
-            solved,
-            meta.effective_sell_amount,
-            meta.limit_price,
-            meta.estimated_limit_price.unwrap_or_default(),
-            meta.settled_xrate.unwrap_or_default(),
-            meta.fill_ratio().unwrap_or_default(),
+            row.batch,
+            row.solved,
+            row.order_uid,
+            row.meta.effective_sell_amount,
+            row.meta.limit_price,
+            row.meta.estimated_limit_price.unwrap_or_default(),
+            row.meta.settled_xrate.unwrap_or_default(),
+            row.meta.fill_ratio().unwrap_or_default(),
         )?;
 
-        match result {
+        match row.result {
             TradeResult::FullyMatched | TradeResult::UnreasonableOrderNotMatched => {
                 self.success += 1
             }
@@ -309,7 +323,7 @@ where
         Ok(())
     }
 
-    fn summary(&mut self) -> Result<()> {
+    fn finalize(self) -> Result<()> {
         let total = self.success + self.skipped + self.failed;
         let percent = |value: usize| 100.0 * value as f64 / total as f64;
         println!(

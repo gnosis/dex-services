@@ -1,6 +1,6 @@
 use anyhow::Result;
 use core::{history::Settlement, models::BatchId};
-use e2e::cmd::{self, Reporting, Sampler};
+use e2e::cmd::{self, Reporting, SampleChannel};
 use pricegraph::{Element, Pricegraph, TokenId};
 use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
@@ -33,14 +33,14 @@ fn main() -> Result<()> {
     cmd::for_each_batch(
         &options.orderbook_file,
         report,
-        move |sampler, history, batch| {
+        move |samples, history, batch| {
             let settlement = match history.settlement_for_batch(batch) {
                 Some(value) => value,
                 None => return Ok(()),
             };
 
             let auction_elements = history.auction_elements_for_batch(batch)?;
-            check_batch_prices(&sampler, batch, &auction_elements, &settlement)?;
+            check_batch_prices(&samples, batch, &auction_elements, &settlement)?;
 
             Ok(())
         },
@@ -50,7 +50,7 @@ fn main() -> Result<()> {
 }
 
 fn check_batch_prices(
-    sampler: &Sampler<Row>,
+    samples: &SampleChannel<Row>,
     batch: BatchId,
     auction_elements: &[Element],
     settlement: &Settlement,
@@ -73,7 +73,7 @@ fn check_batch_prices(
         let price = prices[token_index];
         let estimate = pricegraph.estimate_token_price(token).unwrap_or(0.0) as u128;
 
-        sampler.record_sample(Row {
+        samples.record_sample(Row {
             batch,
             token,
             price,
