@@ -16,8 +16,10 @@ use core::{
 use ethcontract::PrivateKey;
 use orderbook::Orderbook;
 use prometheus::Registry;
-use std::net::SocketAddr;
-use std::{num::ParseIntError, path::PathBuf, sync::Arc, thread, time::Duration};
+use std::{
+    collections::HashMap, net::SocketAddr, num::ParseIntError, path::PathBuf, sync::Arc, thread,
+    time::Duration,
+};
 use structopt::StructOpt;
 use tokio::{runtime, time};
 use url::Url;
@@ -92,7 +94,8 @@ fn main() {
             .unwrap(),
     );
 
-    let token_info = TokenInfoCache::with_cache(contract.clone(), options.token_data.into());
+    let cache: HashMap<_, _> = options.token_data.clone().into();
+    let token_info = TokenInfoCache::with_cache(contract.clone(), cache);
     token_info
         .cache_all(10)
         .wait()
