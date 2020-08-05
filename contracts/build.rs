@@ -4,6 +4,8 @@ use std::{env, fs, path::Path};
 #[path = "src/paths.rs"]
 mod paths;
 
+const DEX_CONTRACTS_VERSION: &str = "0.4.1";
+
 fn main() {
     // NOTE: This is a workaround for `rerun-if-changed` directives for
     // non-existant files cause the crate's build unit to get flagged for a
@@ -16,18 +18,18 @@ fn main() {
 
     generate_contract("BatchExchange");
     generate_contract("BatchExchangeViewer");
-    generate_contract("IdToAddressBiMap");
-    generate_contract("IterableAppendOnlySet");
-    generate_contract("TokenOWL");
-    generate_contract("TokenOWLProxy");
 }
 
 fn generate_contract(name: &str) {
-    let artifact = format!("../dex-contracts/build/contracts/{}.json", name);
+    let artifact = format!(
+        "npm:@gnosis.pm/dex-contracts@{}/build/contracts/{}.json",
+        DEX_CONTRACTS_VERSION, name,
+    );
     let address_file = paths::contract_address_file(name);
     let dest = env::var("OUT_DIR").unwrap();
 
-    let mut builder = Builder::new(artifact)
+    let mut builder = Builder::from_source_url(artifact)
+        .unwrap()
         .with_visibility_modifier(Some("pub"))
         .add_event_derive("serde::Deserialize")
         .add_event_derive("serde::Serialize");

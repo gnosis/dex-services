@@ -1,8 +1,6 @@
 target
 !target/debug/driver
 !target/release/driver
-dex-contracts
-!dex-contracts/build
 **/node_modules
 .git
 .vscode

@@ -3,9 +3,9 @@ use crate::{
         approve, create_accounts_with_funded_tokens, wait_for, FutureBuilderExt, FutureWaitExt,
         MAX_GAS,
     },
-    IERC20,
+    TokenOWL, IERC20,
 };
-use contracts::{BatchExchange, TokenOWL};
+use contracts::BatchExchange;
 use ethcontract::{Account, Address, Http, Web3, U256};
 
 pub fn setup_stablex(

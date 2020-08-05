@@ -15,6 +15,15 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
+ethcontract::contract!("npm:@gnosis.pm/owl-token@3.1.0/build/contracts/TokenOWL.json");
+ethcontract::contract!("npm:@gnosis.pm/owl-token@3.1.0/build/contracts/TokenOWLProxy.json");
+ethcontract::contract!(
+    "npm:@gnosis.pm/solidity-data-structures@1.2.4/build/contracts/IdToAddressBiMap.json",
+);
+ethcontract::contract!(
+    "npm:@gnosis.pm/solidity-data-structures@1.2.4/build/contracts/IterableAppendOnlySet.json",
+);
+
 fn main() {
     env_logger::init_from_env(Env::default().default_filter_or("warn,deploy=info"));
 
