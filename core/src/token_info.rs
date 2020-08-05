@@ -1,8 +1,6 @@
 use anyhow::Result;
-use futures::future::BoxFuture;
+use futures::future::{BoxFuture, FutureExt as _};
 use lazy_static::lazy_static;
-#[cfg(test)]
-use mockall::automock;
 use std::{collections::HashMap, num::NonZeroU128};
 
 use crate::models::TokenId;
@@ -10,14 +8,67 @@ pub mod cached;
 pub mod hardcoded;
 pub mod onchain;
 
-#[cfg_attr(test, automock)]
 pub trait TokenInfoFetching: Send + Sync {
     /// Retrieves some token information from a token ID.
     fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>>;
 
+    /// Retrieves all token information.
+    /// Default implementation calls get_token_info for each token and ignores errors.
+    fn get_token_infos<'a>(
+        &'a self,
+        ids: &'a [TokenId],
+    ) -> BoxFuture<'a, Result<HashMap<TokenId, TokenBaseInfo>>> {
+        async move {
+            let mut result = HashMap::new();
+            for id in ids {
+                match self.get_token_info(*id).await {
+                    Ok(info) => {
+                        result.insert(*id, info);
+                    }
+                    Err(err) => log::warn!("failed to get token info for {}: {:?}", id, err),
+                }
+            }
+            Ok(result)
+        }
+        .boxed()
+    }
+
     /// Returns a vector with all the token IDs available
     fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>>;
 }
+
+// mockall workaround https://github.com/asomers/mockall/issues/134
+#[cfg(test)]
+mod mock {
+    use super::*;
+    #[mockall::automock]
+    pub trait TokenInfoFetching_ {
+        fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>>;
+        fn get_token_infos<'a>(
+            &'a self,
+            ids: &[TokenId],
+        ) -> BoxFuture<'a, Result<HashMap<TokenId, TokenBaseInfo>>>;
+        fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>>;
+    }
+
+    impl<T: TokenInfoFetching_ + Send + Sync> TokenInfoFetching for T {
+        fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
+            TokenInfoFetching_::get_token_info(self, id)
+        }
+        fn get_token_infos(
+            &self,
+            ids: &[TokenId],
+        ) -> BoxFuture<Result<HashMap<TokenId, TokenBaseInfo>>> {
+            TokenInfoFetching_::get_token_infos(self, ids)
+        }
+        fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
+            TokenInfoFetching_::all_ids(self)
+        }
+    }
+}
+#[cfg(test)]
+pub use mock::MockTokenInfoFetching_ as MockTokenInfoFetching;
+
 #[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Clone, Debug)]
 pub struct TokenBaseInfo {
@@ -68,6 +119,7 @@ impl TokenBaseInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::anyhow;
 
     #[test]
     fn token_get_price() {
@@ -101,5 +153,34 @@ mod tests {
         assert_eq!(TokenBaseInfo::new("", 0).base_unit_in_atoms().get(), 1);
         assert_eq!(TokenBaseInfo::new("", 1).base_unit_in_atoms().get(), 10);
         assert_eq!(TokenBaseInfo::new("", 2).base_unit_in_atoms().get(), 100);
+    }
+
+    #[test]
+    fn default_get_token_infos_forwards_calls_and_ignores_errors() {
+        // Not using mockall because we want to test the default impl.
+        struct TokenInfo {};
+        impl TokenInfoFetching for TokenInfo {
+            fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
+                immediate!(match id.0 {
+                    0 | 1 => Ok(TokenBaseInfo {
+                        alias: id.0.to_string(),
+                        decimals: 1
+                    }),
+                    _ => Err(anyhow!("")),
+                })
+            }
+            fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
+                unimplemented!()
+            }
+        }
+        let token_info = TokenInfo {};
+        let result = token_info
+            .get_token_infos(&[TokenId(0), TokenId(1), TokenId(2)])
+            .now_or_never()
+            .unwrap()
+            .unwrap();
+        assert_eq!(result.get(&TokenId(0)).unwrap().alias, "0");
+        assert_eq!(result.get(&TokenId(1)).unwrap().alias, "1");
+        assert!(result.get(&TokenId(2)).is_none());
     }
 }
