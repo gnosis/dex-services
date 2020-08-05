@@ -13,7 +13,7 @@ use std::{
 };
 
 fn main() {
-    env_logger::init_from_env(Env::default().default_filter_or("warn,deploy=debug"));
+    env_logger::init_from_env(Env::default().default_filter_or("warn,deploy=info"));
 
     if let Err(err) = futures::executor::block_on(run()) {
         log::error!("Error deploying contracts: {:?}", err);
@@ -50,7 +50,7 @@ async fn run() -> Result<()> {
                 write_contract_address(stringify!($contract), instance.address())
                     .with_context(|| format!("failed to write contract address for {}", NAME))?;
 
-                log::info!("deployed to {:?}", instance.address());
+                log::info!("deployed {} to {:?}", NAME, instance.address());
                 instance
             }};
         }
