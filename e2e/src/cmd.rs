@@ -15,7 +15,7 @@ pub fn for_each_batch<R, F>(
 ) -> Result<R::Summary>
 where
     R: Reporting,
-    F: Fn(&Sampler<R::Sample>, &ExchangeHistory, BatchId) -> Result<()> + Send + Sync,
+    F: Fn(&SampleChannel<R::Sample>, &ExchangeHistory, BatchId) -> Result<()> + Send + Sync,
 {
     let history = ExchangeHistory::from_filestore(orderbook_file)?;
 
@@ -23,19 +23,19 @@ where
     let mut progress = ProgressBar::on(io::stderr(), batches.batch_count());
 
     let (samples_tx, samples_rx) = mpsc::channel();
-    let sampler = Sampler(samples_tx);
+    let samples = SampleChannel(samples_tx);
 
     thread::scope(|scope| {
         scope.spawn(move |_| {
             if let Err(err) = batches
                 .collect::<Vec<_>>()
                 .into_par_iter()
-                .try_for_each_with(sampler.clone(), move |sampler, batch| {
-                    handler(&sampler, &history, batch)?;
-                    sampler.batch_complete()
+                .try_for_each_with(samples.clone(), move |samples, batch| {
+                    handler(&samples, &history, batch)?;
+                    samples.batch_complete()
                 })
             {
-                sampler.error(err);
+                samples.error(err);
             }
         });
 
@@ -53,19 +53,20 @@ where
     .expect("inner thread panicked when processing batches")
 }
 
-/// A struct used for providing samples to the reporter.
+/// A channel used for sending samples to the main processing thread in order to
+/// be recorded by the `Reporting` instance.
 #[derive(Debug)]
-pub struct Sampler<T>(mpsc::Sender<Result<Option<T>>>);
+pub struct SampleChannel<T>(mpsc::Sender<Result<Option<T>>>);
 
 // NOTE: Manually implement clone, the derive unecessarily adds a `T: Clone`
 // type bound.
-impl<T> Clone for Sampler<T> {
+impl<T> Clone for SampleChannel<T> {
     fn clone(&self) -> Self {
-        Sampler(self.0.clone())
+        SampleChannel(self.0.clone())
     }
 }
 
-impl<T> Sampler<T> {
+impl<T> SampleChannel<T> {
     /// Sends a sample to the recording instance.
     pub fn record_sample(&self, sample: T) -> Result<()> {
         self.send(Some(sample))

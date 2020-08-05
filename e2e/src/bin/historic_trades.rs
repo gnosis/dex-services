@@ -37,7 +37,7 @@ fn main() -> Result<()> {
     cmd::for_each_batch(
         &options.orderbook_file,
         report,
-        |sampler, history, batch| {
+        |samples, history, batch| {
             let auction_elements = history.auction_elements_for_batch(batch)?;
             let settlement = history.settlement_for_batch(batch);
 
@@ -62,7 +62,7 @@ fn main() -> Result<()> {
                     process_unreasonable_order(&meta)
                 };
 
-                sampler.sample(Sample {
+                samples.record_sample(Row {
                     batch,
                     solved: settlement.is_some(),
                     order_uid: format!("{}-{}", order.user, order.id),
@@ -242,7 +242,7 @@ enum TradeResult {
     NotTraded,
 }
 
-struct Sample {
+struct Row {
     batch: BatchId,
     solved: bool,
     order_uid: String,
@@ -290,24 +290,24 @@ impl<T> Reporting for Report<T>
 where
     T: Write,
 {
-    type Sample = Sample;
+    type Sample = Row;
     type Summary = ();
 
-    fn sample(&mut self, sample: Sample) -> Result<()> {
+    fn record_sample(&mut self, row: Row) -> Result<()> {
         writeln!(
             &mut self.output,
             "{},{},{},{},{},{},{},{}",
-            sample.batch,
-            sample.solved,
-            sample.order_uid,
-            sample.meta.effective_sell_amount,
-            sample.meta.limit_price,
-            sample.meta.estimated_limit_price.unwrap_or_default(),
-            sample.meta.settled_xrate.unwrap_or_default(),
-            sample.meta.fill_ratio().unwrap_or_default(),
+            row.batch,
+            row.solved,
+            row.order_uid,
+            row.meta.effective_sell_amount,
+            row.meta.limit_price,
+            row.meta.estimated_limit_price.unwrap_or_default(),
+            row.meta.settled_xrate.unwrap_or_default(),
+            row.meta.fill_ratio().unwrap_or_default(),
         )?;
 
-        match sample.result {
+        match row.result {
             TradeResult::FullyMatched | TradeResult::UnreasonableOrderNotMatched => {
                 self.success += 1
             }
