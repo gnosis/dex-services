@@ -21,7 +21,7 @@ impl<N: PartialEq> NegativeCycle<N> {
     /// Returns the negative cycle changing its starting and terminating
     /// node to be the given node. If the given node is not part of the
     /// cycle, it returns an error containing the original cycle.
-    pub fn with_starting_node(mut self, start: N) -> Result<NegativeCycle<N>, NegativeCycle<N>> {
+    pub fn with_starting_node(mut self, start: N) -> Result<Self, Self> {
         match self.0.iter().position(|i| *i == start) {
             None => Err(self),
             Some(pos) if pos == 0 => Ok(self),

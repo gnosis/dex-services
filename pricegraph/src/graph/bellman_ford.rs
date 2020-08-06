@@ -105,7 +105,7 @@ where
 {
     /// Initializes a shortest path graph that will be later built with the
     /// Bellman-Ford algorithm.
-    fn new(g: G, source: G::NodeId) -> ShortestPathGraph<G> {
+    fn new(g: G, source: G::NodeId) -> Self {
         let predecessor = vec![None; g.node_bound()];
         let mut distance_vec = vec![<_>::infinite(); g.node_bound()];
         distance_vec[g.to_index(source)] = <_>::zero();
