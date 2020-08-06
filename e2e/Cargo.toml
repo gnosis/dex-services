@@ -5,6 +5,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1"
+contracts = { path = "../contracts" }
 core = { path = "../core" }
 crossbeam = "0.7"
 ethcontract = "0.7.2"
