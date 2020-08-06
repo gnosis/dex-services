@@ -44,7 +44,7 @@ Clone the repository, its submodule, and run the container
 git clone git@github.com:gnosis/dex-services.git
 cd dex-services
 docker-compose up -d ganache-cli
-(cd contracts; cargo run --bin deploy --features bin
+(cd contracts; cargo run --bin deploy --features bin)
 ```
 
 ## BatchExchange
