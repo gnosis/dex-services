@@ -11,7 +11,7 @@ This script requires a test node such as Ganache listening on `127.0.0.1:8545`.
 It can be run from the repository root:
 
 ```
-$ (cd contracts; cargo run -p contracts --bin deploy --features bin)
+$ (cd contracts; cargo run --bin deploy --features bin)
    Compiling contracts v0.1.0 (/var/home/nlordell/Developer/dex-services/contracts)
     Finished dev [unoptimized + debuginfo] target(s) in 4.87s
      Running `/var/home/nlordell/Developer/dex-services/target/debug/deploy`
