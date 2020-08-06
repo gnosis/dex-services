@@ -1,15 +1,13 @@
 use super::*;
 use crate::{
-    contracts::{
-        stablex_contract::{batch_exchange, StableXContract},
-        Web3,
-    },
+    contracts::{stablex_contract::StableXContract, Web3},
     history::events::EventRegistry,
     models::{AccountState, Order},
     orderbook::StableXOrderBookReading,
 };
 use anyhow::{anyhow, bail, ensure, Result};
 use block_timestamp_reading::{BlockTimestampReading, CachedBlockTimestampReader};
+use contracts::batch_exchange;
 use ethcontract::{contract::Event, BlockNumber, H256};
 use futures::compat::Future01CompatExt as _;
 use futures::future::{BoxFuture, FutureExt as _};

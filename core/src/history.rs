@@ -6,12 +6,12 @@ pub mod events;
 
 use self::batches::Batches;
 use self::events::EventRegistry;
-use crate::contracts::stablex_contract::batch_exchange::{
+use crate::models::BatchId;
+use anyhow::Result;
+use contracts::batch_exchange::{
     event_data::{SolutionSubmission, Trade},
     Event,
 };
-use crate::models::BatchId;
-use anyhow::Result;
 use pricegraph::Element;
 use std::{fs::File, io::Read, path::Path};
 
@@ -94,7 +94,8 @@ pub struct Settlement {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{contracts::stablex_contract::batch_exchange, models::BatchId};
+    use crate::models::BatchId;
+    use contracts::batch_exchange;
     use ethcontract::{Address, EventData, H256};
 
     fn block_hash(block_number: u64) -> H256 {
