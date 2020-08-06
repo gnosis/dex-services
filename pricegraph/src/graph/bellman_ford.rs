@@ -15,7 +15,7 @@ type Distance<G> = Vec<<G as Data>::EdgeWeight>;
 /// For each node index, this type contains its predecessor node and
 /// distance in the graph from a source node.
 struct PredecessorStore<G: GraphBase + Data> {
-    predecessor: Vec<Option<G::NodeId>>,
+    predecessors: Vec<Option<G::NodeId>>,
     distance: Distance<G>,
 }
 
@@ -27,7 +27,7 @@ impl<G: GraphBase + Data> PredecessorStore<G> {
         self.distance[node_index] = updated_distance;
     }
     fn update_predecessor(&mut self, node_index: usize, updated_predecessor: Option<G::NodeId>) {
-        self.predecessor[node_index] = updated_predecessor;
+        self.predecessors[node_index] = updated_predecessor;
     }
 }
 
@@ -63,10 +63,10 @@ where
     /// Returns shortest path from source to destination node, if a path exists.
     pub fn path_to(&self, dest: G::NodeId) -> Option<Path<G::NodeId>> {
         let mut current = dest;
-        let mut path = Vec::with_capacity(self.predecessor_store.predecessor.len());
+        let mut path = Vec::with_capacity(self.predecessor_store.predecessors.len());
         while current != self.source {
             path.push(current);
-            current = self.predecessor_store.predecessor[self.graph.to_index(current)]?;
+            current = self.predecessor_store.predecessors[self.graph.to_index(current)]?;
         }
         path.push(self.source);
 
@@ -80,7 +80,7 @@ where
     pub fn connected_nodes(&self) -> Vec<G::NodeId> {
         let mut node_indices: Vec<_> = self
             .predecessor_store
-            .predecessor
+            .predecessors
             .iter()
             .enumerate()
             .filter_map(|(i, &pre)| pre.map(|_| self.graph.from_index(i)))
@@ -99,12 +99,12 @@ where
     /// Initializes a shortest path graph that will be later built with the
     /// Bellman-Ford algorithm.
     fn new(g: G, source: G::NodeId) -> Self {
-        let predecessor = vec![None; g.node_bound()];
+        let predecessors = vec![None; g.node_bound()];
         let mut distance = vec![<_>::infinite(); g.node_bound()];
         distance[g.to_index(source)] = <_>::zero();
 
         let predecessor_store = PredecessorStore {
-            predecessor,
+            predecessors,
             distance,
         };
 
@@ -145,7 +145,7 @@ where
 
         find_cycle(
             self.graph,
-            &self.predecessor_store.predecessor,
+            &self.predecessor_store.predecessors,
             search_start,
             None,
         )
