@@ -1,0 +1,55 @@
+//! This script is used to vendor Truffle JSON artifacts to be used for code
+//! generation with `ethcontract`. This is done instead of fetching contracts
+//! at build time to reduce the risk of failure.
+
+use anyhow::Result;
+use contracts::paths;
+use env_logger::Env;
+use ethcontract_generate::Source;
+use std::fs;
+
+const ARTIFACTS: &[(&str, &[&str])] = &[
+    (
+        "@gnosis.pm/dex-contracts@0.4.1",
+        &["BatchExchange", "BatchExchangeViewer"],
+    ),
+    ("@gnosis.pm/owl-token@3.1.0", &["TokenOWL", "TokenOWLProxy"]),
+    (
+        "@gnosis.pm/solidity-data-structures@1.2.4",
+        &["IdToAddressBiMap", "IterableAppendOnlySet"],
+    ),
+    (
+        "@openzeppelin/contracts@3.1.0",
+        &["ERC20Mintable", "IERC20"],
+    ),
+];
+
+fn main() {
+    env_logger::init_from_env(Env::default().default_filter_or("warn,vendor=info"));
+
+    if let Err(err) = run() {
+        log::error!("Error vendoring contracts: {:?}", err);
+        std::process::exit(-1);
+    }
+}
+
+fn run() -> Result<()> {
+    let artifacts = paths::contract_artifacts_dir();
+    fs::create_dir_all(&artifacts)?;
+
+    log::info!("vendoring contract artifacts to '{}'", artifacts.display());
+    for (package, contracts) in ARTIFACTS {
+        for contract in *contracts {
+            log::info!("retrieving {} from {}", contract, package);
+            let path = format!("{}/build/contracts/{}.json", package, contract);
+            let source = Source::npm(path);
+            let artifact_json = source.artifact_json()?;
+
+            let path = artifacts.join(format!("{}.json", contract));
+            log::debug!("saving artifact to {}", path.display());
+            fs::write(path, artifact_json)?;
+        }
+    }
+
+    Ok(())
+}
