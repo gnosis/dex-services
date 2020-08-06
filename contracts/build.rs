@@ -5,6 +5,15 @@ use std::{env, fs, path::Path};
 mod paths;
 
 fn main() {
+    // NOTE: This is a workaround for `rerun-if-changed` directives for
+    // non-existant files cause the crate's build unit to get flagged for a
+    // rebuild if any files in the workspace change.
+    //
+    // See:
+    // - https://github.com/rust-lang/cargo/issues/6003
+    // - https://doc.rust-lang.org/cargo/reference/build-scripts.html#cargorerun-if-changedpath
+    println!("cargo:rerun-if-changed=build.rs");
+
     generate_contract("BatchExchange");
     generate_contract("BatchExchangeViewer");
     generate_contract("IdToAddressBiMap");
@@ -15,6 +24,7 @@ fn main() {
 
 fn generate_contract(name: &str) {
     let artifact = format!("../dex-contracts/build/contracts/{}.json", name);
+    let address_file = paths::contract_address_file(name);
     let dest = env::var("OUT_DIR").unwrap();
 
     let mut builder = Builder::new(artifact)
@@ -22,7 +32,8 @@ fn generate_contract(name: &str) {
         .add_event_derive("serde::Deserialize")
         .add_event_derive("serde::Serialize");
 
-    if let Some(address) = contract_address(name) {
+    if let Ok(address) = fs::read_to_string(&address_file) {
+        println!("cargo:rerun-if-changed={}", address_file.display());
         builder = builder.add_deployment_str(5777, address.trim());
     }
 
@@ -31,10 +42,4 @@ fn generate_contract(name: &str) {
         .unwrap()
         .write_to_file(Path::new(&dest).join(format!("{}.rs", name)))
         .unwrap();
-}
-
-fn contract_address(name: &str) -> Option<String> {
-    let path = paths::contract_address_file(name);
-    println!("cargo:rerun-if-changed={}", path.display());
-    Some(fs::read_to_string(path).ok()?)
 }
