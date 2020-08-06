@@ -62,9 +62,8 @@ where
 
     /// Returns shortest path from source to destination node, if a path exists.
     pub fn path_to(&self, dest: G::NodeId) -> Option<Path<G::NodeId>> {
-        let mut path;
         let mut current = dest;
-        path = Vec::with_capacity(self.predecessor_store.predecessor.len());
+        let mut path = Vec::with_capacity(self.predecessor_store.predecessor.len());
         while current != self.source {
             path.push(current);
             current = self.predecessor_store.predecessor[self.graph.to_index(current)]?;
