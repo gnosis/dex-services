@@ -84,17 +84,11 @@ where
         let mut node_indices: Vec<_> = predecessor
             .iter()
             .enumerate()
-            .filter_map(|(i, &pre)| pre.map(|_| i))
+            .filter_map(|(i, &pre)| pre.map(|_| self.graph.from_index(i)))
             .collect();
-        // if the source was not connected to anything, no node would have it as its
-        // predecessor
-        node_indices.push(self.graph.to_index(self.source));
-        node_indices.sort();
-        node_indices.dedup();
+        debug_assert!(!node_indices.contains(&self.source));
+        node_indices.push(self.source);
         node_indices
-            .into_iter()
-            .map(|i| self.graph.from_index(i))
-            .collect()
     }
 }
 
