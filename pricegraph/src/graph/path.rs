@@ -1,10 +1,19 @@
 //! Definitions of paths and cycles of a graph.
 
 use petgraph::visit::NodeIndexable;
+use std::ops::Deref;
 
 #[derive(Debug, PartialEq)]
 /// A path of nodes connected by a (directed) edge.
 pub struct Path<N>(pub Vec<N>);
+
+impl<N> Deref for Path<N> {
+    type Target = [N];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 impl<N> From<NegativeCycle<N>> for Path<N> {
     fn from(cycle: NegativeCycle<N>) -> Self {

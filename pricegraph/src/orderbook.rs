@@ -257,20 +257,20 @@ impl Orderbook {
             None => return Ok(None),
         };
 
-        let flow = self.find_path_flow(&path.0).unwrap_or_else(|| {
+        let flow = self.find_path_flow(&path).unwrap_or_else(|| {
             panic!(
                 "failed to fill detected shortest path {}",
-                format_path(&path.0),
+                format_path(&path),
             )
         });
         if !condition(&flow) {
             return Ok(None);
         }
 
-        self.fill_path_with_flow(&path.0, &flow).unwrap_or_else(|| {
+        self.fill_path_with_flow(&path, &flow).unwrap_or_else(|| {
             panic!(
                 "failed to fill with capacity along detected path {}",
-                format_path(&path.0),
+                format_path(&path),
             )
         });
 
