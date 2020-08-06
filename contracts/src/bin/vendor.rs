@@ -6,6 +6,7 @@ use anyhow::Result;
 use contracts::paths;
 use env_logger::Env;
 use ethcontract_generate::Source;
+use serde_json::{Map, Value};
 use std::fs;
 
 const ARTIFACTS: &[(&str, &[&str])] = &[
@@ -45,9 +46,21 @@ fn run() -> Result<()> {
             let source = Source::npm(path);
             let artifact_json = source.artifact_json()?;
 
+            log::debug!("pruning artifact JSON");
+            let pruned_artifact_json = {
+                let mut json = serde_json::from_str::<Value>(&artifact_json)?;
+                let mut pruned = Map::new();
+                for property in &["contractName", "abi", "networks", "devdoc", "userdoc"] {
+                    if let Some(value) = json.get_mut(property) {
+                        pruned.insert(property.to_string(), value.take());
+                    }
+                }
+                serde_json::to_string(&pruned)?
+            };
+
             let path = artifacts.join(format!("{}.json", contract));
             log::debug!("saving artifact to {}", path.display());
-            fs::write(path, artifact_json)?;
+            fs::write(path, pruned_artifact_json)?;
         }
     }
 
