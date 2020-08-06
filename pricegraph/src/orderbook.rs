@@ -170,7 +170,7 @@ impl Orderbook {
             let cycle_not_in_path = match cycle.with_starting_node(quote) {
                 Err(cycle) => cycle,
                 Ok(cycle) => {
-                    let base_index_search = cycle.0.iter().position(|node| *node == base);
+                    let base_index_search = cycle.iter().position(|node| *node == base);
                     match base_index_search {
                         None => cycle,
                         Some(base_index) => {
