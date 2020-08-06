@@ -26,6 +26,14 @@ impl<N> From<NegativeCycle<N>> for Path<N> {
 /// The first node of the cycle coincides with the last.
 pub struct NegativeCycle<N>(pub Vec<N>);
 
+impl<N> Deref for NegativeCycle<N> {
+    type Target = [N];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl<N: PartialEq> NegativeCycle<N> {
     /// Returns the negative cycle changing its starting and terminating
     /// node to be the given node. If the given node is not part of the

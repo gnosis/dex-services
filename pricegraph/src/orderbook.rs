@@ -191,10 +191,10 @@ impl Orderbook {
 
             // NOTE: Skip negative cycles that are not along the
             // specified market.
-            self.fill_path(&cycle_not_in_path.0).unwrap_or_else(|| {
+            self.fill_path(&cycle_not_in_path).unwrap_or_else(|| {
                 panic!(
                     "failed to fill path along detected negative cycle {}",
-                    format_path(&cycle_not_in_path.0),
+                    format_path(&cycle_not_in_path),
                 )
             });
         }
