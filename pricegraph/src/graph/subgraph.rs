@@ -17,7 +17,7 @@ where
     G: IntoEdges + NodeIndexable,
     G::NodeId: Ord,
 {
-    /// Create a new subgraphs iterator from an iterator of node indices.
+    /// Create a new subgraphs iterator from an iterator of nodes.
     pub fn new(nodes: impl Iterator<Item = G::NodeId>) -> Self {
         Subgraphs::<G>(nodes.collect())
     }
@@ -45,8 +45,8 @@ where
 /// An enum for representing control flow when iterating subgraphs.
 pub enum ControlFlow<G: GraphBase + Data, T> {
     /// Continue the iterating through the subgraphs with the provided
-    /// predecessor vector indicating which nodes are connected to the current
-    /// subgraph.
+    /// shortest path graph indicating which nodes are connected to the
+    /// current subgraph.
     Continue(ShortestPathGraph<G>),
     /// Stop iterating through the subgraphs and return a result.
     Break(T),

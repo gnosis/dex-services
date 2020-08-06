@@ -1,4 +1,4 @@
-//! Utilities for finding paths from predecessor vectors.
+//! Definitions of paths and cycles of a graph.
 
 use petgraph::visit::NodeIndexable;
 
