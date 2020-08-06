@@ -98,7 +98,7 @@ where
 {
     /// Initializes a shortest path graph that will be later built with the
     /// Bellman-Ford algorithm.
-    fn new(g: G, source: G::NodeId) -> Self {
+    fn empty(g: G, source: G::NodeId) -> Self {
         let predecessors = vec![None; g.node_bound()];
         let mut distance = vec![<_>::infinite(); g.node_bound()];
         distance[g.to_index(source)] = <_>::zero();
@@ -152,17 +152,36 @@ where
     }
 }
 
+impl<G> ShortestPathGraph<G>
+where
+    G: NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
+    G::EdgeWeight: FloatMeasure,
+{
+    /// Creates a representation of all shortest paths from the given source
+    /// to any other node in the graph.
+    ///
+    /// Shortest paths are well defined if and only if the graph does not
+    /// contain any negative weight cycle reachabe from the source. If a
+    /// negative weight cycle is detected, it is returned as an error.
+    pub fn new(g: G, source: G::NodeId) -> Result<Self, NegativeCycle<G::NodeId>> {
+        bellman_ford(g, source)
+    }
+}
+
 /// This implementation follows closely the one that can be found in the
 /// `petgraph` crate, but it has customized output types.
 ///
 /// The orginal source can be found here:
 /// https://docs.rs/petgraph/0.5.0/src/petgraph/algo/mod.rs.html#745-792
-pub fn search<G>(g: G, source: G::NodeId) -> Result<ShortestPathGraph<G>, NegativeCycle<G::NodeId>>
+fn bellman_ford<G>(
+    g: G,
+    source: G::NodeId,
+) -> Result<ShortestPathGraph<G>, NegativeCycle<G::NodeId>>
 where
     G: NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
     G::EdgeWeight: FloatMeasure,
 {
-    let mut shortest_path_graph = ShortestPathGraph::new(g, source);
+    let mut shortest_path_graph = ShortestPathGraph::empty(g, source);
 
     // scan up to |V| - 1 times.
     for _ in 1..g.node_count() {
@@ -208,7 +227,7 @@ pub mod tests {
             (4, 3, 200.0),
         ]);
 
-        let negative_cycle = search(&graph, 0.into()).err().unwrap();
+        let negative_cycle = ShortestPathGraph::new(&graph, 0.into()).err().unwrap();
 
         assert_eq!(
             negative_cycle.0,
@@ -251,7 +270,7 @@ pub mod tests {
             (3, 4, 1.0),
         ]);
 
-        let shortest_path_graph = search(&graph, 0.into()).unwrap();
+        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into()).unwrap();
         let path = shortest_path_graph.path_to(5.into()).unwrap();
 
         assert_eq!(path, Path(vec![0.into(), 3.into(), 4.into(), 5.into()]));
@@ -280,7 +299,7 @@ pub mod tests {
             (7, 0, 1.0),
         ]);
 
-        let shortest_path_graph = search(&graph, 0.into()).unwrap();
+        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into()).unwrap();
         let mut connected_nodes = shortest_path_graph.connected_nodes();
         connected_nodes.sort();
 

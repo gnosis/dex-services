@@ -1,6 +1,6 @@
 //! Module implementing tools for iterating over disconnected subgraphs.
 
-use super::bellman_ford::ShortestPathGraph;
+use super::shortest_paths::ShortestPathGraph;
 use petgraph::visit::{Data, GraphBase, IntoEdges, NodeIndexable};
 use std::cmp::Ord;
 use std::collections::BTreeSet;

@@ -18,8 +18,8 @@ pub use self::scalar::{ExchangeRate, LimitPrice};
 use self::user::{User, UserMap};
 use crate::api::Market;
 use crate::encoding::{Element, TokenId, TokenPair};
-use crate::graph::bellman_ford;
 use crate::graph::path::NegativeCycle;
+use crate::graph::shortest_paths::ShortestPathGraph;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
 use crate::num;
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
@@ -111,7 +111,7 @@ impl Orderbook {
         // NOTE: We detect negative cycles from each disconnected subgraph.
         Subgraphs::<&OrderbookGraph>::new(self.projection.node_indices().skip(1))
             .for_each_until(
-                |token| match bellman_ford::search(&self.projection, token) {
+                |token| match ShortestPathGraph::new(&self.projection, token) {
                     Ok(shortest_path_graph) => ControlFlow::Continue(shortest_path_graph),
                     Err(NegativeCycle(..)) => ControlFlow::Break(true),
                 },
@@ -127,7 +127,7 @@ impl Orderbook {
             remaining_tokens.remove(&token);
 
             let shortest_path_graph = loop {
-                match bellman_ford::search(&self.projection, token) {
+                match ShortestPathGraph::new(&self.projection, token) {
                     Ok(shortest_path_graph) => break shortest_path_graph,
                     Err(NegativeCycle(cycle)) => {
                         self.fill_path(&cycle).unwrap_or_else(|| {
@@ -166,7 +166,7 @@ impl Orderbook {
 
         let (base, quote) = (node_index(market.base), node_index(market.quote));
 
-        while let Err(cycle) = bellman_ford::search(&self.projection, quote) {
+        while let Err(cycle) = ShortestPathGraph::new(&self.projection, quote) {
             let paths_base_quote = match cycle.with_starting_node(quote) {
                 Err(cycle) => Err(cycle),
                 Ok(cycle) => match cycle.iter().position(|node| *node == base) {
@@ -250,7 +250,7 @@ impl Orderbook {
         }
 
         let (start, end) = (node_index(pair.buy), node_index(pair.sell));
-        let shortest_path_graph = bellman_ford::search(&self.projection, start)?;
+        let shortest_path_graph = ShortestPathGraph::new(&self.projection, start)?;
         let path = match shortest_path_graph.path_to(end) {
             Some(path) => path,
             None => return Ok(None),
