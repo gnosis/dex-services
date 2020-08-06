@@ -174,7 +174,7 @@ impl Orderbook {
                     match base_index_search {
                         None => cycle,
                         Some(base_index) => {
-                            let (ask, bid) = (&cycle.0[0..base_index + 1], &cycle.0[base_index..]);
+                            let (ask, bid) = cycle.split_at(base_index);
 
                             let ask = self
                                 .fill_path(ask)

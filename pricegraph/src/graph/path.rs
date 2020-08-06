@@ -58,6 +58,12 @@ impl<N: PartialEq> NegativeCycle<N> {
     pub fn iter(&self) -> Iter<N> {
         self.0.iter()
     }
+
+    /// Returns two paths: from the start to the given index and from
+    /// the given index to the end of the cycle.
+    pub fn split_at(&self, index: usize) -> (&[N], &[N]) {
+        (&self.0[0..index + 1], &self.0[index..])
+    }
 }
 
 /// Finds a negative cycle by searching from the provided `search` node.
