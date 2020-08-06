@@ -105,7 +105,7 @@ where
 {
     /// Initializes a shortest path graph that will be later built with the
     /// Bellman-Ford algorithm.
-    fn init(g: G, source: G::NodeId) -> ShortestPathGraph<G> {
+    fn new(g: G, source: G::NodeId) -> ShortestPathGraph<G> {
         let predecessor = vec![None; g.node_bound()];
         let mut distance_vec = vec![<_>::infinite(); g.node_bound()];
         distance_vec[g.to_index(source)] = <_>::zero();
@@ -164,7 +164,7 @@ where
     G: NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
     G::EdgeWeight: FloatMeasure,
 {
-    let mut shortest_path_graph = ShortestPathGraph::init(g, source);
+    let mut shortest_path_graph = ShortestPathGraph::new(g, source);
 
     // scan up to |V| - 1 times.
     for _ in 1..g.node_count() {
