@@ -54,7 +54,7 @@ where
     #[allow(clippy::needless_lifetimes)]
     async fn get_token_asset_pairs(
         &self,
-        tokens: &[TokenIdAndInfo],
+        tokens: impl IntoIterator<Item = TokenIdAndInfo>,
     ) -> Result<HashMap<String, TokenIdAndInfo>> {
         // TODO(nlordell): If these calls start taking too long, we can consider
         //   caching this information somehow. The only thing that is
@@ -69,11 +69,11 @@ where
             .to_owned();
 
         let token_assets = tokens
-            .iter()
+            .into_iter()
             .filter_map(|(token_id, token_info)| {
                 let asset = find_asset(token_info.symbol(), &assets)?;
                 let pair = find_asset_pair(asset, &usd, &asset_pairs)?;
-                Some((pair.to_owned(), (*token_id, token_info.clone())))
+                Some((pair.to_owned(), (token_id, token_info)))
             })
             .collect();
 
@@ -90,18 +90,9 @@ where
         tokens: &'a [TokenId],
     ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
         async move {
-            let token_infos: Vec<_> = stream::iter(tokens)
-                .filter_map(|token| async move {
-                    Some((
-                        *token,
-                        self.token_info_fetcher.get_token_info(*token).await.ok()?,
-                    ))
-                })
-                .collect()
-                .await;
-
+            let token_infos = self.token_info_fetcher.get_token_infos(tokens).await?;
             let token_asset_pairs = self
-                .get_token_asset_pairs(&token_infos)
+                .get_token_asset_pairs(token_infos)
                 .await
                 .context("failed to generate asset pairs mapping for tokens")?;
 
