@@ -14,20 +14,20 @@ type Distance<G> = Vec<<G as Data>::EdgeWeight>;
 /// Stores the information needed to manage the predecessor list.
 /// For each node index, this type contains its predecessor node and
 /// distance in the graph from a source node.
-struct PredecessorStore<G: GraphBase + Data>(Vec<Option<G::NodeId>>, Distance<G>);
+struct PredecessorStore<G: GraphBase + Data> {
+    predecessor: Vec<Option<G::NodeId>>,
+    distance: Distance<G>,
+}
 
 impl<G: GraphBase + Data> PredecessorStore<G> {
     fn distance(&self, node_index: usize) -> &G::EdgeWeight {
-        let PredecessorStore(_, distance) = self;
-        &distance[node_index]
+        &self.distance[node_index]
     }
     fn update_distance(&mut self, node_index: usize, updated_distance: G::EdgeWeight) {
-        let PredecessorStore(_, distance) = self;
-        distance[node_index] = updated_distance;
+        self.distance[node_index] = updated_distance;
     }
     fn update_predecessor(&mut self, node_index: usize, updated_predecessor: Option<G::NodeId>) {
-        let PredecessorStore(predecessor, _) = self;
-        predecessor[node_index] = updated_predecessor;
+        self.predecessor[node_index] = updated_predecessor;
     }
 }
 
@@ -64,11 +64,10 @@ where
     pub fn path_to(&self, dest: G::NodeId) -> Option<Path<G::NodeId>> {
         let mut path;
         let mut current = dest;
-        let PredecessorStore(predecessor, _) = &self.predecessor_store;
-        path = Vec::with_capacity(predecessor.len());
+        path = Vec::with_capacity(self.predecessor_store.predecessor.len());
         while current != self.source {
             path.push(current);
-            current = predecessor[self.graph.to_index(current)]?;
+            current = self.predecessor_store.predecessor[self.graph.to_index(current)]?;
         }
         path.push(self.source);
 
@@ -80,8 +79,9 @@ where
 
     /// Lists all nodes that can be reached from the source.
     pub fn connected_nodes(&self) -> Vec<G::NodeId> {
-        let PredecessorStore(predecessor, _) = &self.predecessor_store;
-        let mut node_indices: Vec<_> = predecessor
+        let mut node_indices: Vec<_> = self
+            .predecessor_store
+            .predecessor
             .iter()
             .enumerate()
             .filter_map(|(i, &pre)| pre.map(|_| self.graph.from_index(i)))
@@ -101,10 +101,13 @@ where
     /// Bellman-Ford algorithm.
     fn new(g: G, source: G::NodeId) -> Self {
         let predecessor = vec![None; g.node_bound()];
-        let mut distance_vec = vec![<_>::infinite(); g.node_bound()];
-        distance_vec[g.to_index(source)] = <_>::zero();
+        let mut distance = vec![<_>::infinite(); g.node_bound()];
+        distance[g.to_index(source)] = <_>::zero();
 
-        let predecessor_store = PredecessorStore(predecessor, distance_vec);
+        let predecessor_store = PredecessorStore {
+            predecessor,
+            distance,
+        };
 
         ShortestPathGraph {
             graph: g,
@@ -120,14 +123,13 @@ where
         // each node: if a node can be relaxed then a negative cycle exists and is
         // created in the predecessor store; otherwise no such cycle exists.
 
-        let PredecessorStore(predecessor, distance) = &mut self.predecessor_store;
-
         for i in self.graph.node_identifiers() {
             for edge in self.graph.edges(i) {
                 let j = edge.target();
                 let w = *edge.weight();
-                if distance[self.graph.to_index(i)] + w < distance[self.graph.to_index(j)] {
-                    predecessor[self.graph.to_index(j)] = Some(i);
+
+                if *self.distance(i) + w < *self.distance(j) {
+                    self.update_predecessor(j, Some(i));
                     return Some(j);
                 }
             }
@@ -142,9 +144,12 @@ where
             None => return None,
         };
 
-        let PredecessorStore(predecessor, _) = &mut self.predecessor_store;
-
-        find_cycle(self.graph, &predecessor, search_start, None)
+        find_cycle(
+            self.graph,
+            &self.predecessor_store.predecessor,
+            search_start,
+            None,
+        )
     }
 }
 
