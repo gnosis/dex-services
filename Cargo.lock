@@ -412,6 +412,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 
 [[package]]
+name = "contracts"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "env_logger",
+ "ethcontract",
+ "ethcontract-generate",
+ "futures 0.3.5",
+ "log 0.4.11",
+ "serde",
+]
+
+[[package]]
 name = "core"
 version = "0.1.0"
 dependencies = [
