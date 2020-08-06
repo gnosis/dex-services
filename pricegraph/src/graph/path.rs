@@ -21,23 +21,18 @@ impl<N: PartialEq> NegativeCycle<N> {
     /// Returns the negative cycle changing its starting and terminating
     /// node to be the given node. If the given node is not part of the
     /// cycle, it returns an error containing the original cycle.
-    pub fn with_starting_node(self, start: N) -> Result<NegativeCycle<N>, NegativeCycle<N>> {
-        let mut cycle = Vec::with_capacity(self.0.len());
-        let mut cycle_end = Vec::with_capacity(self.0.len());
-        let mut self_iterator = self.0.into_iter();
-        while let Some(node) = self_iterator.next() {
-            if node == start {
-                cycle.push(node);
-                cycle.append(&mut self_iterator.collect());
-                cycle.pop(); // the last element of self.0 is identical to the first
-                cycle.append(&mut cycle_end);
-                cycle.push(start);
-                return Ok(NegativeCycle(cycle));
-            } else {
-                cycle_end.push(node);
+    pub fn with_starting_node(mut self, start: N) -> Result<NegativeCycle<N>, NegativeCycle<N>> {
+        match self.0.iter().position(|i| *i == start) {
+            None => Err(self),
+            Some(pos) if pos == 0 => Ok(self),
+            Some(pos) => {
+                self.0.pop();
+                self.0.rotate_left(pos);
+                debug_assert!(self.0[0] == start);
+                self.0.push(start);
+                Ok(self)
             }
         }
-        Err(NegativeCycle(cycle_end))
     }
 }
 
