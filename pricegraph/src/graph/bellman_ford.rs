@@ -247,9 +247,42 @@ pub mod tests {
             (3, 4, 1.0),
         ]);
 
-        let shartest_path_graph = search(&graph, 0.into()).unwrap();
-        let path = shartest_path_graph.path_to(5.into()).unwrap();
+        let shortest_path_graph = search(&graph, 0.into()).unwrap();
+        let path = shortest_path_graph.path_to(5.into()).unwrap();
 
         assert_eq!(path, Path(vec![0.into(), 3.into(), 4.into(), 5.into()]));
+    }
+
+    #[test]
+    fn shortest_path_graph_finds_connected_nodes() {
+        //           2 <-1.0-- 3
+        //           ∧
+        //          1.0
+        //           |
+        // 1 --1.0-> 0 <-1.0-- 7 <---- -4.0
+        //           |         ∧         |
+        //          1.0       1.0        |
+        //           v         |         |
+        //           4 --1.0-> 5 --1.0-> 6
+        let graph = Graph::<(), f64>::from_edges(&[
+            (1, 0, 1.0),
+            (0, 2, 1.0),
+            (3, 2, 1.0),
+            (0, 4, 1.0),
+            (4, 5, 1.0),
+            (5, 6, 1.0),
+            (5, 7, 1.0),
+            (6, 7, -4.0),
+            (7, 0, 1.0),
+        ]);
+
+        let shortest_path_graph = search(&graph, 0.into()).unwrap();
+        let mut connected_nodes = shortest_path_graph.connected_nodes();
+        connected_nodes.sort();
+
+        assert_eq!(
+            connected_nodes,
+            vec![0.into(), 2.into(), 4.into(), 5.into(), 6.into(), 7.into()]
+        );
     }
 }
