@@ -19,7 +19,7 @@ const ARTIFACTS: &[(&str, &[&str])] = &[
         &["IdToAddressBiMap", "IterableAppendOnlySet"],
     ),
     (
-        "@openzeppelin/contracts@3.1.0",
+        "@openzeppelin/contracts@2.5.0",
         &["ERC20Mintable", "IERC20"],
     ),
 ];

@@ -12,10 +12,6 @@ env:
     - OPEN_SOLVER_VERSION=v0.0.11
     - PRIVATE_SOLVER_VERSION=v0.8.2
 
-install:
-  - nvm install 12 && nvm alias default 12 && npm install -g yarn@latest && yarn --version
-  - (cd dex-contracts && yarn --frozen-lockfile && yarn run prepack)
-
 jobs:
   fast_finish: true
   allow_failures:
@@ -27,7 +23,6 @@ jobs:
       rust: stable
       cache:
         directories:
-          - $HOME/.cache/yarn
           - $HOME/.cargo/bin
       before_cache:
         - rm -rf "$TRAVIS_HOME/.cargo/registry/src"

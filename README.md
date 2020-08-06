@@ -33,9 +33,7 @@ It contains two sub-projects that both implement the market mechanism described 
 ### Requirements
 
 - Rust (stable)
-- Node.js v12 LTS
 - Docker and Docker-compose (stable)
-- libpq - the PostgreSQL library
 
 The project may work with other versions of these tools but they are not tested.
 
@@ -45,9 +43,8 @@ Clone the repository, its submodule, and run the container
 ```bash
 git clone git@github.com:gnosis/dex-services.git
 cd dex-services
-git submodule update --init
 docker-compose up -d ganache-cli
-(cd dex-contracts && yarn && yarn prepack && npx truffle migrate)
+(cd contracts; cargo run --bin deploy --features bin
 ```
 
 ## BatchExchange
@@ -67,33 +64,35 @@ You can run the rust binary locally (without docker). For that you will have to 
 cargo run
 ```
 
-The following commands will help you interact with a testnet instance.
+Additionally, the `dex-contracts` repository contains additional scripts to help you interact with a testnet instance.
 In order to setup the environment (fund test users with tokens and list those on the exchange) as well as to make a first deposit/order you can run:
 
 ```
+git clone git@github.com:gnosis/dex-contracts.git
 cd dex-contracts
-npx truffle exec scripts/stablex/setup_environment.js
-npx truffle exec scripts/stablex/deposit.js --accountId=0 --tokenId=0 --amount=3000
-npx truffle exec scripts/stablex/deposit.js --accountId=1 --tokenId=1 --amount=3000
-npx truffle exec scripts/stablex/place_order.js --accountId=0 --buyToken=1 --sellToken=0 --minBuy=999 --maxSell=2000 --validFor=20
-npx truffle exec scripts/stablex/place_order.js --accountId=1 --buyToken=0 --sellToken=1 --minBuy=1996 --maxSell=999 --validFor=20
+yarn && yarn prepack
+yarn truffle-exec scripts/setup_environment.js
+yarn truffle-exec scripts/deposit.js --accountId=0 --tokenId=0 --amount=3000
+yarn truffle-exec scripts/deposit.js --accountId=1 --tokenId=1 --amount=3000
+yarn truffle-exec scripts/place_order.js --accountId=0 --buyToken=1 --sellToken=0 --minBuy=999 --maxSell=2000 --validFor=20
+yarn truffle-exec scripts/place_order.js --accountId=1 --buyToken=0 --sellToken=1 --minBuy=1996 --maxSell=999 --validFor=20
 ```
 
 It will then take up to 5 minutes (auctions close every 00, 05, 10 ... of the hour). On ganache you can expedite this process by running:
 
 ```
-npx truffle exec scripts/stablex/close_auction.js
+yarn truffle-exec scripts/close_auction.js
 ```
 
 You should then see the docker container computing and applying a solution to the most recent auction. In order to withdraw your proceeds you can request a withdraw, wait for one auction for it to become claimable and claim it:
 
 ```
-npx truffle exec scripts/stablex/request_withdraw.js --accountId=0 --tokenId=1 --amount=999
-npx truffle exec scripts/stablex/close_auction.js
-npx truffle exec scripts/stablex/claim_withdraw.js --accountId=0 --tokenId=1
+yarn truffle-exec scripts/request_withdraw.js --accountId=0 --tokenId=1 --amount=999
+yarn truffle-exec scripts/close_auction.js
+yarn truffle-exec scripts/claim_withdraw.js --accountId=0 --tokenId=1
 ```
 
-**Note:** Whenever stopping the `ganache-cli` service (e.g. by running `docker-compose down` you have to re-migrate the dex-contract before restarting `stablex`)
+**Note:** Whenever stopping the `ganache-cli` service (e.g. by running `docker-compose down` you have to re-deploy the contracts before restarting `stablex`)
 
 ## Tests
 

@@ -1,9 +1,8 @@
-use contracts::BatchExchange;
+use contracts::{BatchExchange, IERC20};
 use e2e::{
     common::{wait_for_condition, FutureBuilderExt, FutureWaitExt},
     docker_logs,
     stablex::{close_auction, setup_stablex},
-    IERC20,
 };
 use ethcontract::{web3::futures::Future as _, Account, Http, PrivateKey, Web3, U256};
 use futures::future::join_all;
