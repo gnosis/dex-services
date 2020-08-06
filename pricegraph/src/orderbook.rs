@@ -167,36 +167,35 @@ impl Orderbook {
         let (base, quote) = (node_index(market.base), node_index(market.quote));
 
         while let Err(cycle) = bellman_ford::search(&self.projection, quote) {
-            let cycle_not_in_path = match cycle.with_starting_node(quote) {
-                Err(cycle) => cycle,
-                Ok(cycle) => {
-                    let base_index_search = cycle.iter().position(|node| *node == base);
-                    match base_index_search {
-                        None => cycle,
-                        Some(base_index) => {
-                            let (ask, bid) = cycle.split_at(base_index);
+            let paths_base_quote = match cycle.with_starting_node(quote) {
+                Err(cycle) => Err(cycle),
+                Ok(cycle) => match cycle.iter().position(|node| *node == base) {
+                    None => Err(cycle),
+                    Some(base_index) => Ok(cycle.split_at(base_index)),
+                },
+            };
+            match paths_base_quote {
+                Ok((ask, bid)) => {
+                    let ask = self
+                        .fill_path(&ask)
+                        .expect("ask transitive path not found after being detected");
+                    let bid = self
+                        .fill_path(&bid)
+                        .expect("bid transitive path not found after being detected");
 
-                            let ask = self
-                                .fill_path(ask)
-                                .expect("ask transitive path not found after being detected");
-                            let bid = self
-                                .fill_path(bid)
-                                .expect("bid transitive path not found after being detected");
-
-                            return Some(Ring { ask, bid });
-                        }
-                    }
+                    return Some(Ring { ask, bid });
+                }
+                Err(cycle) => {
+                    // NOTE: Skip negative cycles that are not along the
+                    // specified market.
+                    self.fill_path(&cycle).unwrap_or_else(|| {
+                        panic!(
+                            "failed to fill path along detected negative cycle {}",
+                            format_path(&cycle),
+                        )
+                    });
                 }
             };
-
-            // NOTE: Skip negative cycles that are not along the
-            // specified market.
-            self.fill_path(&cycle_not_in_path).unwrap_or_else(|| {
-                panic!(
-                    "failed to fill path along detected negative cycle {}",
-                    format_path(&cycle_not_in_path),
-                )
-            });
         }
 
         None

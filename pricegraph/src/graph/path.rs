@@ -35,7 +35,7 @@ impl<N> Deref for NegativeCycle<N> {
     }
 }
 
-impl<N: PartialEq> NegativeCycle<N> {
+impl<N: Clone + PartialEq> NegativeCycle<N> {
     /// Returns the negative cycle changing its starting and terminating
     /// node to be the given node. If the given node is not part of the
     /// cycle, it returns an error containing the original cycle.
@@ -61,8 +61,11 @@ impl<N: PartialEq> NegativeCycle<N> {
 
     /// Returns two paths: from the start to the given index and from
     /// the given index to the end of the cycle.
-    pub fn split_at(&self, index: usize) -> (&[N], &[N]) {
-        (&self.0[0..index + 1], &self.0[index..])
+    pub fn split_at(self, index: usize) -> (Path<N>, Path<N>) {
+        let (start_to_index, index_to_end) = self.0.split_at(index);
+        let mut start_to_index_vec = start_to_index.to_vec();
+        start_to_index_vec.push(self.0[index].clone());
+        (Path(start_to_index_vec), Path(index_to_end.to_vec()))
     }
 }
 
