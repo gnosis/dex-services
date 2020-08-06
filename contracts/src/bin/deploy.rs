@@ -6,10 +6,13 @@ use anyhow::{anyhow, bail, Context as _, Result};
 use contracts::*;
 use env_logger::Env;
 use ethcontract::{Address, Http, Web3};
+use filetime::FileTime;
 use futures::compat::Future01CompatExt as _;
 use std::{
-    fs, thread,
-    time::{Duration, Instant},
+    fs,
+    path::Path,
+    thread,
+    time::{Duration, Instant, SystemTime},
 };
 
 fn main() {
@@ -74,7 +77,7 @@ async fn run() -> Result<()> {
     ));
     deploy!(BatchExchangeViewer(exchange.address()));
 
-    Ok(())
+    touch_build_script()
 }
 
 /// Writes the deployed contract address to the workspace `target` directory.
@@ -86,6 +89,19 @@ fn write_contract_address(name: &str, address: Address) -> Result<()> {
 
     fs::create_dir_all(dir)?;
     fs::write(path, format!("{:?}", address))?;
+
+    Ok(())
+}
+
+/// Touches the build in order to trigger a rebuild when a new deployment writes
+/// contract address files.
+///
+/// See `build.rs` for more information.
+fn touch_build_script() -> Result<()> {
+    let timestamp = FileTime::from_system_time(SystemTime::now());
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("build.rs");
+
+    filetime::set_file_times(path, timestamp, timestamp)?;
 
     Ok(())
 }
