@@ -50,7 +50,14 @@ fn run() -> Result<()> {
             let pruned_artifact_json = {
                 let mut json = serde_json::from_str::<Value>(&artifact_json)?;
                 let mut pruned = Map::new();
-                for property in &["contractName", "abi", "networks", "devdoc", "userdoc"] {
+                for property in &[
+                    "abi",
+                    "bytecode",
+                    "contractName",
+                    "devdoc",
+                    "networks",
+                    "userdoc",
+                ] {
                     if let Some(value) = json.get_mut(property) {
                         pruned.insert(property.to_string(), value.take());
                     }
