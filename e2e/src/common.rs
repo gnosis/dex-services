@@ -1,19 +1,18 @@
-use crate::*;
-
-use ethcontract::contract::{
-    CallFuture, Deploy, DeployBuilder, DeployFuture, Detokenizable, MethodBuilder,
-    MethodSendFuture, ViewMethodBuilder,
+use contracts::{ERC20Mintable, IERC20};
+use ethcontract::{
+    contract::{
+        CallFuture, Deploy, DeployBuilder, DeployFuture, Detokenizable, MethodBuilder,
+        MethodSendFuture, ViewMethodBuilder,
+    },
+    web3::{api::Web3, futures::Future as F, transports::Http, Transport},
+    Account, Address, U256,
 };
-use ethcontract::web3::api::Web3;
-use ethcontract::web3::futures::Future as F;
-use ethcontract::web3::transports::Http;
-use ethcontract::web3::Transport;
-use ethcontract::{Account, Address, U256};
-
-use std::fmt::Debug;
-use std::future::Future;
-use std::io::{Error, ErrorKind};
-use std::time::{Duration, Instant};
+use std::{
+    fmt::Debug,
+    future::Future,
+    io::{Error, ErrorKind},
+    time::{Duration, Instant},
+};
 
 pub const MAX_GAS: u32 = 6_000_000;
 

@@ -5,7 +5,6 @@ COPY Cargo.lock .
 COPY contracts contracts
 COPY core core
 COPY driver driver
-COPY dex-contracts dex-contracts
 COPY e2e e2e
 COPY pricegraph pricegraph
 COPY price-estimator price-estimator

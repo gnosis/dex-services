@@ -1,11 +1,7 @@
-use crate::{
-    common::{
-        approve, create_accounts_with_funded_tokens, wait_for, FutureBuilderExt, FutureWaitExt,
-        MAX_GAS,
-    },
-    IERC20,
+use crate::common::{
+    approve, create_accounts_with_funded_tokens, wait_for, FutureBuilderExt, FutureWaitExt, MAX_GAS,
 };
-use contracts::{BatchExchange, TokenOWL};
+use contracts::{BatchExchange, TokenOWL, IERC20};
 use ethcontract::{Account, Address, Http, Web3, U256};
 
 pub fn setup_stablex(

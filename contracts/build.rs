@@ -16,6 +16,8 @@ fn main() {
 
     generate_contract("BatchExchange");
     generate_contract("BatchExchangeViewer");
+    generate_contract("ERC20Mintable");
+    generate_contract("IERC20");
     generate_contract("IdToAddressBiMap");
     generate_contract("IterableAppendOnlySet");
     generate_contract("TokenOWL");
@@ -23,10 +25,11 @@ fn main() {
 }
 
 fn generate_contract(name: &str) {
-    let artifact = format!("../dex-contracts/build/contracts/{}.json", name);
+    let artifact = paths::contract_artifacts_dir().join(format!("{}.json", name));
     let address_file = paths::contract_address_file(name);
     let dest = env::var("OUT_DIR").unwrap();
 
+    println!("cargo:rerun-if-changed={}", artifact.display());
     let mut builder = Builder::new(artifact)
         .with_visibility_modifier(Some("pub"))
         .add_event_derive("serde::Deserialize")
