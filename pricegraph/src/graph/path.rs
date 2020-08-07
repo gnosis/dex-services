@@ -2,7 +2,6 @@
 
 use petgraph::visit::NodeIndexable;
 use std::ops::Deref;
-use std::slice::Iter;
 
 #[derive(Debug, PartialEq)]
 /// A path of nodes connected by a (directed) edge.
@@ -51,12 +50,6 @@ impl<N: Clone + PartialEq> NegativeCycle<N> {
                 Ok(self)
             }
         }
-    }
-
-    /// Returns an iterator over the nodes in the cycle in the order
-    /// they appear.
-    pub fn iter(&self) -> Iter<N> {
-        self.0.iter()
     }
 
     /// Returns two paths: from the start to the given index and from
