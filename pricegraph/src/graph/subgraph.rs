@@ -45,8 +45,7 @@ impl<N: Copy + Ord> Subgraphs<N> {
 /// An enum for representing control flow when iterating subgraphs.
 pub enum ControlFlow<N, T> {
     /// Continue the iterating through the subgraphs with the provided
-    /// shortest path graph indicating which nodes are connected to the
-    /// current subgraph.
+    /// connected component of the graph.
     Continue(Vec<N>),
     /// Stop iterating through the subgraphs and return a result.
     Break(T),
