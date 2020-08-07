@@ -1,46 +1,110 @@
-//! Utilities for finding paths from predecessor vectors.
+//! Definitions of paths and cycles of a graph.
 
-use petgraph::graph::NodeIndex;
+use petgraph::visit::NodeIndexable;
+use std::ops::Deref;
 
-/// Finds a cycle by searching from the provided `search` node and returns a
-/// vector representing a path along the cycle. This method returns a path,
-/// which means that the first and last nodes will always be the same.
+#[derive(Debug, PartialEq, Eq)]
+/// A path of nodes connected by a (directed) edge.
+pub struct Path<N>(pub Vec<N>);
+
+impl<N> Deref for Path<N> {
+    type Target = [N];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<N> From<NegativeCycle<N>> for Path<N> {
+    fn from(cycle: NegativeCycle<N>) -> Self {
+        Path(cycle.0)
+    }
+}
+
+#[derive(Debug)]
+/// An ordered collection of nodes that form a cycle of negative weight.
+/// The first node of the cycle coincides with the last.
+pub struct NegativeCycle<N>(pub Vec<N>);
+
+impl<N> Deref for NegativeCycle<N> {
+    type Target = [N];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<N: Clone + PartialEq> NegativeCycle<N> {
+    /// Returns the negative cycle changing its starting and terminating
+    /// node to be the given node. If the given node is not part of the
+    /// cycle, it returns an error containing the original cycle.
+    pub fn with_starting_node(mut self, start: N) -> Result<Self, Self> {
+        match self.0.iter().position(|i| *i == start) {
+            None => Err(self),
+            Some(pos) if pos == 0 => Ok(self),
+            Some(pos) => {
+                let popped = self.0.pop();
+                debug_assert!(popped.as_ref() == self.first());
+                self.0.rotate_left(pos);
+                debug_assert!(self.0[0] == start);
+                self.0.push(start);
+                Ok(self)
+            }
+        }
+    }
+
+    /// Returns two paths: from the start to the given index and from
+    /// the given index to the end of the cycle.
+    pub fn split_at(self, node: N) -> Result<(Path<N>, Path<N>), Self> {
+        if let Some(index) = self.iter().position(|entry| *entry == node) {
+            let (start_to_index, index_to_end) = self.0.split_at(index);
+            let mut start_to_index_vec = start_to_index.to_vec();
+            start_to_index_vec.push(node);
+            Ok((Path(start_to_index_vec), Path(index_to_end.to_vec())))
+        } else {
+            Err(self)
+        }
+    }
+}
+
+/// Finds a negative cycle by searching from the provided `search` node.
 ///
 /// Optionally, an `origin` node can be provided so that the first element of
 /// the cycle vector is `origin` if and only if `origin` is part of the cycle.
 ///
 /// Returns `None` if no cycle can be found.
-pub fn find_cycle(
-    predecessor: &[Option<NodeIndex>],
-    search: NodeIndex,
-    origin: Option<NodeIndex>,
-) -> Option<Vec<NodeIndex>> {
+pub fn find_cycle<G: NodeIndexable>(
+    graph: G,
+    predecessor: &[Option<G::NodeId>],
+    search: G::NodeId,
+    origin: Option<G::NodeId>,
+) -> Option<NegativeCycle<G::NodeId>> {
     // NOTE: First find a node that is actually on the cycle, this is done
     // because a negative cycle can be detected on any node connected to the
     // cycle and not just nodes on the cycle itself.
     let mut visited = vec![0; predecessor.len()];
     let mut cursor = search;
     let mut step = 1;
-    visited[cursor.index()] = step;
+    visited[graph.to_index(cursor)] = step;
     loop {
-        cursor = predecessor[cursor.index()]?;
-        if visited[cursor.index()] > 0 {
+        cursor = predecessor[graph.to_index(cursor)]?;
+        if visited[graph.to_index(cursor)] > 0 {
             break;
         }
         step += 1;
-        visited[cursor.index()] = step;
+        visited[graph.to_index(cursor)] = step;
     }
 
     // NOTE: Allocate the cycle vector with enough capacity for the negative
     // cycle path, that is the length of the negative cycle plus one (which is
     // used by the final segment of the path to return to the starting node).
-    let len = step + 1 - visited[cursor.index()];
+    let len = step + 1 - visited[graph.to_index(cursor)];
     let mut path = Vec::with_capacity(len + 1);
 
     // NOTE: `cursor` is now guaranteed to be on the cycle. Furthermore, if
     // `origin` was visited after `cursor`, then it is on the cycle as well.
     let start = match origin {
-        Some(origin) if visited[origin.index()] > visited[cursor.index()] => origin,
+        Some(origin) if visited[graph.to_index(origin)] > visited[graph.to_index(cursor)] => origin,
         _ => cursor,
     };
 
@@ -49,7 +113,7 @@ pub fn find_cycle(
     let mut cursor = start;
     path.push(cursor);
     loop {
-        cursor = predecessor[cursor.index()]?;
+        cursor = predecessor[graph.to_index(cursor)]?;
         path.push(cursor);
         if cursor == start {
             break;
@@ -59,87 +123,5 @@ pub fn find_cycle(
     // NOTE: `path` is in reverse order, since it was built by walking the cycle
     // backwards, so reverse it and done!
     path.reverse();
-    Some(path)
-}
-
-/// Finds a path between two tokens. Returns `None` if no such path exists.
-pub fn find_path(
-    predecessor: &[Option<NodeIndex>],
-    start: NodeIndex,
-    end: NodeIndex,
-) -> Option<Vec<NodeIndex>> {
-    let mut path = Vec::with_capacity(predecessor.len());
-
-    let mut current = end;
-    while current != start {
-        path.push(current);
-        current = predecessor[current.index()]?;
-    }
-    path.push(start);
-
-    // NOTE: `path` is in reverse order, since it was built by walking the path
-    // backwards, so reverse it and done!
-    path.reverse();
-    Some(path)
-}
-
-#[cfg(test)]
-pub mod tests {
-    use super::*;
-    use crate::graph::bellman_ford::{self, NegativeCycle};
-    use petgraph::Graph;
-
-    #[test]
-    fn search_finds_negative_cycle() {
-        // NOTE: There is a negative cycle from 1 -> 2 -> 3 -> 1 with a
-        // transient weight of -1.
-        let graph = Graph::<(), f64>::from_edges(&[
-            (0, 1, 1.0),
-            (1, 2, 2.0),
-            (1, 4, -100.0),
-            (2, 3, 3.0),
-            (3, 1, -6.0),
-            (4, 3, 200.0),
-        ]);
-
-        let NegativeCycle(predecessor, node) = bellman_ford::search(&graph, 0.into()).unwrap_err();
-
-        let cycle = find_cycle(&predecessor, node, None).unwrap();
-        assert_eq!(cycle, &[1.into(), 2.into(), 3.into(), 1.into()]);
-
-        let cycle = find_cycle(&predecessor, node, Some(2.into())).unwrap();
-        assert_eq!(cycle, &[2.into(), 3.into(), 1.into(), 2.into()]);
-
-        // NOTE: if `origin` is provided, but not part of the cycle, then the
-        // first node in the vector cycle can be any node.
-        let cycle = find_cycle(&predecessor, node, Some(4.into())).unwrap();
-        assert_eq!(cycle, &[1.into(), 2.into(), 3.into(), 1.into()]);
-    }
-
-    #[test]
-    fn search_finds_shortest_path() {
-        //  0 --2.0-> 1 --1.0-> 2
-        //  |         |         |
-        // 4.0       7.0        |
-        //  v         v         |
-        //  3         5        5.0
-        //  |         ^         |
-        // 1.0       1.0        |
-        //  |         |         |
-        //  \-------> 4 <-------/
-        let graph = Graph::<(), f64>::from_edges(&[
-            (0, 1, 2.0),
-            (0, 3, 4.0),
-            (1, 2, 1.0),
-            (1, 5, 7.0),
-            (2, 4, 5.0),
-            (4, 5, 1.0),
-            (3, 4, 1.0),
-        ]);
-
-        let (_, predecessor) = bellman_ford::search(&graph, 0.into()).unwrap();
-        let path = find_path(&predecessor, 0.into(), 5.into()).unwrap();
-
-        assert_eq!(path, &[0.into(), 3.into(), 4.into(), 5.into()]);
-    }
+    Some(NegativeCycle(path))
 }
