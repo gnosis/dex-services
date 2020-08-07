@@ -61,11 +61,15 @@ impl<N: Clone + PartialEq> NegativeCycle<N> {
 
     /// Returns two paths: from the start to the given index and from
     /// the given index to the end of the cycle.
-    pub fn split_at(self, index: usize) -> (Path<N>, Path<N>) {
-        let (start_to_index, index_to_end) = self.0.split_at(index);
-        let mut start_to_index_vec = start_to_index.to_vec();
-        start_to_index_vec.push(self.0[index].clone());
-        (Path(start_to_index_vec), Path(index_to_end.to_vec()))
+    pub fn split_at(self, node: N) -> Result<(Path<N>, Path<N>), Self> {
+        if let Some(index) = self.iter().position(|entry| *entry == node) {
+            let (start_to_index, index_to_end) = self.0.split_at(index);
+            let mut start_to_index_vec = start_to_index.to_vec();
+            start_to_index_vec.push(node);
+            Ok((Path(start_to_index_vec), Path(index_to_end.to_vec())))
+        } else {
+            Err(self)
+        }
     }
 }
 

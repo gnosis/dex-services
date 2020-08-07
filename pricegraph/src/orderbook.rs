@@ -167,13 +167,7 @@ impl Orderbook {
         let (base, quote) = (node_index(market.base), node_index(market.quote));
 
         while let Err(cycle) = ShortestPathGraph::new(&self.projection, quote) {
-            let paths_base_quote = match cycle.with_starting_node(quote) {
-                Err(cycle) => Err(cycle),
-                Ok(cycle) => match cycle.iter().position(|node| *node == base) {
-                    None => Err(cycle),
-                    Some(base_index) => Ok(cycle.split_at(base_index)),
-                },
-            };
+            let paths_base_quote = cycle.with_starting_node(quote).and_then(|cycle| cycle.split_at(base));
             match paths_base_quote {
                 Ok((ask, bid)) => {
                     let ask = self
