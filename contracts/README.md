@@ -36,3 +36,25 @@ Note that the `contracts` crate needs to be re-built after running the `deploy`
 script to generate bindings with the injected test network addresses. This is
 done automatically on `cargo build` by leveraging the `cargo:rerun-if-changed`
 build script feature.
+
+## `vendor` Script
+
+A `[[bin]]` script for vendoring Smart Contract JSON artifacts used by various
+service components from npmjs packages. These artifacts get retrieved from
+`unpkg.io` and vendored to `contracts/artifacts`.
+
+```
+$ (cd contracts; cargo run --bin vendor --features bin)
+   Compiling contracts v0.1.0 (/var/home/nlordell/Developer/gnosis/dex-services/contracts)
+    Finished dev [unoptimized + debuginfo] target(s) in 8.08s
+     Running `/var/home/nlordell/Developer/gnosis/dex-services/target/debug/vendor`
+[2020-08-06T21:11:30Z INFO  vendor] vendoring contract artifacts to '/var/home/nlordell/Developer/gnosis/dex-services/contracts/artifacts'
+[2020-08-06T21:11:30Z INFO  vendor] retrieving BatchExchange from @gnosis.pm/dex-contracts@0.4.1
+[2020-08-06T21:11:32Z INFO  vendor] retrieving BatchExchangeViewer from @gnosis.pm/dex-contracts@0.4.1
+[2020-08-06T21:11:34Z INFO  vendor] retrieving TokenOWL from @gnosis.pm/owl-token@3.1.0
+[2020-08-06T21:11:34Z INFO  vendor] retrieving TokenOWLProxy from @gnosis.pm/owl-token@3.1.0
+[2020-08-06T21:11:34Z INFO  vendor] retrieving IdToAddressBiMap from @gnosis.pm/solidity-data-structures@1.2.4
+[2020-08-06T21:11:34Z INFO  vendor] retrieving IterableAppendOnlySet from @gnosis.pm/solidity-data-structures@1.2.4
+[2020-08-06T21:11:35Z INFO  vendor] retrieving ERC20Mintable from @openzeppelin/contracts@2.5.0
+[2020-08-06T21:11:37Z INFO  vendor] retrieving IERC20 from @openzeppelin/contracts@2.5.0
+```

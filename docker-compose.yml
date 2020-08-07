@@ -8,15 +8,6 @@ services:
     logging:
       driver: "none"
 
-  truffle:
-    command: /app/run.sh
-    build:
-      context: driver/docker/truffle
-    depends_on:
-      - ganache-cli
-    volumes:
-      - ./dex-contracts:/app/dex-contracts
-
   stablex:
     build:
       context: .
