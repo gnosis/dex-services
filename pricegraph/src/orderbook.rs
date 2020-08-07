@@ -540,7 +540,7 @@ mod tests {
         // which the loop {6, 7} is cleared:
         // 6->7->6: 100_000 T6 -> 1_000_000 T7 -> 1_000_000 T6, both orders cleared
         // 7->6->7: 100_000 T7 -> 100_000 T6 -> 1_000_000 T7, only 6->7 cleared
-        assert_eq!(orderbook.num_orders(), 6);
+        assert!(orderbook.num_orders() == 5 || orderbook.num_orders() == 6);
         assert!(!orderbook.is_overlapping());
     }
 
