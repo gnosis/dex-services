@@ -44,7 +44,7 @@ impl<N: Clone + PartialEq> NegativeCycle<N> {
             Some(pos) if pos == 0 => Ok(self),
             Some(pos) => {
                 let popped = self.0.pop();
-                debug_assert_eq!(popped, self.first());
+                debug_assert!(popped.as_ref() == self.first());
                 self.0.rotate_left(pos);
                 debug_assert!(self.0[0] == start);
                 self.0.push(start);
