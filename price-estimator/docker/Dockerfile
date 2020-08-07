@@ -2,9 +2,9 @@ FROM clux/muslrust:stable as builder
 WORKDIR /usr/src/app
 COPY Cargo.toml .
 COPY Cargo.lock .
+COPY contracts contracts
 COPY core core
 COPY driver driver
-COPY dex-contracts dex-contracts
 COPY e2e e2e
 COPY pricegraph pricegraph
 COPY price-estimator price-estimator

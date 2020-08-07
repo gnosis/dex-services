@@ -282,7 +282,9 @@ impl PriceFinding for OptimisationPriceFinder {
             // `blocking::unblock` requires the closure to be 'static.
             let io_methods = self.io_methods.clone();
             let solver_type = self.solver_type;
-            let min_avg_fee_per_order = self.economic_viability.min_average_fee().await?;
+            // The solver expects the fee amount as the total paid fees. Half of the paid fees are
+            // burned and half earned.
+            let min_avg_paid_fee_per_order = 2 * self.economic_viability.min_average_fee().await?;
             let internal_optimizer = self.internal_optimizer;
             let result = blocking::unblock!(io_methods.run_solver(
                 &input_file,
@@ -290,7 +292,7 @@ impl PriceFinding for OptimisationPriceFinder {
                 &result_folder,
                 solver_type,
                 time_limit,
-                min_avg_fee_per_order,
+                min_avg_paid_fee_per_order,
                 internal_optimizer,
             ))
             .with_context(|| format!("error running {:?} solver", self.solver_type))?;

@@ -1,12 +1,12 @@
 use super::*;
 use crate::{
     bigint_u256,
-    contracts::stablex_contract::batch_exchange::{event_data::*, Event},
     models::{AccountState, Order as ModelOrder},
     orderbook::util,
 };
 use anyhow::{anyhow, bail, ensure, Result};
 use balance::Balance;
+use contracts::batch_exchange::{event_data::*, Event};
 use order::Order;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::Entry;

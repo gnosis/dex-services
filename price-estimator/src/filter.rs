@@ -337,6 +337,7 @@ fn apply_rounding_buffer(amount: f64, price_rounding_buffer: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infallible_price_source::PriceCacheUpdater;
     use anyhow::{anyhow, Result};
     use core::orderbook::NoopOrderbook;
     use futures::future::{BoxFuture, FutureExt as _};
@@ -358,11 +359,11 @@ mod tests {
     }
 
     fn all_filter() -> impl Filter<Extract = impl Reply, Error = Infallible> + Clone {
+        let token_info = Arc::new(empty_token_info());
         let orderbook = Arc::new(Orderbook::new(
             Box::new(NoopOrderbook {}),
-            Default::default(),
+            PriceCacheUpdater::new(token_info.clone(), Vec::new()),
         ));
-        let token_info = Arc::new(empty_token_info());
         all(orderbook, token_info, 0.0)
     }
 

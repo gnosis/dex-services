@@ -6,8 +6,7 @@ To run the stableX related tests locally,
 
 ```sh
 # T1:
-docker-compose down && docker-compose up ganache-cli truffle
-# Wait for message `dex-services_truffle_1 exited with code 0`
+ci/setup_contracts.sh
 
 # T2:
 cargo run -p driver -- --node-url http://localhost:8545 --network-id 5777 --private-key 4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d --solver-type naive-solver --scheduler evm
@@ -22,8 +21,7 @@ cargo test -p e2e ganache -- --nocapture
 
 ```sh
 # T1:
-docker-compose down && docker-compose up ganache-cli truffle
-# Wait for message `dex-services_truffle_1 exited with code 0`
+ci/setup_contracts.sh
 
 # T2:
 # <private-key> is some private key with Rinkeby OWL, DAI and ETH (for gas)
