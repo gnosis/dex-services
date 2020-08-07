@@ -108,7 +108,7 @@ impl Orderbook {
     /// this ring trade.
     pub fn is_overlapping(&self) -> bool {
         // NOTE: We detect negative cycles from each disconnected subgraph.
-        Subgraphs::<NodeIndex>::new(self.projection.node_indices().skip(1))
+        Subgraphs::new(self.projection.node_indices().skip(1))
             .for_each_until(
                 |token| match ShortestPathGraph::new(&self.projection, token) {
                     Ok(shortest_path_graph) => {
@@ -122,7 +122,7 @@ impl Orderbook {
 
     /// Reduces the orderbook by matching all overlapping ring trades.
     pub fn reduce_overlapping_orders(mut self) -> ReducedOrderbook {
-        Subgraphs::<NodeIndex>::new(self.projection.node_indices()).for_each(|token| loop {
+        Subgraphs::new(self.projection.node_indices()).for_each(|token| loop {
             match ShortestPathGraph::new(&self.projection, token) {
                 Ok(shortest_path_graph) => break shortest_path_graph.connected_nodes(),
                 Err(cycle) => {
