@@ -1,4 +1,5 @@
 use crate::{
+    amounts_at_price,
     error::{self, InternalError},
     models::*,
     orderbook::{Orderbook, PricegraphKind},
@@ -7,7 +8,7 @@ use core::{
     models::TokenId,
     token_info::{TokenBaseInfo, TokenInfoFetching},
 };
-use pricegraph::{Pricegraph, TokenPair};
+use pricegraph::{Pricegraph, TokenPair, TransitiveOrder};
 use std::convert::Infallible;
 use std::sync::Arc;
 use warp::{
@@ -238,19 +239,24 @@ async fn estimate_amounts_at_price(
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
     let pricegraph = orderbook
-        .pricegraph(query.batch_id, PricegraphKind::Raw)
+        .pricegraph(query.batch_id, PricegraphKind::WithRoundingBuffer)
         .await
         .map_err(error::internal_server_rejection)?;
+    let rounding_buffer = orderbook.rounding_buffer(token_pair).await;
     let result = if query.atoms {
-        estimate_amounts_at_price_atoms(token_pair, price_in_quote, pricegraph)
+        estimate_amounts_at_price_atoms(token_pair, price_in_quote, &pricegraph, rounding_buffer)
     } else {
         let buy_token_info = get_token_info(token_pair.buy, token_infos.as_ref()).await?;
         let sell_token_info = get_token_info(token_pair.sell, token_infos.as_ref()).await?;
         let price_in_quote_atoms = price_in_quote
             * (sell_token_info.base_unit_in_atoms().get() as f64
                 / buy_token_info.base_unit_in_atoms().get() as f64);
-        let mut result =
-            estimate_amounts_at_price_atoms(token_pair, price_in_quote_atoms, pricegraph);
+        let mut result = estimate_amounts_at_price_atoms(
+            token_pair,
+            price_in_quote_atoms,
+            &pricegraph,
+            rounding_buffer,
+        );
         result.buy_amount_in_base = result.buy_amount_in_base.into_base_units(&buy_token_info);
         result.sell_amount_in_quote = result
             .sell_amount_in_quote
@@ -264,28 +270,27 @@ async fn estimate_amounts_at_price(
 fn estimate_amounts_at_price_atoms(
     token_pair: TokenPair,
     price_in_quote: f64,
-    pricegraph: Pricegraph,
+    pricegraph: &Pricegraph,
+    rounding_buffer: f64,
 ) -> EstimatedOrderResult {
-    // Will happen in future PR.
     // NOTE: The price in quote is `sell_amount / buy_amount` which is the
-    // inverse of an exchange rate. Additionally, we need to apply the price
-    // rounding buffer to the price, which will **increase** the exchange rate,
-    // making it more restrictive and the estimate more pessimistic.
-    let exchange_rate = 1.0 / apply_rounding_buffer(price_in_quote, OLD_ROUNDING_BUFFER);
-    let transitive_order = pricegraph.order_at_limit_price(token_pair, exchange_rate);
-    let (buy_amount_in_base, sell_amount_in_quote) = transitive_order
-        .map(|order| {
-            (
-                apply_rounding_buffer(order.buy, OLD_ROUNDING_BUFFER),
-                order.sell,
-            )
-        })
-        .unwrap_or_default();
+    // inverse of an exchange rate.
+    let limit_price = 1.0 / price_in_quote;
+    let order = amounts_at_price::order_at_price_with_rounding_buffer(
+        token_pair,
+        limit_price,
+        pricegraph,
+        rounding_buffer,
+    )
+    .unwrap_or(TransitiveOrder {
+        buy: 0.0,
+        sell: 0.0,
+    });
     EstimatedOrderResult {
         base_token_id: token_pair.buy,
         quote_token_id: token_pair.sell,
-        sell_amount_in_quote: Amount::Atoms(sell_amount_in_quote as _),
-        buy_amount_in_base: Amount::Atoms(buy_amount_in_base as _),
+        sell_amount_in_quote: Amount::Atoms(order.sell as _),
+        buy_amount_in_base: Amount::Atoms(order.buy as _),
     }
 }
 
