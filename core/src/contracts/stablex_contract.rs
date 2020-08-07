@@ -297,7 +297,7 @@ impl StableXContract for StableXContractImpl {
                 // NOTE: Gas estimate might be off, as we race with other solution
                 //   submissions and thus might have to revert trades which costs
                 //   more gas than expected.
-                .gas(5_500_000.into())
+                .gas(6_000_000.into())
                 .nonce(nonce);
             method.tx.resolve = Some(ResolveCondition::Confirmed(ConfirmParams::mined()));
             method.send().await.map(|_| ())
