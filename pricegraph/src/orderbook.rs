@@ -25,7 +25,6 @@ use crate::num;
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::NodeIndexable;
 use std::cmp;
-use std::collections::BTreeSet;
 use std::f64;
 use thiserror::Error;
 
@@ -109,10 +108,12 @@ impl Orderbook {
     /// this ring trade.
     pub fn is_overlapping(&self) -> bool {
         // NOTE: We detect negative cycles from each disconnected subgraph.
-        Subgraphs::<&OrderbookGraph>::new(self.projection.node_indices().skip(1))
+        Subgraphs::<NodeIndex>::new(self.projection.node_indices().skip(1))
             .for_each_until(
                 |token| match ShortestPathGraph::new(&self.projection, token) {
-                    Ok(shortest_path_graph) => ControlFlow::Continue(shortest_path_graph),
+                    Ok(shortest_path_graph) => {
+                        ControlFlow::Continue(shortest_path_graph.connected_nodes())
+                    }
                     Err(NegativeCycle(..)) => ControlFlow::Break(true),
                 },
             )
@@ -121,29 +122,19 @@ impl Orderbook {
 
     /// Reduces the orderbook by matching all overlapping ring trades.
     pub fn reduce_overlapping_orders(mut self) -> ReducedOrderbook {
-        let mut remaining_tokens: BTreeSet<_> = self.projection.node_indices().collect();
-
-        while let Some(&token) = remaining_tokens.iter().next() {
-            remaining_tokens.remove(&token);
-
-            let shortest_path_graph = loop {
-                match ShortestPathGraph::new(&self.projection, token) {
-                    Ok(shortest_path_graph) => break shortest_path_graph,
-                    Err(NegativeCycle(cycle)) => {
-                        self.fill_path(&cycle).unwrap_or_else(|| {
-                            panic!(
-                                "failed to fill path along detected negative cycle {}",
-                                format_path(&cycle),
-                            )
-                        });
-                    }
-                };
-            };
-
-            for connected in shortest_path_graph.connected_nodes() {
-                remaining_tokens.remove(&connected);
+        Subgraphs::<NodeIndex>::new(self.projection.node_indices()).for_each(|token| loop {
+            match ShortestPathGraph::new(&self.projection, token) {
+                Ok(shortest_path_graph) => break shortest_path_graph.connected_nodes(),
+                Err(cycle) => {
+                    self.fill_path(&cycle).unwrap_or_else(|| {
+                        panic!(
+                            "failed to fill path along detected negative cycle {}",
+                            format_path(&cycle),
+                        )
+                    });
+                }
             }
-        }
+        });
 
         debug_assert!(!self.is_overlapping());
         ReducedOrderbook(self)

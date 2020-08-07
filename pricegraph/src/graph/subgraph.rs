@@ -1,7 +1,5 @@
 //! Module implementing tools for iterating over disconnected subgraphs.
 
-use super::shortest_paths::ShortestPathGraph;
-use petgraph::visit::{Data, GraphBase, IntoEdges, NodeIndexable};
 use std::cmp::Ord;
 use std::collections::BTreeSet;
 
@@ -10,30 +8,32 @@ use std::collections::BTreeSet;
 ///
 /// Note that this pseudo-iterator uses a `BTreeSet` to ensure that subgraphs
 /// are visited in a predictable order starting the from the first node.
-pub struct Subgraphs<G: GraphBase>(BTreeSet<G::NodeId>);
+pub struct Subgraphs<N>(BTreeSet<N>);
 
-impl<G> Subgraphs<G>
-where
-    G: IntoEdges + NodeIndexable,
-    G::NodeId: Ord,
-{
+impl<N: Copy + Ord> Subgraphs<N> {
     /// Create a new subgraphs iterator from an iterator of nodes.
-    pub fn new(nodes: impl Iterator<Item = G::NodeId>) -> Self {
-        Subgraphs::<G>(nodes.collect())
+    pub fn new(nodes: impl Iterator<Item = N>) -> Self {
+        Subgraphs::<N>(nodes.collect())
+    }
+
+    /// Iterate through each subgraph with the provided closure returning the
+    /// predecessor vector for the current node indicating which nodes are
+    /// connected to it.
+    pub fn for_each(self, mut f: impl FnMut(N) -> Vec<N>) {
+        self.for_each_until(|node| <ControlFlow<N, ()>>::Continue(f(node)));
     }
 
     /// Iterate through each subgraph with the provided closure, returning the
     /// control flow `Break` value if there was an early return.
-    pub fn for_each_until<T>(self, mut f: impl FnMut(G::NodeId) -> ControlFlow<G, T>) -> Option<T> {
+    pub fn for_each_until<T>(self, mut f: impl FnMut(N) -> ControlFlow<N, T>) -> Option<T> {
         let Self(mut remaining_tokens) = self;
         while let Some(&token) = remaining_tokens.iter().next() {
             remaining_tokens.remove(&token);
-            let shortest_path_graph = match f(token) {
-                ControlFlow::Continue(shortest_path_graph) => shortest_path_graph,
+            let connected_nodes = match f(token) {
+                ControlFlow::Continue(connected_nodes) => connected_nodes,
                 ControlFlow::Break(result) => return Some(result),
             };
-
-            for connected in shortest_path_graph.connected_nodes() {
+            for connected in connected_nodes {
                 remaining_tokens.remove(&connected);
             }
         }
@@ -43,11 +43,11 @@ where
 }
 
 /// An enum for representing control flow when iterating subgraphs.
-pub enum ControlFlow<G: GraphBase + Data, T> {
+pub enum ControlFlow<N, T> {
     /// Continue the iterating through the subgraphs with the provided
     /// shortest path graph indicating which nodes are connected to the
     /// current subgraph.
-    Continue(ShortestPathGraph<G>),
+    Continue(Vec<N>),
     /// Stop iterating through the subgraphs and return a result.
     Break(T),
 }
