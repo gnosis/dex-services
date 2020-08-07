@@ -114,7 +114,7 @@ impl Orderbook {
                     Ok(shortest_path_graph) => {
                         ControlFlow::Continue(shortest_path_graph.connected_nodes())
                     }
-                    Err(NegativeCycle(..)) => ControlFlow::Break(true),
+                    Err(_) => ControlFlow::Break(true),
                 },
             )
             .unwrap_or(false)

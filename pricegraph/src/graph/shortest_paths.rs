@@ -23,9 +23,11 @@ impl<G: GraphBase + Data> PredecessorStore<G> {
     fn distance(&self, node_index: usize) -> &G::EdgeWeight {
         &self.distance[node_index]
     }
+
     fn update_distance(&mut self, node_index: usize, updated_distance: G::EdgeWeight) {
         self.distance[node_index] = updated_distance;
     }
+
     fn update_predecessor(&mut self, node_index: usize, updated_predecessor: Option<G::NodeId>) {
         self.predecessors[node_index] = updated_predecessor;
     }
