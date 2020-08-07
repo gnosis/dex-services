@@ -3,7 +3,7 @@
 use petgraph::visit::NodeIndexable;
 use std::ops::Deref;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 /// A path of nodes connected by a (directed) edge.
 pub struct Path<N>(pub Vec<N>);
 
