@@ -1,0 +1,19 @@
+[package]
+name = "pricegraph-data"
+version = "0.0.0"
+authors = ["Nicholas Rodrigues Lordello <nicholas.lordello@gnosis.pm>"]
+edition = "2018"
+publish = false
+
+[[bin]]
+name = "fetch"
+path = "fetch.rs"
+
+[[convert]]
+name = "convert"
+path = "convert.rs"
+
+[dependencies]
+contracts = { path = "../../contracts" }
+env_logger = "0.7.1"
+log = "0.4.11"

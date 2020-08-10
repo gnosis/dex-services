@@ -6,6 +6,7 @@ members = [
     "e2e",
     "price-estimator",
     "pricegraph",
+    "pricegraph/data",
     "pricegraph/fuzz",
     "pricegraph/wasm",
 ]

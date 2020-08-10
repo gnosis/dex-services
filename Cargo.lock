@@ -2322,6 +2322,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pricegraph-data"
+version = "0.0.0"
+dependencies = [
+ "contracts",
+ "env_logger",
+ "log 0.4.11",
+]
+
+[[package]]
 name = "pricegraph-fuzz"
 version = "0.0.0"
 dependencies = [
