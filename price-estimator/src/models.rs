@@ -1,5 +1,9 @@
-use core::{models::BatchId, token_info::TokenBaseInfo};
-use serde::{Deserialize, Serialize};
+mod query;
+
+pub use self::query::*;
+use anyhow::Result;
+use core::token_info::TokenBaseInfo;
+use serde::Serialize;
 use serde_with::rust::display_fromstr;
 use std::{cmp::Ordering, num::ParseIntError, ops::Deref, str::FromStr};
 
@@ -40,15 +44,6 @@ impl FromStr for Market {
             quote: quote_token_id,
         }))
     }
-}
-
-/// The query part of the url.
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QueryParameters {
-    pub atoms: bool,
-    pub hops: Option<u16>,
-    pub batch_id: Option<BatchId>,
 }
 
 #[derive(Serialize)]
