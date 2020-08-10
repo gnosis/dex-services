@@ -2325,8 +2325,11 @@ dependencies = [
 name = "pricegraph-data"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "contracts",
  "env_logger",
+ "futures 0.3.5",
+ "hex",
  "log 0.4.11",
 ]
 
