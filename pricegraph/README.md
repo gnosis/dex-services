@@ -77,13 +77,14 @@ Additionally, solver instance files may be converted to an orderbook file with
 the `convert` script. It can be executed from the repository root:
 
 ```
-$ cargo run -p pricegraph-data --bin convert -- instance.json
+$ cargo run -p pricegraph-data --bin convert -- instance.json 123456789
 [2020-08-10T11:18:32Z INFO  convert] encoding 13766 orders from `target/instance.json`
 ```
 
 This will add a new `orderbook-$BATCH_ID.hex` file to the `data` directory where
-`$BATCH_ID` corresponds to the batch ID specified in the instance file. Again,
-the orderbook will be converted in the same permissive hex format.
+`$BATCH_ID` corresponds to the batch ID specified on the command line (here
+`orderbook-123456789.hex`. Again, the orderbook will be converted in the same
+permissive hex format.
 
 ### Adding Test Data
 
