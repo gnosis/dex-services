@@ -50,8 +50,12 @@ Run a fuzz target with `cargo +nightly fuzz run orderbook`.
 ## Test Data
 
 This crate contains test data from real orderbooks captured on `mainnet` in the
-`data` subdirectory. In order to fetch the current orderbook, execute from the
-repository root:
+`data` subdirectory.
+
+### Fetching the Current Orderbook
+
+The `data` subdirectory contains a `fetch` script for fetching the current
+orderbook. It can be executed from the repository root:
 
 ```
 $ INFURA_PROJECT_ID=... cargo run -p pricegraph-data --bin fetch
@@ -62,10 +66,31 @@ $ INFURA_PROJECT_ID=... cargo run -p pricegraph-data --bin fetch
 ...
 ```
 
-This will add a new `orderbook-${BATCH_ID}.hex` file to the `data` directory
-(here `orderbook-5323483.hex`) with the orderbook in a hex encoded format. This
-file can be added to `data/mod.rs` so that it can be accessed from `pricegraph`
-tests and benchmarks.
+This will add a new `orderbook-$BATCH_ID.hex` file to the `data` directory where
+`$BATCH_ID` corresponds to the current batch ID (here `orderbook-5323483.hex`)
+with the orderbook in a permissive hex encoded format that allows arbitrary
+whitespace with lines to separate orders and spaces to separate fields.
+
+### Converting a Solver Instance File
+
+Additionally, solver instance files may be converted to an orderbook file with
+the `convert` script. It can be executed from the repository root:
+
+```
+$ cargo run -p pricegraph-data --bin convert -- instance.json 123456789
+[2020-08-10T11:18:32Z INFO  convert] encoding 13766 orders from `target/instance.json`
+```
+
+This will add a new `orderbook-$BATCH_ID.hex` file to the `data` directory where
+`$BATCH_ID` corresponds to the batch ID specified on the command line (here
+`orderbook-123456789.hex`. Again, the orderbook will be converted in the same
+permissive hex format.
+
+### Adding Test Data
+
+Orderbook files generated with one of the above two scripts can can be added to
+`data/mod.rs` by its batch ID so that it can be accessed from `pricegraph` tests
+and benchmarks:
 
 ```diff
 diff --git a/pricegraph/data/mod.rs b/pricegraph/data/mod.rs
@@ -76,7 +101,7 @@ index b6fb122..de2e7e5 100644
  
          add_orderbook!(5298183);
          add_orderbook!(5301531);
-+        add_orderbook!(5323483);
++        add_orderbook!(123456789);
  
          orderbooks
      };
