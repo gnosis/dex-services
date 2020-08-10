@@ -139,10 +139,14 @@ impl Pricegraph {
             total_sell_volume += flow.capacity;
         }
 
-        Some(TransitiveOrder {
-            buy: total_buy_volume,
-            sell: total_sell_volume,
-        })
+        if total_buy_volume == 0.0 || total_sell_volume == 0.0 {
+            None
+        } else {
+            Some(TransitiveOrder {
+                buy: total_buy_volume,
+                sell: total_sell_volume,
+            })
+        }
     }
 
     /// Returns a transitive order with the largest sell amount such that there
@@ -471,6 +475,13 @@ mod tests {
     }
 
     #[test]
+    fn order_for_limit_returns_none() {
+        let pricegraph = Pricegraph::new(std::iter::empty());
+        let result = pricegraph.order_for_limit_price(TokenPair { buy: 0, sell: 1 }, 1.0);
+        assert_eq!(result, None);
+    }
+
+    #[test]
     fn order_for_limit_price_has_correct_amounts() {
         //    /-1.0---v
         //   /--2.0---v
@@ -495,13 +506,11 @@ mod tests {
             }
         };
 
-        let TransitiveOrder { buy, sell } = pricegraph
+        let order = pricegraph
             // NOTE: 1 for 1.001 is not enough to match any volume because
             // fees need to be applied twice!
-            .order_for_limit_price(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR)
-            .unwrap();
-        assert_approx_eq!(buy, 0.0);
-        assert_approx_eq!(sell, 0.0);
+            .order_for_limit_price(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR);
+        assert_eq!(order, None);
 
         let TransitiveOrder { buy, sell } = pricegraph
             .order_for_limit_price(TokenPair { buy: 2, sell: 1 }, 1.0 / FEE_FACTOR.powi(2))
