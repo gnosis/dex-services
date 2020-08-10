@@ -5,6 +5,8 @@
 #[cfg(feature = "bin")]
 pub mod paths;
 
+pub use ethcontract;
+
 include!(concat!(env!("OUT_DIR"), "/BatchExchange.rs"));
 include!(concat!(env!("OUT_DIR"), "/BatchExchangeViewer.rs"));
 include!(concat!(env!("OUT_DIR"), "/ERC20Mintable.rs"));
