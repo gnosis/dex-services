@@ -1,12 +1,8 @@
-use crate::*;
-
-use ethcontract::web3::api::Web3;
-use ethcontract::web3::transports::Http;
-use ethcontract::{Account, Address, U256};
-
 use crate::common::{
     approve, create_accounts_with_funded_tokens, wait_for, FutureBuilderExt, FutureWaitExt, MAX_GAS,
 };
+use contracts::{BatchExchange, TokenOWL, IERC20};
+use ethcontract::{Account, Address, Http, Web3, U256};
 
 pub fn setup_stablex(
     web3: &Web3<Http>,

@@ -1,17 +1,15 @@
-use ethcontract::web3::api::Web3;
-use ethcontract::web3::futures::Future as F;
-use ethcontract::web3::transports::Http;
-use ethcontract::{Account, PrivateKey, U256};
-
+use contracts::{BatchExchange, IERC20};
+use e2e::{
+    common::{wait_for_condition, FutureBuilderExt, FutureWaitExt},
+    docker_logs,
+    stablex::{close_auction, setup_stablex},
+};
+use ethcontract::{web3::futures::Future as _, Account, Http, PrivateKey, Web3, U256};
 use futures::future::join_all;
-
-use e2e::common::{wait_for_condition, FutureBuilderExt, FutureWaitExt};
-use e2e::docker_logs;
-use e2e::stablex::{close_auction, setup_stablex};
-use e2e::{BatchExchange, IERC20};
-
-use std::env;
-use std::time::{Duration, Instant};
+use std::{
+    env,
+    time::{Duration, Instant},
+};
 
 #[test]
 fn test_with_ganache() {

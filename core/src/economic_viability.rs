@@ -5,7 +5,7 @@ use crate::{
     gas_station::GasPriceEstimating, models::solution::EconomicViabilityInfo,
     price_estimation::PriceEstimating,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context as _, Result};
 use ethcontract::U256;
 use futures::future::{BoxFuture, FutureExt as _};
 use std::sync::Arc;
@@ -17,6 +17,8 @@ const GAS_PER_TRADE: f64 = 120_000.0;
 #[cfg_attr(test, mockall::automock)]
 pub trait EconomicViabilityComputing: Send + Sync + 'static {
     /// Used by the solver so that it only considers solution that are economically viable.
+    /// This is the minimum average amount of earned fees per order. The total amount of paid fees
+    /// is twice this because half of the fee is burnt.
     fn min_average_fee<'a>(&'a self) -> BoxFuture<'a, Result<u128>>;
     /// The maximum gas price at which submitting the solution is still economically viable.
     fn max_gas_price<'a>(
@@ -30,6 +32,10 @@ pub struct EconomicViabilityComputer {
     price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
     gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
     subsidy_factor: f64,
+    /// We multiply the min average fee by this amount to ensure that if a solution has this minimum
+    /// amount it will still be end up economically viable even when the gas or eth price moves
+    /// slightly between solution computation and submission.
+    min_avg_fee_factor: f64,
 }
 
 impl EconomicViabilityComputer {
@@ -37,11 +43,13 @@ impl EconomicViabilityComputer {
         price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
         gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
         subsidy_factor: f64,
+        min_avg_fee_factor: f64,
     ) -> Self {
         EconomicViabilityComputer {
             price_oracle,
             gas_station,
             subsidy_factor,
+            min_avg_fee_factor,
         }
     }
 
@@ -54,7 +62,12 @@ impl EconomicViabilityComputer {
     }
 
     async fn gas_price(&self) -> Result<f64> {
-        let fast = self.gas_station.estimate_gas_price().await?.fast;
+        let fast = self
+            .gas_station
+            .estimate_gas_price()
+            .await
+            .context("failed to get gas price")?
+            .fast;
         Ok(pricegraph::num::u256_to_f64(fast))
     }
 }
@@ -65,12 +78,11 @@ impl EconomicViabilityComputing for EconomicViabilityComputer {
             let eth_price = self.eth_price_in_owl().await?;
             let gas_price = self.gas_price().await?;
 
-            let fee = min_average_fee(eth_price, gas_price);
+            let fee = min_average_fee(eth_price, gas_price) * self.min_avg_fee_factor;
             let subsidized = fee / self.subsidy_factor;
             log::debug!(
-                "computed min average fee to be {}, subsidized to {}",
-                fee,
-                subsidized,
+                "computed min average fee to be {}, subsidized to {} based on eth price {} gas price {}",
+                fee, subsidized, eth_price, gas_price
             );
 
             Ok(subsidized as _)
@@ -88,6 +100,10 @@ impl EconomicViabilityComputing for EconomicViabilityComputer {
             let eth_price = self.eth_price_in_owl().await?;
             let cap = gas_price_cap(eth_price, earned_fee, num_trades);
             let subsidized = cap * self.subsidy_factor;
+            log::debug!(
+                "computed max gas price to be {} subsidized to {} based on earned fee {} num trades {} eth price {}",
+                cap, subsidized, earned_fee, num_trades, eth_price
+            );
             Ok(U256::from(subsidized as u128))
         }
         .boxed()
@@ -218,12 +234,18 @@ mod tests {
                 ..Default::default()
             }))
         });
-        let economic_viability =
-            EconomicViabilityComputer::new(Arc::new(price_oracle), Arc::new(gas_station), 10.0);
+        let subsidy = 10.0f64;
+        let min_avg_fee_factor = 1.1f64;
+        let economic_viability = EconomicViabilityComputer::new(
+            Arc::new(price_oracle),
+            Arc::new(gas_station),
+            subsidy,
+            min_avg_fee_factor,
+        );
 
         assert_eq!(
             economic_viability.min_average_fee().wait().unwrap(),
-            1152e14 as u128, // 0.1152 OWL
+            ((1152e15 * min_avg_fee_factor) / subsidy) as u128, // 0.1152 OWL
         );
 
         let info = EconomicViabilityInfo {

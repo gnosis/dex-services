@@ -1,9 +1,10 @@
-use crate::{infallible_price_source::UpdatingInfalliblePriceSource, solver_rounding_buffer};
+use crate::{infallible_price_source::PriceCacheUpdater, solver_rounding_buffer};
 use anyhow::Result;
 use core::{
     models::{AccountState, BatchId, Order, TokenId},
     orderbook::StableXOrderBookReading,
 };
+use futures::future;
 use pricegraph::{Pricegraph, TokenPair};
 use tokio::sync::RwLock;
 
@@ -26,13 +27,13 @@ pub struct Orderbook {
     orderbook_reading: Box<dyn StableXOrderBookReading>,
     pricegraph_cache: RwLock<PricegraphCache>,
     extra_rounding_buffer_factor: f64,
-    infallible_price_source: UpdatingInfalliblePriceSource,
+    infallible_price_source: PriceCacheUpdater,
 }
 
 impl Orderbook {
     pub fn new(
         orderbook_reading: Box<dyn StableXOrderBookReading>,
-        infallible_price_source: UpdatingInfalliblePriceSource,
+        infallible_price_source: PriceCacheUpdater,
     ) -> Self {
         Self {
             orderbook_reading,
@@ -70,9 +71,7 @@ impl Orderbook {
 
         // TODO: Move this cpu heavy computation out of the async function using spawn_blocking.
         let pricegraph = pricegraph_from_auction_data(&auction_data);
-        if let Err(err) = self.update_infallible_price_source(&pricegraph).await {
-            log::warn!("failed to update price source: {:?}", err)
-        }
+        self.update_infallible_price_source(&pricegraph).await;
         self.pricegraph_cache.write().await.pricegraph_raw = pricegraph;
 
         self.apply_rounding_buffer_to_auction_data(&mut auction_data)
@@ -98,8 +97,18 @@ impl Orderbook {
 
     /// Update the infallible price source with the averaged prices of the external price sources
     /// and the pricegraph prices.
-    async fn update_infallible_price_source(&self, pricegraph: &Pricegraph) -> Result<()> {
-        self.infallible_price_source.update(pricegraph).await
+    async fn update_infallible_price_source(&self, pricegraph: &Pricegraph) {
+        let (token_result, price_result) = future::join(
+            self.infallible_price_source.update_tokens(),
+            self.infallible_price_source.update_prices(pricegraph),
+        )
+        .await;
+        if let Err(err) = token_result {
+            log::error!("failed to update price source tokens: {:?}", err)
+        }
+        if let Err(err) = price_result {
+            log::error!("failed to update price source prices: {:?}", err)
+        }
     }
 
     async fn auction_data(&self, batch_id: BatchId) -> Result<AuctionData> {
@@ -149,9 +158,10 @@ mod tests {
     use super::*;
     use core::{
         models::TokenId, orderbook::NoopOrderbook, price_estimation::price_source::PriceSource,
+        token_info::hardcoded::TokenData,
     };
     use futures::future::{BoxFuture, FutureExt as _};
-    use std::{collections::HashMap, num::NonZeroU128};
+    use std::{collections::HashMap, num::NonZeroU128, sync::Arc};
 
     #[test]
     fn updates_infallible_price_source() {
@@ -168,11 +178,8 @@ mod tests {
             }
         }
 
-        let infallible = UpdatingInfalliblePriceSource::new(
-            Vec::new(),
-            HashMap::new(),
-            vec![Box::new(PriceSource_ {})],
-        );
+        let token_info = Arc::new(TokenData::default());
+        let infallible = PriceCacheUpdater::new(token_info, vec![Box::new(PriceSource_ {})]);
         let orderbook = Orderbook::new(Box::new(NoopOrderbook {}), infallible);
         let price = || {
             orderbook

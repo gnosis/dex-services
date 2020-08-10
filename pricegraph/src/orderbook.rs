@@ -18,8 +18,8 @@ pub use self::scalar::{ExchangeRate, LimitPrice};
 use self::user::{User, UserMap};
 use crate::api::Market;
 use crate::encoding::{Element, TokenId, TokenPair};
-use crate::graph::bellman_ford::{self, NegativeCycle};
-use crate::graph::path;
+use crate::graph::path::NegativeCycle;
+use crate::graph::shortest_paths::ShortestPathGraph;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
 use crate::num;
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
@@ -27,6 +27,8 @@ use petgraph::visit::NodeIndexable;
 use std::cmp;
 use std::f64;
 use thiserror::Error;
+
+type OrderbookGraph = DiGraph<TokenId, f64>;
 
 /// A graph representation of a complete orderbook.
 #[derive(Clone, Debug)]
@@ -40,7 +42,7 @@ pub struct Orderbook {
     users: UserMap,
     /// A projection of the orderbook onto a graph with nodes as tokens and
     /// edges as the lowest order exchange rate between token pairs.
-    projection: DiGraph<TokenId, f64>,
+    projection: OrderbookGraph,
 }
 
 impl Orderbook {
@@ -108,9 +110,11 @@ impl Orderbook {
         // NOTE: We detect negative cycles from each disconnected subgraph.
         Subgraphs::new(self.projection.node_indices().skip(1))
             .for_each_until(
-                |token| match bellman_ford::search(&self.projection, token) {
-                    Ok((_, predecessor)) => ControlFlow::Continue(predecessor),
-                    Err(NegativeCycle(..)) => ControlFlow::Break(true),
+                |token| match ShortestPathGraph::new(&self.projection, token) {
+                    Ok(shortest_path_graph) => {
+                        ControlFlow::Continue(shortest_path_graph.connected_nodes())
+                    }
+                    Err(_) => ControlFlow::Break(true),
                 },
             )
             .unwrap_or(false)
@@ -119,16 +123,13 @@ impl Orderbook {
     /// Reduces the orderbook by matching all overlapping ring trades.
     pub fn reduce_overlapping_orders(mut self) -> ReducedOrderbook {
         Subgraphs::new(self.projection.node_indices()).for_each(|token| loop {
-            match bellman_ford::search(&self.projection, token) {
-                Ok((_, predecessors)) => break predecessors,
-                Err(NegativeCycle(predecessors, node)) => {
-                    let path = path::find_cycle(&predecessors, node, None)
-                        .expect("negative cycle not found after being detected");
-
-                    self.fill_path(&path).unwrap_or_else(|| {
+            match ShortestPathGraph::new(&self.projection, token) {
+                Ok(shortest_path_graph) => break shortest_path_graph.connected_nodes(),
+                Err(cycle) => {
+                    self.fill_path(&cycle).unwrap_or_else(|| {
                         panic!(
                             "failed to fill path along detected negative cycle {}",
-                            format_path(&path),
+                            format_path(&cycle),
                         )
                     });
                 }
@@ -156,45 +157,32 @@ impl Orderbook {
 
         let (base, quote) = (node_index(market.base), node_index(market.quote));
 
-        while let Err(NegativeCycle(predecessors, node)) =
-            bellman_ford::search(&self.projection, quote)
-        {
-            let path = path::find_cycle(&predecessors, node, Some(quote))
-                .expect("negative cycle not found after being detected");
+        while let Err(cycle) = ShortestPathGraph::new(&self.projection, quote) {
+            let paths_base_quote = cycle
+                .with_starting_node(quote)
+                .and_then(|cycle| cycle.split_at(base));
+            match paths_base_quote {
+                Ok((ask, bid)) => {
+                    let ask = self
+                        .fill_path(&ask)
+                        .expect("ask transitive path not found after being detected");
+                    let bid = self
+                        .fill_path(&bid)
+                        .expect("bid transitive path not found after being detected");
 
-            let base_index_search = if path.first() == Some(&quote) {
-                path.iter().position(|node| *node == base)
-            } else {
-                // NOTE: If the path doesn't start with the quote token, don't
-                // even need to search for the base token.
-                None
-            };
-            let base_index = match base_index_search {
-                Some(value) => value,
-                None => {
+                    return Some(Ring { ask, bid });
+                }
+                Err(cycle) => {
                     // NOTE: Skip negative cycles that are not along the
                     // specified market.
-                    self.fill_path(&path).unwrap_or_else(|| {
+                    self.fill_path(&cycle).unwrap_or_else(|| {
                         panic!(
                             "failed to fill path along detected negative cycle {}",
-                            format_path(&path),
+                            format_path(&cycle),
                         )
                     });
-
-                    continue;
                 }
             };
-
-            let (ask, bid) = (&path[0..base_index + 1], &path[base_index..]);
-
-            let ask = self
-                .fill_path(ask)
-                .expect("ask transitive path not found after being detected");
-            let bid = self
-                .fill_path(bid)
-                .expect("bid transitive path not found after being detected");
-
-            return Some(Ring { ask, bid });
         }
 
         None
@@ -249,8 +237,8 @@ impl Orderbook {
         }
 
         let (start, end) = (node_index(pair.buy), node_index(pair.sell));
-        let predecessors = bellman_ford::search(&self.projection, start)?.1;
-        let path = match path::find_path(&predecessors, start, end) {
+        let shortest_path_graph = ShortestPathGraph::new(&self.projection, start)?;
+        let path = match shortest_path_graph.path_to(end) {
             Some(path) => path,
             None => return Ok(None),
         };
@@ -548,7 +536,11 @@ mod tests {
         let ReducedOrderbook(orderbook) = orderbook.reduce_overlapping_orders();
         // NOTE: We expect user 1's 2->1 order to be completely filled as well
         // as user 2's 5->3 order and user 4's 6->7 order.
-        assert_eq!(orderbook.num_orders(), 6);
+        // User 3's 7->6 order may be filled or not depending on the order in
+        // which the loop {6, 7} is cleared:
+        // 6->7->6: 100_000 T6 -> 1_000_000 T7 -> 1_000_000 T6, both orders cleared
+        // 7->6->7: 100_000 T7 -> 100_000 T6 -> 1_000_000 T7, only 6->7 cleared
+        assert!(orderbook.num_orders() == 5 || orderbook.num_orders() == 6);
         assert!(!orderbook.is_overlapping());
     }
 

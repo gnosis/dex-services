@@ -1,6 +1,3 @@
-// TODO(nlordell): Remove this lint once we release a new `ethcontract` version
-// that does not trigger this lint.
-#![allow(unused_braces)]
 // NOTE: Required for automock.
 #![cfg_attr(test, allow(clippy::ptr_arg))]
 
@@ -10,6 +7,7 @@ use crate::{
     contracts,
     models::{ExecutedOrder, Solution},
 };
+use ::contracts::{batch_exchange, BatchExchange, BatchExchangeViewer};
 use anyhow::{anyhow, Error, Result};
 use ethcontract::{
     contract::Event,
@@ -29,9 +27,6 @@ lazy_static! {
     // 1 + IMPROVEMENT_DENOMINATOR = 101. Hence, the maximal possible objective value is:
     static ref MAX_OBJECTIVE_VALUE: U256 = U256::max_value() / (U256::from(101));
 }
-
-include!(concat!(env!("OUT_DIR"), "/batch_exchange.rs"));
-include!(concat!(env!("OUT_DIR"), "/batch_exchange_viewer.rs"));
 
 #[derive(Clone)]
 pub struct StableXContractImpl {
@@ -302,7 +297,7 @@ impl StableXContract for StableXContractImpl {
                 // NOTE: Gas estimate might be off, as we race with other solution
                 //   submissions and thus might have to revert trades which costs
                 //   more gas than expected.
-                .gas(5_500_000.into())
+                .gas(6_000_000.into())
                 .nonce(nonce);
             method.tx.resolve = Some(ResolveCondition::Confirmed(ConfirmParams::mined()));
             method.send().await.map(|_| ())
