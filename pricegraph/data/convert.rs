@@ -1,5 +1,5 @@
 use anyhow::Result;
-use contracts::ethcontract::Address;
+use contracts::ethcontract::{Address, U256};
 use env_logger::Env;
 use serde::Deserialize;
 use std::{
@@ -65,6 +65,12 @@ fn write_order(mut output: impl Write, order: &Order, balance: Balance) -> Resul
         ($x:expr, $size:expr) => {
             format!("{:0digits$x}", $x, digits = ($size * 2))
         };
+
+        // NOTE: `U256` implementation does not support `LowerHex` format with
+        // `0` padding.
+        (u256: $x:expr) => {
+            format!("{:0>64}", format!("{:x}", *$x))
+        };
     }
 
     writeln!(
@@ -72,7 +78,7 @@ fn write_order(mut output: impl Write, order: &Order, balance: Balance) -> Resul
         "{}",
         vec![
             hex::encode(order.account_id.as_bytes()),
-            num!(*balance, 32),
+            num!(u256: balance),
             num!(*order.buy_token, 2),
             num!(*order.sell_token, 2),
             num!(u32::MIN, 4),
@@ -141,15 +147,26 @@ mod token_ref {
 }
 
 #[derive(Clone, Copy, Default, Deserialize)]
-// NOTE: `U256` implementation does not trivially support deserializing from
-// decimal representation, nor `LowerHex` format with `0` padding, so convert
-// use `u128` for now until we run into issues.
-struct Balance(#[serde(with = "serde_with::rust::display_fromstr")] u128);
+struct Balance(#[serde(with = "balance")] U256);
 
 impl Deref for Balance {
-    type Target = u128;
+    type Target = U256;
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+mod balance {
+    use contracts::ethcontract::U256;
+    use serde::de::{Deserialize, Deserializer, Error as _};
+    use std::borrow::Cow;
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<U256, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let dec = Cow::<'de, str>::deserialize(deserializer)?;
+        U256::from_dec_str(&dec).map_err(|err| D::Error::custom(err.to_string()))
     }
 }
