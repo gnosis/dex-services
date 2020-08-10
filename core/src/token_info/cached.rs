@@ -69,18 +69,23 @@ impl TokenInfoCache {
             .await;
         Ok(())
     }
+
+    async fn uncached_tokens(&self, ids: impl IntoIterator<Item = &TokenId>) -> Vec<TokenId> {
+        let cache = self.cache.read().await;
+        ids.into_iter()
+            .copied()
+            .filter(|id| !cache.contains_key(id))
+            .collect()
+    }
 }
 
 impl TokenInfoFetching for TokenInfoCache {
     fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
         async move {
-            match self.cache.read().await.get(&id) {
-                Some(CacheEntry::TokenBaseInfo(info)) => return Ok(info.clone()),
-                Some(CacheEntry::UnretryableError(reason)) => {
-                    return Err(anyhow!(reason.clone()).context("cached error"));
-                }
-                None => (),
+            if let Some(entry) = self.cache.read().await.get(&id) {
+                return cache_entry_to_result(entry);
             }
+
             let info = self.inner.get_token_info(id).await;
             match info {
                 Ok(info) => {
@@ -104,8 +109,46 @@ impl TokenInfoFetching for TokenInfoCache {
         .boxed()
     }
 
+    fn get_token_infos<'a>(
+        &'a self,
+        ids: &'a [TokenId],
+    ) -> BoxFuture<'a, Result<HashMap<TokenId, TokenBaseInfo>>> {
+        async move {
+            let uncached_token_ids = self.uncached_tokens(ids).await;
+            // Insert the missing infos into the cache.
+            // It would be nice to be able to use `self.inner.get_token_infos` as an optimization
+            // but with the current signature of `get_token_infos` we wouldn't be able to
+            // access to the individual errors making it impossible to discern unretryable errors.
+            for id in uncached_token_ids {
+                let _ = self.get_token_info(id).await;
+            }
+
+            let cache = self.cache.read().await;
+            let result = ids
+                .iter()
+                .filter_map(|id| {
+                    let entry = cache.get(id)?;
+                    let result = cache_entry_to_result(entry);
+                    let info = result.ok()?;
+                    Some((*id, info))
+                })
+                .collect();
+            Ok(result)
+        }
+        .boxed()
+    }
+
     fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
         self.inner.all_ids()
+    }
+}
+
+fn cache_entry_to_result(entry: &CacheEntry) -> Result<TokenBaseInfo> {
+    match entry {
+        CacheEntry::TokenBaseInfo(info) => Ok(info.clone()),
+        CacheEntry::UnretryableError(reason) => {
+            Err(anyhow!(reason.clone()).context("cached error"))
+        }
     }
 }
 
@@ -280,5 +323,39 @@ mod tests {
                 assert_eq!(token_info.decimals, token_id.0 as u8);
             }
         }
+    }
+
+    #[test]
+    fn get_token_infos_fetches_missing_infos() {
+        let mut inner = MockTokenInfoFetching::new();
+        inner
+            .expect_get_token_info()
+            .times(4)
+            .returning(|token_id| {
+                immediate!(Ok(TokenBaseInfo {
+                    alias: token_id.to_string(),
+                    decimals: 1
+                }))
+            });
+
+        let cache = TokenInfoCache::new(Arc::new(inner));
+        let result = cache
+            .get_token_infos(&[TokenId(0), TokenId(1)])
+            .now_or_never()
+            .unwrap()
+            .unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result.get(&TokenId(0)).unwrap().alias, "0");
+        assert_eq!(result.get(&TokenId(1)).unwrap().alias, "1");
+
+        let result = cache
+            .get_token_infos(&[TokenId(1), TokenId(2), TokenId(3)])
+            .now_or_never()
+            .unwrap()
+            .unwrap();
+        assert_eq!(result.len(), 3);
+        assert_eq!(result.get(&TokenId(1)).unwrap().alias, "1");
+        assert_eq!(result.get(&TokenId(2)).unwrap().alias, "2");
+        assert_eq!(result.get(&TokenId(3)).unwrap().alias, "3");
     }
 }
