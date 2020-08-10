@@ -45,7 +45,6 @@ pub enum Generation {
 #[serde(rename_all = "camelCase")]
 struct RawQuery {
     atoms: Option<bool>,
-    unit: Option<Unit>,
     hops: Option<usize>,
     batch_id: Option<BatchId>,
 }
@@ -55,12 +54,10 @@ impl TryFrom<RawQuery> for QueryParameters {
 
     fn try_from(raw: RawQuery) -> Result<Self> {
         Ok(QueryParameters {
-            unit: match (raw.atoms, raw.unit) {
-                (Some(true), None) => Unit::Atoms,
-                (Some(false), None) => Unit::BaseUnits,
-                (None, Some(unit)) => unit,
-                (None, None) => bail!("'atoms' or 'unit' parameter must be specified"),
-                _ => bail!("specified both 'atoms' and 'unit' parameters"),
+            unit: match raw.atoms {
+                Some(true) => Unit::Atoms,
+                Some(false) => Unit::BaseUnits,
+                None => bail!("'atoms' or parameter must be specified"),
             },
             hops: raw.hops,
             generation: match raw.batch_id {
