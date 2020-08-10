@@ -46,3 +46,39 @@ Then install *cargo fuzz* with `cargo +nightly install cargo-fuzz`.
 List fuzz targets with `cargo +nightly fuzz list`.
 
 Run a fuzz target with `cargo +nightly fuzz run orderbook`.
+
+## Test Data
+
+This crate contains test data from real orderbooks captured on `mainnet` in the
+`data` subdirectory. In order to fetch the current orderbook, execute from the
+repository root:
+
+```
+$ INFURA_PROJECT_ID=... cargo run -p pricegraph-data --bin fetch
+[2020-08-10T07:45:09Z INFO  fetch] retrieving orderbook at block 10630913 until batch 5323483
+[2020-08-10T07:45:09Z DEBUG fetch] retrieving page 0x0000…0000-0
+[2020-08-10T07:45:10Z DEBUG fetch] retrieving page 0x7b2e…a196-24
+[2020-08-10T07:45:11Z DEBUG fetch] retrieving page 0xb738…a513-10
+[2020-08-10T07:45:12Z DEBUG fetch] retrieving page 0xae5f…d7a9-6
+...
+```
+
+This will add a new `orderbook-${BATCH_ID}.hex` file to the `data` directory
+(here `orderbook-5323483.hex`) with the orderbook in a hex encoded format. This
+file can be added to `data/mod.rs` so that it can be accessed from `pricegraph`
+tests and benchmarks.
+
+```diff
+diff --git a/pricegraph/data/mod.rs b/pricegraph/data/mod.rs
+index b6fb122..de2e7e5 100644
+--- a/pricegraph/data/mod.rs
++++ b/pricegraph/data/mod.rs
+@@ -29,6 +29,7 @@ lazy_static! {
+ 
+         add_orderbook!(5298183);
+         add_orderbook!(5301531);
++        add_orderbook!(5323483);
+ 
+         orderbooks
+     };
+```

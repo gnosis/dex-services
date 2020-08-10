@@ -14,7 +14,7 @@ use std::{
 
 const ALL_TOKENS: &[Address] = &[];
 const CONFIRMATIONS: u64 = 6;
-const PAGE_SIZE: u16 = 25;
+const PAGE_SIZE: u16 = 50;
 
 fn main() {
     env_logger::init_from_env(Env::default().default_filter_or("warn,fetch=debug"));
@@ -42,13 +42,16 @@ async fn run() -> Result<()> {
         latest_block - CONFIRMATIONS
     };
 
-    let batch_id = exchange
-        .get_current_batch_id()
-        .block(block_number.into())
-        .call()
-        .await?;
+    let batch_id = {
+        let current_batch_id = exchange
+            .get_current_batch_id()
+            .block(block_number.into())
+            .call()
+            .await?;
+        current_batch_id - 1
+    };
     let mut output = File::create(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("orderbook-{}.hex", batch_id - 1)),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("orderbook-{}.hex", batch_id)),
     )?;
 
     log::info!(
