@@ -5,6 +5,7 @@ mod models;
 mod orderbook;
 mod solver_rounding_buffer;
 
+use crate::filter::Context;
 use core::{
     contracts::{stablex_contract::StableXContractImpl, web3_provider},
     http::HttpFactory,
@@ -143,7 +144,11 @@ fn main() {
         options.orderbook_update_interval,
     ));
 
-    let filter = filter::all(orderbook, token_info, price_rounding_buffer);
+    let filter = filter::all(Context {
+        orderbook,
+        token_info,
+        price_rounding_buffer,
+    });
     let serve_task = runtime.spawn(warp::serve(filter).run(options.bind_address));
 
     log::info!("Server ready.");
