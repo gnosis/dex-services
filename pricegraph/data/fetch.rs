@@ -20,7 +20,7 @@ fn main() {
     env_logger::init_from_env(Env::default().default_filter_or("warn,fetch=debug"));
 
     if let Err(err) = futures::executor::block_on(run()) {
-        log::error!("Error deploying contracts: {:?}", err);
+        log::error!("Error retrieving orderbook: {:?}", err);
         std::process::exit(-1);
     }
 }
