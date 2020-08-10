@@ -59,7 +59,6 @@ $ INFURA_PROJECT_ID=... cargo run -p pricegraph-data --bin fetch
 [2020-08-10T07:45:09Z DEBUG fetch] retrieving page 0x0000…0000-0
 [2020-08-10T07:45:10Z DEBUG fetch] retrieving page 0x7b2e…a196-24
 [2020-08-10T07:45:11Z DEBUG fetch] retrieving page 0xb738…a513-10
-[2020-08-10T07:45:12Z DEBUG fetch] retrieving page 0xae5f…d7a9-6
 ...
 ```
 
