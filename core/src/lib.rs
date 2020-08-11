@@ -19,6 +19,7 @@ pub mod orderbook;
 pub mod price_estimation;
 pub mod price_finding;
 pub mod solution_submission;
+pub mod time;
 pub mod token_info;
 pub mod transport;
 pub mod util;

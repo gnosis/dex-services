@@ -1,3 +1,4 @@
+use crate::time::SystemTimeExt as _;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::time::{Duration, SystemTime, SystemTimeError};
@@ -27,12 +28,11 @@ impl BatchId {
         Self::current(SystemTime::now()).expect("system time earlier than Unix epoch")
     }
 
-    pub fn current(now: SystemTime) -> std::result::Result<Self, SystemTimeError> {
-        let time_since_epoch = now.duration_since(SystemTime::UNIX_EPOCH)?;
-        Ok(Self::from_timestamp(time_since_epoch.as_secs()))
+    pub fn current(now: SystemTime) -> Result<Self, SystemTimeError> {
+        Ok(Self::from_timestamp(now.as_timestamp()?))
     }
 
-    pub fn currently_being_solved(now: SystemTime) -> std::result::Result<Self, SystemTimeError> {
+    pub fn currently_being_solved(now: SystemTime) -> Result<Self, SystemTimeError> {
         Self::current(now).map(|batch_id| batch_id.prev())
     }
 
@@ -41,7 +41,7 @@ impl BatchId {
     }
 
     pub fn order_collection_start_time(self) -> SystemTime {
-        SystemTime::UNIX_EPOCH + Duration::from_secs(self.as_timestamp())
+        SystemTime::from_timestamp(self.as_timestamp())
     }
 
     pub fn solve_start_time(self) -> SystemTime {
