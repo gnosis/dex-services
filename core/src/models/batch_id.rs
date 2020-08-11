@@ -41,7 +41,7 @@ impl BatchId {
     }
 
     pub fn order_collection_start_time(self) -> SystemTime {
-        SystemTime::UNIX_EPOCH + Duration::from_secs(self.as_timestamp())
+        SystemTime::from_timestamp(self.as_timestamp())
     }
 
     pub fn solve_start_time(self) -> SystemTime {

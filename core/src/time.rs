@@ -5,9 +5,14 @@ use std::time::{Duration, SystemTime, SystemTimeError};
 /// `SystemTime` extention trait.
 pub trait SystemTimeExt {
     /// Creates a new `SystemTime` from a Unix timestamp.
+    fn from_timestamp(timestamp: u64) -> SystemTime {
+        SystemTime::UNIX_EPOCH + Duration::from_secs(timestamp)
+    }
+
+    /// Creates a new `SystemTime` from a Unix timestamp.
     ///
     /// Returns `None` if the specified timestamp cannot be represented.
-    fn from_timestamp(timestamp: u64) -> Option<SystemTime> {
+    fn checked_from_timestamp(timestamp: u64) -> Option<SystemTime> {
         SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(timestamp))
     }
 
