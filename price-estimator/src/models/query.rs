@@ -2,7 +2,7 @@
 
 use anyhow::{bail, Context as _, Error, Result};
 use core::models::BatchId;
-use ethcontract::Address;
+use ethcontract::{Address, BlockNumber};
 use serde::Deserialize;
 use std::convert::TryFrom;
 
@@ -38,7 +38,7 @@ impl Default for Unit {
 }
 
 /// When to perform a price estimate.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum EstimationTime {
     /// Estimate with the current open orderbook.
     Now,
@@ -46,7 +46,7 @@ pub enum EstimationTime {
     Batch(BatchId),
     /// The `Pricegraph` will be contructed from the events up to, and
     /// including, the specified block.
-    Block(u64),
+    Block(BlockNumber),
     /// The `Pricegraph` will be contructed from the events that occured up to,
     /// and including, the specified timestamp.
     Timestamp(u64),
@@ -82,7 +82,7 @@ impl TryFrom<RawQuery> for QueryParameters {
             time: match (raw.batch_id, raw.block_number, raw.timestamp) {
                 (None, None, None) => EstimationTime::Now,
                 (Some(batch_id), None, None) => EstimationTime::Batch(batch_id),
-                (None, Some(block_number), None) => EstimationTime::Block(block_number),
+                (None, Some(block_number), None) => EstimationTime::Block(block_number.into()),
                 (None, None, Some(timestamp)) => EstimationTime::Timestamp(timestamp),
                 _ => bail!("only one of 'batchId', 'blockNumber', or 'timestamp' parameters can be specified"),
             },
@@ -191,7 +191,7 @@ mod tests {
         assert_eq!(query.time, EstimationTime::Batch(42.into()));
 
         let query = query_params("?blockNumber=123").unwrap();
-        assert_eq!(query.time, EstimationTime::Block(123));
+        assert_eq!(query.time, EstimationTime::Block(123.into()));
 
         let query = query_params("?timestamp=1337").unwrap();
         assert_eq!(query.time, EstimationTime::Timestamp(1337));

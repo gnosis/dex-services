@@ -56,29 +56,25 @@ impl Orderbook {
         ignore_addresses: &[Address],
         pricegraph_type: PricegraphKind,
     ) -> Result<Pricegraph> {
-        let mut auction_data = match (time, ignore_addresses.is_empty()) {
-            (EstimationTime::Now, true) => {
-                return Ok(self.cached_pricegraph(pricegraph_type).await)
+        if ignore_addresses.is_empty() {
+            Ok(self.cached_pricegraph(pricegraph_type).await)
+        } else {
+            let mut auction_data = self.auction_data(time).await?;
+            if matches!(pricegraph_type, PricegraphKind::WithRoundingBuffer) {
+                self.apply_rounding_buffer_to_auction_data(&mut auction_data)
+                    .await?;
             }
-            (EstimationTime::Now, false) => self.auction_data(BatchId::now()).await?,
-            (EstimationTime::Batch(batch_id), _) => self.auction_data(batch_id).await?,
-            (EstimationTime::Block(_), _) | (EstimationTime::Timestamp(_), _) => {
-                bail!("not yet implemented")
-            }
-        };
-        if matches!(pricegraph_type, PricegraphKind::WithRoundingBuffer) {
-            self.apply_rounding_buffer_to_auction_data(&mut auction_data)
-                .await?;
+
+            Ok(pricegraph_from_auction_data(
+                &auction_data,
+                ignore_addresses,
+            ))
         }
-        Ok(pricegraph_from_auction_data(
-            &auction_data,
-            ignore_addresses,
-        ))
     }
 
     /// Recreate the pricegraph orderbook and update the infallible price source.
     pub async fn update(&self) -> Result<()> {
-        let mut auction_data = self.auction_data(BatchId::now()).await?;
+        let mut auction_data = self.auction_data(EstimationTime::Now).await?;
 
         // TODO: Move this cpu heavy computation out of the async function using spawn_blocking.
         let pricegraph = pricegraph_from_auction_data(&auction_data, &[]);
@@ -121,10 +117,25 @@ impl Orderbook {
         }
     }
 
-    async fn auction_data(&self, batch_id: BatchId) -> Result<AuctionData> {
-        self.orderbook_reading
-            .get_auction_data_for_batch(batch_id.into())
-            .await
+    async fn auction_data(&self, time: EstimationTime) -> Result<AuctionData> {
+        match time {
+            EstimationTime::Now => {
+                self.orderbook_reading
+                    .get_auction_data_for_batch(BatchId::now().into())
+                    .await
+            }
+            EstimationTime::Batch(batch_id) => {
+                self.orderbook_reading
+                    .get_auction_data_for_batch(batch_id.into())
+                    .await
+            }
+            EstimationTime::Block(block_number) => {
+                self.orderbook_reading
+                    .get_auction_data_for_block(block_number)
+                    .await
+            }
+            EstimationTime::Timestamp(_) => bail!("not yet implemented"),
+        }
     }
 
     async fn cached_pricegraph(&self, pricegraph_type: PricegraphKind) -> Pricegraph {
