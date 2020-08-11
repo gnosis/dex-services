@@ -126,6 +126,11 @@ mod tests {
     }
 
     #[test]
+    fn unknown_parameter() {
+        assert!(query_params("?answer=42").is_err());
+    }
+
+    #[test]
     fn atoms_query_parameter() {
         let query = query_params("?atoms=true").unwrap();
         assert_eq!(query.unit, Unit::Atoms);
