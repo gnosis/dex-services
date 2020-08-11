@@ -1,10 +1,10 @@
 use crate::{
     infallible_price_source::PriceCacheUpdater, models::Generation, solver_rounding_buffer,
 };
-use anyhow::{bail, Result};
+use anyhow::Result;
 use core::{
     models::{AccountState, BatchId, Order, TokenId},
-    orderbook::StableXOrderBookReading,
+    orderbook::history::HistoricOrderbookReading,
 };
 use futures::future;
 use pricegraph::{Pricegraph, TokenPair};
@@ -26,7 +26,7 @@ struct PricegraphCache {
 
 /// Access and update the pricegraph orderbook.
 pub struct Orderbook {
-    orderbook_reading: Box<dyn StableXOrderBookReading>,
+    orderbook_reading: Box<dyn HistoricOrderbookReading>,
     pricegraph_cache: RwLock<PricegraphCache>,
     extra_rounding_buffer_factor: f64,
     infallible_price_source: PriceCacheUpdater,
@@ -34,7 +34,7 @@ pub struct Orderbook {
 
 impl Orderbook {
     pub fn new(
-        orderbook_reading: Box<dyn StableXOrderBookReading>,
+        orderbook_reading: Box<dyn HistoricOrderbookReading>,
         infallible_price_source: PriceCacheUpdater,
     ) -> Self {
         Self {
@@ -56,21 +56,20 @@ impl Orderbook {
     ) -> Result<Pricegraph> {
         match generation {
             Generation::Current => Ok(self.cached_pricegraph(pricegraph_type).await),
-            Generation::Batch(batch_id) => {
-                let mut auction_data = self.auction_data(batch_id).await?;
+            _ => {
+                let mut auction_data = self.auction_data(generation).await?;
                 if matches!(pricegraph_type, PricegraphKind::WithRoundingBuffer) {
                     self.apply_rounding_buffer_to_auction_data(&mut auction_data)
                         .await?;
                 }
                 Ok(pricegraph_from_auction_data(&auction_data))
             }
-            Generation::Block(_) | Generation::Timestamp(_) => bail!("not yet implemented"),
         }
     }
 
     /// Recreate the pricegraph orderbook and update the infallible price source.
     pub async fn update(&self) -> Result<()> {
-        let mut auction_data = self.auction_data(BatchId::now()).await?;
+        let mut auction_data = self.auction_data(Generation::Current).await?;
 
         // TODO: Move this cpu heavy computation out of the async function using spawn_blocking.
         let pricegraph = pricegraph_from_auction_data(&auction_data);
@@ -114,10 +113,29 @@ impl Orderbook {
         }
     }
 
-    async fn auction_data(&self, batch_id: BatchId) -> Result<AuctionData> {
-        self.orderbook_reading
-            .get_auction_data(batch_id.into())
-            .await
+    async fn auction_data(&self, generation: Generation) -> Result<AuctionData> {
+        match generation {
+            Generation::Current => {
+                self.orderbook_reading
+                    .get_auction_data(BatchId::now().into())
+                    .await
+            }
+            Generation::Batch(batch_id) => {
+                self.orderbook_reading
+                    .get_auction_data(batch_id.into())
+                    .await
+            }
+            Generation::Block(block_number) => {
+                self.orderbook_reading
+                    .get_auction_data_for_block(block_number)
+                    .await
+            }
+            Generation::Timestamp(timestamp) => {
+                self.orderbook_reading
+                    .get_auction_data_for_timestamp(timestamp)
+                    .await
+            }
+        }
     }
 
     async fn cached_pricegraph(&self, pricegraph_type: PricegraphKind) -> Pricegraph {

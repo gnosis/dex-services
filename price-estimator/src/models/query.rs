@@ -1,9 +1,10 @@
 //! Module implementing parsing request query parameters.
 
-use anyhow::{bail, Error, Result};
-use core::models::BatchId;
+use anyhow::{anyhow, bail, Error, Result};
+use core::{models::BatchId, time::SystemTimeExt as _};
+use ethcontract::BlockNumber;
 use serde::Deserialize;
-use std::convert::TryFrom;
+use std::{convert::TryFrom, time::SystemTime};
 
 /// Common query parameters shared across all price estimation routes.
 #[derive(Clone, Debug, Deserialize)]
@@ -35,7 +36,7 @@ impl Default for Unit {
 }
 
 /// When to perform a price estimate.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Generation {
     /// The `Pricegraph` will be contructed from the current state of the
     /// orderbook.
@@ -46,10 +47,10 @@ pub enum Generation {
     Batch(BatchId),
     /// The `Pricegraph` will be contructed from the events up to, and
     /// including, the specified block.
-    Block(u64),
+    Block(BlockNumber),
     /// The `Pricegraph` will be contructed from the events that occured up to,
     /// and including, the specified timestamp.
-    Timestamp(u64),
+    Timestamp(SystemTime),
 }
 
 /// Intermediate raw query parameters used for parsing.
@@ -80,9 +81,15 @@ impl TryFrom<RawQuery> for QueryParameters {
             generation: match (raw.batch_id, raw.block_number, raw.timestamp) {
                 (None, None, None) => Generation::Current,
                 (Some(batch_id), None, None) => Generation::Batch(batch_id),
-                (None, Some(block_number), None) => Generation::Block(block_number),
-                (None, None, Some(timestamp)) => Generation::Timestamp(timestamp),
-                _ => bail!("only one of 'batchId', 'blockNumber', or 'timestamp' parameters can be specified"),
+                (None, Some(block_number), None) => Generation::Block(block_number.into()),
+                (None, None, Some(timestamp)) => Generation::Timestamp(
+                    SystemTime::from_timestamp(timestamp)
+                        .ok_or_else(|| anyhow!("invalid timestamp value {}", timestamp))?,
+                ),
+                _ => bail!(
+                    "only one of 'batchId', 'blockNumber', or 'timestamp' \
+                     parameters can be specified"
+                ),
             },
         })
     }
@@ -148,10 +155,13 @@ mod tests {
         assert_eq!(query.generation, Generation::Batch(42.into()));
 
         let query = query_params("?blockNumber=123").unwrap();
-        assert_eq!(query.generation, Generation::Block(123));
+        assert_eq!(query.generation, Generation::Block(123.into()));
 
         let query = query_params("?timestamp=1337").unwrap();
-        assert_eq!(query.generation, Generation::Timestamp(1337));
+        assert_eq!(
+            query.generation,
+            Generation::Timestamp(SystemTime::from_timestamp(1337).unwrap())
+        );
     }
 
     #[test]
