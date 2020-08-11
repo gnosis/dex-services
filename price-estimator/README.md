@@ -3,9 +3,11 @@
 All endpoints use the query part of the URL with these key-values:
 
 * `unit`: Either `atoms` or `baseunits` (default). If set to `atoms` all amounts are denominated in the smallest available unit (atom) of the token. If `baseunits` all amounts are denominated in the "natural" unit of the respective token given by the number of decimals specified through the ERC20 interface. TODO: `baseunits` is currently not implemented for all URLs.
-* `atoms`: Deprecated. An boolean alias for `unit` parameter where `atoms=true` is equivalent to `unit=atoms` and `atoms=false` is equivalent to `unit=baseunits`.
+* `atoms`: Deprecated. An boolean alias for `unit` parameter where `atoms=true` is equivalent to `unit=atoms` and `atoms=false` is equivalent to `unit=baseunits`. Note that this parameter may not be specified together with the `unit` parameter.
 * `hops`: TODO: document this once it has been implemented.
-* `batchId`: Specify a specific batch ID to compute the estimate for, only accounting orders that are valid at the specified batch. If no batch ID is specified, the current batch that is collecting orders will be used.
+* `batchId`: Specify a specific batch ID to compute the estimate for, only accounting orders that are valid at the specified batch. If no batch ID is specified, the current batch that is collecting orders will be used. This parameter cannot be specified together with the `blockNumber` and `timestamp` parameters.
+* `blockNumer`: Specify a specific block number to compute the estimate for. This will use th open orderbook at that block (i.e. orders that will be considered for solving the current batch at the block number). This parameter cannot be specified together with the `batchId` and `timestamp` parameters.
+* `timestamp`: Specify a specific Unix epoch timestamp **in seconds** at which point in time to compute the estimate for. This will use th open orderbook at that time. This parameter cannot be specified together with the `batchId` and `blockNumber` parameters.
 
 Example: `<path>?unit=atoms&batchId=1337`
 
