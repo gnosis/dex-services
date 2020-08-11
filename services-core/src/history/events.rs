@@ -40,7 +40,7 @@ struct Value {
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct EventRegistry {
-    version: Version<typenum::U2>,
+    version: Version<U1>,
     events: BTreeMap<EventSortKey, Value>,
 }
 
