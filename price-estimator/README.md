@@ -1,12 +1,13 @@
 ## API
 
-All endpoints use the query part of the url with these key-values:
+All endpoints use the query part of the URL with these key-values:
 
-* `atoms`: Required. If set to `true` all amounts are denominated in the smallest available unit (base quantity) of the token. If `false` all amounts are denominated in the "natural" unit of the respective token given by the number of decimals specified through the ERC20 interface. TODO: `false` is currently only implemented for estimated-buy-amount and estimated-amounts-at-price .
-* `hops`: Optional. TODO: document this once it has been implemented.
-* `batchId`: Optional. Specify a specific batch ID to compute the estimate for, only accounting orders that are valid at the specified batch. If no batch ID is specified, the current batch that is collecting orders will be used.
+* `unit`: Either `atoms` or `baseunits` (default). If set to `atoms` all amounts are denominated in the smallest available unit (atom) of the token. If `baseunits` all amounts are denominated in the "natural" unit of the respective token given by the number of decimals specified through the ERC20 interface. TODO: `baseunits` is currently not implemented for all URLs.
+* `atoms`: Deprecated. An boolean alias for `unit` parameter where `atoms=true` is equivalent to `unit=atoms` and `atoms=false` is equivalent to `unit=baseunits`.
+* `hops`: TODO: document this once it has been implemented.
+* `batchId`: Specify a specific batch ID to compute the estimate for, only accounting orders that are valid at the specified batch. If no batch ID is specified, the current batch that is collecting orders will be used.
 
-Example: `<path>?atoms=true`
+Example: `<path>?unit=atoms&batchId=1337`
 
 The endpoint documentation references these types:
 
@@ -20,7 +21,7 @@ The service exposes the following endpoints:
 
 `GET /api/v1/markets/:market`
 
-Example Request: `/api/v1/markets/1-7?atoms=true`
+Example Request: `/api/v1/markets/1-7?unit=atoms`
 
 Example Response:
 
@@ -41,7 +42,7 @@ Returns the transitive orderbook (containing bids and asks) for the given base a
 
 `GET /api/v1/markets/:market/estimated-buy-amount/:sell-amount-in-quote-token`
 
-Example Request: `/api/v1/markets/1-7/estimated-buy-amount/20000000000000000000?atoms=true`
+Example Request: `/api/v1/markets/1-7/estimated-buy-amount/20000000000000000000?unit=atoms`
 
 Example Response:
 
@@ -55,13 +56,13 @@ Example Response:
 ```
 
 * `buyAmountInBase` estimates the buy amount (in base tokens) a user can set as a limit order while still expecting to be completely matched when selling the given amount of quote token.
-* The other fields repeat the parameters in the url back.
+* The other fields repeat the parameters in the URL back.
 
 ### Estimated Amounts At Price
 
 `GET /api/v1/markets/:market/estimated-amounts-at-price/:price-in-quote`
 
-Example Request: `/api/v1/markets/1-7/estimated-amounts-at-price/245.5?atoms=true`
+Example Request: `/api/v1/markets/1-7/estimated-amounts-at-price/245.5?unit=atoms`
 
 Example Response:
 
@@ -78,13 +79,13 @@ The following result indicates that if we wanted to buy ETH (token 2) for DAI (t
 
 * `sellAmountInBase` estimates the sell amount (in quote tokens) a user can completely fill in the following batch at the specified `price_in_quote`.
 * `buyAmountInBase` is the computed buy amount (in base tokens) for the order from the specified price and estimated sell amount. Note that it might be possible to use a higher buy amount for the same returned sell amount and still likely get completely matched by the solver. This buy amount can be computed with a subsequent estimate buy amount API call using the returned sell amount in quote value.
-* The other fields repeat the parameters in the url back.
+* The other fields repeat the parameters in the URL back.
 
 ### Estimated Best Ask Price
 
 `GET /api/v1/markets/:market/estimated-best-ask-price`
 
-Example Request: `/api/v1/markets/1-7/estimated-best-ask-price?atoms=true`
+Example Request: `/api/v1/markets/1-7/estimated-best-ask-price?unit=atoms`
 
 Example Responses:
 
@@ -97,7 +98,7 @@ It represents the exchange rate for the market. In the example we can exchange ~
 
 # Testing
 
-To test a locally running price estimator with the frontend at https://mesa.eth.link/ we need to set our browser to allow websites to access localhost and change the url that the javascript uses for the price estimator. With chromium:
+To test a locally running price estimator with the frontend at https://mesa.eth.link/ we need to set our browser to allow websites to access localhost and change the URL that the javascript uses for the price estimator. With chromium:
 
 1. `chromium --disable-web-security --user-data-dir=temp/`.
 2. Open the frontend.
@@ -105,7 +106,7 @@ To test a locally running price estimator with the frontend at https://mesa.eth.
 4. In the browser console enter `dexPriceEstimatorApi.urlsByNetwork[1] = "http://localhost:8080/api/v1/"`.
 5. Induce a request by changing the sell amount and check that price estimator prints that it handled the request.
 
-It is useful to start the price estimator with logging enabled, using the gnosis staging node url and using a permanent orderbook file:
+It is useful to start the price estimator with logging enabled, using the gnosis staging node URL and using a permanent orderbook file:
 
 ```
 env RUST_LOG=warn,price_estimator=info,core=info cargo run -p price-estimator -- --node-url https://staging-openethereum.mainnet.gnosisdev.com --orderbook-file ../orderbook-file-mainnet
