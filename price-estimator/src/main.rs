@@ -31,7 +31,7 @@ use url::Url;
 struct Options {
     /// The log filter to use.
     ///
-    /// This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug').
+    /// This follows the `slog-envlogger` syntax (e.g. 'info,price_estimator=debug').
     #[structopt(
         long,
         env = "DFUSION_LOG",
