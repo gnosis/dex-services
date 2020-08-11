@@ -1,18 +1,13 @@
 //! This module contains fallback token data that should be used by the price
 //! estimator when prices are not available.
 
-use crate::models::TokenId;
-use crate::price_estimation::price_source::PriceSource;
-use anyhow::{anyhow, Context, Error, Result};
-
-use futures::future::{BoxFuture, FutureExt};
-use serde::Deserialize;
-use std::collections::HashMap;
-use std::iter::FromIterator;
-use std::num::NonZeroU128;
-use std::str::FromStr;
-
 use super::{TokenBaseInfo, TokenInfoFetching};
+use crate::{models::TokenId, price_estimation::price_source::PriceSource};
+use anyhow::{anyhow, Context, Error, Result};
+use futures::future::BoxFuture;
+use serde::Deserialize;
+use std::{collections::HashMap, iter::FromIterator, num::NonZeroU128, str::FromStr};
+
 #[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
