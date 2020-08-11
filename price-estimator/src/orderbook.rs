@@ -1,7 +1,7 @@
 use crate::{
     infallible_price_source::PriceCacheUpdater, models::Generation, solver_rounding_buffer,
 };
-use anyhow::Result;
+use anyhow::{bail, Result};
 use core::{
     models::{AccountState, BatchId, Order, TokenId},
     orderbook::StableXOrderBookReading,
@@ -64,6 +64,7 @@ impl Orderbook {
                 }
                 Ok(pricegraph_from_auction_data(&auction_data))
             }
+            Generation::Block(_) | Generation::Timestamp(_) => bail!("not yet implemented"),
         }
     }
 
