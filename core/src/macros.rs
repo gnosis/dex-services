@@ -31,7 +31,7 @@ macro_rules! std_map {
 
 macro_rules! immediate {
     ($expression:expr) => {
-        async move { $expression }.boxed()
+        futures::future::FutureExt::boxed(async move { $expression })
     };
 }
 

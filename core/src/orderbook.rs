@@ -1,5 +1,6 @@
 mod auction_data_reader;
 mod filtered_orderbook;
+pub mod history;
 mod onchain_filtered_orderbook;
 mod paginated_orderbook;
 mod shadow_orderbook;
@@ -34,15 +35,16 @@ pub trait StableXOrderBookReading: Send + Sync {
         &'a self,
         batch_id_to_solve: u32,
     ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>>;
+
     /// Perform potential heavy initialization of the orderbook. If this fails or wasn't called
-    // the orderbook will initialize on first use of `get_auction_data`.
+    /// the orderbook will initialize on first use of `get_auction_data`.
     fn initialize<'a>(&'a self) -> BoxFuture<'a, Result<()>> {
         async { Ok(()) }.boxed()
     }
 }
 
 /// Always suceeds with empty orderbook.
-pub struct NoopOrderbook {}
+pub struct NoopOrderbook;
 
 impl StableXOrderBookReading for NoopOrderbook {
     fn get_auction_data<'a>(&'a self, _: u32) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
