@@ -8,6 +8,7 @@ mod solver_rounding_buffer;
 use core::{
     contracts::{stablex_contract::StableXContractImpl, web3_provider},
     http::HttpFactory,
+    logging,
     metrics::{HttpMetrics, MetricsServer},
     orderbook::EventBasedOrderbook,
     token_info::{cached::TokenInfoCache, hardcoded::TokenData},
@@ -28,6 +29,16 @@ use url::Url;
 #[derive(Debug, StructOpt)]
 #[structopt(name = "price estimator", rename_all = "kebab")]
 struct Options {
+    /// The log filter to use.
+    ///
+    /// This follows the `slog-envlogger` syntax (e.g. 'info,price_estimator=debug').
+    #[structopt(
+        long,
+        env = "DFUSION_LOG",
+        default_value = "warn,price_estimator=info,core=info"
+    )]
+    log_filter: String,
+
     #[structopt(long, env = "BIND_ADDRESS", default_value = "0.0.0.0:8080")]
     bind_address: SocketAddr,
 
@@ -84,11 +95,12 @@ struct Options {
 
 fn main() {
     let options = Options::from_args();
-    env_logger::init();
+    let (_, _guard) = logging::init(&options.log_filter);
     log::info!(
         "Starting price estimator with runtime options: {:#?}",
         options
     );
+
     let price_rounding_buffer = options.price_rounding_buffer;
     assert!(price_rounding_buffer.is_finite());
     assert!(price_rounding_buffer >= 0.0 && price_rounding_buffer <= 1.0);
