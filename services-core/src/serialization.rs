@@ -45,7 +45,7 @@ where
             Ok(Default::default())
         } else {
             Err(D::Error::custom(format!(
-                "invalid version '{}', expecter '{}'",
+                "invalid version '{}', expected '{}'",
                 version,
                 Self::VALUE,
             )))
