@@ -397,7 +397,7 @@ mod tests {
     #[test]
     fn markets_ok() {
         let (market, query) = warp::test::request()
-            .path("/markets/1-2?atoms=true&hops=3")
+            .path("/markets/1-2?atoms=true&hops=3&batchId=123")
             .filter(&markets_filter())
             .now_or_never()
             .unwrap()
@@ -406,27 +406,7 @@ mod tests {
         assert_eq!(market.quote, 2);
         assert_eq!(query.unit, Unit::Atoms);
         assert_eq!(query.hops, Some(3));
-    }
-
-    #[test]
-    fn missing_hops_ok() {
-        let (_, _, query) = warp::test::request()
-            .path("/markets/0-65535/estimated-buy-amount/1?atoms=true")
-            .filter(&estimated_buy_amount_filter())
-            .now_or_never()
-            .unwrap()
-            .unwrap();
-        assert_eq!(query.hops, None);
-    }
-
-    #[test]
-    fn missing_query() {
-        assert!(warp::test::request()
-            .path("/markets/0-0/estimated-buy-amount/0")
-            .filter(&estimated_buy_amount_filter())
-            .now_or_never()
-            .unwrap()
-            .is_err());
+        assert_eq!(query.generation, Generation::Batch(123.into()));
     }
 
     #[test]
@@ -466,22 +446,6 @@ mod tests {
         for path in &[
             "/markets/0-1/estimated-buy-amount/",
             "/markets/0-1/estimated-buy-amount/asdf",
-        ] {
-            assert!(warp::test::request()
-                .path(path)
-                .filter(&estimated_buy_amount_filter())
-                .now_or_never()
-                .unwrap()
-                .is_err());
-        }
-    }
-
-    #[test]
-    fn estimated_buy_amount_no_float_volume() {
-        for path in &[
-            "/markets/0-1/estimated-buy-amount/0.0",
-            "/markets/0-1/estimated-buy-amount/1.0",
-            "/markets/0-1/estimated-buy-amount/0.5",
         ] {
             assert!(warp::test::request()
                 .path(path)
