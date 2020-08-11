@@ -44,9 +44,14 @@ impl<'a> SystemScheduler<'a> {
         'a: 'b,
     {
         let driver = self.driver;
+        let min_solution_submit_time = self
+            .auction_timing_configuration
+            .earliest_solution_submit_time;
         scope.spawn(move |_| {
             while let Some(time_limit) = solver_deadline.checked_duration_since(Instant::now()) {
-                let driver_result = driver.run(batch_id.into(), time_limit).wait();
+                let driver_result = driver
+                    .run(batch_id, time_limit, min_solution_submit_time)
+                    .wait();
                 log_driver_result(batch_id, &driver_result);
                 match driver_result {
                     DriverResult::Retry(_) => thread::sleep(RETRY_SLEEP_DURATION),
@@ -69,7 +74,10 @@ impl<'a> SystemScheduler<'a> {
             .unwrap();
 
         let action = if self.last_solved_batch == Some(solving_batch)
-            || elapsed_time >= self.auction_timing_configuration.solver_time_limit
+            || elapsed_time
+                >= self
+                    .auction_timing_configuration
+                    .latest_solution_submit_time
         {
             let next = solving_batch.next();
             let duration = (next.solve_start_time()
@@ -81,7 +89,10 @@ impl<'a> SystemScheduler<'a> {
             let duration = intended_solve_start_time.duration_since(now).unwrap();
             Action::Sleep(duration)
         } else {
-            let time_limit = self.auction_timing_configuration.solver_time_limit - elapsed_time;
+            let time_limit = self
+                .auction_timing_configuration
+                .latest_solution_submit_time
+                - elapsed_time;
             Action::Solve(solving_batch, time_limit)
         };
 
@@ -139,7 +150,8 @@ mod tests {
         let driver = MockStableXDriver::new();
         let auction_timing_configuration = AuctionTimingConfiguration {
             target_start_solve_time: Duration::from_secs(10),
-            solver_time_limit: Duration::from_secs(20),
+            latest_solution_submit_time: Duration::from_secs(20),
+            earliest_solution_submit_time: Duration::from_secs(0),
         };
         let scheduler = SystemScheduler::new(&driver, auction_timing_configuration);
 
@@ -193,7 +205,8 @@ mod tests {
         let driver = MockStableXDriver::new();
         let auction_timing_configuration = AuctionTimingConfiguration {
             target_start_solve_time: Duration::from_secs(10),
-            solver_time_limit: Duration::from_secs(20),
+            latest_solution_submit_time: Duration::from_secs(20),
+            earliest_solution_submit_time: Duration::from_secs(0),
         };
         let mut scheduler = SystemScheduler::new(&driver, auction_timing_configuration);
         scheduler.last_solved_batch = Some(BatchId(0));
@@ -254,7 +267,7 @@ mod tests {
         let mut driver = MockStableXDriver::new();
 
         let mut counter = 0;
-        driver.expect_run().returning(move |batch, time_limit| {
+        driver.expect_run().returning(move |batch, time_limit, _| {
             log::info!(
                 "driver run called for the {}. time with batch {} time_limit {}",
                 counter,
@@ -275,7 +288,8 @@ mod tests {
 
         let auction_timing_configuration = AuctionTimingConfiguration {
             target_start_solve_time: Duration::from_secs(10),
-            solver_time_limit: Duration::from_secs(20),
+            latest_solution_submit_time: Duration::from_secs(20),
+            earliest_solution_submit_time: Duration::from_secs(0),
         };
         let mut scheduler = SystemScheduler::new(&driver, auction_timing_configuration);
 
