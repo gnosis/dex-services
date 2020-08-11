@@ -3,20 +3,20 @@ use crate::{
     contracts::{stablex_contract::StableXContract, Web3},
     history::events::EventRegistry,
     models::{AccountState, Order},
-    orderbook::StableXOrderBookReading,
+    orderbook::{history::HistoricOrderbookReading, StableXOrderBookReading},
+    time::SystemTimeExt as _,
 };
 use anyhow::{anyhow, bail, ensure, Result};
 use block_timestamp_reading::{BlockTimestampReading, CachedBlockTimestampReader};
 use contracts::batch_exchange;
 use ethcontract::{contract::Event, BlockNumber, H256};
-use futures::compat::Future01CompatExt as _;
-use futures::future::{BoxFuture, FutureExt as _};
-use futures::lock::Mutex;
+use futures::{
+    compat::Future01CompatExt as _,
+    future::{BoxFuture, FutureExt as _},
+    lock::Mutex,
+};
 use log::{error, info, warn};
-use std::collections::HashSet;
-use std::convert::TryFrom;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{collections::HashSet, convert::TryFrom, path::PathBuf, sync::Arc, time::SystemTime};
 
 /// An event based orderbook that automatically updates itself with new events from the contract.
 pub struct UpdatingOrderbook {
@@ -189,7 +189,7 @@ impl UpdatingOrderbook {
             } => {
                 let block_timestamp = context
                     .block_timestamp_reader
-                    .block_timestamp(meta.block_hash)
+                    .block_timestamp(meta.block_hash.into())
                     .await?;
                 context.orderbook.handle_event_data(
                     data,
@@ -215,6 +215,44 @@ impl StableXOrderBookReading for UpdatingOrderbook {
             .boxed()
     }
     fn initialize<'a>(&'a self) -> BoxFuture<'a, Result<()>> {
-        self.do_with_context(|_| async { Ok(()) }.boxed()).boxed()
+        self.do_with_context(|_| immediate!(Ok(()))).boxed()
+    }
+}
+
+impl HistoricOrderbookReading for UpdatingOrderbook {
+    fn get_auction_data_for_block<'a>(
+        &'a self,
+        block_number: BlockNumber,
+    ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
+        // NOTE: Get the timestamp for the block, this will give more accurate
+        // results as to what batch the orderbook is retrieved for.
+        self.do_with_context(move |context| {
+            async move {
+                let timestamp = {
+                    let block_timestamp = context
+                        .block_timestamp_reader
+                        .block_timestamp(block_number.into())
+                        .await?;
+                    SystemTime::from_timestamp(block_timestamp)
+                        .ok_or_else(|| anyhow!("invalid block timestamp {}", block_timestamp))?
+                };
+                context
+                    .orderbook
+                    .get_auction_data_for_timestamp(timestamp)
+                    .await
+            }
+            .boxed()
+        })
+        .boxed()
+    }
+
+    fn get_auction_data_for_timestamp<'a>(
+        &'a self,
+        timestamp: SystemTime,
+    ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
+        self.do_with_context(move |context| {
+            context.orderbook.get_auction_data_for_timestamp(timestamp)
+        })
+        .boxed()
     }
 }

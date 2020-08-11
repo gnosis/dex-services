@@ -1,26 +1,31 @@
 use crate::{
     models::{AccountState, BatchId, Order},
-    orderbook::{streamed::State, StableXOrderBookReading},
+    orderbook::{history::HistoricOrderbookReading, streamed::State, StableXOrderBookReading},
+    time::SystemTimeExt as _,
 };
 use anyhow::{Context, Result};
 use contracts::batch_exchange;
-use ethcontract::{contract::EventData, H256};
-use futures::future::{BoxFuture, FutureExt as _};
+use ethcontract::{contract::EventData, BlockNumber, H256};
+use futures::future::BoxFuture;
 use log::info;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::convert::TryFrom;
-use std::fs;
-use std::fs::File;
-use std::io::{Read, Write};
-use std::path::Path;
+use std::{
+    collections::BTreeMap,
+    convert::TryFrom,
+    fs,
+    fs::File,
+    io::{Read, Write},
+    ops::Bound,
+    path::Path,
+    time::SystemTime,
+};
 
 // Ethereum events (logs) can be both created and removed. Removals happen if the chain reorganizes
 // and ends up not including block that was previously thought to be part of the chain.
 // However, the orderbook state (`State`) cannot remove events. To support this, we keep an ordered
 // list of all events based on which the state is built.
 
-#[derive(Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 struct EventSortKey {
     block_number: u64,
     /// Is included to differentiate events from the same block number but different blocks which
@@ -32,8 +37,13 @@ struct EventSortKey {
 #[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
 struct Value {
     event: batch_exchange::Event,
-    /// The batch id is calculated based on the timestamp of the block.
-    batch_id: BatchId,
+    timestamp: u64,
+}
+
+impl Value {
+    fn batch_id(&self) -> BatchId {
+        BatchId::from_timestamp(self.timestamp)
+    }
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -57,14 +67,19 @@ impl EventRegistry {
         block_hash: H256,
         block_timestamp: u64,
     ) {
-        let batch_id = BatchId::from_timestamp(block_timestamp);
         let key = EventSortKey {
             block_number,
             block_hash,
             log_index,
         };
         match event_data {
-            EventData::Added(event) => self.events.insert(key, Value { event, batch_id }),
+            EventData::Added(event) => self.events.insert(
+                key,
+                Value {
+                    event,
+                    timestamp: block_timestamp,
+                },
+            ),
             EventData::Removed(_event) => self.events.remove(&key),
         };
     }
@@ -104,9 +119,10 @@ impl EventRegistry {
     /// Returns an iterator over all owned events and their corresponding batch
     /// IDs.
     pub fn into_events(self) -> impl Iterator<Item = (batch_exchange::Event, BatchId)> {
-        self.events
-            .into_iter()
-            .map(|(_, Value { event, batch_id })| (event, batch_id))
+        self.events.into_iter().map(|(_, value)| {
+            let batch_id = value.batch_id();
+            (value.event, batch_id)
+        })
     }
 
     /// Returns an iterator of all events and their corresponding batch IDs.
@@ -116,7 +132,7 @@ impl EventRegistry {
     ) -> impl DoubleEndedIterator<Item = (&'_ batch_exchange::Event, BatchId)> + '_ {
         self.events
             .values()
-            .map(|Value { event, batch_id }| (event, *batch_id))
+            .map(|value| (&value.event, value.batch_id()))
     }
 
     /// Returns an iterator containing all events up to and including the
@@ -156,6 +172,23 @@ impl EventRegistry {
         )?;
         // In order to solve batch t we need the orderbook at the beginning of
         // batch t+1's collection process
+        state.canonicalized_auction_state_at_beginning_of_batch(batch_id.next().into())
+    }
+
+    /// Create a new auction state for all events that occured up to, and on,
+    /// the specified timestamp.
+    pub fn auction_state_for_timestamp(
+        &self,
+        timestamp: SystemTime,
+    ) -> Result<(AccountState, Vec<Order>)> {
+        let timestamp = timestamp.as_timestamp()?;
+        let batch_id = BatchId::from_timestamp(timestamp);
+        let state = State::from_events(
+            self.events
+                .values()
+                .take_while(|value| value.timestamp <= timestamp)
+                .map(|value| (&value.event, value.batch_id().into())),
+        )?;
         state.canonicalized_auction_state_at_beginning_of_batch(batch_id.next().into())
     }
 }
@@ -199,7 +232,46 @@ impl StableXOrderBookReading for EventRegistry {
         &'a self,
         batch_id_to_solve: u32,
     ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
-        async move { self.auction_state_for_batch(batch_id_to_solve) }.boxed()
+        immediate!(self.auction_state_for_batch(batch_id_to_solve))
+    }
+}
+
+impl HistoricOrderbookReading for EventRegistry {
+    fn get_auction_data_for_block<'a>(
+        &'a self,
+        block_number: BlockNumber,
+    ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
+        // NOTE: For this implementation approximate the block's timestamp so
+        // that we know what batch ID to use for building the orderbook.
+        let timestamp = match block_number {
+            BlockNumber::Earliest => SystemTime::UNIX_EPOCH,
+            BlockNumber::Latest | BlockNumber::Pending => SystemTime::now(),
+            // NOTE: Approximate the timestamp of the block by finding
+            BlockNumber::Number(block_number) => self
+                .events
+                .range((
+                    Bound::Included(EventSortKey::default()),
+                    Bound::Excluded(EventSortKey {
+                        block_number: block_number.as_u64().saturating_add(1),
+                        ..Default::default()
+                    }),
+                ))
+                .rev()
+                .next()
+                .map(|(_, value)| {
+                    SystemTime::from_timestamp(value.timestamp).unwrap_or_else(SystemTime::now)
+                })
+                .unwrap_or(SystemTime::UNIX_EPOCH),
+        };
+
+        self.get_auction_data_for_timestamp(timestamp)
+    }
+
+    fn get_auction_data_for_timestamp<'a>(
+        &'a self,
+        timestamp: SystemTime,
+    ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
+        immediate!(self.auction_state_for_timestamp(timestamp))
     }
 }
 
@@ -208,6 +280,7 @@ mod tests {
     use super::*;
     use contracts::batch_exchange::{event_data::*, Event};
     use ethcontract::{Address, U256};
+    use futures::future::FutureExt as _;
 
     #[test]
     fn test_serialize_deserialize_events() {
@@ -236,7 +309,7 @@ mod tests {
                     },
                     Value {
                         event: event.clone(),
-                        batch_id: 0.into(),
+                        timestamp: BatchId(0).as_timestamp(),
                     },
                 )
             })
@@ -264,7 +337,7 @@ mod tests {
         });
         let value = Value {
             event,
-            batch_id: 0.into(),
+            timestamp: BatchId(0).as_timestamp(),
         };
 
         let mut events = BTreeMap::new();
@@ -397,7 +470,7 @@ mod tests {
     }
 
     #[test]
-    fn historic_auction_states() {
+    fn historic_batch_auction_states() {
         let token_listing_0 = EventData::Added(Event::TokenListing(TokenListing {
             token: Address::from_low_u64_be(0),
             id: 0,
@@ -433,12 +506,73 @@ mod tests {
         events.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
         events.handle_event_data(token_listing_1, 0, 1, H256::zero(), 0);
         events.handle_event_data(order_placement, 0, 2, H256::zero(), 0);
-        events.handle_event_data(deposit_0, 0, 3, H256::zero(), 0);
-        events.handle_event_data(deposit_1, 1, 0, H256::zero(), BatchId(2).as_timestamp());
+        events.handle_event_data(deposit_0, 1, 0, H256::zero(), 100);
+        events.handle_event_data(deposit_1, 2, 0, H256::zero(), BatchId(2).as_timestamp());
 
-        let auction_data = events.get_auction_data(0).now_or_never().unwrap().unwrap();
+        let (accounts, _) = events.get_auction_data(0).now_or_never().unwrap().unwrap();
         assert_eq!(
-            auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
+            accounts.read_balance(0, Address::from_low_u64_be(2)),
+            U256::from(42)
+        );
+    }
+
+    #[test]
+    fn historic_timestamp_auction_states() {
+        let token_listing_0 = EventData::Added(Event::TokenListing(TokenListing {
+            token: Address::from_low_u64_be(0),
+            id: 0,
+        }));
+        let token_listing_1 = EventData::Added(Event::TokenListing(TokenListing {
+            token: Address::from_low_u64_be(1),
+            id: 1,
+        }));
+        let order_placement = EventData::Added(Event::OrderPlacement(OrderPlacement {
+            owner: Address::from_low_u64_be(2),
+            index: 0,
+            buy_token: 1,
+            sell_token: 0,
+            valid_from: 0,
+            valid_until: 10,
+            price_numerator: 100,
+            price_denominator: 100,
+        }));
+        let deposit_0 = EventData::Added(Event::Deposit(Deposit {
+            user: Address::from_low_u64_be(2),
+            token: Address::from_low_u64_be(0),
+            amount: 42.into(),
+            batch_id: 0,
+        }));
+        let deposit_1 = EventData::Added(Event::Deposit(Deposit {
+            user: Address::from_low_u64_be(2),
+            token: Address::from_low_u64_be(0),
+            amount: 1337.into(),
+            batch_id: 1,
+        }));
+
+        let mut events = EventRegistry::default();
+        events.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
+        events.handle_event_data(token_listing_1, 0, 1, H256::zero(), 0);
+        events.handle_event_data(order_placement, 0, 2, H256::zero(), 0);
+        events.handle_event_data(deposit_0, 1, 0, H256::zero(), 100);
+        events.handle_event_data(deposit_1, 2, 0, H256::zero(), BatchId(2).as_timestamp());
+
+        let (accounts, _) = events
+            .get_auction_data_for_timestamp(SystemTime::from_timestamp(50).unwrap())
+            .now_or_never()
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            accounts.read_balance(0, Address::from_low_u64_be(2)),
+            U256::from(0)
+        );
+
+        let (accounts, _) = events
+            .get_auction_data_for_timestamp(SystemTime::from_timestamp(100).unwrap())
+            .now_or_never()
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            accounts.read_balance(0, Address::from_low_u64_be(2)),
             U256::from(42)
         );
     }

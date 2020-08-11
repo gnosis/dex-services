@@ -12,7 +12,7 @@ use std::iter::FromIterator;
 
 /// Helper trait to make this functionality mockable for tests.
 pub trait BlockTimestampReading {
-    fn block_timestamp(&mut self, block_hash: H256) -> BoxFuture<Result<u64>>;
+    fn block_timestamp(&mut self, block: BlockId) -> BoxFuture<Result<u64>>;
 }
 
 pub trait BlockTimestampBatchReading {
@@ -25,12 +25,12 @@ pub trait BlockTimestampBatchReading {
 
 /// During normal operation this is implemented by Web3.
 impl BlockTimestampReading for Web3 {
-    fn block_timestamp(&mut self, block_hash: H256) -> BoxFuture<Result<u64>> {
+    fn block_timestamp(&mut self, block: BlockId) -> BoxFuture<Result<u64>> {
         async move {
-            let block = self.eth().block(BlockId::Hash(block_hash)).compat().await;
-            let block = block
-                .with_context(|| format!("failed to get block {}", block_hash))?
-                .with_context(|| format!("block {} does not exist", block_hash))?;
+            let block_header = self.eth().block(block.clone()).compat().await;
+            let block = block_header
+                .with_context(|| format!("failed to get block {:?}", block))?
+                .with_context(|| format!("block {:?} does not exist", block))?;
             Ok(block.timestamp.low_u64())
         }
         .boxed()
@@ -117,12 +117,17 @@ impl<T: BlockTimestampBatchReading + Send> CachedBlockTimestampReader<T> {
 }
 
 impl<T: BlockTimestampReading + Send> BlockTimestampReading for CachedBlockTimestampReader<T> {
-    fn block_timestamp(&mut self, block_hash: H256) -> BoxFuture<Result<u64>> {
+    fn block_timestamp(&mut self, block: BlockId) -> BoxFuture<Result<u64>> {
         async move {
+            let block_hash = match block {
+                BlockId::Hash(hash) => hash,
+                _ => return self.inner.block_timestamp(block).await,
+            };
+
             if let Some(timestamp) = self.cache.get(&block_hash) {
                 Ok(*timestamp)
             } else {
-                let timestamp = self.inner.block_timestamp(block_hash).await?;
+                let timestamp = self.inner.block_timestamp(block_hash.into()).await?;
                 self.cache.insert(block_hash, timestamp);
                 Ok(timestamp)
             }
