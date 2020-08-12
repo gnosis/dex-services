@@ -17,10 +17,6 @@ use warp::{
     Filter, Rejection, Reply,
 };
 
-// TODO: There are some routes that still use this because adapting them to work with the new
-// solver rounding buffer is more complicated. These routes will be changed in future PRs.
-const OLD_ROUNDING_BUFFER: f64 = 0.001;
-
 /// Handles all supported requests under a `/api/v1` root path.
 pub fn all(
     orderbook: Arc<Orderbook>,
@@ -303,21 +299,13 @@ async fn estimate_best_ask_price(
         return Err(warp::reject());
     }
     let price = orderbook
-        .pricegraph(query.batch_id, PricegraphKind::Raw)
+        .pricegraph(query.batch_id, PricegraphKind::WithRoundingBuffer)
         .await
         .map_err(error::internal_server_rejection)?
-        .estimate_limit_price(token_pair, 0.0)
-        .map(|xrate| {
-            // NOTE: Exchange rate is the inverse of price for an ask order.
-            1.0 / apply_rounding_buffer(xrate, OLD_ROUNDING_BUFFER)
-        });
+        .estimate_limit_price(token_pair, 0.0);
 
     let result = PriceEstimateResult(price);
     Ok(warp::reply::json(&result))
-}
-
-fn apply_rounding_buffer(amount: f64, price_rounding_buffer: f64) -> f64 {
-    ((1.0 - price_rounding_buffer) * amount) as _
 }
 
 #[cfg(test)]
