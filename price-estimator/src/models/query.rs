@@ -28,6 +28,12 @@ pub enum Unit {
     BaseUnits,
 }
 
+impl Default for Unit {
+    fn default() -> Self {
+        Unit::BaseUnits
+    }
+}
+
 /// When to perform a price estimate.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EstimationTime {
@@ -39,9 +45,10 @@ pub enum EstimationTime {
 
 /// Intermediate raw query parameters used for parsing.
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct RawQuery {
     atoms: Option<bool>,
+    unit: Option<Unit>,
     hops: Option<usize>,
     batch_id: Option<BatchId>,
 }
@@ -51,10 +58,12 @@ impl TryFrom<RawQuery> for QueryParameters {
 
     fn try_from(raw: RawQuery) -> Result<Self> {
         Ok(QueryParameters {
-            unit: match raw.atoms {
-                Some(true) => Unit::Atoms,
-                Some(false) => Unit::BaseUnits,
-                None => bail!("'atoms' or parameter must be specified"),
+            unit: match (raw.atoms, raw.unit) {
+                (Some(true), None) => Unit::Atoms,
+                (Some(false), None) => Unit::BaseUnits,
+                (None, Some(unit)) => unit,
+                (None, None) => Unit::default(),
+                _ => bail!("only one of 'atoms' or 'unit' parameters can be specified"),
             },
             hops: raw.hops,
             time: match raw.batch_id {
@@ -62,5 +71,57 @@ impl TryFrom<RawQuery> for QueryParameters {
                 None => EstimationTime::Now,
             },
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::future::FutureExt as _;
+    use warp::Rejection;
+
+    fn query_params(params: &str) -> Result<QueryParameters, Rejection> {
+        warp::test::request()
+            .path(&format!("/{}", params))
+            .filter(&warp::query::<QueryParameters>())
+            .now_or_never()
+            .unwrap()
+    }
+
+    #[test]
+    fn default_query_parameters() {
+        let query = query_params("").unwrap();
+        assert_eq!(query.unit, Unit::BaseUnits);
+        assert_eq!(query.hops, None);
+        assert_eq!(query.time, EstimationTime::Now);
+    }
+
+    #[test]
+    fn all_query_parameters() {
+        let query = query_params("?unit=atoms&hops=42&batchId=1337").unwrap();
+        assert_eq!(query.unit, Unit::Atoms);
+        assert_eq!(query.hops, Some(42));
+        assert_eq!(query.time, EstimationTime::Batch(1337.into()));
+    }
+
+    #[test]
+    fn invalid_parameters() {
+        assert!(query_params("?unit=invalid").is_err());
+        assert!(query_params("?hops=invalid").is_err());
+        assert!(query_params("?batch_id=invalid").is_err());
+    }
+
+    #[test]
+    fn atoms_query_parameter() {
+        let query = query_params("?atoms=true").unwrap();
+        assert_eq!(query.unit, Unit::Atoms);
+
+        let query = query_params("?atoms=false").unwrap();
+        assert_eq!(query.unit, Unit::BaseUnits);
+    }
+
+    #[test]
+    fn mutually_exclusive_unit_parameter() {
+        assert!(query_params("?unit=atoms&atoms=true").is_err());
     }
 }
