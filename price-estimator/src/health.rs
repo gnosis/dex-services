@@ -172,7 +172,13 @@ mod tests {
         });
 
         let endpoint = HttpHealthEndpoint::with_server(server);
-        endpoint.notify_ready().wait().unwrap();
+        futures::future::try_join3(
+            endpoint.notify_ready(),
+            endpoint.notify_ready(),
+            endpoint.notify_ready(),
+        )
+        .wait()
+        .unwrap();
         endpoint.notify_ready().wait().unwrap();
         endpoint.notify_ready().wait().unwrap();
         mem::drop(endpoint);
