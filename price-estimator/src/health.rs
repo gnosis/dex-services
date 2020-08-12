@@ -130,9 +130,7 @@ mod tests {
     use anyhow::ensure;
     use futures::channel::oneshot;
     use std::{
-        io::{Read, Write},
         mem,
-        net::TcpStream,
         sync::{atomic::AtomicUsize, Arc},
         time::Duration,
     };
@@ -199,34 +197,18 @@ mod tests {
     #[ignore]
     // Run with `cargo test warp_hosts_endpoint -- --ignored --nocapture`.
     fn warp_hosts_endpoint() {
-        let address = "0.0.0.0:1337".parse().unwrap();
+        let address = "0.0.0.0:1337";
         let (mut sender, receiver) = mpsc::channel(0);
-        thread::spawn(move || WarpServer(address).serve(receiver));
+        thread::spawn(move || WarpServer(address.parse().unwrap()).serve(receiver));
 
         let check_health = || -> Result<()> {
-            let mut stream = TcpStream::connect(address)?;
-            stream.write_all(
-                concat!(
-                    "GET /health HTTP/1.1\r\n",
-                    "Host: localhost:42\r\n",
-                    "User-Agent: awesomesauce/42\r\n",
-                    "\r\n",
-                    "\r\n",
-                )
-                .as_bytes(),
-            )?;
-
-            let mut response = [0u8; 128];
-            let len = stream.read(&mut response)?;
-            let body = String::from_utf8_lossy(&response[..len]);
-
+            let response = isahc::get(format!("http://{}/health", address))?;
             ensure!(
-                response.starts_with(b"HTTP/1.1 204"),
+                response.status() == 204,
                 "invalid HTTP response {:?}",
-                body,
+                response,
             );
 
-            println!("received health response:\n{}", body.trim());
             Ok(())
         };
 
