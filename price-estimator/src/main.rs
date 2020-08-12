@@ -76,11 +76,6 @@ struct Options {
     )]
     price_source_update_interval: Duration,
 
-    /// The safety margin to subtract from the estimated price, in order to make it more likely to
-    /// be matched.
-    #[structopt(long, env = "PRICE_ROUNDING_BUFFER", default_value = "0.001")]
-    price_rounding_buffer: f64,
-
     /// JSON encoded backup token information like in the driver. Used as an override to the ERC20
     /// information we fetch from the block chain in case that information is wrong or unavailable
     /// which can happen for example when tokens do not implement the standard properly.
@@ -100,10 +95,6 @@ fn main() {
         "Starting price estimator with runtime options: {:#?}",
         options
     );
-
-    let price_rounding_buffer = options.price_rounding_buffer;
-    assert!(price_rounding_buffer.is_finite());
-    assert!(price_rounding_buffer >= 0.0 && price_rounding_buffer <= 1.0);
 
     let driver_http_metrics = setup_driver_metrics();
     let http_factory = HttpFactory::new(options.timeout, driver_http_metrics);
@@ -155,7 +146,7 @@ fn main() {
         options.orderbook_update_interval,
     ));
 
-    let filter = filter::all(orderbook, token_info, price_rounding_buffer);
+    let filter = filter::all(orderbook, token_info);
     let serve_task = runtime.spawn(warp::serve(filter).run(options.bind_address));
 
     log::info!("Server ready.");

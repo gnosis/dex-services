@@ -16,26 +16,21 @@ use warp::{
     Filter, Rejection, Reply,
 };
 
+// TODO: There are some routes that still use this because adapting them to work with the new
+// solver rounding buffer is more complicated. These routes will be changed in future PRs.
+const OLD_ROUNDING_BUFFER: f64 = 0.001;
+
 /// Handles all supported requests under a `/api/v1` root path.
 pub fn all(
     orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
-    price_rounding_buffer: f64,
 ) -> impl Filter<Extract = impl Reply, Error = Infallible> + Clone {
     warp::path!("api" / "v1" / ..)
         .and(
             markets(orderbook.clone())
-                .or(estimated_buy_amount(
-                    orderbook.clone(),
-                    token_info.clone(),
-                    price_rounding_buffer,
-                ))
-                .or(estimated_amounts_at_price(
-                    orderbook.clone(),
-                    token_info,
-                    price_rounding_buffer,
-                ))
-                .or(estimated_best_ask_price(orderbook, price_rounding_buffer)),
+                .or(estimated_buy_amount(orderbook.clone(), token_info.clone()))
+                .or(estimated_amounts_at_price(orderbook.clone(), token_info))
+                .or(estimated_best_ask_price(orderbook)),
         )
         .recover(handle_rejection)
 }
@@ -89,10 +84,8 @@ fn markets(
 fn estimated_buy_amount(
     orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
-    price_rounding_buffer: f64,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     estimated_buy_amount_filter()
-        .and(warp::any().map(move || price_rounding_buffer))
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_info.clone()))
         .and_then(estimate_buy_amount)
@@ -105,10 +98,8 @@ fn estimated_buy_amount(
 fn estimated_amounts_at_price(
     orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
-    price_rounding_buffer: f64,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     estimated_amounts_at_price_filter()
-        .and(warp::any().map(move || price_rounding_buffer))
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_info.clone()))
         .and_then(estimate_amounts_at_price)
@@ -120,10 +111,8 @@ fn estimated_amounts_at_price(
 /// and answer it.
 fn estimated_best_ask_price(
     orderbook: Arc<Orderbook>,
-    price_rounding_buffer: f64,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     estimated_best_ask_price_filter()
-        .and(warp::any().map(move || price_rounding_buffer))
         .and(warp::any().map(move || orderbook.clone()))
         .and_then(estimate_best_ask_price)
         .with(warp::log("price_estimator::api::estimate_best_ask_price"))
@@ -176,6 +165,8 @@ async fn get_markets(
     if !query.atoms {
         return Err(warp::reject());
     }
+    // This route intentionally uses the raw pricegraph without rounding buffer so that orders are
+    // unmodified.
     let transitive_orderbook = orderbook
         .pricegraph(query.batch_id, PricegraphKind::Raw)
         .await
@@ -199,7 +190,6 @@ async fn estimate_buy_amount(
     token_pair: TokenPair,
     sell_amount_in_quote: f64,
     query: QueryParameters,
-    price_rounding_buffer: f64,
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
@@ -213,17 +203,19 @@ async fn estimate_buy_amount(
         let amount = Amount::BaseUnits(sell_amount_in_quote);
         (amount, amount.as_atoms(&token_info) as _)
     };
-    let transitive_order = orderbook
-        .pricegraph(query.batch_id, PricegraphKind::Raw)
+    let rounding_buffer = orderbook.rounding_buffer(token_pair).await;
+    let pricegraph = orderbook
+        .pricegraph(query.batch_id, PricegraphKind::WithRoundingBuffer)
         .await
-        .map_err(error::internal_server_rejection)?
-        .order_for_sell_amount(token_pair, sell_amount_in_quote_atoms);
-
-    let mut buy_amount_in_base = Amount::Atoms(
-        transitive_order
-            .map(|order| apply_rounding_buffer(order.buy, price_rounding_buffer))
-            .unwrap_or_default() as _,
+        .map_err(error::internal_server_rejection)?;
+    // This reduced sell amount is what the solver would see after applying the rounding buffer.
+    let transitive_order = pricegraph.order_for_sell_amount(
+        token_pair,
+        f64::max(sell_amount_in_quote_atoms - rounding_buffer, 0.0),
     );
+
+    let mut buy_amount_in_base =
+        Amount::Atoms(transitive_order.map(|order| order.buy).unwrap_or_default() as _);
     if !query.atoms {
         let token_info = get_token_info(token_pair.buy, token_infos.as_ref()).await?;
         buy_amount_in_base = buy_amount_in_base.into_base_units(&token_info)
@@ -242,7 +234,6 @@ async fn estimate_amounts_at_price(
     token_pair: TokenPair,
     price_in_quote: f64,
     query: QueryParameters,
-    price_rounding_buffer: f64,
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
@@ -251,24 +242,15 @@ async fn estimate_amounts_at_price(
         .await
         .map_err(error::internal_server_rejection)?;
     let result = if query.atoms {
-        estimate_amounts_at_price_atoms(
-            token_pair,
-            price_in_quote,
-            price_rounding_buffer,
-            pricegraph,
-        )
+        estimate_amounts_at_price_atoms(token_pair, price_in_quote, pricegraph)
     } else {
         let buy_token_info = get_token_info(token_pair.buy, token_infos.as_ref()).await?;
         let sell_token_info = get_token_info(token_pair.sell, token_infos.as_ref()).await?;
         let price_in_quote_atoms = price_in_quote
             * (sell_token_info.base_unit_in_atoms().get() as f64
                 / buy_token_info.base_unit_in_atoms().get() as f64);
-        let mut result = estimate_amounts_at_price_atoms(
-            token_pair,
-            price_in_quote_atoms,
-            price_rounding_buffer,
-            pricegraph,
-        );
+        let mut result =
+            estimate_amounts_at_price_atoms(token_pair, price_in_quote_atoms, pricegraph);
         result.buy_amount_in_base = result.buy_amount_in_base.into_base_units(&buy_token_info);
         result.sell_amount_in_quote = result
             .sell_amount_in_quote
@@ -282,19 +264,19 @@ async fn estimate_amounts_at_price(
 fn estimate_amounts_at_price_atoms(
     token_pair: TokenPair,
     price_in_quote: f64,
-    price_rounding_buffer: f64,
     pricegraph: Pricegraph,
 ) -> EstimatedOrderResult {
+    // Will happen in future PR.
     // NOTE: The price in quote is `sell_amount / buy_amount` which is the
     // inverse of an exchange rate. Additionally, we need to apply the price
     // rounding buffer to the price, which will **increase** the exchange rate,
     // making it more restrictive and the estimate more pessimistic.
-    let exchange_rate = 1.0 / apply_rounding_buffer(price_in_quote, price_rounding_buffer);
+    let exchange_rate = 1.0 / apply_rounding_buffer(price_in_quote, OLD_ROUNDING_BUFFER);
     let transitive_order = pricegraph.order_at_limit_price(token_pair, exchange_rate);
     let (buy_amount_in_base, sell_amount_in_quote) = transitive_order
         .map(|order| {
             (
-                apply_rounding_buffer(order.buy, price_rounding_buffer),
+                apply_rounding_buffer(order.buy, OLD_ROUNDING_BUFFER),
                 order.sell,
             )
         })
@@ -310,7 +292,6 @@ fn estimate_amounts_at_price_atoms(
 async fn estimate_best_ask_price(
     token_pair: TokenPair,
     query: QueryParameters,
-    price_rounding_buffer: f64,
     orderbook: Arc<Orderbook>,
 ) -> Result<impl Reply, Rejection> {
     if !query.atoms {
@@ -323,7 +304,7 @@ async fn estimate_best_ask_price(
         .estimate_limit_price(token_pair, 0.0)
         .map(|xrate| {
             // NOTE: Exchange rate is the inverse of price for an ask order.
-            1.0 / apply_rounding_buffer(xrate, price_rounding_buffer)
+            1.0 / apply_rounding_buffer(xrate, OLD_ROUNDING_BUFFER)
         });
 
     let result = PriceEstimateResult(price);
@@ -364,7 +345,7 @@ mod tests {
             Box::new(NoopOrderbook {}),
             PriceCacheUpdater::new(token_info.clone(), Vec::new()),
         ));
-        all(orderbook, token_info, 0.0)
+        all(orderbook, token_info)
     }
 
     #[test]

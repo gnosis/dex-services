@@ -51,7 +51,6 @@ pub struct PriceCacheUpdater {
 }
 
 impl PriceCacheUpdater {
-    #[allow(dead_code)]
     pub fn new(
         token_info: Arc<dyn TokenInfoFetching>,
         external_price_sources: Vec<Box<dyn PriceSource + Send + Sync>>,

@@ -84,15 +84,14 @@ impl Orderbook {
         Ok(())
     }
 
-    // TODO: this function is going to be used in some routes
-    pub async fn _rounding_buffer(&self, token_pair: TokenPair) -> Result<f64> {
+    pub async fn rounding_buffer(&self, token_pair: TokenPair) -> f64 {
         let price_source = self.infallible_price_source.inner().await;
-        Ok(solver_rounding_buffer::rounding_buffer(
+        solver_rounding_buffer::rounding_buffer(
             price_source.price(TokenId(0)).get() as f64,
             price_source.price(TokenId(token_pair.sell)).get() as f64,
             price_source.price(TokenId(token_pair.buy)).get() as f64,
             self.extra_rounding_buffer_factor,
-        ))
+        )
     }
 
     /// Update the infallible price source with the averaged prices of the external price sources
