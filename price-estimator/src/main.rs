@@ -158,7 +158,9 @@ fn main() {
         options.orderbook_update_interval,
     ));
 
-    let filter = filter::all(orderbook, token_info).with(warp::log("price_estimator"));
+    let filter = core::health::filter()
+        .or(filter::all(orderbook, token_info))
+        .with(warp::log("price_estimator"));
     let serve_task = runtime.spawn(warp::serve(filter).run(options.bind_address));
 
     log::info!("Server ready.");
