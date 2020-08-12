@@ -14,8 +14,8 @@ pub struct QueryParameters {
     /// The maximum number of hops (i.e. maximum ring trade length) used by the
     /// `pricegraph` search algorithm.
     pub hops: Option<usize>,
-    /// The generation to load the orderbook at.
-    pub generation: Generation,
+    /// The time to load the orderbook at to perform estimations.
+    pub time: EstimationTime,
 }
 
 /// Units for token amounts.
@@ -30,13 +30,10 @@ pub enum Unit {
 
 /// When to perform a price estimate.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Generation {
-    /// The `Pricegraph` will be contructed from the current state of the
-    /// orderbook.
-    Current,
-    /// The `Pricegraph` will be contructed from the finalized orderbook at the
-    /// specified batch. This will be the same orderbook that is provided to the
-    /// solver when solving for the specified batch.
+pub enum EstimationTime {
+    /// Estimate with the current open orderbook.
+    Now,
+    /// Estimate with the finalized orderbook at the specified batch.
     Batch(BatchId),
 }
 
@@ -60,9 +57,9 @@ impl TryFrom<RawQuery> for QueryParameters {
                 None => bail!("'atoms' or parameter must be specified"),
             },
             hops: raw.hops,
-            generation: match raw.batch_id {
-                Some(batch_id) => Generation::Batch(batch_id),
-                None => Generation::Current,
+            time: match raw.batch_id {
+                Some(batch_id) => EstimationTime::Batch(batch_id),
+                None => EstimationTime::Now,
             },
         })
     }

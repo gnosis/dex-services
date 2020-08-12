@@ -165,7 +165,7 @@ async fn get_markets(
     // This route intentionally uses the raw pricegraph without rounding buffer so that orders are
     // unmodified.
     let transitive_orderbook = orderbook
-        .pricegraph(query.generation, PricegraphKind::Raw)
+        .pricegraph(query.time, PricegraphKind::Raw)
         .await
         .map_err(error::internal_server_rejection)?
         .transitive_orderbook(*market, None);
@@ -203,7 +203,7 @@ async fn estimate_buy_amount(
     };
     let rounding_buffer = orderbook.rounding_buffer(token_pair).await;
     let pricegraph = orderbook
-        .pricegraph(query.generation, PricegraphKind::WithRoundingBuffer)
+        .pricegraph(query.time, PricegraphKind::WithRoundingBuffer)
         .await
         .map_err(error::internal_server_rejection)?;
     // This reduced sell amount is what the solver would see after applying the rounding buffer.
@@ -236,7 +236,7 @@ async fn estimate_amounts_at_price(
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
     let pricegraph = orderbook
-        .pricegraph(query.generation, PricegraphKind::WithRoundingBuffer)
+        .pricegraph(query.time, PricegraphKind::WithRoundingBuffer)
         .await
         .map_err(error::internal_server_rejection)?;
     let rounding_buffer = orderbook.rounding_buffer(token_pair).await;
@@ -306,7 +306,7 @@ async fn estimate_best_ask_price(
         return Err(warp::reject());
     }
     let price = orderbook
-        .pricegraph(query.generation, PricegraphKind::WithRoundingBuffer)
+        .pricegraph(query.time, PricegraphKind::WithRoundingBuffer)
         .await
         .map_err(error::internal_server_rejection)?
         .estimate_limit_price(token_pair, 0.0);
