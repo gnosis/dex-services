@@ -22,12 +22,14 @@ use warp::{
 /// A `warp` filter for responding to health checks. This filter can be reused
 /// in cases where a `warp` serving task already exists.
 pub fn filter() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    warp::path!("health").and(warp::get()).map(|| {
-        Response::builder()
-            .status(StatusCode::NO_CONTENT)
-            .header(header::CACHE_CONTROL, "no-store")
-            .body("")
-    })
+    warp::path!("health")
+        .and(warp::get().or(warp::head()))
+        .map(|_| {
+            Response::builder()
+                .status(StatusCode::NO_CONTENT)
+                .header(header::CACHE_CONTROL, "no-store")
+                .body("")
+        })
 }
 
 /// Trait for asyncronously notifying health information.
