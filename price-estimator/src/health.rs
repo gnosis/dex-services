@@ -199,7 +199,11 @@ mod tests {
     fn warp_hosts_endpoint() {
         let address = "0.0.0.0:1337";
         let (mut sender, receiver) = mpsc::channel(0);
-        thread::spawn(move || WarpServer(address.parse().unwrap()).serve(receiver));
+        thread::spawn(move || {
+            WarpServer(address.parse().unwrap())
+                .serve(receiver)
+                .unwrap()
+        });
 
         let check_health = || -> Result<()> {
             let response = isahc::get(format!("http://{}/health", address))?;
