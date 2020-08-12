@@ -8,7 +8,7 @@ use core::{
     models::TokenId,
     token_info::{TokenBaseInfo, TokenInfoFetching},
 };
-use pricegraph::{Pricegraph, TokenPair, TransitiveOrder};
+use pricegraph::{Market, Pricegraph, TokenPair, TransitiveOrder};
 use std::convert::Infallible;
 use std::sync::Arc;
 use warp::{
@@ -24,10 +24,13 @@ pub fn all(
 ) -> impl Filter<Extract = impl Reply, Error = Infallible> + Clone {
     warp::path!("api" / "v1" / ..)
         .and(
-            markets(orderbook.clone())
+            markets(orderbook.clone(), token_info.clone())
                 .or(estimated_buy_amount(orderbook.clone(), token_info.clone()))
-                .or(estimated_amounts_at_price(orderbook.clone(), token_info))
-                .or(estimated_best_ask_price(orderbook)),
+                .or(estimated_amounts_at_price(
+                    orderbook.clone(),
+                    token_info.clone(),
+                ))
+                .or(estimated_best_ask_price(orderbook, token_info)),
         )
         .recover(handle_rejection)
 }
@@ -35,6 +38,10 @@ pub fn all(
 #[derive(Debug)]
 struct NoTokenInfo;
 impl Reject for NoTokenInfo {}
+
+#[derive(Debug)]
+struct TokenNotFound;
+impl Reject for TokenNotFound {}
 
 async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
     let code;
@@ -46,6 +53,9 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
     } else if let Some(NoTokenInfo) = err.find() {
         code = StatusCode::BAD_REQUEST;
         message = "request with atoms=true for token we don't have erc20 info for";
+    } else if let Some(TokenNotFound) = err.find() {
+        code = StatusCode::BAD_REQUEST;
+        message = "token symbol or address not found";
     } else if let Some(InternalError(err)) = err.find() {
         log::warn!("internal server error: {:?}", err);
         code = StatusCode::INTERNAL_SERVER_ERROR;
@@ -68,9 +78,11 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
 /// and answer it.
 fn markets(
     orderbook: Arc<Orderbook>,
+    token_info: Arc<dyn TokenInfoFetching>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     markets_filter()
         .and(warp::any().map(move || orderbook.clone()))
+        .and(warp::any().map(move || token_info.clone()))
         .and_then(get_markets)
         .with(warp::log("price_estimator::api::markets"))
 }
@@ -108,22 +120,21 @@ fn estimated_amounts_at_price(
 /// and answer it.
 fn estimated_best_ask_price(
     orderbook: Arc<Orderbook>,
+    token_infos: Arc<dyn TokenInfoFetching>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     estimated_best_ask_price_filter()
         .and(warp::any().map(move || orderbook.clone()))
+        .and(warp::any().map(move || token_infos.clone()))
         .and_then(estimate_best_ask_price)
         .with(warp::log("price_estimator::api::estimate_best_ask_price"))
 }
 
-fn markets_prefix() -> impl Filter<Extract = (Market,), Error = Rejection> + Copy {
-    warp::path!("markets" / Market / ..)
+fn markets_prefix() -> impl Filter<Extract = (CurrencyPair,), Error = Rejection> + Copy {
+    warp::path!("markets" / CurrencyPair / ..)
 }
 
-fn markets_bid_prefix() -> impl Filter<Extract = (TokenPair,), Error = Rejection> + Copy {
-    markets_prefix().map(|market: Market| market.bid_pair())
-}
-
-fn markets_filter() -> impl Filter<Extract = (Market, QueryParameters), Error = Rejection> + Copy {
+fn markets_filter(
+) -> impl Filter<Extract = (CurrencyPair, QueryParameters), Error = Rejection> + Copy {
     markets_prefix()
         .and(warp::path::end())
         .and(warp::get())
@@ -131,46 +142,27 @@ fn markets_filter() -> impl Filter<Extract = (Market, QueryParameters), Error = 
 }
 
 fn estimated_buy_amount_filter(
-) -> impl Filter<Extract = (TokenPair, f64, QueryParameters), Error = Rejection> + Copy {
-    markets_bid_prefix()
+) -> impl Filter<Extract = (CurrencyPair, f64, QueryParameters), Error = Rejection> + Copy {
+    markets_prefix()
         .and(warp::path!("estimated-buy-amount" / f64))
         .and(warp::get())
         .and(warp::query::<QueryParameters>())
 }
 
 fn estimated_amounts_at_price_filter(
-) -> impl Filter<Extract = (TokenPair, f64, QueryParameters), Error = Rejection> + Copy {
-    markets_bid_prefix()
+) -> impl Filter<Extract = (CurrencyPair, f64, QueryParameters), Error = Rejection> + Copy {
+    markets_prefix()
         .and(warp::path!("estimated-amounts-at-price" / f64))
         .and(warp::get())
         .and(warp::query::<QueryParameters>())
 }
 
 fn estimated_best_ask_price_filter(
-) -> impl Filter<Extract = (TokenPair, QueryParameters), Error = Rejection> + Copy {
-    markets_bid_prefix()
+) -> impl Filter<Extract = (CurrencyPair, QueryParameters), Error = Rejection> + Copy {
+    markets_prefix()
         .and(warp::path!("estimated-best-ask-price"))
         .and(warp::get())
         .and(warp::query::<QueryParameters>())
-}
-
-async fn get_markets(
-    market: Market,
-    query: QueryParameters,
-    orderbook: Arc<Orderbook>,
-) -> Result<impl Reply, Rejection> {
-    if query.unit != Unit::Atoms {
-        return Err(warp::reject());
-    }
-    // This route intentionally uses the raw pricegraph without rounding buffer so that orders are
-    // unmodified.
-    let transitive_orderbook = orderbook
-        .pricegraph(query.time, PricegraphKind::Raw)
-        .await
-        .map_err(error::internal_server_rejection)?
-        .transitive_orderbook(*market, None);
-    let result = MarketsResult::from(&transitive_orderbook);
-    Ok(warp::reply::json(&result))
 }
 
 async fn get_token_info(
@@ -183,13 +175,44 @@ async fn get_token_info(
         .map_err(|_| reject::custom(NoTokenInfo))
 }
 
+async fn get_market(
+    pair: CurrencyPair,
+    token_info_fetching: &dyn TokenInfoFetching,
+) -> Result<Market, Rejection> {
+    pair.as_market(token_info_fetching)
+        .await
+        .map_err(|_| reject::custom(TokenNotFound))
+}
+
+async fn get_markets(
+    pair: CurrencyPair,
+    query: QueryParameters,
+    orderbook: Arc<Orderbook>,
+    token_infos: Arc<dyn TokenInfoFetching>,
+) -> Result<impl Reply, Rejection> {
+    if query.unit != Unit::Atoms {
+        return Err(warp::reject());
+    }
+    let market = get_market(pair, &*token_infos).await?;
+    // This route intentionally uses the raw pricegraph without rounding buffer so that orders are
+    // unmodified.
+    let transitive_orderbook = orderbook
+        .pricegraph(query.time, PricegraphKind::Raw)
+        .await
+        .map_err(error::internal_server_rejection)?
+        .transitive_orderbook(market, None);
+    let result = MarketsResult::from(&transitive_orderbook);
+    Ok(warp::reply::json(&result))
+}
+
 async fn estimate_buy_amount(
-    token_pair: TokenPair,
+    pair: CurrencyPair,
     sell_amount_in_quote: f64,
     query: QueryParameters,
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
+    let token_pair = get_market(pair, &*token_infos).await?.bid_pair();
     let (sell_amount_in_quote, sell_amount_in_quote_atoms) = match query.unit {
         Unit::Atoms => (
             Amount::Atoms(sell_amount_in_quote as _),
@@ -229,12 +252,13 @@ async fn estimate_buy_amount(
 }
 
 async fn estimate_amounts_at_price(
-    token_pair: TokenPair,
+    pair: CurrencyPair,
     price_in_quote: f64,
     query: QueryParameters,
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
+    let token_pair = get_market(pair, &*token_infos).await?.bid_pair();
     let pricegraph = orderbook
         .pricegraph(query.time, PricegraphKind::WithRoundingBuffer)
         .await
@@ -298,13 +322,15 @@ fn estimate_amounts_at_price_atoms(
 }
 
 async fn estimate_best_ask_price(
-    token_pair: TokenPair,
+    pair: CurrencyPair,
     query: QueryParameters,
     orderbook: Arc<Orderbook>,
+    token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
     if query.unit != Unit::Atoms {
         return Err(warp::reject());
     }
+    let token_pair = get_market(pair, &*token_infos).await?.bid_pair();
     let price = orderbook
         .pricegraph(query.time, PricegraphKind::WithRoundingBuffer)
         .await
@@ -379,16 +405,35 @@ mod tests {
     }
 
     #[test]
+    fn token_by_symbol_and_address() {
+        let (pair, _) = warp::test::request()
+            .path("/markets/WETH-0x1A5F9352Af8aF974bFC03399e3767DF6370d82e4?atoms=false")
+            .filter(&markets_filter())
+            .now_or_never()
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            pair,
+            CurrencyPair {
+                base: TokenRef::Symbol("WETH".into()),
+                quote: TokenRef::Address(
+                    "1A5F9352Af8aF974bFC03399e3767DF6370d82e4".parse().unwrap(),
+                ),
+            }
+        );
+    }
+
+    #[test]
     #[allow(clippy::float_cmp)]
     fn estimated_buy_amount_ok() {
-        let (token_pair, volume, query) = warp::test::request()
+        let (pair, volume, query) = warp::test::request()
             .path("/markets/0-65535/estimated-buy-amount/1?atoms=true&hops=2")
             .filter(&estimated_buy_amount_filter())
             .now_or_never()
             .unwrap()
             .unwrap();
-        assert_eq!(token_pair.buy, 0);
-        assert_eq!(token_pair.sell, 65535);
+        assert_eq!(pair.base, TokenRef::Id(0));
+        assert_eq!(pair.quote, TokenRef::Id(65535));
         assert_eq!(volume, 1.0);
         assert_eq!(query.unit, Unit::Atoms);
         assert_eq!(query.hops, Some(2));
@@ -396,14 +441,14 @@ mod tests {
 
     #[test]
     fn markets_ok() {
-        let (market, query) = warp::test::request()
+        let (pair, query) = warp::test::request()
             .path("/markets/1-2?atoms=true&hops=3&batchId=123")
             .filter(&markets_filter())
             .now_or_never()
             .unwrap()
             .unwrap();
-        assert_eq!(market.base, 1);
-        assert_eq!(market.quote, 2);
+        assert_eq!(pair.base, TokenRef::Id(1));
+        assert_eq!(pair.quote, TokenRef::Id(2));
         assert_eq!(query.unit, Unit::Atoms);
         assert_eq!(query.hops, Some(3));
         assert_eq!(query.time, EstimationTime::Batch(123.into()));
@@ -458,14 +503,14 @@ mod tests {
 
     #[test]
     fn estimated_amounts_at_price_ok() {
-        let (token_pair, volume, query) = warp::test::request()
+        let (pair, volume, query) = warp::test::request()
             .path("/markets/0-65535/estimated-amounts-at-price/0.5?atoms=true")
             .filter(&estimated_amounts_at_price_filter())
             .now_or_never()
             .unwrap()
             .unwrap();
-        assert_eq!(token_pair.buy, 0);
-        assert_eq!(token_pair.sell, 65535);
+        assert_eq!(pair.base, TokenRef::Id(0));
+        assert_eq!(pair.quote, TokenRef::Id(65535));
         assert!((volume - 0.5).abs() < f64::EPSILON);
         assert_eq!(query.unit, Unit::Atoms);
         assert_eq!(query.hops, None);
@@ -473,14 +518,14 @@ mod tests {
 
     #[test]
     fn estimated_best_ask_xrate_ok() {
-        let (token_pair, query) = warp::test::request()
+        let (pair, query) = warp::test::request()
             .path("/markets/0-65535/estimated-best-ask-price?atoms=true")
             .filter(&estimated_best_ask_price_filter())
             .now_or_never()
             .unwrap()
             .unwrap();
-        assert_eq!(token_pair.buy, 0);
-        assert_eq!(token_pair.sell, 65535);
+        assert_eq!(pair.base, TokenRef::Id(0));
+        assert_eq!(pair.quote, TokenRef::Id(65535));
         assert_eq!(query.unit, Unit::Atoms);
         assert_eq!(query.hops, None);
     }
