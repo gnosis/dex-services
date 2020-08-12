@@ -195,7 +195,7 @@ mod tests {
 
     #[test]
     #[ignore]
-    // Run with `cargo test warp_hosts_endpoint -- --ignored --nocapture`.
+    // Run with `cargo test warp_hosts_endpoint -- --ignored`.
     fn warp_hosts_endpoint() {
         let address = "0.0.0.0:1337";
         let (mut sender, receiver) = mpsc::channel(0);
