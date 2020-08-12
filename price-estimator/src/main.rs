@@ -1,3 +1,4 @@
+mod amounts_at_price;
 mod error;
 mod filter;
 mod infallible_price_source;
