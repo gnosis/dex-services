@@ -36,7 +36,7 @@ struct Options {
     #[structopt(
         long,
         env = "DFUSION_LOG",
-        default_value = "warn,price_estimator=info,core=info,warp=info"
+        default_value = "warn,price_estimator=info,core=info,warp::filters::log=info"
     )]
     log_filter: String,
 
