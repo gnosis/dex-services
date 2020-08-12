@@ -71,6 +71,10 @@ impl FromStr for TokenRef {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self> {
+        // NOTE: Make sure to try parsing by ID and address before falling back
+        // to the symbol variant, since it can technically accomodate all values
+        // of `s`.
+
         if let Ok(id) = s.parse() {
             Ok(TokenRef::Id(id))
         } else if let Some(address) = parse_address(s) {
