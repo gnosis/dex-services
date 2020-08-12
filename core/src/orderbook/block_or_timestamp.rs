@@ -7,8 +7,8 @@ use ethcontract::BlockNumber;
 use futures::future::BoxFuture;
 use std::time::SystemTime;
 
-/// Trait for reading historic orderbook data.
-pub trait HistoricOrderbookReading: StableXOrderBookReading {
+/// Trait for reading orderbook data by block or timestamp.
+pub trait OrderbookReadingByBlockOrTimestamp: StableXOrderBookReading {
     /// Retrieves the open orderbook at the specified block number.
     ///
     /// The open orderbook is defined as the auction state for the current batch
@@ -27,7 +27,7 @@ pub trait HistoricOrderbookReading: StableXOrderBookReading {
     ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>>;
 }
 
-impl HistoricOrderbookReading for NoopOrderbook {
+impl OrderbookReadingByBlockOrTimestamp for NoopOrderbook {
     fn get_auction_data_for_block<'a>(
         &'a self,
         _: BlockNumber,
@@ -47,8 +47,8 @@ impl HistoricOrderbookReading for NoopOrderbook {
 mod mock {
     use super::*;
 
-    /// Proxy trait used for mocking a `HistoricOrderbookReading` to work around
-    /// the fact that `mockall` doesn't support trait inheritance.
+    /// Proxy trait used for mocking a `OrderbookReadingByBlockOrTimestamp` to
+    /// work around the fact that `mockall` doesn't support trait inheritance.
     #[mockall::automock]
     pub trait Proxy {
         fn get_auction_data<'a>(
@@ -78,7 +78,7 @@ mod mock {
         }
     }
 
-    impl HistoricOrderbookReading for MockProxy {
+    impl OrderbookReadingByBlockOrTimestamp for MockProxy {
         fn get_auction_data_for_block<'a>(
             &'a self,
             block_number: BlockNumber,
@@ -95,4 +95,4 @@ mod mock {
 }
 
 #[cfg(test)]
-pub use mock::MockProxy as MockHistoricOrderbookReading;
+pub use mock::MockProxy as MockOrderbookReadingByBlockOrTimestamp;
