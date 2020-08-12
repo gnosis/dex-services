@@ -122,6 +122,10 @@ impl Pricegraph {
             buy: pair.sell,
             sell: pair.buy,
         };
+
+        if limit_price < 1e-15 {
+            return None;
+        }
         let max_xrate = LimitPrice::new(limit_price)?.exchange_rate().inverse();
 
         let mut total_buy_volume = 0.0;
@@ -142,6 +146,7 @@ impl Pricegraph {
         if total_buy_volume == 0.0 || total_sell_volume == 0.0 {
             None
         } else {
+            debug_assert!(total_buy_volume / total_sell_volume >= limit_price);
             Some(TransitiveOrder {
                 buy: total_buy_volume,
                 sell: total_sell_volume,

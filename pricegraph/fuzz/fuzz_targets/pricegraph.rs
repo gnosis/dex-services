@@ -14,6 +14,7 @@ const MAX_TOKEN_ID: u16 = 16;
 enum Operation {
     OrderForSellAmount { pair: TokenPair, sell_amount: f64 },
     TransitiveOrderbook { market: Market, spread: Option<f64> },
+    OrderForLimitPrice { pair: TokenPair, limit_price: f64 },
 }
 
 #[derive(Arbitrary, Debug)]
@@ -46,6 +47,9 @@ fuzz_target!(|arguments: Arguments| {
                 }
             }
             pricegraph.transitive_orderbook(market, spread);
+        }
+        Operation::OrderForLimitPrice { pair, limit_price } => {
+            pricegraph.order_for_limit_price(pair, limit_price);
         }
     };
 });

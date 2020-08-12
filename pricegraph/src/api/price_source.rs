@@ -8,7 +8,7 @@ const OWL_BASE_UNIT: f64 = 1_000_000_000_000_000_000.0;
 
 impl Pricegraph {
     /// Estimates the fee token price in atoms for the specified token.
-    /// Specifically, this price repesents the number of OWL atoms required to
+    /// Specifically, this price represents the number of OWL atoms required to
     /// buy 1e18 atoms of the specified token.
     ///
     /// Returns `None` if the token is not connected to the fee token (that is,
