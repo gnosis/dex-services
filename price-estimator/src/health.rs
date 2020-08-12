@@ -218,12 +218,15 @@ mod tests {
 
             let mut response = [0u8; 128];
             let len = stream.read(&mut response)?;
+            let body = String::from_utf8_lossy(&response[..len]);
 
             ensure!(
                 response.starts_with(b"HTTP/1.1 204"),
                 "invalid HTTP response {:?}",
-                String::from_utf8_lossy(&response[..len]),
+                body,
             );
+
+            println!("received health response:\n{}", body.trim());
             Ok(())
         };
 
