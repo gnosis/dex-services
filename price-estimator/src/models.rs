@@ -1,50 +1,11 @@
+mod currency_pair;
 mod query;
 
-pub use self::query::*;
-use anyhow::Result;
+pub use self::{currency_pair::*, query::*};
 use core::token_info::TokenBaseInfo;
 use serde::Serialize;
 use serde_with::rust::display_fromstr;
-use std::{cmp::Ordering, num::ParseIntError, ops::Deref, str::FromStr};
-
-#[derive(Debug, Copy, Clone)]
-pub struct Market(pub pricegraph::Market);
-
-impl Deref for Market {
-    type Target = pricegraph::Market;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum ParseMarketError {
-    #[error("wrong number of tokens")]
-    WrongNumberOfTokens,
-    #[error("parse int error")]
-    ParseIntError(#[from] ParseIntError),
-}
-
-impl FromStr for Market {
-    type Err = ParseMarketError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut split = s.split('-');
-        let mut next_token_id = || -> Result<u16, ParseMarketError> {
-            let token_string = split.next().ok_or(ParseMarketError::WrongNumberOfTokens)?;
-            token_string.parse().map_err(From::from)
-        };
-        let base_token_id = next_token_id()?;
-        let quote_token_id = next_token_id()?;
-        if split.next().is_some() {
-            return Err(ParseMarketError::WrongNumberOfTokens);
-        }
-        Ok(Self(pricegraph::Market {
-            base: base_token_id,
-            quote: quote_token_id,
-        }))
-    }
-}
+use std::cmp::Ordering;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -166,25 +127,6 @@ pub struct ErrorResult {
 mod tests {
     use super::*;
     use serde_json::Value;
-
-    #[test]
-    fn parse_market() {
-        let market = "42-1337".parse::<Market>().unwrap();
-        assert_eq!(
-            *market,
-            pricegraph::Market {
-                base: 42,
-                quote: 1337
-            }
-        );
-        assert_eq!(
-            market.bid_pair(),
-            pricegraph::TokenPair {
-                buy: 42,
-                sell: 1337
-            }
-        );
-    }
 
     #[test]
     fn estimated_buy_amount_serialization() {
