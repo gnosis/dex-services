@@ -1,6 +1,6 @@
 use pricegraph::{Pricegraph, TokenPair, TransitiveOrder};
 
-/// An overlapping order where buy / sell == price and the amounts take into account that the solver
+/// An overlapping order where buy / sell ≈ price and the amounts take into account that the solver
 /// will subtract the rounding buffer from the sell amount.
 pub fn order_at_price_with_rounding_buffer(
     token_pair: TokenPair,
@@ -32,11 +32,15 @@ pub fn order_at_price_with_rounding_buffer(
         Some(order_that_user_places)
     } else {
         // Otherwise we cannot keep the limit_price exactly the same as requested. Since rounding
-        // buffers are small compared to traded amounts the introduced error is small.
-        Some(TransitiveOrder {
-            sell: order_that_user_places.sell + rounding_buffer,
-            buy: order_that_user_places.buy,
-        })
+        // buffers are small compared to traded amounts the introduced error is small. This is
+        // usually the case but for tokens with a low number of decimals it might be significant.
+        let sell = order_that_user_places.sell + rounding_buffer;
+        let buy = order_that_user_places.buy;
+        log::debug!(
+            "unable to fulfill price constraint for token pair {}-{} at price {} using buy amount {} sell amount {}",
+            token_pair.buy, token_pair.sell, limit_price, buy, sell
+        );
+        Some(TransitiveOrder { sell, buy })
     }
 }
 
@@ -46,7 +50,7 @@ mod tests {
     use pricegraph::{Element, PriceFraction, TokenPair, UserId, Validity, FEE_FACTOR};
 
     #[test]
-    fn order_at_price_likely_branch() {
+    fn order_at_price_returns_exact_fraction_if_found_order_can_fit_rounding_buffer() {
         let denominator = 100_000;
         let elements = vec![Element {
             user: UserId::zero(),
@@ -80,7 +84,7 @@ mod tests {
     }
 
     #[test]
-    fn order_at_price_unlikely_branch() {
+    fn order_at_price_returns_inexact_fraction_if_found_order_cannot_fit_rounding_buffer() {
         let denominator = 100_000;
         let elements = vec![Element {
             user: UserId::zero(),
