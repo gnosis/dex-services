@@ -406,7 +406,7 @@ mod tests {
         assert_eq!(market.quote, 2);
         assert_eq!(query.unit, Unit::Atoms);
         assert_eq!(query.hops, Some(3));
-        assert_eq!(query.generation, Generation::Batch(123.into()));
+        assert_eq!(query.time, EstimationTime::Batch(123.into()));
     }
 
     #[test]

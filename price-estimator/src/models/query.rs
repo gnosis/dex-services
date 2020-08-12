@@ -93,7 +93,7 @@ mod tests {
         let query = query_params("").unwrap();
         assert_eq!(query.unit, Unit::BaseUnits);
         assert_eq!(query.hops, None);
-        assert_eq!(query.generation, Generation::Current);
+        assert_eq!(query.time, EstimationTime::Now);
     }
 
     #[test]
@@ -101,7 +101,7 @@ mod tests {
         let query = query_params("?unit=atoms&hops=42&batchId=1337").unwrap();
         assert_eq!(query.unit, Unit::Atoms);
         assert_eq!(query.hops, Some(42));
-        assert_eq!(query.generation, Generation::Batch(1337.into()));
+        assert_eq!(query.time, EstimationTime::Batch(1337.into()));
     }
 
     #[test]
