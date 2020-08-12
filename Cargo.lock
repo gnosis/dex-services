@@ -490,6 +490,7 @@ dependencies = [
  "slog-stdlog",
  "slog-term",
  "thiserror",
+ "tokio 0.2.22",
  "uint",
  "url 2.1.1",
 ]
