@@ -24,7 +24,11 @@ pub struct AuctionTimingConfiguration {
 
     /// The offset from the start of the batch to cap the solver's execution
     /// time.
-    solver_time_limit: Duration,
+    latest_solution_submit_time: Duration,
+
+    /// The earliest offset from the start of a batch in seconds at which point we should submit the
+    /// solution.
+    earliest_solution_submit_time: Duration,
 }
 
 impl AuctionTimingConfiguration {
@@ -36,13 +40,18 @@ impl AuctionTimingConfiguration {
     /// invariants must hold:
     /// - `target_start_solve_time < solver_time_limit`
     /// - `solver_time_limit < SOLVING_WINDOW`
+    /// - `min_solution_submit_time < SOLVING_WINDOW`
     ///
     /// Where `SOLVING_WINDOW` represents the amount of time within a batch in
     /// which a solution is accepted. There is an amount of time at the end of a
     /// batch where solutions are no longer accepted, this is done to allow
     /// traders time to make decisions after the previous batch has already
     /// finalized.
-    pub fn new(target_start_solve_time: Duration, solver_time_limit: Duration) -> Self {
+    pub fn new(
+        target_start_solve_time: Duration,
+        solver_time_limit: Duration,
+        min_solution_submit_time: Duration,
+    ) -> Self {
         assert!(
             solver_time_limit < SOLVING_WINDOW,
             "The solver time limit must be within the solving window",
@@ -51,17 +60,26 @@ impl AuctionTimingConfiguration {
             target_start_solve_time < solver_time_limit,
             "the target solve start time must be earlier than the solver time limit",
         );
+        assert!(
+            min_solution_submit_time < SOLVING_WINDOW,
+            "The min solution submit time must be within the solving window",
+        );
 
         AuctionTimingConfiguration {
             target_start_solve_time,
-            solver_time_limit,
+            latest_solution_submit_time: solver_time_limit,
+            earliest_solution_submit_time: min_solution_submit_time,
         }
     }
 }
 
 impl Default for AuctionTimingConfiguration {
     fn default() -> Self {
-        AuctionTimingConfiguration::new(Duration::from_secs(30), Duration::from_secs(180))
+        AuctionTimingConfiguration::new(
+            Duration::from_secs(30),
+            Duration::from_secs(180),
+            Duration::from_secs(0),
+        )
     }
 }
 

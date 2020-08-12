@@ -150,11 +150,23 @@ struct Options {
     /// time.
     #[structopt(
         long,
-        env = "SOLVER_TIME_LIMIT",
+        env = "LATEST_SOLUTION_SUBMIT_TIME",
         default_value = "210",
         parse(try_from_str = duration_secs),
     )]
-    solver_time_limit: Duration,
+    latest_solution_submit_time: Duration,
+
+    /// The earliest offset from the start of a batch in seconds at which point we should submit the
+    /// solution. This is useful when there are multiple solvers one of provides solutions more
+    /// often but also worse solutions than the others. By submitting its solutions later we avoid
+    /// its solution getting reverted by a better one which saves gas.
+    #[structopt(
+        long,
+        env = "EARLIEST_SOLUTION_SUBMIT_TIME",
+        default_value = "0",
+        parse(try_from_str = duration_secs),
+    )]
+    earliest_solution_submit_time: Duration,
 
     /// Subsidy factor used to compute the minimum average fee per order in a
     /// solution as well as the gas cap for economically viable solution.
@@ -310,8 +322,11 @@ fn main() {
         &stablex_metrics,
     );
 
-    let scheduler_config =
-        AuctionTimingConfiguration::new(options.target_start_solve_time, options.solver_time_limit);
+    let scheduler_config = AuctionTimingConfiguration::new(
+        options.target_start_solve_time,
+        options.latest_solution_submit_time,
+        options.earliest_solution_submit_time,
+    );
 
     let mut scheduler = options
         .scheduler

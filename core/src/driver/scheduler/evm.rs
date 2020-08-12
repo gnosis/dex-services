@@ -75,21 +75,29 @@ impl<'a> EvmScheduler<'a> {
         }
 
         let current_batch_time = BATCH_DURATION - time_remaining;
-        if current_batch_time > self.config.solver_time_limit {
+        if current_batch_time > self.config.latest_solution_submit_time {
             // TODO(nlordell): This should probably be reflected in a metric.
             //   For now we just log an warning.
             warn!("skipping batch {}", batch_id);
             return Ok(());
         }
 
-        let time_limit = self.config.solver_time_limit - current_batch_time;
+        let time_limit = self.config.latest_solution_submit_time - current_batch_time;
 
         info!(
             "solving for batch {} with time limit {}s",
             batch_id,
             time_limit.as_secs_f64(),
         );
-        match self.driver.run(batch_id, time_limit).wait() {
+        match self
+            .driver
+            .run(
+                batch_id.into(),
+                time_limit,
+                self.config.earliest_solution_submit_time,
+            )
+            .wait()
+        {
             DriverResult::Ok => {
                 info!("successfully solved batch {}", batch_id);
                 self.last_batch = Some(batch_id);
@@ -129,11 +137,13 @@ impl Scheduler for EvmScheduler<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contracts::stablex_contract::MockStableXContract;
-    use crate::driver::stablex_driver::MockStableXDriver;
+    use crate::{
+        contracts::stablex_contract::MockStableXContract,
+        driver::stablex_driver::MockStableXDriver, models::BatchId,
+    };
     use anyhow::anyhow;
     use futures::future::FutureExt as _;
-    use mockall::predicate::eq;
+    use mockall::predicate::{always, eq};
     use mockall::Sequence;
 
     #[test]
@@ -149,8 +159,8 @@ mod tests {
         let mut driver = MockStableXDriver::new();
         driver
             .expect_run()
-            .with(eq(41), eq(Duration::from_secs(150)))
-            .returning(|_, _| async { DriverResult::Ok }.boxed());
+            .with(eq(BatchId(41)), eq(Duration::from_secs(150)), always())
+            .returning(|_, _, _| async { DriverResult::Ok }.boxed());
 
         let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
 
@@ -171,7 +181,7 @@ mod tests {
         let mut driver = MockStableXDriver::new();
         driver
             .expect_run()
-            .returning(|_, _| async { DriverResult::Ok }.boxed());
+            .returning(|_, _, _| async { DriverResult::Ok }.boxed());
 
         let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
         scheduler.last_batch = Some(40);
@@ -252,7 +262,7 @@ mod tests {
         let mut driver = MockStableXDriver::new();
         driver
             .expect_run()
-            .returning(|_, _| async { DriverResult::Skip(anyhow!("error")) }.boxed());
+            .returning(|_, _, _| async { DriverResult::Skip(anyhow!("error")) }.boxed());
 
         let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
 
@@ -273,7 +283,7 @@ mod tests {
         let mut driver = MockStableXDriver::new();
         driver
             .expect_run()
-            .returning(|_, _| async { DriverResult::Retry(anyhow!("error")) }.boxed());
+            .returning(|_, _, _| async { DriverResult::Retry(anyhow!("error")) }.boxed());
 
         let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
 
