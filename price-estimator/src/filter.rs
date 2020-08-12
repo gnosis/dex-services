@@ -159,13 +159,13 @@ async fn get_markets(
     query: QueryParameters,
     orderbook: Arc<Orderbook>,
 ) -> Result<impl Reply, Rejection> {
-    if !query.atoms {
+    if query.unit != Unit::Atoms {
         return Err(warp::reject());
     }
     // This route intentionally uses the raw pricegraph without rounding buffer so that orders are
     // unmodified.
     let transitive_orderbook = orderbook
-        .pricegraph(query.batch_id, PricegraphKind::Raw)
+        .pricegraph(query.time, PricegraphKind::Raw)
         .await
         .map_err(error::internal_server_rejection)?
         .transitive_orderbook(*market, None);
@@ -190,19 +190,20 @@ async fn estimate_buy_amount(
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
-    let (sell_amount_in_quote, sell_amount_in_quote_atoms) = if query.atoms {
-        (
+    let (sell_amount_in_quote, sell_amount_in_quote_atoms) = match query.unit {
+        Unit::Atoms => (
             Amount::Atoms(sell_amount_in_quote as _),
             sell_amount_in_quote,
-        )
-    } else {
-        let token_info = get_token_info(token_pair.sell, token_infos.as_ref()).await?;
-        let amount = Amount::BaseUnits(sell_amount_in_quote);
-        (amount, amount.as_atoms(&token_info) as _)
+        ),
+        Unit::BaseUnits => {
+            let token_info = get_token_info(token_pair.sell, token_infos.as_ref()).await?;
+            let amount = Amount::BaseUnits(sell_amount_in_quote);
+            (amount, amount.as_atoms(&token_info) as _)
+        }
     };
     let rounding_buffer = orderbook.rounding_buffer(token_pair).await;
     let pricegraph = orderbook
-        .pricegraph(query.batch_id, PricegraphKind::WithRoundingBuffer)
+        .pricegraph(query.time, PricegraphKind::WithRoundingBuffer)
         .await
         .map_err(error::internal_server_rejection)?;
     // This reduced sell amount is what the solver would see after applying the rounding buffer.
@@ -213,7 +214,7 @@ async fn estimate_buy_amount(
 
     let mut buy_amount_in_base =
         Amount::Atoms(transitive_order.map(|order| order.buy).unwrap_or_default() as _);
-    if !query.atoms {
+    if query.unit == Unit::BaseUnits {
         let token_info = get_token_info(token_pair.buy, token_infos.as_ref()).await?;
         buy_amount_in_base = buy_amount_in_base.into_base_units(&token_info)
     };
@@ -235,29 +236,35 @@ async fn estimate_amounts_at_price(
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
     let pricegraph = orderbook
-        .pricegraph(query.batch_id, PricegraphKind::WithRoundingBuffer)
+        .pricegraph(query.time, PricegraphKind::WithRoundingBuffer)
         .await
         .map_err(error::internal_server_rejection)?;
     let rounding_buffer = orderbook.rounding_buffer(token_pair).await;
-    let result = if query.atoms {
-        estimate_amounts_at_price_atoms(token_pair, price_in_quote, &pricegraph, rounding_buffer)
-    } else {
-        let buy_token_info = get_token_info(token_pair.buy, token_infos.as_ref()).await?;
-        let sell_token_info = get_token_info(token_pair.sell, token_infos.as_ref()).await?;
-        let price_in_quote_atoms = price_in_quote
-            * (sell_token_info.base_unit_in_atoms().get() as f64
-                / buy_token_info.base_unit_in_atoms().get() as f64);
-        let mut result = estimate_amounts_at_price_atoms(
+    let result = match query.unit {
+        Unit::Atoms => estimate_amounts_at_price_atoms(
             token_pair,
-            price_in_quote_atoms,
+            price_in_quote,
             &pricegraph,
             rounding_buffer,
-        );
-        result.buy_amount_in_base = result.buy_amount_in_base.into_base_units(&buy_token_info);
-        result.sell_amount_in_quote = result
-            .sell_amount_in_quote
-            .into_base_units(&sell_token_info);
-        result
+        ),
+        Unit::BaseUnits => {
+            let buy_token_info = get_token_info(token_pair.buy, token_infos.as_ref()).await?;
+            let sell_token_info = get_token_info(token_pair.sell, token_infos.as_ref()).await?;
+            let price_in_quote_atoms = price_in_quote
+                * (sell_token_info.base_unit_in_atoms().get() as f64
+                    / buy_token_info.base_unit_in_atoms().get() as f64);
+            let mut result = estimate_amounts_at_price_atoms(
+                token_pair,
+                price_in_quote_atoms,
+                &pricegraph,
+                rounding_buffer,
+            );
+            result.buy_amount_in_base = result.buy_amount_in_base.into_base_units(&buy_token_info);
+            result.sell_amount_in_quote = result
+                .sell_amount_in_quote
+                .into_base_units(&sell_token_info);
+            result
+        }
     };
     Ok(warp::reply::json(&result))
 }
@@ -295,11 +302,11 @@ async fn estimate_best_ask_price(
     query: QueryParameters,
     orderbook: Arc<Orderbook>,
 ) -> Result<impl Reply, Rejection> {
-    if !query.atoms {
+    if query.unit != Unit::Atoms {
         return Err(warp::reject());
     }
     let price = orderbook
-        .pricegraph(query.batch_id, PricegraphKind::WithRoundingBuffer)
+        .pricegraph(query.time, PricegraphKind::WithRoundingBuffer)
         .await
         .map_err(error::internal_server_rejection)?
         .estimate_limit_price(token_pair, 0.0);
@@ -383,7 +390,7 @@ mod tests {
         assert_eq!(token_pair.buy, 0);
         assert_eq!(token_pair.sell, 65535);
         assert_eq!(volume, 1.0);
-        assert_eq!(query.atoms, true);
+        assert_eq!(query.unit, Unit::Atoms);
         assert_eq!(query.hops, Some(2));
     }
 
@@ -397,7 +404,7 @@ mod tests {
             .unwrap();
         assert_eq!(market.base, 1);
         assert_eq!(market.quote, 2);
-        assert_eq!(query.atoms, true);
+        assert_eq!(query.unit, Unit::Atoms);
         assert_eq!(query.hops, Some(3));
     }
 
@@ -496,7 +503,7 @@ mod tests {
         assert_eq!(token_pair.buy, 0);
         assert_eq!(token_pair.sell, 65535);
         assert!((volume - 0.5).abs() < f64::EPSILON);
-        assert_eq!(query.atoms, true);
+        assert_eq!(query.unit, Unit::Atoms);
         assert_eq!(query.hops, None);
     }
 
@@ -510,7 +517,7 @@ mod tests {
             .unwrap();
         assert_eq!(token_pair.buy, 0);
         assert_eq!(token_pair.sell, 65535);
-        assert_eq!(query.atoms, true);
+        assert_eq!(query.unit, Unit::Atoms);
         assert_eq!(query.hops, None);
     }
 }

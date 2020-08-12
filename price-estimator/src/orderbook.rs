@@ -1,4 +1,6 @@
-use crate::{infallible_price_source::PriceCacheUpdater, solver_rounding_buffer};
+use crate::{
+    infallible_price_source::PriceCacheUpdater, models::EstimationTime, solver_rounding_buffer,
+};
 use anyhow::Result;
 use core::{
     models::{AccountState, BatchId, Order, TokenId},
@@ -49,11 +51,12 @@ impl Orderbook {
 
     pub async fn pricegraph(
         &self,
-        batch_id: Option<BatchId>,
+        time: EstimationTime,
         pricegraph_type: PricegraphKind,
     ) -> Result<Pricegraph> {
-        match batch_id {
-            Some(batch_id) => {
+        match time {
+            EstimationTime::Now => Ok(self.cached_pricegraph(pricegraph_type).await),
+            EstimationTime::Batch(batch_id) => {
                 let mut auction_data = self.auction_data(batch_id).await?;
                 if matches!(pricegraph_type, PricegraphKind::WithRoundingBuffer) {
                     self.apply_rounding_buffer_to_auction_data(&mut auction_data)
@@ -61,7 +64,6 @@ impl Orderbook {
                 }
                 Ok(pricegraph_from_auction_data(&auction_data))
             }
-            None => Ok(self.cached_pricegraph(pricegraph_type).await),
         }
     }
 
