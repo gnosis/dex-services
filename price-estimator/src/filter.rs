@@ -84,7 +84,6 @@ fn markets(
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_info.clone()))
         .and_then(get_markets)
-        .with(warp::log("price_estimator::api::markets"))
 }
 
 /// Validate a request of the form
@@ -98,7 +97,6 @@ fn estimated_buy_amount(
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_info.clone()))
         .and_then(estimate_buy_amount)
-        .with(warp::log("price_estimator::api::estimate_buy_amount"))
 }
 
 /// Validate a request of the form:
@@ -112,7 +110,6 @@ fn estimated_amounts_at_price(
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_info.clone()))
         .and_then(estimate_amounts_at_price)
-        .with(warp::log("price_estimator::api::estimate_amounts_at_price"))
 }
 
 /// Validate a request of the form:
@@ -126,7 +123,6 @@ fn estimated_best_ask_price(
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_infos.clone()))
         .and_then(estimate_best_ask_price)
-        .with(warp::log("price_estimator::api::estimate_best_ask_price"))
 }
 
 fn markets_prefix() -> impl Filter<Extract = (CurrencyPair,), Error = Rejection> + Copy {
