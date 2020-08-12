@@ -36,6 +36,7 @@ impl Orderbook {
     pub fn new(
         orderbook_reading: Box<dyn StableXOrderBookReading>,
         infallible_price_source: PriceCacheUpdater,
+        extra_rounding_buffer_factor: f64,
     ) -> Self {
         Self {
             orderbook_reading,
@@ -43,9 +44,8 @@ impl Orderbook {
                 pricegraph_raw: Pricegraph::new(std::iter::empty()),
                 pricegraph_with_rounding_buffer: Pricegraph::new(std::iter::empty()),
             }),
-            // TODO: pass this from command line argument
-            extra_rounding_buffer_factor: 2.0,
             infallible_price_source,
+            extra_rounding_buffer_factor,
         }
     }
 
@@ -181,7 +181,7 @@ mod tests {
 
         let token_info = Arc::new(TokenData::default());
         let infallible = PriceCacheUpdater::new(token_info, vec![Box::new(PriceSource_ {})]);
-        let orderbook = Orderbook::new(Box::new(NoopOrderbook {}), infallible);
+        let orderbook = Orderbook::new(Box::new(NoopOrderbook {}), infallible, 2.0);
         let price = || {
             orderbook
                 .infallible_price_source

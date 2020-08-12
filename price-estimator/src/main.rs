@@ -87,6 +87,12 @@ struct Options {
     /// orderbook.
     #[structopt(long, env = "AUCTION_DATA_PAGE_SIZE", default_value = "500")]
     auction_data_page_size: usize,
+
+    /// An extra factor to multiply calculated rounding buffers with. Setting this to >1 protects
+    /// makes prices mores conservative protecting against changes between the time a user requested
+    /// an estimate and the solver submitting a solution.
+    #[structopt(long, env = "EXTRA_ROUNDING_BUFFER_FACTOR", default_value = "2.0")]
+    extra_rounding_buffer_factor: f64,
 }
 
 fn main() {
@@ -132,7 +138,11 @@ fn main() {
     let infallible_price_source =
         PriceCacheUpdater::new(token_info.clone(), external_price_sources);
 
-    let orderbook = Arc::new(Orderbook::new(Box::new(orderbook), infallible_price_source));
+    let orderbook = Arc::new(Orderbook::new(
+        Box::new(orderbook),
+        infallible_price_source,
+        options.extra_rounding_buffer_factor,
+    ));
     let _ = orderbook.update().wait();
     log::info!("Orderbook initialized.");
 
