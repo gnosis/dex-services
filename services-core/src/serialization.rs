@@ -7,8 +7,9 @@ use serde::{
 use std::marker::PhantomData;
 use typenum::Unsigned;
 
-/// A format version identifier to prevent previous versions of event registry
-/// from being parsed as if
+/// A format version identifier to prevent different formats of serialized data
+/// (such as the `EventRegistry`) to be conflated with eachother. This 0-sized
+/// struct uses a compile-time version constant to encode a format version.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Version<T>(PhantomData<T>);
 
