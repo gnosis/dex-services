@@ -370,6 +370,7 @@ mod tests {
         let orderbook = Arc::new(Orderbook::new(
             Box::new(NoopOrderbook {}),
             PriceCacheUpdater::new(token_info.clone(), Vec::new()),
+            1.0,
         ));
         all(orderbook, token_info)
     }
