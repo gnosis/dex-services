@@ -194,7 +194,7 @@ struct Options {
 
     /// The default maximum gas price. This is used when computing the maximum gas price based on
     /// ether price in owl fails.
-    #[structopt(long, env = "DEFAULT_MAX_GAS_PRICE", default_value = "10000000000")]
+    #[structopt(long, env = "DEFAULT_MAX_GAS_PRICE", default_value = "100000000000")]
     default_max_gas_price: u128,
 
     /// The kind of scheduler to use.
