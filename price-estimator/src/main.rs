@@ -26,6 +26,7 @@ use std::{
 use structopt::StructOpt;
 use tokio::{runtime, time};
 use url::Url;
+use warp::Filter;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "price estimator", rename_all = "kebab")]
@@ -36,7 +37,7 @@ struct Options {
     #[structopt(
         long,
         env = "DFUSION_LOG",
-        default_value = "warn,price_estimator=info,core=info"
+        default_value = "warn,price_estimator=info,core=info,warp::filters::log=info"
     )]
     log_filter: String,
 
@@ -157,7 +158,7 @@ fn main() {
         options.orderbook_update_interval,
     ));
 
-    let filter = filter::all(orderbook, token_info);
+    let filter = filter::all(orderbook, token_info).with(warp::log("price_estimator"));
     let serve_task = runtime.spawn(warp::serve(filter).run(options.bind_address));
 
     log::info!("Server ready.");
