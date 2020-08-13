@@ -6,7 +6,7 @@ use core::driver::{
 use core::economic_viability::{
     EconomicViabilityComputer, FixedEconomicViabilityComputer, PriorityEconomicViabilityComputer,
 };
-use core::gas_station::{self, GnosisSafeGasStation};
+use core::gas_price::{self, GasPriceEstimating};
 use core::http::HttpFactory;
 use core::logging;
 use core::metrics::{HttpMetrics, MetricsServer, StableXMetrics};
@@ -194,7 +194,7 @@ struct Options {
 
     /// The default maximum gas price. This is used when computing the maximum gas price based on
     /// ether price in owl fails.
-    #[structopt(long, env = "DEFAULT_MAX_GAS_PRICE", default_value = "10000000000")]
+    #[structopt(long, env = "DEFAULT_MAX_GAS_PRICE", default_value = "100000000000")]
     default_max_gas_price: u128,
 
     /// The kind of scheduler to use.
@@ -353,15 +353,11 @@ fn setup_metrics() -> (StableXMetrics, HttpMetrics) {
 fn setup_http_services(
     http_factory: &HttpFactory,
     options: &Options,
-) -> (Web3, Arc<GnosisSafeGasStation>) {
+) -> (Web3, Arc<dyn GasPriceEstimating + Send + Sync>) {
     let web3 = web3_provider(http_factory, options.node_url.as_str(), options.rpc_timeout).unwrap();
-    let gas_station = GnosisSafeGasStation::new(
-        &http_factory,
-        gas_station::api_url_from_network_id(options.network_id)
-            .expect("no gas station available for network_id"),
-    )
-    .unwrap();
-    (web3, Arc::new(gas_station))
+    let gas_station =
+        gas_price::create_estimator(options.network_id, &http_factory, &web3).unwrap();
+    (web3, gas_station)
 }
 
 fn duration_millis(s: &str) -> Result<Duration, ParseIntError> {

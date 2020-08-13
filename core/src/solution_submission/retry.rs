@@ -1,7 +1,7 @@
 use super::IsOpenEthereumTransactionError as _;
 use crate::util::AsyncSleeping;
 use crate::{
-    contracts::stablex_contract::StableXContract, gas_station::GasPriceEstimating, models::Solution,
+    contracts::stablex_contract::StableXContract, gas_price::GasPriceEstimating, models::Solution,
 };
 use anyhow::Result;
 use ethcontract::{errors::MethodError, U256};
@@ -90,7 +90,7 @@ impl<'a> InfallibleGasPriceEstimator<'a> {
         match self.gas_price_estimating.estimate_gas_price().await {
             Ok(gas_estimate) => {
                 // `retry` relies on the gas price always increasing.
-                self.previous_gas_price = self.previous_gas_price.max(gas_estimate.fast);
+                self.previous_gas_price = self.previous_gas_price.max(gas_estimate);
             }
             Err(ref err) => {
                 log::warn!(
@@ -183,7 +183,7 @@ mod tests {
     use super::*;
     use crate::{
         contracts::stablex_contract::MockStableXContract,
-        gas_station::{GasPrice, MockGasPriceEstimating},
+        gas_price::MockGasPriceEstimating,
         util::{FutureWaitExt as _, MockAsyncSleeping},
     };
     use anyhow::anyhow;
@@ -201,21 +201,11 @@ mod tests {
         gas_station
             .expect_estimate_gas_price()
             .times(1)
-            .return_once(|| {
-                immediate!(Ok(GasPrice {
-                    fast: 5.into(),
-                    ..Default::default()
-                }))
-            });
+            .return_once(|| immediate!(Ok(5.into())));
         gas_station
             .expect_estimate_gas_price()
             .times(1)
-            .return_once(|| {
-                immediate!(Ok(GasPrice {
-                    fast: 6.into(),
-                    ..Default::default()
-                }))
-            });
+            .return_once(|| immediate!(Ok(6.into())));
         gas_station
             .expect_estimate_gas_price()
             .times(1)
@@ -234,21 +224,11 @@ mod tests {
         gas_station
             .expect_estimate_gas_price()
             .times(1)
-            .return_once(|| {
-                immediate!(Ok(GasPrice {
-                    fast: 10.into(),
-                    ..Default::default()
-                }))
-            });
+            .return_once(|| immediate!(Ok(10.into())));
         gas_station
             .expect_estimate_gas_price()
             .times(1)
-            .return_once(|| {
-                immediate!(Ok(GasPrice {
-                    fast: 9.into(),
-                    ..Default::default()
-                }))
-            });
+            .return_once(|| immediate!(Ok(9.into())));
 
         let mut estimator = InfallibleGasPriceEstimator::new(&gas_station, 3.into());
         assert_eq!(estimator.estimate().now_or_never().unwrap(), U256::from(10));
@@ -325,15 +305,9 @@ mod tests {
         // enough gas price increase.
 
         let mut gas_station = MockGasPriceEstimating::new();
-        gas_station.expect_estimate_gas_price().returning(|| {
-            async {
-                Ok(GasPrice {
-                    fast: (DEFAULT_GAS_PRICE * 90).into(),
-                    ..Default::default()
-                })
-            }
-            .boxed()
-        });
+        gas_station
+            .expect_estimate_gas_price()
+            .returning(|| async { Ok((DEFAULT_GAS_PRICE * 90).into()) }.boxed());
 
         let sleep = MockAsyncSleeping::new();
 

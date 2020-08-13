@@ -9,7 +9,7 @@ pub mod bigint_u256;
 pub mod contracts;
 pub mod driver;
 pub mod economic_viability;
-pub mod gas_station;
+pub mod gas_price;
 pub mod history;
 pub mod http;
 pub mod logging;
