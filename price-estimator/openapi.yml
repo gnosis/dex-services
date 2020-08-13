@@ -2,6 +2,13 @@ openapi: 3.0.3
 info:
   version: 0.0.1
   title: Price Estimator OpenAPI
+servers:
+- url: https://price-estimate-mainnet.dev.gnosisdev.com
+  description: Staging
+- url: https://dex-price-estimator.gnosis.io
+  description: Production
+- url: http://localhost:8080
+  description: Local
 paths:
   /api/v1/markets/{market}/estimated-buy-amount/{sell amount in quote}:
     get:
@@ -81,6 +88,11 @@ components:
   schemas:
     NumberParameter:
       type: number
+    Unit:
+      type: string
+      enum: [baseunits, atoms]
+      default: baseunits
+      example: baseunits
     AmountResponse:
       type: object
       properties:
@@ -137,10 +149,7 @@ components:
       description: If `baseunits` (the default) all amounts are denominated in the "natural" unit of the respective token given by the number of decimals specified through the ERC20 interface. If set to `atoms` all amounts are denominated in the smallest available unit (atom) of the token.
       required: false
       schema:
-        type: string
-        enum: [baseunits, atoms]
-        default: baseunits
-        example: baseunits
+        $ref: "#/components/schemas/Unit"
     BatchId:
       name: batchId
       in: query
