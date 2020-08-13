@@ -2,7 +2,7 @@ mod retry;
 
 use crate::{
     contracts::stablex_contract::{NoopTransactionError, StableXContract},
-    gas_station::GasPriceEstimating,
+    gas_price::GasPriceEstimating,
     models::{BatchId, Solution},
     util::AsyncSleeping,
 };
@@ -227,10 +227,11 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
             // is not feasible because it would take too long.
             match self.gas_price_estimating.estimate_gas_price().await {
                 Ok(gas_price) => {
-                    if gas_price_cap < gas_price.fast {
+                    if gas_price_cap < gas_price {
                         return Err(SolutionSubmissionError::Benign(format!(
-                            "Solution does not generate enough fees for the transaction to execute quickly enough: price cap {} < fast gas price {}",
-                            gas_price_cap, gas_price.fast
+                            "Solution does not generate enough fees for the transaction \
+                             to execute quickly enough: price cap {} < fast gas price {}",
+                            gas_price_cap, gas_price,
                         )));
                     }
                 }
@@ -244,7 +245,8 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
                 gas_price_cap,
                 nonce,
             });
-            let cancel_future = self.cancel_transaction_after_deadline(batch_index, nonce, gas_price_cap);
+            let cancel_future =
+                self.cancel_transaction_after_deadline(batch_index, nonce, gas_price_cap);
 
             // Run both futures at the same time. When one of them completes check whether the
             // result is a "nonce already used error". If this is the case then the other future's
@@ -335,7 +337,7 @@ mod tests {
     use super::*;
     use crate::{
         contracts::stablex_contract::{MockStableXContract, NoopTransactionError},
-        gas_station::MockGasPriceEstimating,
+        gas_price::MockGasPriceEstimating,
         util::{FutureWaitExt as _, MockAsyncSleeping},
     };
     use retry::MockSolutionTransactionSending;
@@ -524,12 +526,9 @@ mod tests {
         let retry = MockSolutionTransactionSending::new();
         let sleep = MockAsyncSleeping::new();
         let mut gas_price = MockGasPriceEstimating::new();
-        gas_price.expect_estimate_gas_price().returning(|| {
-            immediate!(Ok(crate::gas_station::GasPrice {
-                fast: 10.into(),
-                ..Default::default()
-            }))
-        });
+        gas_price
+            .expect_estimate_gas_price()
+            .returning(|| immediate!(Ok(10.into())));
         let submitter =
             StableXSolutionSubmitter::with_retry_and_sleep(&contract, &gas_price, retry, sleep);
         let result = submitter

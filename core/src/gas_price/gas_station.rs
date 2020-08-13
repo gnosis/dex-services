@@ -1,3 +1,6 @@
+//! Gnosis Safe gas station `GasPriceEstimating` implementation.
+
+use super::GasPriceEstimating;
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::Result;
 use ethcontract::U256;
@@ -14,16 +17,15 @@ pub fn api_url_from_network_id(network_id: u64) -> Option<&'static str> {
     match network_id {
         1 => Some(DEFAULT_MAINNET_URI),
         4 => Some(DEFAULT_RINKEBY_URI),
-        // Using Rinkeby gas estimates for local ganache testing
-        5777 => Some(DEFAULT_RINKEBY_URI),
         _ => None,
     }
 }
 
-/// Result of the api call. Prices are in wei.
+/// Gas prices in wei retrieved from the gas station. This is a result from the
+/// API call.
 #[derive(Deserialize, Debug, Default, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct GasPrice {
+pub struct GasPrices {
     pub last_update: String,
     #[serde(deserialize_with = "deserialize_u256_from_string")]
     pub lowest: U256,
@@ -37,12 +39,7 @@ pub struct GasPrice {
     pub fastest: U256,
 }
 
-#[cfg_attr(test, mockall::automock)]
-pub trait GasPriceEstimating {
-    /// Retrieves gas prices from the Gnosis Safe Relay api.
-    fn estimate_gas_price<'a>(&'a self) -> BoxFuture<'a, Result<GasPrice>>;
-}
-
+/// Retrieve gas prices from the Gnosis Safe gas station service.
 #[derive(Debug)]
 pub struct GnosisSafeGasStation {
     client: HttpClient,
@@ -55,13 +52,19 @@ impl GnosisSafeGasStation {
         let uri: Uri = api_uri.parse()?;
         Ok(GnosisSafeGasStation { client, uri })
     }
+
+    /// Retrieves the current gas prices from the gas station.
+    pub async fn gas_prices(&self) -> Result<GasPrices> {
+        self.client
+            .get_json_async(&self.uri, HttpLabel::GasStation)
+            .await
+    }
 }
 
 impl GasPriceEstimating for GnosisSafeGasStation {
-    fn estimate_gas_price(&self) -> BoxFuture<Result<GasPrice>> {
-        self.client
-            .get_json_async(&self.uri, HttpLabel::GasStation)
-            .boxed()
+    /// Retrieves the current gas prices from the gas station.
+    fn estimate_gas_price(&self) -> BoxFuture<Result<U256>> {
+        async move { Ok(self.gas_prices().await?.fast) }.boxed()
     }
 }
 
@@ -98,7 +101,7 @@ pub mod tests {
             "fast": "20000000001",
             "fastest": "1377000000001"
         }"#;
-        let expected = GasPrice {
+        let expected = GasPrices {
             last_update: "2020-02-13T09:37:45.551231Z".to_string(),
             lowest: U256::from(6u64),
             safe_low: U256::from(9_000_000_001u64),
@@ -106,7 +109,7 @@ pub mod tests {
             fast: U256::from(20_000_000_001u64),
             fastest: U256::from(1_377_000_000_001u64),
         };
-        assert_eq!(serde_json::from_str::<GasPrice>(json).unwrap(), expected);
+        assert_eq!(serde_json::from_str::<GasPrices>(json).unwrap(), expected);
     }
 
     #[test]
