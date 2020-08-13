@@ -1,0 +1,159 @@
+openapi: 3.0.3
+info:
+  version: 0.0.1
+  title: Price Estimator OpenAPI
+servers:
+- url: https://price-estimate-mainnet.dev.gnosisdev.com
+  description: Staging
+- url: https://dex-price-estimator.gnosis.io
+  description: Production
+- url: http://localhost:8080
+  description: Local
+paths:
+  /api/v1/markets/{market}/estimated-buy-amount/{sell amount in quote}:
+    get:
+      summary: Estimated Buy Amount
+      description: Estimate the buy amount (in buy tokens) a user can set as a limit order while still expecting to be completely matched when selling the given amount of quote token.
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AmountResponse"
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: sell amount in quote
+          required: true
+          in: path
+          schema:
+            $ref: "#/components/schemas/NumberParameter"
+          example: 1
+        - $ref: "#/components/parameters/Unit"
+        - $ref: "#/components/parameters/BatchId"
+  /api/v1/markets/{market}/estimated-amounts-at-price/{price}:
+    get:
+      summary: Estimated Amounts At Price
+      description: Estimate largest buy and sell amounts for a limit at given price that would get matched. Note that it might be possible to use a higher buy amount for the same returned sell amount and still likely get completely matched by the solver. This buy amount can be computed with a subsequent estimate buy amount API call using the returned sell amount in quote value.
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AmountResponse"
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: price
+          required: true
+          in: path
+          schema:
+            $ref: "#/components/schemas/NumberParameter"
+          example: 400
+        - $ref: "#/components/parameters/Unit"
+        - $ref: "#/components/parameters/BatchId"
+  /api/v1/markets/{market}/estimated-best-ask-price:
+    get:
+      summary: Estimated Best Ask Price
+      description: Estimates the exchange rate for the market. Note that the true exchange rate depends on the buy amount whereas this exchange rate is for a theoretical 0 amount. In the example we can exchange ~300 units of the sell token for 1 unit of the buy token. `unit=baseunits` is not yet implemented for this route.
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: number
+                nullable: true
+                example: 297.8
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Unit"
+        - $ref: "#/components/parameters/BatchId"
+  /api/v1/markets/{market}:
+    get:
+      summary: Market
+      description: The transitive orderbook (containing bids and asks) for the given base and quote token. `unit=baseunits` is not yet implemented for this route.
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketsResponse"
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Unit"
+        - $ref: "#/components/parameters/BatchId"
+components:
+  schemas:
+    NumberParameter:
+      type: number
+    Unit:
+      type: string
+      enum: [baseunits, atoms]
+      default: baseunits
+      example: baseunits
+    AmountResponse:
+      type: object
+      properties:
+        baseTokenId:
+          type: integer
+        quoteTokenId:
+          type: integer
+        buyAmountInBase:
+          type: string
+        sellAmountInQuote:
+          type: string
+      example:
+        baseTokenId: 1
+        quoteTokenId: 7
+        buyAmountInBase: "0.0025"
+        sellAmountInQuote: "1"
+    TransitiveOrder:
+      type: object
+      properties:
+        price:
+          type: number
+        volume:
+          type: number
+    MarketsResponse:
+      type: object
+      properties:
+        asks:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransitiveOrder"
+        bids:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransitiveOrder"
+      example:
+        asks:
+          - price: 407.6755405630054
+            volume: 9.389082650375993
+        bids:
+          - price: 5508028446685.359
+            volume": 3.2264600472733105
+  parameters:
+    Market:
+      name: market
+      in: path
+      description: token pair of the form `<buy token>-<sell token>`
+      required: true
+      schema:
+        type: string
+        example: 1-7
+    Unit:
+      name: unit
+      in: query
+      description: If `baseunits` (the default) all amounts are denominated in the "natural" unit of the respective token given by the number of decimals specified through the ERC20 interface. If set to `atoms` all amounts are denominated in the smallest available unit (atom) of the token.
+      required: false
+      schema:
+        $ref: "#/components/schemas/Unit"
+    BatchId:
+      name: batchId
+      in: query
+      description: The batch ID to compute the estimate for, only accounting orders that are valid at the specified batch. If no batch ID is specified, the current batch that is collecting orders will be used.
+      required: false
+      schema:
+        type: integer
