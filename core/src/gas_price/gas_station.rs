@@ -21,6 +21,24 @@ pub fn api_url_from_network_id(network_id: u64) -> Option<&'static str> {
     }
 }
 
+/// Gas prices in wei retrieved from the gas station. This is a result from the
+/// API call.
+#[derive(Deserialize, Debug, Default, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GasPrices {
+    pub last_update: String,
+    #[serde(deserialize_with = "deserialize_u256_from_string")]
+    pub lowest: U256,
+    #[serde(deserialize_with = "deserialize_u256_from_string")]
+    pub safe_low: U256,
+    #[serde(deserialize_with = "deserialize_u256_from_string")]
+    pub standard: U256,
+    #[serde(deserialize_with = "deserialize_u256_from_string")]
+    pub fast: U256,
+    #[serde(deserialize_with = "deserialize_u256_from_string")]
+    pub fastest: U256,
+}
+
 /// Retrieve gas prices from the Gnosis Safe gas station service.
 #[derive(Debug)]
 pub struct GnosisSafeGasStation {
@@ -54,24 +72,6 @@ impl GasPriceEstimating for GnosisSafeGasStation {
     fn estimate_gas_price(&self) -> BoxFuture<Result<U256>> {
         async move { Ok(self.gas_prices().await?.fast) }.boxed()
     }
-}
-
-/// Gas prices in wei retrieved from the gas station. This is a result from the
-/// API call.
-#[derive(Deserialize, Debug, Default, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct GasPrices {
-    pub last_update: String,
-    #[serde(deserialize_with = "deserialize_u256_from_string")]
-    pub lowest: U256,
-    #[serde(deserialize_with = "deserialize_u256_from_string")]
-    pub safe_low: U256,
-    #[serde(deserialize_with = "deserialize_u256_from_string")]
-    pub standard: U256,
-    #[serde(deserialize_with = "deserialize_u256_from_string")]
-    pub fast: U256,
-    #[serde(deserialize_with = "deserialize_u256_from_string")]
-    pub fastest: U256,
 }
 
 fn deserialize_u256_from_string<'de, D>(deserializer: D) -> Result<U256, D::Error>
