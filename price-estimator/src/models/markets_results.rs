@@ -1,4 +1,5 @@
 use super::TransitiveOrder;
+use core::token_info::TokenBaseInfo;
 use serde::Serialize;
 use std::cmp::Ordering;
 
@@ -23,6 +24,45 @@ impl From<&pricegraph::TransitiveOrderbook> for MarketsResult {
         );
         Self { asks, bids }
     }
+}
+
+impl MarketsResult {
+    pub fn into_base_units(
+        self,
+        base_token_info: &TokenBaseInfo,
+        quote_token_info: &TokenBaseInfo,
+    ) -> Self {
+        return Self {
+            asks: into_transitive_orders_in_base_unit(
+                self.asks,
+                &base_token_info,
+                &quote_token_info,
+            ),
+            bids: into_transitive_orders_in_base_unit(
+                self.bids,
+                &base_token_info,
+                &quote_token_info,
+            ),
+        };
+    }
+}
+
+fn into_transitive_orders_in_base_unit(
+    orders: Vec<TransitiveOrder>,
+    base_token_info: &TokenBaseInfo,
+    quote_token_info: &TokenBaseInfo,
+) -> Vec<TransitiveOrder> {
+    orders
+        .into_iter()
+        .map(|order| TransitiveOrder {
+            // Prices are in quote
+            price: order.price
+                / 10f64.powi(quote_token_info.decimals as i32 - base_token_info.decimals as i32)
+                    as f64,
+            // Volumes are in base
+            volume: order.volume / base_token_info.base_unit_in_atoms().get() as f64,
+        })
+        .collect()
 }
 
 enum TransitiveOrderbookOrdering {
@@ -56,6 +96,8 @@ fn sort_and_aggregate_orders_by_price(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_approx_eq::assert_approx_eq;
+    use core::token_info::TokenBaseInfo;
     use serde_json::Value;
 
     #[test]
@@ -140,5 +182,35 @@ mod tests {
             ),
             expected
         );
+    }
+
+    #[test]
+    fn into_base_units() {
+        // Market ETH-USDC, buy 1 ETH at 99 USDC (bid), sell at 101 USDC (ask)
+        let orderbook = pricegraph::TransitiveOrderbook {
+            asks: vec![pricegraph::TransitiveOrder {
+                buy: 101_000_000.0,
+                sell: 1_000_000_000_000_000_000.0,
+            }],
+            bids: vec![pricegraph::TransitiveOrder {
+                sell: 99_000_000.0,
+                buy: 1_000_000_000_000_000_000.0,
+            }],
+        };
+        let base = TokenBaseInfo {
+            alias: "WETH".into(),
+            decimals: 18,
+        };
+        let quote = TokenBaseInfo {
+            alias: "USDC".into(),
+            decimals: 6,
+        };
+        let result = MarketsResult::from(&orderbook).into_base_units(&base, &quote);
+        let best_bid = result.bids.first().unwrap();
+        assert_approx_eq!(best_bid.price, 99.0 / pricegraph::FEE_FACTOR);
+        assert_approx_eq!(best_bid.volume, 1.0);
+        let best_ask = result.asks.first().unwrap();
+        assert_approx_eq!(best_ask.price, 101.0 * pricegraph::FEE_FACTOR);
+        assert_approx_eq!(best_ask.volume, 1.0);
     }
 }
