@@ -6,8 +6,8 @@ use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
 
 /// Threshold logarithmic distance from the actual price at which an estimate is
-/// considered "bad"; currently `0.01 * price < estimate < 100 * price`.
-const BAD_ESTIMATE_THRESHOLD_LOG_DISTANCE: f64 = 2.0;
+/// considered "bad"; currently `0.1 * price < estimate < 10 * price`.
+const BAD_ESTIMATE_THRESHOLD_LOG_DISTANCE: f64 = 1.0;
 
 /// Common options for analyzing historic batch data.
 #[derive(Debug, StructOpt)]
