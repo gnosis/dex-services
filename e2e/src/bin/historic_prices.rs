@@ -71,7 +71,7 @@ fn check_batch_prices(
         .filter(|(_, token)| *token != 0)
     {
         let price = prices[token_index];
-        let estimate = pricegraph.estimate_token_price(token).unwrap_or(0.0) as u128;
+        let estimate = pricegraph.estimate_token_price(token).map(|p| p as u128);
 
         samples.record_sample(Row {
             batch,
@@ -88,14 +88,15 @@ struct Row {
     batch: BatchId,
     token: TokenId,
     price: u128,
-    estimate: u128,
+    estimate: Option<u128>,
 }
 
 struct Report<T> {
     output: T,
     samples: usize,
-    bad_estimates: usize,
     total_error: f64,
+    bad_estimates: usize,
+    missed_estimates: usize,
 }
 
 impl<T> Report<T>
@@ -106,8 +107,9 @@ where
         Report {
             output,
             samples: 0,
-            bad_estimates: 0,
             total_error: 0.0,
+            bad_estimates: 0,
+            missed_estimates: 0,
         }
     }
 
@@ -133,26 +135,32 @@ where
             estimate,
         }: Row,
     ) -> Result<()> {
-        let error = (estimate as f64 - price as f64).abs() / price as f64;
+        let price_estimate = estimate.unwrap_or_default();
+        let error = (price_estimate as f64 - price as f64).abs() / price as f64;
         writeln!(
             &mut self.output,
             "{},{},{},{},{}",
-            batch, token, price, estimate, error,
+            batch, token, price, price_estimate, error,
         )?;
 
         self.samples += 1;
-        self.bad_estimates += (error > BAD_ESTIMATE_THRESHOLD) as usize;
-        self.total_error += error;
+        if estimate.is_some() {
+            self.total_error += error;
+            self.bad_estimates += (error > BAD_ESTIMATE_THRESHOLD) as usize;
+        } else {
+            self.missed_estimates += 1;
+        }
 
         Ok(())
     }
 
     fn finalize(self) -> Result<()> {
         println!(
-            "Processed {} token prices: bad estimates {:.2}%, average error {:.2}%.",
+            "Processed {} token prices: average error {:.2}%, bad {:.2}%, missed {:.2}%.",
             self.samples,
-            100.0 * self.bad_estimates as f64 / self.samples as f64,
             100.0 * self.total_error / self.samples as f64,
+            100.0 * self.bad_estimates as f64 / self.samples as f64,
+            100.0 * self.missed_estimates as f64 / self.samples as f64,
         );
         Ok(())
     }
