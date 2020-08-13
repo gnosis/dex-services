@@ -2,7 +2,7 @@
 
 use super::GasPriceEstimating;
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use ethcontract::U256;
 use futures::future::{BoxFuture, FutureExt as _};
 use isahc::http::uri::Uri;
@@ -51,12 +51,6 @@ impl GnosisSafeGasStation {
         let client = http_factory.create()?;
         let uri: Uri = api_uri.parse()?;
         Ok(GnosisSafeGasStation { client, uri })
-    }
-
-    pub fn from_network(http_factory: &HttpFactory, network_id: u64) -> Result<Self> {
-        let url = api_url_from_network_id(network_id)
-            .ok_or_else(|| anyhow!("no gas station configured for network {}", network_id))?;
-        Self::new(http_factory, url)
     }
 
     /// Retrieves the current gas prices from the gas station.
