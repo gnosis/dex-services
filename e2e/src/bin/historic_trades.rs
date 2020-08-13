@@ -215,14 +215,15 @@ enum TradeResult {
     /// Order was unreasonably priced and not matched at all by the solver.
     UnreasonableOrderNotMatched,
 
-    /// The order's price estimate was overly pessimistic. It was considered an
-    /// unreasonably priced order but still partially or fully matched by the
-    /// solver.
-    OverlyPessimistic,
     /// The order's limit price overlaps with the solutions price vector. This
     /// indicates that the order's limit price and estimated limit price were
     /// "good", but the order was not used by the solver in its solution.
     SkippedMatchableOrder,
+
+    /// The order's price estimate was overly pessimistic. It was considered an
+    /// unreasonably priced order but still partially or fully matched by the
+    /// solver.
+    OverlyPessimistic,
 
     /// The order was reasonably priced but only partially matched by the
     /// solver.
@@ -250,8 +251,9 @@ struct Row {
 
 struct Report<T> {
     output: T,
-    skipped: usize,
     success: usize,
+    skipped: usize,
+    missed: usize,
     failed: usize,
 }
 
@@ -262,8 +264,9 @@ where
     fn new(output: T) -> Self {
         Report {
             output,
-            skipped: 0,
             success: 0,
+            skipped: 0,
+            missed: 0,
             failed: 0,
         }
     }
@@ -309,9 +312,8 @@ where
             TradeResult::FullyMatched | TradeResult::UnreasonableOrderNotMatched => {
                 self.success += 1
             }
-            TradeResult::OverlyPessimistic | TradeResult::SkippedMatchableOrder => {
-                self.skipped += 1
-            }
+            TradeResult::SkippedMatchableOrder => self.skipped += 1,
+            TradeResult::OverlyPessimistic => self.missed += 1,
             TradeResult::PartiallyMatched
             | TradeResult::OverlyOptimistic
             | TradeResult::NoSolution
@@ -325,11 +327,12 @@ where
         let total = self.success + self.skipped + self.failed;
         let percent = |value: usize| 100.0 * value as f64 / total as f64;
         println!(
-            "Processed {} orders: {:.2}% correct, {:.2}% failed, {:.2}% skipped.",
+            "Processed {} orders: {:.2}% correct, {:.2}% missed, {:.2}% failed, {:.2}% skipped.",
             total,
             percent(self.success),
-            percent(self.skipped),
+            percent(self.missed),
             percent(self.failed),
+            percent(self.skipped),
         );
 
         Ok(())
