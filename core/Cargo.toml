@@ -34,7 +34,6 @@ slog-term = "2.6.0"
 thiserror = "1.0"
 uint = "0.8"
 url = "2.1.1"
-warp = "0.2.4"
 
 [dev-dependencies]
 assert_approx_eq = "1"

@@ -7,7 +7,7 @@ use warp::{
 
 /// A `warp` filter for responding to health checks.
 pub fn filter() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    warp::path!("health")
+    warp::path!("health" / "readiness")
         .and(warp::get().or(warp::head()))
         .map(|_| {
             Response::builder()
@@ -26,7 +26,7 @@ mod tests {
     fn replies_with_no_content() {
         let response = warp::test::request()
             .method("GET")
-            .path("/health")
+            .path("/health/readiness")
             .reply(&filter())
             .now_or_never()
             .unwrap();
@@ -34,7 +34,7 @@ mod tests {
 
         let response = warp::test::request()
             .method("HEAD")
-            .path("/health")
+            .path("/health/readiness")
             .reply(&filter())
             .now_or_never()
             .unwrap();

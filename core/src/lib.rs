@@ -10,7 +10,6 @@ pub mod contracts;
 pub mod driver;
 pub mod economic_viability;
 pub mod gas_station;
-pub mod health;
 pub mod history;
 pub mod http;
 pub mod logging;
