@@ -1,6 +1,6 @@
 target
 !target/debug/driver
-!target/orderbook.bin
+!target/orderbook*.bin
 !target/release/driver
 **/node_modules
 .git
