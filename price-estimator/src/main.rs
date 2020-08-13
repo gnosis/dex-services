@@ -1,6 +1,7 @@
 mod amounts_at_price;
 mod error;
 mod filter;
+mod health;
 mod infallible_price_source;
 mod models;
 mod orderbook;
@@ -158,7 +159,9 @@ fn main() {
         options.orderbook_update_interval,
     ));
 
-    let filter = filter::all(orderbook, token_info).with(warp::log("price_estimator"));
+    let filter = health::filter()
+        .or(filter::all(orderbook, token_info))
+        .with(warp::log("price_estimator"));
     let serve_task = runtime.spawn(warp::serve(filter).run(options.bind_address));
 
     log::info!("Server ready.");
