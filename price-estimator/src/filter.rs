@@ -1,6 +1,6 @@
 use crate::{
     amounts_at_price,
-    error::{self, InternalError},
+    error::RejectionReason,
     models::*,
     orderbook::{Orderbook, PricegraphKind},
 };
@@ -11,11 +11,7 @@ use core::{
 use pricegraph::{Market, Pricegraph, TokenPair, TransitiveOrder};
 use std::convert::Infallible;
 use std::sync::Arc;
-use warp::{
-    http::StatusCode,
-    reject::{self, Reject},
-    Filter, Rejection, Reply,
-};
+use warp::{http::StatusCode, Filter, Rejection, Reply};
 
 /// Handles all supported requests under a `/api/v1` root path.
 pub fn all(
@@ -35,39 +31,21 @@ pub fn all(
         .recover(handle_rejection)
 }
 
-#[derive(Debug)]
-struct NoTokenInfo;
-impl Reject for NoTokenInfo {}
-
-#[derive(Debug)]
-struct TokenNotFound;
-impl Reject for TokenNotFound {}
-
 async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
-    let code;
-    let message;
-
-    if err.is_not_found() {
-        code = StatusCode::NOT_FOUND;
-        message = "invalid url path";
-    } else if let Some(NoTokenInfo) = err.find() {
-        code = StatusCode::BAD_REQUEST;
-        message = "request with atoms=true for token we don't have erc20 info for";
-    } else if let Some(TokenNotFound) = err.find() {
-        code = StatusCode::BAD_REQUEST;
-        message = "token symbol or address not found";
-    } else if let Some(InternalError(err)) = err.find() {
-        log::warn!("internal server error: {:?}", err);
-        code = StatusCode::INTERNAL_SERVER_ERROR;
-        message = "internal server error";
+    let (code, message) = if let Some(reason) = err.find::<RejectionReason>() {
+        log::warn!("rejection reason: {:?}", reason);
+        reason.as_http_error()
+    } else if err.is_not_found() {
+        (StatusCode::NOT_FOUND, "invalid url path")
     } else if let Some(warp::reject::InvalidQuery { .. }) = err.find() {
-        code = StatusCode::BAD_REQUEST;
-        message = "invalid url query";
+        (StatusCode::BAD_REQUEST, "invalid url query")
     } else {
         log::warn!("unhandled rejection: {:?}", err);
-        code = StatusCode::INTERNAL_SERVER_ERROR;
-        message = "unexpected internal error";
-    }
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "unexpected internal error",
+        )
+    };
 
     let json = warp::reply::json(&ErrorResult { message });
     Ok(warp::reply::with_status(json, code))
@@ -168,7 +146,7 @@ async fn get_token_info(
     token_info_fetching
         .get_token_info(TokenId(token_id))
         .await
-        .map_err(|_| reject::custom(NoTokenInfo))
+        .map_err(|_| RejectionReason::NoTokenInfo.into())
 }
 
 async fn get_market(
@@ -177,7 +155,7 @@ async fn get_market(
 ) -> Result<Market, Rejection> {
     pair.as_market(token_info_fetching)
         .await
-        .map_err(|_| reject::custom(TokenNotFound))
+        .map_err(|_| RejectionReason::TokenNotFound.into())
 }
 
 async fn get_markets(
@@ -195,7 +173,7 @@ async fn get_markets(
     let transitive_orderbook = orderbook
         .pricegraph(query.time, PricegraphKind::Raw)
         .await
-        .map_err(error::internal_server_rejection)?
+        .map_err(RejectionReason::InternalError)?
         .transitive_orderbook(market, None);
     let result = MarketsResult::from(&transitive_orderbook);
     Ok(warp::reply::json(&result))
@@ -224,7 +202,7 @@ async fn estimate_buy_amount(
     let pricegraph = orderbook
         .pricegraph(query.time, PricegraphKind::WithRoundingBuffer)
         .await
-        .map_err(error::internal_server_rejection)?;
+        .map_err(RejectionReason::InternalError)?;
     // This reduced sell amount is what the solver would see after applying the rounding buffer.
     let transitive_order = pricegraph.order_for_sell_amount(
         token_pair,
@@ -258,7 +236,7 @@ async fn estimate_amounts_at_price(
     let pricegraph = orderbook
         .pricegraph(query.time, PricegraphKind::WithRoundingBuffer)
         .await
-        .map_err(error::internal_server_rejection)?;
+        .map_err(RejectionReason::InternalError)?;
     let rounding_buffer = orderbook.rounding_buffer(token_pair).await;
     let result = match query.unit {
         Unit::Atoms => estimate_amounts_at_price_atoms(
@@ -330,7 +308,7 @@ async fn estimate_best_ask_price(
     let price = orderbook
         .pricegraph(query.time, PricegraphKind::WithRoundingBuffer)
         .await
-        .map_err(error::internal_server_rejection)?
+        .map_err(RejectionReason::InternalError)?
         .estimate_limit_price(token_pair, 0.0);
 
     let result = PriceEstimateResult(price);
