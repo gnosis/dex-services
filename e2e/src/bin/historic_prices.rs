@@ -6,8 +6,8 @@ use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
 
 /// Threshold logarithmic distance from the actual price at which an estimate is
-/// considered "bad"; currently `0.1 * price < estimate < 10 * price`.
-const BAD_ESTIMATE_THRESHOLD_LOG_DISTANCE: f64 = 1.0;
+/// considered "bad"; currently `0.01 * price < estimate < 100 * price`.
+const BAD_ESTIMATE_THRESHOLD_LOG_DISTANCE: f64 = 2.0;
 
 /// Common options for analyzing historic batch data.
 #[derive(Debug, StructOpt)]
@@ -141,17 +141,17 @@ where
     ) -> Result<()> {
         let price_estimate = estimate.unwrap_or_default();
         let error = (price_estimate as f64 - price as f64).abs() / price as f64;
-        let distance = (price_estimate as f64 / price as f64).log10().abs();
+        let distance = (price_estimate as f64 / price as f64).log10();
         writeln!(
             &mut self.output,
-            "{},{},{},{},{}",
-            batch, token, price, price_estimate, error,
+            "{},{},{},{},{},{}",
+            batch, token, price, price_estimate, error, distance,
         )?;
 
         self.samples += 1;
         if estimate.is_some() {
             self.total_error += error;
-            self.bad_estimates += (distance >= BAD_ESTIMATE_THRESHOLD_LOG_DISTANCE) as usize;
+            self.bad_estimates += (distance.abs() >= BAD_ESTIMATE_THRESHOLD_LOG_DISTANCE) as usize;
         } else {
             self.missed_estimates += 1;
         }
