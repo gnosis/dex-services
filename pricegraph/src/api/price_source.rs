@@ -1,7 +1,7 @@
 //! This module implements price source methods for the `Pricegraph` API so that
 //! it can be used for OWL price estimates to the solver.
 
-use crate::encoding::{TokenId, TokenPair};
+use crate::encoding::{TokenId, TokenPair, TokenPairRange};
 use crate::{Pricegraph, FEE_TOKEN};
 
 const OWL_BASE_UNIT: f64 = 1_000_000_000_000_000_000.0;
@@ -16,7 +16,7 @@ impl Pricegraph {
     /// token).
     ///
     /// The fee token is defined as the token with ID 0.
-    pub fn estimate_token_price(&self, token: TokenId) -> Option<f64> {
+    pub fn estimate_token_price(&self, token: TokenId, hops: Option<u16>) -> Option<f64> {
         if token == FEE_TOKEN {
             return Some(OWL_BASE_UNIT);
         }
@@ -25,12 +25,15 @@ impl Pricegraph {
         // specified token. We sell rather than buy the reference token because
         // volume is denominated in the sell token, for which we know the number
         // of decimals.
-        let pair = TokenPair {
-            buy: token,
-            sell: FEE_TOKEN,
+        let pair_range = TokenPairRange {
+            pair: TokenPair {
+                buy: token,
+                sell: FEE_TOKEN,
+            },
+            hops,
         };
 
-        let price_in_token = self.estimate_limit_price(pair, OWL_BASE_UNIT)?;
+        let price_in_token = self.estimate_limit_price(pair_range, OWL_BASE_UNIT)?;
         let price_in_reference = 1.0 / price_in_token;
 
         Some(OWL_BASE_UNIT * price_in_reference)

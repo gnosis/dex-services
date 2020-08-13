@@ -1,7 +1,7 @@
 //! Module containing limit price estimation implementation.
 
 use crate::api::TransitiveOrder;
-use crate::encoding::TokenPair;
+use crate::encoding::TokenPairRange;
 use crate::num;
 use crate::orderbook::{ExchangeRate, LimitPrice};
 use crate::Pricegraph;
@@ -13,16 +13,17 @@ impl Pricegraph {
     ///
     /// Note that this price is in exchange format, that is, it is expressed as
     /// the ratio between buy and sell amounts, with implicit fees.
-    pub fn estimate_limit_price(&self, pair: TokenPair, max_sell_amount: f64) -> Option<f64> {
+    pub fn estimate_limit_price(
+        &self,
+        pair_range: TokenPairRange,
+        max_sell_amount: f64,
+    ) -> Option<f64> {
         let mut orderbook = self.reduced_orderbook();
 
         // NOTE: This method works by searching for the "best" counter
         // transitive orders, as such we need to fill transitive orders in the
         // inverse direction: from sell token to the buy token.
-        let inverse_pair = TokenPair {
-            buy: pair.sell,
-            sell: pair.buy,
-        };
+        let inverse_pair_range = pair_range.inverse();
 
         if max_sell_amount == 0.0 {
             // NOTE: For a 0 volume we simulate sending an tiny epsilon of value
@@ -33,7 +34,7 @@ impl Pricegraph {
             // overlaps with the last counter transtive order's exchange rate.
             return Some(
                 orderbook
-                    .find_optimal_transitive_order(inverse_pair)?
+                    .find_optimal_transitive_order(inverse_pair_range)?
                     .exchange_rate
                     .inverse()
                     .price()
@@ -51,20 +52,22 @@ impl Pricegraph {
         // the marginal exchange rate.
         let mut cumulative_buy_volume = 0.0;
         let mut cumulative_sell_volume = 0.0;
-        while let Some(flow) = orderbook.fill_optimal_transitive_order_if(inverse_pair, |flow| {
-            let current_exchange_rate =
-                match ExchangeRate::new(cumulative_buy_volume / max_sell_amount) {
-                    Some(price) => price,
-                    None => return true,
-                };
+        while let Some(flow) =
+            orderbook.fill_optimal_transitive_order_if(inverse_pair_range, |flow| {
+                let current_exchange_rate =
+                    match ExchangeRate::new(cumulative_buy_volume / max_sell_amount) {
+                        Some(price) => price,
+                        None => return true,
+                    };
 
-            // NOTE: This implies that the added liquidity from the counter
-            // transitive order at its exchange rate makes the estimated
-            // exchange rate worse, and we are better off just buying off all
-            // the previously discovered liquidity instead of including new
-            // liquidity from this transitive order.
-            current_exchange_rate < flow.exchange_rate.inverse()
-        }) {
+                // NOTE: This implies that the added liquidity from the counter
+                // transitive order at its exchange rate makes the estimated
+                // exchange rate worse, and we are better off just buying off all
+                // the previously discovered liquidity instead of including new
+                // liquidity from this transitive order.
+                current_exchange_rate < flow.exchange_rate.inverse()
+            })
+        {
             if flow.is_dust_trade() {
                 continue;
             }
@@ -93,10 +96,10 @@ impl Pricegraph {
     /// be matched given the **current** state of the batch.
     pub fn order_for_sell_amount(
         &self,
-        pair: TokenPair,
+        pair_range: TokenPairRange,
         sell_amount: f64,
     ) -> Option<TransitiveOrder> {
-        let price = self.estimate_limit_price(pair, sell_amount)?;
+        let price = self.estimate_limit_price(pair_range, sell_amount)?;
         Some(TransitiveOrder {
             buy: sell_amount * price,
             sell: sell_amount,
@@ -110,7 +113,7 @@ impl Pricegraph {
     /// the given limit price.
     pub fn order_for_limit_price(
         &self,
-        pair: TokenPair,
+        pair_range: TokenPairRange,
         limit_price: f64,
     ) -> Option<TransitiveOrder> {
         let mut orderbook = self.reduced_orderbook();
@@ -118,16 +121,16 @@ impl Pricegraph {
         // NOTE: This method works by searching for the "best" counter
         // transitive orders, as such we need to fill transitive orders in the
         // inverse direction and need to invert the limit price.
-        let inverse_pair = TokenPair {
-            buy: pair.sell,
-            sell: pair.buy,
-        };
+        let inverse_pair_range = pair_range.inverse();
+
         let max_xrate = LimitPrice::new(limit_price)?.exchange_rate().inverse();
 
         let mut total_buy_volume = 0.0;
         let mut total_sell_volume = 0.0;
         while let Some(flow) = orderbook
-            .fill_optimal_transitive_order_if(inverse_pair, |flow| flow.exchange_rate <= max_xrate)
+            .fill_optimal_transitive_order_if(inverse_pair_range, |flow| {
+                flow.exchange_rate <= max_xrate
+            })
         {
             if flow.is_dust_trade() {
                 continue;
@@ -155,10 +158,10 @@ impl Pricegraph {
     /// resulting order is always equal to the specified price.
     pub fn order_at_limit_price(
         &self,
-        pair: TokenPair,
+        pair_range: TokenPairRange,
         limit_price: f64,
     ) -> Option<TransitiveOrder> {
-        let order = self.order_for_limit_price(pair, limit_price)?;
+        let order = self.order_for_limit_price(pair_range, limit_price)?;
         Some(TransitiveOrder {
             buy: order.sell * limit_price,
             sell: order.sell,

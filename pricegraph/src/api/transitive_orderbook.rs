@@ -2,7 +2,7 @@
 //! over a market.
 
 use crate::api::{Market, TransitiveOrder};
-use crate::encoding::TokenPair;
+use crate::encoding::TokenPairRange;
 use crate::num;
 use crate::orderbook::{Orderbook, OverlapError, Ring};
 use crate::{Pricegraph, FEE_FACTOR};
@@ -54,7 +54,12 @@ impl Pricegraph {
     /// # Panics
     ///
     /// This method panics if the spread is zero or negative.
-    pub fn transitive_orderbook(&self, market: Market, spread: Option<f64>) -> TransitiveOrderbook {
+    pub fn transitive_orderbook(
+        &self,
+        market: Market,
+        hops: Option<u16>,
+        spread: Option<f64>,
+    ) -> TransitiveOrderbook {
         let mut orderbook = self.full_orderbook();
 
         let mut transitive_orderbook = TransitiveOrderbook::default();
@@ -73,12 +78,20 @@ impl Pricegraph {
         let inverse_ring = orderbook.fill_market_ring_trade(market.inverse());
         debug_assert_eq!(inverse_ring, None);
 
+        let ask_pair_range = TokenPairRange {
+            pair: market.ask_pair(),
+            hops,
+        };
         transitive_orderbook.asks.extend(
-            fill_transitive_orders(orderbook.clone(), market.ask_pair(), spread)
+            fill_transitive_orders(orderbook.clone(), ask_pair_range, spread)
                 .expect("overlapping orders in reduced orderbook"),
         );
+        let bid_pair_range = TokenPairRange {
+            pair: market.bid_pair(),
+            hops,
+        };
         transitive_orderbook.bids.extend(
-            fill_transitive_orders(orderbook, market.bid_pair(), spread)
+            fill_transitive_orders(orderbook, bid_pair_range, spread)
                 .expect("overlapping orders in reduced orderbook"),
         );
 
@@ -110,7 +123,7 @@ impl Pricegraph {
 /// This method panics if the spread is zero or negative.
 fn fill_transitive_orders(
     mut orderbook: Orderbook,
-    pair: TokenPair,
+    pair_range: TokenPairRange,
     spread: Option<f64>,
 ) -> Result<Vec<TransitiveOrder>, OverlapError> {
     if let Some(spread) = spread {
@@ -120,7 +133,7 @@ fn fill_transitive_orders(
     let mut orders = Vec::new();
     let mut max_xrate = None;
 
-    while let Some(flow) = orderbook.fill_optimal_transitive_order_if(pair, |flow| {
+    while let Some(flow) = orderbook.fill_optimal_transitive_order_if(pair_range, |flow| {
         if let Some(spread) = spread {
             let max_xrate =
                 max_xrate.get_or_insert_with(|| flow.exchange_rate.value() * (1.0 + spread));

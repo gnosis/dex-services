@@ -9,6 +9,8 @@ use std::num::NonZeroU128;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+const MAX_MATCHED_ORDERS_IN_BATCH: u16 = 30;
+
 pub struct PricegraphEstimator {
     orderbook_reader: Arc<dyn StableXOrderBookReading>,
 }
@@ -46,7 +48,7 @@ impl<T: TokenPriceEstimating> PriceSource for T {
         let result = tokens
             .iter()
             .flat_map(|token| {
-                let price_in_reference = self.estimate_token_price(*token)?;
+                let price_in_reference = self.estimate_token_price(*token, Some(MAX_MATCHED_ORDERS_IN_BATCH))?;
                 Some((*token, NonZeroU128::new(price_in_reference as _)?))
             })
             .collect();
@@ -62,12 +64,12 @@ mod inner {
 
     #[cfg_attr(test, mockall::automock)]
     pub trait TokenPriceEstimating {
-        fn estimate_token_price(&self, token: TokenId) -> Option<f64>;
+        fn estimate_token_price(&self, token: TokenId, hops: Option<u16>) -> Option<f64>;
     }
 
     impl TokenPriceEstimating for Pricegraph {
-        fn estimate_token_price(&self, token: TokenId) -> Option<f64> {
-            let estimate = self.estimate_token_price(token.0)?;
+        fn estimate_token_price(&self, token: TokenId, hops: Option<u16>) -> Option<f64> {
+            let estimate = self.estimate_token_price(token.0, hops)?;
             Some(estimate)
         }
     }

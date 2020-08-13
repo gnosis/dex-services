@@ -1,6 +1,6 @@
 //! Module containing reduced orderbook wrapper type.
 
-use crate::encoding::TokenPair;
+use crate::encoding::TokenPairRange;
 use crate::orderbook::{Flow, Orderbook};
 
 /// A graph representation of a reduced orderbook. Reduced orderbooks are
@@ -18,16 +18,16 @@ impl ReducedOrderbook {
     /// method is similar to
     /// `ReducedOrderbook::fill_optimal_transitive_order_if` except it does not
     /// check a condition on the discovered path's flow before filling.
-    pub fn fill_optimal_transitive_order(&mut self, pair: TokenPair) -> Option<Flow> {
-        self.fill_optimal_transitive_order_if(pair, |_| true)
+    pub fn fill_optimal_transitive_order(&mut self, pair_range: TokenPairRange) -> Option<Flow> {
+        self.fill_optimal_transitive_order_if(pair_range, |_| true)
     }
 
     /// Finds and returns the optimal transitive order for the specified token
     /// pair without filling it. Returns `None` if no such transitive order
     /// exists.
-    pub fn find_optimal_transitive_order(&mut self, pair: TokenPair) -> Option<Flow> {
+    pub fn find_optimal_transitive_order(&mut self, pair_range: TokenPairRange) -> Option<Flow> {
         self.0
-            .find_optimal_transitive_order(pair)
+            .find_optimal_transitive_order(pair_range)
             .expect("negative cycle in reduced orderbook")
     }
 
@@ -42,11 +42,11 @@ impl ReducedOrderbook {
     /// the token pair.
     pub fn fill_optimal_transitive_order_if(
         &mut self,
-        pair: TokenPair,
+        pair_range: TokenPairRange,
         condition: impl FnMut(&Flow) -> bool,
     ) -> Option<Flow> {
         self.0
-            .fill_optimal_transitive_order_if(pair, condition)
+            .fill_optimal_transitive_order_if(pair_range, condition)
             .expect("negative cycle in reduced orderbook")
     }
 

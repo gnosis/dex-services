@@ -7,7 +7,7 @@ use core::{
     models::TokenId,
     token_info::{TokenBaseInfo, TokenInfoFetching},
 };
-use pricegraph::{Pricegraph, TokenPair};
+use pricegraph::{Pricegraph, TokenPair, TokenPairRange};
 use std::convert::Infallible;
 use std::sync::Arc;
 use warp::{
@@ -180,7 +180,7 @@ async fn get_markets(
         .pricegraph(query.batch_id, PricegraphKind::Raw)
         .await
         .map_err(error::internal_server_rejection)?
-        .transitive_orderbook(*market, None);
+        .transitive_orderbook(*market, query.hops, None);
     let result = MarketsResult::from(&transitive_orderbook);
     Ok(warp::reply::json(&result))
 }
@@ -213,11 +213,15 @@ async fn estimate_buy_amount(
         let amount = Amount::BaseUnits(sell_amount_in_quote);
         (amount, amount.as_atoms(&token_info) as _)
     };
+    let token_pair_range = TokenPairRange {
+        pair: token_pair,
+        hops: query.hops,
+    };
     let transitive_order = orderbook
         .pricegraph(query.batch_id, PricegraphKind::Raw)
         .await
         .map_err(error::internal_server_rejection)?
-        .order_for_sell_amount(token_pair, sell_amount_in_quote_atoms);
+        .order_for_sell_amount(token_pair_range, sell_amount_in_quote_atoms);
 
     let mut buy_amount_in_base = Amount::Atoms(
         transitive_order
@@ -250,9 +254,13 @@ async fn estimate_amounts_at_price(
         .pricegraph(query.batch_id, PricegraphKind::Raw)
         .await
         .map_err(error::internal_server_rejection)?;
+    let token_pair_range = TokenPairRange {
+        pair: token_pair,
+        hops: query.hops,
+    };
     let result = if query.atoms {
         estimate_amounts_at_price_atoms(
-            token_pair,
+            token_pair_range,
             price_in_quote,
             price_rounding_buffer,
             pricegraph,
@@ -264,7 +272,7 @@ async fn estimate_amounts_at_price(
             * (sell_token_info.base_unit_in_atoms().get() as f64
                 / buy_token_info.base_unit_in_atoms().get() as f64);
         let mut result = estimate_amounts_at_price_atoms(
-            token_pair,
+            token_pair_range,
             price_in_quote_atoms,
             price_rounding_buffer,
             pricegraph,
@@ -280,7 +288,7 @@ async fn estimate_amounts_at_price(
 
 /// Like `estimate_amounts_at_price` but the price is given and returned in atoms.
 fn estimate_amounts_at_price_atoms(
-    token_pair: TokenPair,
+    token_pair_range: TokenPairRange,
     price_in_quote: f64,
     price_rounding_buffer: f64,
     pricegraph: Pricegraph,
@@ -290,7 +298,7 @@ fn estimate_amounts_at_price_atoms(
     // rounding buffer to the price, which will **increase** the exchange rate,
     // making it more restrictive and the estimate more pessimistic.
     let exchange_rate = 1.0 / apply_rounding_buffer(price_in_quote, price_rounding_buffer);
-    let transitive_order = pricegraph.order_at_limit_price(token_pair, exchange_rate);
+    let transitive_order = pricegraph.order_at_limit_price(token_pair_range, exchange_rate);
     let (buy_amount_in_base, sell_amount_in_quote) = transitive_order
         .map(|order| {
             (
@@ -300,8 +308,8 @@ fn estimate_amounts_at_price_atoms(
         })
         .unwrap_or_default();
     EstimatedOrderResult {
-        base_token_id: token_pair.buy,
-        quote_token_id: token_pair.sell,
+        base_token_id: token_pair_range.pair.buy,
+        quote_token_id: token_pair_range.pair.sell,
         sell_amount_in_quote: Amount::Atoms(sell_amount_in_quote as _),
         buy_amount_in_base: Amount::Atoms(buy_amount_in_base as _),
     }
@@ -316,11 +324,15 @@ async fn estimate_best_ask_price(
     if !query.atoms {
         return Err(warp::reject());
     }
+    let token_pair_range = TokenPairRange {
+        pair:token_pair,
+        hops: query.hops,
+    }; 
     let price = orderbook
         .pricegraph(query.batch_id, PricegraphKind::Raw)
         .await
         .map_err(error::internal_server_rejection)?
-        .estimate_limit_price(token_pair, 0.0)
+        .estimate_limit_price(token_pair_range, 0.0)
         .map(|xrate| {
             // NOTE: Exchange rate is the inverse of price for an ask order.
             1.0 / apply_rounding_buffer(xrate, price_rounding_buffer)

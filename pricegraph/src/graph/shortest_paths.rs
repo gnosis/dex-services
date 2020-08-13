@@ -160,7 +160,7 @@ where
 impl<G> ShortestPathGraph<G>
 where
     G: IntoNodeIdentifiers + IntoEdges + NodeIndexable,
-    G::NodeId: Ord, 
+    G::NodeId: Ord,
     G::EdgeWeight: FloatMeasure,
 {
     /// Initializes a shortest path graph that will be later built with the
@@ -257,7 +257,8 @@ where
                 let mut cycle = Vec::with_capacity(steps);
                 let mut node = search_start;
                 for step in (0..steps).rev() {
-                    node = if let Some(pred) = predecessors_at_step[step][self.graph.to_index(node)] {
+                    node = if let Some(pred) = predecessors_at_step[step][self.graph.to_index(node)]
+                    {
                         cycle.push(node);
                         if pred == search_start {
                             cycle.push(search_start);
