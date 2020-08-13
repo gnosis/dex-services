@@ -251,6 +251,7 @@ struct Row {
 
 struct Report<T> {
     output: T,
+    total: usize,
     success: usize,
     skipped: usize,
     missed: usize,
@@ -264,6 +265,7 @@ where
     fn new(output: T) -> Self {
         Report {
             output,
+            total: 0,
             success: 0,
             skipped: 0,
             missed: 0,
@@ -308,6 +310,7 @@ where
             row.meta.fill_ratio().unwrap_or_default(),
         )?;
 
+        self.total += 1;
         match row.result {
             TradeResult::FullyMatched | TradeResult::UnreasonableOrderNotMatched => {
                 self.success += 1
@@ -324,15 +327,18 @@ where
     }
 
     fn finalize(self) -> Result<()> {
-        let total = self.success + self.skipped + self.failed;
-        let percent = |value: usize| 100.0 * value as f64 / total as f64;
+        let percent = |value: usize| 100.0 * value as f64 / self.total as f64;
         println!(
-            "Processed {} orders: {:.2}% correct, {:.2}% missed, {:.2}% failed, {:.2}% skipped.",
-            total,
-            percent(self.success),
-            percent(self.missed),
-            percent(self.failed),
-            percent(self.skipped),
+            "Processed {} orders: \
+             {success:.2}% correct, \
+             {missed:.2}% missed, \
+             {failed:.2}% failed, \
+             {skipped:.2}% skipped.",
+            self.total,
+            success = percent(self.success),
+            missed = percent(self.missed),
+            failed = percent(self.failed),
+            skipped = percent(self.skipped),
         );
 
         Ok(())
