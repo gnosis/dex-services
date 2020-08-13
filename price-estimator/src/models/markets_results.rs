@@ -32,37 +32,26 @@ impl MarketsResult {
         base_token_info: &TokenBaseInfo,
         quote_token_info: &TokenBaseInfo,
     ) -> Self {
-        return Self {
-            asks: into_transitive_orders_in_base_unit(
-                self.asks,
-                &base_token_info,
-                &quote_token_info,
-            ),
-            bids: into_transitive_orders_in_base_unit(
-                self.bids,
-                &base_token_info,
-                &quote_token_info,
-            ),
-        };
+        let mut asks = self.asks;
+        convert_to_base_units(&mut asks, &base_token_info, &quote_token_info);
+        let mut bids = self.bids;
+        convert_to_base_units(&mut bids, &base_token_info, &quote_token_info);
+        return Self { asks, bids };
     }
 }
 
-fn into_transitive_orders_in_base_unit(
-    orders: Vec<TransitiveOrder>,
+fn convert_to_base_units(
+    orders: &mut Vec<TransitiveOrder>,
     base_token_info: &TokenBaseInfo,
     quote_token_info: &TokenBaseInfo,
-) -> Vec<TransitiveOrder> {
-    orders
-        .into_iter()
-        .map(|order| TransitiveOrder {
-            // Prices are in quote
-            price: order.price
-                / 10f64.powi(quote_token_info.decimals as i32 - base_token_info.decimals as i32)
-                    as f64,
-            // Volumes are in base
-            volume: order.volume / base_token_info.base_unit_in_atoms().get() as f64,
-        })
-        .collect()
+) {
+    orders.iter_mut().for_each(|order| {
+        // Prices are in quote
+        order.price /=
+            10f64.powi(quote_token_info.decimals as i32 - base_token_info.decimals as i32) as f64;
+        // Volumes are in base
+        order.volume /= base_token_info.base_unit_in_atoms().get() as f64;
+    })
 }
 
 enum TransitiveOrderbookOrdering {
