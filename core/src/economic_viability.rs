@@ -2,7 +2,7 @@
 //! price estimates.
 
 use crate::{
-    gas_station::GasPriceEstimating, models::solution::EconomicViabilityInfo,
+    gas_price::GasPriceEstimating, models::solution::EconomicViabilityInfo,
     price_estimation::PriceEstimating,
 };
 use anyhow::{anyhow, Context as _, Result};
@@ -62,13 +62,12 @@ impl EconomicViabilityComputer {
     }
 
     async fn gas_price(&self) -> Result<f64> {
-        let fast = self
+        let gas_price = self
             .gas_station
             .estimate_gas_price()
             .await
-            .context("failed to get gas price")?
-            .fast;
-        Ok(pricegraph::num::u256_to_f64(fast))
+            .context("failed to get gas price")?;
+        Ok(pricegraph::num::u256_to_f64(gas_price))
     }
 }
 
@@ -201,8 +200,7 @@ impl EconomicViabilityComputing for PriorityEconomicViabilityComputer {
 mod tests {
     use super::*;
     use crate::{
-        gas_station::{GasPrice, MockGasPriceEstimating},
-        price_estimation::MockPriceEstimating,
+        gas_price::MockGasPriceEstimating, price_estimation::MockPriceEstimating,
         util::FutureWaitExt as _,
     };
     use assert_approx_eq::assert_approx_eq;
@@ -228,12 +226,9 @@ mod tests {
             .returning(|| immediate!(Some(nonzero!(240e18 as u128))));
 
         let mut gas_station = MockGasPriceEstimating::new();
-        gas_station.expect_estimate_gas_price().returning(|| {
-            immediate!(Ok(GasPrice {
-                fast: (40e9 as u128).into(),
-                ..Default::default()
-            }))
-        });
+        gas_station
+            .expect_estimate_gas_price()
+            .returning(|| immediate!(Ok((40e9 as u128).into())));
         let subsidy = 10.0f64;
         let min_avg_fee_factor = 1.1f64;
         let economic_viability = EconomicViabilityComputer::new(

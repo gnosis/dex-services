@@ -6,7 +6,7 @@ use core::driver::{
 use core::economic_viability::{
     EconomicViabilityComputer, FixedEconomicViabilityComputer, PriorityEconomicViabilityComputer,
 };
-use core::gas_station::{self, GnosisSafeGasStation};
+use core::gas_price::{GasPriceEstimating, GasPriceEstimatingKind};
 use core::http::HttpFactory;
 use core::logging;
 use core::metrics::{HttpMetrics, MetricsServer, StableXMetrics};
@@ -223,6 +223,16 @@ struct Options {
 
     #[structopt(long, env = "ORDERBOOK_FILE", parse(from_os_str))]
     orderbook_file: Option<PathBuf>,
+
+    /// The gas price estimation method to use. Can be one of `gasstation` or
+    /// `web3`.
+    #[structopt(
+        long,
+        env = "GAS_PRICE_ESTIMATING_KIND",
+        default_value = "gasstation",
+        parse(try_from_str)
+    )]
+    gas_price_estimating_kind: GasPriceEstimatingKind,
 }
 
 fn main() {
@@ -353,15 +363,13 @@ fn setup_metrics() -> (StableXMetrics, HttpMetrics) {
 fn setup_http_services(
     http_factory: &HttpFactory,
     options: &Options,
-) -> (Web3, Arc<GnosisSafeGasStation>) {
+) -> (Web3, Arc<dyn GasPriceEstimating + Send + Sync>) {
     let web3 = web3_provider(http_factory, options.node_url.as_str(), options.rpc_timeout).unwrap();
-    let gas_station = GnosisSafeGasStation::new(
-        &http_factory,
-        gas_station::api_url_from_network_id(options.network_id)
-            .expect("no gas station available for network_id"),
-    )
-    .unwrap();
-    (web3, Arc::new(gas_station))
+    let gas_station = options
+        .gas_price_estimating_kind
+        .create(&http_factory, &web3, options.network_id)
+        .unwrap();
+    (web3, gas_station)
 }
 
 fn duration_millis(s: &str) -> Result<Duration, ParseIntError> {
