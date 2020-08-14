@@ -1,6 +1,6 @@
 use super::{AuctionTimingConfiguration, Scheduler};
 use crate::{
-    driver::stablex_driver::{DriverResult, StableXDriver},
+    driver::stablex_driver::{DriverError, StableXDriver},
     models::BatchId,
     util::{AsyncSleep, AsyncSleeping, DefaultNow, FutureWaitExt as _, Now},
 };
@@ -115,19 +115,19 @@ async fn solve(
             .await;
         log_driver_result(batch_id, &driver_result);
         match driver_result {
-            DriverResult::Retry(_) => sleep.sleep(RETRY_SLEEP_DURATION).await,
-            DriverResult::Ok | DriverResult::Skip(_) => break,
+            Err(DriverError::Retry(_)) => sleep.sleep(RETRY_SLEEP_DURATION).await,
+            Ok(()) | Err(DriverError::Skip(_)) => break,
         }
     }
 }
 
-fn log_driver_result(batch_id: BatchId, driver_result: &DriverResult) {
+fn log_driver_result(batch_id: BatchId, driver_result: &Result<(), DriverError>) {
     match driver_result {
-        DriverResult::Ok => info!("Batch {} solved successfully.", batch_id),
-        DriverResult::Retry(err) => {
+        Ok(()) => info!("Batch {} solved successfully.", batch_id),
+        Err(DriverError::Retry(err)) => {
             error!("Batch {} failed with retryable error: {:?}", batch_id, err)
         }
-        DriverResult::Skip(err) => error!(
+        Err(DriverError::Skip(err)) => error!(
             "Batch {} failed with unretryable error: {:?}",
             batch_id, err
         ),
@@ -287,7 +287,7 @@ mod tests {
         let mut driver = MockStableXDriver::new();
         driver
             .expect_run()
-            .returning(|_, _, _| immediate!(DriverResult::Retry(anyhow!(""))));
+            .returning(|_, _, _| immediate!(Err(DriverError::Retry(anyhow!("")))));
         let mut sleep = MockAsyncSleeping::new();
         sleep.expect_sleep().returning(|_| immediate!(()));
 
@@ -322,7 +322,6 @@ mod tests {
     #[test]
     #[ignore]
     fn test_real() {
-        use crate::driver::stablex_driver::DriverResult;
         let (_, _guard) = crate::logging::init("info");
 
         let mut driver = MockStableXDriver::new();
@@ -338,9 +337,9 @@ mod tests {
             counter += 1;
             async move {
                 match counter % 3 {
-                    0 => DriverResult::Ok,
-                    1 => DriverResult::Retry(anyhow!("")),
-                    2 => DriverResult::Skip(anyhow!("")),
+                    0 => Ok(()),
+                    1 => Err(DriverError::Retry(anyhow!(""))),
+                    2 => Err(DriverError::Skip(anyhow!(""))),
                     _ => unreachable!(),
                 }
             }

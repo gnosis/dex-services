@@ -16,8 +16,7 @@ use std::{
 };
 
 #[derive(Debug)]
-pub enum DriverResult {
-    Ok,
+pub enum DriverError {
     Retry(Error),
     Skip(Error),
 }
@@ -31,7 +30,7 @@ pub trait StableXDriver {
         batch_to_solve: BatchId,
         latest_solution_submit_time: Duration,
         earliest_solution_submit_time: Duration,
-    ) -> BoxFuture<'a, DriverResult>;
+    ) -> BoxFuture<'a, Result<(), DriverError>>;
 }
 
 pub struct StableXDriverImpl<'a> {
@@ -221,16 +220,16 @@ impl<'a> StableXDriver for StableXDriverImpl<'a> {
         batch_to_solve: BatchId,
         latest_solution_submit_time: Duration,
         earliest_solution_submit_time: Duration,
-    ) -> BoxFuture<DriverResult> {
+    ) -> BoxFuture<Result<(), DriverError>> {
         async move {
             let deadline = Instant::now() + latest_solution_submit_time;
 
             self.metrics
                 .auction_processing_started(&Ok(batch_to_solve.into()));
-            let (account_state, orders) = match self.get_orderbook(batch_to_solve.into()).await {
-                Ok(ok) => ok,
-                Err(err) => return DriverResult::Retry(err),
-            };
+            let (account_state, orders) = self
+                .get_orderbook(batch_to_solve.into())
+                .await
+                .map_err(DriverError::Retry)?;
 
             // Make sure the solver has at least some minimal time to run to have a chance for a
             // solution. This also fixes an assert where the solver fails if the timelimit gets rounded
@@ -240,11 +239,11 @@ impl<'a> StableXDriver for StableXDriverImpl<'a> {
                 Some(duration) if duration > Duration::from_secs(1) => duration,
                 _ => {
                     warn!("orderbook retrieval exceeded time limit");
-                    return DriverResult::Ok;
+                    return Ok(());
                 }
             };
 
-            let solution = match self
+            let solution = self
                 .solve(
                     batch_to_solve,
                     latest_solution_submit_time,
@@ -252,17 +251,10 @@ impl<'a> StableXDriver for StableXDriverImpl<'a> {
                     orders,
                 )
                 .await
-            {
-                Ok(solution) => solution,
-                Err(err) => return DriverResult::Skip(err),
-            };
-            match self
-                .submit(batch_to_solve, earliest_solution_submit_time, solution)
+                .map_err(DriverError::Skip)?;
+            self.submit(batch_to_solve, earliest_solution_submit_time, solution)
                 .await
-            {
-                Ok(()) => DriverResult::Ok,
-                Err(err) => DriverResult::Skip(err),
-            }
+                .map_err(DriverError::Skip)
         }
         .boxed()
     }
@@ -286,29 +278,6 @@ mod tests {
     use ethcontract::U256;
     use mockall::predicate::*;
     use std::thread;
-
-    impl DriverResult {
-        fn is_ok(&self) -> bool {
-            match self {
-                DriverResult::Ok => true,
-                _ => false,
-            }
-        }
-
-        fn is_retry(&self) -> bool {
-            match self {
-                DriverResult::Retry(_) => true,
-                _ => false,
-            }
-        }
-
-        fn is_skip(&self) -> bool {
-            match self {
-                DriverResult::Skip(_) => true,
-                _ => false,
-            }
-        }
-    }
 
     #[test]
     fn invokes_solver_with_reader_data_for_unprocessed_auction() {
@@ -382,11 +351,13 @@ mod tests {
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
 
-        assert!(driver
-            .run(BatchId(42), Duration::default(), Duration::default())
-            .now_or_never()
-            .unwrap()
-            .is_retry())
+        assert!(matches!(
+            driver
+                .run(BatchId(42), Duration::default(), Duration::default())
+                .now_or_never()
+                .unwrap(),
+            Err(DriverError::Retry(_))
+        ));
     }
 
     #[test]
@@ -427,15 +398,17 @@ mod tests {
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
 
-        assert!(driver
-            .run(
-                BatchId::from(batch),
-                latest_solution_submit_time,
-                Duration::from_secs(0)
-            )
-            .now_or_never()
-            .unwrap()
-            .is_skip());
+        assert!(matches!(
+            driver
+                .run(
+                    BatchId::from(batch),
+                    latest_solution_submit_time,
+                    Duration::from_secs(0)
+                )
+                .now_or_never()
+                .unwrap(),
+            Err(DriverError::Skip(_))
+        ));
     }
 
     #[test]
@@ -561,15 +534,17 @@ mod tests {
             .return_once(move |_, _, _| async { Ok(solution) }.boxed());
 
         let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
-        assert!(driver
-            .run(
-                BatchId::from(batch),
-                latest_solution_submit_time,
-                Duration::from_secs(0)
-            )
-            .now_or_never()
-            .unwrap()
-            .is_skip());
+        assert!(matches!(
+            driver
+                .run(
+                    BatchId::from(batch),
+                    latest_solution_submit_time,
+                    Duration::from_secs(0)
+                )
+                .now_or_never()
+                .unwrap(),
+            Err(DriverError::Skip(_))
+        ));
     }
 
     #[test]
