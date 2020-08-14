@@ -59,10 +59,17 @@ pub enum TokenRef {
 
 impl TokenRef {
     /// Convert this token reference into an exchange token ID.
-    pub async fn as_token_id(&self, _token_infos: &dyn TokenInfoFetching) -> Result<TokenId> {
+    pub async fn as_token_id(&self, token_infos: &dyn TokenInfoFetching) -> Result<TokenId> {
         match self {
             TokenRef::Id(id) => Ok(*id),
-            _ => bail!("not yet implemented"),
+            TokenRef::Address(_) => bail!("not yet implemented"),
+            TokenRef::Symbol(symbol) => {
+                let (id, _) = token_infos
+                    .find_token_by_symbol(symbol)
+                    .await?
+                    .ok_or_else(|| anyhow!("token symbol {} not found", symbol))?;
+                Ok(id.into())
+            }
         }
     }
 }

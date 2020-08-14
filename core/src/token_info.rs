@@ -10,7 +10,7 @@ pub mod onchain;
 
 pub trait TokenInfoFetching: Send + Sync {
     /// Retrieves some token information from a token ID.
-    fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>>;
+    fn get_token_info(&self, id: TokenId) -> BoxFuture<Result<TokenBaseInfo>>;
 
     /// Retrieves all token information.
     /// Default implementation calls get_token_info for each token and ignores errors.
@@ -34,7 +34,24 @@ pub trait TokenInfoFetching: Send + Sync {
     }
 
     /// Returns a vector with all the token IDs available
-    fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>>;
+    fn all_ids(&self) -> BoxFuture<Result<Vec<TokenId>>>;
+
+    /// Retrieves a token by symbol.
+    ///
+    /// Default implementation queries token info for all IDs and searches the
+    /// resulting token for the specified symbol.
+    fn find_token_by_symbol<'a>(
+        &'a self,
+        symbol: &'a str,
+    ) -> BoxFuture<'a, Result<Option<(TokenId, TokenBaseInfo)>>> {
+        async move {
+            let infos = self.get_token_infos(&self.all_ids().await?).await?;
+            Ok(infos
+                .into_iter()
+                .find(|(_, info)| info.symbol() == symbol || info.alias == symbol))
+        }
+        .boxed()
+    }
 }
 
 // mockall workaround https://github.com/asomers/mockall/issues/134
