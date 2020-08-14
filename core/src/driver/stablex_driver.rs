@@ -90,30 +90,34 @@ impl<'a> StableXDriverImpl<'a> {
         &self,
         batch_to_solve: BatchId,
         latest_solution_submit_time: Duration,
-        earliest_solution_submit_time: Duration,
         account_state: AccountState,
         orders: Vec<Order>,
-    ) -> Result<()> {
-        let solution = if orders.is_empty() {
+    ) -> Result<Solution> {
+        if orders.is_empty() {
             info!("No orders in batch {}", batch_to_solve);
-            Solution::trivial()
-        } else {
-            let price_finder_result = self
-                .price_finder
-                .find_prices(&orders, &account_state, latest_solution_submit_time)
-                .await;
-            self.metrics
-                .auction_solution_computed(batch_to_solve.into(), &price_finder_result);
+            return Ok(Solution::trivial());
+        }
+        let price_finder_result = self
+            .price_finder
+            .find_prices(&orders, &account_state, latest_solution_submit_time)
+            .await;
+        self.metrics
+            .auction_solution_computed(batch_to_solve.into(), &price_finder_result);
 
-            let solution = price_finder_result?;
-            info!(
-                "Computed solution for batch {}: {:?}",
-                batch_to_solve, &solution
-            );
+        let solution = price_finder_result?;
+        info!(
+            "Computed solution for batch {}: {:?}",
+            batch_to_solve, &solution
+        );
+        Ok(solution)
+    }
 
-            solution
-        };
-
+    async fn submit(
+        &self,
+        batch_to_solve: BatchId,
+        earliest_solution_submit_time: Duration,
+        solution: Solution,
+    ) -> Result<()> {
         let verified = if solution.is_non_trivial() {
             // NOTE: in retrieving the objective value from the reader the
             //   solution gets validated, ensured that it is better than the
@@ -240,14 +244,20 @@ impl<'a> StableXDriver for StableXDriverImpl<'a> {
                 }
             };
 
-            match self
+            let solution = match self
                 .solve(
                     batch_to_solve,
                     latest_solution_submit_time,
-                    earliest_solution_submit_time,
                     account_state,
                     orders,
                 )
+                .await
+            {
+                Ok(solution) => solution,
+                Err(err) => return DriverResult::Skip(err),
+            };
+            match self
+                .submit(batch_to_solve, earliest_solution_submit_time, solution)
                 .await
             {
                 Ok(()) => DriverResult::Ok,
