@@ -69,12 +69,14 @@ impl TokenInfoCache {
         Ok(())
     }
 
-    async fn uncached_tokens(&self, ids: impl IntoIterator<Item = &TokenId>) -> Vec<TokenId> {
+    async fn uncached_tokens<'a>(
+        &'a self,
+        ids: impl IntoIterator<Item = &'a TokenId> + 'a,
+    ) -> impl Iterator<Item = TokenId> + 'a {
         let cache = self.cache.read().await;
         ids.into_iter()
             .copied()
-            .filter(|id| !cache.contains_key(id))
-            .collect()
+            .filter(move |id| !cache.contains_key(id))
     }
 
     async fn find_cached_token_by_symbol(&self, symbol: &str) -> Option<(TokenId, TokenBaseInfo)> {
