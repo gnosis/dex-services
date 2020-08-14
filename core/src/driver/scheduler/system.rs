@@ -1,15 +1,15 @@
 use super::{AuctionTimingConfiguration, Scheduler};
 use crate::{
     driver::stablex_driver::{DriverError, StableXDriver},
-    models::BatchId,
+    models::{BatchId, Solution},
     util::{AsyncSleep, AsyncSleeping, DefaultNow, FutureWaitExt as _, Now},
 };
 use anyhow::{Context, Result};
 use crossbeam_utils::thread::Scope;
-use log::error;
-use log::info;
-use std::thread;
-use std::time::{Duration, Instant, SystemTime};
+use std::{
+    thread,
+    time::{Duration, Instant, SystemTime},
+};
 
 const RETRY_SLEEP_DURATION: Duration = Duration::from_secs(1);
 
@@ -46,14 +46,14 @@ impl<'a> SystemScheduler<'a> {
         'a: 'b,
     {
         let driver = self.driver;
-        let min_solution_submit_time = self
+        let earliest_solution_submit_time = self
             .auction_timing_configuration
             .earliest_solution_submit_time;
         scope.spawn(move |_| {
-            solve(
+            solve_and_submit(
                 batch_id,
                 solver_deadline,
-                min_solution_submit_time,
+                earliest_solution_submit_time,
                 driver,
                 &DefaultNow {},
                 &AsyncSleep {},
@@ -101,36 +101,70 @@ impl<'a> SystemScheduler<'a> {
     }
 }
 
-async fn solve(
+async fn solve_and_submit(
     batch_id: BatchId,
     solver_deadline: Instant,
-    min_solution_submit_time: Duration,
+    earliest_solution_submit_time: Duration,
     driver: &dyn StableXDriver,
     now: &dyn Now,
     sleep: &dyn AsyncSleeping,
 ) {
     while let Some(time_limit) = solver_deadline.checked_duration_since(now.instant_now()) {
-        let driver_result = driver
-            .run(batch_id, time_limit, min_solution_submit_time)
-            .await;
-        log_driver_result(batch_id, &driver_result);
+        let driver_result = driver.solve_batch(batch_id, time_limit).await;
+        log_solve_result(batch_id, &driver_result);
         match driver_result {
+            Ok(solution) => {
+                return submit(
+                    batch_id,
+                    earliest_solution_submit_time,
+                    solution,
+                    driver,
+                    now,
+                    sleep,
+                )
+                .await
+            }
             Err(DriverError::Retry(_)) => sleep.sleep(RETRY_SLEEP_DURATION).await,
-            Ok(()) | Err(DriverError::Skip(_)) => break,
+            Err(DriverError::Skip(_)) => break,
         }
     }
 }
 
-fn log_driver_result(batch_id: BatchId, driver_result: &Result<(), DriverError>) {
+async fn submit(
+    batch_id: BatchId,
+    earliest_solution_submit_time: Duration,
+    solution: Solution,
+    driver: &dyn StableXDriver,
+    now: &dyn Now,
+    sleep: &dyn AsyncSleeping,
+) {
+    if let Ok(duration) = (batch_id.solve_start_time() + earliest_solution_submit_time)
+        .duration_since(now.system_now())
+    {
+        sleep.sleep(duration).await;
+    }
+    let result = driver.submit_solution(batch_id, solution).wait();
+    log_submit_result(batch_id, &result);
+}
+
+fn log_solve_result(batch_id: BatchId, driver_result: &Result<Solution, DriverError>) {
     match driver_result {
-        Ok(()) => info!("Batch {} solved successfully.", batch_id),
+        Ok(_) => log::info!("Batch {} solved successfully.", batch_id),
         Err(DriverError::Retry(err)) => {
-            error!("Batch {} failed with retryable error: {:?}", batch_id, err)
+            log::error!("Batch {} failed with retryable error: {:?}", batch_id, err)
         }
-        Err(DriverError::Skip(err)) => error!(
+        Err(DriverError::Skip(err)) => log::error!(
             "Batch {} failed with unretryable error: {:?}",
-            batch_id, err
+            batch_id,
+            err
         ),
+    }
+}
+
+fn log_submit_result(batch_id: BatchId, result: &Result<()>) {
+    match result {
+        Ok(_) => log::info!("Batch {} solution submitted successfully.", batch_id),
+        Err(err) => log::error!("Batch {} solution submission failed: {:?}", batch_id, err),
     }
 }
 
@@ -140,16 +174,16 @@ impl<'a> Scheduler for SystemScheduler<'a> {
             loop {
                 match self.determine_action(SystemTime::now()) {
                     Ok(Action::Sleep(duration)) => {
-                        info!("Sleeping {}s.", duration.as_secs());
+                        log::info!("Sleeping {}s.", duration.as_secs());
                         thread::sleep(duration);
                     }
                     Ok(Action::Solve(batch_id, duration)) => {
-                        info!("Starting to solve batch {}.", batch_id);
+                        log::info!("Starting to solve batch {}.", batch_id);
                         self.last_solved_batch = Some(batch_id);
                         self.start_solving_in_thread(batch_id, Instant::now() + duration, scope)
                     }
                     Err(err) => {
-                        error!("Scheduler error: {:?}", err);
+                        log::error!("Scheduler error: {:?}", err);
                         thread::sleep(RETRY_SLEEP_DURATION);
                     }
                 };
@@ -168,6 +202,7 @@ mod tests {
     };
     use anyhow::anyhow;
     use futures::future::FutureExt as _;
+    use mockall::{predicate::*, Sequence};
 
     #[test]
     fn determine_action_without_matching_last_solved_batch() {
@@ -286,8 +321,8 @@ mod tests {
 
         let mut driver = MockStableXDriver::new();
         driver
-            .expect_run()
-            .returning(|_, _, _| immediate!(Err(DriverError::Retry(anyhow!("")))));
+            .expect_solve_batch()
+            .returning(|_, _| immediate!(Err(DriverError::Retry(anyhow!("")))));
         let mut sleep = MockAsyncSleeping::new();
         sleep.expect_sleep().returning(|_| immediate!(()));
 
@@ -303,10 +338,45 @@ mod tests {
             .times(1)
             .returning(|| *EPOCH + Duration::from_secs(6));
 
-        assert!(solve(
+        assert!(solve_and_submit(
             BatchId(0),
             *EPOCH + Duration::from_secs(5),
             Duration::from_secs(0),
+            &driver,
+            &now,
+            &sleep,
+        )
+        .now_or_never()
+        .is_some());
+    }
+
+    #[test]
+    fn submit_waits_for_earliest_time() {
+        let mut sequence = Sequence::new();
+        let mut driver = MockStableXDriver::new();
+        let mut now = MockNow::new();
+        let mut sleep = MockAsyncSleeping::new();
+
+        now.expect_system_now()
+            .times(1)
+            .in_sequence(&mut sequence)
+            .returning(|| std::time::UNIX_EPOCH + Duration::from_secs(300));
+        sleep
+            .expect_sleep()
+            .times(1)
+            .in_sequence(&mut sequence)
+            .with(eq(Duration::from_secs(5)))
+            .returning(|_| immediate!(()));
+        driver
+            .expect_submit_solution()
+            .times(1)
+            .in_sequence(&mut sequence)
+            .returning(|_, _| immediate!(Ok(())));
+
+        assert!(submit(
+            BatchId(0),
+            Duration::from_secs(5),
+            Solution::trivial(),
             &driver,
             &now,
             &sleep,
@@ -327,23 +397,26 @@ mod tests {
         let mut driver = MockStableXDriver::new();
 
         let mut counter = 0;
-        driver.expect_run().returning(move |batch, time_limit, _| {
-            log::info!(
-                "driver run called for the {}. time with batch {} time_limit {}",
-                counter,
-                batch,
-                time_limit.as_secs(),
-            );
-            counter += 1;
-            async move {
-                match counter % 3 {
-                    0 => Ok(()),
+        driver
+            .expect_solve_batch()
+            .returning(move |batch, time_limit| {
+                log::info!(
+                    "driver solve batch called for the {}. time with batch {} time_limit {}",
+                    counter,
+                    batch,
+                    time_limit.as_secs(),
+                );
+                counter += 1;
+                immediate!(match counter % 3 {
+                    0 => Ok(Solution::trivial()),
                     1 => Err(DriverError::Retry(anyhow!(""))),
                     2 => Err(DriverError::Skip(anyhow!(""))),
                     _ => unreachable!(),
-                }
-            }
-            .boxed()
+                })
+            });
+        driver.expect_submit_solution().returning(|batch, _| {
+            log::info!("driver submit solution called for batch {}", batch);
+            immediate!(Ok(()))
         });
 
         let auction_timing_configuration = AuctionTimingConfiguration {
