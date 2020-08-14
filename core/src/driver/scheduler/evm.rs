@@ -190,6 +190,9 @@ mod tests {
         driver
             .expect_solve_batch()
             .returning(|_, _| immediate!(Ok(Solution::trivial())));
+        driver
+            .expect_submit_solution()
+            .returning(|_, _| immediate!(Ok(())));
 
         let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
         scheduler.last_batch = Some(40);
