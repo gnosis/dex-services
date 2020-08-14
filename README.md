@@ -26,8 +26,6 @@
 
 This repository contains the backend logic for the Gnosis Protocol based on [this specification](https://github.com/gnosis/dex-research).
 
-It contains two sub-projects that both implement the market mechanism described above in different ways. An fully on-chain solution with instant finality but limited scalability (referred to as "BatchExchange") and a preliminary version that intends to achieves scalability by offloading computation and data-storage off-chain using an [optimistic roll-up](https://medium.com/plasma-group/ethereum-smart-contracts-in-l2-optimistic-rollup-2c1cef2ec537) approach. The latter is in early development stage and not yet ready for use.
-
 ## Getting Started
 
 ### Requirements
@@ -37,9 +35,10 @@ It contains two sub-projects that both implement the market mechanism described 
 
 The project may work with other versions of these tools but they are not tested.
 
-### Installation
+### Setup
 
-Clone the repository, its submodule, and run the container
+Clone the repository. To run against a local test-chain use the following commands to deploy a version of the smart contracts:
+
 ```bash
 git clone git@github.com:gnosis/dex-services.git
 cd dex-services
@@ -47,11 +46,13 @@ docker-compose up -d ganache-cli
 (cd contracts; cargo run --bin deploy --features bin)
 ```
 
+Running against public chains (e.g. Rinkeby/Mainnet) does not require any extra setup.
+
 ## BatchExchange
 
 The BatchExchange system only consists of a simple service that queries the relevant auction information (orders and balances) directly from the blockchain. It then tries to find and submit a valid solution as soon as the order collection phase for a given auction ends.
 
-The repo ships with a very naive solver, that can at the moment only match two orders between the fee token (*token0*) and another token if those orders overlap. A more sophisticated solver using a mixed integer programming approach is not open sourced at the moment. In order to implement a custom solver, check the smart contract for the required constraints in the `submitSolution` method.
+The repo ships with a very naive solver, that can at the moment only match two orders between the fee token (*token0*) and another token if those orders overlap. A slightly more sophisticated solver allowing to match multiple orders between two directly overlapping tokens (without the restriction that one has to be a fee token) can be found [here](https://github.com/gnosis/dex-open-solver). We also developed a solver that uses a mixed integer programming approach, however this one is not open sourced at the moment. In order to implement a custom solver, check the smart contract for the required constraints in the `submitSolution` method.
 
 ### Running BatchExchange
 
@@ -61,38 +62,8 @@ You can run the rust binary locally (without docker). For that you will have to 
 - PRIVATE_KEY (the hex key without leading 0x that should be used to sign transactions. Needs to be funded with eth for gas)
 
 ```bash
-cargo run
+cargo run --bin driver
 ```
-
-Additionally, the `dex-contracts` repository contains additional scripts to help you interact with a testnet instance.
-In order to setup the environment (fund test users with tokens and list those on the exchange) as well as to make a first deposit/order you can run:
-
-```
-git clone git@github.com:gnosis/dex-contracts.git
-cd dex-contracts
-yarn && yarn prepack
-yarn truffle-exec scripts/setup_environment.js
-yarn truffle-exec scripts/deposit.js --accountId=0 --tokenId=0 --amount=3000
-yarn truffle-exec scripts/deposit.js --accountId=1 --tokenId=1 --amount=3000
-yarn truffle-exec scripts/place_order.js --accountId=0 --buyToken=1 --sellToken=0 --minBuy=999 --maxSell=2000 --validFor=20
-yarn truffle-exec scripts/place_order.js --accountId=1 --buyToken=0 --sellToken=1 --minBuy=1996 --maxSell=999 --validFor=20
-```
-
-It will then take up to 5 minutes (auctions close every 00, 05, 10 ... of the hour). On ganache you can expedite this process by running:
-
-```
-yarn truffle-exec scripts/close_auction.js
-```
-
-You should then see the docker container computing and applying a solution to the most recent auction. In order to withdraw your proceeds you can request a withdraw, wait for one auction for it to become claimable and claim it:
-
-```
-yarn truffle-exec scripts/request_withdraw.js --accountId=0 --tokenId=1 --amount=999
-yarn truffle-exec scripts/close_auction.js
-yarn truffle-exec scripts/claim_withdraw.js --accountId=0 --tokenId=1
-```
-
-**Note:** Whenever stopping the `ganache-cli` service (e.g. by running `docker-compose down` you have to re-deploy the contracts before restarting `stablex`)
 
 ## Tests
 
@@ -110,7 +81,22 @@ cargo test
 
 We also require `cargo clippy` and `cargo fmt` to pass for any PR to be merged.
 
-## Running with optimization solver
+## Running with open solver
+
+If you are running ubuntu you can checkout the [open solver](https://github.com/gnosis/dex-open-solver) in `/app/open_solver` on your host machine.
+However, it is likely more convenient to use the provided docker setup.
+From the root directory of the repository, run:
+
+```
+docker-compose build --build-arg SOLVER_BASE=gnosispm/dex-open-solver:master stablex-debug
+docker-compose run [-v $(PWD)/:/app/dex-services] stablex-debug
+cargo run --bin driver -- --solver-type open-solver
+```
+
+The `-v` argument is optional will mount the repository from your host filesystem inside the container, so that you can still perform code changes locally without having to rebuild the container.
+This also allows you to use orderbook files that have been synced previously and have the container write the updated version back to a common directory.
+
+## Running with linear optimization solver
 
 For this to work, you will need to have read access to our AWS docker registry and have [awscli](https://aws.amazon.com/cli/) installed. Use this command to login:
 
@@ -121,22 +107,11 @@ $(aws ecr get-login --no-include-email)
 Then specify the solver image you want to use as a build argument, e.g.:
 
 ```sh
-docker-compose build --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:master stablex
+docker-compose build --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:master stablex-debug
 ```
 
-and add the following line to you `common.env` file:
-
-```
-OPTIMIZATION_MODEL=MIP
-```
-
-or
-
-```
-OPTIMIZATION_MODEL=NLP
-```
-
-Afterwards, when you run your environment e.g. with `docker-compose up stablex` the linear optimizer should be automatically used. Note that the e2e tests might no longer work, as their resolution depends on the naive and not the optimal solving strategy.
+Afterwards, when you run your environment as above, the linear optimizer should be automatically used. 
+Note that the e2e tests might no longer work, as their resolution depends on the naive and not the optimal solving strategy.
 
 ## Configuration
 
@@ -280,5 +255,11 @@ docker-compose build
 In order to start BatchExchange for the Rinkeby network, make sure that the env variables in common-rinkeby.env are up to date and then start the specific docker:
 
 ```
-docker-compose -f docker-compose.yml -f driver/docker-compose.rinkeby.yml up stablex
+docker-compose -f docker-compose.yml -f driver/docker-compose.rinkeby.yml up stablex-debug
+```
+
+For mainnet,
+
+```
+docker-compose -f docker-compose.yml -f driver/docker-compose.mainnet.yml up stablex-debug
 ```

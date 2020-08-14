@@ -1,7 +1,7 @@
 version: "3.6"
 services:
-  stablex:
-    env_file: common-rinkeby.env
+  stablex-debug:
+    env_file: driver/common-rinkeby.env
     environment:
       PRIVATE_KEY: ${PK}
 

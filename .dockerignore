@@ -1,5 +1,6 @@
 target
 !target/debug/driver
+!target/deploy
 !target/orderbook*.bin
 !target/release/driver
 **/node_modules
