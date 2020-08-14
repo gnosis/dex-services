@@ -232,6 +232,7 @@ fn main() {
 
     // Set up metrics and serve in separate thread.
     let (stablex_metrics, http_metrics) = setup_metrics();
+    let stablex_metrics = Arc::new(stablex_metrics);
 
     // Set up shared HTTP client and HTTP services.
     let http_factory = HttpFactory::new(options.http_timeout, http_metrics);
@@ -311,15 +312,15 @@ fn main() {
     );
 
     // Set up solution submitter.
-    let solution_submitter = StableXSolutionSubmitter::new(&*contract, &*gas_station);
+    let solution_submitter = Arc::new(StableXSolutionSubmitter::new(contract.clone(), gas_station));
 
     // Set up the driver and start the run-loop.
     let driver = StableXDriverImpl::new(
-        &*price_finder,
-        &*orderbook,
-        &solution_submitter,
+        price_finder,
+        orderbook.clone(),
+        solution_submitter,
         economic_viability,
-        &stablex_metrics,
+        stablex_metrics,
     );
 
     let scheduler_config = AuctionTimingConfiguration::new(
@@ -330,7 +331,7 @@ fn main() {
 
     let mut scheduler = options
         .scheduler
-        .create(&*contract, &driver, scheduler_config);
+        .create(contract, Arc::new(driver), scheduler_config);
     orderbook
         .initialize()
         .wait()

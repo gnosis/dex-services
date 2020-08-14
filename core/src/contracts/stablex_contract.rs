@@ -84,7 +84,7 @@ pub enum NoopTransactionError {
 }
 
 #[cfg_attr(test, automock)]
-pub trait StableXContract {
+pub trait StableXContract: Send + Sync {
     /// Retrieve the current batch ID that is accepting orders. Note that this
     /// is always `1` greater than the batch ID that is accepting solutions.
     fn get_current_auction_index<'a>(&'a self) -> BoxFuture<'a, Result<u32>>;

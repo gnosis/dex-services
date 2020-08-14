@@ -17,13 +17,13 @@ pub fn create_price_finder(
     price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
     min_avg_fee: Arc<dyn EconomicViabilityComputing>,
     internal_optimizer: InternalOptimizer,
-) -> Box<dyn PriceFinding + Sync> {
+) -> Arc<dyn PriceFinding + Send + Sync> {
     if solver_type == SolverType::NaiveSolver {
         info!("Using naive price finder");
-        Box::new(NaiveSolver::new(fee))
+        Arc::new(NaiveSolver::new(fee))
     } else {
         info!("Using {:?} optimization price finder", solver_type);
-        Box::new(OptimisationPriceFinder::new(
+        Arc::new(OptimisationPriceFinder::new(
             fee,
             solver_type,
             price_oracle,

@@ -8,25 +8,24 @@ use crate::models::batch_id::BATCH_DURATION;
 use crate::util::FutureWaitExt as _;
 use anyhow::Result;
 use log::{debug, error, info, warn};
-use std::thread;
-use std::time::Duration;
+use std::{sync::Arc, thread, time::Duration};
 
 /// The amount of time the scheduler should wait between polling.
 const POLL_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// An EVM-based scheduler for the exchange driver.
-pub struct EvmScheduler<'a> {
-    exchange: &'a dyn StableXContract,
-    driver: &'a dyn StableXDriver,
+pub struct EvmScheduler {
+    exchange: Arc<dyn StableXContract>,
+    driver: Arc<dyn StableXDriver>,
     config: AuctionTimingConfiguration,
     last_batch: Option<u32>,
 }
 
-impl<'a> EvmScheduler<'a> {
+impl EvmScheduler {
     /// Creates a new EVM-based scheduler from a configuration.
     pub fn new(
-        exchange: &'a dyn StableXContract,
-        driver: &'a dyn StableXDriver,
+        exchange: Arc<dyn StableXContract>,
+        driver: Arc<dyn StableXDriver>,
         config: AuctionTimingConfiguration,
     ) -> Self {
         EvmScheduler {
@@ -39,7 +38,10 @@ impl<'a> EvmScheduler<'a> {
 
     /// Creates a new scheduler with the default configuration.
     #[cfg(test)]
-    pub fn with_defaults(exchange: &'a dyn StableXContract, driver: &'a dyn StableXDriver) -> Self {
+    pub fn with_defaults(
+        exchange: Arc<dyn StableXContract>,
+        driver: Arc<dyn StableXDriver>,
+    ) -> Self {
         EvmScheduler::new(exchange, driver, AuctionTimingConfiguration::default())
     }
 
@@ -127,7 +129,7 @@ impl<'a> EvmScheduler<'a> {
     }
 }
 
-impl Scheduler for EvmScheduler<'_> {
+impl Scheduler for EvmScheduler {
     fn start(&mut self) -> ! {
         loop {
             if let Err(err) = self.step() {
@@ -170,7 +172,7 @@ mod tests {
             .expect_submit_solution()
             .returning(|_, _| immediate!(Ok(())));
 
-        let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
+        let mut scheduler = EvmScheduler::with_defaults(Arc::new(exchange), Arc::new(driver));
 
         scheduler.step().unwrap();
         assert_eq!(scheduler.last_batch, Some(41));
@@ -194,7 +196,7 @@ mod tests {
             .expect_submit_solution()
             .returning(|_, _| immediate!(Ok(())));
 
-        let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
+        let mut scheduler = EvmScheduler::with_defaults(Arc::new(exchange), Arc::new(driver));
         scheduler.last_batch = Some(40);
 
         scheduler.step().unwrap();
@@ -210,7 +212,7 @@ mod tests {
 
         let driver = MockStableXDriver::new();
 
-        let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
+        let mut scheduler = EvmScheduler::with_defaults(Arc::new(exchange), Arc::new(driver));
         scheduler.last_batch = Some(41);
 
         scheduler.step().unwrap();
@@ -236,7 +238,7 @@ mod tests {
 
         let driver = MockStableXDriver::new();
 
-        let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
+        let mut scheduler = EvmScheduler::with_defaults(Arc::new(exchange), Arc::new(driver));
 
         scheduler.step().unwrap();
         assert_eq!(scheduler.last_batch, None);
@@ -254,7 +256,7 @@ mod tests {
 
         let driver = MockStableXDriver::new();
 
-        let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
+        let mut scheduler = EvmScheduler::with_defaults(Arc::new(exchange), Arc::new(driver));
 
         scheduler.step().unwrap();
         assert_eq!(scheduler.last_batch, None);
@@ -275,7 +277,7 @@ mod tests {
             .expect_solve_batch()
             .returning(|_, _| immediate!(Err(DriverError::Skip(anyhow!("error")))));
 
-        let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
+        let mut scheduler = EvmScheduler::with_defaults(Arc::new(exchange), Arc::new(driver));
 
         scheduler.step().unwrap();
         assert_eq!(scheduler.last_batch, Some(41));
@@ -296,7 +298,7 @@ mod tests {
             .expect_solve_batch()
             .returning(|_, _| immediate!(Err(DriverError::Retry(anyhow!("error")))));
 
-        let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
+        let mut scheduler = EvmScheduler::with_defaults(Arc::new(exchange), Arc::new(driver));
 
         scheduler.step().unwrap();
         assert_eq!(scheduler.last_batch, None);

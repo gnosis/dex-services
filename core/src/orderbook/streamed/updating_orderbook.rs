@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 /// An event based orderbook that automatically updates itself with new events from the contract.
 pub struct UpdatingOrderbook {
-    contract: Arc<dyn StableXContract + Send + Sync>,
+    contract: Arc<dyn StableXContract>,
     web3: Web3,
     block_page_size: usize,
     /// We need a mutex because otherwise the struct wouldn't be Sync which is needed because we use
@@ -42,7 +42,7 @@ impl UpdatingOrderbook {
     /// Does not block on initializing the orderbook. This will happen in the first call to
     /// `get_auction_data` which can thus take a long time to complete.
     pub fn new(
-        contract: Arc<dyn StableXContract + Send + Sync>,
+        contract: Arc<dyn StableXContract>,
         web3: Web3,
         block_page_size: usize,
         path: Option<PathBuf>,

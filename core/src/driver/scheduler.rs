@@ -7,8 +7,7 @@ use crate::contracts::stablex_contract::StableXContract;
 use crate::driver::stablex_driver::StableXDriver;
 use crate::models::batch_id::SOLVING_WINDOW;
 use anyhow::{anyhow, Error, Result};
-use std::str::FromStr;
-use std::time::Duration;
+use std::{str::FromStr, sync::Arc, time::Duration};
 
 /// A scheduler that can be started in order to run the driver for each batch.
 pub trait Scheduler {
@@ -94,12 +93,12 @@ pub enum SchedulerKind {
 
 impl SchedulerKind {
     /// Creates a new scheduler based on the parameters.
-    pub fn create<'a>(
+    pub fn create(
         &self,
-        exchange: &'a dyn StableXContract,
-        driver: &'a (dyn StableXDriver + Sync),
+        exchange: Arc<dyn StableXContract>,
+        driver: Arc<dyn StableXDriver>,
         config: AuctionTimingConfiguration,
-    ) -> Box<dyn Scheduler + 'a> {
+    ) -> Box<dyn Scheduler> {
         match self {
             SchedulerKind::System => Box::new(SystemScheduler::new(driver, config)),
             SchedulerKind::Evm => Box::new(EvmScheduler::new(exchange, driver, config)),

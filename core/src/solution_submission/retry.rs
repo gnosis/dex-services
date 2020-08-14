@@ -10,7 +10,7 @@ use futures::{
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
 };
 use pricegraph::num;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use super::MIN_GAS_PRICE_INCREASE_FACTOR;
 
@@ -31,22 +31,22 @@ pub trait SolutionTransactionSending {
 }
 
 pub struct RetryWithGasPriceIncrease<'a> {
-    contract: &'a (dyn StableXContract + Sync),
-    gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
+    contract: Arc<dyn StableXContract>,
+    gas_price_estimating: Arc<dyn GasPriceEstimating + Send + Sync>,
     async_sleep: Box<dyn AsyncSleeping + 'a>,
 }
 
 impl<'a> RetryWithGasPriceIncrease<'a> {
     pub fn new(
-        contract: &'a (dyn StableXContract + Sync),
-        gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
+        contract: Arc<dyn StableXContract>,
+        gas_price_estimating: Arc<dyn GasPriceEstimating + Send + Sync>,
     ) -> Self {
         Self::with_sleep(contract, gas_price_estimating, crate::util::AsyncSleep {})
     }
 
     pub fn with_sleep(
-        contract: &'a (dyn StableXContract + Sync),
-        gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
+        contract: Arc<dyn StableXContract>,
+        gas_price_estimating: Arc<dyn GasPriceEstimating + Send + Sync>,
         async_sleep: impl AsyncSleeping + 'a,
     ) -> Self {
         Self {
@@ -60,8 +60,8 @@ impl<'a> RetryWithGasPriceIncrease<'a> {
 impl<'a> SolutionTransactionSending for RetryWithGasPriceIncrease<'a> {
     fn retry<'b>(&'b self, args: Args) -> BoxFuture<'b, Result<(), MethodError>> {
         retry(
-            self.contract,
-            self.gas_price_estimating,
+            self.contract.as_ref(),
+            self.gas_price_estimating.as_ref(),
             self.async_sleep.as_ref(),
             args,
         )
@@ -115,7 +115,7 @@ enum FutureOutput {
 }
 
 async fn retry(
-    contract: &(dyn StableXContract + Sync),
+    contract: &dyn StableXContract,
     gas_price_estimating: &(dyn GasPriceEstimating + Sync),
     async_sleep: &dyn AsyncSleeping,
     Args {

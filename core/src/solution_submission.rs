@@ -18,7 +18,10 @@ use futures::future::{self, BoxFuture, Either, FutureExt as _};
 use log::info;
 use pricegraph::num;
 use retry::SolutionTransactionSending;
-use std::time::{Duration, SystemTime};
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 use thiserror::Error;
 
 /// The amount of time the solution submitter should wait between polling the
@@ -99,28 +102,28 @@ impl From<Error> for SolutionSubmissionError {
 }
 
 pub struct StableXSolutionSubmitter<'a> {
-    contract: &'a (dyn StableXContract + Sync),
-    gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
+    contract: Arc<dyn StableXContract>,
+    gas_price_estimating: Arc<dyn GasPriceEstimating + Send + Sync>,
     retry_with_gas_price_increase: Box<dyn SolutionTransactionSending + Send + Sync + 'a>,
     async_sleep: Box<dyn AsyncSleeping + 'a>,
 }
 
 impl<'a> StableXSolutionSubmitter<'a> {
     pub fn new(
-        contract: &'a (dyn StableXContract + Sync),
-        gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
+        contract: Arc<dyn StableXContract>,
+        gas_price_estimating: Arc<dyn GasPriceEstimating + Send + Sync>,
     ) -> Self {
         Self::with_retry_and_sleep(
-            contract,
-            gas_price_estimating,
+            contract.clone(),
+            gas_price_estimating.clone(),
             retry::RetryWithGasPriceIncrease::new(contract, gas_price_estimating),
             crate::util::AsyncSleep {},
         )
     }
 
     fn with_retry_and_sleep(
-        contract: &'a (dyn StableXContract + Sync),
-        gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
+        contract: Arc<dyn StableXContract>,
+        gas_price_estimating: Arc<dyn GasPriceEstimating + Send + Sync>,
         retry_with_gas_price_increase: impl SolutionTransactionSending + Send + Sync + 'a,
         async_sleep: impl AsyncSleeping + 'a,
     ) -> Self {
@@ -376,14 +379,17 @@ mod tests {
         let sleep = MockAsyncSleeping::new();
 
         let result = {
-            let submitter =
-                StableXSolutionSubmitter::with_retry_and_sleep(&contract, &gas_price, retry, sleep);
+            let submitter = StableXSolutionSubmitter::with_retry_and_sleep(
+                Arc::new(contract),
+                Arc::new(gas_price),
+                retry,
+                sleep,
+            );
             submitter
                 .get_solution_objective_value(0, Solution::trivial())
                 .now_or_never()
                 .unwrap()
         };
-        contract.checkpoint();
         assert_eq!(result.unwrap(), U256::from(42));
     }
 
@@ -411,8 +417,12 @@ mod tests {
         let gas_price = erroring_gas_station();
         let sleep = MockAsyncSleeping::new();
 
-        let submitter =
-            StableXSolutionSubmitter::with_retry_and_sleep(&contract, &gas_price, retry, sleep);
+        let submitter = StableXSolutionSubmitter::with_retry_and_sleep(
+            Arc::new(contract),
+            Arc::new(gas_price),
+            retry,
+            sleep,
+        );
         let result = submitter
             .get_solution_objective_value(0, Solution::trivial())
             .now_or_never()
@@ -475,8 +485,12 @@ mod tests {
             .returning(|_| future::pending().boxed());
 
         let gas_price = erroring_gas_station();
-        let submitter =
-            StableXSolutionSubmitter::with_retry_and_sleep(&contract, &gas_price, retry, sleep);
+        let submitter = StableXSolutionSubmitter::with_retry_and_sleep(
+            Arc::new(contract),
+            Arc::new(gas_price),
+            retry,
+            sleep,
+        );
         let result = submitter
             .submit_solution(0, Solution::trivial(), U256::zero(), U256::zero())
             .now_or_never()
@@ -511,8 +525,12 @@ mod tests {
             .returning(|_, _| immediate!(Err(NoopTransactionError::NoAccount)));
 
         let gas_price = erroring_gas_station();
-        let submitter =
-            StableXSolutionSubmitter::with_retry_and_sleep(&contract, &gas_price, retry, sleep);
+        let submitter = StableXSolutionSubmitter::with_retry_and_sleep(
+            Arc::new(contract),
+            Arc::new(gas_price),
+            retry,
+            sleep,
+        );
         let result = submitter
             .submit_solution(0, Solution::trivial(), 0.into(), 0.into())
             .now_or_never()
@@ -529,8 +547,12 @@ mod tests {
         gas_price
             .expect_estimate_gas_price()
             .returning(|| immediate!(Ok(10.into())));
-        let submitter =
-            StableXSolutionSubmitter::with_retry_and_sleep(&contract, &gas_price, retry, sleep);
+        let submitter = StableXSolutionSubmitter::with_retry_and_sleep(
+            Arc::new(contract),
+            Arc::new(gas_price),
+            retry,
+            sleep,
+        );
         let result = submitter
             .submit_solution(0, Solution::trivial(), 0.into(), 9.into())
             .now_or_never()
@@ -566,8 +588,8 @@ mod tests {
 
         let gas_price = erroring_gas_station();
         let submitter = StableXSolutionSubmitter::with_retry_and_sleep(
-            &contract,
-            &gas_price,
+            Arc::new(contract),
+            Arc::new(gas_price),
             retry,
             async_sleep,
         );
@@ -613,8 +635,8 @@ mod tests {
 
         let gas_price = erroring_gas_station();
         let submitter = StableXSolutionSubmitter::with_retry_and_sleep(
-            &contract,
-            &gas_price,
+            Arc::new(contract),
+            Arc::new(gas_price),
             retry,
             async_sleep,
         );

@@ -13,12 +13,12 @@ use std::sync::Arc;
 /// contract in a paginated way.
 /// This avoid hitting gas limits when the total amount of orders is large.
 pub struct PaginatedStableXOrderBookReader {
-    contract: Arc<dyn StableXContract + Send + Sync>,
+    contract: Arc<dyn StableXContract>,
     page_size: u16,
 }
 
 impl PaginatedStableXOrderBookReader {
-    pub fn new(contract: Arc<dyn StableXContract + Send + Sync>, page_size: u16) -> Self {
+    pub fn new(contract: Arc<dyn StableXContract>, page_size: u16) -> Self {
         Self {
             contract,
             page_size,
