@@ -1,0 +1,19 @@
+# Dockerfile that can be used on systems that cannot create a ubuntu-bionic compatible binary and thus cannot use
+# the default Dockerfile
+
+# With this image, only the naive solver will work
+ARG SOLVER_BASE=ubuntu:bionic
+
+FROM ${SOLVER_BASE}
+WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends gcc vim curl ca-certificates libc-dev pkg-config libssl1.0.0 libssl-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:$PATH"
+
+COPY ./ /app/dex-services
+WORKDIR /app/dex-services
+RUN cargo build

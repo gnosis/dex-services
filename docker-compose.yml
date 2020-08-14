@@ -21,3 +21,15 @@ services:
       - '9586:9586'
     depends_on:
       - ganache-cli
+  
+  stablex-debug:
+    build:
+      context: .
+      dockerfile: driver/docker/rust/Dockerfile.debug
+    restart: always
+    env_file: driver/common.env
+    environment:
+      - RUST_BACKTRACE=1
+    image: stablex-debug
+    ports:
+      - '9586:9586'
