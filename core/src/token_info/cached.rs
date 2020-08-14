@@ -80,12 +80,15 @@ impl TokenInfoCache {
 
     async fn find_cached_token_by_symbol(&self, symbol: &str) -> Option<(TokenId, TokenBaseInfo)> {
         let cache = self.cache.read().await;
-        cache.iter().find_map(|(id, entry)| match entry {
-            CacheEntry::TokenBaseInfo(info) if info.matches_symbol(symbol) => {
-                Some((*id, info.clone()))
-            }
-            _ => None,
-        })
+        let (id, info) = cache
+            .iter()
+            .filter_map(|(id, entry)| match entry {
+                CacheEntry::TokenBaseInfo(info) if info.matches_symbol(symbol) => Some((*id, info)),
+                _ => None,
+            })
+            .min_by_key(|(id, _)| *id)?;
+
+        Some((id, info.clone()))
     }
 }
 
@@ -442,5 +445,32 @@ mod tests {
                 .unwrap(),
             Some((TokenId(0), owl)),
         );
+    }
+
+    #[test]
+    fn prefers_symbol_of_lower_token_ids() {
+        // NOTE: The order in which entries get iterated with in a `HashMap` is
+        // random, so use a large one with many many tokens so the chance of
+        // the first one being having the lowest token ID is small.
+        let cache = (0..1000).map(|id| {
+            (
+                TokenId(id),
+                TokenBaseInfo {
+                    alias: "OWL".to_owned(),
+                    decimals: 18,
+                },
+            )
+        });
+
+        let inner = MockTokenInfoFetching::new();
+        let cache = TokenInfoCache::with_cache(Arc::new(inner), cache);
+
+        let (id, _) = cache
+            .find_token_by_symbol("OWL")
+            .now_or_never()
+            .unwrap()
+            .unwrap()
+            .unwrap(); // 🤣
+        assert_eq!(id, TokenId(0));
     }
 }
