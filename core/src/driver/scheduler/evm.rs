@@ -3,7 +3,7 @@
 
 use super::{AuctionTimingConfiguration, Scheduler};
 use crate::contracts::stablex_contract::StableXContract;
-use crate::driver::stablex_driver::{DriverResult, StableXDriver};
+use crate::driver::stablex_driver::{DriverError, StableXDriver};
 use crate::models::batch_id::BATCH_DURATION;
 use crate::util::FutureWaitExt as _;
 use anyhow::Result;
@@ -98,14 +98,14 @@ impl<'a> EvmScheduler<'a> {
             )
             .wait()
         {
-            DriverResult::Ok => {
+            Ok(()) => {
                 info!("successfully solved batch {}", batch_id);
                 self.last_batch = Some(batch_id);
             }
-            DriverResult::Retry(err) => {
+            Err(DriverError::Retry(err)) => {
                 error!("driver retryable error for batch {}: {:?}", batch_id, err);
             }
-            DriverResult::Skip(err) => {
+            Err(DriverError::Skip(err)) => {
                 error!("driver error for batch {}: {:?}", batch_id, err);
                 self.last_batch = Some(batch_id);
             }
@@ -160,7 +160,7 @@ mod tests {
         driver
             .expect_run()
             .with(eq(BatchId(41)), eq(Duration::from_secs(150)), always())
-            .returning(|_, _, _| async { DriverResult::Ok }.boxed());
+            .returning(|_, _, _| immediate!(Ok(())));
 
         let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
 
@@ -179,9 +179,7 @@ mod tests {
             .returning(|| async { Ok(Duration::from_secs(240)) }.boxed());
 
         let mut driver = MockStableXDriver::new();
-        driver
-            .expect_run()
-            .returning(|_, _, _| async { DriverResult::Ok }.boxed());
+        driver.expect_run().returning(|_, _, _| immediate!(Ok(())));
 
         let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
         scheduler.last_batch = Some(40);
@@ -262,7 +260,7 @@ mod tests {
         let mut driver = MockStableXDriver::new();
         driver
             .expect_run()
-            .returning(|_, _, _| async { DriverResult::Skip(anyhow!("error")) }.boxed());
+            .returning(|_, _, _| immediate!(Err(DriverError::Skip(anyhow!("error")))));
 
         let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
 
@@ -283,7 +281,7 @@ mod tests {
         let mut driver = MockStableXDriver::new();
         driver
             .expect_run()
-            .returning(|_, _, _| async { DriverResult::Retry(anyhow!("error")) }.boxed());
+            .returning(|_, _, _| immediate!(Err(DriverError::Retry(anyhow!("error")))));
 
         let mut scheduler = EvmScheduler::with_defaults(&exchange, &driver);
 
