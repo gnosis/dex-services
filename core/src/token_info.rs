@@ -66,6 +66,10 @@ mod mock {
             ids: &[TokenId],
         ) -> BoxFuture<'a, Result<HashMap<TokenId, TokenBaseInfo>>>;
         fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>>;
+        fn find_token_by_symbol<'a>(
+            &'a self,
+            symbol: &str,
+        ) -> BoxFuture<'a, Result<Option<(TokenId, TokenBaseInfo)>>>;
     }
 
     impl<T: TokenInfoFetching_ + Send + Sync> TokenInfoFetching for T {
@@ -80,6 +84,12 @@ mod mock {
         }
         fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
             TokenInfoFetching_::all_ids(self)
+        }
+        fn find_token_by_symbol<'a>(
+            &'a self,
+            symbol: &'a str,
+        ) -> BoxFuture<'a, Result<Option<(TokenId, TokenBaseInfo)>>> {
+            TokenInfoFetching_::find_token_by_symbol(self, symbol)
         }
     }
 }
