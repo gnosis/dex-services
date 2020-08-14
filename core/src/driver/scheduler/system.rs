@@ -5,7 +5,6 @@ use crate::{
     util::{AsyncSleep, AsyncSleeping, DefaultNow, FutureWaitExt as _, Now},
 };
 use anyhow::{Context, Result};
-use crossbeam_utils::thread::Scope;
 use std::{
     thread,
     time::{Duration, Instant, SystemTime},
@@ -37,29 +36,19 @@ impl<'a> SystemScheduler<'a> {
         }
     }
 
-    fn start_solving_in_thread<'b>(
-        &self,
-        batch_id: BatchId,
-        solver_deadline: Instant,
-        scope: &Scope<'b>,
-    ) where
-        'a: 'b,
-    {
+    fn start_solving_in_background(&self, batch_id: BatchId, solver_deadline: Instant) {
         let driver = self.driver;
         let earliest_solution_submit_time = self
             .auction_timing_configuration
             .earliest_solution_submit_time;
-        scope.spawn(move |_| {
-            solve_and_submit(
-                batch_id,
-                solver_deadline,
-                earliest_solution_submit_time,
-                driver,
-                &DefaultNow {},
-                &AsyncSleep {},
-            )
-            .wait();
-        });
+        async_std::task::block_on(solve_and_submit(
+            batch_id,
+            solver_deadline,
+            earliest_solution_submit_time,
+            driver,
+            &DefaultNow {},
+            &AsyncSleep {},
+        ));
     }
 
     /// Return current batch id and what to do with it.
@@ -170,26 +159,23 @@ fn log_submit_result(batch_id: BatchId, result: &Result<()>) {
 
 impl<'a> Scheduler for SystemScheduler<'a> {
     fn start(&mut self) -> ! {
-        crossbeam_utils::thread::scope(|scope| -> ! {
-            loop {
-                match self.determine_action(SystemTime::now()) {
-                    Ok(Action::Sleep(duration)) => {
-                        log::info!("Sleeping {}s.", duration.as_secs());
-                        thread::sleep(duration);
-                    }
-                    Ok(Action::Solve(batch_id, duration)) => {
-                        log::info!("Starting to solve batch {}.", batch_id);
-                        self.last_solved_batch = Some(batch_id);
-                        self.start_solving_in_thread(batch_id, Instant::now() + duration, scope)
-                    }
-                    Err(err) => {
-                        log::error!("Scheduler error: {:?}", err);
-                        thread::sleep(RETRY_SLEEP_DURATION);
-                    }
-                };
-            }
-        })
-        .unwrap();
+        loop {
+            match self.determine_action(SystemTime::now()) {
+                Ok(Action::Sleep(duration)) => {
+                    log::info!("Sleeping {}s.", duration.as_secs());
+                    thread::sleep(duration);
+                }
+                Ok(Action::Solve(batch_id, duration)) => {
+                    log::info!("Starting to solve batch {}.", batch_id);
+                    self.last_solved_batch = Some(batch_id);
+                    self.start_solving_in_background(batch_id, Instant::now() + duration);
+                }
+                Err(err) => {
+                    log::error!("Scheduler error: {:?}", err);
+                    thread::sleep(RETRY_SLEEP_DURATION);
+                }
+            };
+        }
     }
 }
 

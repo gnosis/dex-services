@@ -470,7 +470,6 @@ dependencies = [
  "byteorder",
  "chrono",
  "contracts",
- "crossbeam-utils",
  "ethcontract",
  "futures 0.3.5",
  "isahc",
