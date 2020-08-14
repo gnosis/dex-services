@@ -30,9 +30,10 @@ macro_rules! std_map {
 }
 
 macro_rules! immediate {
-    ($expression:expr) => {
-        async move { $expression }.boxed()
-    };
+    ($expression:expr) => {{
+        let value = $expression;
+        async move { value }.boxed()
+    }};
 }
 
 #[cfg(test)]

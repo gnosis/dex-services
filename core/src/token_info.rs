@@ -48,7 +48,7 @@ pub trait TokenInfoFetching: Send + Sync {
             let infos = self.get_token_infos(&self.all_ids().await?).await?;
             Ok(infos
                 .into_iter()
-                .find(|(_, info)| info.symbol() == symbol || info.alias == symbol))
+                .find(|(_, info)| info.matches_symbol(symbol)))
         }
         .boxed()
     }
@@ -130,6 +130,11 @@ impl TokenBaseInfo {
     pub fn get_owl_price(&self, usd_price: f64) -> u128 {
         let pow = 36 - (self.decimals as i32);
         (usd_price * 10f64.powi(pow)) as _
+    }
+
+    /// Returns true if the token alias or symbol matches the speciefied symbol.
+    pub fn matches_symbol(&self, symbol: &str) -> bool {
+        self.alias == symbol || self.symbol() == symbol
     }
 }
 

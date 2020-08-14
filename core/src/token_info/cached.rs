@@ -10,10 +10,8 @@ use futures::{
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/**
- * Implementation of TokenInfoFetching that stores previously fetched information in an in-memory cache for fast retrieval.
- * TokenIds will always be fetched from the inner layer, as new tokens could be added at any time.
- */
+/// Implementation of TokenInfoFetching that stores previously fetched information in an in-memory cache for fast retrieval.
+/// TokenIds will always be fetched from the inner layer, as new tokens could be added at any time.
 pub struct TokenInfoCache {
     cache: RwLock<HashMap<TokenId, CacheEntry>>,
     inner: Arc<dyn TokenInfoFetching>,
@@ -54,7 +52,8 @@ impl TokenInfoCache {
     /// Attempt to retrieve and cache all token info that is not already cached.
     /// Fails if `all_ids` fails. Does not fail if individual token infos fail.
     pub async fn cache_all(&self, number_of_parallel_requests: usize) -> Result<()> {
-        stream::iter(self.all_ids().await.context("failed to get all ids")?)
+        let ids = self.all_ids().await.context("failed to get all ids")?;
+        stream::iter(self.uncached_tokens(&ids).await)
             .for_each_concurrent(number_of_parallel_requests, |token_id| async move {
                 // Individual tokens might not conform to erc20 in which case we are unable to retrieve
                 // their info.
@@ -76,6 +75,16 @@ impl TokenInfoCache {
             .copied()
             .filter(|id| !cache.contains_key(id))
             .collect()
+    }
+
+    async fn find_cached_token_by_symbol(&self, symbol: &str) -> Option<(TokenId, TokenBaseInfo)> {
+        let cache = self.cache.read().await;
+        cache.iter().find_map(|(id, entry)| match entry {
+            CacheEntry::TokenBaseInfo(info) if info.matches_symbol(symbol) => {
+                Some((*id, info.clone()))
+            }
+            _ => None,
+        })
     }
 }
 
@@ -141,6 +150,24 @@ impl TokenInfoFetching for TokenInfoCache {
     fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
         self.inner.all_ids()
     }
+
+    fn find_token_by_symbol<'a>(
+        &'a self,
+        symbol: &'a str,
+    ) -> BoxFuture<'a, Result<Option<(TokenId, TokenBaseInfo)>>> {
+        async move {
+            // NOTE: First check the cache directly before refetching. This
+            // allows us to exit early without checking to see if there are
+            // missing token infos that we need to cache.
+            if let Some(result) = self.find_cached_token_by_symbol(symbol).await {
+                return Ok(Some(result));
+            }
+
+            self.cache_all(1).await?;
+            Ok(self.find_cached_token_by_symbol(symbol).await)
+        }
+        .boxed()
+    }
 }
 
 fn cache_entry_to_result(entry: &CacheEntry) -> Result<TokenBaseInfo> {
@@ -167,6 +194,7 @@ mod tests {
     use super::super::MockTokenInfoFetching;
     use super::*;
     use anyhow::anyhow;
+    use mockall::predicate::eq;
 
     fn revert_error() -> Error {
         MethodError {
@@ -357,5 +385,61 @@ mod tests {
         assert_eq!(result.get(&TokenId(1)).unwrap().alias, "1");
         assert_eq!(result.get(&TokenId(2)).unwrap().alias, "2");
         assert_eq!(result.get(&TokenId(3)).unwrap().alias, "3");
+    }
+
+    #[test]
+    fn find_token_by_symbol_doesnt_query_if_in_cache() {
+        let owl = TokenBaseInfo {
+            alias: "OWL".to_owned(),
+            decimals: 18,
+        };
+
+        let inner = MockTokenInfoFetching::new();
+        let cache = TokenInfoCache::with_cache(
+            Arc::new(inner),
+            hash_map! {
+                TokenId(0) => owl.clone(),
+            },
+        );
+
+        assert_eq!(
+            cache
+                .find_token_by_symbol("OWL")
+                .now_or_never()
+                .unwrap()
+                .unwrap(),
+            Some((TokenId(0), owl)),
+        );
+    }
+
+    #[test]
+    fn find_token_by_symbol_updates_cache_for_missing_symbol() {
+        let owl = TokenBaseInfo {
+            alias: "OWL".to_owned(),
+            decimals: 18,
+        };
+
+        let mut inner = MockTokenInfoFetching::new();
+        inner
+            .expect_all_ids()
+            .returning(|| immediate!(Ok(vec![TokenId(0)])));
+        inner
+            .expect_get_token_info()
+            .with(eq(TokenId(0)))
+            .returning({
+                let owl = owl.clone();
+                move |_| immediate!(Ok(owl.clone()))
+            });
+
+        let cache = TokenInfoCache::new(Arc::new(inner));
+
+        assert_eq!(
+            cache
+                .find_token_by_symbol("OWL")
+                .now_or_never()
+                .unwrap()
+                .unwrap(),
+            Some((TokenId(0), owl)),
+        );
     }
 }

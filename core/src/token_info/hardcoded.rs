@@ -55,8 +55,9 @@ impl TokenInfoFetching for TokenData {
             .0
             .get(&id)
             .cloned()
-            .ok_or_else(|| anyhow!("Token {:?} not found in hardcoded data", id));
-        immediate!(Ok(info?.into()))
+            .ok_or_else(|| anyhow!("Token {:?} not found in hardcoded data", id))
+            .map(Into::into);
+        immediate!(info)
     }
 
     fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
