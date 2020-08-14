@@ -41,7 +41,7 @@ impl MarketsResult {
 }
 
 fn convert_to_base_units(
-    orders: &mut Vec<TransitiveOrder>,
+    orders: &mut [TransitiveOrder],
     base_token_info: &TokenBaseInfo,
     quote_token_info: &TokenBaseInfo,
 ) {
