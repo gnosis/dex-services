@@ -1,5 +1,6 @@
 use crate::{
     economic_viability::EconomicViabilityComputing,
+    metrics::solver_metrics::SolverMetrics,
     models::{self, TokenId, TokenInfo},
     price_estimation::PriceEstimating,
     price_finding::price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
@@ -41,6 +42,7 @@ pub type TokenDataType = BTreeMap<TokenId, Option<TokenInfo>>;
 
 mod solver_output {
     use super::{Num, TokenId};
+    use crate::metrics::solver_metrics::SolverMetrics;
     use crate::models::Solution;
     use ethcontract::Address;
     use serde::Deserialize;
@@ -60,6 +62,38 @@ mod solver_output {
         pub exec_buy_amount: Num<u128>,
     }
 
+    #[derive(Deserialize, Default, Debug, Clone, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Solver {
+        pub name: String,
+        pub args: Vec<String>,
+        pub runtime: f64,
+        #[serde(rename = "runtime_preprocessing")]
+        pub runtime_preprocessing: f64,
+        #[serde(rename = "runtime_solving")]
+        pub runtime_solving: f64,
+        #[serde(rename = "runtime_ring_finding")]
+        pub runtime_ring_finding: f64,
+        #[serde(rename = "runtime_validation")]
+        pub runtime_validation: f64,
+        #[serde(rename = "nr_variables")]
+        pub nr_variables: i64,
+        #[serde(rename = "nr_bool_variables")]
+        pub nr_bool_variables: i64,
+        #[serde(rename = "optimality_gap")]
+        pub optimality_gap: f64,
+        #[serde(rename = "solver_status")]
+        pub solver_status: String,
+        #[serde(rename = "termination_condition")]
+        pub termination_condition: String,
+        #[serde(rename = "exit_status")]
+        pub exit_status: String,
+        #[serde(rename = "obj_val")]
+        pub obj_val: f64,
+        #[serde(rename = "obj_val_sc")]
+        pub obj_val_sc: f64,
+    }
+
     /// Solver solution output format. This format can be converted directly to
     /// the exchange solution format.
     #[derive(Deserialize)]
@@ -67,6 +101,7 @@ mod solver_output {
     pub struct Output {
         pub orders: Vec<ExecutedOrder>,
         pub prices: HashMap<TokenId, Option<Num<u128>>>,
+        pub solver_info: Solver,
     }
 
     impl Output {
@@ -93,6 +128,20 @@ mod solver_output {
             Solution {
                 prices,
                 executed_orders,
+            }
+        }
+
+        pub fn into_solution_info(self) -> SolverMetrics {
+            let runtime: prometheus::gauge::GenericGauge<f64> = self.solver_info.runtime;
+            let objective_value = self.solver_info.obj_val;
+            let objective_value_for_touched_orders = self.solver_info.obj_val_sc;
+            let optimality_gap = self.solver_info.optimality_gap;
+
+            SolverMetrics {
+                objective_values: objective_value,
+                objective_values_touched_orders: objective_value_for_touched_orders,
+                processing_time: runtime,
+                optimality_gap: optimality_gap,
             }
         }
     }
@@ -235,9 +284,9 @@ fn serialize_balances(
     accounts
 }
 
-fn deserialize_result(result: String) -> Result<models::Solution> {
+fn deserialize_result(result: String) -> Result<(models::Solution, SolverMetrics)> {
     let output: solver_output::Output = serde_json::from_str(&result)?;
-    Ok(output.into_solution())
+    Ok((output.into_solution(), output.into_solution_info()))
 }
 
 impl PriceFinding for OptimisationPriceFinder {

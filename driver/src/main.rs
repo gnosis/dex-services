@@ -9,7 +9,7 @@ use core::economic_viability::{
 use core::gas_price::{self, GasPriceEstimating};
 use core::http::HttpFactory;
 use core::logging;
-use core::metrics::{HttpMetrics, MetricsServer, StableXMetrics};
+use core::metrics::{HttpMetrics, MetricsServer, SolverMetrics, StableXMetrics};
 use core::orderbook::{
     FilteredOrderbookReader, OnchainFilteredOrderBookReader, OrderbookFilter, OrderbookReaderKind,
     ShadowedOrderbookReader, StableXOrderBookReading,
@@ -231,7 +231,7 @@ fn main() {
     info!("Starting driver with runtime options: {:#?}", options);
 
     // Set up metrics and serve in separate thread.
-    let (stablex_metrics, http_metrics) = setup_metrics();
+    let (stablex_metrics, http_metrics, solver_metrics) = setup_metrics();
 
     // Set up shared HTTP client and HTTP services.
     let http_factory = HttpFactory::new(options.http_timeout, http_metrics);
@@ -338,9 +338,10 @@ fn main() {
     scheduler.start();
 }
 
-fn setup_metrics() -> (StableXMetrics, HttpMetrics) {
+fn setup_metrics() -> (StableXMetrics, HttpMetrics, SolverMetrics) {
     let prometheus_registry = Arc::new(Registry::new());
     let stablex_metrics = StableXMetrics::new(prometheus_registry.clone());
+    let solver_metrics = SolverMetrics::new(&prometheus_registry).unwrap();
     let http_metrics = HttpMetrics::new(&prometheus_registry).unwrap();
     let metric_server = MetricsServer::new(prometheus_registry);
     thread::spawn(move || {
