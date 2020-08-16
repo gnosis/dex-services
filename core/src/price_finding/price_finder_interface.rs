@@ -176,7 +176,7 @@ pub trait PriceFinding {
         orders: &'a [models::Order],
         state: &'a models::AccountState,
         time_limit: Duration,
-    ) -> BoxFuture<'a, Result<models::Solution, Error>>;
+    ) -> BoxFuture<'a, Result<(models::Solution, models::SolutionInfo), Error>>;
 }
 
 // We would like to tag `PriceFinding` with `mockall::automock` but mockall does not support the

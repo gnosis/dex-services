@@ -9,4 +9,5 @@ pub use self::batch_id::BatchId;
 pub use self::order::Order;
 pub use self::solution::ExecutedOrder;
 pub use self::solution::Solution;
+pub use self::solution::SolutionInfo;
 pub use self::tokens::{TokenId, TokenInfo};

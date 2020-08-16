@@ -24,6 +24,14 @@ pub struct EconomicViabilityInfo {
     pub earned_fee: U256,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub struct SolutionInfo {
+    objective_values: f64,
+    objective_values_touched_orders: f64,
+    processing_time: f64,
+    optimality_gap: f64,
+}
+
 impl Solution {
     pub fn trivial() -> Self {
         Solution {

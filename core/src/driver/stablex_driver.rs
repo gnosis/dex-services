@@ -98,14 +98,15 @@ impl<'a> StableXDriverImpl<'a> {
             info!("No orders in batch {}", batch_to_solve);
             Solution::trivial()
         } else {
-            let price_finder_result = self
+            let (price_finder_result, solution_info_result) = self
                 .price_finder
                 .find_prices(&orders, &account_state, latest_solution_submit_time)
-                .await;
+                .await?;
             self.metrics
-                .auction_solution_computed(batch_to_solve.into(), &price_finder_result);
+                .auction_solution_computed(batch_to_solve.into(), &Ok(price_finder_result.clone()));
+            // additionally process additional solver metrics
 
-            let solution = price_finder_result?;
+            let solution = price_finder_result;
             info!(
                 "Computed solution for batch {}: {:?}",
                 batch_to_solve, &solution

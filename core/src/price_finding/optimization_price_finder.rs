@@ -1,6 +1,5 @@
 use crate::{
     economic_viability::EconomicViabilityComputing,
-    metrics::solver_metrics::SolverMetrics,
     models::{self, TokenId, TokenInfo},
     price_estimation::PriceEstimating,
     price_finding::price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
@@ -42,8 +41,7 @@ pub type TokenDataType = BTreeMap<TokenId, Option<TokenInfo>>;
 
 mod solver_output {
     use super::{Num, TokenId};
-    use crate::metrics::solver_metrics::SolverMetrics;
-    use crate::models::Solution;
+    use crate::models::{Solution, SolutionInfo};
     use ethcontract::Address;
     use serde::Deserialize;
     use std::collections::HashMap;
@@ -131,13 +129,13 @@ mod solver_output {
             }
         }
 
-        pub fn into_solution_info(self) -> SolverMetrics {
-            let runtime: prometheus::gauge::GenericGauge<f64> = self.solver_info.runtime;
+        pub fn into_solution_info(self) -> SolutionInfo {
+            let runtime = self.solver_info.runtime;
             let objective_value = self.solver_info.obj_val;
             let objective_value_for_touched_orders = self.solver_info.obj_val_sc;
             let optimality_gap = self.solver_info.optimality_gap;
 
-            SolverMetrics {
+            SolutionInfo {
                 objective_values: objective_value,
                 objective_values_touched_orders: objective_value_for_touched_orders,
                 processing_time: runtime,
@@ -284,7 +282,7 @@ fn serialize_balances(
     accounts
 }
 
-fn deserialize_result(result: String) -> Result<(models::Solution, SolverMetrics)> {
+fn deserialize_result(result: String) -> Result<(models::Solution, models::SolutionInfo)> {
     let output: solver_output::Output = serde_json::from_str(&result)?;
     Ok((output.into_solution(), output.into_solution_info()))
 }
@@ -295,7 +293,7 @@ impl PriceFinding for OptimisationPriceFinder {
         orders: &'a [models::Order],
         state: &'a models::AccountState,
         time_limit: Duration,
-    ) -> BoxFuture<'a, Result<models::Solution>> {
+    ) -> BoxFuture<'a, Result<(models::Solution, models::SolutionInfo)>> {
         let price_oracle = &*self.price_oracle;
         async move {
             let input = solver_input::Input {
@@ -345,9 +343,9 @@ impl PriceFinding for OptimisationPriceFinder {
                 internal_optimizer,
             ))
             .with_context(|| format!("error running {:?} solver", self.solver_type))?;
-            let solution =
+            let (solution, solution_info) =
                 deserialize_result(result).context("error deserializing solver output")?;
-            Ok(solution)
+            Ok((solution, solution_info))
         }
         .boxed()
     }
