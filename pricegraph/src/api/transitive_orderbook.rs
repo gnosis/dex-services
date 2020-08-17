@@ -156,7 +156,7 @@ mod tests {
     #[test]
     fn transitive_orderbook_empty_same_token() {
         let pricegraph = Pricegraph::new(std::iter::empty());
-        let orderbook = pricegraph.transitive_orderbook(Market { base: 0, quote: 0 }, None);
+        let orderbook = pricegraph.transitive_orderbook(Market { base: 0, quote: 0 }, None, None);
         assert!(orderbook.asks.is_empty());
         assert!(orderbook.bids.is_empty());
     }
@@ -175,7 +175,7 @@ mod tests {
             }
         };
 
-        let orderbook = pricegraph.transitive_orderbook(Market { base: 0, quote: 1 }, None);
+        let orderbook = pricegraph.transitive_orderbook(Market { base: 0, quote: 1 }, None, None);
         assert_eq!(orderbook.asks, vec![]);
         assert_eq!(
             orderbook.bids,
@@ -187,7 +187,7 @@ mod tests {
         let bid_price = orderbook.bid_prices().next().unwrap();
         assert_approx_eq!(bid_price.0, 0.5 / FEE_FACTOR);
 
-        let orderbook = pricegraph.transitive_orderbook(Market { base: 1, quote: 0 }, None);
+        let orderbook = pricegraph.transitive_orderbook(Market { base: 1, quote: 0 }, None, None);
         assert_eq!(
             orderbook.asks,
             vec![TransitiveOrder {
@@ -273,7 +273,7 @@ mod tests {
         };
 
         let transitive_orderbook =
-            pricegraph.transitive_orderbook(Market { base: 1, quote: 2 }, None);
+            pricegraph.transitive_orderbook(Market { base: 1, quote: 2 }, None, None);
 
         // Transitive order `2 -> 3 -> 1` buying 2 selling 1
         assert_eq!(transitive_orderbook.asks.len(), 1);
@@ -312,7 +312,7 @@ mod tests {
         };
 
         let transitive_orderbook =
-            pricegraph.transitive_orderbook(Market { base: 0, quote: 1 }, None);
+            pricegraph.transitive_orderbook(Market { base: 0, quote: 1 }, None, None);
 
         // Transitive orders `1 -> 0` buying 1 selling 0
         assert_eq!(transitive_orderbook.asks.len(), 2);
@@ -358,21 +358,24 @@ mod tests {
         };
         let market = Market { base: 1, quote: 2 };
 
-        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, Some(0.5));
+        let TransitiveOrderbook { bids, .. } =
+            pricegraph.transitive_orderbook(market, None, Some(0.5));
         assert_eq!(bids.len(), 1);
         assert_approx_eq!(bids[0].buy, 1_000_000.0);
         assert_approx_eq!(bids[0].sell, 1_000_000.0);
 
-        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, Some(1.0));
+        let TransitiveOrderbook { bids, .. } =
+            pricegraph.transitive_orderbook(market, None, Some(1.0));
         assert_eq!(bids.len(), 1);
 
         let TransitiveOrderbook { bids, .. } =
-            pricegraph.transitive_orderbook(market, Some((2.0 * FEE_FACTOR) - 1.0));
+            pricegraph.transitive_orderbook(market, None, Some((2.0 * FEE_FACTOR) - 1.0));
         assert_eq!(bids.len(), 2);
         assert_approx_eq!(bids[1].buy, 1_000_000.0);
         assert_approx_eq!(bids[1].sell, 500_000.0 / FEE_FACTOR);
 
-        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, Some(3.0));
+        let TransitiveOrderbook { bids, .. } =
+            pricegraph.transitive_orderbook(market, None, Some(3.0));
         assert_eq!(bids.len(), 3);
         assert_approx_eq!(bids[2].buy, 4_000_000.0);
         assert_approx_eq!(bids[2].sell, 1_000_000.0);
@@ -409,7 +412,7 @@ mod tests {
         };
         let market = Market { base: 1, quote: 2 };
 
-        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, None);
+        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, None, None);
         assert_eq!(bids.len(), 3);
 
         assert_approx_eq!(bids[0].buy, 1_000_000.0);
@@ -447,7 +450,7 @@ mod tests {
             }
         };
         let transitive_orderbook =
-            pricegraph.transitive_orderbook(Market { base: 3, quote: 2 }, None);
+            pricegraph.transitive_orderbook(Market { base: 3, quote: 2 }, None, None);
         assert!(transitive_orderbook.asks.is_empty() && transitive_orderbook.bids.is_empty());
     }
 }

@@ -54,7 +54,10 @@ mod tests {
             orders {}
         };
 
-        assert_approx_eq!(pricegraph.estimate_token_price(0).unwrap(), OWL_BASE_UNIT);
+        assert_approx_eq!(
+            pricegraph.estimate_token_price(0, None).unwrap(),
+            OWL_BASE_UNIT
+        );
     }
 
     #[test]
@@ -83,12 +86,12 @@ mod tests {
         let rounding_error = num::max_rounding_error_with_epsilon(OWL_BASE_UNIT);
 
         assert_approx_eq!(
-            pricegraph.estimate_token_price(1).unwrap(),
+            pricegraph.estimate_token_price(1, None).unwrap(),
             (OWL_BASE_UNIT / 2.0) * FEE_FACTOR.powi(3),
             rounding_error
         );
         assert_approx_eq!(
-            pricegraph.estimate_token_price(2).unwrap(),
+            pricegraph.estimate_token_price(2, None).unwrap(),
             (OWL_BASE_UNIT / 2.0) * FEE_FACTOR.powi(2),
             rounding_error
         );

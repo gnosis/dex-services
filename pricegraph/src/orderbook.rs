@@ -568,12 +568,15 @@ mod tests {
                 owner @1 buying 0 [5_000_000] selling 1 [10_000_000],
             }
         };
-        let pair = TokenPair { buy: 1, sell: 0 };
+        let pair_range = TokenPairRange {
+            pair: TokenPair { buy: 1, sell: 0 },
+            hops: None,
+        };
 
         assert!(orderbook.is_overlapping());
-        assert!(orderbook.fill_optimal_transitive_order(pair).is_err());
+        assert!(orderbook.fill_optimal_transitive_order(pair_range).is_err());
         assert!(orderbook
-            .fill_optimal_transitive_order_if(pair, |_| false)
+            .fill_optimal_transitive_order_if(pair_range, |_| false)
             .is_err());
     }
 
