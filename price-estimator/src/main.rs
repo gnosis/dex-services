@@ -3,6 +3,7 @@ mod error;
 mod filter;
 mod health;
 mod infallible_price_source;
+mod metrics;
 mod models;
 mod orderbook;
 mod solver_rounding_buffer;
@@ -106,7 +107,7 @@ fn main() {
         options
     );
 
-    let driver_http_metrics = setup_driver_metrics();
+    let (prometheus_registry, driver_http_metrics) = setup_driver_metrics();
     let http_factory = HttpFactory::new(options.timeout, driver_http_metrics);
     let web3 = web3_provider(&http_factory, options.node_url.as_str(), options.timeout).unwrap();
     // The private key is not actually used but StableXContractImpl requires it.
@@ -165,6 +166,7 @@ fn main() {
     // requests too. This doesn't have security implications because this is a public,
     // unauthenticated api anyway.
     let filter = health::filter()
+        .or(metrics::filter(prometheus_registry))
         .or(filter::all(orderbook, token_info))
         .with(warp::log("price_estimator"))
         .with(warp::reply::with::header(
@@ -195,7 +197,7 @@ fn duration_secs(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_secs(s.parse()?))
 }
 
-fn setup_driver_metrics() -> HttpMetrics {
+fn setup_driver_metrics() -> (Arc<Registry>, HttpMetrics) {
     let prometheus_registry = Arc::new(Registry::new());
 
     let metric_handler = MetricsHandler::new(prometheus_registry.clone());
