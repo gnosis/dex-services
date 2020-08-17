@@ -161,14 +161,20 @@ impl TokenInfoFetching for TokenInfoCache {
         const CONCURRENT_REQUESTS: usize = 1;
 
         async move {
-            // NOTE: First check the cache directly before refetching. This
-            // allows us to exit early without checking to see if there are
-            // missing token infos that we need to cache.
-            if let Some(result) = self.find_cached_token_by_symbol(symbol).await {
-                return Ok(Some(result));
+            if let Some((id, _)) = self.find_cached_token_by_symbol(symbol).await {
+                // NOTE: In case we found a symbol, make sure that all tokens up
+                // to that ID are already cached. This ensures that if we find a
+                // token with the symbol, it is indeed the one with the lowest
+                // token ID on the exchange. Also, if the cache is already warm,
+                // this this operation will complete very fast without having to
+                // query the inner `TokenInfoFetching`.
+                let ids = (0..id.0).map(TokenId).collect::<Vec<_>>();
+                self.get_token_infos(&ids).await?;
+            } else {
+                // NOTE: Token not found - update the entire token cache.
+                self.cache_all(CONCURRENT_REQUESTS).await?;
             }
 
-            self.cache_all(CONCURRENT_REQUESTS).await?;
             Ok(self.find_cached_token_by_symbol(symbol).await)
         }
         .boxed()
@@ -473,5 +479,38 @@ mod tests {
             .unwrap()
             .unwrap(); // 🤣
         assert_eq!(id, TokenId(0));
+    }
+
+    #[test]
+    fn fetches_tokens_with_lower_ids_when_searching_for_symbol() {
+        let owl = TokenBaseInfo {
+            alias: "OWL".to_owned(),
+            decimals: 18,
+        };
+
+        let mut inner = MockTokenInfoFetching::new();
+        inner
+            .expect_get_token_info()
+            .with(eq(TokenId(0)))
+            .returning({
+                let owl = owl.clone();
+                move |_| immediate!(Ok(owl.clone()))
+            });
+
+        let cache = TokenInfoCache::with_cache(
+            Arc::new(inner),
+            hash_map! {
+                TokenId(1) => owl.clone(),
+            },
+        );
+
+        assert_eq!(
+            cache
+                .find_token_by_symbol("OWL")
+                .now_or_never()
+                .unwrap()
+                .unwrap(),
+            Some((TokenId(0), owl)),
+        );
     }
 }
