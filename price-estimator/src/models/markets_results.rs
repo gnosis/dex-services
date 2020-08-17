@@ -36,7 +36,7 @@ impl MarketsResult {
         convert_to_base_units(&mut asks, &base_token_info, &quote_token_info);
         let mut bids = self.bids;
         convert_to_base_units(&mut bids, &base_token_info, &quote_token_info);
-        return Self { asks, bids };
+        Self { asks, bids }
     }
 }
 
