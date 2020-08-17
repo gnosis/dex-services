@@ -1,15 +1,14 @@
 mod amounts_at_price;
 mod error;
 mod filter;
-mod health;
 mod infallible_price_source;
-mod metrics;
 mod models;
 mod orderbook;
 mod solver_rounding_buffer;
 
 use core::{
     contracts::{stablex_contract::StableXContractImpl, web3_provider},
+    health::{HealthReporting, HttpHealthEndpoint},
     http::HttpFactory,
     http_server::{DefaultRouter, RouilleServer, Serving},
     logging,
@@ -107,7 +106,7 @@ fn main() {
         options
     );
 
-    let (prometheus_registry, driver_http_metrics) = setup_driver_metrics();
+    let (driver_http_metrics, health) = setup_driver_metrics();
     let http_factory = HttpFactory::new(options.timeout, driver_http_metrics);
     let web3 = web3_provider(&http_factory, options.node_url.as_str(), options.timeout).unwrap();
     // The private key is not actually used but StableXContractImpl requires it.
@@ -165,9 +164,7 @@ fn main() {
     // go through to locally running instance. This does mean we set the header for non openapi
     // requests too. This doesn't have security implications because this is a public,
     // unauthenticated api anyway.
-    let filter = health::filter()
-        .or(metrics::filter(prometheus_registry))
-        .or(filter::all(orderbook, token_info))
+    let filter = filter::all(orderbook, token_info)
         .with(warp::log("price_estimator"))
         .with(warp::reply::with::header(
             "Access-Control-Allow-Origin",
@@ -177,6 +174,7 @@ fn main() {
 
     log::info!("Server ready.");
     runtime.block_on(async move {
+        health.notify_ready();
         tokio::select! {
             _ = orderbook_task => log::error!("Update task exited."),
             _ = serve_task => log::error!("Serve task exited."),
@@ -197,11 +195,12 @@ fn duration_secs(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_secs(s.parse()?))
 }
 
-fn setup_driver_metrics() -> (Arc<Registry>, HttpMetrics) {
+fn setup_driver_metrics() -> (HttpMetrics, Arc<dyn HealthReporting>) {
+    let health = Arc::new(HttpHealthEndpoint::new());
     let prometheus_registry = Arc::new(Registry::new());
 
     let metric_handler = MetricsHandler::new(prometheus_registry.clone());
     RouilleServer::new(DefaultRouter(metric_handler)).start_in_background();
 
-    HttpMetrics::new(&prometheus_registry).unwrap()
+    (HttpMetrics::new(&prometheus_registry).unwrap(), health)
 }
