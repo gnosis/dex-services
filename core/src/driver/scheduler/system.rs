@@ -2,7 +2,7 @@ use super::{AuctionTimingConfiguration, Scheduler};
 use crate::{
     driver::stablex_driver::{DriverResult, StableXDriver},
     models::BatchId,
-    util::{AsyncSleep, AsyncSleeping, DefaultNow, FutureWaitExt as _, Now},
+    util::{self, AsyncSleep, AsyncSleeping, FutureWaitExt as _, Now},
 };
 use anyhow::{Context, Result};
 use crossbeam_utils::thread::Scope;
@@ -55,7 +55,7 @@ impl<'a> SystemScheduler<'a> {
                 solver_deadline,
                 min_solution_submit_time,
                 driver,
-                &DefaultNow {},
+                &util::default_now(),
                 &AsyncSleep {},
             )
             .wait();

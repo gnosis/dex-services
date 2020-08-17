@@ -67,6 +67,7 @@ pub trait AsyncSleeping: Send + Sync {
         async_std::task::sleep(duration).boxed()
     }
 }
+
 pub struct AsyncSleep;
 impl AsyncSleeping for AsyncSleep {}
 
@@ -76,7 +77,11 @@ pub trait Now: Send + Sync {
     fn instant_now(&self) -> Instant;
 }
 
-pub struct DefaultNow;
+pub fn default_now() -> impl Now {
+    DefaultNow {}
+}
+
+struct DefaultNow;
 impl Now for DefaultNow {
     fn system_now(&self) -> SystemTime {
         SystemTime::now()
