@@ -1,9 +1,9 @@
+use crate::models::TokenId;
 use anyhow::Result;
 use futures::future::{BoxFuture, FutureExt as _};
 use lazy_static::lazy_static;
-use std::{collections::HashMap, num::NonZeroU128};
+use std::{borrow::Borrow, collections::HashMap, num::NonZeroU128};
 
-use crate::models::TokenId;
 pub mod cached;
 pub mod hardcoded;
 pub mod onchain;
@@ -46,12 +46,23 @@ pub trait TokenInfoFetching: Send + Sync {
     ) -> BoxFuture<'a, Result<Option<(TokenId, TokenBaseInfo)>>> {
         async move {
             let infos = self.get_token_infos(&self.all_ids().await?).await?;
-            Ok(infos
-                .into_iter()
-                .find(|(_, info)| info.matches_symbol(symbol)))
+            Ok(search_for_token_by_symbol(infos, symbol))
         }
         .boxed()
     }
+}
+
+fn search_for_token_by_symbol<T>(
+    tokens: impl IntoIterator<Item = (TokenId, T)>,
+    symbol: &str,
+) -> Option<(TokenId, T)>
+where
+    T: Borrow<TokenBaseInfo>,
+{
+    tokens
+        .into_iter()
+        .filter(|(_, info)| info.borrow().matches_symbol(symbol))
+        .min_by_key(|(id, _)| *id)
 }
 
 // mockall workaround https://github.com/asomers/mockall/issues/134
@@ -214,5 +225,24 @@ mod tests {
         assert_eq!(result.get(&TokenId(0)).unwrap().alias, "0");
         assert_eq!(result.get(&TokenId(1)).unwrap().alias, "1");
         assert!(result.get(&TokenId(2)).is_none());
+    }
+
+    #[test]
+    fn search_prefers_symbol_of_lower_token_ids() {
+        let owl = TokenBaseInfo {
+            alias: "OWL".to_owned(),
+            decimals: 18,
+        };
+
+        let (id, info) = search_for_token_by_symbol(
+            vec![
+                (TokenId(42), owl.clone()),
+                (TokenId(1337), owl.clone()),
+                (TokenId(0), owl.clone()),
+            ],
+            "OWL",
+        )
+        .unwrap();
+        assert_eq!((id, info), (TokenId(0), owl));
     }
 }

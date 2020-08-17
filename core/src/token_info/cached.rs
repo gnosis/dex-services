@@ -1,5 +1,4 @@
 use super::{TokenBaseInfo, TokenId, TokenInfoFetching};
-
 use anyhow::{anyhow, Context as _, Error, Result};
 use async_std::sync::RwLock;
 use ethcontract::errors::{ExecutionError, MethodError};
@@ -80,13 +79,13 @@ impl TokenInfoCache {
 
     async fn find_cached_token_by_symbol(&self, symbol: &str) -> Option<(TokenId, TokenBaseInfo)> {
         let cache = self.cache.read().await;
-        let (id, info) = cache
-            .iter()
-            .filter_map(|(id, entry)| match entry {
-                CacheEntry::TokenBaseInfo(info) if info.matches_symbol(symbol) => Some((*id, info)),
+        let (id, info) = super::search_for_token_by_symbol(
+            cache.iter().filter_map(|(id, entry)| match entry {
+                CacheEntry::TokenBaseInfo(info) => Some((*id, info)),
                 _ => None,
-            })
-            .min_by_key(|(id, _)| *id)?;
+            }),
+            symbol,
+        )?;
 
         Some((id, info.clone()))
     }
@@ -159,6 +158,8 @@ impl TokenInfoFetching for TokenInfoCache {
         &'a self,
         symbol: &'a str,
     ) -> BoxFuture<'a, Result<Option<(TokenId, TokenBaseInfo)>>> {
+        const CONCURRENT_REQUESTS: usize = 1;
+
         async move {
             // NOTE: First check the cache directly before refetching. This
             // allows us to exit early without checking to see if there are
@@ -167,7 +168,7 @@ impl TokenInfoFetching for TokenInfoCache {
                 return Ok(Some(result));
             }
 
-            self.cache_all(1).await?;
+            self.cache_all(CONCURRENT_REQUESTS).await?;
             Ok(self.find_cached_token_by_symbol(symbol).await)
         }
         .boxed()
