@@ -164,9 +164,6 @@ async fn get_markets(
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
-    if query.unit != Unit::Atoms {
-        return Err(warp::reject());
-    }
     let market = get_market(pair, &*token_infos).await?;
     // This route intentionally uses the raw pricegraph without rounding buffer so that orders are
     // unmodified.
@@ -176,6 +173,14 @@ async fn get_markets(
         .map_err(RejectionReason::InternalError)?
         .transitive_orderbook(market, None);
     let result = MarketsResult::from(&transitive_orderbook);
+    let result = match query.unit {
+        Unit::Atoms => result,
+        Unit::BaseUnits => {
+            let base_token_info = get_token_info(market.base, token_infos.as_ref()).await?;
+            let quote_token_info = get_token_info(market.quote, token_infos.as_ref()).await?;
+            result.into_base_units(&base_token_info, &quote_token_info)
+        }
+    };
     Ok(warp::reply::json(&result))
 }
 
