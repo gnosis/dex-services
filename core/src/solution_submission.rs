@@ -15,7 +15,6 @@ use ethcontract::{
     U256,
 };
 use futures::future::{self, BoxFuture, Either, FutureExt as _};
-use log::info;
 use pricegraph::num;
 use retry::SolutionTransactionSending;
 use std::{
@@ -23,14 +22,6 @@ use std::{
     time::{Duration, SystemTime},
 };
 use thiserror::Error;
-
-/// The amount of time the solution submitter should wait between polling the
-/// current batch ID to wait for a block to be mined after the solving batch
-/// stops accepting orders.
-#[cfg(not(test))]
-const POLL_TIMEOUT: Duration = Duration::from_secs(5);
-#[cfg(test)]
-const POLL_TIMEOUT: Duration = Duration::from_secs(0);
 
 // openethereum requires that the gas price of the resubmitted transaction has increased by at
 // least 12.5%.
@@ -201,15 +192,6 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
         solution: Solution,
     ) -> BoxFuture<Result<U256, SolutionSubmissionError>> {
         async move {
-            // NOTE: Compare with `>=` as the exchange's current batch index is the
-            //   one accepting orders and does not yet accept solutions.
-            while batch_index >= self.contract.get_current_auction_index().await? {
-                info!("Solved batch is not yet accepting solutions, waiting for next batch.");
-                if POLL_TIMEOUT > Duration::from_secs(0) {
-                    async_std::task::sleep(POLL_TIMEOUT).await;
-                }
-            }
-
             self.contract
                 .get_solution_objective_value(batch_index, solution, None)
                 .await
@@ -355,42 +337,6 @@ mod tests {
             .expect_estimate_gas_price()
             .returning(|| immediate!(Err(anyhow!(""))));
         gas_price_estimating
-    }
-
-    #[test]
-    fn solution_submitter_waits_for_solving_batch() {
-        let mut contract = MockStableXContract::new();
-
-        contract
-            .expect_get_current_auction_index()
-            .times(2)
-            .returning(|| async { Ok(0) }.boxed());
-        contract
-            .expect_get_current_auction_index()
-            .times(1)
-            .returning(|| async { Ok(1) }.boxed());
-
-        contract
-            .expect_get_solution_objective_value()
-            .return_once(move |_, _, _| async { Ok(U256::from(42)) }.boxed());
-
-        let retry = MockSolutionTransactionSending::new();
-        let gas_price = erroring_gas_station();
-        let sleep = MockAsyncSleeping::new();
-
-        let result = {
-            let submitter = StableXSolutionSubmitter::with_retry_and_sleep(
-                Arc::new(contract),
-                Arc::new(gas_price),
-                retry,
-                sleep,
-            );
-            submitter
-                .get_solution_objective_value(0, Solution::trivial())
-                .now_or_never()
-                .unwrap()
-        };
-        assert_eq!(result.unwrap(), U256::from(42));
     }
 
     #[test]

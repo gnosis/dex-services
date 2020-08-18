@@ -1,5 +1,6 @@
 use super::{AuctionTimingConfiguration, Scheduler};
 use crate::{
+    contracts::stablex_contract::StableXContract,
     driver::stablex_driver::{DriverError, StableXDriver},
     models::{BatchId, Solution},
     util::{self, AsyncSleep, AsyncSleeping, Now},
@@ -12,8 +13,10 @@ use std::{
 };
 
 const RETRY_SLEEP_DURATION: Duration = Duration::from_secs(1);
+const CONTRACT_BATCH_ID_POLL_INTERVAL: Duration = Duration::from_secs(10);
 
 pub struct SystemScheduler {
+    contract: Arc<dyn StableXContract>,
     driver: Arc<dyn StableXDriver>,
     auction_timing_configuration: AuctionTimingConfiguration,
     last_solved_batch: Option<BatchId>,
@@ -27,10 +30,12 @@ enum Action {
 
 impl SystemScheduler {
     pub fn new(
+        contract: Arc<dyn StableXContract>,
         driver: Arc<dyn StableXDriver>,
         auction_timing_configuration: AuctionTimingConfiguration,
     ) -> Self {
         Self {
+            contract,
             driver,
             auction_timing_configuration,
             last_solved_batch: None,
@@ -39,6 +44,7 @@ impl SystemScheduler {
 
     fn start_solving_in_background(&self, batch_id: BatchId, solver_deadline: Instant) {
         let driver = self.driver.clone();
+        let contract = self.contract.clone();
         let earliest_solution_submit_time = self
             .auction_timing_configuration
             .earliest_solution_submit_time;
@@ -48,6 +54,7 @@ impl SystemScheduler {
                 solver_deadline,
                 earliest_solution_submit_time,
                 driver.as_ref(),
+                contract.as_ref(),
                 &util::default_now(),
                 &AsyncSleep {},
             )
@@ -99,6 +106,7 @@ async fn solve_and_submit(
     solver_deadline: Instant,
     earliest_solution_submit_time: Duration,
     driver: &(dyn StableXDriver),
+    contract: &(dyn StableXContract),
     now: &dyn Now,
     sleep: &dyn AsyncSleeping,
 ) {
@@ -107,6 +115,9 @@ async fn solve_and_submit(
         log_solve_result(batch_id, &driver_result);
         match driver_result {
             Ok(solution) => {
+                if let Err(err) = wait_for_batch_id(batch_id, contract, sleep).await {
+                    log::error!("failed to wait for batch id: {:?}", err);
+                }
                 return submit(
                     batch_id,
                     earliest_solution_submit_time,
@@ -115,12 +126,28 @@ async fn solve_and_submit(
                     now,
                     sleep,
                 )
-                .await
+                .await;
             }
             Err(DriverError::Retry(_)) => sleep.sleep(RETRY_SLEEP_DURATION).await,
             Err(DriverError::Skip(_)) => break,
         }
     }
+}
+
+/// Wait for the smart contract to signal the correct batch id. This can lag behind real time
+/// significantly so we have to wait until we can submit the solution.
+async fn wait_for_batch_id(
+    batch_id: BatchId,
+    contract: &dyn StableXContract,
+    sleep: &dyn AsyncSleeping,
+) -> Result<()> {
+    // NOTE: Compare with `>=` as the exchange's current batch index is the
+    //   one accepting orders and does not yet accept solutions.
+    while batch_id.0 as u32 >= contract.get_current_auction_index().await? {
+        log::info!("Solved batch is not yet accepting solutions, waiting for next batch.");
+        sleep.sleep(CONTRACT_BATCH_ID_POLL_INTERVAL);
+    }
+    Ok(())
 }
 
 async fn submit(
@@ -191,6 +218,7 @@ impl Scheduler for SystemScheduler {
 mod tests {
     use super::*;
     use crate::{
+        contracts::stablex_contract::MockStableXContract,
         driver::stablex_driver::MockStableXDriver,
         util::{MockAsyncSleeping, MockNow},
     };
@@ -200,13 +228,14 @@ mod tests {
 
     #[test]
     fn determine_action_without_matching_last_solved_batch() {
-        let driver = MockStableXDriver::new();
+        let driver = Arc::new(MockStableXDriver::new());
+        let contract = Arc::new(MockStableXContract::new());
         let auction_timing_configuration = AuctionTimingConfiguration {
             target_start_solve_time: Duration::from_secs(10),
             latest_solution_submit_time: Duration::from_secs(20),
             earliest_solution_submit_time: Duration::from_secs(0),
         };
-        let scheduler = SystemScheduler::new(Arc::new(driver), auction_timing_configuration);
+        let scheduler = SystemScheduler::new(contract, driver, auction_timing_configuration);
 
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
 
@@ -255,13 +284,14 @@ mod tests {
 
     #[test]
     fn determine_action_with_matching_last_solved_batch() {
-        let driver = MockStableXDriver::new();
+        let driver = Arc::new(MockStableXDriver::new());
+        let contract = Arc::new(MockStableXContract::new());
         let auction_timing_configuration = AuctionTimingConfiguration {
             target_start_solve_time: Duration::from_secs(10),
             latest_solution_submit_time: Duration::from_secs(20),
             earliest_solution_submit_time: Duration::from_secs(0),
         };
-        let mut scheduler = SystemScheduler::new(Arc::new(driver), auction_timing_configuration);
+        let mut scheduler = SystemScheduler::new(contract, driver, auction_timing_configuration);
         scheduler.last_solved_batch = Some(BatchId(0));
 
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
@@ -313,6 +343,7 @@ mod tests {
             static ref EPOCH: Instant = Instant::now();
         };
 
+        let contract = MockStableXContract::new();
         let mut driver = MockStableXDriver::new();
         driver
             .expect_solve_batch()
@@ -337,6 +368,61 @@ mod tests {
             *EPOCH + Duration::from_secs(5),
             Duration::from_secs(0),
             &driver,
+            &contract,
+            &now,
+            &sleep,
+        )
+        .now_or_never()
+        .is_some());
+    }
+    #[test]
+    fn solve_waits_for_batch() {
+        lazy_static::lazy_static! {
+            static ref EPOCH: Instant = Instant::now();
+        };
+
+        let mut contract = MockStableXContract::new();
+        let mut driver = MockStableXDriver::new();
+        let mut sleep = MockAsyncSleeping::new();
+        let mut now = MockNow::new();
+
+        sleep.expect_sleep().returning(|_| immediate!(()));
+        now.expect_instant_now().returning(|| *EPOCH);
+        now.expect_system_now().returning(|| std::time::UNIX_EPOCH);
+
+        let mut sequence = Sequence::new();
+        driver
+            .expect_solve_batch()
+            .times(1)
+            .in_sequence(&mut sequence)
+            .returning(|_, _| immediate!(Ok(Solution::trivial())));
+        contract
+            .expect_get_current_auction_index()
+            .times(1)
+            .in_sequence(&mut sequence)
+            .returning(|| immediate!(Ok(0)));
+        contract
+            .expect_get_current_auction_index()
+            .times(1)
+            .in_sequence(&mut sequence)
+            .returning(|| immediate!(Ok(0)));
+        contract
+            .expect_get_current_auction_index()
+            .times(1)
+            .in_sequence(&mut sequence)
+            .returning(|| immediate!(Ok(1)));
+        driver
+            .expect_submit_solution()
+            .times(1)
+            .in_sequence(&mut sequence)
+            .returning(|_, _| immediate!(Ok(())));
+
+        assert!(solve_and_submit(
+            BatchId(0),
+            *EPOCH + Duration::from_secs(1),
+            Duration::from_secs(0),
+            &driver,
+            &contract,
             &now,
             &sleep,
         )
@@ -389,6 +475,10 @@ mod tests {
         let (_, _guard) = crate::logging::init("info");
 
         let mut driver = MockStableXDriver::new();
+        let mut contract = MockStableXContract::new();
+        contract
+            .expect_get_current_auction_index()
+            .returning(|| immediate!(Err(anyhow!(""))));
 
         let mut counter = 0;
         driver
@@ -418,7 +508,11 @@ mod tests {
             latest_solution_submit_time: Duration::from_secs(20),
             earliest_solution_submit_time: Duration::from_secs(0),
         };
-        let mut scheduler = SystemScheduler::new(Arc::new(driver), auction_timing_configuration);
+        let mut scheduler = SystemScheduler::new(
+            Arc::new(contract),
+            Arc::new(driver),
+            auction_timing_configuration,
+        );
 
         scheduler.start();
     }
