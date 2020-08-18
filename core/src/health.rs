@@ -51,7 +51,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn responds_with_204_when_not_ready() {
+    fn responds_with_204_when_ready() {
         let health = HttpHealthEndpoint::new();
         health.notify_ready();
 
