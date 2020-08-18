@@ -59,6 +59,14 @@ impl BatchId {
     fn prev(self) -> BatchId {
         self.0.checked_sub(1).map(BatchId).unwrap()
     }
+
+    /// Returns the duration until the start of the batch, or `None` if the
+    /// batch is in the past.
+    pub fn duration_until_order_collection_start_time(self) -> Option<Duration> {
+        self.order_collection_start_time()
+            .duration_since(SystemTime::now())
+            .ok()
+    }
 }
 
 impl From<u32> for BatchId {

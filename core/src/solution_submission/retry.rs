@@ -30,18 +30,18 @@ pub trait SolutionTransactionSending {
     fn retry<'a>(&'a self, args: Args) -> BoxFuture<'a, Result<(), MethodError>>;
 }
 
-pub struct RetryWithGasPriceIncrease<'a> {
+pub struct RetryWithGasPriceIncrease {
     contract: Arc<dyn StableXContract>,
     gas_price_estimating: Arc<dyn GasPriceEstimating + Send + Sync>,
-    async_sleep: Box<dyn AsyncSleeping + 'a>,
+    async_sleep: Box<dyn AsyncSleeping>,
 }
 
-impl<'a> RetryWithGasPriceIncrease<'a> {
+impl<'a> RetryWithGasPriceIncrease {
     pub fn new(
         contract: Arc<dyn StableXContract>,
         gas_price_estimating: Arc<dyn GasPriceEstimating + Send + Sync>,
     ) -> Self {
-        Self::with_sleep(contract, gas_price_estimating, crate::util::AsyncSleep {})
+        Self::with_sleep(contract, gas_price_estimating, crate::util::AsyncSleep)
     }
 
     pub fn with_sleep(
@@ -57,7 +57,7 @@ impl<'a> RetryWithGasPriceIncrease<'a> {
     }
 }
 
-impl<'a> SolutionTransactionSending for RetryWithGasPriceIncrease<'a> {
+impl SolutionTransactionSending for RetryWithGasPriceIncrease {
     fn retry<'b>(&'b self, args: Args) -> BoxFuture<'b, Result<(), MethodError>> {
         retry(
             self.contract.as_ref(),

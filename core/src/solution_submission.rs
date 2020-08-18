@@ -105,7 +105,7 @@ pub struct StableXSolutionSubmitter<'a> {
     contract: Arc<dyn StableXContract>,
     gas_price_estimating: Arc<dyn GasPriceEstimating + Send + Sync>,
     retry_with_gas_price_increase: Box<dyn SolutionTransactionSending + Send + Sync + 'a>,
-    async_sleep: Box<dyn AsyncSleeping + 'a>,
+    async_sleep: Box<dyn AsyncSleeping>,
 }
 
 impl<'a> StableXSolutionSubmitter<'a> {
@@ -117,7 +117,7 @@ impl<'a> StableXSolutionSubmitter<'a> {
             contract.clone(),
             gas_price_estimating.clone(),
             retry::RetryWithGasPriceIncrease::new(contract, gas_price_estimating),
-            crate::util::AsyncSleep {},
+            crate::util::AsyncSleep,
         )
     }
 

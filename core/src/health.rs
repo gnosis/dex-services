@@ -1,9 +1,19 @@
 //! Module implementing shared basic health reporting.
 
-use crate::http_server::Handler;
+use crate::{
+    http_server::Handler,
+    util::{AsyncSleep, AsyncSleeping},
+};
 use anyhow::Result;
+use async_std::task::{self, JoinHandle};
 use rouille::{Request, Response};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 /// Trait for asyncronously notifying health information.
 #[cfg_attr(test, mockall::automock)]
@@ -46,9 +56,28 @@ impl Handler for HttpHealthEndpoint {
     }
 }
 
+/// Perform a delayed notification to a health reporting instance.
+pub fn delayed_notify_ready(health: Arc<dyn HealthReporting>, delay: Duration) -> JoinHandle<()> {
+    delayed_notify_ready_with_sleep(health, delay, AsyncSleep)
+}
+
+fn delayed_notify_ready_with_sleep(
+    health: Arc<dyn HealthReporting>,
+    delay: Duration,
+    sleeper: impl AsyncSleeping,
+) -> JoinHandle<()> {
+    task::spawn(async move {
+        sleeper.sleep(delay).await;
+        log::info!("service is ready");
+        health.notify_ready();
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::util::MockAsyncSleeping;
+    use mockall::predicate::eq;
 
     #[test]
     fn responds_with_204_when_ready() {
@@ -79,5 +108,20 @@ mod tests {
             ))
             .unwrap();
         assert_eq!(response.status_code, 503);
+    }
+
+    #[test]
+    fn delays_ready_notification() {
+        let mut health = MockHealthReporting::new();
+        health.expect_notify_ready().return_once(|| {});
+
+        let duration = Duration::from_secs(42);
+        let mut sleeper = MockAsyncSleeping::new();
+        sleeper
+            .expect_sleep()
+            .with(eq(duration))
+            .return_once(|_| immediate!(()));
+
+        delayed_notify_ready_with_sleep(Arc::new(health), duration, sleeper);
     }
 }

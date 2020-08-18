@@ -7,11 +7,12 @@ use core::economic_viability::{
     EconomicViabilityComputer, FixedEconomicViabilityComputer, PriorityEconomicViabilityComputer,
 };
 use core::gas_price::{self, GasPriceEstimating};
-use core::health::{HealthReporting, HttpHealthEndpoint};
+use core::health::{self, HealthReporting, HttpHealthEndpoint};
 use core::http::HttpFactory;
 use core::http_server::{DefaultRouter, RouilleServer, Serving};
 use core::logging;
 use core::metrics::{HttpMetrics, MetricsHandler, StableXMetrics};
+use core::models::BatchId;
 use core::orderbook::{
     FilteredOrderbookReader, OnchainFilteredOrderBookReader, OrderbookFilter, OrderbookReaderKind,
     ShadowedOrderbookReader, StableXOrderBookReading,
@@ -232,7 +233,7 @@ fn main() {
     info!("Starting driver with runtime options: {:#?}", options);
 
     // Set up metrics and health monitoring and serve in separate thread.
-    let (stablex_metrics, http_metrics, _health) = setup_monitoring();
+    let (stablex_metrics, http_metrics, health) = setup_monitoring();
 
     // Set up shared HTTP client and HTTP services.
     let http_factory = HttpFactory::new(options.http_timeout, http_metrics);
@@ -336,6 +337,18 @@ fn main() {
         .initialize()
         .wait()
         .expect("primary orderbook initialization failed");
+
+    health::delayed_notify_ready(
+        health,
+        // NOTE: Delay the ready notification until the start of the next batch.
+        // This ensures that the service isn't flagged as ready and removes the
+        // previous deployment if it is started in the middle of a batch and
+        // doesn't have enough time to run the solver to completion.
+        BatchId::now()
+            .next()
+            .duration_until_order_collection_start_time()
+            .unwrap_or_default(),
+    );
     scheduler.start();
 }
 
