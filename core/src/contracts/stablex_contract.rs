@@ -92,9 +92,6 @@ pub trait StableXContract: Send + Sync {
     /// Retrieve the time remaining in the batch.
     fn get_current_auction_remaining_time<'a>(&'a self) -> BoxFuture<'a, Result<Duration>>;
 
-    /// Retrieve the current auction index at the specified block number.
-    fn get_auction_index_at_block<'a>(&'a self, block: BlockNumber) -> BoxFuture<'a, Result<u32>>;
-
     /// Searches for the block number of the last block of the given batch. If
     /// the batch has not yet been finalized, then the block number for the
     /// `"latest"` block is returned.
@@ -161,7 +158,14 @@ pub trait StableXContract: Send + Sync {
 
 impl StableXContract for StableXContractImpl {
     fn get_current_auction_index<'a>(&'a self) -> BoxFuture<'a, Result<u32>> {
-        self.get_auction_index_at_block(BlockNumber::Latest)
+        async move {
+            self.instance
+                .get_current_batch_id()
+                .call()
+                .await
+                .map_err(Error::from)
+        }
+        .boxed()
     }
 
     fn get_current_auction_remaining_time<'a>(&'a self) -> BoxFuture<'a, Result<Duration>> {
@@ -172,18 +176,6 @@ impl StableXContract for StableXContractImpl {
                 .call()
                 .await?;
             Ok(Duration::from_secs(seconds.as_u64()))
-        }
-        .boxed()
-    }
-
-    fn get_auction_index_at_block<'a>(&'a self, block: BlockNumber) -> BoxFuture<'a, Result<u32>> {
-        async move {
-            self.instance
-                .get_current_batch_id()
-                .block(block)
-                .call()
-                .await
-                .map_err(Error::from)
         }
         .boxed()
     }
