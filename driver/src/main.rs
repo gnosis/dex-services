@@ -105,11 +105,10 @@ struct Options {
     #[structopt(short = "k", long, env = "PRIVATE_KEY", hide_env_values = true)]
     private_key: PrivateKey,
 
-    /// For storage based orderbook reading, the page size with which to read
-    /// orders from the smart contract. For event based orderbook reading, the
-    /// number of blocks to fetch events for at a time.
+    /// Specify the number of blocks to fetch events for at a time for
+    /// constructing the orderbook for the solver.
     #[structopt(long, env = "AUCTION_DATA_PAGE_SIZE", default_value = "500")]
-    auction_data_page_size: u16,
+    auction_data_page_size: usize,
 
     /// The timeout in milliseconds of web3 JSON RPC calls, defaults to 10000ms
     #[structopt(
@@ -205,17 +204,8 @@ struct Options {
     )]
     price_source_update_interval: Duration,
 
-    /// Use a shadowed orderbook reader along side a primary reader so that the
-    /// queried data can be compared and produce log errors in case they
-    /// disagree.
-    #[structopt(
-        long,
-        env = "USE_SHADOWED_ORDERBOOK",
-        default_value = "false",
-        parse(try_from_str)
-    )]
-    use_shadowed_orderbook: bool,
-
+    /// Use an orderbook file for persisting an event cache in order to speed up
+    /// the startup time.
     #[structopt(long, env = "ORDERBOOK_FILE", parse(from_os_str))]
     orderbook_file: Option<PathBuf>,
 }
@@ -247,7 +237,7 @@ fn main() {
         Box::new(EventBasedOrderbook::new(
             contract.clone(),
             web3,
-            options.auction_data_page_size as _,
+            options.auction_data_page_size,
             options.orderbook_file,
         )),
         options.orderbook_filter.clone(),
