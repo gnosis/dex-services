@@ -1,10 +1,9 @@
 use chrono::Utc;
-use slog::Level;
-use slog::{o, Drain, Logger, OwnedKVList, Record};
+use slog::{b, o, record, Drain, Level, Logger, OwnedKVList, Record};
 use slog_async::{Async, OverflowStrategy};
 use slog_envlogger::LogBuilder;
 use slog_scope::GlobalLoggerGuard;
-use slog_term::{Decorator, TermDecorator};
+use slog_term::{Decorator, PlainDecorator, TermDecorator};
 use std::{
     panic::{self, PanicInfo},
     thread,
@@ -32,14 +31,25 @@ pub fn init(filter: impl AsRef<str>) -> (Logger, GlobalLoggerGuard) {
 }
 
 /// Sets a panic hook so panic information is written with the log facilities
-/// instead of directly to STDERR.
+/// in addition to the default panic printer.
 fn set_panic_hook() {
-    fn hook(info: &PanicInfo) {
+    let default_hook = panic::take_hook();
+    let hook = move |info: &PanicInfo| {
         let thread = thread::current();
         let thread_name = thread.name().unwrap_or("<unnamed>");
 
+        // It is not possible for our custom hook to print a full backtrace on stable rust. To not
+        // lose this information we call the default panic handler which prints the full backtrace.
+        // We print a fake log message prefix so that kibana can identify that this is supposed to
+        // a single message.
+        let decorator = PlainDecorator::new(std::io::stderr());
+        let _ = log_prefix_to_decorator(
+            &decorator,
+            &record!(Level::Error, "", &format_args!(""), b!()),
+        );
+        default_hook(info);
         log::error!("thread '{}' {}", thread_name, info);
-    }
+    };
 
     panic::set_hook(Box::new(hook));
 }
@@ -77,14 +87,17 @@ impl<ErrDecorator: Decorator, RestDecorator: Decorator> Drain
     }
 }
 
-fn log_to_decorator(
+fn formatted_current_time() -> String {
+    Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
+}
+
+fn log_prefix_to_decorator(
     decorator: &impl Decorator,
     record: &Record,
-    values: &OwnedKVList,
 ) -> std::result::Result<(), std::io::Error> {
-    decorator.with_record(record, values, |decorator| {
+    decorator.with_record(record, &o!().into(), |decorator| {
         decorator.start_timestamp()?;
-        write!(decorator, "{}", Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ"))?;
+        write!(decorator, "{}", formatted_current_time())?;
 
         decorator.start_whitespace()?;
         write!(decorator, " ")?;
@@ -100,10 +113,34 @@ fn log_to_decorator(
         decorator.start_whitespace()?;
         write!(decorator, " ")?;
 
+        Ok(())
+    })
+}
+
+fn log_to_decorator(
+    decorator: &impl Decorator,
+    record: &Record,
+    values: &OwnedKVList,
+) -> std::result::Result<(), std::io::Error> {
+    log_prefix_to_decorator(decorator, record)?;
+    decorator.with_record(record, values, |decorator| {
         decorator.start_msg()?;
         writeln!(decorator, "{}", record.msg())?;
         decorator.flush()?;
-
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // `env RUST_BACKTRACE=1 cargo test -p core panic_is_printed -- --ignored --nocapture`
+    // Should see the normal rust panic backtrace and an error log message.
+    #[test]
+    #[ignore]
+    fn panic_is_printed() {
+        let _log = init("info");
+        let _ = std::thread::spawn(|| panic!()).join();
+    }
 }
