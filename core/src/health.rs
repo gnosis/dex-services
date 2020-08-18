@@ -45,3 +45,39 @@ impl Handler for HttpHealthEndpoint {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn responds_with_204_when_not_ready() {
+        let health = HttpHealthEndpoint::new();
+        health.notify_ready();
+
+        let response = health
+            .handle_request(&Request::fake_http(
+                "GET",
+                "/health/readiness",
+                vec![],
+                vec![],
+            ))
+            .unwrap();
+        assert_eq!(response.status_code, 204);
+    }
+
+    #[test]
+    fn responds_with_503_when_not_ready() {
+        let health = HttpHealthEndpoint::new();
+
+        let response = health
+            .handle_request(&Request::fake_http(
+                "GET",
+                "/health/readiness",
+                vec![],
+                vec![],
+            ))
+            .unwrap();
+        assert_eq!(response.status_code, 503);
+    }
+}
