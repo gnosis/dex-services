@@ -106,7 +106,7 @@ fn main() {
         options
     );
 
-    let (driver_http_metrics, health) = setup_driver_metrics();
+    let (driver_http_metrics, health) = setup_monitoring();
     let http_factory = HttpFactory::new(options.timeout, driver_http_metrics);
     let web3 = web3_provider(&http_factory, options.node_url.as_str(), options.timeout).unwrap();
     // The private key is not actually used but StableXContractImpl requires it.
@@ -195,7 +195,7 @@ fn duration_secs(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_secs(s.parse()?))
 }
 
-fn setup_driver_metrics() -> (HttpMetrics, Arc<dyn HealthReporting>) {
+fn setup_monitoring() -> (HttpMetrics, Arc<dyn HealthReporting>) {
     let health = Arc::new(HttpHealthEndpoint::new());
     let prometheus_registry = Arc::new(Registry::new());
 
