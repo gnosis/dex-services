@@ -17,7 +17,6 @@ pub mod http_server;
 pub mod logging;
 pub mod metrics;
 pub mod models;
-pub mod monitoring;
 pub mod orderbook;
 pub mod price_estimation;
 pub mod price_finding;
