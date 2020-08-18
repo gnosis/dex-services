@@ -12,6 +12,7 @@ pub mod economic_viability;
 pub mod gas_price;
 pub mod history;
 pub mod http;
+pub mod http_server;
 pub mod logging;
 pub mod metrics;
 pub mod models;

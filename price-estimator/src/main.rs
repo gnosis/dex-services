@@ -10,8 +10,9 @@ mod solver_rounding_buffer;
 use core::{
     contracts::{stablex_contract::StableXContractImpl, web3_provider},
     http::HttpFactory,
+    http_server::{DefaultRouter, RouilleServer, Serving},
     logging,
-    metrics::{HttpMetrics, MetricsServer},
+    metrics::{HttpMetrics, MetricsHandler},
     orderbook::EventBasedOrderbook,
     token_info::{cached::TokenInfoCache, hardcoded::TokenData},
     util::FutureWaitExt as _,
@@ -21,7 +22,7 @@ use infallible_price_source::PriceCacheUpdater;
 use orderbook::Orderbook;
 use prometheus::Registry;
 use std::{
-    collections::HashMap, net::SocketAddr, num::ParseIntError, path::PathBuf, sync::Arc, thread,
+    collections::HashMap, net::SocketAddr, num::ParseIntError, path::PathBuf, sync::Arc,
     time::Duration,
 };
 use structopt::StructOpt;
@@ -196,9 +197,9 @@ fn duration_secs(s: &str) -> Result<Duration, ParseIntError> {
 
 fn setup_driver_metrics() -> HttpMetrics {
     let prometheus_registry = Arc::new(Registry::new());
-    let metric_server = MetricsServer::new(prometheus_registry.clone());
-    thread::spawn(move || {
-        metric_server.serve(9586);
-    });
+
+    let metric_handler = MetricsHandler::new(prometheus_registry.clone());
+    RouilleServer::new(DefaultRouter(metric_handler)).start_in_background();
+
     HttpMetrics::new(&prometheus_registry).unwrap()
 }
