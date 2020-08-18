@@ -345,7 +345,7 @@ fn setup_metrics() -> (StableXMetrics, HttpMetrics) {
     let http_metrics = HttpMetrics::new(&prometheus_registry).unwrap();
 
     let metric_handler = MetricsHandler::new(prometheus_registry);
-    RouilleServer::new(DefaultRouter(metric_handler)).start_in_background(9586);
+    RouilleServer::new(DefaultRouter(metric_handler)).start_in_background();
 
     (stablex_metrics, http_metrics)
 }

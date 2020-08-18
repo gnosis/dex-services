@@ -8,17 +8,21 @@ use anyhow::Result;
 use rouille::{Request, Response};
 use std::{net::SocketAddr, thread};
 
+/// The default port for hosting the service monitor HTTP server.
+pub const DEFAULT_MONITOR_PORT: u16 = 9586;
+
 /// Trait for serving an HTTP endpoint exposing service monitoring data.
 pub trait Serving {
     /// Starts serving the HTTP server on the specified port.
     fn serve(self, port: u16) -> !;
 
-    /// Starts the HTTP server on a background thread.
-    fn start_in_background(self, port: u16)
+    /// Starts the HTTP server on a background thread with the default monitor
+    /// port.
+    fn start_in_background(self)
     where
         Self: Sized + Send + 'static,
     {
-        let _ = thread::spawn(move || self.serve(port));
+        let _ = thread::spawn(move || self.serve(DEFAULT_MONITOR_PORT));
     }
 }
 

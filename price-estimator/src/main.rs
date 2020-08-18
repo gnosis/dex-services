@@ -199,7 +199,7 @@ fn setup_driver_metrics() -> HttpMetrics {
     let prometheus_registry = Arc::new(Registry::new());
 
     let metric_handler = MetricsHandler::new(prometheus_registry.clone());
-    RouilleServer::new(DefaultRouter(metric_handler)).start_in_background(9586);
+    RouilleServer::new(DefaultRouter(metric_handler)).start_in_background();
 
     HttpMetrics::new(&prometheus_registry).unwrap()
 }
