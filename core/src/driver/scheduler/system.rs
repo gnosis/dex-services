@@ -141,6 +141,10 @@ async fn submit(
     if let Ok(duration) = (batch_id.solve_start_time() + earliest_solution_submit_time)
         .duration_since(now.system_now())
     {
+        log::info!(
+            "Sleeping {} seconds to wait for earliest_solution_submit_time.",
+            duration.as_secs()
+        );
         sleep.sleep(duration).await;
     }
     let result = driver.submit_solution(batch_id, solution).wait();
