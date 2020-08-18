@@ -8,8 +8,9 @@ use core::economic_viability::{
 };
 use core::gas_price::{self, GasPriceEstimating};
 use core::http::HttpFactory;
+use core::http_server::{DefaultRouter, RouilleServer, Serving};
 use core::logging;
-use core::metrics::{HttpMetrics, MetricsServer, StableXMetrics};
+use core::metrics::{HttpMetrics, MetricsHandler, StableXMetrics};
 use core::orderbook::{
     FilteredOrderbookReader, OnchainFilteredOrderBookReader, OrderbookFilter, OrderbookReaderKind,
     ShadowedOrderbookReader, StableXOrderBookReading,
@@ -26,7 +27,6 @@ use prometheus::Registry;
 use std::num::ParseIntError;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::thread;
 use std::time::Duration;
 use structopt::StructOpt;
 use url::Url;
@@ -343,10 +343,9 @@ fn setup_metrics() -> (StableXMetrics, HttpMetrics) {
     let prometheus_registry = Arc::new(Registry::new());
     let stablex_metrics = StableXMetrics::new(prometheus_registry.clone());
     let http_metrics = HttpMetrics::new(&prometheus_registry).unwrap();
-    let metric_server = MetricsServer::new(prometheus_registry);
-    thread::spawn(move || {
-        metric_server.serve(9586);
-    });
+
+    let metric_handler = MetricsHandler::new(prometheus_registry);
+    RouilleServer::new(DefaultRouter(metric_handler)).start_in_background(9586);
 
     (stablex_metrics, http_metrics)
 }
