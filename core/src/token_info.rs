@@ -1,16 +1,16 @@
+use crate::models::TokenId;
 use anyhow::Result;
 use futures::future::{BoxFuture, FutureExt as _};
 use lazy_static::lazy_static;
-use std::{collections::HashMap, num::NonZeroU128};
+use std::{borrow::Borrow, collections::HashMap, num::NonZeroU128};
 
-use crate::models::TokenId;
 pub mod cached;
 pub mod hardcoded;
 pub mod onchain;
 
 pub trait TokenInfoFetching: Send + Sync {
     /// Retrieves some token information from a token ID.
-    fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>>;
+    fn get_token_info(&self, id: TokenId) -> BoxFuture<Result<TokenBaseInfo>>;
 
     /// Retrieves all token information.
     /// Default implementation calls get_token_info for each token and ignores errors.
@@ -34,7 +34,35 @@ pub trait TokenInfoFetching: Send + Sync {
     }
 
     /// Returns a vector with all the token IDs available
-    fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>>;
+    fn all_ids(&self) -> BoxFuture<Result<Vec<TokenId>>>;
+
+    /// Retrieves a token by symbol.
+    ///
+    /// Default implementation queries token info for all IDs and searches the
+    /// resulting token for the specified symbol.
+    fn find_token_by_symbol<'a>(
+        &'a self,
+        symbol: &'a str,
+    ) -> BoxFuture<'a, Result<Option<(TokenId, TokenBaseInfo)>>> {
+        async move {
+            let infos = self.get_token_infos(&self.all_ids().await?).await?;
+            Ok(search_for_token_by_symbol(infos, symbol))
+        }
+        .boxed()
+    }
+}
+
+fn search_for_token_by_symbol<T>(
+    tokens: impl IntoIterator<Item = (TokenId, T)>,
+    symbol: &str,
+) -> Option<(TokenId, T)>
+where
+    T: Borrow<TokenBaseInfo>,
+{
+    tokens
+        .into_iter()
+        .filter(|(_, info)| info.borrow().matches_symbol(symbol))
+        .min_by_key(|(id, _)| *id)
 }
 
 // mockall workaround https://github.com/asomers/mockall/issues/134
@@ -49,6 +77,10 @@ mod mock {
             ids: &[TokenId],
         ) -> BoxFuture<'a, Result<HashMap<TokenId, TokenBaseInfo>>>;
         fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>>;
+        fn find_token_by_symbol<'a>(
+            &'a self,
+            symbol: &str,
+        ) -> BoxFuture<'a, Result<Option<(TokenId, TokenBaseInfo)>>>;
     }
 
     impl<T: TokenInfoFetching_ + Send + Sync> TokenInfoFetching for T {
@@ -63,6 +95,12 @@ mod mock {
         }
         fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
             TokenInfoFetching_::all_ids(self)
+        }
+        fn find_token_by_symbol<'a>(
+            &'a self,
+            symbol: &'a str,
+        ) -> BoxFuture<'a, Result<Option<(TokenId, TokenBaseInfo)>>> {
+            TokenInfoFetching_::find_token_by_symbol(self, symbol)
         }
     }
 }
@@ -113,6 +151,11 @@ impl TokenBaseInfo {
     pub fn get_owl_price(&self, usd_price: f64) -> u128 {
         let pow = 36 - (self.decimals as i32);
         (usd_price * 10f64.powi(pow)) as _
+    }
+
+    /// Returns true if the token alias or symbol matches the speciefied symbol.
+    pub fn matches_symbol(&self, symbol: &str) -> bool {
+        self.alias == symbol || self.symbol() == symbol
     }
 }
 
@@ -182,5 +225,24 @@ mod tests {
         assert_eq!(result.get(&TokenId(0)).unwrap().alias, "0");
         assert_eq!(result.get(&TokenId(1)).unwrap().alias, "1");
         assert!(result.get(&TokenId(2)).is_none());
+    }
+
+    #[test]
+    fn search_prefers_symbol_of_lower_token_ids() {
+        let owl = TokenBaseInfo {
+            alias: "OWL".to_owned(),
+            decimals: 18,
+        };
+
+        let (id, info) = search_for_token_by_symbol(
+            vec![
+                (TokenId(42), owl.clone()),
+                (TokenId(1337), owl.clone()),
+                (TokenId(0), owl.clone()),
+            ],
+            "OWL",
+        )
+        .unwrap();
+        assert_eq!((id, info), (TokenId(0), owl));
     }
 }
