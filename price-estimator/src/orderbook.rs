@@ -182,7 +182,7 @@ mod tests {
 
         let token_info = Arc::new(TokenData::default());
         let infallible = PriceCacheUpdater::new(token_info, vec![Box::new(PriceSource_ {})]);
-        let orderbook = Orderbook::new(Box::new(NoopOrderbook {}), infallible, 2.0);
+        let orderbook = Orderbook::new(Box::new(NoopOrderbook), infallible, 2.0);
         let price = || {
             orderbook
                 .infallible_price_source
