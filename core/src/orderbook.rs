@@ -1,14 +1,12 @@
 mod auction_data_reader;
 mod filtered_orderbook;
 mod onchain_filtered_orderbook;
-mod paginated_orderbook;
 mod shadow_orderbook;
 pub mod streamed;
 mod util;
 
 pub use self::filtered_orderbook::{FilteredOrderbookReader, OrderbookFilter};
 pub use self::onchain_filtered_orderbook::OnchainFilteredOrderBookReader;
-pub use self::paginated_orderbook::PaginatedStableXOrderBookReader;
 pub use self::shadow_orderbook::ShadowedOrderbookReader;
 pub use self::streamed::Orderbook as EventBasedOrderbook;
 
@@ -53,8 +51,6 @@ impl StableXOrderBookReading for NoopOrderbook {
 /// The different kinds of orderbook readers.
 #[derive(Clone, Debug)]
 pub enum OrderbookReaderKind {
-    /// An unfiltered paginated orderbook read directly from the EVM
-    Paginated,
     /// A paginated orderbook read from and filtered by EVM
     OnchainFiltered,
     /// An orderbook reader that is built from subscribing to
@@ -73,10 +69,6 @@ impl OrderbookReaderKind {
         file_path: Option<PathBuf>,
     ) -> Box<dyn StableXOrderBookReading> {
         match self {
-            OrderbookReaderKind::Paginated => Box::new(PaginatedStableXOrderBookReader::new(
-                contract,
-                auction_data_page_size,
-            )),
             OrderbookReaderKind::OnchainFiltered => Box::new(OnchainFilteredOrderBookReader::new(
                 contract,
                 auction_data_page_size,
@@ -96,7 +88,6 @@ impl FromStr for OrderbookReaderKind {
     type Err = Error;
     fn from_str(value: &str) -> Result<Self> {
         match value.to_lowercase().as_str() {
-            "paginated" => Ok(OrderbookReaderKind::Paginated),
             "onchainfiltered" => Ok(OrderbookReaderKind::OnchainFiltered),
             "eventbased" => Ok(OrderbookReaderKind::EventBased),
             _ => Err(anyhow!("unknown orderbook reader kind '{}'", value)),
