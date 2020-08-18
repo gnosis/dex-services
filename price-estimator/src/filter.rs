@@ -347,7 +347,7 @@ mod tests {
     fn all_filter() -> impl Filter<Extract = impl Reply, Error = Infallible> + Clone {
         let token_info = Arc::new(empty_token_info());
         let orderbook = Arc::new(Orderbook::new(
-            Box::new(NoopOrderbook {}),
+            Box::new(NoopOrderbook),
             PriceCacheUpdater::new(token_info.clone(), Vec::new()),
             1.0,
         ));

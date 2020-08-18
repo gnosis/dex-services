@@ -134,18 +134,32 @@ FLAGS:
 
 OPTIONS:
         --auction-data-page-size <auction-data-page-size>
-            For storage based orderbook reading, the page size with which to read orders from the smart contract. For
-            event based orderbook reading, the number of blocks to fetch events for at a time [env:
-            AUCTION_DATA_PAGE_SIZE=]  [default: 500]
+            Specify the number of blocks to fetch events for at a time for constructing the orderbook for the solver
+            [env: AUCTION_DATA_PAGE_SIZE=]  [default: 500]
+        --default-max-gas-price <default-max-gas-price>
+            The default maximum gas price. This is used when computing the maximum gas price based on ether price in owl
+            fails [env: DEFAULT_MAX_GAS_PRICE=]  [default: 100000000000]
         --default-min-avg-fee-per-order <default-min-avg-fee-per-order>
             The default minimum average fee per order. This is passed to the solver in case the computing its value
             fails. Its unit is [OWL] [env: MIN_AVG_FEE_PER_ORDER=]  [default: 0]
+        --earliest-solution-submit-time <earliest-solution-submit-time>
+            The earliest offset from the start of a batch in seconds at which point we should submit the solution. This
+            is useful when there are multiple solvers one of provides solutions more often but also worse solutions than
+            the others. By submitting its solutions later we avoid its solution getting reverted by a better one which
+            saves gas [env: EARLIEST_SOLUTION_SUBMIT_TIME=]  [default: 0]
+        --economic-viability-min-avg-fee-factor <economic-viability-min-avg-fee-factor>
+            We multiply the economically viable min average fee by this amount to ensure that if a solution has this
+            minimum amount it will still be end up economically viable even when the gas or eth price moves slightly
+            between solution computation and submission [env: ECONOMIC_VIABILITY_MIN_AVG_FEE_FACTOR=]  [default: 1.1]
         --economic-viability-subsidy-factor <economic-viability-subsidy-factor>
             Subsidy factor used to compute the minimum average fee per order in a solution as well as the gas cap for
             economically viable solution [env: ECONOMIC_VIABILITY_SUBSIDY_FACTOR=]  [default: 10.0]
         --http-timeout <http-timeout>
             The default timeout in milliseconds of HTTP requests to remote services such as the Gnosis Safe gas station
             and exchange REST APIs for fetching price estimates [env: HTTP_TIMEOUT=]  [default: 10000]
+        --latest-solution-submit-time <latest-solution-submit-time>
+            The offset from the start of the batch to cap the solver's execution time [env:
+            LATEST_SOLUTION_SUBMIT_TIME=]  [default: 210]
         --log-filter <log-filter>
             The log filter to use.
 
@@ -158,8 +172,8 @@ OPTIONS:
             The Ethereum node URL to connect to. Make sure that the node allows for queries without a gas limit to be
             able to fetch the orderbook [env: ETHEREUM_NODE_URL=]
         --orderbook-file <orderbook-file>
-             [env: ORDERBOOK_FILE=]
-
+            Use an orderbook file for persisting an event cache in order to speed up the startup time [env:
+            ORDERBOOK_FILE=]
         --orderbook-filter <orderbook-filter>
             JSON encoded object of which tokens/orders to ignore.
 
@@ -169,9 +183,6 @@ OPTIONS:
         --price-source-update-interval <price-source-update-interval>
             Time interval in seconds in which price sources should be updated [env: PRICE_SOURCE_UPDATE_INTERVAL=]
             [default: 300]
-        --primary-orderbook <primary-orderbook>
-            Primary method for orderbook retrieval [env: PRIMARY_ORDERBOOK=]  [default: eventbased]
-
     -k, --private-key <private-key>
             The private key used by the driver to sign transactions [env: PRIVATE_KEY]
 
@@ -184,9 +195,6 @@ OPTIONS:
         --solver-internal-optimizer <solver-internal-optimizer>
             Which internal optimizer the solver should use. It is passed as `--solver` to the solver. Choices are "scip"
             and "gurobi" [env: SOLVER_INTERNAL_OPTIMIZER=]  [default: scip]
-        --solver-time-limit <solver-time-limit>
-            The offset from the start of the batch to cap the solver's execution time [env: SOLVER_TIME_LIMIT=]
-            [default: 210]
         --solver-type <solver-type>
             Which style of solver to use. Can be one of: 'naive-solver' for the naive solver; 'standard-solver' for
             mixed integer programming solver; 'fallback-solver' for a more conservative solver than the standard solver;
@@ -198,11 +206,9 @@ OPTIONS:
         --token-data <token-data>
             JSON encoded backup token information to provide to the solver.
 
-            For example: '{ "T0001": { "alias": "WETH", "decimals": 18, "externalPrice": 200000000000000000000 }, "T0004": { "alias": "USDC", "decimals": 6, "externalPrice":
-            1000000000000000000000000000000 } }' [env: TOKEN_DATA=]  [default: {}]
-        --use-shadowed-orderbook <use-shadowed-orderbook>
-            Use a shadowed orderbook reader along side a primary reader so that the queried data can be compared and
-            produce log errors in case they disagree [env: USE_SHADOWED_ORDERBOOK=]  [default: false]
+            For example: '{ "T0001": { "alias": "WETH", "decimals": 18, "externalPrice": 200000000000000000000, },
+            "T0004": { "alias": "USDC", "decimals": 6, "externalPrice": 1000000000000000000000000000000, } }' [env:
+            TOKEN_DATA=]  [default: {}]
 ```
 
 ### Orderbook Filter Example
