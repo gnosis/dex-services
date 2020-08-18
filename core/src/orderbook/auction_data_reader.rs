@@ -1,30 +1,25 @@
 use crate::contracts::stablex_auction_element::{
-    StableXAuctionElement, AUCTION_ELEMENT_WIDTH, INDEXED_AUCTION_ELEMENT_WIDTH,
+    StableXAuctionElement, INDEXED_AUCTION_ELEMENT_WIDTH,
 };
 use crate::models::{AccountState, Order};
-use ethcontract::Address;
-use std::collections::HashMap;
 
 /// Handles reading of auction data that has been encoded with the smart
 /// contract's `encodeAuctionElement` function.
-pub struct AuctionDataReader {
+pub struct IndexedAuctionDataReader {
     /// The account state resulting from unfiltered handled orders.
     account_state: AccountState,
     /// All unfiltered orders in the order they were received.
     orders: Vec<Order>,
     /// Used when reading data from the smart contract in batches.
     index: u32,
-    /// The total number of orders per user.
-    user_order_counts: HashMap<Address, usize>,
 }
 
-impl AuctionDataReader {
+impl IndexedAuctionDataReader {
     pub fn new(index: u32) -> Self {
         Self {
             account_state: AccountState::default(),
             orders: Vec::new(),
             index,
-            user_order_counts: HashMap::new(),
         }
     }
 
@@ -42,7 +37,7 @@ impl AuctionDataReader {
     /// Panics if length of `packed_auction_bytes` is not a multiple of
     /// `AUCTION_ELEMENT_WIDTH`.
     pub fn apply_page(&mut self, packed_auction_bytes: &[u8]) {
-        let auction_elements = self.parse_auction_elements(packed_auction_bytes);
+        let auction_elements = parse_indexed_auction_elements(packed_auction_bytes);
         self.apply_auction_data(auction_elements);
     }
 
@@ -81,133 +76,6 @@ impl AuctionDataReader {
             }
         }
     }
-
-    fn parse_auction_elements(
-        &mut self,
-        packed_auction_bytes: &[u8],
-    ) -> Vec<StableXAuctionElement> {
-        assert_eq!(
-            packed_auction_bytes.len() % AUCTION_ELEMENT_WIDTH,
-            0,
-            "Each auction should be packed in {} bytes",
-            AUCTION_ELEMENT_WIDTH
-        );
-
-        packed_auction_bytes
-            .chunks(AUCTION_ELEMENT_WIDTH)
-            .map(|chunk| {
-                let mut result = auction_element_from_slice(chunk);
-                let order_counter = self
-                    .user_order_counts
-                    .entry(result.order.account_id)
-                    .or_insert(0);
-                result.order.id = *order_counter as u16;
-                *order_counter += 1;
-                result
-            })
-            .collect()
-    }
-}
-
-/// An AuctionDataReader that also keeps track of pagination
-pub struct PaginatedAuctionDataReader {
-    /// The underlying data reader
-    reader: AuctionDataReader,
-    /// Used when reading data from the smart contract in batches. None, when there is
-    /// no next page.
-    next_page: Option<Pagination>,
-    page_size: usize,
-}
-
-/// Data for the next call to the smart contract's `getEncodedUsersPaginated`
-/// function (which should be named `getEncodedOrdersPaginated`).
-#[derive(Debug, PartialEq)]
-pub struct Pagination {
-    /// The user of the last received order or Address::zero when no order has been
-    /// received.
-    pub previous_page_user: Address,
-    /// The number of received orders for `previous_page_user`.
-    pub previous_page_user_offset: usize,
-}
-
-impl PaginatedAuctionDataReader {
-    /// Create a new PaginatedAuctionDataReader.
-    pub fn new(index: u32, page_size: usize) -> PaginatedAuctionDataReader {
-        PaginatedAuctionDataReader {
-            reader: AuctionDataReader::new(index),
-            next_page: Some(Pagination {
-                previous_page_user: Address::zero(),
-                previous_page_user_offset: 0,
-            }),
-            page_size,
-        }
-    }
-
-    pub fn next_page(&self) -> Option<&Pagination> {
-        self.next_page.as_ref()
-    }
-
-    pub fn get_auction_data(self) -> (AccountState, Vec<Order>) {
-        self.reader.get_auction_data()
-    }
-
-    /// Applies one batch of data to the underlying reader and keeps track of pagination info.
-    pub fn apply_page(&mut self, packed_auction_bytes: &[u8]) {
-        let number_of_orders = packed_auction_bytes.len() / AUCTION_ELEMENT_WIDTH;
-        if number_of_orders == 0 {
-            self.next_page = None;
-            return;
-        }
-
-        let previous_page_user = auction_element_from_slice(
-            &packed_auction_bytes
-                [packed_auction_bytes.len() - AUCTION_ELEMENT_WIDTH..packed_auction_bytes.len()],
-        )
-        .order
-        .account_id;
-        self.reader.apply_page(packed_auction_bytes);
-
-        self.next_page = if number_of_orders == self.page_size {
-            let previous_page_user_offset = *self
-                .reader
-                .user_order_counts
-                .get(&previous_page_user)
-                .expect("user has order but no order count");
-
-            Some(Pagination {
-                previous_page_user,
-                previous_page_user_offset,
-            })
-        } else {
-            None
-        };
-    }
-}
-
-pub struct IndexedAuctionDataReader(AuctionDataReader);
-
-impl IndexedAuctionDataReader {
-    pub fn new(index: u32) -> Self {
-        Self(AuctionDataReader::new(index))
-    }
-
-    /// Signal that no more data will be read and return the result consuming
-    /// self.
-    pub fn get_auction_data(self) -> (AccountState, Vec<Order>) {
-        self.0.get_auction_data()
-    }
-
-    /// Applies one batch of data.
-    ///
-    /// A batch can come from `getFinalizedOrderBook`, `getOpenOrderBook` or
-    /// `getFilteredOrdersPaginated`.
-    ///
-    /// Panics if length of `packed_auction_bytes` is not a multiple of
-    /// `INDEXED_AUCTION_ELEMENT_WIDTH`.
-    pub fn apply_page(&mut self, packed_auction_bytes: &[u8]) {
-        let auction_elements = parse_indexed_auction_elements(packed_auction_bytes);
-        self.0.apply_auction_data(auction_elements);
-    }
 }
 
 fn parse_indexed_auction_elements(indexed_auction_bytes: &[u8]) -> Vec<StableXAuctionElement> {
@@ -224,12 +92,6 @@ fn parse_indexed_auction_elements(indexed_auction_bytes: &[u8]) -> Vec<StableXAu
         .collect()
 }
 
-fn auction_element_from_slice(chunk: &[u8]) -> StableXAuctionElement {
-    let mut chunk_array = [0u8; AUCTION_ELEMENT_WIDTH];
-    chunk_array.copy_from_slice(chunk);
-    StableXAuctionElement::from_bytes(&chunk_array)
-}
-
 fn auction_element_from_indexed_slice(chunk: &[u8]) -> StableXAuctionElement {
     let mut chunk_array = [0u8; INDEXED_AUCTION_ELEMENT_WIDTH];
     chunk_array.copy_from_slice(chunk);
@@ -239,6 +101,7 @@ fn auction_element_from_indexed_slice(chunk: &[u8]) -> StableXAuctionElement {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use ethcontract::Address;
     use lazy_static::lazy_static;
 
     const ORDER_1_BYTES: &[u8] = &[
@@ -253,6 +116,7 @@ pub mod tests {
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // remainingAmount: 2**8 + 1 = 257
+        0, 0, // orderId: 0
     ];
     const ORDER_2_BYTES: &[u8] = &[
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // user:
@@ -265,6 +129,7 @@ pub mod tests {
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258;
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, // remainingAmount: 2**8 = 256
+        0, 1, // orderId: 1
     ];
     const ORDER_3_BYTES: &[u8] = &[
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, // user:
@@ -277,6 +142,7 @@ pub mod tests {
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, // priceNumerator: 258;
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, // priceDenominator: 259
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, // remainingAmount: 2**8 = 256
+        0, 0, // orderId: 0
     ];
 
     lazy_static! {
@@ -317,7 +183,7 @@ pub mod tests {
 
     #[test]
     fn auction_data_reader_empty() {
-        let mut reader = AuctionDataReader::new(3);
+        let mut reader = IndexedAuctionDataReader::new(3);
         reader.apply_page(&[]);
         assert_eq!(reader.orders.len(), 0);
     }
@@ -327,7 +193,7 @@ pub mod tests {
         let mut bytes = Vec::new();
         bytes.extend(ORDER_1_BYTES);
         bytes.extend(ORDER_2_BYTES);
-        let mut reader = AuctionDataReader::new(3);
+        let mut reader = IndexedAuctionDataReader::new(3);
         reader.apply_page(&bytes);
 
         let mut account_state = AccountState::default();
@@ -341,7 +207,7 @@ pub mod tests {
     #[test]
     fn auction_data_reader_multiple_batches() {
         let mut account_state = AccountState::default();
-        let mut reader = AuctionDataReader::new(3);
+        let mut reader = IndexedAuctionDataReader::new(3);
         let mut bytes = Vec::new();
 
         bytes.extend(ORDER_1_BYTES);
@@ -367,7 +233,7 @@ pub mod tests {
     #[test]
     fn auction_data_reader_multiple_batches_different_users() {
         let mut account_state = AccountState::default();
-        let mut reader = AuctionDataReader::new(3);
+        let mut reader = IndexedAuctionDataReader::new(3);
         let mut bytes = Vec::new();
 
         bytes.extend(ORDER_1_BYTES);
@@ -390,7 +256,7 @@ pub mod tests {
         let mut bytes = Vec::new();
         bytes.extend(ORDER_1_BYTES);
         bytes.extend(ORDER_2_BYTES);
-        let mut reader = AuctionDataReader::new(1000);
+        let mut reader = IndexedAuctionDataReader::new(1000);
         // the bytes contain two orders
         reader.apply_page(&bytes);
 
@@ -398,86 +264,5 @@ pub mod tests {
         assert_eq!(reader.account_state, AccountState::default());
         // orders is empty because `index` does not match
         assert_eq!(reader.orders, []);
-    }
-
-    #[test]
-    fn paginated_auction_data_reader_single_batch() {
-        let mut bytes = Vec::new();
-        bytes.extend(ORDER_1_BYTES);
-        bytes.extend(ORDER_2_BYTES);
-        let mut reader = PaginatedAuctionDataReader::new(3, 2);
-        reader.apply_page(&bytes);
-
-        assert_eq!(
-            reader.next_page,
-            Some(Pagination {
-                previous_page_user: ORDER_1.account_id,
-                previous_page_user_offset: 2
-            })
-        );
-    }
-
-    #[test]
-    fn paginated_auction_data_reader_multiple_batches() {
-        let mut reader = PaginatedAuctionDataReader::new(3, 1);
-        let mut bytes = Vec::new();
-
-        bytes.extend(ORDER_1_BYTES);
-        reader.apply_page(&bytes);
-
-        assert_eq!(
-            reader.next_page,
-            Some(Pagination {
-                previous_page_user: ORDER_1.account_id,
-                previous_page_user_offset: 1
-            })
-        );
-
-        bytes.clear();
-        bytes.extend(ORDER_2_BYTES);
-        reader.apply_page(&bytes);
-        assert_eq!(
-            reader.next_page,
-            Some(Pagination {
-                previous_page_user: ORDER_1.account_id,
-                previous_page_user_offset: 2
-            })
-        );
-
-        bytes.clear();
-        bytes.extend(ORDER_3_BYTES);
-        reader.apply_page(&bytes);
-        assert_eq!(
-            reader.next_page,
-            Some(Pagination {
-                previous_page_user: ORDER_3.account_id,
-                previous_page_user_offset: 1
-            })
-        );
-
-        reader.apply_page(&[]);
-        assert_eq!(reader.next_page, None);
-    }
-
-    #[test]
-    fn paginated_auction_data_reader_multiple_batches_different_users() {
-        let mut reader = PaginatedAuctionDataReader::new(3, 2);
-        let mut bytes = Vec::new();
-
-        bytes.extend(ORDER_3_BYTES);
-        bytes.extend(ORDER_2_BYTES);
-        reader.apply_page(&bytes);
-        assert_eq!(
-            reader.next_page,
-            Some(Pagination {
-                previous_page_user: ORDER_2.account_id,
-                previous_page_user_offset: 1
-            })
-        );
-
-        bytes.clear();
-        bytes.extend(ORDER_1_BYTES);
-        reader.apply_page(&bytes);
-        assert_eq!(reader.next_page, None);
     }
 }
