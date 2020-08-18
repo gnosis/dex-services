@@ -12,8 +12,7 @@ use core::http_server::{DefaultRouter, RouilleServer, Serving};
 use core::logging;
 use core::metrics::{HttpMetrics, MetricsHandler, StableXMetrics};
 use core::orderbook::{
-    FilteredOrderbookReader, OnchainFilteredOrderBookReader, OrderbookFilter, OrderbookReaderKind,
-    ShadowedOrderbookReader, StableXOrderBookReading,
+    EventBasedOrderbook, FilteredOrderbookReader, OrderbookFilter, StableXOrderBookReading,
 };
 use core::price_estimation::PriceOracle;
 use core::price_finding::{self, Fee, InternalOptimizer, SolverType};
@@ -101,10 +100,6 @@ struct Options {
     /// More examples can be found in the tests of orderbook/filtered_orderboook.rs
     #[structopt(long, env = "ORDERBOOK_FILTER", default_value = "{}")]
     orderbook_filter: OrderbookFilter,
-
-    /// Primary method for orderbook retrieval
-    #[structopt(long, env = "PRIMARY_ORDERBOOK", default_value = "eventbased")]
-    primary_orderbook: OrderbookReaderKind,
 
     /// The private key used by the driver to sign transactions.
     #[structopt(short = "k", long, env = "PRIVATE_KEY", hide_env_values = true)]
@@ -247,36 +242,16 @@ fn main() {
     info!("Using contract at {:?}", contract.address());
     info!("Using account {:?}", contract.account());
 
-    // Create the orderbook reader.
-    let primary_orderbook = options.primary_orderbook.create(
-        contract.clone(),
-        options.auction_data_page_size,
-        &options.orderbook_filter,
-        web3,
-        options.orderbook_file,
-    );
-
     info!("Orderbook filter: {:?}", options.orderbook_filter);
-    let filtered_orderbook = Box::new(FilteredOrderbookReader::new(
-        primary_orderbook,
+    let orderbook = Arc::new(FilteredOrderbookReader::new(
+        Box::new(EventBasedOrderbook::new(
+            contract.clone(),
+            web3,
+            options.auction_data_page_size as _,
+            options.orderbook_file,
+        )),
         options.orderbook_filter.clone(),
     ));
-
-    // NOTE: Keep the shadowed orderbook around so it doesn't get dropped and we
-    //   can pass a reference to the filtered orderbook reader.
-    let orderbook: Arc<dyn StableXOrderBookReading> = if options.use_shadowed_orderbook {
-        let shadow_orderbook = Box::new(OnchainFilteredOrderBookReader::new(
-            contract.clone(),
-            options.auction_data_page_size,
-            &options.orderbook_filter,
-        ));
-        Arc::new(ShadowedOrderbookReader::new(
-            filtered_orderbook,
-            shadow_orderbook,
-        ))
-    } else {
-        Arc::new(*filtered_orderbook)
-    };
 
     let price_oracle = Arc::new(
         PriceOracle::new(
