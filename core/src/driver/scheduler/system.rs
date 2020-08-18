@@ -147,7 +147,7 @@ async fn submit(
         );
         sleep.sleep(duration).await;
     }
-    let result = driver.submit_solution(batch_id, solution).wait();
+    let result = driver.submit_solution(batch_id, solution).await;
     log_submit_result(batch_id, &result);
 }
 
