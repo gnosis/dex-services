@@ -9,6 +9,9 @@ use futures::{
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// Default number of concurrent requests used for caching.
+pub const DEFAULT_CACHE_CONCURRENT_REQUESTS: usize = 10;
+
 /// Implementation of TokenInfoFetching that stores previously fetched information in an in-memory cache for fast retrieval.
 /// TokenIds will always be fetched from the inner layer, as new tokens could be added at any time.
 pub struct TokenInfoCache {
@@ -50,7 +53,22 @@ impl TokenInfoCache {
 
     /// Attempt to retrieve and cache all token info that is not already cached.
     /// Fails if `all_ids` fails. Does not fail if individual token infos fail.
-    pub async fn cache_all(&self, number_of_parallel_requests: usize) -> Result<()> {
+    ///
+    /// This method uses `DEFAULT_CACHE_CONCURRENT_REQUESTS` concurrent requests
+    /// for retrieving token data. Use `cache_all_with_concurrent_requests` to
+    /// manually specify a number of concurrent requests.
+    pub async fn cache_all(&self) -> Result<()> {
+        self.cache_all_with_concurrent_requests(DEFAULT_CACHE_CONCURRENT_REQUESTS)
+            .await
+    }
+
+    /// Attemts to cache all tokens using the specified number of concurrent
+    /// requests. This method is identical to `cache_all` except that the number
+    /// of concurrent requests may be manually specified.
+    pub async fn cache_all_with_concurrent_requests(
+        &self,
+        number_of_parallel_requests: usize,
+    ) -> Result<()> {
         let ids = self.all_ids().await.context("failed to get all ids")?;
         stream::iter(self.uncached_tokens(&ids).await)
             .for_each_concurrent(number_of_parallel_requests, |token_id| async move {
@@ -158,8 +176,6 @@ impl TokenInfoFetching for TokenInfoCache {
         &'a self,
         symbol: &'a str,
     ) -> BoxFuture<'a, Result<Option<(TokenId, TokenBaseInfo)>>> {
-        const CONCURRENT_REQUESTS: usize = 1;
-
         async move {
             if let Some((id, _)) = self.find_cached_token_by_symbol(symbol).await {
                 // NOTE: In case we found a symbol, make sure that all tokens up
@@ -172,7 +188,7 @@ impl TokenInfoFetching for TokenInfoCache {
                 self.get_token_infos(&ids).await?;
             } else {
                 // NOTE: Token not found - update the entire token cache.
-                self.cache_all(CONCURRENT_REQUESTS).await?;
+                self.cache_all().await?;
             }
 
             Ok(self.find_cached_token_by_symbol(symbol).await)
@@ -351,7 +367,7 @@ mod tests {
         });
 
         let cache = TokenInfoCache::new(Arc::new(inner));
-        cache.cache_all(2).now_or_never().unwrap().unwrap();
+        cache.cache_all().now_or_never().unwrap().unwrap();
 
         for token_id in token_ids() {
             let token_info = cache.get_token_info(token_id).now_or_never().unwrap();

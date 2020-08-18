@@ -119,7 +119,7 @@ fn main() {
     let cache: HashMap<_, _> = options.token_data.clone().into();
     let token_info = TokenInfoCache::with_cache(contract.clone(), cache);
     token_info
-        .cache_all(10)
+        .cache_all()
         .wait()
         .expect("failed to cache token infos");
     let token_info = Arc::new(token_info);
