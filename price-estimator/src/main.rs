@@ -200,7 +200,11 @@ fn setup_driver_metrics() -> (HttpMetrics, Arc<dyn HealthReporting>) {
     let prometheus_registry = Arc::new(Registry::new());
 
     let metric_handler = MetricsHandler::new(prometheus_registry.clone());
-    RouilleServer::new(DefaultRouter(metric_handler)).start_in_background();
+    RouilleServer::new(DefaultRouter {
+        metrics: Arc::new(metric_handler),
+        health_readiness: health.clone(),
+    })
+    .start_in_background();
 
     (HttpMetrics::new(&prometheus_registry).unwrap(), health)
 }

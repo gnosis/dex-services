@@ -56,6 +56,7 @@ impl Serving for RouilleServer {
 }
 
 /// An endpoint that can be registered on a path.
+#[cfg_attr(test, mockall::automock)]
 pub trait Handler: Send + Sync + 'static {
     /// Handles an HTTP request.
     fn handle_request(&self, request: &Request) -> Result<Response>;

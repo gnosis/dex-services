@@ -1,6 +1,6 @@
 //! Module implementing shared basic health reporting.
 
-use crate::monitoring::Handler;
+use crate::http_server::Handler;
 use anyhow::Result;
 use rouille::{Request, Response};
 use std::sync::atomic::{AtomicBool, Ordering};
