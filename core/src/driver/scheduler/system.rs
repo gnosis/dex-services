@@ -2,7 +2,7 @@ use super::{AuctionTimingConfiguration, Scheduler};
 use crate::{
     driver::stablex_driver::{DriverError, StableXDriver},
     models::{BatchId, Solution},
-    util::{self, AsyncSleep, AsyncSleeping, FutureWaitExt as _, Now},
+    util::{self, AsyncSleep, AsyncSleeping, Now},
 };
 use anyhow::{Context, Result};
 use std::{
