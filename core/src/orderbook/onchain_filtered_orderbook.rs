@@ -11,14 +11,14 @@ use futures::future::{BoxFuture, FutureExt as _};
 use std::sync::Arc;
 
 pub struct OnchainFilteredOrderBookReader {
-    contract: Arc<dyn StableXContract + Send + Sync>,
+    contract: Arc<dyn StableXContract>,
     page_size: u16,
     filter: Vec<u16>,
 }
 
 impl OnchainFilteredOrderBookReader {
     pub fn new(
-        contract: Arc<dyn StableXContract + Send + Sync>,
+        contract: Arc<dyn StableXContract>,
         page_size: u16,
         filter: &OrderbookFilter,
     ) -> Self {

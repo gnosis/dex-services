@@ -2,19 +2,19 @@ use super::{AuctionTimingConfiguration, Scheduler};
 use crate::{
     driver::stablex_driver::{DriverError, StableXDriver},
     models::{BatchId, Solution},
-    util::{self, AsyncSleep, AsyncSleeping, FutureWaitExt as _, Now},
+    util::{self, AsyncSleep, AsyncSleeping, Now},
 };
 use anyhow::{Context, Result};
-use crossbeam_utils::thread::Scope;
 use std::{
+    sync::Arc,
     thread,
     time::{Duration, Instant, SystemTime},
 };
 
 const RETRY_SLEEP_DURATION: Duration = Duration::from_secs(1);
 
-pub struct SystemScheduler<'a> {
-    driver: &'a (dyn StableXDriver + Sync),
+pub struct SystemScheduler {
+    driver: Arc<dyn StableXDriver>,
     auction_timing_configuration: AuctionTimingConfiguration,
     last_solved_batch: Option<BatchId>,
 }
@@ -25,9 +25,9 @@ enum Action {
     Sleep(Duration),
 }
 
-impl<'a> SystemScheduler<'a> {
+impl SystemScheduler {
     pub fn new(
-        driver: &'a (dyn StableXDriver + Sync),
+        driver: Arc<dyn StableXDriver>,
         auction_timing_configuration: AuctionTimingConfiguration,
     ) -> Self {
         Self {
@@ -37,28 +37,21 @@ impl<'a> SystemScheduler<'a> {
         }
     }
 
-    fn start_solving_in_thread<'b>(
-        &self,
-        batch_id: BatchId,
-        solver_deadline: Instant,
-        scope: &Scope<'b>,
-    ) where
-        'a: 'b,
-    {
-        let driver = self.driver;
+    fn start_solving_in_background(&self, batch_id: BatchId, solver_deadline: Instant) {
+        let driver = self.driver.clone();
         let earliest_solution_submit_time = self
             .auction_timing_configuration
             .earliest_solution_submit_time;
-        scope.spawn(move |_| {
+        async_std::task::spawn(async move {
             solve_and_submit(
                 batch_id,
                 solver_deadline,
                 earliest_solution_submit_time,
-                driver,
+                driver.as_ref(),
                 &util::default_now(),
                 &AsyncSleep {},
             )
-            .wait();
+            .await;
         });
     }
 
@@ -105,7 +98,7 @@ async fn solve_and_submit(
     batch_id: BatchId,
     solver_deadline: Instant,
     earliest_solution_submit_time: Duration,
-    driver: &dyn StableXDriver,
+    driver: &(dyn StableXDriver),
     now: &dyn Now,
     sleep: &dyn AsyncSleeping,
 ) {
@@ -134,7 +127,7 @@ async fn submit(
     batch_id: BatchId,
     earliest_solution_submit_time: Duration,
     solution: Solution,
-    driver: &dyn StableXDriver,
+    driver: &(dyn StableXDriver),
     now: &dyn Now,
     sleep: &dyn AsyncSleeping,
 ) {
@@ -172,28 +165,25 @@ fn log_submit_result(batch_id: BatchId, result: &Result<()>) {
     }
 }
 
-impl<'a> Scheduler for SystemScheduler<'a> {
+impl Scheduler for SystemScheduler {
     fn start(&mut self) -> ! {
-        crossbeam_utils::thread::scope(|scope| -> ! {
-            loop {
-                match self.determine_action(SystemTime::now()) {
-                    Ok(Action::Sleep(duration)) => {
-                        log::info!("Sleeping {}s.", duration.as_secs());
-                        thread::sleep(duration);
-                    }
-                    Ok(Action::Solve(batch_id, duration)) => {
-                        log::info!("Starting to solve batch {}.", batch_id);
-                        self.last_solved_batch = Some(batch_id);
-                        self.start_solving_in_thread(batch_id, Instant::now() + duration, scope)
-                    }
-                    Err(err) => {
-                        log::error!("Scheduler error: {:?}", err);
-                        thread::sleep(RETRY_SLEEP_DURATION);
-                    }
-                };
-            }
-        })
-        .unwrap();
+        loop {
+            match self.determine_action(SystemTime::now()) {
+                Ok(Action::Sleep(duration)) => {
+                    log::info!("Sleeping {}s.", duration.as_secs());
+                    thread::sleep(duration);
+                }
+                Ok(Action::Solve(batch_id, duration)) => {
+                    log::info!("Starting to solve batch {}.", batch_id);
+                    self.last_solved_batch = Some(batch_id);
+                    self.start_solving_in_background(batch_id, Instant::now() + duration);
+                }
+                Err(err) => {
+                    log::error!("Scheduler error: {:?}", err);
+                    thread::sleep(RETRY_SLEEP_DURATION);
+                }
+            };
+        }
     }
 }
 
@@ -216,7 +206,7 @@ mod tests {
             latest_solution_submit_time: Duration::from_secs(20),
             earliest_solution_submit_time: Duration::from_secs(0),
         };
-        let scheduler = SystemScheduler::new(&driver, auction_timing_configuration);
+        let scheduler = SystemScheduler::new(Arc::new(driver), auction_timing_configuration);
 
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
 
@@ -271,7 +261,7 @@ mod tests {
             latest_solution_submit_time: Duration::from_secs(20),
             earliest_solution_submit_time: Duration::from_secs(0),
         };
-        let mut scheduler = SystemScheduler::new(&driver, auction_timing_configuration);
+        let mut scheduler = SystemScheduler::new(Arc::new(driver), auction_timing_configuration);
         scheduler.last_solved_batch = Some(BatchId(0));
 
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
@@ -428,7 +418,7 @@ mod tests {
             latest_solution_submit_time: Duration::from_secs(20),
             earliest_solution_submit_time: Duration::from_secs(0),
         };
-        let mut scheduler = SystemScheduler::new(&driver, auction_timing_configuration);
+        let mut scheduler = SystemScheduler::new(Arc::new(driver), auction_timing_configuration);
 
         scheduler.start();
     }

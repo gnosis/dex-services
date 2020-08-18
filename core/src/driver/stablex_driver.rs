@@ -21,7 +21,7 @@ pub enum DriverError {
 }
 
 #[cfg_attr(test, mockall::automock)]
-pub trait StableXDriver {
+pub trait StableXDriver: Send + Sync {
     fn solve_batch<'a>(
         &'a self,
         batch_to_solve: BatchId,
@@ -35,21 +35,21 @@ pub trait StableXDriver {
     ) -> BoxFuture<'a, Result<()>>;
 }
 
-pub struct StableXDriverImpl<'a> {
-    price_finder: &'a (dyn PriceFinding + Sync),
-    orderbook_reader: &'a (dyn StableXOrderBookReading),
-    solution_submitter: &'a (dyn StableXSolutionSubmitting + Sync),
-    economic_viability: Arc<dyn EconomicViabilityComputing + Sync>,
-    metrics: &'a StableXMetrics,
+pub struct StableXDriverImpl {
+    price_finder: Arc<dyn PriceFinding + Send + Sync>,
+    orderbook_reader: Arc<dyn StableXOrderBookReading>,
+    solution_submitter: Arc<dyn StableXSolutionSubmitting + Send + Sync>,
+    economic_viability: Arc<dyn EconomicViabilityComputing + Send + Sync>,
+    metrics: Arc<StableXMetrics>,
 }
 
-impl<'a> StableXDriverImpl<'a> {
+impl StableXDriverImpl {
     pub fn new(
-        price_finder: &'a (dyn PriceFinding + Sync),
-        orderbook_reader: &'a (dyn StableXOrderBookReading),
-        solution_submitter: &'a (dyn StableXSolutionSubmitting + Sync),
-        economic_viability: Arc<dyn EconomicViabilityComputing + Sync>,
-        metrics: &'a StableXMetrics,
+        price_finder: Arc<dyn PriceFinding + Send + Sync>,
+        orderbook_reader: Arc<dyn StableXOrderBookReading>,
+        solution_submitter: Arc<dyn StableXSolutionSubmitting + Send + Sync>,
+        economic_viability: Arc<dyn EconomicViabilityComputing + Send + Sync>,
+        metrics: Arc<StableXMetrics>,
     ) -> Self {
         Self {
             price_finder,
@@ -175,7 +175,7 @@ impl<'a> StableXDriverImpl<'a> {
     }
 }
 
-impl<'a> StableXDriver for StableXDriverImpl<'a> {
+impl StableXDriver for StableXDriverImpl {
     fn solve_batch(
         &self,
         batch_to_solve: BatchId,
@@ -273,7 +273,13 @@ mod tests {
             })
             .return_once(move |_, _, _| async { Ok(solution) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
+        let driver = StableXDriverImpl::new(
+            Arc::new(pf),
+            Arc::new(reader),
+            Arc::new(submitter),
+            economic_viability,
+            Arc::new(metrics),
+        );
         assert!(driver
             .solve_batch(BatchId::from(batch), latest_solution_submit_time)
             .now_or_never()
@@ -293,7 +299,13 @@ mod tests {
             .expect_get_auction_data()
             .returning(|_| async { Err(anyhow!("Error")) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
+        let driver = StableXDriverImpl::new(
+            Arc::new(pf),
+            Arc::new(reader),
+            Arc::new(submitter),
+            economic_viability,
+            Arc::new(metrics),
+        );
 
         assert!(matches!(
             driver
@@ -330,7 +342,13 @@ mod tests {
         pf.expect_find_prices()
             .returning(|_, _, _| async { Err(anyhow!("Error")) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
+        let driver = StableXDriverImpl::new(
+            Arc::new(pf),
+            Arc::new(reader),
+            Arc::new(submitter),
+            economic_viability,
+            Arc::new(metrics),
+        );
 
         assert!(matches!(
             driver
@@ -360,7 +378,13 @@ mod tests {
             .with(eq(batch))
             .return_once(move |_| async { Ok((state, orders)) }.boxed());
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
+        let driver = StableXDriverImpl::new(
+            Arc::new(pf),
+            Arc::new(reader),
+            Arc::new(submitter),
+            economic_viability,
+            Arc::new(metrics),
+        );
         assert!(driver
             .solve_batch(BatchId::from(batch), latest_solution_submit_time,)
             .now_or_never()
@@ -381,7 +405,13 @@ mod tests {
 
         submitter.expect_submit_solution().times(0);
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
+        let driver = StableXDriverImpl::new(
+            Arc::new(pf),
+            Arc::new(reader),
+            Arc::new(submitter),
+            economic_viability,
+            Arc::new(metrics),
+        );
         assert!(driver
             .submit_solution(BatchId::from(batch), solution)
             .now_or_never()
@@ -421,7 +451,13 @@ mod tests {
             ],
         };
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
+        let driver = StableXDriverImpl::new(
+            Arc::new(pf),
+            Arc::new(reader),
+            Arc::new(submitter),
+            economic_viability,
+            Arc::new(metrics),
+        );
         assert!(driver
             .submit_solution(BatchId::from(batch), solution)
             .now_or_never()
@@ -456,7 +492,13 @@ mod tests {
             ],
         };
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
+        let driver = StableXDriverImpl::new(
+            Arc::new(pf),
+            Arc::new(reader),
+            Arc::new(submitter),
+            economic_viability,
+            Arc::new(metrics),
+        );
         assert!(driver
             .submit_solution(BatchId::from(batch), solution)
             .now_or_never()
@@ -495,7 +537,13 @@ mod tests {
             ],
         };
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
+        let driver = StableXDriverImpl::new(
+            Arc::new(pf),
+            Arc::new(reader),
+            Arc::new(submitter),
+            economic_viability,
+            Arc::new(metrics),
+        );
         assert!(driver
             .submit_solution(BatchId::from(batch), solution)
             .now_or_never()
@@ -531,7 +579,13 @@ mod tests {
                 async { Ok((state, orders)) }.boxed()
             });
 
-        let driver = StableXDriverImpl::new(&pf, &reader, &submitter, economic_viability, &metrics);
+        let driver = StableXDriverImpl::new(
+            Arc::new(pf),
+            Arc::new(reader),
+            Arc::new(submitter),
+            economic_viability,
+            Arc::new(metrics),
+        );
         assert!(driver
             .solve_batch(BatchId::from(batch), latest_solution_submit_time,)
             .now_or_never()
