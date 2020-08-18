@@ -1,7 +1,9 @@
 use super::{AuctionTimingConfiguration, Scheduler};
-use crate::driver::stablex_driver::{DriverResult, StableXDriver};
-use crate::models::BatchId;
-use crate::util::FutureWaitExt as _;
+use crate::{
+    driver::stablex_driver::{DriverResult, StableXDriver},
+    models::BatchId,
+    util::{self, AsyncSleep, AsyncSleeping, FutureWaitExt as _, Now},
+};
 use anyhow::{Context, Result};
 use crossbeam_utils::thread::Scope;
 use log::error;
@@ -48,16 +50,15 @@ impl<'a> SystemScheduler<'a> {
             .auction_timing_configuration
             .earliest_solution_submit_time;
         scope.spawn(move |_| {
-            while let Some(time_limit) = solver_deadline.checked_duration_since(Instant::now()) {
-                let driver_result = driver
-                    .run(batch_id, time_limit, min_solution_submit_time)
-                    .wait();
-                log_driver_result(batch_id, &driver_result);
-                match driver_result {
-                    DriverResult::Retry(_) => thread::sleep(RETRY_SLEEP_DURATION),
-                    DriverResult::Ok | DriverResult::Skip(_) => break,
-                }
-            }
+            solve(
+                batch_id,
+                solver_deadline,
+                min_solution_submit_time,
+                driver,
+                &util::default_now(),
+                &AsyncSleep {},
+            )
+            .wait();
         });
     }
 
@@ -97,6 +98,26 @@ impl<'a> SystemScheduler<'a> {
         };
 
         Ok(action)
+    }
+}
+
+async fn solve(
+    batch_id: BatchId,
+    solver_deadline: Instant,
+    min_solution_submit_time: Duration,
+    driver: &dyn StableXDriver,
+    now: &dyn Now,
+    sleep: &dyn AsyncSleeping,
+) {
+    while let Some(time_limit) = solver_deadline.checked_duration_since(now.instant_now()) {
+        let driver_result = driver
+            .run(batch_id, time_limit, min_solution_submit_time)
+            .await;
+        log_driver_result(batch_id, &driver_result);
+        match driver_result {
+            DriverResult::Retry(_) => sleep.sleep(RETRY_SLEEP_DURATION).await,
+            DriverResult::Ok | DriverResult::Skip(_) => break,
+        }
     }
 }
 
@@ -141,7 +162,10 @@ impl<'a> Scheduler for SystemScheduler<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::driver::stablex_driver::MockStableXDriver;
+    use crate::{
+        driver::stablex_driver::MockStableXDriver,
+        util::{MockAsyncSleeping, MockNow},
+    };
     use anyhow::anyhow;
     use futures::future::FutureExt as _;
 
@@ -252,6 +276,43 @@ mod tests {
                 .unwrap(),
             Action::Sleep(Duration::from_secs(11))
         );
+    }
+
+    #[test]
+    fn solve_checks_deadline() {
+        lazy_static::lazy_static! {
+            static ref EPOCH: Instant = Instant::now();
+        };
+
+        let mut driver = MockStableXDriver::new();
+        driver
+            .expect_run()
+            .returning(|_, _, _| immediate!(DriverResult::Retry(anyhow!(""))));
+        let mut sleep = MockAsyncSleeping::new();
+        sleep.expect_sleep().returning(|_| immediate!(()));
+
+        let mut now = MockNow::new();
+        now.expect_instant_now().times(1).returning(|| *EPOCH);
+        now.expect_instant_now()
+            .times(1)
+            .returning(|| *EPOCH + Duration::from_secs(2));
+        now.expect_instant_now()
+            .times(1)
+            .returning(|| *EPOCH + Duration::from_secs(4));
+        now.expect_instant_now()
+            .times(1)
+            .returning(|| *EPOCH + Duration::from_secs(6));
+
+        assert!(solve(
+            BatchId(0),
+            *EPOCH + Duration::from_secs(5),
+            Duration::from_secs(0),
+            &driver,
+            &now,
+            &sleep,
+        )
+        .now_or_never()
+        .is_some());
     }
 
     // Allows a human to observe real behavior by looking at the log output.

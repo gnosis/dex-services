@@ -159,9 +159,17 @@ fn main() {
         options.orderbook_update_interval,
     ));
 
+    // We add the allow origin header so that requests from the interactive openapi documentation
+    // go through to locally running instance. This does mean we set the header for non openapi
+    // requests too. This doesn't have security implications because this is a public,
+    // unauthenticated api anyway.
     let filter = health::filter()
         .or(filter::all(orderbook, token_info))
-        .with(warp::log("price_estimator"));
+        .with(warp::log("price_estimator"))
+        .with(warp::reply::with::header(
+            "Access-Control-Allow-Origin",
+            "*",
+        ));
     let serve_task = runtime.spawn(warp::serve(filter).run(options.bind_address));
 
     log::info!("Server ready.");

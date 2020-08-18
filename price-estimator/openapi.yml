@@ -72,7 +72,7 @@ paths:
   /api/v1/markets/{market}:
     get:
       summary: Market
-      description: The transitive orderbook (containing bids and asks) for the given base and quote token. `unit=baseunits` is not yet implemented for this route.
+      description: The transitive orderbook (containing bids and asks) for the given base and quote token.
       responses:
         200:
           description: OK

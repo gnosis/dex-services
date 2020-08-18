@@ -2,22 +2,27 @@
 
 The api is documented with [OpenAPI](https://www.openapis.org/) in `openapi.yml`. It can be accessed in a rendered and interactive fashion on https://editor.swagger.io/ through `File -> Import file`.
 
-TODO: Add a binary or docker image that can host the interactive ui without an external service.
+Alternatively locally with docker
+
+```
+docker run -p 80:8080 -e SWAGGER_JSON=/openapi.yml --mount type=bind,src="$PWD/openapi.yml",dst=/openapi.yml swaggerapi/swagger-ui
+```
+
+and open http://localhost:80 .
 
 ## Testing
 
-To test a locally running price estimator with the frontend at https://mesa.eth.link/ we need to set our browser to allow websites to access localhost and change the URL that the javascript uses for the price estimator. With chromium:
+To test a locally running price estimator with the frontend at https://mesa.eth.link/ we need to set our browser to allow websites to access localhost and change the URL that the javascript uses for the price estimator.
 
-1. `chromium --disable-web-security --user-data-dir=temp/`.
-2. Open the frontend.
-3. Open the developer tools with `F12`.
-4. In the browser console enter `dexPriceEstimatorApi.urlsByNetwork[1] = "http://localhost:8080/api/v1/"`.
-5. Induce a request by changing the sell amount and check that price estimator prints that it handled the request.
+* Open the frontend in a web browser.
+* Open the developer tools with `F12`.
+* In the browser console enter `dexPriceEstimatorApi.urlsByNetwork[1] = "http://localhost:8080/api/v1/"`.
+* Induce a request by changing the sell amount and check that price estimator prints that it handled the request.
 
 It is useful to start the price estimator with logging enabled, using the gnosis staging node URL and using a permanent orderbook file:
 
 ```
-env RUST_LOG=warn,price_estimator=info,core=info cargo run -p price-estimator -- --node-url https://staging-openethereum.mainnet.gnosisdev.com --orderbook-file ../orderbook-file-mainnet
+cargo run -p price-estimator -- --node-url https://staging-openethereum.mainnet.gnosisdev.com --orderbook-file ../orderbook-file-mainnet
 ```
 
 ## Benchmarking

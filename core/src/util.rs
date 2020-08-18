@@ -1,6 +1,9 @@
 use ethcontract::U256;
 use futures::future::{BoxFuture, FutureExt as _};
-use std::{future::Future, time::Duration};
+use std::{
+    future::Future,
+    time::{Duration, Instant, SystemTime},
+};
 
 pub trait CeiledDiv {
     /// Panics on overflow.
@@ -64,8 +67,29 @@ pub trait AsyncSleeping: Send + Sync {
         async_std::task::sleep(duration).boxed()
     }
 }
+
 pub struct AsyncSleep;
 impl AsyncSleeping for AsyncSleep {}
+
+#[cfg_attr(test, mockall::automock)]
+pub trait Now: Send + Sync {
+    fn system_now(&self) -> SystemTime;
+    fn instant_now(&self) -> Instant;
+}
+
+pub fn default_now() -> impl Now {
+    DefaultNow {}
+}
+
+struct DefaultNow;
+impl Now for DefaultNow {
+    fn system_now(&self) -> SystemTime {
+        SystemTime::now()
+    }
+    fn instant_now(&self) -> Instant {
+        Instant::now()
+    }
+}
 
 #[cfg(test)]
 pub mod test_util {
