@@ -5,7 +5,7 @@ use crate::models::TokenId;
 use crate::price_estimation::price_source::PriceSource;
 use anyhow::{anyhow, Context, Error, Result};
 
-use futures::future::{BoxFuture, FutureExt};
+use futures::future::BoxFuture;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::iter::FromIterator;

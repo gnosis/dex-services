@@ -13,8 +13,7 @@ use core::http_server::{DefaultRouter, RouilleServer, Serving};
 use core::logging;
 use core::metrics::{HttpMetrics, MetricsHandler, StableXMetrics};
 use core::orderbook::{
-    FilteredOrderbookReader, OnchainFilteredOrderBookReader, OrderbookFilter, OrderbookReaderKind,
-    ShadowedOrderbookReader, StableXOrderBookReading,
+    EventBasedOrderbook, FilteredOrderbookReader, OrderbookFilter, StableXOrderBookReading,
 };
 use core::price_estimation::PriceOracle;
 use core::price_finding::{self, Fee, InternalOptimizer, SolverType};
@@ -103,19 +102,14 @@ struct Options {
     #[structopt(long, env = "ORDERBOOK_FILTER", default_value = "{}")]
     orderbook_filter: OrderbookFilter,
 
-    /// Primary method for orderbook retrieval
-    #[structopt(long, env = "PRIMARY_ORDERBOOK", default_value = "eventbased")]
-    primary_orderbook: OrderbookReaderKind,
-
     /// The private key used by the driver to sign transactions.
     #[structopt(short = "k", long, env = "PRIVATE_KEY", hide_env_values = true)]
     private_key: PrivateKey,
 
-    /// For storage based orderbook reading, the page size with which to read
-    /// orders from the smart contract. For event based orderbook reading, the
-    /// number of blocks to fetch events for at a time.
+    /// Specify the number of blocks to fetch events for at a time for
+    /// constructing the orderbook for the solver.
     #[structopt(long, env = "AUCTION_DATA_PAGE_SIZE", default_value = "500")]
-    auction_data_page_size: u16,
+    auction_data_page_size: usize,
 
     /// The timeout in milliseconds of web3 JSON RPC calls, defaults to 10000ms
     #[structopt(
@@ -211,17 +205,8 @@ struct Options {
     )]
     price_source_update_interval: Duration,
 
-    /// Use a shadowed orderbook reader along side a primary reader so that the
-    /// queried data can be compared and produce log errors in case they
-    /// disagree.
-    #[structopt(
-        long,
-        env = "USE_SHADOWED_ORDERBOOK",
-        default_value = "false",
-        parse(try_from_str)
-    )]
-    use_shadowed_orderbook: bool,
-
+    /// Use an orderbook file for persisting an event cache in order to speed up
+    /// the startup time.
     #[structopt(long, env = "ORDERBOOK_FILE", parse(from_os_str))]
     orderbook_file: Option<PathBuf>,
 }
@@ -247,36 +232,16 @@ fn main() {
     info!("Using contract at {:?}", contract.address());
     info!("Using account {:?}", contract.account());
 
-    // Create the orderbook reader.
-    let primary_orderbook = options.primary_orderbook.create(
-        contract.clone(),
-        options.auction_data_page_size,
-        &options.orderbook_filter,
-        web3,
-        options.orderbook_file,
-    );
-
     info!("Orderbook filter: {:?}", options.orderbook_filter);
-    let filtered_orderbook = Box::new(FilteredOrderbookReader::new(
-        primary_orderbook,
+    let orderbook = Arc::new(FilteredOrderbookReader::new(
+        Box::new(EventBasedOrderbook::new(
+            contract.clone(),
+            web3,
+            options.auction_data_page_size,
+            options.orderbook_file,
+        )),
         options.orderbook_filter.clone(),
     ));
-
-    // NOTE: Keep the shadowed orderbook around so it doesn't get dropped and we
-    //   can pass a reference to the filtered orderbook reader.
-    let orderbook: Arc<dyn StableXOrderBookReading> = if options.use_shadowed_orderbook {
-        let shadow_orderbook = Box::new(OnchainFilteredOrderBookReader::new(
-            contract.clone(),
-            options.auction_data_page_size,
-            &options.orderbook_filter,
-        ));
-        Arc::new(ShadowedOrderbookReader::new(
-            filtered_orderbook,
-            shadow_orderbook,
-        ))
-    } else {
-        Arc::new(*filtered_orderbook)
-    };
 
     let price_oracle = Arc::new(
         PriceOracle::new(
