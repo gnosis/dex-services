@@ -1,6 +1,8 @@
 ## API
 
-The api is documented with [OpenAPI](https://www.openapis.org/) in `openapi.yml`. It can be accessed in a rendered and interactive fashion on https://editor.swagger.io/ through `File -> Import file`.
+The api is documented with [OpenAPI](https://www.openapis.org/) in `openapi.yml` and hosted at <https://price-estimate-docs.dev.gnosisdev.com/>.
+
+The online editor can be useful when editing it: https://editor.swagger.io/ through `File -> Import file`.
 
 Alternatively locally with docker
 

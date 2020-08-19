@@ -7,6 +7,7 @@ use core::economic_viability::{
     EconomicViabilityComputer, FixedEconomicViabilityComputer, PriorityEconomicViabilityComputer,
 };
 use core::gas_price::{self, GasPriceEstimating};
+use core::health::{HealthReporting, HttpHealthEndpoint};
 use core::http::HttpFactory;
 use core::http_server::{DefaultRouter, RouilleServer, Serving};
 use core::logging;
@@ -215,9 +216,8 @@ fn main() {
     let (_, _guard) = logging::init(&options.log_filter);
     info!("Starting driver with runtime options: {:#?}", options);
 
-    // Set up metrics and serve in separate thread.
-    let (stablex_metrics, http_metrics) = setup_metrics();
-    let stablex_metrics = Arc::new(stablex_metrics);
+    // Set up metrics and health monitoring and serve in separate thread.
+    let (stablex_metrics, http_metrics, _health) = setup_monitoring();
 
     // Set up shared HTTP client and HTTP services.
     let http_factory = HttpFactory::new(options.http_timeout, http_metrics);
@@ -304,15 +304,21 @@ fn main() {
     scheduler.start();
 }
 
-fn setup_metrics() -> (StableXMetrics, HttpMetrics) {
+fn setup_monitoring() -> (Arc<StableXMetrics>, HttpMetrics, Arc<dyn HealthReporting>) {
+    let health = Arc::new(HttpHealthEndpoint::new());
+
     let prometheus_registry = Arc::new(Registry::new());
-    let stablex_metrics = StableXMetrics::new(prometheus_registry.clone());
+    let stablex_metrics = Arc::new(StableXMetrics::new(prometheus_registry.clone()));
     let http_metrics = HttpMetrics::new(&prometheus_registry).unwrap();
 
     let metric_handler = MetricsHandler::new(prometheus_registry);
-    RouilleServer::new(DefaultRouter(metric_handler)).start_in_background();
+    RouilleServer::new(DefaultRouter {
+        metrics: Arc::new(metric_handler),
+        health_readiness: health.clone(),
+    })
+    .start_in_background();
 
-    (stablex_metrics, http_metrics)
+    (stablex_metrics, http_metrics, health)
 }
 
 fn setup_http_services(

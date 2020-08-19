@@ -100,7 +100,7 @@ impl SchedulerKind {
         config: AuctionTimingConfiguration,
     ) -> Box<dyn Scheduler> {
         match self {
-            SchedulerKind::System => Box::new(SystemScheduler::new(driver, config)),
+            SchedulerKind::System => Box::new(SystemScheduler::new(exchange, driver, config)),
             SchedulerKind::Evm => Box::new(EvmScheduler::new(exchange, driver, config)),
         }
     }
