@@ -503,6 +503,93 @@ mod tests {
     }
 
     #[test]
+    fn auction_state_at_block_for_batch() {
+        let token_listing_0 = EventData::Added(Event::TokenListing(TokenListing {
+            token: Address::from_low_u64_be(0),
+            id: 0,
+        }));
+        let token_listing_1 = EventData::Added(Event::TokenListing(TokenListing {
+            token: Address::from_low_u64_be(1),
+            id: 1,
+        }));
+        let order_placement = EventData::Added(Event::OrderPlacement(OrderPlacement {
+            owner: Address::from_low_u64_be(2),
+            index: 0,
+            buy_token: 1,
+            sell_token: 0,
+            valid_from: 0,
+            valid_until: 10,
+            price_numerator: 100,
+            price_denominator: 100,
+        }));
+        let deposit_0 = EventData::Added(Event::Deposit(Deposit {
+            user: Address::from_low_u64_be(2),
+            token: Address::from_low_u64_be(0),
+            amount: 42.into(),
+            batch_id: 0,
+        }));
+        let deposit_1 = EventData::Added(Event::Deposit(Deposit {
+            user: Address::from_low_u64_be(2),
+            token: Address::from_low_u64_be(0),
+            amount: 1337.into(),
+            batch_id: 0,
+        }));
+        let deposit_2 = EventData::Added(Event::Deposit(Deposit {
+            user: Address::from_low_u64_be(2),
+            token: Address::from_low_u64_be(0),
+            amount: 1337.into(),
+            batch_id: 1,
+        }));
+
+        let mut events = EventRegistry::default();
+        events.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
+        events.handle_event_data(token_listing_1, 0, 1, H256::zero(), 0);
+        events.handle_event_data(order_placement, 0, 2, H256::zero(), 0);
+        events.handle_event_data(deposit_0, 0, 3, H256::zero(), 0);
+        events.handle_event_data(deposit_1, 1, 0, H256::zero(), 0);
+        events.handle_event_data(deposit_2, 2, 0, H256::zero(), BatchId(1).as_timestamp());
+
+        let auction_data = events
+            .auction_state_for_batch_at_block(BatchId(1), 0)
+            .unwrap();
+        assert_eq!(
+            auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
+            U256::from(42)
+        );
+
+        let auction_data = events
+            .get_auction_data_for_block(1.into())
+            .now_or_never()
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
+            U256::from(42 + 1337)
+        );
+    }
+
+    #[test]
+    fn errors_when_requesting_past_batch_in_future_block() {
+        let token_listing = EventData::Added(Event::TokenListing(TokenListing {
+            token: Address::from_low_u64_be(0),
+            id: 0,
+        }));
+
+        let mut events = EventRegistry::default();
+        events.handle_event_data(
+            token_listing,
+            1,
+            0,
+            H256::zero(),
+            BatchId(1337).as_timestamp(),
+        );
+
+        assert!(events
+            .auction_state_for_batch_at_block(BatchId(42), 1)
+            .is_err());
+    }
+
+    #[test]
     fn filters_events_by_batch_range() {
         fn token_listing(token: u16) -> Event {
             Event::TokenListing(TokenListing {
