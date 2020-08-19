@@ -88,6 +88,7 @@ pub struct ErrorResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_approx_eq::assert_approx_eq;
     use serde_json::Value;
 
     #[test]
@@ -147,7 +148,7 @@ mod tests {
         let one_usdc = 10_u64.pow(6);
 
         let price_estimate = PriceEstimateResult(Some(one_owl as f64 / one_usdc as f64));
-        assert_eq!(
+        assert_approx_eq!(
             price_estimate.into_base_units(&owl, &usdc).0.unwrap(),
             1.0f64
         )
