@@ -306,10 +306,8 @@ async fn estimate_best_ask_price(
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
-    if query.unit != Unit::Atoms {
-        return Err(warp::reject());
-    }
-    let token_pair = get_market(pair, &*token_infos).await?.bid_pair();
+    let market = get_market(pair, &*token_infos).await?;
+    let token_pair = market.bid_pair();
     let price = orderbook
         .pricegraph(query.time, PricegraphKind::WithRoundingBuffer)
         .await
@@ -317,6 +315,14 @@ async fn estimate_best_ask_price(
         .estimate_limit_price(token_pair, 0.0);
 
     let result = PriceEstimateResult(price);
+    let result = match query.unit {
+        Unit::Atoms => result,
+        Unit::BaseUnits => {
+            let base_token_info = get_token_info(market.base, token_infos.as_ref()).await?;
+            let quote_token_info = get_token_info(market.quote, token_infos.as_ref()).await?;
+            PriceEstimateResult(price).into_base_units(&base_token_info, &quote_token_info)
+        }
+    };
     Ok(warp::reply::json(&result))
 }
 
