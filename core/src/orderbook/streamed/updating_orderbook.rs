@@ -224,6 +224,6 @@ impl StableXOrderBookReading for UpdatingOrderbook {
     }
 
     fn initialize(&self) -> BoxFuture<Result<()>> {
-        self.do_with_context(|_| async { Ok(()) }.boxed()).boxed()
+        self.do_with_context(|_| immediate!(Ok(()))).boxed()
     }
 }
