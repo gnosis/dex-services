@@ -226,6 +226,12 @@ impl StableXOrderBookReading for EventRegistry {
         immediate!(self.auction_state_for_batch(batch_id_to_solve))
     }
 
+    /// Returns the state of the open orderbook at the closest block before (or
+    /// on) the specified block with an exchange event.
+    ///
+    /// This is a limitation of the `EventRegistry` implementation where an
+    /// accurate batch ID for a block number cannot be determined unless there
+    /// is an event on that block.
     fn get_auction_data_for_block(
         &self,
         block: BlockNumber,
