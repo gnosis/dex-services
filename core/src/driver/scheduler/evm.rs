@@ -2,10 +2,12 @@
 //! batch duration information directly from the EVM instead of system time.
 
 use super::{AuctionTimingConfiguration, Scheduler};
-use crate::contracts::stablex_contract::StableXContract;
-use crate::driver::stablex_driver::{DriverError, StableXDriver};
-use crate::models::batch_id::BATCH_DURATION;
-use crate::util::FutureWaitExt as _;
+use crate::{
+    contracts::stablex_contract::StableXContract,
+    driver::stablex_driver::{DriverError, StableXDriver},
+    models::batch_id::BATCH_DURATION,
+    util::{AsyncSleep, AsyncSleeping, FutureWaitExt as _},
+};
 use anyhow::Result;
 use log::{debug, error, info, warn};
 use std::{sync::Arc, thread, time::Duration};
@@ -17,6 +19,7 @@ const POLL_TIMEOUT: Duration = Duration::from_secs(5);
 pub struct EvmScheduler {
     exchange: Arc<dyn StableXContract>,
     driver: Arc<dyn StableXDriver>,
+    sleep: Box<dyn AsyncSleeping>,
     config: AuctionTimingConfiguration,
     last_batch: Option<u32>,
 }
@@ -28,9 +31,10 @@ impl EvmScheduler {
         driver: Arc<dyn StableXDriver>,
         config: AuctionTimingConfiguration,
     ) -> Self {
-        EvmScheduler {
+        Self {
             driver,
             exchange,
+            sleep: Box::new(AsyncSleep),
             config,
             last_batch: None,
         }
@@ -38,16 +42,23 @@ impl EvmScheduler {
 
     /// Creates a new scheduler with the default configuration.
     #[cfg(test)]
-    pub fn with_defaults(
+    pub fn with_defaults_and_sleep(
         exchange: Arc<dyn StableXContract>,
         driver: Arc<dyn StableXDriver>,
+        sleep: Box<dyn AsyncSleeping>,
     ) -> Self {
-        EvmScheduler::new(exchange, driver, AuctionTimingConfiguration::default())
+        Self {
+            exchange,
+            driver,
+            sleep,
+            config: AuctionTimingConfiguration::default(),
+            last_batch: None,
+        }
     }
 
     /// Runs the scheduler for a single iteration.
-    fn step(&mut self) -> Result<()> {
-        let batch_id = self.current_solving_batch()?;
+    async fn step(&mut self) -> Result<()> {
+        let batch_id = self.current_solving_batch().await?;
         if self
             .last_batch
             .map(|last_batch| batch_id <= last_batch)
@@ -57,7 +68,7 @@ impl EvmScheduler {
             return Ok(());
         }
 
-        let time_remaining = self.exchange.get_current_auction_remaining_time().wait()?;
+        let time_remaining = self.exchange.get_current_auction_remaining_time().await?;
         // NOTE: We need to take into account the asynchronous nature of web3
         //   and handle the case where we query the batch information right on
         //   a batch border and the following happens:
@@ -67,7 +78,7 @@ impl EvmScheduler {
         //   In order to work around this, we just re-query the batch ID after
         //   getting the time in the batch to make sure we are using the correct
         //   batch. If they don't match, we just return to restart the run-loop.
-        let verify_batch_id = self.current_solving_batch()?;
+        let verify_batch_id = self.current_solving_batch().await?;
         if batch_id != verify_batch_id {
             info!(
                 "batch ID changed during run loop ({} -> {}); retrying",
@@ -76,7 +87,7 @@ impl EvmScheduler {
             return Ok(());
         }
 
-        let current_batch_time = BATCH_DURATION - time_remaining;
+        let mut current_batch_time = BATCH_DURATION - time_remaining;
         if current_batch_time > self.config.latest_solution_submit_time {
             // TODO(nlordell): This should probably be reflected in a metric.
             //   For now we just log an warning.
@@ -91,30 +102,39 @@ impl EvmScheduler {
             batch_id,
             time_limit.as_secs_f64(),
         );
-        match self.driver.solve_batch(batch_id.into(), time_limit).wait() {
+        let solution = match self.driver.solve_batch(batch_id.into(), time_limit).await {
             Ok(solution) => {
                 info!("successfully solved batch {}", batch_id);
                 self.last_batch = Some(batch_id);
-                // TODO: handle earliest_solution_submit_time .
-                match self
-                    .driver
-                    .submit_solution(batch_id.into(), solution)
-                    .wait()
-                {
-                    Ok(()) => info!("successfully submitted solution for batch {}", batch_id),
-                    Err(err) => error!(
-                        "failed to submit solution for batch {}: {:?}",
-                        batch_id, err
-                    ),
-                }
+                solution
             }
             Err(DriverError::Retry(err)) => {
                 error!("driver retryable error for batch {}: {:?}", batch_id, err);
+                return Ok(());
             }
             Err(DriverError::Skip(err)) => {
                 error!("driver error for batch {}: {:?}", batch_id, err);
                 self.last_batch = Some(batch_id);
+                return Ok(());
             }
+        };
+
+        while current_batch_time < self.config.earliest_solution_submit_time {
+            self.sleep.sleep(POLL_TIMEOUT);
+            current_batch_time =
+                BATCH_DURATION - self.exchange.get_current_auction_remaining_time().await?;
+            if self.current_solving_batch().await? != batch_id {
+                info!("skipping solution submission because batch changed");
+                return Ok(());
+            }
+        }
+
+        match self.driver.submit_solution(batch_id.into(), solution).await {
+            Ok(()) => info!("successfully submitted solution for batch {}", batch_id),
+            Err(err) => error!(
+                "failed to submit solution for batch {}: {:?}",
+                batch_id, err
+            ),
         }
 
         Ok(())
@@ -124,15 +144,15 @@ impl EvmScheduler {
     ///
     /// This is the current batch ID minus 1, as the current batch ID is the ID
     /// of the batch that is currently accepting orders.
-    fn current_solving_batch(&self) -> Result<u32> {
-        Ok(self.exchange.get_current_auction_index().wait()? - 1)
+    async fn current_solving_batch(&self) -> Result<u32> {
+        Ok(self.exchange.get_current_auction_index().await? - 1)
     }
 }
 
 impl Scheduler for EvmScheduler {
     fn start(&mut self) -> ! {
         loop {
-            if let Err(err) = self.step() {
+            if let Err(err) = self.step().wait() {
                 error!("EVM scheduler error: {:?}", err);
             }
             thread::sleep(POLL_TIMEOUT);
@@ -147,6 +167,7 @@ mod tests {
         contracts::stablex_contract::MockStableXContract,
         driver::stablex_driver::MockStableXDriver,
         models::{BatchId, Solution},
+        util::MockAsyncSleeping,
     };
     use anyhow::anyhow;
     use futures::future::FutureExt as _;
@@ -172,9 +193,12 @@ mod tests {
             .expect_submit_solution()
             .returning(|_, _| immediate!(Ok(())));
 
-        let mut scheduler = EvmScheduler::with_defaults(Arc::new(exchange), Arc::new(driver));
+        let sleep = Box::new(MockAsyncSleeping::new());
 
-        scheduler.step().unwrap();
+        let mut scheduler =
+            EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
+
+        scheduler.step().now_or_never().unwrap().unwrap();
         assert_eq!(scheduler.last_batch, Some(41));
     }
 
@@ -196,10 +220,13 @@ mod tests {
             .expect_submit_solution()
             .returning(|_, _| immediate!(Ok(())));
 
-        let mut scheduler = EvmScheduler::with_defaults(Arc::new(exchange), Arc::new(driver));
+        let sleep = Box::new(MockAsyncSleeping::new());
+
+        let mut scheduler =
+            EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
         scheduler.last_batch = Some(40);
 
-        scheduler.step().unwrap();
+        scheduler.step().now_or_never().unwrap().unwrap();
         assert_eq!(scheduler.last_batch, Some(41));
     }
 
@@ -212,10 +239,13 @@ mod tests {
 
         let driver = MockStableXDriver::new();
 
-        let mut scheduler = EvmScheduler::with_defaults(Arc::new(exchange), Arc::new(driver));
+        let sleep = Box::new(MockAsyncSleeping::new());
+
+        let mut scheduler =
+            EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
         scheduler.last_batch = Some(41);
 
-        scheduler.step().unwrap();
+        scheduler.step().now_or_never().unwrap().unwrap();
     }
 
     #[test]
@@ -238,9 +268,12 @@ mod tests {
 
         let driver = MockStableXDriver::new();
 
-        let mut scheduler = EvmScheduler::with_defaults(Arc::new(exchange), Arc::new(driver));
+        let sleep = Box::new(MockAsyncSleeping::new());
 
-        scheduler.step().unwrap();
+        let mut scheduler =
+            EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
+
+        scheduler.step().now_or_never().unwrap().unwrap();
         assert_eq!(scheduler.last_batch, None);
     }
 
@@ -256,9 +289,12 @@ mod tests {
 
         let driver = MockStableXDriver::new();
 
-        let mut scheduler = EvmScheduler::with_defaults(Arc::new(exchange), Arc::new(driver));
+        let sleep = Box::new(MockAsyncSleeping::new());
 
-        scheduler.step().unwrap();
+        let mut scheduler =
+            EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
+
+        scheduler.step().now_or_never().unwrap().unwrap();
         assert_eq!(scheduler.last_batch, None);
     }
 
@@ -277,9 +313,12 @@ mod tests {
             .expect_solve_batch()
             .returning(|_, _| immediate!(Err(DriverError::Skip(anyhow!("error")))));
 
-        let mut scheduler = EvmScheduler::with_defaults(Arc::new(exchange), Arc::new(driver));
+        let sleep = Box::new(MockAsyncSleeping::new());
 
-        scheduler.step().unwrap();
+        let mut scheduler =
+            EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
+
+        scheduler.step().now_or_never().unwrap().unwrap();
         assert_eq!(scheduler.last_batch, Some(41));
     }
 
@@ -298,9 +337,57 @@ mod tests {
             .expect_solve_batch()
             .returning(|_, _| immediate!(Err(DriverError::Retry(anyhow!("error")))));
 
-        let mut scheduler = EvmScheduler::with_defaults(Arc::new(exchange), Arc::new(driver));
+        let sleep = Box::new(MockAsyncSleeping::new());
 
-        scheduler.step().unwrap();
+        let mut scheduler =
+            EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
+
+        scheduler.step().now_or_never().unwrap().unwrap();
         assert_eq!(scheduler.last_batch, None);
+    }
+
+    #[test]
+    fn scheduler_waits_for_earliest_submit_time() {
+        let mut exchange = MockStableXContract::new();
+        let mut driver = MockStableXDriver::new();
+        let mut sleep = Box::new(MockAsyncSleeping::new());
+
+        exchange
+            .expect_get_current_auction_index()
+            .returning(|| async { Ok(42) }.boxed());
+
+        let mut seq = Sequence::new();
+        exchange
+            .expect_get_current_auction_remaining_time()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(|| async { Ok(Duration::from_secs(295)) }.boxed());
+        driver
+            .expect_solve_batch()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(|_, _| immediate!(Ok(Solution::trivial())));
+        sleep
+            .expect_sleep()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(|_| immediate!(()));
+        exchange
+            .expect_get_current_auction_remaining_time()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(|| async { Ok(Duration::from_secs(289)) }.boxed());
+        driver
+            .expect_submit_solution()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(|_, _| immediate!(Ok(())));
+
+        let mut scheduler =
+            EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
+        scheduler.config.earliest_solution_submit_time = Duration::from_secs(10);
+
+        scheduler.step().now_or_never().unwrap().unwrap();
+        assert_eq!(scheduler.last_batch, Some(41));
     }
 }
