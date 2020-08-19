@@ -1,7 +1,38 @@
 use crate::bigint_u256;
 use ethcontract::{Address, U256};
 use num::{BigInt, Zero as _};
+use serde::Deserialize;
 use std::collections::HashMap;
+
+#[derive(Debug, Default, PartialEq, Deserialize)]
+pub struct ObjVals {
+    pub volume: String,
+    pub utility: String,
+    pub utility_disreg: String,
+    pub utility_disreg_touched: String,
+    pub fees: u128,
+    pub orders_touched: u128,
+}
+
+#[derive(Debug, Default, PartialEq, Deserialize)]
+pub struct Solver {
+    pub runtime: f64,
+    pub runtime_preprocessing: f64,
+    pub runtime_solving: f64,
+    pub runtime_ring_finding: f64,
+    pub runtime_validation: f64,
+    pub nr_variables: u128,
+    pub nr_bool_variables: u128,
+    pub optimality_gap: f64,
+    pub obj_val: f64,
+    pub obj_val_sc: f64,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct SolverStats {
+    pub obj_vals: ObjVals,
+    pub solver: Solver,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExecutedOrder {
@@ -11,7 +42,7 @@ pub struct ExecutedOrder {
     pub buy_amount: u128,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Solution {
     /// token_id => price
     pub prices: HashMap<u16, u128>,
@@ -26,10 +57,7 @@ pub struct EconomicViabilityInfo {
 
 impl Solution {
     pub fn trivial() -> Self {
-        Solution {
-            prices: HashMap::new(),
-            executed_orders: Vec::new(),
-        }
+        Self::default()
     }
 
     /// Returns true if a solution is non-trivial and false otherwise

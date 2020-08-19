@@ -1,6 +1,11 @@
 use crate::{
     economic_viability::EconomicViabilityComputing,
-    models::{self, TokenId, TokenInfo},
+    metrics::SolverMetrics,
+    models::{
+        self,
+        solution::{Solution, SolverStats},
+        TokenId, TokenInfo,
+    },
     price_estimation::PriceEstimating,
     price_finding::price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
 };
@@ -41,7 +46,7 @@ pub type TokenDataType = BTreeMap<TokenId, Option<TokenInfo>>;
 
 mod solver_output {
     use super::{Num, TokenId};
-    use crate::models::Solution;
+    use crate::models::solution::{ObjVals, Solution, Solver, SolverStats};
     use ethcontract::Address;
     use serde::Deserialize;
     use std::collections::HashMap;
@@ -67,11 +72,15 @@ mod solver_output {
     pub struct Output {
         pub orders: Vec<ExecutedOrder>,
         pub prices: HashMap<TokenId, Option<Num<u128>>>,
+        #[serde(default)]
+        pub obj_vals: ObjVals,
+        #[serde(default)]
+        pub solver: Solver,
     }
 
     impl Output {
         /// Convert the solver output to a solution.
-        pub fn into_solution(self) -> Solution {
+        pub fn into_solution(self) -> (Solution, SolverStats) {
             let prices = self
                 .prices
                 .into_iter()
@@ -90,10 +99,16 @@ mod solver_output {
                 })
                 .collect();
 
-            Solution {
-                prices,
-                executed_orders,
-            }
+            (
+                Solution {
+                    prices,
+                    executed_orders,
+                },
+                SolverStats {
+                    obj_vals: self.obj_vals,
+                    solver: self.solver,
+                },
+            )
         }
     }
 }
@@ -197,6 +212,7 @@ pub struct OptimisationPriceFinder {
     price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
     economic_viability: Arc<dyn EconomicViabilityComputing>,
     internal_optimizer: InternalOptimizer,
+    solver_metrics: SolverMetrics,
 }
 
 impl OptimisationPriceFinder {
@@ -206,6 +222,7 @@ impl OptimisationPriceFinder {
         price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
         economic_viability: Arc<dyn EconomicViabilityComputing>,
         internal_optimizer: InternalOptimizer,
+        solver_metrics: SolverMetrics,
     ) -> Self {
         OptimisationPriceFinder {
             io_methods: Arc::new(DefaultIo),
@@ -214,6 +231,7 @@ impl OptimisationPriceFinder {
             price_oracle,
             economic_viability,
             internal_optimizer,
+            solver_metrics,
         }
     }
 }
@@ -235,7 +253,7 @@ fn serialize_balances(
     accounts
 }
 
-fn deserialize_result(result: String) -> Result<models::Solution> {
+fn deserialize_result(result: String) -> Result<(Solution, SolverStats)> {
     let output: solver_output::Output = serde_json::from_str(&result)?;
     Ok(output.into_solution())
 }
@@ -246,7 +264,7 @@ impl PriceFinding for OptimisationPriceFinder {
         orders: &'a [models::Order],
         state: &'a models::AccountState,
         time_limit: Duration,
-    ) -> BoxFuture<'a, Result<models::Solution>> {
+    ) -> BoxFuture<'a, Result<Solution>> {
         let price_oracle = &*self.price_oracle;
         async move {
             let input = solver_input::Input {
@@ -296,8 +314,9 @@ impl PriceFinding for OptimisationPriceFinder {
                 internal_optimizer,
             ))
             .with_context(|| format!("error running {:?} solver", self.solver_type))?;
-            let solution =
+            let (solution, solver_stats) =
                 deserialize_result(result).context("error deserializing solver output")?;
+            self.solver_metrics.handle_stats(&solver_stats);
             Ok(solution)
         }
         .boxed()
@@ -368,11 +387,15 @@ impl Io for DefaultIo {
 pub mod tests {
     use super::*;
     use crate::{
-        economic_viability::MockEconomicViabilityComputing, models::AccountState,
-        price_estimation::MockPriceEstimating, util::test_util::map_from_slice,
+        economic_viability::MockEconomicViabilityComputing,
+        models::solution::{ObjVals, Solver},
+        models::AccountState,
+        price_estimation::MockPriceEstimating,
+        util::test_util::map_from_slice,
         util::FutureWaitExt as _,
     };
     use ethcontract::Address;
+    use prometheus::Registry;
     use serde_json::json;
     use std::{collections::BTreeMap, sync::Arc};
 
@@ -419,7 +442,32 @@ pub mod tests {
                     "execSellAmount": "318390084925498118944",
                     "execBuyAmount": "95042777139162480000"
                 },
-            ]
+            ],
+            "objVals": {
+                "volume": "1",
+                "utility": "2",
+                "utility_disreg": "3",
+                "utility_disreg_touched": "4",
+                "fees": 5,
+                "orders_touched": 6
+            },
+            "solver": {
+                "name": "7",
+                "args": [],
+                "runtime": 8,
+                "runtime_preprocessing": 9,
+                "runtime_solving": 10,
+                "runtime_ring_finding": 11,
+                "runtime_validation": 12,
+                "nr_variables": 13,
+                "nr_bool_variables": 14,
+                "optimality_gap": 15,
+                "solver_status": "16",
+                "termination_condition": "17",
+                "exit_status": "18",
+                "obj_val": 19,
+                "obj_val_sc": 20,
+            }
         });
 
         let expected_solution = models::Solution {
@@ -444,8 +492,32 @@ pub mod tests {
             ],
         };
 
+        let expected_solver_stats = SolverStats {
+            obj_vals: ObjVals {
+                volume: "1".to_string(),
+                utility: "2".to_string(),
+                utility_disreg: "3".to_string(),
+                utility_disreg_touched: "4".to_string(),
+                fees: 5,
+                orders_touched: 6,
+            },
+            solver: Solver {
+                runtime: 8.0,
+                runtime_preprocessing: 9.0,
+                runtime_solving: 10.0,
+                runtime_ring_finding: 11.0,
+                runtime_validation: 12.0,
+                nr_variables: 13,
+                nr_bool_variables: 14,
+                optimality_gap: 15.0,
+                obj_val: 19.0,
+                obj_val_sc: 20.0,
+            },
+        };
+
         let solution = deserialize_result(json.to_string()).expect("Should not fail to parse");
-        assert_eq!(solution, expected_solution);
+        assert_eq!(solution.0, expected_solution);
+        assert_eq!(solution.1, expected_solver_stats);
     }
 
     #[test]
@@ -517,7 +589,8 @@ pub mod tests {
         });
         let result = deserialize_result(json.to_string())
             .map_err(|err| err.to_string())
-            .expect("Should not fail to parse");
+            .expect("Should not fail to parse")
+            .0;
         assert_eq!(result.executed_orders[0].sell_amount, 0);
     }
 
@@ -553,7 +626,9 @@ pub mod tests {
                 }
             ]
         });
-        let result = deserialize_result(json.to_string()).expect("Should not fail to parse");
+        let result = deserialize_result(json.to_string())
+            .expect("Should not fail to parse")
+            .0;
         assert_eq!(result.executed_orders[0].buy_amount, 0);
     }
 
@@ -662,6 +737,7 @@ pub mod tests {
             price_oracle: Arc::new(price_oracle),
             economic_viability: Arc::new(economic_viablity),
             internal_optimizer: InternalOptimizer::Scip,
+            solver_metrics: SolverMetrics::new(Arc::new(Registry::new())),
         };
         let orders = vec![];
         assert!(solver
