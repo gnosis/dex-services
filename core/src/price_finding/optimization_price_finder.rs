@@ -1,11 +1,7 @@
 use crate::{
     economic_viability::EconomicViabilityComputing,
-    metrics::SolverMetrics,
-    models::{
-        self,
-        solution::{Solution, SolverStats},
-        TokenId, TokenInfo,
-    },
+    metrics::solver_metrics::{SolverMetrics, SolverStats},
+    models::{self, solution::Solution, TokenId, TokenInfo},
     price_estimation::PriceEstimating,
     price_finding::price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
 };
@@ -46,7 +42,7 @@ pub type TokenDataType = BTreeMap<TokenId, Option<TokenInfo>>;
 
 mod solver_output {
     use super::{Num, TokenId};
-    use crate::models::solution::{ObjVals, Solution, Solver, SolverStats};
+    use crate::{metrics::solver_metrics::SolverStats, models::solution::Solution};
     use ethcontract::Address;
     use serde::Deserialize;
     use std::collections::HashMap;
@@ -72,10 +68,8 @@ mod solver_output {
     pub struct Output {
         pub orders: Vec<ExecutedOrder>,
         pub prices: HashMap<TokenId, Option<Num<u128>>>,
-        #[serde(default)]
-        pub obj_vals: ObjVals,
-        #[serde(default)]
-        pub solver: Solver,
+        #[serde(flatten)]
+        pub solver_stats: SolverStats,
     }
 
     impl Output {
@@ -104,10 +98,7 @@ mod solver_output {
                     prices,
                     executed_orders,
                 },
-                SolverStats {
-                    obj_vals: self.obj_vals,
-                    solver: self.solver,
-                },
+                self.solver_stats,
             )
         }
     }
@@ -387,11 +378,8 @@ impl Io for DefaultIo {
 pub mod tests {
     use super::*;
     use crate::{
-        economic_viability::MockEconomicViabilityComputing,
-        models::solution::{ObjVals, Solver},
-        models::AccountState,
-        price_estimation::MockPriceEstimating,
-        util::test_util::map_from_slice,
+        economic_viability::MockEconomicViabilityComputing, models::AccountState,
+        price_estimation::MockPriceEstimating, util::test_util::map_from_slice,
         util::FutureWaitExt as _,
     };
     use ethcontract::Address;
@@ -442,32 +430,7 @@ pub mod tests {
                     "execSellAmount": "318390084925498118944",
                     "execBuyAmount": "95042777139162480000"
                 },
-            ],
-            "objVals": {
-                "volume": "1",
-                "utility": "2",
-                "utility_disreg": "3",
-                "utility_disreg_touched": "4",
-                "fees": 5,
-                "orders_touched": 6
-            },
-            "solver": {
-                "name": "7",
-                "args": [],
-                "runtime": 8,
-                "runtime_preprocessing": 9,
-                "runtime_solving": 10,
-                "runtime_ring_finding": 11,
-                "runtime_validation": 12,
-                "nr_variables": 13,
-                "nr_bool_variables": 14,
-                "optimality_gap": 15,
-                "solver_status": "16",
-                "termination_condition": "17",
-                "exit_status": "18",
-                "obj_val": 19,
-                "obj_val_sc": 20,
-            }
+            ]
         });
 
         let expected_solution = models::Solution {
@@ -492,32 +455,29 @@ pub mod tests {
             ],
         };
 
-        let expected_solver_stats = SolverStats {
-            obj_vals: ObjVals {
-                volume: "1".to_string(),
-                utility: "2".to_string(),
-                utility_disreg: "3".to_string(),
-                utility_disreg_touched: "4".to_string(),
-                fees: 5,
-                orders_touched: 6,
-            },
-            solver: Solver {
-                runtime: 8.0,
-                runtime_preprocessing: 9.0,
-                runtime_solving: 10.0,
-                runtime_ring_finding: 11.0,
-                runtime_validation: 12.0,
-                nr_variables: 13,
-                nr_bool_variables: 14,
-                optimality_gap: 15.0,
-                obj_val: 19.0,
-                obj_val_sc: 20.0,
-            },
-        };
+        let solution = deserialize_result(json.to_string())
+            .expect("Should not fail to parse")
+            .0;
+        assert_eq!(solution, expected_solution);
+    }
 
-        let solution = deserialize_result(json.to_string()).expect("Should not fail to parse");
-        assert_eq!(solution.0, expected_solution);
-        assert_eq!(solution.1, expected_solver_stats);
+    #[test]
+    fn deserialize_solver_stats() {
+        let json = json!({
+            "prices": {},
+            "orders": [],
+            "objVals": {
+                "a": "1",
+                "b": 2
+            },
+            "solver": {
+                "c": 2.5,
+                "d": null
+            }
+        });
+        let stats = deserialize_result(json.to_string()).unwrap().1;
+        assert_eq!(stats.obj_vals.len(), 2);
+        assert_eq!(stats.solver.len(), 2);
     }
 
     #[test]

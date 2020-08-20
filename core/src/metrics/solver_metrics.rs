@@ -1,6 +1,23 @@
-use crate::models::solution::SolverStats;
 use prometheus::{Gauge, Registry};
-use std::sync::Arc;
+use serde::Deserialize;
+use serde_json::{Number, Value};
+use std::{collections::HashMap, sync::Arc};
+
+/// This struct deserializes the metrics part of the solver generated solution json file.
+/// We use `default` and serialize to HashMap<String, Value> so that we don't run into errors when
+/// the metrics are missing or the format changes. We don't want those errors to prevent the
+/// solution from being used.
+/// This is also useful to ignore differences in the metrics between solvers. For example the open
+/// solver creates less metrics than the others and it serializes `fees` and `orders_touched` as
+/// strings instead of numbers.
+#[derive(Debug, Deserialize, PartialEq)]
+pub struct SolverStats {
+    #[serde(rename = "objVals")]
+    #[serde(default)]
+    pub obj_vals: HashMap<String, Value>,
+    #[serde(default)]
+    pub solver: HashMap<String, Value>,
+}
 
 pub struct SolverMetrics {
     volume: Gauge,
@@ -64,30 +81,51 @@ impl SolverMetrics {
         }
     }
 
+    /// If a metric is not found in the solution file or cannot be converted to a float, it is set
+    /// to 0.
     pub fn handle_stats(&self, stats: &SolverStats) {
-        let str_to_f64 = |string| std::str::FromStr::from_str(string).unwrap_or_default();
-
-        self.volume.set(str_to_f64(&stats.obj_vals.volume));
-        self.utility.set(str_to_f64(&stats.obj_vals.utility));
+        self.volume.set(f64_or_0(&stats.obj_vals, "volume"));
+        self.utility.set(f64_or_0(&stats.obj_vals, "utility"));
         self.utility_disreg
-            .set(str_to_f64(&stats.obj_vals.utility_disreg));
+            .set(f64_or_0(&stats.obj_vals, "utility_disreg"));
         self.utility_disreg_touched
-            .set(str_to_f64(&stats.obj_vals.utility_disreg_touched));
-        self.fees.set(stats.obj_vals.fees as f64);
+            .set(f64_or_0(&stats.obj_vals, "utility_disreg_touched"));
+        self.fees.set(f64_or_0(&stats.obj_vals, "fees"));
         self.orders_touched
-            .set(stats.obj_vals.orders_touched as f64);
-        self.runtime.set(stats.solver.runtime);
+            .set(f64_or_0(&stats.obj_vals, "orders_touched"));
+
+        self.runtime.set(f64_or_0(&stats.solver, "runtime"));
         self.runtime_preprocessing
-            .set(stats.solver.runtime_preprocessing);
-        self.runtime_solving.set(stats.solver.runtime_solving);
+            .set(f64_or_0(&stats.solver, "runtime_preprocessing"));
+        self.runtime_solving
+            .set(f64_or_0(&stats.solver, "runtime_solving"));
         self.runtime_ring_finding
-            .set(stats.solver.runtime_ring_finding);
-        self.runtime_validation.set(stats.solver.runtime_validation);
-        self.nr_variables.set(stats.solver.nr_bool_variables as f64);
+            .set(f64_or_0(&stats.solver, "runtime_ring_finding"));
+        self.runtime_validation
+            .set(f64_or_0(&stats.solver, "runtime_validation"));
+        self.nr_variables
+            .set(f64_or_0(&stats.solver, "nr_variables"));
         self.nr_bool_variables
-            .set(stats.solver.nr_bool_variables as f64);
-        self.optimality_gap.set(stats.solver.optimality_gap);
-        self.obj_val.set(stats.solver.obj_val);
-        self.obj_val_sc.set(stats.solver.obj_val_sc);
+            .set(f64_or_0(&stats.solver, "nr_bool_variables"));
+        self.optimality_gap
+            .set(f64_or_0(&stats.solver, "optimality_gap"));
+        self.obj_val.set(f64_or_0(&stats.solver, "obj_val"));
+        self.obj_val_sc.set(f64_or_0(&stats.solver, "obj_val_sc"));
+    }
+}
+
+fn number_to_f64(number: &Number) -> f64 {
+    number
+        .as_f64()
+        .or_else(|| number.as_i64().map(|n| n as f64))
+        .or_else(|| number.as_u64().map(|n| n as f64))
+        .unwrap_or(0.0)
+}
+
+fn f64_or_0(values: &HashMap<String, Value>, key: &str) -> f64 {
+    match values.get(key) {
+        Some(Value::Number(number)) => number_to_f64(number),
+        Some(Value::String(string)) => string.parse().unwrap_or(0.0),
+        _ => 0.0,
     }
 }

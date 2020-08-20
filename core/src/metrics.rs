@@ -1,6 +1,6 @@
 mod http_metrics;
 mod metrics_handler;
-mod solver_metrics;
+pub mod solver_metrics;
 mod stablex_metrics;
 
 pub use http_metrics::{HttpLabel, HttpMetrics};
