@@ -74,7 +74,7 @@ impl PriceEstimateResult {
         quote_token_info: &TokenBaseInfo,
     ) -> Self {
         Self(self.0.map(|p| {
-            p * 10f64.powi(quote_token_info.decimals as i32 - base_token_info.decimals as i32)
+            p / 10f64.powi(quote_token_info.decimals as i32 - base_token_info.decimals as i32)
                 as f64
         }))
     }
@@ -144,12 +144,15 @@ mod tests {
             decimals: 6,
         };
 
-        let one_owl = 10_u64.pow(18);
-        let one_usdc = 10_u64.pow(6);
-
-        let price_estimate = PriceEstimateResult(Some(one_owl as f64 / one_usdc as f64));
+        // Since OWL has 18 decimals, and USDC 6, we get 10^12 OWL per USDC (counterintuitively denoted as USDC/OWL
+        // with OWL being the quote token) From https://www.investopedia.com/terms/c/currencypair.asp:
+        // > The quotation EUR/USD = 1.2500 means that one euro is exchanged for 1.2500 U.S. dollars. In this case,
+        // EUR is the base currency and USD is the quote currency (counter currency). This means that 1 euro can be
+        // exchanged for 1.25 U.S. dollars.
+        let owl_per_usdc = 10_u64.pow(12);
+        let price_estimate = PriceEstimateResult(Some(owl_per_usdc as f64));
         assert_approx_eq!(
-            price_estimate.into_base_units(&owl, &usdc).0.unwrap(),
+            price_estimate.into_base_units(&usdc, &owl).0.unwrap(),
             1.0f64
         )
     }
