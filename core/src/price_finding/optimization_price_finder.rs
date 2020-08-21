@@ -1,6 +1,7 @@
 use crate::{
     economic_viability::EconomicViabilityComputing,
-    models::{self, TokenId, TokenInfo},
+    metrics::solver_metrics::{SolverMetrics, SolverStats},
+    models::{self, solution::Solution, TokenId, TokenInfo},
     price_estimation::PriceEstimating,
     price_finding::price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
 };
@@ -41,7 +42,7 @@ pub type TokenDataType = BTreeMap<TokenId, Option<TokenInfo>>;
 
 mod solver_output {
     use super::{Num, TokenId};
-    use crate::models::Solution;
+    use crate::{metrics::solver_metrics::SolverStats, models::solution::Solution};
     use ethcontract::Address;
     use serde::Deserialize;
     use std::collections::HashMap;
@@ -67,11 +68,13 @@ mod solver_output {
     pub struct Output {
         pub orders: Vec<ExecutedOrder>,
         pub prices: HashMap<TokenId, Option<Num<u128>>>,
+        #[serde(flatten)]
+        pub solver_stats: SolverStats,
     }
 
     impl Output {
         /// Convert the solver output to a solution.
-        pub fn into_solution(self) -> Solution {
+        pub fn into_solution(self) -> (Solution, SolverStats) {
             let prices = self
                 .prices
                 .into_iter()
@@ -90,10 +93,13 @@ mod solver_output {
                 })
                 .collect();
 
-            Solution {
-                prices,
-                executed_orders,
-            }
+            (
+                Solution {
+                    prices,
+                    executed_orders,
+                },
+                self.solver_stats,
+            )
         }
     }
 }
@@ -197,6 +203,7 @@ pub struct OptimisationPriceFinder {
     price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
     economic_viability: Arc<dyn EconomicViabilityComputing>,
     internal_optimizer: InternalOptimizer,
+    solver_metrics: SolverMetrics,
 }
 
 impl OptimisationPriceFinder {
@@ -206,6 +213,7 @@ impl OptimisationPriceFinder {
         price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
         economic_viability: Arc<dyn EconomicViabilityComputing>,
         internal_optimizer: InternalOptimizer,
+        solver_metrics: SolverMetrics,
     ) -> Self {
         OptimisationPriceFinder {
             io_methods: Arc::new(DefaultIo),
@@ -214,6 +222,7 @@ impl OptimisationPriceFinder {
             price_oracle,
             economic_viability,
             internal_optimizer,
+            solver_metrics,
         }
     }
 }
@@ -235,7 +244,7 @@ fn serialize_balances(
     accounts
 }
 
-fn deserialize_result(result: String) -> Result<models::Solution> {
+fn deserialize_result(result: String) -> Result<(Solution, SolverStats)> {
     let output: solver_output::Output = serde_json::from_str(&result)?;
     Ok(output.into_solution())
 }
@@ -246,7 +255,7 @@ impl PriceFinding for OptimisationPriceFinder {
         orders: &'a [models::Order],
         state: &'a models::AccountState,
         time_limit: Duration,
-    ) -> BoxFuture<'a, Result<models::Solution>> {
+    ) -> BoxFuture<'a, Result<Solution>> {
         let price_oracle = &*self.price_oracle;
         async move {
             let input = solver_input::Input {
@@ -296,8 +305,9 @@ impl PriceFinding for OptimisationPriceFinder {
                 internal_optimizer,
             ))
             .with_context(|| format!("error running {:?} solver", self.solver_type))?;
-            let solution =
+            let (solution, solver_stats) =
                 deserialize_result(result).context("error deserializing solver output")?;
+            self.solver_metrics.handle_stats(&solver_stats);
             Ok(solution)
         }
         .boxed()
@@ -373,6 +383,7 @@ pub mod tests {
         util::FutureWaitExt as _,
     };
     use ethcontract::Address;
+    use prometheus::Registry;
     use serde_json::json;
     use std::{collections::BTreeMap, sync::Arc};
 
@@ -444,8 +455,29 @@ pub mod tests {
             ],
         };
 
-        let solution = deserialize_result(json.to_string()).expect("Should not fail to parse");
+        let solution = deserialize_result(json.to_string())
+            .expect("Should not fail to parse")
+            .0;
         assert_eq!(solution, expected_solution);
+    }
+
+    #[test]
+    fn deserialize_solver_stats() {
+        let json = json!({
+            "prices": {},
+            "orders": [],
+            "objVals": {
+                "a": "1",
+                "b": 2
+            },
+            "solver": {
+                "c": 2.5,
+                "d": null
+            }
+        });
+        let stats = deserialize_result(json.to_string()).unwrap().1;
+        assert_eq!(stats.obj_vals.len(), 2);
+        assert_eq!(stats.solver.len(), 2);
     }
 
     #[test]
@@ -517,7 +549,8 @@ pub mod tests {
         });
         let result = deserialize_result(json.to_string())
             .map_err(|err| err.to_string())
-            .expect("Should not fail to parse");
+            .expect("Should not fail to parse")
+            .0;
         assert_eq!(result.executed_orders[0].sell_amount, 0);
     }
 
@@ -553,7 +586,9 @@ pub mod tests {
                 }
             ]
         });
-        let result = deserialize_result(json.to_string()).expect("Should not fail to parse");
+        let result = deserialize_result(json.to_string())
+            .expect("Should not fail to parse")
+            .0;
         assert_eq!(result.executed_orders[0].buy_amount, 0);
     }
 
@@ -662,6 +697,7 @@ pub mod tests {
             price_oracle: Arc::new(price_oracle),
             economic_viability: Arc::new(economic_viablity),
             internal_optimizer: InternalOptimizer::Scip,
+            solver_metrics: SolverMetrics::new(Arc::new(Registry::new())),
         };
         let orders = vec![];
         assert!(solver

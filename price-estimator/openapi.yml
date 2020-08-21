@@ -55,7 +55,7 @@ paths:
   /api/v1/markets/{market}/estimated-best-ask-price:
     get:
       summary: Estimated Best Ask Price
-      description: Estimates the exchange rate for the market. Note that the true exchange rate depends on the buy amount whereas this exchange rate is for a theoretical 0 amount. In the example we can exchange ~300 units of the sell token for 1 unit of the buy token. `unit=baseunits` is not yet implemented for this route.
+      description: Estimates the exchange rate for the market. Note that the true exchange rate depends on the buy amount whereas this exchange rate is for a theoretical 0 amount. In the example we can exchange ~300 units of the sell token for 1 unit of the buy token.
       responses:
         200:
           description: OK

@@ -11,7 +11,7 @@ use core::health::{HealthReporting, HttpHealthEndpoint};
 use core::http::HttpFactory;
 use core::http_server::{DefaultRouter, RouilleServer, Serving};
 use core::logging;
-use core::metrics::{HttpMetrics, MetricsHandler, StableXMetrics};
+use core::metrics::{HttpMetrics, MetricsHandler, SolverMetrics, StableXMetrics};
 use core::orderbook::{
     EventBasedOrderbook, FilteredOrderbookReader, OrderbookFilter, StableXOrderBookReading,
 };
@@ -217,7 +217,7 @@ fn main() {
     info!("Starting driver with runtime options: {:#?}", options);
 
     // Set up metrics and health monitoring and serve in separate thread.
-    let (stablex_metrics, http_metrics, _health) = setup_monitoring();
+    let (stablex_metrics, http_metrics, solver_metrics, _health) = setup_monitoring();
 
     // Set up shared HTTP client and HTTP services.
     let http_factory = HttpFactory::new(options.http_timeout, http_metrics);
@@ -274,6 +274,7 @@ fn main() {
         price_oracle,
         economic_viability.clone(),
         options.solver_internal_optimizer,
+        solver_metrics,
     );
 
     // Set up solution submitter.
@@ -304,12 +305,18 @@ fn main() {
     scheduler.start();
 }
 
-fn setup_monitoring() -> (Arc<StableXMetrics>, HttpMetrics, Arc<dyn HealthReporting>) {
+fn setup_monitoring() -> (
+    Arc<StableXMetrics>,
+    HttpMetrics,
+    SolverMetrics,
+    Arc<dyn HealthReporting>,
+) {
     let health = Arc::new(HttpHealthEndpoint::new());
 
     let prometheus_registry = Arc::new(Registry::new());
     let stablex_metrics = Arc::new(StableXMetrics::new(prometheus_registry.clone()));
     let http_metrics = HttpMetrics::new(&prometheus_registry).unwrap();
+    let solver_metrics = SolverMetrics::new(prometheus_registry.clone());
 
     let metric_handler = MetricsHandler::new(prometheus_registry);
     RouilleServer::new(DefaultRouter {
@@ -318,7 +325,7 @@ fn setup_monitoring() -> (Arc<StableXMetrics>, HttpMetrics, Arc<dyn HealthReport
     })
     .start_in_background();
 
-    (stablex_metrics, http_metrics, health)
+    (stablex_metrics, http_metrics, solver_metrics, health)
 }
 
 fn setup_http_services(

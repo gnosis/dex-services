@@ -67,6 +67,19 @@ impl Amount {
 #[serde(transparent)]
 pub struct PriceEstimateResult(pub Option<f64>);
 
+impl PriceEstimateResult {
+    pub fn into_base_units(
+        self,
+        base_token_info: &TokenBaseInfo,
+        quote_token_info: &TokenBaseInfo,
+    ) -> Self {
+        Self(self.0.map(|p| {
+            p * 10f64.powi(quote_token_info.decimals as i32 - base_token_info.decimals as i32)
+                as f64
+        }))
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub struct ErrorResult {
     pub message: &'static str,
@@ -75,6 +88,7 @@ pub struct ErrorResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_approx_eq::assert_approx_eq;
     use serde_json::Value;
 
     #[test]
@@ -117,5 +131,26 @@ mod tests {
 
         assert_eq!(amount.into_atoms(&owl).into_base_units(&owl), amount);
         assert_eq!(amount.into_atoms(&usdc).into_base_units(&usdc), amount);
+    }
+
+    #[test]
+    fn price_estimate_into_base_units() {
+        let owl = TokenBaseInfo {
+            alias: "OWL".into(),
+            decimals: 18,
+        };
+        let usdc = TokenBaseInfo {
+            alias: "USDC".into(),
+            decimals: 6,
+        };
+
+        let one_owl = 10_u64.pow(18);
+        let one_usdc = 10_u64.pow(6);
+
+        let price_estimate = PriceEstimateResult(Some(one_owl as f64 / one_usdc as f64));
+        assert_approx_eq!(
+            price_estimate.into_base_units(&owl, &usdc).0.unwrap(),
+            1.0f64
+        )
     }
 }
