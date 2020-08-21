@@ -219,7 +219,7 @@ impl TryFrom<&Path> for EventRegistry {
 }
 
 impl StableXOrderBookReading for EventRegistry {
-    fn get_auction_data(
+    fn get_auction_data_for_batch(
         &self,
         batch_id_to_solve: u32,
     ) -> BoxFuture<Result<(AccountState, Vec<Order>)>> {
@@ -393,13 +393,21 @@ mod tests {
         }));
         events.handle_event_data(deposit_2, 2, 0, H256::zero(), 0);
 
-        let auction_data = events.get_auction_data(2).now_or_never().unwrap().unwrap();
+        let auction_data = events
+            .get_auction_data_for_batch(2)
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
             U256::from(3)
         );
         events.delete_events_starting_at_block(1);
-        let auction_data = events.get_auction_data(1).now_or_never().unwrap().unwrap();
+        let auction_data = events
+            .get_auction_data_for_batch(1)
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
             U256::from(1)
@@ -454,7 +462,11 @@ mod tests {
         events.handle_event_data(withdraw_request, 1, 0, H256::zero(), 0);
         events.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
 
-        let auction_data = events.get_auction_data(2).now_or_never().unwrap().unwrap();
+        let auction_data = events
+            .get_auction_data_for_batch(2)
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
             U256::from(7)
@@ -501,7 +513,11 @@ mod tests {
         events.handle_event_data(deposit_0, 0, 3, H256::zero(), 0);
         events.handle_event_data(deposit_1, 1, 0, H256::zero(), BatchId(2).as_timestamp());
 
-        let auction_data = events.get_auction_data(0).now_or_never().unwrap().unwrap();
+        let auction_data = events
+            .get_auction_data_for_batch(0)
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
             U256::from(42)

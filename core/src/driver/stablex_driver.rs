@@ -61,7 +61,10 @@ impl StableXDriverImpl {
     }
 
     async fn get_orderbook(&self, batch_to_solve: u32) -> Result<(AccountState, Vec<Order>)> {
-        let get_auction_data_result = self.orderbook_reader.get_auction_data(batch_to_solve).await;
+        let get_auction_data_result = self
+            .orderbook_reader
+            .get_auction_data_for_batch(batch_to_solve)
+            .await;
         self.metrics
             .auction_orders_fetched(batch_to_solve, &get_auction_data_result);
         get_auction_data_result
@@ -253,7 +256,7 @@ mod tests {
         let latest_solution_submit_time = Duration::from_secs(120);
 
         reader
-            .expect_get_auction_data()
+            .expect_get_auction_data_for_batch()
             .with(eq(batch))
             .return_once({
                 let result = (state.clone(), orders.clone());
@@ -296,7 +299,7 @@ mod tests {
         let economic_viability = Arc::new(MockEconomicViabilityComputing::new());
 
         reader
-            .expect_get_auction_data()
+            .expect_get_auction_data_for_batch()
             .returning(|_| async { Err(anyhow!("Error")) }.boxed());
 
         let driver = StableXDriverImpl::new(
@@ -332,7 +335,7 @@ mod tests {
         let latest_solution_submit_time = Duration::from_secs(120);
 
         reader
-            .expect_get_auction_data()
+            .expect_get_auction_data_for_batch()
             .with(eq(batch))
             .return_once({
                 let result = (state, orders);
@@ -374,7 +377,7 @@ mod tests {
         let latest_solution_submit_time = Duration::from_secs(120);
 
         reader
-            .expect_get_auction_data()
+            .expect_get_auction_data_for_batch()
             .with(eq(batch))
             .return_once(move |_| async { Ok((state, orders)) }.boxed());
 
@@ -567,7 +570,7 @@ mod tests {
         let latest_solution_submit_time = Duration::from_secs(0);
 
         reader
-            .expect_get_auction_data()
+            .expect_get_auction_data_for_batch()
             .with(eq(batch))
             .return_once(move |_| {
                 // NOTE: Wait for an epsilon to go by so that the time limit

@@ -18,7 +18,7 @@ pub trait StableXOrderBookReading: Send + Sync {
     ///
     /// # Arguments
     /// * `batch_id_to_solve` - the index for which returned orders should be valid
-    fn get_auction_data<'a>(
+    fn get_auction_data_for_batch<'a>(
         &'a self,
         batch_id_to_solve: u32,
     ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>>;
@@ -33,7 +33,7 @@ pub trait StableXOrderBookReading: Send + Sync {
     ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>>;
 
     /// Perform potential heavy initialization of the orderbook. If this fails or wasn't called
-    /// the orderbook will initialize on first use of `get_auction_data`.
+    /// the orderbook will initialize on first use of `get_auction_data_*`.
     fn initialize<'a>(&'a self) -> BoxFuture<'a, Result<()>> {
         immediate!(Ok(()))
     }
@@ -43,7 +43,7 @@ pub trait StableXOrderBookReading: Send + Sync {
 pub struct NoopOrderbook;
 
 impl StableXOrderBookReading for NoopOrderbook {
-    fn get_auction_data(&self, _: u32) -> BoxFuture<Result<(AccountState, Vec<Order>)>> {
+    fn get_auction_data_for_batch(&self, _: u32) -> BoxFuture<Result<(AccountState, Vec<Order>)>> {
         immediate!(Ok(Default::default()))
     }
 

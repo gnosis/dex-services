@@ -94,12 +94,15 @@ impl FilteredOrderbookReader {
 }
 
 impl StableXOrderBookReading for FilteredOrderbookReader {
-    fn get_auction_data(
+    fn get_auction_data_for_batch(
         &self,
         batch_id_to_solve: u32,
     ) -> BoxFuture<Result<(AccountState, Vec<Order>)>> {
         async move {
-            let auction_data = self.orderbook.get_auction_data(batch_id_to_solve).await?;
+            let auction_data = self
+                .orderbook
+                .get_auction_data_for_batch(batch_id_to_solve)
+                .await?;
             Ok(self.filter.apply(auction_data))
         }
         .boxed()
@@ -195,7 +198,7 @@ mod tests {
         mixed_user_bad_order.id = 1;
 
         let mut inner = MockStableXOrderBookReading::default();
-        inner.expect_get_auction_data().return_once({
+        inner.expect_get_auction_data_for_batch().return_once({
             let result = (
                 AccountState::default(),
                 vec![
@@ -229,7 +232,11 @@ mod tests {
 
         let reader = FilteredOrderbookReader::new(Box::new(inner), filter);
 
-        let (_, filtered_orders) = reader.get_auction_data(0).now_or_never().unwrap().unwrap();
+        let (_, filtered_orders) = reader
+            .get_auction_data_for_batch(0)
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         assert_eq!(filtered_orders, vec![mixed_user_good_order]);
     }
 
@@ -243,7 +250,7 @@ mod tests {
         let good_order = create_order_for_test();
 
         let mut inner = MockStableXOrderBookReading::default();
-        inner.expect_get_auction_data().return_once({
+        inner.expect_get_auction_data_for_batch().return_once({
             let result = (
                 AccountState::default(),
                 vec![bad_buy_token, bad_sell_token, good_order.clone()],
@@ -258,7 +265,11 @@ mod tests {
 
         let reader = FilteredOrderbookReader::new(Box::new(inner), filter);
 
-        let (_, filtered_orders) = reader.get_auction_data(0).now_or_never().unwrap().unwrap();
+        let (_, filtered_orders) = reader
+            .get_auction_data_for_batch(0)
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         assert_eq!(filtered_orders, vec![good_order]);
     }
 
@@ -268,7 +279,7 @@ mod tests {
         state.increase_balance(Address::zero(), 0, 10000);
         let mut inner = MockStableXOrderBookReading::default();
         inner
-            .expect_get_auction_data()
+            .expect_get_auction_data_for_batch()
             .return_once(move |_| async { Ok((state, vec![])) }.boxed());
 
         let filter = OrderbookFilter {
@@ -278,7 +289,11 @@ mod tests {
 
         let reader = FilteredOrderbookReader::new(Box::new(inner), filter);
 
-        let (state, filtered_orders) = reader.get_auction_data(0).now_or_never().unwrap().unwrap();
+        let (state, filtered_orders) = reader
+            .get_auction_data_for_batch(0)
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         assert_eq!(filtered_orders, vec![]);
         assert_eq!(state, AccountState::default());
     }
