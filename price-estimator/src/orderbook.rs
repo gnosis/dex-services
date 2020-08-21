@@ -115,7 +115,7 @@ impl Orderbook {
 
     async fn auction_data(&self, batch_id: BatchId) -> Result<AuctionData> {
         self.orderbook_reading
-            .get_auction_data(batch_id.into())
+            .get_auction_data_for_batch(batch_id.into())
             .await
     }
 
