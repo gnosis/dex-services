@@ -18,6 +18,8 @@ use std::convert::TryFrom;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+const BLOCK_CONFIRMATION_COUNT: u64 = 25;
+
 /// An event based orderbook that automatically updates itself with new events from the contract.
 pub struct UpdatingOrderbook {
     contract: Arc<dyn StableXContract>,
@@ -95,7 +97,10 @@ impl UpdatingOrderbook {
                 let mut context = Context {
                     orderbook: EventRegistry::default(),
                     last_handled_block: 0,
-                    block_timestamp_reader: CachedBlockTimestampReader::new(self.web3.clone()),
+                    block_timestamp_reader: CachedBlockTimestampReader::new(
+                        self.web3.clone(),
+                        BLOCK_CONFIRMATION_COUNT,
+                    ),
                 };
                 self.load_orderbook_from_file(&mut context);
                 self.update_with_events(&mut context).await?;
@@ -107,15 +112,16 @@ impl UpdatingOrderbook {
     }
 
     async fn update_with_events(&self, context: &mut Context) -> Result<()> {
-        const BLOCK_RANGE: u64 = 25;
         let current_block = self.web3.eth().block_number().compat().await?.as_u64();
-        let from_block = context.last_handled_block.saturating_sub(BLOCK_RANGE);
+        let from_block = context
+            .last_handled_block
+            .saturating_sub(BLOCK_CONFIRMATION_COUNT);
         ensure!(
             from_block <= current_block,
             format!(
                 "current block number according to node is {} which is more than {} blocks in the \
                  past compared to previous current block {}",
-                current_block, BLOCK_RANGE, from_block
+                current_block, BLOCK_CONFIRMATION_COUNT, from_block
             )
         );
         // We cannot use BlockNumber::Pending here because we are not guaranteed to get metadata for
@@ -134,7 +140,8 @@ impl UpdatingOrderbook {
                 self.block_page_size as _,
             )
             .await?;
-        self.handle_events(context, events, from_block).await?;
+        self.handle_events(context, events, from_block, current_block)
+            .await?;
         // Update the orderbook on disk before exit.
         if let Some(filestore) = &self.filestore {
             if let Err(write_error) = context.orderbook.write_to_file(filestore) {
@@ -150,6 +157,7 @@ impl UpdatingOrderbook {
         context: &mut Context,
         events: Vec<Event<batch_exchange::Event>>,
         delete_events_starting_at_block: u64,
+        latest_block: u64,
     ) -> Result<()> {
         log::info!("Received {} events.", events.len());
         let block_hashes = events
@@ -164,7 +172,7 @@ impl UpdatingOrderbook {
             .collect::<Result<HashSet<H256>>>()?;
         context
             .block_timestamp_reader
-            .prepare_cache(block_hashes, self.block_page_size)
+            .prepare_cache(block_hashes, self.block_page_size, latest_block)
             .await?;
         context
             .orderbook
@@ -189,7 +197,7 @@ impl UpdatingOrderbook {
             } => {
                 let block_timestamp = context
                     .block_timestamp_reader
-                    .block_timestamp(meta.block_hash)
+                    .block_timestamp(meta.block_hash.into())
                     .await?;
                 context.orderbook.handle_event_data(
                     data,
