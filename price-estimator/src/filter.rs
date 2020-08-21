@@ -312,7 +312,9 @@ async fn estimate_best_ask_price(
         .pricegraph(query.time, PricegraphKind::WithRoundingBuffer)
         .await
         .map_err(RejectionReason::InternalError)?
-        .estimate_limit_price(token_pair, 0.0);
+        .estimate_limit_price(token_pair, 0.0)
+        // The price above is in base, but we need to return it in quote.
+        .map(|p| 1.0 / p);
 
     let result = PriceEstimateResult(price);
     let result = match query.unit {
