@@ -9,8 +9,8 @@ dist: bionic
 language: rust
 env:
   global:
-    - OPEN_SOLVER_VERSION=v0.0.11
-    - PRIVATE_SOLVER_VERSION=v0.8.3
+    - OPEN_SOLVER_VERSION=v0.0.12
+    - PRIVATE_SOLVER_VERSION=v0.8.4
 
 jobs:
   fast_finish: true
