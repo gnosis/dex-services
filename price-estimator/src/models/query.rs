@@ -1,7 +1,8 @@
 //! Module implementing parsing request query parameters.
 
-use anyhow::{bail, Error, Result};
+use anyhow::{bail, Context as _, Error, Result};
 use core::models::BatchId;
+use ethcontract::Address;
 use serde::Deserialize;
 use std::convert::TryFrom;
 
@@ -16,6 +17,8 @@ pub struct QueryParameters {
     pub hops: Option<usize>,
     /// The time to load the orderbook at to perform estimations.
     pub time: EstimationTime,
+    /// Addresses whose orders should be ignored.
+    pub ignore_addresses: Vec<Address>,
 }
 
 /// Units for token amounts.
@@ -59,6 +62,8 @@ struct RawQuery {
     batch_id: Option<BatchId>,
     block_number: Option<u64>,
     timestamp: Option<u64>,
+    // String instead of Vec<Address> because the urlencoded standard does not support lists.
+    ignore_addresses: Option<String>,
 }
 
 impl TryFrom<RawQuery> for QueryParameters {
@@ -81,8 +86,24 @@ impl TryFrom<RawQuery> for QueryParameters {
                 (None, None, Some(timestamp)) => EstimationTime::Timestamp(timestamp),
                 _ => bail!("only one of 'batchId', 'blockNumber', or 'timestamp' parameters can be specified"),
             },
+            ignore_addresses: raw.ignore_addresses.as_deref().map(parse_addresses).transpose()?.unwrap_or_default()
         })
     }
+}
+
+fn parse_addresses(string: &str) -> Result<Vec<Address>> {
+    string.split(',').map(parse_address).collect()
+}
+
+fn parse_address(string: &str) -> Result<Address> {
+    let string = if string.starts_with("0x") {
+        &string[2..]
+    } else {
+        &string[..]
+    };
+    string
+        .parse()
+        .with_context(|| format!("failed to parse address: {}", string))
 }
 
 #[cfg(test)]
@@ -105,6 +126,7 @@ mod tests {
         assert_eq!(query.unit, Unit::BaseUnits);
         assert_eq!(query.hops, None);
         assert_eq!(query.time, EstimationTime::Now);
+        assert_eq!(query.ignore_addresses, Vec::new());
     }
 
     #[test]
@@ -113,6 +135,30 @@ mod tests {
         assert_eq!(query.unit, Unit::Atoms);
         assert_eq!(query.hops, Some(42));
         assert_eq!(query.time, EstimationTime::Batch(1337.into()));
+    }
+
+    #[test]
+    fn address() {
+        let query = query_params(
+            "?ignoreAddresses=\
+            0000000000000000000000000000000000000000,\
+            0000000000000000000000000000000000000001,\
+            000000000000000000000000000000000000000a,\
+            000000000000000000000000000000000000000A,\
+            0x0000000000000000000000000000000000000002\
+            ",
+        )
+        .unwrap();
+        assert_eq!(
+            query.ignore_addresses,
+            vec![
+                Address::from_low_u64_be(0),
+                Address::from_low_u64_be(1),
+                Address::from_low_u64_be(10),
+                Address::from_low_u64_be(10),
+                Address::from_low_u64_be(2),
+            ]
+        );
     }
 
     #[test]

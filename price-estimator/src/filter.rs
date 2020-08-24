@@ -168,7 +168,7 @@ async fn get_markets(
     // This route intentionally uses the raw pricegraph without rounding buffer so that orders are
     // unmodified.
     let transitive_orderbook = orderbook
-        .pricegraph(query.time, PricegraphKind::Raw)
+        .pricegraph(query.time, &query.ignore_addresses, PricegraphKind::Raw)
         .await
         .map_err(RejectionReason::InternalError)?
         .transitive_orderbook(market, None);
@@ -205,7 +205,11 @@ async fn estimate_buy_amount(
     };
     let rounding_buffer = orderbook.rounding_buffer(token_pair).await;
     let pricegraph = orderbook
-        .pricegraph(query.time, PricegraphKind::WithRoundingBuffer)
+        .pricegraph(
+            query.time,
+            &query.ignore_addresses,
+            PricegraphKind::WithRoundingBuffer,
+        )
         .await
         .map_err(RejectionReason::InternalError)?;
     // This reduced sell amount is what the solver would see after applying the rounding buffer.
@@ -239,7 +243,11 @@ async fn estimate_amounts_at_price(
 ) -> Result<impl Reply, Rejection> {
     let token_pair = get_market(pair, &*token_infos).await?.bid_pair();
     let pricegraph = orderbook
-        .pricegraph(query.time, PricegraphKind::WithRoundingBuffer)
+        .pricegraph(
+            query.time,
+            &query.ignore_addresses,
+            PricegraphKind::WithRoundingBuffer,
+        )
         .await
         .map_err(RejectionReason::InternalError)?;
     let rounding_buffer = orderbook.rounding_buffer(token_pair).await;
@@ -309,10 +317,16 @@ async fn estimate_best_ask_price(
     let market = get_market(pair, &*token_infos).await?;
     let token_pair = market.bid_pair();
     let price = orderbook
-        .pricegraph(query.time, PricegraphKind::WithRoundingBuffer)
+        .pricegraph(
+            query.time,
+            &query.ignore_addresses,
+            PricegraphKind::WithRoundingBuffer,
+        )
         .await
         .map_err(RejectionReason::InternalError)?
-        .estimate_limit_price(token_pair, 0.0);
+        .estimate_limit_price(token_pair, 0.0)
+        // The price above is in base, but we need to return it in quote.
+        .map(|p| 1.0 / p);
 
     let result = PriceEstimateResult(price);
     let result = match query.unit {

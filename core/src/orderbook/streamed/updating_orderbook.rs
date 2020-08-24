@@ -26,8 +26,8 @@ pub struct UpdatingOrderbook {
     web3: Web3,
     block_page_size: usize,
     /// We need a mutex because otherwise the struct wouldn't be Sync which is needed because we use
-    /// the orderbook in multiple threads. The mutex is locked in `get_auction_data` while the
-    /// orderbook is updated with new events.
+    /// the orderbook in multiple threads. The mutex is locked in `get_auction_data_for_batch` while
+    /// the orderbook is updated with new events.
     /// None means that we have not yet been initialized.
     context: Mutex<Option<Context>>,
     /// File path where orderbook is written to disk.
@@ -42,7 +42,7 @@ struct Context {
 
 impl UpdatingOrderbook {
     /// Does not block on initializing the orderbook. This will happen in the first call to
-    /// `get_auction_data` which can thus take a long time to complete.
+    /// `get_auction_data_*` which can thus take a long time to complete.
     pub fn new(
         contract: Arc<dyn StableXContract>,
         web3: Web3,
@@ -215,14 +215,27 @@ impl UpdatingOrderbook {
 
 impl StableXOrderBookReading for UpdatingOrderbook {
     /// Blocks on updating the orderbook. This can be expensive if `initialize` hasn't been called before.
-    fn get_auction_data<'a>(
-        &'a self,
+    fn get_auction_data_for_batch(
+        &self,
         batch_id_to_solve: u32,
-    ) -> BoxFuture<'a, Result<(AccountState, Vec<Order>)>> {
-        self.do_with_context(move |context| context.orderbook.get_auction_data(batch_id_to_solve))
+    ) -> BoxFuture<Result<(AccountState, Vec<Order>)>> {
+        self.do_with_context(move |context| {
+            context
+                .orderbook
+                .get_auction_data_for_batch(batch_id_to_solve)
+        })
+        .boxed()
+    }
+
+    fn get_auction_data_for_block(
+        &self,
+        block: BlockNumber,
+    ) -> BoxFuture<Result<(AccountState, Vec<Order>)>> {
+        self.do_with_context(move |context| context.orderbook.get_auction_data_for_block(block))
             .boxed()
     }
-    fn initialize<'a>(&'a self) -> BoxFuture<'a, Result<()>> {
-        self.do_with_context(|_| async { Ok(()) }.boxed()).boxed()
+
+    fn initialize(&self) -> BoxFuture<Result<()>> {
+        self.do_with_context(|_| immediate!(Ok(()))).boxed()
     }
 }

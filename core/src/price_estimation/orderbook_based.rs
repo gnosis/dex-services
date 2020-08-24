@@ -26,8 +26,10 @@ impl PriceSource for PricegraphEstimator {
     ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
         async move {
             let batch = BatchId::currently_being_solved(SystemTime::now())?;
-            let (account_state, orders) =
-                self.orderbook_reader.get_auction_data(batch.into()).await?;
+            let (account_state, orders) = self
+                .orderbook_reader
+                .get_auction_data_for_batch(batch.into())
+                .await?;
             let pricegraph = Pricegraph::new(orders.iter().map(|order| {
                 order.to_element(account_state.read_balance(order.sell_token, order.account_id))
             }));

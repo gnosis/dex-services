@@ -6,6 +6,7 @@ use core::{
     models::{AccountState, BatchId, Order, TokenId},
     orderbook::StableXOrderBookReading,
 };
+use ethcontract::Address;
 use futures::future;
 use pricegraph::{Pricegraph, TokenPair};
 use tokio::sync::RwLock;
@@ -52,20 +53,27 @@ impl Orderbook {
     pub async fn pricegraph(
         &self,
         time: EstimationTime,
+        ignore_addresses: &[Address],
         pricegraph_type: PricegraphKind,
     ) -> Result<Pricegraph> {
-        match time {
-            EstimationTime::Now => Ok(self.cached_pricegraph(pricegraph_type).await),
-            EstimationTime::Batch(batch_id) => {
-                let mut auction_data = self.auction_data(batch_id).await?;
-                if matches!(pricegraph_type, PricegraphKind::WithRoundingBuffer) {
-                    self.apply_rounding_buffer_to_auction_data(&mut auction_data)
-                        .await?;
-                }
-                Ok(pricegraph_from_auction_data(&auction_data))
+        let mut auction_data = match (time, ignore_addresses.is_empty()) {
+            (EstimationTime::Now, true) => {
+                return Ok(self.cached_pricegraph(pricegraph_type).await)
             }
-            EstimationTime::Block(_) | EstimationTime::Timestamp(_) => bail!("not yet implemented"),
+            (EstimationTime::Now, false) => self.auction_data(BatchId::now()).await?,
+            (EstimationTime::Batch(batch_id), _) => self.auction_data(batch_id).await?,
+            (EstimationTime::Block(_), _) | (EstimationTime::Timestamp(_), _) => {
+                bail!("not yet implemented")
+            }
+        };
+        if matches!(pricegraph_type, PricegraphKind::WithRoundingBuffer) {
+            self.apply_rounding_buffer_to_auction_data(&mut auction_data)
+                .await?;
         }
+        Ok(pricegraph_from_auction_data(
+            &auction_data,
+            ignore_addresses,
+        ))
     }
 
     /// Recreate the pricegraph orderbook and update the infallible price source.
@@ -73,13 +81,13 @@ impl Orderbook {
         let mut auction_data = self.auction_data(BatchId::now()).await?;
 
         // TODO: Move this cpu heavy computation out of the async function using spawn_blocking.
-        let pricegraph = pricegraph_from_auction_data(&auction_data);
+        let pricegraph = pricegraph_from_auction_data(&auction_data, &[]);
         self.update_infallible_price_source(&pricegraph).await;
         self.pricegraph_cache.write().await.pricegraph_raw = pricegraph;
 
         self.apply_rounding_buffer_to_auction_data(&mut auction_data)
             .await?;
-        let pricegraph = pricegraph_from_auction_data(&auction_data);
+        let pricegraph = pricegraph_from_auction_data(&auction_data, &[]);
         self.pricegraph_cache
             .write()
             .await
@@ -115,7 +123,7 @@ impl Orderbook {
 
     async fn auction_data(&self, batch_id: BatchId) -> Result<AuctionData> {
         self.orderbook_reading
-            .get_auction_data(batch_id.into())
+            .get_auction_data_for_batch(batch_id.into())
             .await
     }
 
@@ -146,11 +154,15 @@ impl Orderbook {
 
 type AuctionData = (AccountState, Vec<Order>);
 
-fn pricegraph_from_auction_data(auction_data: &AuctionData) -> Pricegraph {
+fn pricegraph_from_auction_data(
+    auction_data: &AuctionData,
+    ignore_addresses: &[Address],
+) -> Pricegraph {
     Pricegraph::new(
         auction_data
             .1
             .iter()
+            .filter(|order| !ignore_addresses.contains(&order.account_id))
             .map(|order| order.to_element_with_accounts(&auction_data.0)),
     )
 }
@@ -197,5 +209,33 @@ mod tests {
         let after_update_price = price();
         assert!(before_update_price != after_update_price);
         assert_eq!(after_update_price.get(), 3);
+    }
+
+    #[test]
+    fn uses_ignored_addresses() {
+        let mut account_state = AccountState::default();
+        let mut create_order = |address| {
+            let amount = 10u128.pow(18);
+            account_state.0.insert((address, 0), amount.into());
+            Order {
+                id: 0,
+                account_id: address,
+                buy_token: 1,
+                sell_token: 0,
+                numerator: amount,
+                denominator: amount,
+                remaining_sell_amount: amount,
+                valid_from: 0,
+                valid_until: 0,
+            }
+        };
+        let orders = vec![
+            create_order(Address::from_low_u64_be(0)),
+            create_order(Address::from_low_u64_be(1)),
+            create_order(Address::from_low_u64_be(2)),
+        ];
+        let pricegraph =
+            pricegraph_from_auction_data(&(account_state, orders), &[Address::from_low_u64_be(1)]);
+        assert_eq!(pricegraph.full_orderbook().num_orders(), 2);
     }
 }
