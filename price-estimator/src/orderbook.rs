@@ -130,7 +130,6 @@ impl Orderbook {
                     .await
             }
             EstimationTime::Block(block_number) => {
-                log::error!("foo");
                 self.orderbook_reading
                     .get_auction_data_for_block(block_number)
                     .await
