@@ -31,6 +31,7 @@ paths:
           example: 1
         - $ref: "#/components/parameters/Unit"
         - $ref: "#/components/parameters/BatchId"
+        - $ref: "#/components/parameters/IgnoreAddresses"
   /api/v1/markets/{market}/estimated-amounts-at-price/{price}:
     get:
       summary: Estimated Amounts At Price
@@ -52,6 +53,7 @@ paths:
           example: 400
         - $ref: "#/components/parameters/Unit"
         - $ref: "#/components/parameters/BatchId"
+        - $ref: "#/components/parameters/IgnoreAddresses"
   /api/v1/markets/{market}/estimated-best-ask-price:
     get:
       summary: Estimated Best Ask Price
@@ -69,6 +71,7 @@ paths:
         - $ref: "#/components/parameters/Market"
         - $ref: "#/components/parameters/Unit"
         - $ref: "#/components/parameters/BatchId"
+        - $ref: "#/components/parameters/IgnoreAddresses"
   /api/v1/markets/{market}:
     get:
       summary: Market
@@ -84,6 +87,7 @@ paths:
         - $ref: "#/components/parameters/Market"
         - $ref: "#/components/parameters/Unit"
         - $ref: "#/components/parameters/BatchId"
+        - $ref: "#/components/parameters/IgnoreAddresses"
 components:
   schemas:
     NumberParameter:
@@ -93,6 +97,9 @@ components:
       enum: [baseunits, atoms]
       default: baseunits
       example: baseunits
+    IgnoreAddressesParameter:
+      type: string
+      default: ""
     AmountResponse:
       type: object
       properties:
@@ -157,3 +164,17 @@ components:
       required: false
       schema:
         type: integer
+    IgnoreAddresses:
+      name: ignoreAddresses
+      in: query
+      description: Comma separated list of addresses in hex notation whose orders should be ignored. Capitalization of letters does not matter. No space after the commas.
+      required: false
+      schema:
+        $ref: "#/components/schemas/IgnoreAddressesParameter"
+      examples:
+        empty:
+          summary: Empty
+          value: ""
+        list:
+          summary: Two Addresses
+          value: 0x00000000000000000000000000000000000000a0,0x00000000000000000000000000000000000000A1
