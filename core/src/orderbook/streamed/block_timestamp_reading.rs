@@ -144,10 +144,12 @@ impl<T> CachedBlockTimestampReader<T> {
     }
 
     fn is_cacheable(&self, block: BlockCacheId) -> bool {
-        let confirmed_block = self.latest_block.saturating_sub(self.confirmation_count);
         match block {
             BlockCacheId::Hash(_) => true,
-            BlockCacheId::Number(block_number) => block_number <= confirmed_block,
+            BlockCacheId::Number(block_number) => {
+                let confirmed_block = self.latest_block.saturating_sub(self.confirmation_count);
+                block_number <= confirmed_block
+            }
         }
     }
 
