@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     contracts::{stablex_contract::StableXContract, Web3},
     history::events::EventRegistry,
-    models::{AccountState, Order},
+    models::{AccountState, BatchId, Order},
     orderbook::StableXOrderBookReading,
 };
 use anyhow::{anyhow, bail, ensure, Result};
@@ -231,8 +231,23 @@ impl StableXOrderBookReading for UpdatingOrderbook {
         &self,
         block: BlockNumber,
     ) -> BoxFuture<Result<(AccountState, Vec<Order>)>> {
-        self.do_with_context(move |context| context.orderbook.get_auction_data_for_block(block))
+        self.do_with_context(move |context| {
+            async move {
+                // NOTE: Get the exact timestamp for the block, this will give more
+                // accurate results as to what batch the orderbook is retrieved for.
+                let timestamp = context
+                    .block_timestamp_reader
+                    .block_timestamp(block.into())
+                    .await?;
+                let batch = BatchId::from_timestamp(timestamp);
+
+                context
+                    .orderbook
+                    .auction_state_for_batch_at_block(batch, block)
+            }
             .boxed()
+        })
+        .boxed()
     }
 
     fn initialize(&self) -> BoxFuture<Result<()>> {

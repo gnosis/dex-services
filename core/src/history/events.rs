@@ -161,8 +161,13 @@ impl EventRegistry {
     pub fn auction_state_for_batch_at_block(
         &self,
         batch_id: impl Into<BatchId>,
-        block_number: u64,
+        block: impl Into<BlockNumber>,
     ) -> Result<(AccountState, Vec<Order>)> {
+        let block_number = match block.into() {
+            BlockNumber::Earliest => 0,
+            BlockNumber::Latest | BlockNumber::Pending => u64::MAX,
+            BlockNumber::Number(block_number) => block_number.as_u64(),
+        };
         auction_state_for_batch_from_events(
             batch_id,
             self.events
@@ -236,24 +241,20 @@ impl StableXOrderBookReading for EventRegistry {
         &self,
         block: BlockNumber,
     ) -> BoxFuture<Result<(AccountState, Vec<Order>)>> {
-        let (batch_id, block_number) = match block {
-            BlockNumber::Earliest => (BatchId(0), 0),
-            BlockNumber::Latest | BlockNumber::Pending => (BatchId::now(), u64::MAX),
+        let batch_id = match block {
+            BlockNumber::Earliest => BatchId(0),
+            BlockNumber::Latest | BlockNumber::Pending => BatchId::now(),
             // NOTE: Approximate the timestamp of the block by finding the batch
             // ID of the last event before the specified block.
-            BlockNumber::Number(block_number) => {
-                let block_number = block_number.as_u64();
-                let batch_id = self
-                    .events
-                    .range(bounds_until_end_of_block(block_number))
-                    .rev()
-                    .next()
-                    .map(|(_, Value { batch_id, .. })| *batch_id)
-                    .unwrap_or(BatchId(0));
-                (batch_id, block_number)
-            }
+            BlockNumber::Number(block_number) => self
+                .events
+                .range(bounds_until_end_of_block(block_number.as_u64()))
+                .rev()
+                .next()
+                .map(|(_, Value { batch_id, .. })| *batch_id)
+                .unwrap_or(BatchId(0)),
         };
-        immediate!(self.auction_state_for_batch_at_block(batch_id, block_number))
+        immediate!(self.auction_state_for_batch_at_block(batch_id, block))
     }
 }
 
