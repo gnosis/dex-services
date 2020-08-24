@@ -32,6 +32,7 @@ paths:
         - $ref: "#/components/parameters/Unit"
         - $ref: "#/components/parameters/BatchId"
         - $ref: "#/components/parameters/IgnoreAddresses"
+        - $ref: "#/components/parameters/BlockNumber"
   /api/v1/markets/{market}/estimated-amounts-at-price/{price}:
     get:
       summary: Estimated Amounts At Price
@@ -54,6 +55,7 @@ paths:
         - $ref: "#/components/parameters/Unit"
         - $ref: "#/components/parameters/BatchId"
         - $ref: "#/components/parameters/IgnoreAddresses"
+        - $ref: "#/components/parameters/BlockNumber"
   /api/v1/markets/{market}/estimated-best-ask-price:
     get:
       summary: Estimated Best Ask Price
@@ -72,6 +74,7 @@ paths:
         - $ref: "#/components/parameters/Unit"
         - $ref: "#/components/parameters/BatchId"
         - $ref: "#/components/parameters/IgnoreAddresses"
+        - $ref: "#/components/parameters/BlockNumber"
   /api/v1/markets/{market}:
     get:
       summary: Market
@@ -88,6 +91,7 @@ paths:
         - $ref: "#/components/parameters/Unit"
         - $ref: "#/components/parameters/BatchId"
         - $ref: "#/components/parameters/IgnoreAddresses"
+        - $ref: "#/components/parameters/BlockNumber"
 components:
   schemas:
     NumberParameter:
@@ -186,3 +190,10 @@ components:
         list:
           summary: Two Addresses
           value: 0x00000000000000000000000000000000000000a0,0x00000000000000000000000000000000000000A1
+    BlockNumber:
+      name: blockNumber
+      in: query
+      description: The block number to compute the estimate for. This will use th open orderbook at that block (i.e. orders that will be considered for solving the current batch at the block number). This parameter cannot be specified together with the "batchId" query parameter.
+      required: false
+      schema:
+        type: integer

@@ -56,7 +56,7 @@ impl Orderbook {
         ignore_addresses: &[Address],
         pricegraph_type: PricegraphKind,
     ) -> Result<Pricegraph> {
-        if ignore_addresses.is_empty() {
+        if time == EstimationTime::Now && ignore_addresses.is_empty() {
             Ok(self.cached_pricegraph(pricegraph_type).await)
         } else {
             let mut auction_data = self.auction_data(time).await?;
@@ -130,6 +130,7 @@ impl Orderbook {
                     .await
             }
             EstimationTime::Block(block_number) => {
+                log::error!("foo");
                 self.orderbook_reading
                     .get_auction_data_for_block(block_number)
                     .await
