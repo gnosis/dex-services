@@ -210,4 +210,32 @@ mod tests {
         assert!(before_update_price != after_update_price);
         assert_eq!(after_update_price.get(), 3);
     }
+
+    #[test]
+    fn uses_ignored_addresses() {
+        let mut account_state = AccountState::default();
+        let mut create_order = |address| {
+            let amount = 10u128.pow(18);
+            account_state.0.insert((address, 0), amount.into());
+            Order {
+                id: 0,
+                account_id: address,
+                buy_token: 1,
+                sell_token: 0,
+                numerator: amount,
+                denominator: amount,
+                remaining_sell_amount: amount,
+                valid_from: 0,
+                valid_until: 0,
+            }
+        };
+        let orders = vec![
+            create_order(Address::from_low_u64_be(0)),
+            create_order(Address::from_low_u64_be(1)),
+            create_order(Address::from_low_u64_be(2)),
+        ];
+        let pricegraph =
+            pricegraph_from_auction_data(&(account_state, orders), &[Address::from_low_u64_be(1)]);
+        assert_eq!(pricegraph.full_orderbook().num_orders(), 2);
+    }
 }

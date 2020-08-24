@@ -101,7 +101,9 @@ fn parse_address(string: &str) -> Result<Address> {
     } else {
         &string[..]
     };
-    string.parse().context("failed to parse address")
+    string
+        .parse()
+        .with_context(|| format!("failed to parse address: {}", string))
 }
 
 #[cfg(test)]
