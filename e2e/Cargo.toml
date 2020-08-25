@@ -12,5 +12,5 @@ ethcontract = "0.7.2"
 futures = { version = "0.3.5", features = ["compat"] }
 pbr = "1.0.3"
 pricegraph = { path = "../pricegraph" }
-rayon = "1.3"
+rayon = "1.4"
 structopt = "0.3.16"
