@@ -8,7 +8,11 @@ impl TokenInfoFetching for StableXContractImpl {
     fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
         async move {
             let (address, alias, decimals) = self.get_token_info(id.into()).await?;
-            Ok(TokenBaseInfo { address, alias, decimals })
+            Ok(TokenBaseInfo {
+                address,
+                alias,
+                decimals,
+            })
         }
         .boxed()
     }
