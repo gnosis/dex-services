@@ -149,17 +149,20 @@ fn find_asset_pair<'a>(
 mod tests {
     use super::api::{MockKrakenApi, TickerInfo};
     use super::*;
-    use crate::token_info::hardcoded::{TokenData, TokenInfoOverride};
-    use crate::util::FutureWaitExt as _;
-    use std::collections::HashSet;
-    use std::time::Instant;
+    use crate::{
+        token_info::hardcoded::{TokenData, TokenInfoOverride},
+        util::FutureWaitExt as _,
+    };
+    use ethcontract::Address;
+    use std::{collections::HashSet, time::Instant};
 
     #[test]
     fn get_token_prices() {
+        let address = Address::from_low_u64_be(0);
         let tokens = hash_map! {
-            TokenId(1) => TokenInfoOverride::new("ETH", 18, None),
-            TokenId(4) => TokenInfoOverride::new("USDC", 6, None),
-            TokenId(5) => TokenInfoOverride::new("PAX", 18, None),
+            TokenId(1) => TokenInfoOverride::new(address, "ETH", 18, None),
+            TokenId(4) => TokenInfoOverride::new(address, "USDC", 6, None),
+            TokenId(5) => TokenInfoOverride::new(address, "PAX", 18, None),
         };
 
         let mut api = MockKrakenApi::new();
@@ -224,17 +227,18 @@ mod tests {
         // cargo test online_kraken_prices -- --ignored --nocapture
         // ```
 
+        let address = Address::from_low_u64_be(0);
         let tokens = hash_map! {
-            TokenId(1) => TokenInfoOverride::new("WETH", 18, None),
-            TokenId(2) => TokenInfoOverride::new("USDT", 6, None),
-            TokenId(3) => TokenInfoOverride::new("TUSD", 18, None),
-            TokenId(4) => TokenInfoOverride::new("USDC", 6, None),
-            TokenId(5) => TokenInfoOverride::new("PAX", 18, None),
-            TokenId(6) => TokenInfoOverride::new("GUSD", 2, None),
-            TokenId(7) => TokenInfoOverride::new("DAI", 18, None),
-            TokenId(8) => TokenInfoOverride::new("sETH", 18, None),
-            TokenId(9) => TokenInfoOverride::new("sUSD", 18, None),
-            TokenId(15) => TokenInfoOverride::new("SNX", 18, None),
+            TokenId(1) => TokenInfoOverride::new(address, "WETH", 18, None),
+            TokenId(2) => TokenInfoOverride::new(address, "USDT", 6, None),
+            TokenId(3) => TokenInfoOverride::new(address, "TUSD", 18, None),
+            TokenId(4) => TokenInfoOverride::new(address, "USDC", 6, None),
+            TokenId(5) => TokenInfoOverride::new(address, "PAX", 18, None),
+            TokenId(6) => TokenInfoOverride::new(address, "GUSD", 2, None),
+            TokenId(7) => TokenInfoOverride::new(address, "DAI", 18, None),
+            TokenId(8) => TokenInfoOverride::new(address, "sETH", 18, None),
+            TokenId(9) => TokenInfoOverride::new(address, "sUSD", 18, None),
+            TokenId(15) => TokenInfoOverride::new(address, "SNX", 18, None),
         };
         let token_ids: Vec<TokenId> = tokens.keys().copied().collect();
 

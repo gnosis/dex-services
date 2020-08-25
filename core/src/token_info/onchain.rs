@@ -7,8 +7,8 @@ use crate::contracts::stablex_contract::StableXContractImpl;
 impl TokenInfoFetching for StableXContractImpl {
     fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
         async move {
-            let (_, alias, decimals) = self.get_token_info(id.into()).await?;
-            Ok(TokenBaseInfo { alias, decimals })
+            let (address, alias, decimals) = self.get_token_info(id.into()).await?;
+            Ok(TokenBaseInfo { address, alias, decimals })
         }
         .boxed()
     }

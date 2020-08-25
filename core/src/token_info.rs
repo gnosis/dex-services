@@ -1,5 +1,6 @@
 use crate::models::TokenId;
 use anyhow::Result;
+use ethcontract::Address;
 use futures::future::{BoxFuture, FutureExt as _};
 use lazy_static::lazy_static;
 use std::{borrow::Borrow, collections::HashMap, num::NonZeroU128};
@@ -110,6 +111,7 @@ pub use mock::MockTokenInfoFetching_ as MockTokenInfoFetching;
 #[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Clone, Debug)]
 pub struct TokenBaseInfo {
+    pub address: Address,
     pub alias: String,
     pub decimals: u8,
 }
@@ -117,8 +119,9 @@ pub struct TokenBaseInfo {
 impl TokenBaseInfo {
     /// Create new token information from its parameters.
     #[cfg(test)]
-    pub fn new(alias: impl Into<String>, decimals: u8) -> Self {
+    pub fn new(address: Address, alias: impl Into<String>, decimals: u8) -> Self {
         TokenBaseInfo {
+            address,
             alias: alias.into(),
             decimals,
         }
@@ -166,11 +169,12 @@ mod tests {
 
     #[test]
     fn token_get_price() {
+        let address = Address::from_low_u64_be(0);
         for (token, usd_price, expected) in &[
-            (TokenBaseInfo::new("USDC", 6), 0.99, 0.99e30),
-            (TokenBaseInfo::new("DAI", 18), 1.01, 1.01e18),
-            (TokenBaseInfo::new("FAKE", 32), 1.0, 1e4),
-            (TokenBaseInfo::new("SCAM", 42), 1e10, 1e4),
+            (TokenBaseInfo::new(address, "USDC", 6), 0.99, 0.99e30),
+            (TokenBaseInfo::new(address, "DAI", 18), 1.01, 1.01e18),
+            (TokenBaseInfo::new(address, "FAKE", 32), 1.0, 1e4),
+            (TokenBaseInfo::new(address, "SCAM", 42), 1e10, 1e4),
         ] {
             let owl_price = token.get_owl_price(*usd_price);
             assert_eq!(owl_price, *expected as u128);
@@ -180,22 +184,41 @@ mod tests {
     #[test]
     fn token_get_price_without_rounding_error() {
         assert_eq!(
-            TokenBaseInfo::new("OWL", 18).get_owl_price(1.0),
+            TokenBaseInfo::new(Address::from_low_u64_be(0), "OWL", 18).get_owl_price(1.0),
             1_000_000_000_000_000_000,
         );
     }
 
     #[test]
     fn weth_token_symbol_is_eth() {
-        assert_eq!(TokenBaseInfo::new("WETH", 18).symbol(), "ETH");
+        assert_eq!(
+            TokenBaseInfo::new(Address::from_low_u64_be(0), "WETH", 18).symbol(),
+            "ETH"
+        );
     }
 
     #[test]
     #[allow(clippy::float_cmp)]
     fn base_unit_in_atoms() {
-        assert_eq!(TokenBaseInfo::new("", 0).base_unit_in_atoms().get(), 1);
-        assert_eq!(TokenBaseInfo::new("", 1).base_unit_in_atoms().get(), 10);
-        assert_eq!(TokenBaseInfo::new("", 2).base_unit_in_atoms().get(), 100);
+        let address = Address::from_low_u64_be(0);
+        assert_eq!(
+            TokenBaseInfo::new(address, "", 0)
+                .base_unit_in_atoms()
+                .get(),
+            1
+        );
+        assert_eq!(
+            TokenBaseInfo::new(address, "", 1)
+                .base_unit_in_atoms()
+                .get(),
+            10
+        );
+        assert_eq!(
+            TokenBaseInfo::new(address, "", 2)
+                .base_unit_in_atoms()
+                .get(),
+            100
+        );
     }
 
     #[test]
@@ -206,6 +229,7 @@ mod tests {
             fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
                 immediate!(match id.0 {
                     0 | 1 => Ok(TokenBaseInfo {
+                        address: Address::from_low_u64_be(0),
                         alias: id.0.to_string(),
                         decimals: 1
                     }),
@@ -230,6 +254,7 @@ mod tests {
     #[test]
     fn search_prefers_symbol_of_lower_token_ids() {
         let owl = TokenBaseInfo {
+            address: Address::from_low_u64_be(0),
             alias: "OWL".to_owned(),
             decimals: 18,
         };

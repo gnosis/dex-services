@@ -221,6 +221,7 @@ mod tests {
     use super::super::MockTokenInfoFetching;
     use super::*;
     use anyhow::anyhow;
+    use ethcontract::Address;
     use mockall::predicate::eq;
 
     fn revert_error() -> Error {
@@ -237,6 +238,7 @@ mod tests {
 
         inner.expect_get_token_info().times(1).returning(|_| {
             immediate!(Ok(TokenBaseInfo {
+                address: Address::from_low_u64_be(0),
                 alias: "Foo".to_owned(),
                 decimals: 18,
             }))
@@ -326,6 +328,7 @@ mod tests {
     fn can_be_seeded_with_a_cache() {
         let inner = MockTokenInfoFetching::new();
         let hardcoded = TokenBaseInfo {
+            address: Address::from_low_u64_be(0),
             alias: "Foo".to_owned(),
             decimals: 42,
         };
@@ -360,6 +363,7 @@ mod tests {
                 immediate!(Err(anyhow!("")))
             } else {
                 immediate!(Ok(TokenBaseInfo {
+                    address: Address::from_low_u64_be(0),
                     alias: String::new(),
                     decimals: token_id.0 as u8,
                 }))
@@ -388,6 +392,7 @@ mod tests {
             .times(4)
             .returning(|token_id| {
                 immediate!(Ok(TokenBaseInfo {
+                    address: Address::from_low_u64_be(0),
                     alias: token_id.to_string(),
                     decimals: 1
                 }))
@@ -417,6 +422,7 @@ mod tests {
     #[test]
     fn find_token_by_symbol_doesnt_query_if_in_cache() {
         let owl = TokenBaseInfo {
+            address: Address::from_low_u64_be(0),
             alias: "OWL".to_owned(),
             decimals: 18,
         };
@@ -442,6 +448,7 @@ mod tests {
     #[test]
     fn find_token_by_symbol_updates_cache_for_missing_symbol() {
         let owl = TokenBaseInfo {
+            address: Address::from_low_u64_be(0),
             alias: "OWL".to_owned(),
             decimals: 18,
         };
@@ -479,6 +486,7 @@ mod tests {
             (
                 TokenId(id),
                 TokenBaseInfo {
+                    address: Address::from_low_u64_be(0),
                     alias: "OWL".to_owned(),
                     decimals: 18,
                 },
@@ -500,6 +508,7 @@ mod tests {
     #[test]
     fn fetches_tokens_with_lower_ids_when_searching_for_symbol() {
         let owl = TokenBaseInfo {
+            address: Address::from_low_u64_be(0),
             alias: "OWL".to_owned(),
             decimals: 18,
         };
