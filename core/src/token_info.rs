@@ -51,6 +51,22 @@ pub trait TokenInfoFetching: Send + Sync {
         }
         .boxed()
     }
+
+    /// Retrieves a token by address.
+    ///
+    /// Default implementation queries token info for all IDs and searches the
+    /// resulting token for the specified address.
+    fn find_token_by_address(
+        &self,
+        address: Address,
+    ) -> BoxFuture<Result<Option<(TokenId, TokenBaseInfo)>>> {
+        async move {
+            let infos = self.get_token_infos(&self.all_ids().await?).await?;
+            let info = infos.into_iter().find(|(_, info)| info.address == address);
+            Ok(info)
+        }
+        .boxed()
+    }
 }
 
 fn search_for_token_by_symbol<T>(
@@ -269,5 +285,27 @@ mod tests {
         )
         .unwrap();
         assert_eq!((id, info), (TokenId(0), owl));
+    }
+
+    #[test]
+    fn find_token_info_by_address_finds_result() {
+        let mut info = MockTokenInfoFetching::new();
+        info.expect_all_ids()
+            .returning(|| immediate!(Ok(vec![TokenId(0), TokenId(1), TokenId(2)])));
+        info.expect_get_token_infos().returning(|_| {
+            immediate!(Ok(hash_map!(
+                TokenId(0) => TokenBaseInfo::new(Address::from_low_u64_be(0), "a", 0),
+                TokenId(1) => TokenBaseInfo::new(Address::from_low_u64_be(1), "b", 1),
+                TokenId(2) => TokenBaseInfo::new(Address::from_low_u64_be(2), "c", 2),
+            )))
+        });
+        let address = Address::from_low_u64_be(1);
+        let result = info
+            .find_token_by_address(address)
+            .now_or_never()
+            .unwrap()
+            .unwrap();
+        let expected = (TokenId(1), TokenBaseInfo::new(address, "b", 1));
+        assert_eq!(result, Some(expected));
     }
 }

@@ -1,7 +1,10 @@
 use super::{TokenBaseInfo, TokenId, TokenInfoFetching};
 use anyhow::{anyhow, Context as _, Error, Result};
 use async_std::sync::RwLock;
-use ethcontract::errors::{ExecutionError, MethodError};
+use ethcontract::{
+    errors::{ExecutionError, MethodError},
+    Address,
+};
 use futures::{
     future::{BoxFuture, FutureExt},
     stream::{self, StreamExt as _},
@@ -107,6 +110,17 @@ impl TokenInfoCache {
 
         Some((id, info.clone()))
     }
+
+    async fn find_cached_token_by_address(
+        &self,
+        address: Address,
+    ) -> Option<(TokenId, TokenBaseInfo)> {
+        let cache = self.cache.read().await;
+        cache.iter().find_map(|(id, info)| match info {
+            CacheEntry::TokenBaseInfo(info) if info.address == address => Some((*id, info.clone())),
+            _ => None,
+        })
+    }
 }
 
 impl TokenInfoFetching for TokenInfoCache {
@@ -192,6 +206,23 @@ impl TokenInfoFetching for TokenInfoCache {
             }
 
             Ok(self.find_cached_token_by_symbol(symbol).await)
+        }
+        .boxed()
+    }
+
+    fn find_token_by_address(
+        &self,
+        address: Address,
+    ) -> BoxFuture<Result<Option<(TokenId, TokenBaseInfo)>>> {
+        async move {
+            let cached_info = self.find_cached_token_by_address(address).await;
+            match cached_info {
+                None => {
+                    self.cache_all().await?;
+                    Ok(self.find_cached_token_by_address(address).await)
+                }
+                some => Ok(some),
+            }
         }
         .boxed()
     }
@@ -532,6 +563,38 @@ mod tests {
         assert_eq!(
             cache
                 .find_token_by_symbol("OWL")
+                .now_or_never()
+                .unwrap()
+                .unwrap(),
+            Some((TokenId(0), owl)),
+        );
+    }
+
+    #[test]
+    fn find_token_by_address_updates_cache_for_missing_address() {
+        let owl = TokenBaseInfo {
+            address: Address::from_low_u64_be(0),
+            alias: "OWL".to_owned(),
+            decimals: 18,
+        };
+
+        let mut inner = MockTokenInfoFetching::new();
+        inner
+            .expect_all_ids()
+            .returning(|| immediate!(Ok(vec![TokenId(0)])));
+        inner
+            .expect_get_token_info()
+            .with(eq(TokenId(0)))
+            .returning({
+                let owl = owl.clone();
+                move |_| immediate!(Ok(owl.clone()))
+            });
+
+        let cache = TokenInfoCache::new(Arc::new(inner));
+
+        assert_eq!(
+            cache
+                .find_token_by_address(Address::from_low_u64_be(0))
                 .now_or_never()
                 .unwrap()
                 .unwrap(),
