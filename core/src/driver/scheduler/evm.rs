@@ -136,6 +136,8 @@ impl EvmScheduler {
         let new_batch = self.wait_for_batch_to_change(last_batch).await?;
         // TODO: signal healthiness
         let solution = self.solve(new_batch).await?;
+        // The batch is marked as handled so that the next call to step does not handle it again.
+        // In the next call `step` will sleep until the batch id changes.
         self.last_batch = Some(new_batch);
         if let Some(solution) = solution {
             self.submit(new_batch, solution).await;
