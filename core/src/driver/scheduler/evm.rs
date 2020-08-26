@@ -24,7 +24,6 @@ pub struct EvmScheduler {
     driver: Arc<dyn StableXDriver>,
     config: AuctionTimingConfiguration,
     sleep: Box<dyn AsyncSleeping>,
-    last_batch: Option<u32>,
 }
 
 impl EvmScheduler {
@@ -39,7 +38,6 @@ impl EvmScheduler {
             exchange,
             config,
             sleep: Box::new(AsyncSleep),
-            last_batch: None,
         }
     }
 
@@ -55,7 +53,6 @@ impl EvmScheduler {
             exchange,
             config: AuctionTimingConfiguration::default(),
             sleep,
-            last_batch: None,
         }
     }
 
@@ -91,7 +88,7 @@ impl EvmScheduler {
             .checked_sub(batch_time))
     }
 
-    async fn solve(&mut self, batch_id: u32) -> Result<Option<Solution>> {
+    async fn solve(&self, batch_id: u32) -> Result<Option<Solution>> {
         while let Some(time_limit) = self.solver_time_limit(batch_id).await? {
             info!(
                 "solving for batch {} with time limit {}s",
@@ -128,17 +125,14 @@ impl EvmScheduler {
     }
 
     /// Wait for and solve the next batch.
-    async fn step(&mut self) -> Result<u32> {
-        let last_batch = match self.last_batch {
+    async fn step(&self, last_batch: Option<u32>) -> Result<u32> {
+        let last_batch = match last_batch {
             None => self.current_solving_batch().await?,
             Some(batch) => batch,
         };
         let new_batch = self.wait_for_batch_to_change(last_batch).await?;
         // TODO: signal healthiness
         let solution = self.solve(new_batch).await?;
-        // The batch is marked as handled so that the next call to step does not handle it again.
-        // In the next call `step` will sleep until the batch id changes.
-        self.last_batch = Some(new_batch);
         if let Some(solution) = solution {
             self.submit(new_batch, solution).await;
         }
@@ -148,9 +142,11 @@ impl EvmScheduler {
 
 impl Scheduler for EvmScheduler {
     fn start(&mut self) -> ! {
+        let mut previous_batch = None;
         loop {
-            if let Err(err) = self.step().wait() {
-                error!("EVM scheduler error: {:?}", err);
+            match self.step(previous_batch).wait() {
+                Ok(batch) => previous_batch = Some(batch),
+                Err(err) => error!("EVM scheduler error: {:?}", err),
             }
             thread::sleep(RETRY_SLEEP_DURATION);
         }
@@ -196,11 +192,11 @@ mod tests {
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
 
-        let mut scheduler =
+        let scheduler =
             EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
 
-        scheduler.step().now_or_never().unwrap().unwrap();
-        assert_eq!(scheduler.last_batch, Some(42));
+        let result = scheduler.step(None).now_or_never().unwrap().unwrap();
+        assert_eq!(result, 42);
     }
 
     #[test]
@@ -228,12 +224,11 @@ mod tests {
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
 
-        let mut scheduler =
+        let scheduler =
             EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
-        scheduler.last_batch = Some(40);
 
-        scheduler.step().now_or_never().unwrap().unwrap();
-        assert_eq!(scheduler.last_batch, Some(41));
+        let result = scheduler.step(Some(40)).now_or_never().unwrap().unwrap();
+        assert_eq!(result, 41);
     }
 
     #[test]
@@ -256,12 +251,11 @@ mod tests {
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
 
-        let mut scheduler =
+        let scheduler =
             EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
-        scheduler.last_batch = Some(40);
 
-        scheduler.step().now_or_never().unwrap().unwrap();
-        assert_eq!(scheduler.last_batch, Some(41));
+        let result = scheduler.step(Some(40)).now_or_never().unwrap().unwrap();
+        assert_eq!(result, 41);
     }
 
     #[test]
@@ -279,12 +273,11 @@ mod tests {
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
 
-        let mut scheduler =
+        let scheduler =
             EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
-        scheduler.last_batch = Some(40);
 
-        scheduler.step().now_or_never().unwrap().unwrap();
-        assert_eq!(scheduler.last_batch, Some(41));
+        let result = scheduler.step(Some(40)).now_or_never().unwrap().unwrap();
+        assert_eq!(result, 41);
     }
 
     #[test]
@@ -313,12 +306,11 @@ mod tests {
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
 
-        let mut scheduler =
+        let scheduler =
             EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
-        scheduler.last_batch = Some(40);
 
-        scheduler.step().now_or_never().unwrap().unwrap();
-        assert_eq!(scheduler.last_batch, Some(41));
+        let result = scheduler.step(Some(40)).now_or_never().unwrap().unwrap();
+        assert_eq!(result, 41);
     }
 
     #[test]
@@ -339,11 +331,10 @@ mod tests {
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
 
-        let mut scheduler =
+        let scheduler =
             EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
-        scheduler.last_batch = Some(40);
 
-        scheduler.step().now_or_never().unwrap().unwrap();
-        assert_eq!(scheduler.last_batch, Some(41));
+        let result = scheduler.step(Some(40)).now_or_never().unwrap().unwrap();
+        assert_eq!(result, 41);
     }
 }
