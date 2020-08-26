@@ -93,6 +93,7 @@ impl PriceCacheUpdater {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ethcontract::Address;
 
     #[test]
     fn use_existing_price() {
@@ -107,6 +108,7 @@ mod tests {
     fn fallback_to_base_unit() {
         let token = TokenId(1);
         let token_info = TokenBaseInfo {
+            address: Address::from_low_u64_be(0),
             alias: String::new(),
             decimals: 1,
         };

@@ -89,6 +89,7 @@ pub struct ErrorResult {
 mod tests {
     use super::*;
     use assert_approx_eq::assert_approx_eq;
+    use ethcontract::Address;
     use serde_json::Value;
 
     #[test]
@@ -113,10 +114,12 @@ mod tests {
     #[test]
     fn amount_unit_conversion() {
         let owl = TokenBaseInfo {
+            address: Address::from_low_u64_be(0),
             alias: "OWL".into(),
             decimals: 18,
         };
         let usdc = TokenBaseInfo {
+            address: Address::from_low_u64_be(0),
             alias: "USDC".into(),
             decimals: 6,
         };
@@ -136,10 +139,12 @@ mod tests {
     #[test]
     fn price_estimate_into_base_units() {
         let owl = TokenBaseInfo {
+            address: Address::from_low_u64_be(0),
             alias: "OWL".into(),
             decimals: 18,
         };
         let usdc = TokenBaseInfo {
+            address: Address::from_low_u64_be(0),
             alias: "USDC".into(),
             decimals: 6,
         };

@@ -203,13 +203,15 @@ mod tests {
     use super::*;
     use crate::token_info::hardcoded::{TokenData, TokenInfoOverride};
     use anyhow::anyhow;
+    use ethcontract::Address;
     use price_source::{MockPriceSource, NoopPriceSource};
 
     #[test]
     fn price_oracle_fetches_token_prices() {
+        let address = Address::from_low_u64_be(0);
         let tokens = Arc::new(TokenData::from(hash_map! {
-            TokenId(1) => TokenInfoOverride::new("WETH", 18, None),
-            TokenId(2) => TokenInfoOverride::new("USDT", 6, None),
+            TokenId(1) => TokenInfoOverride::new(address, "WETH", 18, None),
+            TokenId(2) => TokenInfoOverride::new(address, "USDT", 6, None),
         }));
 
         let mut source = MockPriceSource::new();
@@ -256,7 +258,7 @@ mod tests {
     #[test]
     fn price_oracle_ignores_source_error() {
         let tokens = Arc::new(TokenData::from(hash_map! {
-            TokenId(1) => TokenInfoOverride::new("WETH", 18, None),
+            TokenId(1) => TokenInfoOverride::new(Address::from_low_u64_be(0), "WETH", 18, None),
         }));
 
         let mut source = MockPriceSource::new();
