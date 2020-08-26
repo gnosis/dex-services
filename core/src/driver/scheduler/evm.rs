@@ -74,7 +74,7 @@ impl EvmScheduler {
         }
     }
 
-    async fn solver_time_limit(&self, batch_id: u32) -> Result<Option<Duration>> {
+    async fn batch_time(&self, batch_id: u32) -> Result<Option<Duration>> {
         let time_remaining = self.exchange.get_current_auction_remaining_time().await?;
         // Without this check it would be appear as if the the time remaining increased when the
         // batch changes.
@@ -84,10 +84,17 @@ impl EvmScheduler {
         let batch_time = BATCH_DURATION
             .checked_sub(time_remaining)
             .expect("time remaining greater than batch duration");
-        Ok(self
-            .config
-            .latest_solution_submit_time
-            .checked_sub(batch_time))
+        Ok(Some(batch_time))
+    }
+
+    async fn solver_time_limit(&self, batch_id: u32) -> Result<Option<Duration>> {
+        let batch_time = self.batch_time(batch_id).await?;
+        let time_limit = batch_time.map(|batch_time| {
+            self.config
+                .latest_solution_submit_time
+                .checked_sub(batch_time)
+        });
+        Ok(time_limit.flatten())
     }
 
     async fn solve(&self, batch_id: u32) -> Result<Option<Solution>> {
@@ -115,8 +122,17 @@ impl EvmScheduler {
         Ok(None)
     }
 
-    async fn submit(&self, batch_id: u32, solution: Solution) {
-        // TODO: handle earliest_solution_submit_time .
+    async fn submit(&self, batch_id: u32, solution: Solution) -> Result<()> {
+        while match self.batch_time(batch_id).await? {
+            None => {
+                warn!("batch changed while waiting for earliest solution submit time");
+                return Ok(());
+            }
+            Some(duration) => duration < self.config.earliest_solution_submit_time,
+        } {
+            self.sleep.sleep(POLL_TIMEOUT).await;
+        }
+
         match self.driver.submit_solution(batch_id.into(), solution).await {
             Ok(()) => info!("successfully submitted solution for batch {}", batch_id),
             Err(err) => error!(
@@ -124,6 +140,7 @@ impl EvmScheduler {
                 batch_id, err
             ),
         }
+        Ok(())
     }
 
     /// Wait for and solve the next batch.
@@ -136,7 +153,7 @@ impl EvmScheduler {
         // TODO: signal healthiness
         let solution = self.solve(new_batch).await?;
         if let Some(solution) = solution {
-            self.submit(new_batch, solution).await;
+            self.submit(new_batch, solution).await?;
         }
         Ok(new_batch)
     }
@@ -335,6 +352,41 @@ mod tests {
 
         let scheduler =
             EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
+
+        let result = scheduler.step(Some(40)).now_or_never().unwrap().unwrap();
+        assert_eq!(result, 41);
+    }
+
+    #[test]
+    fn waits_for_earliest_solution_submit_time() {
+        let mut exchange = MockStableXContract::new();
+        exchange
+            .expect_get_current_auction_index()
+            .returning(|| async { Ok(42) }.boxed());
+        exchange
+            .expect_get_current_auction_remaining_time()
+            .times(2)
+            .returning(|| async { Ok(Duration::from_secs(270)) }.boxed());
+        exchange
+            .expect_get_current_auction_remaining_time()
+            .times(1)
+            .returning(|| async { Ok(Duration::from_secs(250)) }.boxed());
+
+        let mut driver = MockStableXDriver::new();
+        driver
+            .expect_solve_batch()
+            .returning(|_, _| immediate!(Ok(Solution::trivial())));
+        driver
+            .expect_submit_solution()
+            .times(1)
+            .returning(|_, _| immediate!(Ok(())));
+
+        let mut sleep = Box::new(MockAsyncSleeping::new());
+        sleep.expect_sleep().returning(|_| immediate!(()));
+
+        let mut scheduler =
+            EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
+        scheduler.config.earliest_solution_submit_time = Duration::from_secs(50);
 
         let result = scheduler.step(Some(40)).now_or_never().unwrap().unwrap();
         assert_eq!(result, 41);
