@@ -81,7 +81,7 @@ impl EvmScheduler {
         if self.current_solving_batch().await? != batch_id {
             return Ok(None);
         }
-        let batch_time = BATCH_DURATION - time_remaining;
+        let batch_time = BATCH_DURATION.checked_sub(time_remaining).expect("time remaining greater than batch duration");
         Ok(self
             .config
             .latest_solution_submit_time
