@@ -2,12 +2,13 @@ use anyhow::Result;
 use contracts::batch_exchange::event_data::Trade;
 use core::{history::Settlement, models::BatchId};
 use e2e::cmd::{self, Reporting};
-use pricegraph::{Element, Pricegraph, TokenPair, FEE_FACTOR, U256};
+use pricegraph::{Element, Pricegraph, TokenPair, TokenPairRange, FEE_FACTOR, U256};
 use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
 
 const FULLY_FILLED_THRESHOLD: f64 = 0.95;
 const MIN_AMOUNT: u128 = pricegraph::MIN_AMOUNT as _;
+const MAX_MATCHED_ORDERS_IN_BATCH: u16 = 30;
 
 /// Common options for analyzing historic batch data.
 #[derive(Debug, StructOpt)]
@@ -108,8 +109,13 @@ impl OrderMetadata {
         let effective_sell_amount =
             pricegraph::num::u256_to_f64(order.balance).min(order.remaining_sell_amount as _);
         let limit_price = order.price.numerator as f64 / order.price.denominator as f64;
-        let estimated_limit_price =
-            pricegraph.estimate_limit_price(order.pair, effective_sell_amount);
+        let estimated_limit_price = pricegraph.estimate_limit_price(
+            TokenPairRange {
+                pair: order.pair,
+                hops: Some(MAX_MATCHED_ORDERS_IN_BATCH),
+            },
+            effective_sell_amount,
+        );
 
         // NOTE: Compare the settled exchange rate to the limit price, this is
         // because the limit price must be respected by the actual executed

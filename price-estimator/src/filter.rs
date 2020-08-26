@@ -8,7 +8,7 @@ use core::{
     models::TokenId,
     token_info::{TokenBaseInfo, TokenInfoFetching},
 };
-use pricegraph::{Market, Pricegraph, TokenPair, TransitiveOrder};
+use pricegraph::{Market, Pricegraph, TokenPairRange, TransitiveOrder};
 use std::convert::Infallible;
 use std::sync::Arc;
 use warp::{http::StatusCode, Filter, Rejection, Reply};
@@ -171,7 +171,7 @@ async fn get_markets(
         .pricegraph(query.time, &query.ignore_addresses, PricegraphKind::Raw)
         .await
         .map_err(RejectionReason::InternalError)?
-        .transitive_orderbook(market, None);
+        .transitive_orderbook(market, query.hops, None);
     let result = MarketsResult::from(&transitive_orderbook);
     let result = match query.unit {
         Unit::Atoms => result,
@@ -203,6 +203,11 @@ async fn estimate_buy_amount(
             (amount, amount.as_atoms(&token_info) as _)
         }
     };
+
+    let token_pair_range = TokenPairRange {
+        pair: token_pair,
+        hops: query.hops,
+    };
     let rounding_buffer = orderbook.rounding_buffer(token_pair).await;
     let pricegraph = orderbook
         .pricegraph(
@@ -212,9 +217,10 @@ async fn estimate_buy_amount(
         )
         .await
         .map_err(RejectionReason::InternalError)?;
+
     // This reduced sell amount is what the solver would see after applying the rounding buffer.
     let transitive_order = pricegraph.order_for_sell_amount(
-        token_pair,
+        token_pair_range,
         f64::max(sell_amount_in_quote_atoms - rounding_buffer, 0.0),
     );
 
@@ -250,10 +256,14 @@ async fn estimate_amounts_at_price(
         )
         .await
         .map_err(RejectionReason::InternalError)?;
+    let token_pair_range = TokenPairRange {
+        pair: token_pair,
+        hops: query.hops,
+    };
     let rounding_buffer = orderbook.rounding_buffer(token_pair).await;
     let result = match query.unit {
         Unit::Atoms => estimate_amounts_at_price_atoms(
-            token_pair,
+            token_pair_range,
             price_in_quote,
             &pricegraph,
             rounding_buffer,
@@ -265,7 +275,7 @@ async fn estimate_amounts_at_price(
                 * (sell_token_info.base_unit_in_atoms().get() as f64
                     / buy_token_info.base_unit_in_atoms().get() as f64);
             let mut result = estimate_amounts_at_price_atoms(
-                token_pair,
+                token_pair_range,
                 price_in_quote_atoms,
                 &pricegraph,
                 rounding_buffer,
@@ -282,7 +292,7 @@ async fn estimate_amounts_at_price(
 
 /// Like `estimate_amounts_at_price` but the price is given and returned in atoms.
 fn estimate_amounts_at_price_atoms(
-    token_pair: TokenPair,
+    token_pair_range: TokenPairRange,
     price_in_quote: f64,
     pricegraph: &Pricegraph,
     rounding_buffer: f64,
@@ -291,7 +301,7 @@ fn estimate_amounts_at_price_atoms(
     // inverse of an exchange rate.
     let limit_price = 1.0 / price_in_quote;
     let order = amounts_at_price::order_at_price_with_rounding_buffer(
-        token_pair,
+        token_pair_range,
         limit_price,
         pricegraph,
         rounding_buffer,
@@ -301,8 +311,8 @@ fn estimate_amounts_at_price_atoms(
         sell: 0.0,
     });
     EstimatedOrderResult {
-        base_token_id: token_pair.buy,
-        quote_token_id: token_pair.sell,
+        base_token_id: token_pair_range.pair.buy,
+        quote_token_id: token_pair_range.pair.sell,
         sell_amount_in_quote: Amount::Atoms(order.sell as _),
         buy_amount_in_base: Amount::Atoms(order.buy as _),
     }
@@ -315,7 +325,10 @@ async fn estimate_best_ask_price(
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
     let market = get_market(pair, &*token_infos).await?;
-    let token_pair = market.bid_pair();
+    let token_pair_range = TokenPairRange {
+        pair: market.bid_pair(),
+        hops: query.hops,
+    };
     let price = orderbook
         .pricegraph(
             query.time,
@@ -324,7 +337,7 @@ async fn estimate_best_ask_price(
         )
         .await
         .map_err(RejectionReason::InternalError)?
-        .estimate_limit_price(token_pair, 0.0)
+        .estimate_limit_price(token_pair_range, 0.0)
         // The price above is in base, but we need to return it in quote.
         .map(|p| 1.0 / p);
 

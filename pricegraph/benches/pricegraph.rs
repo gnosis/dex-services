@@ -2,7 +2,9 @@
 mod data;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use pricegraph::{Market, Pricegraph, TokenPair};
+use pricegraph::{Market, Pricegraph, TokenPair, TokenPairRange};
+
+const BENCHED_HOPS: [Option<u16>; 4] = [None, Some(2), Some(30), Some(u16::MAX)];
 
 fn read_default_pricegraph() -> Pricegraph {
     Pricegraph::read(&*data::DEFAULT_ORDERBOOK).expect("error reading orderbook")
@@ -16,11 +18,22 @@ pub fn transitive_orderbook(c: &mut Criterion) {
     let pricegraph = read_default_pricegraph();
     let dai_weth = Market { base: 7, quote: 1 };
 
-    c.bench_with_input(
-        BenchmarkId::new("Pricegraph::transitive_orderbook", *data::DEFAULT_BATCH_ID),
-        &(&pricegraph, dai_weth),
-        |b, &(pricegraph, dai_weth)| b.iter(|| pricegraph.transitive_orderbook(dai_weth, None)),
-    );
+    let mut group = c.benchmark_group("Transitive orderbook");
+
+    for &hops in &BENCHED_HOPS {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(format!(
+                "batch id: {}, hops: {:?}",
+                *data::DEFAULT_BATCH_ID,
+                hops
+            )),
+            &(&pricegraph, dai_weth),
+            |b, &(pricegraph, dai_weth)| {
+                b.iter(|| pricegraph.transitive_orderbook(dai_weth, hops, None))
+            },
+        );
+    }
+    group.finish();
 }
 
 pub fn estimate_limit_price(c: &mut Criterion) {
@@ -31,13 +44,17 @@ pub fn estimate_limit_price(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("Pricegraph::estimate_limit_price");
     for volume in volumes {
-        group.bench_with_input(
-            BenchmarkId::from_parameter(volume),
-            &(&pricegraph, dai_weth, *volume),
-            |b, &(pricegraph, pair, volume)| {
-                b.iter(|| pricegraph.estimate_limit_price(pair, volume))
-            },
-        );
+        for &hops in &BENCHED_HOPS {
+            group.bench_with_input(
+                BenchmarkId::from_parameter(format!("volume: {}, hops: {:?}", volume, hops)),
+                &(&pricegraph, dai_weth, *volume),
+                |b, &(pricegraph, pair, volume)| {
+                    b.iter(|| {
+                        pricegraph.estimate_limit_price(TokenPairRange { pair, hops }, volume)
+                    })
+                },
+            );
+        }
     }
     group.finish();
 }
@@ -49,13 +66,17 @@ pub fn order_for_limit_price(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("Pricegraph::order_for_limit_price");
     for price in prices {
-        group.bench_with_input(
-            BenchmarkId::from_parameter(price),
-            &(&pricegraph, dai_weth, *price),
-            |b, &(pricegraph, pair, price)| {
-                b.iter(|| pricegraph.order_for_limit_price(pair, price))
-            },
-        );
+        for &hops in &BENCHED_HOPS {
+            group.bench_with_input(
+                BenchmarkId::from_parameter(format!("price: {}, hops: {:?}", price, hops)),
+                &(&pricegraph, dai_weth, *price),
+                |b, &(pricegraph, pair, price)| {
+                    b.iter(|| {
+                        pricegraph.order_for_limit_price(TokenPairRange { pair, hops }, price)
+                    })
+                },
+            );
+        }
     }
     group.finish();
 }

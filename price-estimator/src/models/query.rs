@@ -14,7 +14,7 @@ pub struct QueryParameters {
     pub unit: Unit,
     /// The maximum number of hops (i.e. maximum ring trade length) used by the
     /// `pricegraph` search algorithm.
-    pub hops: Option<usize>,
+    pub hops: Option<u16>,
     /// The time to load the orderbook at to perform estimations.
     pub time: EstimationTime,
     /// Addresses whose orders should be ignored.
@@ -58,7 +58,7 @@ pub enum EstimationTime {
 struct RawQuery {
     atoms: Option<bool>,
     unit: Option<Unit>,
-    hops: Option<usize>,
+    hops: Option<u16>,
     batch_id: Option<BatchId>,
     block_number: Option<u64>,
     timestamp: Option<u64>,

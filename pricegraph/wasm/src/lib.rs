@@ -1,7 +1,7 @@
 //! This crate provides a thin WASM-compatible wrapper around the `pricegraph`
 //! crate and can be used for estimating prices for a given orderbook.
 
-use pricegraph::{Pricegraph, TokenId, TokenPair};
+use pricegraph::{Pricegraph, TokenId, TokenPair, TokenPairRange};
 use wasm_bindgen::prelude::*;
 
 /// A graph representation of a complete orderbook.
@@ -40,8 +40,19 @@ impl PriceEstimator {
     /// Estimates price for the specified trade. Returns `undefined` if the
     /// volume cannot be fully filled.
     #[wasm_bindgen(js_name = "estimatePrice")]
-    pub fn estimate_price(&self, buy: TokenId, sell: TokenId, volume: f64) -> Option<f64> {
-        self.pricegraph
-            .estimate_limit_price(TokenPair { buy, sell }, volume)
+    pub fn estimate_price(
+        &self,
+        buy: TokenId,
+        sell: TokenId,
+        volume: f64,
+        hops: Option<u16>,
+    ) -> Option<f64> {
+        self.pricegraph.estimate_limit_price(
+            TokenPairRange {
+                pair: TokenPair { buy, sell },
+                hops,
+            },
+            volume,
+        )
     }
 }

@@ -1,14 +1,14 @@
-use pricegraph::{Pricegraph, TokenPair, TransitiveOrder};
+use pricegraph::{Pricegraph, TokenPairRange, TransitiveOrder};
 
 /// An overlapping order where buy / sell ≈ price and the amounts take into account that the solver
 /// will subtract the rounding buffer from the sell amount.
 pub fn order_at_price_with_rounding_buffer(
-    token_pair: TokenPair,
+    token_pair_range: TokenPairRange,
     limit_price: f64,
     pricegraph: &Pricegraph,
     rounding_buffer: f64,
 ) -> Option<TransitiveOrder> {
-    let order = pricegraph.order_for_limit_price(token_pair, limit_price)?;
+    let order = pricegraph.order_for_limit_price(token_pair_range, limit_price)?;
     // We know that an order is still overlapping if it has a limit price <= this one. The limit
     // price of this order is usually larger (better for the seller) than the user requested limit
     // price.
@@ -38,7 +38,7 @@ pub fn order_at_price_with_rounding_buffer(
         let buy = order_that_user_places.buy;
         log::debug!(
             "unable to fulfill price constraint for token pair {}-{} at price {} using buy amount {} sell amount {}",
-            token_pair.buy, token_pair.sell, limit_price, buy, sell
+            token_pair_range.pair.buy, token_pair_range.pair.sell, limit_price, buy, sell
         );
         Some(TransitiveOrder { sell, buy })
     }
@@ -69,7 +69,10 @@ mod tests {
         let limit_price = 0.5;
         let rounding_buffer = 1000.0;
         let result = order_at_price_with_rounding_buffer(
-            TokenPair { buy: 1, sell: 0 },
+            TokenPairRange {
+                pair: TokenPair { buy: 1, sell: 0 },
+                hops: None,
+            },
             limit_price,
             &pricegraph,
             rounding_buffer,
@@ -103,7 +106,10 @@ mod tests {
         let limit_price = 0.998;
         let rounding_buffer = 1000.0;
         let result = order_at_price_with_rounding_buffer(
-            TokenPair { buy: 1, sell: 0 },
+            TokenPairRange {
+                pair: TokenPair { buy: 1, sell: 0 },
+                hops: None,
+            },
             limit_price,
             &pricegraph,
             rounding_buffer,

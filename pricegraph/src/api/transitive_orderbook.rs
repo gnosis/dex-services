@@ -2,7 +2,7 @@
 //! over a market.
 
 use crate::api::{Market, TransitiveOrder};
-use crate::encoding::TokenPair;
+use crate::encoding::TokenPairRange;
 use crate::num;
 use crate::orderbook::{Orderbook, OverlapError, Ring};
 use crate::{Pricegraph, FEE_FACTOR};
@@ -54,7 +54,12 @@ impl Pricegraph {
     /// # Panics
     ///
     /// This method panics if the spread is zero or negative.
-    pub fn transitive_orderbook(&self, market: Market, spread: Option<f64>) -> TransitiveOrderbook {
+    pub fn transitive_orderbook(
+        &self,
+        market: Market,
+        hops: Option<u16>,
+        spread: Option<f64>,
+    ) -> TransitiveOrderbook {
         let mut orderbook = self.full_orderbook();
 
         let mut transitive_orderbook = TransitiveOrderbook::default();
@@ -73,12 +78,20 @@ impl Pricegraph {
         let inverse_ring = orderbook.fill_market_ring_trade(market.inverse());
         debug_assert_eq!(inverse_ring, None);
 
+        let ask_pair_range = TokenPairRange {
+            pair: market.ask_pair(),
+            hops,
+        };
         transitive_orderbook.asks.extend(
-            fill_transitive_orders(orderbook.clone(), market.ask_pair(), spread)
+            fill_transitive_orders(orderbook.clone(), ask_pair_range, spread)
                 .expect("overlapping orders in reduced orderbook"),
         );
+        let bid_pair_range = TokenPairRange {
+            pair: market.bid_pair(),
+            hops,
+        };
         transitive_orderbook.bids.extend(
-            fill_transitive_orders(orderbook, market.bid_pair(), spread)
+            fill_transitive_orders(orderbook, bid_pair_range, spread)
                 .expect("overlapping orders in reduced orderbook"),
         );
 
@@ -110,7 +123,7 @@ impl Pricegraph {
 /// This method panics if the spread is zero or negative.
 fn fill_transitive_orders(
     mut orderbook: Orderbook,
-    pair: TokenPair,
+    pair_range: TokenPairRange,
     spread: Option<f64>,
 ) -> Result<Vec<TransitiveOrder>, OverlapError> {
     if let Some(spread) = spread {
@@ -120,7 +133,7 @@ fn fill_transitive_orders(
     let mut orders = Vec::new();
     let mut max_xrate = None;
 
-    while let Some(flow) = orderbook.fill_optimal_transitive_order_if(pair, |flow| {
+    while let Some(flow) = orderbook.fill_optimal_transitive_order_if(pair_range, |flow| {
         if let Some(spread) = spread {
             let max_xrate =
                 max_xrate.get_or_insert_with(|| flow.exchange_rate.value() * (1.0 + spread));
@@ -143,9 +156,12 @@ mod tests {
     #[test]
     fn transitive_orderbook_empty_same_token() {
         let pricegraph = Pricegraph::new(std::iter::empty());
-        let orderbook = pricegraph.transitive_orderbook(Market { base: 0, quote: 0 }, None);
-        assert!(orderbook.asks.is_empty());
-        assert!(orderbook.bids.is_empty());
+        for &hops in [None, Some(1), Some(30), Some(u16::MAX)].iter() {
+            let orderbook =
+                pricegraph.transitive_orderbook(Market { base: 0, quote: 0 }, hops, None);
+            assert!(orderbook.asks.is_empty());
+            assert!(orderbook.bids.is_empty());
+        }
     }
 
     #[test]
@@ -162,29 +178,116 @@ mod tests {
             }
         };
 
-        let orderbook = pricegraph.transitive_orderbook(Market { base: 0, quote: 1 }, None);
-        assert_eq!(orderbook.asks, vec![]);
-        assert_eq!(
-            orderbook.bids,
-            vec![TransitiveOrder {
-                buy: 2.0 * base as f64,
-                sell: base as f64,
-            }]
-        );
-        let bid_price = orderbook.bid_prices().next().unwrap();
-        assert_approx_eq!(bid_price.0, 0.5 / FEE_FACTOR);
+        for &hops in [None, Some(1), Some(30), Some(u16::MAX)].iter() {
+            let orderbook =
+                pricegraph.transitive_orderbook(Market { base: 0, quote: 1 }, hops, None);
+            assert_eq!(orderbook.asks, vec![]);
+            assert_eq!(
+                orderbook.bids,
+                vec![TransitiveOrder {
+                    buy: 2.0 * base as f64,
+                    sell: base as f64,
+                }]
+            );
+            let bid_price = orderbook.bid_prices().next().unwrap();
+            assert_approx_eq!(bid_price.0, 0.5 / FEE_FACTOR);
 
-        let orderbook = pricegraph.transitive_orderbook(Market { base: 1, quote: 0 }, None);
-        assert_eq!(
-            orderbook.asks,
-            vec![TransitiveOrder {
-                buy: 2.0 * base as f64,
-                sell: base as f64,
-            }]
-        );
-        let ask_price = orderbook.ask_prices().next().unwrap();
-        assert_approx_eq!(ask_price.0, 2.0 * FEE_FACTOR);
-        assert_eq!(orderbook.bids, vec![]);
+            let orderbook =
+                pricegraph.transitive_orderbook(Market { base: 1, quote: 0 }, hops, None);
+            assert_eq!(
+                orderbook.asks,
+                vec![TransitiveOrder {
+                    buy: 2.0 * base as f64,
+                    sell: base as f64,
+                }]
+            );
+            let ask_price = orderbook.ask_prices().next().unwrap();
+            assert_approx_eq!(ask_price.0, 2.0 * FEE_FACTOR);
+            assert_eq!(orderbook.bids, vec![]);
+        }
+    }
+
+    #[test]
+    fn transitive_orderbook_hops() {
+        //  0 --2.0-> 1 --1.0-> 5 <--\
+        //  |         |         |    |
+        // 1.0       2.0       0.5  1.0
+        //  ∨         ∨         ∨    |
+        //  2         3         6----/
+        //  |         ∧         |
+        // 1.0       2.0        |
+        //  |         |         |
+        //  \-------> 4 <------0.5
+        let pricegraph = pricegraph! {
+            users {
+                @1 {
+                    token 1 => 2_000_000,
+                }
+                @2 {
+                    token 2 => 1_000_000,
+                }
+                @3 {
+                    token 3 => 2_000_000,
+                }
+                @4 {
+                    token 5 => 1_000_000,
+                }
+                @5 {
+                    token 4 => 1_000_000,
+                }
+                @6 {
+                    token 3 => 2_000_000,
+                }
+                @7 {
+                    token 6 => 500_000,
+                }
+                @8 {
+                    token 5 => 10_000_000,
+                }
+                @9 {
+                    token 4 => 1_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 0 [1_000_000] selling 1 [2_000_000],
+                owner @2 buying 0 [1_000_000] selling 2 [1_000_000],
+                owner @3 buying 1 [1_000_000] selling 3 [2_000_000],
+                owner @4 buying 1 [1_000_000] selling 5 [1_000_000],
+                owner @5 buying 2 [1_000_000] selling 4 [1_000_000],
+                owner @6 buying 4 [1_000_000] selling 3 [2_000_000],
+                owner @7 buying 5 [1_000_000] selling 6 [500_000],
+                owner @8 buying 6 [10_000_000] selling 5 [10_000_000],
+                owner @9 buying 6 [1_000_000] selling 4 [1_000_000],
+            }
+        };
+        let market = Market { base: 0, quote: 3 };
+
+        // All transitive orders need at most two hops to be computed.
+        // There is a small negative loop between the tokens 5 and 6
+        // which makes the path 0 -> 1 -> 5 -> 6 -> 4 -> 3 disappear.
+
+        for &hops in &[None, Some(3), Some(4), Some(30), Some(u16::MAX)] {
+            let TransitiveOrderbook { bids, asks } =
+                pricegraph.transitive_orderbook(market, hops, None);
+            assert_eq!(asks.len(), 0);
+            assert_eq!(bids.len(), 2);
+            assert_approx_eq!(bids[0].buy, 500_000.0 * FEE_FACTOR);
+            assert_approx_eq!(bids[0].sell, 2_000_000.0);
+            assert_approx_eq!(bids[1].buy, 1_000_000.0);
+            assert_approx_eq!(bids[1].sell, 2_000_000.0 / FEE_FACTOR.powi(2));
+        }
+
+        let TransitiveOrderbook { bids, asks } =
+            pricegraph.transitive_orderbook(market, Some(2), None);
+        assert_eq!(asks.len(), 0);
+        assert_eq!(bids.len(), 1);
+        assert_approx_eq!(bids[0].buy, 500_000.0 * FEE_FACTOR);
+        assert_approx_eq!(bids[0].sell, 2_000_000.0);
+
+        let TransitiveOrderbook { bids, asks } =
+            pricegraph.transitive_orderbook(market, Some(1), None);
+        assert_eq!(asks.len(), 0);
+        assert_eq!(bids.len(), 0);
     }
 
     #[test]
@@ -259,18 +362,23 @@ mod tests {
             }
         };
 
-        let transitive_orderbook =
-            pricegraph.transitive_orderbook(Market { base: 1, quote: 2 }, None);
+        // All transitive orders between 1 and 2 are involved in a negative cycle.
+        // No difference is expected when the number of hops changes.
 
-        // Transitive order `2 -> 3 -> 1` buying 2 selling 1
-        assert_eq!(transitive_orderbook.asks.len(), 1);
-        assert_approx_eq!(transitive_orderbook.asks[0].buy, 500_000.0);
-        assert_approx_eq!(transitive_orderbook.asks[0].sell, 500_000.0 / FEE_FACTOR);
+        for &hops in &[None, Some(1), Some(30), Some(u16::MAX)] {
+            let transitive_orderbook =
+                pricegraph.transitive_orderbook(Market { base: 1, quote: 2 }, hops, None);
 
-        // Transitive order `1 -> 2` buying 1 selling 2
-        assert_eq!(transitive_orderbook.bids.len(), 1);
-        assert_approx_eq!(transitive_orderbook.bids[0].buy, 1_000_000.0);
-        assert_approx_eq!(transitive_orderbook.bids[0].sell, 2_000_000.0);
+            // Transitive order `2 -> 3 -> 1` buying 2 selling 1
+            assert_eq!(transitive_orderbook.asks.len(), 1);
+            assert_approx_eq!(transitive_orderbook.asks[0].buy, 500_000.0);
+            assert_approx_eq!(transitive_orderbook.asks[0].sell, 500_000.0 / FEE_FACTOR);
+
+            // Transitive order `1 -> 2` buying 1 selling 2
+            assert_eq!(transitive_orderbook.bids.len(), 1);
+            assert_approx_eq!(transitive_orderbook.bids[0].buy, 1_000_000.0);
+            assert_approx_eq!(transitive_orderbook.bids[0].sell, 2_000_000.0);
+        }
     }
 
     #[test]
@@ -298,20 +406,22 @@ mod tests {
             }
         };
 
-        let transitive_orderbook =
-            pricegraph.transitive_orderbook(Market { base: 0, quote: 1 }, None);
+        for &hops in &[None, Some(1), Some(30), Some(u16::MAX)] {
+            let transitive_orderbook =
+                pricegraph.transitive_orderbook(Market { base: 0, quote: 1 }, hops, None);
 
-        // Transitive orders `1 -> 0` buying 1 selling 0
-        assert_eq!(transitive_orderbook.asks.len(), 2);
-        assert_approx_eq!(transitive_orderbook.asks[0].buy, 1_000_000.0);
-        assert_approx_eq!(transitive_orderbook.asks[0].sell, 1_000_000.0);
-        assert_approx_eq!(transitive_orderbook.asks[1].buy, 1_500_000.0);
-        assert_approx_eq!(transitive_orderbook.asks[1].sell, 1_000_000.0);
+            // Transitive orders `1 -> 0` buying 1 selling 0
+            assert_eq!(transitive_orderbook.asks.len(), 2);
+            assert_approx_eq!(transitive_orderbook.asks[0].buy, 1_000_000.0);
+            assert_approx_eq!(transitive_orderbook.asks[0].sell, 1_000_000.0);
+            assert_approx_eq!(transitive_orderbook.asks[1].buy, 1_500_000.0);
+            assert_approx_eq!(transitive_orderbook.asks[1].sell, 1_000_000.0);
 
-        // Transitive order `0 -> 1` buying 0 selling 1
-        assert_eq!(transitive_orderbook.bids.len(), 1);
-        assert_approx_eq!(transitive_orderbook.bids[0].buy, 50_000_000.0);
-        assert_approx_eq!(transitive_orderbook.bids[0].sell, 100_000_000.0);
+            // Transitive order `0 -> 1` buying 0 selling 1
+            assert_eq!(transitive_orderbook.bids.len(), 1);
+            assert_approx_eq!(transitive_orderbook.bids[0].buy, 50_000_000.0);
+            assert_approx_eq!(transitive_orderbook.bids[0].sell, 100_000_000.0);
+        }
     }
 
     #[test]
@@ -345,24 +455,51 @@ mod tests {
         };
         let market = Market { base: 1, quote: 2 };
 
-        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, Some(0.5));
+        // All transitive orders need at most two hops to be computed.
+        for &hops in &[None, Some(2), Some(5), Some(30), Some(u16::MAX)] {
+            let TransitiveOrderbook { bids, .. } =
+                pricegraph.transitive_orderbook(market, hops, Some(0.5));
+            assert_eq!(bids.len(), 1);
+            assert_approx_eq!(bids[0].buy, 1_000_000.0);
+            assert_approx_eq!(bids[0].sell, 1_000_000.0);
+
+            let TransitiveOrderbook { bids, .. } =
+                pricegraph.transitive_orderbook(market, hops, Some(1.0));
+            assert_eq!(bids.len(), 1);
+
+            let TransitiveOrderbook { bids, .. } =
+                pricegraph.transitive_orderbook(market, hops, Some((2.0 * FEE_FACTOR) - 1.0));
+            assert_eq!(bids.len(), 2);
+            assert_approx_eq!(bids[1].buy, 1_000_000.0);
+            assert_approx_eq!(bids[1].sell, 500_000.0 / FEE_FACTOR);
+
+            let TransitiveOrderbook { bids, .. } =
+                pricegraph.transitive_orderbook(market, hops, Some(3.0));
+            assert_eq!(bids.len(), 3);
+            assert_approx_eq!(bids[2].buy, 4_000_000.0);
+            assert_approx_eq!(bids[2].sell, 1_000_000.0);
+        }
+
+        let TransitiveOrderbook { bids, .. } =
+            pricegraph.transitive_orderbook(market, Some(1), Some(0.5));
         assert_eq!(bids.len(), 1);
         assert_approx_eq!(bids[0].buy, 1_000_000.0);
         assert_approx_eq!(bids[0].sell, 1_000_000.0);
 
-        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, Some(1.0));
+        let TransitiveOrderbook { bids, .. } =
+            pricegraph.transitive_orderbook(market, Some(1), Some(1.0));
+        assert_eq!(bids.len(), 1);
+
+        // From here on out, the test changes in the case `hops == 1`.
+        let TransitiveOrderbook { bids, .. } =
+            pricegraph.transitive_orderbook(market, Some(1), Some((2.0 * FEE_FACTOR) - 1.0));
         assert_eq!(bids.len(), 1);
 
         let TransitiveOrderbook { bids, .. } =
-            pricegraph.transitive_orderbook(market, Some((2.0 * FEE_FACTOR) - 1.0));
+            pricegraph.transitive_orderbook(market, Some(1), Some(3.0));
         assert_eq!(bids.len(), 2);
-        assert_approx_eq!(bids[1].buy, 1_000_000.0);
-        assert_approx_eq!(bids[1].sell, 500_000.0 / FEE_FACTOR);
-
-        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, Some(3.0));
-        assert_eq!(bids.len(), 3);
-        assert_approx_eq!(bids[2].buy, 4_000_000.0);
-        assert_approx_eq!(bids[2].sell, 1_000_000.0);
+        assert_approx_eq!(bids[1].buy, 4_000_000.0);
+        assert_approx_eq!(bids[1].sell, 1_000_000.0);
     }
 
     #[test]
@@ -396,17 +533,30 @@ mod tests {
         };
         let market = Market { base: 1, quote: 2 };
 
-        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, None);
-        assert_eq!(bids.len(), 3);
+        for &hops in &[None, Some(2), Some(5), Some(30), Some(u16::MAX)] {
+            let TransitiveOrderbook { bids, .. } =
+                pricegraph.transitive_orderbook(market, hops, None);
+            assert_eq!(bids.len(), 3);
+
+            assert_approx_eq!(bids[0].buy, 1_000_000.0);
+            assert_approx_eq!(bids[0].sell, 1_000_000.0);
+
+            assert_approx_eq!(bids[1].buy, 1_000_000.0);
+            assert_approx_eq!(bids[1].sell, 500_000.0 / FEE_FACTOR);
+
+            assert_approx_eq!(bids[2].buy, 4_000_000.0);
+            assert_approx_eq!(bids[2].sell, 1_000_000.0);
+        }
+
+        let TransitiveOrderbook { bids, .. } =
+            pricegraph.transitive_orderbook(market, Some(1), None);
+        assert_eq!(bids.len(), 2);
 
         assert_approx_eq!(bids[0].buy, 1_000_000.0);
         assert_approx_eq!(bids[0].sell, 1_000_000.0);
 
-        assert_approx_eq!(bids[1].buy, 1_000_000.0);
-        assert_approx_eq!(bids[1].sell, 500_000.0 / FEE_FACTOR);
-
-        assert_approx_eq!(bids[2].buy, 4_000_000.0);
-        assert_approx_eq!(bids[2].sell, 1_000_000.0);
+        assert_approx_eq!(bids[1].buy, 4_000_000.0);
+        assert_approx_eq!(bids[1].sell, 1_000_000.0);
     }
 
     #[test]
@@ -433,8 +583,10 @@ mod tests {
                 owner @2 buying 0 [500_000] selling 1 [1_000_000],
             }
         };
-        let transitive_orderbook =
-            pricegraph.transitive_orderbook(Market { base: 3, quote: 2 }, None);
-        assert!(transitive_orderbook.asks.is_empty() && transitive_orderbook.bids.is_empty());
+        for &hops in &[None, Some(1), Some(30), Some(u16::MAX)] {
+            let transitive_orderbook =
+                pricegraph.transitive_orderbook(Market { base: 3, quote: 2 }, hops, None);
+            assert!(transitive_orderbook.asks.is_empty() && transitive_orderbook.bids.is_empty());
+        }
     }
 }

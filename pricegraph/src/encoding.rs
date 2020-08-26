@@ -70,6 +70,33 @@ pub struct Element {
     pub id: OrderId,
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub struct TokenPairRange {
+    /// The traded pair.
+    pub pair: TokenPair,
+    /// The maximum number of transitive trades allowed to trade the pair.
+    pub hops: Option<u16>,
+}
+
+impl TokenPair {
+    pub fn inverse(self) -> Self {
+        TokenPair {
+            buy: self.sell,
+            sell: self.buy,
+        }
+    }
+}
+
+impl TokenPairRange {
+    pub fn inverse(self) -> Self {
+        TokenPairRange {
+            pair: self.pair.inverse(),
+            hops: self.hops,
+        }
+    }
+}
+
 impl Element {
     pub fn read_all<'a>(bytes: &'a [u8]) -> Result<impl Iterator<Item = Self> + 'a, InvalidLength> {
         if bytes.len() % ELEMENT_STRIDE != 0 {

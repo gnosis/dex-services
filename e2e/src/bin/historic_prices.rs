@@ -8,6 +8,7 @@ use structopt::StructOpt;
 /// Threshold logarithmic distance from the actual price at which an estimate is
 /// considered "bad"; currently `0.1 * price < estimate < 10 * price`.
 const BAD_ESTIMATE_THRESHOLD_LOG_DISTANCE: f64 = 1.0;
+const MAX_MATCHED_ORDERS_IN_BATCH: u16 = 30;
 
 /// Common options for analyzing historic batch data.
 #[derive(Debug, StructOpt)]
@@ -72,7 +73,9 @@ fn check_batch_prices(
         .filter(|(_, token)| *token != 0)
     {
         let price = prices[token_index];
-        let estimate = pricegraph.estimate_token_price(token).map(|p| p as u128);
+        let estimate = pricegraph
+            .estimate_token_price(token, Some(MAX_MATCHED_ORDERS_IN_BATCH))
+            .map(|p| p as u128);
 
         samples.record_sample(Row {
             batch,

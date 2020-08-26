@@ -109,11 +109,16 @@ mod tests {
         let volume = 1.0 * base_unit;
         let spread = 0.05;
 
+        let pair_range = TokenPairRange {
+            pair: dai_weth.bid_pair(),
+            hops: None,
+        };
+
         for (batch_id, raw_orderbook) in data::ORDERBOOKS.iter() {
             let pricegraph = Pricegraph::read(raw_orderbook).unwrap();
 
             let order = pricegraph
-                .order_for_sell_amount(dai_weth.bid_pair(), volume)
+                .order_for_sell_amount(pair_range, volume)
                 .unwrap();
             println!(
                 "#{}: estimated order for buying {} DAI for {} WETH",
@@ -123,7 +128,7 @@ mod tests {
             );
 
             let TransitiveOrderbook { asks, bids } =
-                pricegraph.transitive_orderbook(dai_weth, Some(spread));
+                pricegraph.transitive_orderbook(dai_weth, None, Some(spread));
             println!(
                 "#{}: DAI-WETH market contains {} ask orders and {} bid orders within a {}% spread:",
                 batch_id,
