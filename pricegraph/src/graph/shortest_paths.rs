@@ -217,6 +217,22 @@ pub mod tests {
     use petgraph::Graph;
 
     #[test]
+    fn floating_point_issue() {
+        let graph = Graph::<(), f64>::from_edges(&[(0, 1, 0.1), (1, 2, 6.8), (2, 1, -6.8)]);
+        let mut graph = ShortestPathGraph::new(&graph, 0.into()).unwrap();
+        let predecessor_ids = graph
+            .predecessor_store
+            .predecessors
+            .iter()
+            .map(|item| item.map(|i| graph.graph.to_index(i)))
+            .collect::<Vec<_>>();
+        // There exists a cycle
+        assert!(predecessor_ids[1] == Some(2) && predecessor_ids[2] == Some(1));
+        // But we don't find it
+        assert!(graph.find_cycle().is_some());
+    }
+
+    #[test]
     fn search_finds_negative_cycle() {
         // NOTE: There is a negative cycle from 1 -> 2 -> 3 -> 1 with a
         // transient weight of -1.
