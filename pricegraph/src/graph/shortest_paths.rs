@@ -124,15 +124,26 @@ where
         // each node: if a node can be relaxed then a negative cycle exists and is
         // created in the predecessor store; otherwise no such cycle exists.
 
-        for i in self.graph.node_identifiers() {
-            for edge in self.graph.edges(i) {
-                let j = edge.target();
-                let w = *edge.weight();
-
-                if *self.distance(i) + w < *self.distance(j) {
-                    self.update_predecessor(j, Some(i));
-                    return Some(j);
+        let mut visited: Vec<Option<usize>> = vec![None; self.predecessor_store.predecessors.len()];
+        for current_generation in 0..visited.len() {
+            if visited[current_generation].is_some() {
+                continue;
+            }
+            visited[current_generation] = Some(current_generation);
+            let mut current_index = current_generation;
+            while let Some(next) = self.predecessor_store.predecessors[current_index] {
+                let next_index = self.graph.to_index(next);
+                match visited[next_index] {
+                    Some(visited_generation) => {
+                        if visited_generation < current_generation {
+                            break;
+                        } else {
+                            return Some(next);
+                        }
+                    }
+                    None => visited[next_index] = Some(current_generation),
                 }
+                current_index = next_index;
             }
         }
         None
@@ -185,8 +196,8 @@ where
 {
     let mut shortest_path_graph = ShortestPathGraph::empty(g, source);
 
-    // scan up to |V| - 1 times.
-    for _ in 1..g.node_count() {
+    // scan up to |V| times.
+    for _ in 0..g.node_count() {
         let mut did_update = false;
         for i in g.node_identifiers() {
             for edge in g.edges(i) {
@@ -217,19 +228,15 @@ pub mod tests {
     use petgraph::Graph;
 
     #[test]
-    fn floating_point_issue() {
+    fn negative_cycle_with_floating_point_precision() {
+        // In this example the path 0->1 should have the same distance (0.1) as the path 0->1->2->1 (0.1)
+        // However due to floating point precision 0.1 + 6.8 - 6.8 < 0.1. The latter path leaves the graph
+        // in a cyclical state, thus this test ensures that we cannot create such a graph.
         let graph = Graph::<(), f64>::from_edges(&[(0, 1, 0.1), (1, 2, 6.8), (2, 1, -6.8)]);
-        let mut graph = ShortestPathGraph::new(&graph, 0.into()).unwrap();
-        let predecessor_ids = graph
-            .predecessor_store
-            .predecessors
-            .iter()
-            .map(|item| item.map(|i| graph.graph.to_index(i)))
-            .collect::<Vec<_>>();
-        // There exists a cycle
-        assert!(predecessor_ids[1] == Some(2) && predecessor_ids[2] == Some(1));
-        // But we don't find it
-        assert!(graph.find_cycle().is_some());
+        let result = ShortestPathGraph::new(&graph, 0.into());
+        assert!(result.is_err());
+        let negative_cycle = result.err().unwrap();
+        assert_eq!(negative_cycle.0, vec![1.into(), 2.into(), 1.into()]);
     }
 
     #[test]
