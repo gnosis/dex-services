@@ -89,12 +89,12 @@ impl EvmScheduler {
 
     async fn solver_time_limit(&self, batch_id: u32) -> Result<Option<Duration>> {
         let batch_time = self.batch_time(batch_id).await?;
-        let time_limit = batch_time.map(|batch_time| {
+        let time_limit = batch_time.and_then(|batch_time| {
             self.config
                 .latest_solution_submit_time
                 .checked_sub(batch_time)
         });
-        Ok(time_limit.flatten())
+        Ok(time_limit)
     }
 
     async fn solve(&self, batch_id: u32) -> Result<Option<Solution>> {
