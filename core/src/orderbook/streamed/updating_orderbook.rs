@@ -220,9 +220,7 @@ impl StableXOrderBookReading for UpdatingOrderbook {
         batch_id_to_solve: u32,
     ) -> BoxFuture<Result<(AccountState, Vec<Order>)>> {
         self.do_with_context(move |context| {
-            context
-                .orderbook
-                .get_auction_data_for_batch(batch_id_to_solve)
+            immediate!(context.orderbook.auction_state_for_batch(batch_id_to_solve))
         })
         .boxed()
     }

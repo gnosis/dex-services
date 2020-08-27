@@ -1,12 +1,10 @@
 use crate::{
     models::{AccountState, BatchId, Order},
-    orderbook::{streamed::State, StableXOrderBookReading},
+    orderbook::streamed::State,
 };
 use anyhow::{Context, Result};
 use contracts::batch_exchange;
 use ethcontract::{contract::EventData, BlockNumber, H256};
-use futures::future::BoxFuture;
-use log::info;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -204,7 +202,7 @@ impl TryFrom<File> for EventRegistry {
         let events = EventRegistry::read(&mut file)
             .with_context(|| format!("Failed to read file: {:?}", file))?;
 
-        info!(
+        log::info!(
             "Successfully loaded {} events in {} bytes from event registry file",
             events.events.len(),
             file.metadata()?.len(),
@@ -223,41 +221,6 @@ impl TryFrom<&Path> for EventRegistry {
     }
 }
 
-impl StableXOrderBookReading for EventRegistry {
-    fn get_auction_data_for_batch(
-        &self,
-        batch_id_to_solve: u32,
-    ) -> BoxFuture<Result<(AccountState, Vec<Order>)>> {
-        immediate!(self.auction_state_for_batch(batch_id_to_solve))
-    }
-
-    /// Returns the state of the open orderbook at the closest block before (or
-    /// on) the specified block with an exchange event.
-    ///
-    /// This is a limitation of the `EventRegistry` implementation where an
-    /// accurate batch ID for a block number cannot be determined unless there
-    /// is an event on that block.
-    fn get_auction_data_for_block(
-        &self,
-        block: BlockNumber,
-    ) -> BoxFuture<Result<(AccountState, Vec<Order>)>> {
-        let batch_id = match block {
-            BlockNumber::Earliest => BatchId(0),
-            BlockNumber::Latest | BlockNumber::Pending => BatchId::now(),
-            // NOTE: Approximate the timestamp of the block by finding the batch
-            // ID of the last event before the specified block.
-            BlockNumber::Number(block_number) => self
-                .events
-                .range(bounds_until_end_of_block(block_number.as_u64()))
-                .rev()
-                .next()
-                .map(|(_, Value { batch_id, .. })| *batch_id)
-                .unwrap_or(BatchId(0)),
-        };
-        immediate!(self.auction_state_for_batch_at_block(batch_id, block))
-    }
-}
-
 fn bounds_until_end_of_block(block_number: u64) -> (Bound<EventSortKey>, Bound<EventSortKey>) {
     (
         Bound::Unbounded,
@@ -273,7 +236,6 @@ mod tests {
     use super::*;
     use contracts::batch_exchange::{event_data::*, Event};
     use ethcontract::{Address, U256};
-    use futures::future::FutureExt as _;
 
     #[test]
     fn test_serialize_deserialize_events() {
@@ -394,21 +356,13 @@ mod tests {
         }));
         events.handle_event_data(deposit_2, 2, 0, H256::zero(), 0);
 
-        let auction_data = events
-            .get_auction_data_for_batch(2)
-            .now_or_never()
-            .unwrap()
-            .unwrap();
+        let auction_data = events.auction_state_for_batch(2).unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
             U256::from(3)
         );
         events.delete_events_starting_at_block(1);
-        let auction_data = events
-            .get_auction_data_for_batch(1)
-            .now_or_never()
-            .unwrap()
-            .unwrap();
+        let auction_data = events.auction_state_for_batch(1).unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
             U256::from(1)
@@ -463,11 +417,7 @@ mod tests {
         events.handle_event_data(withdraw_request, 1, 0, H256::zero(), 0);
         events.handle_event_data(token_listing_0, 0, 0, H256::zero(), 0);
 
-        let auction_data = events
-            .get_auction_data_for_batch(2)
-            .now_or_never()
-            .unwrap()
-            .unwrap();
+        let auction_data = events.auction_state_for_batch(2).unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
             U256::from(7)
@@ -514,11 +464,7 @@ mod tests {
         events.handle_event_data(deposit_0, 0, 3, H256::zero(), 0);
         events.handle_event_data(deposit_1, 1, 0, H256::zero(), BatchId(2).as_timestamp());
 
-        let auction_data = events
-            .get_auction_data_for_batch(0)
-            .now_or_never()
-            .unwrap()
-            .unwrap();
+        let auction_data = events.auction_state_for_batch(0).unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
             U256::from(42)
@@ -572,19 +518,13 @@ mod tests {
         events.handle_event_data(deposit_1, 1, 0, H256::zero(), 0);
         events.handle_event_data(deposit_2, 2, 0, H256::zero(), BatchId(1).as_timestamp());
 
-        let auction_data = events
-            .auction_state_for_batch_at_block(BatchId(1), 0)
-            .unwrap();
+        let auction_data = events.auction_state_for_batch_at_block(1, 0).unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
             U256::from(42)
         );
 
-        let auction_data = events
-            .get_auction_data_for_block(1.into())
-            .now_or_never()
-            .unwrap()
-            .unwrap();
+        let auction_data = events.auction_state_for_batch_at_block(1, 1).unwrap();
         assert_eq!(
             auction_data.0.read_balance(0, Address::from_low_u64_be(2)),
             U256::from(42 + 1337)
