@@ -179,11 +179,16 @@ impl Weight {
     /// Creates a new graph weight from a floating point number.
     pub fn new(value: f64) -> Self {
         // NOTE: We need to reserve some bits in order for the addition not to
-        // overflow
-        const FACTOR: f64 = (1u128 << 100) as _;
+        // overflow, specifically we need to reserve
+        // - 16 bits for the maximum number of nodes (maximum number of tokens)
+        // - 8 bits for the [-128, 128) range
+        // - 1 bit for infinity
+        // Thats a total of 25 bits, which leaves us with 103 bits of precision
+        // for the weight.
+        const FACTOR: f64 = (1u128 << 103) as _;
 
         let weight = value.log2() * FACTOR;
-        debug_assert!(-128.0 * FACTOR < weight && weight < 128.0 * FACTOR);
+        debug_assert!(-128.0 * FACTOR <= weight && weight < 128.0 * FACTOR);
 
         Weight(weight as _)
     }
@@ -195,7 +200,7 @@ impl FloatMeasure for Weight {
     }
 
     fn infinite() -> Self {
-        Weight(i128::MAX)
+        Weight(i128::MIN)
     }
 }
 
@@ -205,8 +210,8 @@ impl ops::Add for Weight {
     fn add(self, rhs: Self) -> Self {
         // NOTE: The Bellman-Ford implementation relies on `∞ * x == ∞`.
         // TODO(nlordell): Since this branch is in a tight loop, we would
-        // probably benifit quite a bit in transforming this into a bitwise
-        // operation with no branches.
+        // probably benifit quite a bit in optimizing this so that there are no
+        // branches.
         if self == Weight::infinite() || rhs == Weight::infinite() {
             Weight::infinite()
         } else {
