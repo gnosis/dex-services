@@ -14,7 +14,7 @@ mod user;
 pub use self::flow::{Flow, Ring};
 use self::order::{Order, OrderCollector, OrderMap};
 pub use self::reduced::ReducedOrderbook;
-pub use self::scalar::{ExchangeRate, LimitPrice};
+pub use self::scalar::{ExchangeRate, LimitPrice, Weight};
 use self::user::{User, UserMap};
 use crate::api::Market;
 use crate::encoding::{Element, TokenId, TokenPair};
@@ -28,7 +28,7 @@ use std::cmp;
 use std::f64;
 use thiserror::Error;
 
-type OrderbookGraph = DiGraph<TokenId, f64>;
+type OrderbookGraph = DiGraph<TokenId, Weight>;
 
 /// A graph representation of a complete orderbook.
 #[derive(Clone, Debug)]
@@ -472,14 +472,15 @@ mod tests {
     use super::*;
     use crate::test::prelude::*;
     use crate::FEE_FACTOR;
+    use petgraph::algo::FloatMeasure;
 
     impl Orderbook {
         /// Retrieve the weight of an edge in the projection graph. This is used for
         /// testing that the projection graph is in sync with the order map.
-        fn get_projected_pair_weight(&self, pair: TokenPair) -> f64 {
+        fn get_projected_pair_weight(&self, pair: TokenPair) -> Weight {
             let edge = match self.get_pair_edge(pair) {
                 Some(edge) => edge,
-                None => return f64::INFINITY,
+                None => return Weight::infinite(),
             };
             self.projection[edge]
         }
@@ -600,7 +601,7 @@ mod tests {
         let order = orderbook.orders.best_order_for_pair(pair).unwrap();
         assert_eq!(orderbook.num_orders(), 2);
         assert_eq!(order.user, user_id(2));
-        assert_approx_eq!(
+        assert_eq!(
             order.exchange_rate.weight(),
             orderbook.get_projected_pair_weight(pair)
         );
@@ -609,7 +610,10 @@ mod tests {
         let order = orderbook.orders.best_order_for_pair(pair);
         assert_eq!(orderbook.num_orders(), 1);
         assert!(order.is_none());
-        assert!(orderbook.get_projected_pair_weight(pair).is_infinite());
+        assert_eq!(
+            orderbook.get_projected_pair_weight(pair),
+            Weight::infinite()
+        );
     }
 
     #[test]
@@ -689,13 +693,13 @@ mod tests {
         // 2 -> 3 | 500_000 |  499_500 |   1.0
         // 3 -> 4 | 499_500 |  998_000 |   0.5
 
-        assert_approx_eq!(
+        assert_eq!(
             orderbook.get_projected_pair_weight(TokenPair { buy: 1, sell: 2 }),
             // NOTE: user 2's order has no more balance so expect the new weight
             // between tokens 1 and 2 to be user 5's order with the worse price
             // of 2:1 (meaning it needs twice as much token 1 to get the same
             // amount of token 2 when pushing flow through that edge).
-            (2.0 * FEE_FACTOR).log2()
+            Weight::new(2.0 * FEE_FACTOR),
         );
         // NOTE: User 2's other order selling token 2 for 4 also has no more
         // balance so check that it was also removed from the order map and from
@@ -704,9 +708,10 @@ mod tests {
             .orders
             .best_order_for_pair(TokenPair { buy: 4, sell: 2 })
             .is_none());
-        assert!(orderbook
-            .get_projected_pair_weight(TokenPair { buy: 4, sell: 2 })
-            .is_infinite());
+        assert_eq!(
+            orderbook.get_projected_pair_weight(TokenPair { buy: 4, sell: 2 }),
+            Weight::infinite(),
+        );
         // NOTE: User 3's order selling token 3 for 2 has become a dust order
         // (since it has a remaining amount of about 500), check that it was
         // removed.
@@ -714,9 +719,10 @@ mod tests {
             .orders
             .best_order_for_pair(TokenPair { buy: 2, sell: 3 })
             .is_none());
-        assert!(orderbook
-            .get_projected_pair_weight(TokenPair { buy: 2, sell: 3 })
-            .is_infinite());
+        assert_eq!(
+            orderbook.get_projected_pair_weight(TokenPair { buy: 2, sell: 3 }),
+            Weight::infinite(),
+        );
 
         assert_eq!(orderbook.num_orders(), 3);
 

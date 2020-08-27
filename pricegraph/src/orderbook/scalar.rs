@@ -4,6 +4,7 @@
 use crate::encoding::PriceFraction;
 use crate::num;
 use crate::FEE_FACTOR;
+use petgraph::algo::FloatMeasure;
 use std::cmp;
 use std::ops;
 
@@ -104,8 +105,8 @@ impl ExchangeRate {
     ///
     /// This is the base-2 logarithm of the exchange rate. This eanbles path
     /// weights to be computed using addition instead of multiplication.
-    pub fn weight(self) -> f64 {
-        self.0.log2()
+    pub fn weight(self) -> Weight {
+        Weight::new(self.0)
     }
 }
 
@@ -168,4 +169,48 @@ impl_binop! {
 fn assert_strictly_positive_and_finite(value: f64) -> f64 {
     debug_assert!(num::is_strictly_positive_and_finite(value));
     value
+}
+
+/// The exchange rate weight used by the pathfinding algorithm.
+#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+pub struct Weight(i128);
+
+impl Weight {
+    /// Creates a new graph weight from a floating point number.
+    pub fn new(value: f64) -> Self {
+        // NOTE: We need to reserve some bits in order for the addition not to
+        // overflow
+        const FACTOR: f64 = (1u128 << 100) as _;
+
+        let weight = value.log2() * FACTOR;
+        debug_assert!(-128.0 * FACTOR < weight && weight < 128.0 * FACTOR);
+
+        Weight(weight as _)
+    }
+}
+
+impl FloatMeasure for Weight {
+    fn zero() -> Self {
+        Weight(0)
+    }
+
+    fn infinite() -> Self {
+        Weight(i128::MAX)
+    }
+}
+
+impl ops::Add for Weight {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self {
+        // NOTE: The Bellman-Ford implementation relies on `∞ * x == ∞`.
+        // TODO(nlordell): Since this branch is in a tight loop, we would
+        // probably benifit quite a bit in transforming this into a bitwise
+        // operation with no branches.
+        if self == Weight::infinite() || rhs == Weight::infinite() {
+            Weight::infinite()
+        } else {
+            Weight(self.0 + rhs.0)
+        }
+    }
 }
