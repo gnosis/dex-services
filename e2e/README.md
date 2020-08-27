@@ -1,8 +1,10 @@
-# Guide to Running Tests
+This crate contains tests and e2e scripts for gathering historic price estimate information.
+
+## Guide to Running Tests
 
 To run the stableX related tests locally,
 
-## Ganache:
+### Ganache:
 
 ```sh
 # T1:
@@ -17,7 +19,7 @@ cargo test -p e2e ganache -- --nocapture
 # The test is over when this command exits.
 ```
 
-## Rinkeby:
+### Rinkeby:
 
 ```sh
 # T1:
@@ -31,4 +33,24 @@ cargo run -p driver -- --node-url https://node.rinkeby.gnosisdev.com/ --network-
 # T3:
 cargo test -p e2e rinkeby -- --nocapture
 # The test is over when this command exits.
+```
+
+## Guide to Running E2E Scripts
+
+There are two e2e scripts available for gathering `pricegraph` performance metrics by analyzing historing batches and submitted solutions. All scripts are run from the root of the repository.
+
+### Historic Prices
+
+This script estimates historic OWL prices for tokens and compares them to the results produced by the solver.
+
+```
+$ cargo run --release -p e2e --bin historic_prices -- --orderbook-file path/to/orderbook/file
+```
+
+### Historic Trades
+
+This script analyses the historic trades on the exchange and compares the exchange rates to the `pricegraph` estimates.
+
+```
+$ cargo run --release -p e2e --bin historic_trades -- --orderbook-file path/to/orderbook/file
 ```

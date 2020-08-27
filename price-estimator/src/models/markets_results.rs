@@ -87,6 +87,7 @@ mod tests {
     use super::*;
     use assert_approx_eq::assert_approx_eq;
     use core::token_info::TokenBaseInfo;
+    use ethcontract::Address;
     use serde_json::Value;
 
     #[test]
@@ -187,10 +188,12 @@ mod tests {
             }],
         };
         let base = TokenBaseInfo {
+            address: Address::from_low_u64_be(0),
             alias: "WETH".into(),
             decimals: 18,
         };
         let quote = TokenBaseInfo {
+            address: Address::from_low_u64_be(0),
             alias: "USDC".into(),
             decimals: 6,
         };

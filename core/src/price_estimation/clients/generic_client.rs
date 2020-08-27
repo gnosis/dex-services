@@ -171,6 +171,7 @@ mod tests {
     use super::*;
     use crate::token_info::hardcoded::{TokenData, TokenInfoOverride};
     use anyhow::anyhow;
+    use ethcontract::Address;
     use lazy_static::lazy_static;
     use mockall::{predicate::*, Sequence};
     use std::sync::Once;
@@ -214,7 +215,9 @@ mod tests {
         api.expect_get_token_list()
             .returning(|| async { Ok(Vec::new()) }.boxed());
 
-        let tokens = hash_map! { TokenId::from(6) => TokenInfoOverride::new("DAI", 18, None)};
+        let tokens = hash_map! {
+            TokenId::from(6) => TokenInfoOverride::new(Address::from_low_u64_be(0), "DAI", 18, None)
+        };
         assert!(GenericClient::<MockApi>::with_api_and_tokens(
             api,
             Arc::new(TokenData::from(tokens))
@@ -228,7 +231,9 @@ mod tests {
     #[test]
     fn get_token_prices_initialization_fails_then_works() {
         initialize_mockapi_context();
-        let tokens = hash_map! { TokenId::from(1) => TokenInfoOverride::new("ETH", 18, None)};
+        let tokens = hash_map! {
+            TokenId::from(1) => TokenInfoOverride::new(Address::from_low_u64_be(0), "ETH", 18, None)
+        };
         let mut api = MockApi::new();
         let mut seq = Sequence::new();
 
@@ -271,10 +276,11 @@ mod tests {
         initialize_mockapi_context();
         let mut api = MockApi::new();
 
+        let address = Address::from_low_u64_be(0);
         let tokens = hash_map! {
-            TokenId(6) => TokenInfoOverride::new("DAI", 18, None),
-            TokenId(1) => TokenInfoOverride::new("ETH", 18, None),
-            TokenId(4) => TokenInfoOverride::new("USDC", 6, None),
+            TokenId(6) => TokenInfoOverride::new(address, "DAI", 18, None),
+            TokenId(1) => TokenInfoOverride::new(address,"ETH", 18, None),
+            TokenId(4) => TokenInfoOverride::new(address,"USDC", 6, None),
         };
         lazy_static! {
             static ref API_TOKENS: [MockGenericToken; 3] =
@@ -317,9 +323,10 @@ mod tests {
         initialize_mockapi_context();
         let mut api = MockApi::new();
 
+        let address = Address::from_low_u64_be(0);
         let tokens = hash_map! {
-            TokenId(6) => TokenInfoOverride::new("DAI", 18, None),
-            TokenId(1) => TokenInfoOverride::new("ETH", 18, None)
+            TokenId(6) => TokenInfoOverride::new(address, "DAI", 18, None),
+            TokenId(1) => TokenInfoOverride::new(address, "ETH", 18, None)
         };
 
         lazy_static! {
@@ -358,10 +365,11 @@ mod tests {
         initialize_mockapi_context();
         let mut api = MockApi::new();
 
+        let address = Address::from_low_u64_be(0);
         let tokens = hash_map! {
-            TokenId(6) => TokenInfoOverride::new("dai", 18, None),
-            TokenId(1) => TokenInfoOverride::new("ETH", 18, None),
-            TokenId(4) => TokenInfoOverride::new("sUSD", 6, None)
+            TokenId(6) => TokenInfoOverride::new(address, "dai", 18, None),
+            TokenId(1) => TokenInfoOverride::new(address, "ETH", 18, None),
+            TokenId(4) => TokenInfoOverride::new(address, "sUSD", 6, None)
         };
 
         lazy_static! {
@@ -397,9 +405,10 @@ mod tests {
         initialize_mockapi_context();
         let mut api = MockApi::new();
 
+        let address = Address::from_low_u64_be(0);
         let tokens = hash_map! {
-            TokenId(6) => TokenInfoOverride::new("DAI", 18, None),
-            TokenId(1) => TokenInfoOverride::new("ETH", 18, None)
+            TokenId(6) => TokenInfoOverride::new(address, "DAI", 18, None),
+            TokenId(1) => TokenInfoOverride::new(address, "ETH", 18, None)
         };
 
         lazy_static! {

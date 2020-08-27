@@ -110,7 +110,7 @@ Then specify the solver image you want to use as a build argument, e.g.:
 docker-compose build --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:master stablex-debug
 ```
 
-Afterwards, when you run your environment as above, the linear optimizer should be automatically used. 
+Afterwards, when you run your environment as above, the linear optimizer should be automatically used.
 Note that the e2e tests might no longer work, as their resolution depends on the naive and not the optimal solving strategy.
 
 ## Configuration
@@ -206,9 +206,10 @@ OPTIONS:
         --token-data <token-data>
             JSON encoded backup token information to provide to the solver.
 
-            For example: '{ "T0001": { "alias": "WETH", "decimals": 18, "externalPrice": 200000000000000000000, },
-            "T0004": { "alias": "USDC", "decimals": 6, "externalPrice": 1000000000000000000000000000000, } }' [env:
-            TOKEN_DATA=]  [default: {}]
+            For example: '{ "T0001": { "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", "alias": "WETH",
+            "decimals": 18, "externalPrice": 200000000000000000000, }, "T0004": { "address":
+            "0x0000000000000000000000000000000000000000", "alias": "USDC", "decimals": 6, "externalPrice":
+            1000000000000000000000000000000, } }' [env: TOKEN_DATA=]  [default: {}]           TOKEN_DATA=]  [default: {}]
 ```
 
 ### Orderbook Filter Example

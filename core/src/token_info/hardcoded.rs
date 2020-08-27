@@ -1,22 +1,19 @@
 //! This module contains fallback token data that should be used by the price
 //! estimator when prices are not available.
 
-use crate::models::TokenId;
-use crate::price_estimation::price_source::PriceSource;
+use crate::{models::TokenId, price_estimation::price_source::PriceSource};
 use anyhow::{anyhow, Context, Error, Result};
-
+use ethcontract::Address;
 use futures::future::BoxFuture;
 use serde::Deserialize;
-use std::collections::HashMap;
-use std::iter::FromIterator;
-use std::num::NonZeroU128;
-use std::str::FromStr;
+use std::{collections::HashMap, iter::FromIterator, num::NonZeroU128, str::FromStr};
 
 use super::{TokenBaseInfo, TokenInfoFetching};
 #[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenInfoOverride {
+    pub address: Address,
     pub alias: String,
     pub decimals: u8,
     pub external_price: Option<NonZeroU128>,
@@ -24,8 +21,14 @@ pub struct TokenInfoOverride {
 
 impl TokenInfoOverride {
     #[cfg(test)]
-    pub fn new(alias: &str, decimals: u8, external_price: Option<NonZeroU128>) -> Self {
+    pub fn new(
+        address: Address,
+        alias: &str,
+        decimals: u8,
+        external_price: Option<NonZeroU128>,
+    ) -> Self {
         Self {
+            address,
             alias: alias.to_owned(),
             decimals,
             external_price,
@@ -36,6 +39,7 @@ impl TokenInfoOverride {
 impl Into<TokenBaseInfo> for TokenInfoOverride {
     fn into(self) -> TokenBaseInfo {
         TokenBaseInfo {
+            address: self.address,
             alias: self.alias,
             decimals: self.decimals,
         }
@@ -95,6 +99,7 @@ impl Into<HashMap<TokenId, TokenBaseInfo>> for TokenData {
                 (
                     id,
                     TokenBaseInfo {
+                        address: Address::from_low_u64_be(0),
                         alias: info.alias,
                         decimals: info.decimals,
                     },
@@ -121,11 +126,13 @@ mod tests {
     fn token_fallback_data_from_str() {
         let json = r#"{
           "T0001": {
+            "address": "0x000000000000000000000000000000000000000a",
             "alias": "WETH",
             "decimals": 18,
             "externalPrice": 200000000000000000000
           },
           "T0004": {
+            "address": "0x000000000000000000000000000000000000000B",
             "alias": "USDC",
             "decimals": 6,
             "externalPrice": 1000000000000000000000000000000
@@ -135,8 +142,8 @@ mod tests {
         assert_eq!(
             TokenData::from_str(json).unwrap(),
             TokenData::from(hash_map! {
-                TokenId(1) => TokenInfoOverride::new("WETH", 18, Some(nonzero!(200_000_000_000_000_000_000))),
-                TokenId(4) => TokenInfoOverride::new("USDC", 6, Some(nonzero!(1_000_000_000_000_000_000_000_000_000_000))),
+                TokenId(1) => TokenInfoOverride::new(Address::from_low_u64_be(10), "WETH", 18, Some(nonzero!(200_000_000_000_000_000_000))),
+                TokenId(4) => TokenInfoOverride::new(Address::from_low_u64_be(11), "USDC", 6, Some(nonzero!(1_000_000_000_000_000_000_000_000_000_000))),
             })
         );
     }
