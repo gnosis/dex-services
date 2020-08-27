@@ -5,6 +5,7 @@ use super::{AuctionTimingConfiguration, Scheduler};
 use crate::{
     contracts::stablex_contract::StableXContract,
     driver::stablex_driver::{DriverError, StableXDriver},
+    health::HealthReporting,
     models::batch_id::BATCH_DURATION,
     models::Solution,
     util::{AsyncSleep, AsyncSleeping, FutureWaitExt as _},
@@ -24,6 +25,7 @@ pub struct EvmScheduler {
     driver: Arc<dyn StableXDriver>,
     config: AuctionTimingConfiguration,
     sleep: Box<dyn AsyncSleeping>,
+    health: Arc<dyn HealthReporting>,
 }
 
 impl EvmScheduler {
@@ -31,6 +33,7 @@ impl EvmScheduler {
     pub fn new(
         exchange: Arc<dyn StableXContract>,
         driver: Arc<dyn StableXDriver>,
+        health: Arc<dyn HealthReporting>,
         config: AuctionTimingConfiguration,
     ) -> Self {
         EvmScheduler {
@@ -38,6 +41,7 @@ impl EvmScheduler {
             exchange,
             config,
             sleep: Box::new(AsyncSleep),
+            health,
         }
     }
 
@@ -47,12 +51,14 @@ impl EvmScheduler {
         exchange: Arc<dyn StableXContract>,
         driver: Arc<dyn StableXDriver>,
         sleep: Box<dyn AsyncSleeping>,
+        health: Arc<dyn HealthReporting>,
     ) -> Self {
         EvmScheduler {
             driver,
             exchange,
             config: AuctionTimingConfiguration::default(),
             sleep,
+            health,
         }
     }
 
@@ -150,7 +156,7 @@ impl EvmScheduler {
             Some(batch) => batch,
         };
         let new_batch = self.wait_for_batch_to_change(last_batch).await?;
-        // TODO: signal healthiness
+        self.health.notify_ready();
         let solution = self.solve(new_batch).await?;
         if let Some(solution) = solution {
             self.submit(new_batch, solution).await?;
@@ -178,20 +184,35 @@ mod tests {
     use crate::{
         contracts::stablex_contract::MockStableXContract,
         driver::stablex_driver::MockStableXDriver,
+        health::MockHealthReporting,
         models::{BatchId, Solution},
         util::MockAsyncSleeping,
     };
     use anyhow::anyhow;
     use futures::future::FutureExt as _;
-    use mockall::predicate::eq;
+    use mockall::{predicate::eq, Sequence};
 
     #[test]
-    fn scheduler_first_step_waits_for_second_batch() {
+    fn scheduler_first_step_waits_for_second_batch_and_reports_healthy() {
+        let mut sequence = Sequence::new();
         let mut exchange = MockStableXContract::new();
+        let mut health = MockHealthReporting::new();
         exchange
             .expect_get_current_auction_index()
             .times(1)
+            .in_sequence(&mut sequence)
             .returning(|| async { Ok(42) }.boxed());
+        exchange
+            .expect_get_current_auction_index()
+            .times(1)
+            .in_sequence(&mut sequence)
+            .returning(|| async { Ok(43) }.boxed());
+        health
+            .expect_notify_ready()
+            .times(1)
+            .in_sequence(&mut sequence)
+            .returning(|| ());
+
         exchange
             .expect_get_current_auction_index()
             .returning(|| async { Ok(43) }.boxed());
@@ -203,16 +224,17 @@ mod tests {
         driver
             .expect_solve_batch()
             .with(eq(BatchId(42)), eq(Duration::from_secs(150)))
-            .returning(|_, _| immediate!(Ok(Solution::trivial())));
-        driver
-            .expect_submit_solution()
-            .returning(|_, _| immediate!(Ok(())));
+            .returning(|_, _| immediate!(Err(DriverError::Skip(anyhow!("")))));
 
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
 
-        let scheduler =
-            EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
+        let scheduler = EvmScheduler::with_defaults_and_sleep(
+            Arc::new(exchange),
+            Arc::new(driver),
+            sleep,
+            Arc::new(health),
+        );
 
         let result = scheduler.step(None).now_or_never().unwrap().unwrap();
         assert_eq!(result, 42);
@@ -243,8 +265,15 @@ mod tests {
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
 
-        let scheduler =
-            EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
+        let mut health = MockHealthReporting::new();
+        health.expect_notify_ready().returning(|| ());
+
+        let scheduler = EvmScheduler::with_defaults_and_sleep(
+            Arc::new(exchange),
+            Arc::new(driver),
+            sleep,
+            Arc::new(health),
+        );
 
         let result = scheduler.step(Some(40)).now_or_never().unwrap().unwrap();
         assert_eq!(result, 41);
@@ -270,8 +299,15 @@ mod tests {
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
 
-        let scheduler =
-            EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
+        let mut health = MockHealthReporting::new();
+        health.expect_notify_ready().returning(|| ());
+
+        let scheduler = EvmScheduler::with_defaults_and_sleep(
+            Arc::new(exchange),
+            Arc::new(driver),
+            sleep,
+            Arc::new(health),
+        );
 
         let result = scheduler.step(Some(40)).now_or_never().unwrap().unwrap();
         assert_eq!(result, 41);
@@ -292,8 +328,15 @@ mod tests {
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
 
-        let scheduler =
-            EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
+        let mut health = MockHealthReporting::new();
+        health.expect_notify_ready().returning(|| ());
+
+        let scheduler = EvmScheduler::with_defaults_and_sleep(
+            Arc::new(exchange),
+            Arc::new(driver),
+            sleep,
+            Arc::new(health),
+        );
 
         let result = scheduler.step(Some(40)).now_or_never().unwrap().unwrap();
         assert_eq!(result, 41);
@@ -325,8 +368,15 @@ mod tests {
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
 
-        let scheduler =
-            EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
+        let mut health = MockHealthReporting::new();
+        health.expect_notify_ready().returning(|| ());
+
+        let scheduler = EvmScheduler::with_defaults_and_sleep(
+            Arc::new(exchange),
+            Arc::new(driver),
+            sleep,
+            Arc::new(health),
+        );
 
         let result = scheduler.step(Some(40)).now_or_never().unwrap().unwrap();
         assert_eq!(result, 41);
@@ -350,8 +400,15 @@ mod tests {
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
 
-        let scheduler =
-            EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
+        let mut health = MockHealthReporting::new();
+        health.expect_notify_ready().returning(|| ());
+
+        let scheduler = EvmScheduler::with_defaults_and_sleep(
+            Arc::new(exchange),
+            Arc::new(driver),
+            sleep,
+            Arc::new(health),
+        );
 
         let result = scheduler.step(Some(40)).now_or_never().unwrap().unwrap();
         assert_eq!(result, 41);
@@ -384,8 +441,15 @@ mod tests {
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
 
-        let mut scheduler =
-            EvmScheduler::with_defaults_and_sleep(Arc::new(exchange), Arc::new(driver), sleep);
+        let mut health = MockHealthReporting::new();
+        health.expect_notify_ready().returning(|| ());
+
+        let mut scheduler = EvmScheduler::with_defaults_and_sleep(
+            Arc::new(exchange),
+            Arc::new(driver),
+            sleep,
+            Arc::new(health),
+        );
         scheduler.config.earliest_solution_submit_time = Duration::from_secs(50);
 
         let result = scheduler.step(Some(40)).now_or_never().unwrap().unwrap();

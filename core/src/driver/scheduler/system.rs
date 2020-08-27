@@ -2,6 +2,7 @@ use super::{AuctionTimingConfiguration, Scheduler};
 use crate::{
     contracts::stablex_contract::StableXContract,
     driver::stablex_driver::{DriverError, StableXDriver},
+    health::HealthReporting,
     models::{BatchId, Solution},
     util::{self, AsyncSleep, AsyncSleeping, Now},
 };
@@ -18,6 +19,7 @@ const CONTRACT_BATCH_ID_POLL_INTERVAL: Duration = Duration::from_secs(10);
 pub struct SystemScheduler {
     contract: Arc<dyn StableXContract>,
     driver: Arc<dyn StableXDriver>,
+    health: Arc<dyn HealthReporting>,
     auction_timing_configuration: AuctionTimingConfiguration,
     last_solved_batch: Option<BatchId>,
 }
@@ -32,11 +34,13 @@ impl SystemScheduler {
     pub fn new(
         contract: Arc<dyn StableXContract>,
         driver: Arc<dyn StableXDriver>,
+        health: Arc<dyn HealthReporting>,
         auction_timing_configuration: AuctionTimingConfiguration,
     ) -> Self {
         Self {
             contract,
             driver,
+            health,
             auction_timing_configuration,
             last_solved_batch: None,
         }
@@ -192,8 +196,19 @@ fn log_submit_result(batch_id: BatchId, result: &Result<()>) {
     }
 }
 
+fn duration_until_healthy(now: SystemTime) -> Duration {
+    // We don't use the target_start_solve_time as an extra safety buffer in case the time between
+    // this pod and the other one is out of sync.
+    let next_start_solve_time = BatchId::current(now).unwrap().solve_start_time();
+    next_start_solve_time
+        .duration_since(now)
+        .unwrap_or_default()
+}
+
 impl Scheduler for SystemScheduler {
     fn start(&mut self) -> ! {
+        thread::sleep(duration_until_healthy(SystemTime::now()));
+        self.health.notify_ready();
         loop {
             match self.determine_action(SystemTime::now()) {
                 Ok(Action::Sleep(duration)) => {
@@ -220,6 +235,7 @@ mod tests {
     use crate::{
         contracts::stablex_contract::MockStableXContract,
         driver::stablex_driver::MockStableXDriver,
+        health::MockHealthReporting,
         util::{MockAsyncSleeping, MockNow},
     };
     use anyhow::anyhow;
@@ -235,7 +251,9 @@ mod tests {
             latest_solution_submit_time: Duration::from_secs(20),
             earliest_solution_submit_time: Duration::from_secs(0),
         };
-        let scheduler = SystemScheduler::new(contract, driver, auction_timing_configuration);
+        let health = Arc::new(MockHealthReporting::new());
+        let scheduler =
+            SystemScheduler::new(contract, driver, health, auction_timing_configuration);
 
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
 
@@ -291,7 +309,9 @@ mod tests {
             latest_solution_submit_time: Duration::from_secs(20),
             earliest_solution_submit_time: Duration::from_secs(0),
         };
-        let mut scheduler = SystemScheduler::new(contract, driver, auction_timing_configuration);
+        let health = Arc::new(MockHealthReporting::new());
+        let mut scheduler =
+            SystemScheduler::new(contract, driver, health, auction_timing_configuration);
         scheduler.last_solved_batch = Some(BatchId(0));
 
         let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(300);
@@ -508,12 +528,31 @@ mod tests {
             latest_solution_submit_time: Duration::from_secs(20),
             earliest_solution_submit_time: Duration::from_secs(0),
         };
+        let health = Arc::new(MockHealthReporting::new());
         let mut scheduler = SystemScheduler::new(
             Arc::new(contract),
             Arc::new(driver),
+            health,
             auction_timing_configuration,
         );
 
         scheduler.start();
+    }
+
+    #[test]
+    fn duration_until_healthy_returns_next_start_solve_time() {
+        let time = |duration| SystemTime::UNIX_EPOCH + duration;
+        assert_eq!(
+            duration_until_healthy(time(Duration::from_secs(301))),
+            Duration::from_secs(299)
+        );
+        assert_eq!(
+            duration_until_healthy(time(Duration::from_secs(350))),
+            Duration::from_secs(250)
+        );
+        assert_eq!(
+            duration_until_healthy(time(Duration::from_secs(599))),
+            Duration::from_secs(1)
+        );
     }
 }
