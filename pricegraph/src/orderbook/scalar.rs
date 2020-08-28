@@ -170,7 +170,7 @@ fn assert_strictly_positive_and_finite(value: f64) -> f64 {
 
 /// A signed fixed point number with 24 magnitude bits and 104 fractional bits.
 ///
-/// Note the that size of the magniture and fractional compontents was carefully
+/// Note the that size of the magnitude and fractional components was carefully
 /// chosen for exchange rate weights. Specifically, weights must be in a
 /// logarithmic scale so that adding them is equivalent to multiplying exchange
 /// rates. Since `log2` of the exchange rate is used, and the range of these
