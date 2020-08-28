@@ -68,7 +68,7 @@ where
         let mut path = Vec::with_capacity(max_path_len);
         let mut current = dest;
         while current != self.source {
-            debug_assert!(path.len() <= max_path_len, "undetected negative cycle");
+            assert!(path.len() <= max_path_len, "undetected negative cycle");
             path.push(current);
             current = self.predecessor_store.predecessors[self.graph.to_index(current)]?;
         }
