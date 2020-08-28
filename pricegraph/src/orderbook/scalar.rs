@@ -175,25 +175,26 @@ fn assert_strictly_positive_and_finite(value: f64) -> f64 {
 /// logarithmic scale so that adding them is equivalent to multiplying exchange
 /// rates. Since `log2` of the exchange rate is used, and the range of these
 /// exchange rates are:
-/// ```
+/// ```text
 /// [MIN_AMOUNT / u128::MAX, u128::MAX / MIN_AMOUNT]
 /// ```
 ///
 /// In the logarithmic scale, this range is:
-/// ```
+/// ```text
 /// [-114.71, 114.71]
 /// ```
 ///
 /// Furthermore, these weights can be added at most 2^16 times (this is the
 /// maximum number of tokens in the exchange), so the total range that must be
 /// representable by the magnitude bits is:
-/// ```
+/// ```text
 /// [-7517784, 7517784]
 /// ```
 ///
 /// This number fits in 23 bits. However, an additional bit is needed in order
-/// to have a special "infinite" value which is required by the Bellman-Ford
-/// implementation.
+/// to be able to represent the two's complement of 7517784 (for the --7517784)
+/// while still reserving a special value for ∞.to have a special "infinite"
+/// value which is required by the Bellman-Ford implementation.
 ///
 /// This leaves 104 fractional bits. Note that we want **as many fractional bits
 /// as possible** to keep as much precision as possible for values very close to
@@ -211,7 +212,7 @@ const FIXED_24X104_SCALING_FACTOR: f64 = (1u128 << 104) as _;
 /// An opaque weight for an exchange rate used by the pathfinding algorithm.
 ///
 /// Internally, the weight is a represented as an fixed point number.
-#[derive(Clone, Copy, Default, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
 pub struct Weight(Fixed24x104);
 
 impl Weight {
@@ -260,6 +261,23 @@ impl ops::Add for Weight {
     }
 }
 
+impl cmp::PartialOrd for Weight {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl cmp::Ord for Weight {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        match (*self == Weight::infinite(), *other == Weight::infinite()) {
+            (true, true) => cmp::Ordering::Equal,
+            (true, false) => cmp::Ordering::Greater,
+            (false, true) => cmp::Ordering::Less,
+            _ => self.0.cmp(&other.0),
+        }
+    }
+}
+
 impl fmt::Debug for Weight {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (value, xrate): (&dyn fmt::Debug, _) = if *self == Weight::infinite() {
@@ -300,6 +318,18 @@ mod tests {
         // NOTE: The actual minimum value is reserved to represent +∞.
         assert!(min_total_weight > Fixed24x104::MIN + 1);
         assert!(max_total_weight < Fixed24x104::MAX);
+    }
+
+    #[test]
+    fn weight_implements_ord() {
+        assert_eq!(
+            Weight::infinite().cmp(&Weight::infinite()),
+            cmp::Ordering::Equal,
+        );
+        assert!(Weight::infinite() > Weight::new(1000.0));
+        assert!(Weight::new(1000.0) < Weight::infinite());
+
+        assert!(Weight::new(42.0) > Weight::new(1337.0f64.recip()));
     }
 
     #[test]
