@@ -764,9 +764,6 @@ mod tests {
         );
     }
 
-    // TODO(nlordell): Once this known issue is fixed, this unit test should no
-    // longer panic.
-    #[should_panic]
     #[test]
     fn search_panics_on_undetected_negative_cycle_due_to_rounding_errors() {
         //              /---250---v
