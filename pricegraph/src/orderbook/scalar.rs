@@ -1,12 +1,9 @@
 //! This module contains definitions for measurement scalars used by the
 //! orderbook graph representation.
 
-use crate::encoding::PriceFraction;
-use crate::num;
-use crate::FEE_FACTOR;
+use crate::{encoding::PriceFraction, num, FEE_FACTOR};
 use petgraph::algo::FloatMeasure;
-use std::cmp;
-use std::ops;
+use std::{cmp, ops};
 
 /// An exchange limit price. Limit prices on the exchange are represented by a
 /// fraction of two `u128`s representing a buy and sell amount. These limit
@@ -171,24 +168,66 @@ fn assert_strictly_positive_and_finite(value: f64) -> f64 {
     value
 }
 
-/// The exchange rate weight used by the pathfinding algorithm.
+/// A signed fixed point number with 24 magnitude bits and 104 fractional bits.
+///
+/// Note the that size of the magniture and fractional compontents was carefully
+/// chosen for exchange rate weights. Specifically, weights must be in a
+/// logarithmic scale so that adding them is equivalent to multiplying exchange
+/// rates. Since `log2` of the exchange rate is used, and the range of these
+/// exchange rates are:
+/// ```
+/// [MIN_AMOUNT / u128::MAX, u128::MAX / MIN_AMOUNT]
+/// ```
+///
+/// In the logarithmic scale, this range is:
+/// ```
+/// [-114.71, 114.71]
+/// ```
+///
+/// Furthermore, these weights can be added at most 2^16 times (this is the
+/// maximum number of tokens in the exchange), so the total range that must be
+/// representable by the magnitude bits is:
+/// ```
+/// [-7517784, 7517784]
+/// ```
+///
+/// This number fits in 23 bits. However, an additional bit is needed in order
+/// to have a special "infinite" value which is required by the Bellman-Ford
+/// implementation.
+///
+/// This leaves 104 fractional bits. Note that we want **as many fractional bits
+/// as possible** to keep as much precision as possible for values very close to
+/// `0.0`. With `104` fractional bits, we can represent without precision loss
+/// any `f64` that is greater than `1e-51` (since `-104 - 53 == 51` where `53 is
+/// the number of bits of precision in an `f64`.
+type Fixed24x104 = i128;
+
+/// The 24x104 fixed point number scaling factor.
+///
+/// Note that this value is a **power of 2** to make sure that multiplying with
+/// `f64`s does not cause precision issues.
+const FIXED_24X104_SCALING_FACTOR: f64 = (1u128 << 104) as _;
+
+/// An opaque weight for an exchange rate used by the pathfinding algorithm.
+///
+/// Interally, the weight is a represented as an integer
 #[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
-pub struct Weight(i128);
+pub struct Weight(Fixed24x104);
 
 impl Weight {
     /// Creates a new graph weight from a floating point number.
     pub fn new(value: f64) -> Self {
-        // NOTE: We need to reserve some bits in order for the addition not to
-        // overflow, specifically we need to reserve
-        // - 16 bits for the maximum number of nodes (maximum number of tokens)
-        // - 8 bits for the [-128, 128) range
-        // - 1 bit for infinity
-        // Thats a total of 25 bits, which leaves us with 103 bits of precision
-        // for the weight.
-        const FACTOR: f64 = (1u128 << 103) as _;
+        // TODO(nlordell): In the future, it might be nice to compute the `log2`
+        // already as a fixed point value in order to have more precision.
+        // Currently, since it is computed as a `f64` it is limited to 53 bits
+        // of precision instead of the full `104 + 7` that is possible given
+        // the range of the `log2` values and size of the fixed point number.
 
-        let weight = value.log2() * FACTOR;
-        debug_assert!(-128.0 * FACTOR <= weight && weight < 128.0 * FACTOR);
+        let weight = value.log2() * FIXED_24X104_SCALING_FACTOR;
+        debug_assert!(
+            -114.72 * FIXED_24X104_SCALING_FACTOR <= weight
+                && weight < 114.72 * FIXED_24X104_SCALING_FACTOR,
+        );
 
         Weight(weight as _)
     }
@@ -200,6 +239,9 @@ impl FloatMeasure for Weight {
     }
 
     fn infinite() -> Self {
+        // NOTE: Use a special marker value to represent +∞ which is needed by
+        // the `petgraph` Bellman-Ford implementation. `i128::MIN` is chosen so
+        // that the the range of non-infinite values are semetric around `0`.
         Weight(i128::MIN)
     }
 }
@@ -208,14 +250,39 @@ impl ops::Add for Weight {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self {
-        // NOTE: The Bellman-Ford implementation relies on `∞ * x == ∞`.
-        // TODO(nlordell): Since this branch is in a tight loop, we would
-        // probably benifit quite a bit in optimizing this so that there are no
-        // branches.
+        // NOTE: The Bellman-Ford implementation relies on special behaviour
+        // for +∞ such that: `+∞ * x == +∞`.
         if self == Weight::infinite() || rhs == Weight::infinite() {
             Weight::infinite()
         } else {
             Weight(self.0 + rhs.0)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{num, MIN_AMOUNT};
+
+    #[test]
+    fn weight_range_fits_in_fixed_point_number() {
+        // NOTE: This test relies on float to integer conversion being
+        // saturating, so just verify for sanity's sake:
+        assert_eq!(f64::MAX as i128, i128::MAX);
+        assert_eq!(-f64::MAX as i128, i128::MIN);
+
+        const MAX_TOKENS: f64 = (1 << 16) as _;
+        let max_xrate = 2.0f64.powi(128) / MIN_AMOUNT;
+
+        let max_total_weight = {
+            let weight = max_xrate.log2() * MAX_TOKENS * FIXED_24X104_SCALING_FACTOR;
+            (weight + num::max_rounding_error(weight)) as Fixed24x104
+        };
+        let min_total_weight = -max_total_weight;
+
+        // NOTE: The actual minimum value is reserved to represent +∞.
+        assert!(min_total_weight > Fixed24x104::MIN + 1);
+        assert!(max_total_weight < Fixed24x104::MAX);
     }
 }
