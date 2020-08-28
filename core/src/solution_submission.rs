@@ -169,7 +169,7 @@ impl<'a> StableXSolutionSubmitter<'a> {
         let deadline = BatchId::from(batch_index).solve_end_time() + Duration::from_secs(30);
         let remaining = deadline
             .duration_since(SystemTime::now())
-            .unwrap_or(Duration::from_secs(0));
+            .unwrap_or_default();
         self.async_sleep.sleep(remaining).await;
         let gas_price = U256::from(
             (num::u256_to_f64(gas_price_cap) * MIN_GAS_PRICE_INCREASE_FACTOR).ceil() as u128,

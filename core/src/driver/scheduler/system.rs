@@ -149,7 +149,7 @@ async fn wait_for_batch_id(
     //   one accepting orders and does not yet accept solutions.
     while batch_id.0 as u32 >= contract.get_current_auction_index().await? {
         log::info!("Solved batch is not yet accepting solutions, waiting for next batch.");
-        sleep.sleep(CONTRACT_BATCH_ID_POLL_INTERVAL);
+        sleep.sleep(CONTRACT_BATCH_ID_POLL_INTERVAL).await;
     }
     Ok(())
 }
