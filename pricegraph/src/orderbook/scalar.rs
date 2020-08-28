@@ -3,7 +3,7 @@
 
 use crate::{encoding::PriceFraction, num, FEE_FACTOR};
 use petgraph::algo::FloatMeasure;
-use std::{cmp, ops};
+use std::{cmp, fmt, ops};
 
 /// An exchange limit price. Limit prices on the exchange are represented by a
 /// fraction of two `u128`s representing a buy and sell amount. These limit
@@ -210,8 +210,8 @@ const FIXED_24X104_SCALING_FACTOR: f64 = (1u128 << 104) as _;
 
 /// An opaque weight for an exchange rate used by the pathfinding algorithm.
 ///
-/// Interally, the weight is a represented as an integer
-#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+/// Internally, the weight is a represented as an fixed point number.
+#[derive(Clone, Copy, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Weight(Fixed24x104);
 
 impl Weight {
@@ -260,6 +260,22 @@ impl ops::Add for Weight {
     }
 }
 
+impl fmt::Debug for Weight {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let (value, xrate): (&dyn fmt::Debug, _) = if *self == Weight::infinite() {
+            (&f64::INFINITY, f64::INFINITY)
+        } else {
+            let xrate = 2.0f64.powf((self.0 as f64) / FIXED_24X104_SCALING_FACTOR);
+            (&self.0, xrate)
+        };
+
+        f.debug_struct("Weight")
+            .field("value", value)
+            .field("exchange_rate", &xrate)
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -284,5 +300,25 @@ mod tests {
         // NOTE: The actual minimum value is reserved to represent +∞.
         assert!(min_total_weight > Fixed24x104::MIN + 1);
         assert!(max_total_weight < Fixed24x104::MAX);
+    }
+
+    #[test]
+    fn weight_debug_displays_xrate() {
+        assert_eq!(
+            format!("{:?}", Weight::new(4.0)),
+            format!(
+                "Weight {{ value: {}, exchange_rate: {:?} }}",
+                2i128 << 104,
+                4.0,
+            ),
+        );
+        assert_eq!(
+            format!("{:?}", Weight::infinite()),
+            format!(
+                "Weight {{ value: {:?}, exchange_rate: {:?} }}",
+                f64::INFINITY,
+                f64::INFINITY,
+            ),
+        );
     }
 }
