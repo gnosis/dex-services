@@ -192,9 +192,9 @@ fn assert_strictly_positive_and_finite(value: f64) -> f64 {
 /// ```
 ///
 /// This number fits in 23 bits. However, an additional bit is needed in order
-/// to be able to represent the two's complement of 7517784 (for the --7517784)
-/// while still reserving a special value for ∞.to have a special "infinite"
-/// value which is required by the Bellman-Ford implementation.
+/// to be able to represent the two's complement of 7517784 (for the -7517784)
+/// while still reserving a special value for ∞ which is required by the
+/// Bellman-Ford implementation.
 ///
 /// This leaves 104 fractional bits. Note that we want **as many fractional bits
 /// as possible** to keep as much precision as possible for values very close to
