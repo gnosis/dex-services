@@ -242,7 +242,7 @@ impl FloatMeasure for Weight {
     fn infinite() -> Self {
         // NOTE: Use a special marker value to represent +∞ which is needed by
         // the `petgraph` Bellman-Ford implementation. `i128::MIN` is chosen so
-        // that the the range of non-infinite values are semetric around `0`.
+        // that the the range of non-infinite values are symmetric around `0`.
         Weight(i128::MIN)
     }
 }
