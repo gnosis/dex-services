@@ -10,12 +10,14 @@ mod order;
 mod reduced;
 mod scalar;
 mod user;
+mod weight;
 
 pub use self::flow::{Flow, Ring};
 use self::order::{Order, OrderCollector, OrderMap};
 pub use self::reduced::ReducedOrderbook;
-pub use self::scalar::{ExchangeRate, LimitPrice, Weight};
+pub use self::scalar::{ExchangeRate, LimitPrice};
 use self::user::{User, UserMap};
+pub use self::weight::Weight;
 use crate::api::Market;
 use crate::encoding::{Element, TokenId, TokenPair};
 use crate::graph::path::NegativeCycle;
