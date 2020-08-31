@@ -1,11 +1,8 @@
 //! This module contains definitions for measurement scalars used by the
 //! orderbook graph representation.
 
-use crate::encoding::PriceFraction;
-use crate::num;
-use crate::FEE_FACTOR;
-use std::cmp;
-use std::ops;
+use crate::{encoding::PriceFraction, num, orderbook::weight::Weight, FEE_FACTOR};
+use std::{cmp, ops};
 
 /// An exchange limit price. Limit prices on the exchange are represented by a
 /// fraction of two `u128`s representing a buy and sell amount. These limit
@@ -104,8 +101,8 @@ impl ExchangeRate {
     ///
     /// This is the base-2 logarithm of the exchange rate. This eanbles path
     /// weights to be computed using addition instead of multiplication.
-    pub fn weight(self) -> f64 {
-        self.0.log2()
+    pub fn weight(self) -> Weight {
+        Weight::new(self.0)
     }
 }
 
