@@ -219,7 +219,7 @@ fn main() {
     info!("Starting driver with runtime options: {:#?}", options);
 
     // Set up metrics and health monitoring and serve in separate thread.
-    let (stablex_metrics, http_metrics, solver_metrics, _health) = setup_monitoring();
+    let (stablex_metrics, http_metrics, solver_metrics, health) = setup_monitoring();
 
     // Set up shared HTTP client and HTTP services.
     let http_factory = HttpFactory::new(options.http_timeout, http_metrics);
@@ -297,9 +297,10 @@ fn main() {
         options.earliest_solution_submit_time,
     );
 
-    let mut scheduler = options
-        .scheduler
-        .create(contract, Arc::new(driver), scheduler_config);
+    let mut scheduler =
+        options
+            .scheduler
+            .create(contract, Arc::new(driver), scheduler_config, health);
     orderbook
         .initialize()
         .wait()

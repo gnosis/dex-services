@@ -8,7 +8,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// Trait for asyncronously notifying health information.
 #[cfg_attr(test, mockall::automock)]
 pub trait HealthReporting: Send + Sync {
-    /// Notify that the service is ready.
+    /// Notify that the service is ready. Can be called multiple times.
+    /// We use this to signal readiness only at the start of a batch in order to not interrupt the
+    /// still running kubernetes pod while it is handling a batch.
     fn notify_ready(&self);
 }
 

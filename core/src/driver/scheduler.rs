@@ -1,11 +1,11 @@
 mod evm;
 mod system;
 
-use self::evm::EvmScheduler;
-use self::system::SystemScheduler;
-use crate::contracts::stablex_contract::StableXContract;
-use crate::driver::stablex_driver::StableXDriver;
-use crate::models::batch_id::SOLVING_WINDOW;
+use self::{evm::EvmScheduler, system::SystemScheduler};
+use crate::{
+    contracts::stablex_contract::StableXContract, driver::stablex_driver::StableXDriver,
+    health::HealthReporting, models::batch_id::SOLVING_WINDOW,
+};
 use anyhow::{anyhow, Error, Result};
 use std::{str::FromStr, sync::Arc, time::Duration};
 
@@ -98,10 +98,13 @@ impl SchedulerKind {
         exchange: Arc<dyn StableXContract>,
         driver: Arc<dyn StableXDriver>,
         config: AuctionTimingConfiguration,
+        health: Arc<dyn HealthReporting>,
     ) -> Box<dyn Scheduler> {
         match self {
-            SchedulerKind::System => Box::new(SystemScheduler::new(exchange, driver, config)),
-            SchedulerKind::Evm => Box::new(EvmScheduler::new(exchange, driver, config)),
+            SchedulerKind::System => {
+                Box::new(SystemScheduler::new(exchange, driver, health, config))
+            }
+            SchedulerKind::Evm => Box::new(EvmScheduler::new(exchange, driver, health, config)),
         }
     }
 }
