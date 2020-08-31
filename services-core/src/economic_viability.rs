@@ -228,7 +228,7 @@ mod tests {
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station
             .expect_estimate_gas_price()
-            .returning(|| immediate!(Ok((40e9 as u128).into())));
+            .returning(|| Ok((40e9 as u128).into()));
         let subsidy = 10.0f64;
         let min_avg_fee_factor = 1.1f64;
         let economic_viability = EconomicViabilityComputer::new(

@@ -4,7 +4,6 @@ use super::GasPriceEstimating;
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::Result;
 use ethcontract::U256;
-use futures::future::{BoxFuture, FutureExt as _};
 use isahc::http::uri::Uri;
 use serde::Deserialize;
 use uint::FromDecStrErr;
@@ -61,10 +60,11 @@ impl GnosisSafeGasStation {
     }
 }
 
+#[async_trait::async_trait]
 impl GasPriceEstimating for GnosisSafeGasStation {
     /// Retrieves the current gas prices from the gas station.
-    fn estimate_gas_price(&self) -> BoxFuture<Result<U256>> {
-        async move { Ok(self.gas_prices().await?.fast) }.boxed()
+    async fn estimate_gas_price(&self) -> Result<U256> {
+        Ok(self.gas_prices().await?.fast)
     }
 }
 

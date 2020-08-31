@@ -335,7 +335,7 @@ mod tests {
         let mut gas_price_estimating = MockGasPriceEstimating::new();
         gas_price_estimating
             .expect_estimate_gas_price()
-            .returning(|| immediate!(Err(anyhow!(""))));
+            .returning(|| Err(anyhow!("")));
         gas_price_estimating
     }
 
@@ -492,7 +492,7 @@ mod tests {
         let mut gas_price = MockGasPriceEstimating::new();
         gas_price
             .expect_estimate_gas_price()
-            .returning(|| immediate!(Ok(10.into())));
+            .returning(|| Ok(10.into()));
         let submitter = StableXSolutionSubmitter::with_retry_and_sleep(
             Arc::new(contract),
             Arc::new(gas_price),
