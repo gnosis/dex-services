@@ -1,5 +1,5 @@
 [package]
-name = "core"
+name = "services-core"
 version = "0.1.0"
 authors = ["Alexander Herrmann <alex@gnosis.io>", "Ben Smith <ben@gnosis.io>", "Felix Leupold <felix@gnosis.io>"]
 edition = "2018"

@@ -4,11 +4,11 @@ use crate::{
     models::*,
     orderbook::{Orderbook, PricegraphKind},
 };
-use core::{
+use pricegraph::{Market, Pricegraph, TokenPair, TransitiveOrder};
+use services_core::{
     models::TokenId,
     token_info::{TokenBaseInfo, TokenInfoFetching},
 };
-use pricegraph::{Market, Pricegraph, TokenPair, TransitiveOrder};
 use std::convert::Infallible;
 use std::sync::Arc;
 use warp::{http::StatusCode, Filter, Rejection, Reply};
@@ -345,8 +345,8 @@ mod tests {
     use super::*;
     use crate::infallible_price_source::PriceCacheUpdater;
     use anyhow::{anyhow, Result};
-    use core::orderbook::NoopOrderbook;
     use futures::future::{BoxFuture, FutureExt as _};
+    use services_core::orderbook::NoopOrderbook;
 
     fn empty_token_info() -> impl TokenInfoFetching {
         struct TokenInfoFetcher {}
@@ -354,7 +354,7 @@ mod tests {
             fn get_token_info<'a>(
                 &'a self,
                 _: TokenId,
-            ) -> BoxFuture<'a, Result<core::token_info::TokenBaseInfo>> {
+            ) -> BoxFuture<'a, Result<services_core::token_info::TokenBaseInfo>> {
                 async { Err(anyhow!("")) }.boxed()
             }
             fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {

@@ -1,6 +1,6 @@
 use super::TransitiveOrder;
-use core::token_info::TokenBaseInfo;
 use serde::Serialize;
+use services_core::token_info::TokenBaseInfo;
 use std::cmp::Ordering;
 
 #[derive(Debug, Serialize)]
@@ -86,9 +86,9 @@ fn sort_and_aggregate_orders_by_price(
 mod tests {
     use super::*;
     use assert_approx_eq::assert_approx_eq;
-    use core::token_info::TokenBaseInfo;
     use ethcontract::Address;
     use serde_json::Value;
+    use services_core::token_info::TokenBaseInfo;
 
     #[test]
     fn transitive_orderbook_serialization() {

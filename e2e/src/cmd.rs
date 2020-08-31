@@ -1,10 +1,10 @@
 //! Module containing command line helpers for e2e scripts.
 
 use anyhow::{Error, Result};
-use core::{history::ExchangeHistory, models::BatchId};
 use crossbeam::thread;
 use pbr::ProgressBar;
 use rayon::prelude::*;
+use services_core::{history::ExchangeHistory, models::BatchId};
 use std::{io, path::Path, sync::mpsc};
 
 /// Runs a closure for each batch for the specified event history.

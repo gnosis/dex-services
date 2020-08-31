@@ -1,25 +1,25 @@
-use core::contracts::{stablex_contract::StableXContractImpl, web3_provider, Web3};
-use core::driver::{
+use services_core::contracts::{stablex_contract::StableXContractImpl, web3_provider, Web3};
+use services_core::driver::{
     scheduler::{AuctionTimingConfiguration, SchedulerKind},
     stablex_driver::StableXDriverImpl,
 };
-use core::economic_viability::{
+use services_core::economic_viability::{
     EconomicViabilityComputer, FixedEconomicViabilityComputer, PriorityEconomicViabilityComputer,
 };
-use core::gas_price::{self, GasPriceEstimating};
-use core::health::{HealthReporting, HttpHealthEndpoint};
-use core::http::HttpFactory;
-use core::http_server::{DefaultRouter, RouilleServer, Serving};
-use core::logging;
-use core::metrics::{HttpMetrics, MetricsHandler, SolverMetrics, StableXMetrics};
-use core::orderbook::{
+use services_core::gas_price::{self, GasPriceEstimating};
+use services_core::health::{HealthReporting, HttpHealthEndpoint};
+use services_core::http::HttpFactory;
+use services_core::http_server::{DefaultRouter, RouilleServer, Serving};
+use services_core::logging;
+use services_core::metrics::{HttpMetrics, MetricsHandler, SolverMetrics, StableXMetrics};
+use services_core::orderbook::{
     EventBasedOrderbook, FilteredOrderbookReader, OrderbookFilter, StableXOrderBookReading,
 };
-use core::price_estimation::PriceOracle;
-use core::price_finding::{self, Fee, InternalOptimizer, SolverType};
-use core::solution_submission::StableXSolutionSubmitter;
-use core::token_info::hardcoded::TokenData;
-use core::util::FutureWaitExt as _;
+use services_core::price_estimation::PriceOracle;
+use services_core::price_finding::{self, Fee, InternalOptimizer, SolverType};
+use services_core::solution_submission::StableXSolutionSubmitter;
+use services_core::token_info::hardcoded::TokenData;
+use services_core::util::FutureWaitExt as _;
 
 use ethcontract::PrivateKey;
 use log::info;

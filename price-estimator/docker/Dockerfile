@@ -3,7 +3,7 @@ WORKDIR /usr/src/app
 COPY Cargo.toml .
 COPY Cargo.lock .
 COPY contracts contracts
-COPY core core
+COPY services-core services-core
 COPY driver driver
 COPY e2e e2e
 COPY pricegraph pricegraph

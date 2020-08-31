@@ -1,9 +1,9 @@
 //! Module containing currency pair model implementation.
 
 use anyhow::{anyhow, Error, Result};
-use core::token_info::TokenInfoFetching;
 use ethcontract::Address;
 use pricegraph::{Market, TokenId};
+use services_core::token_info::TokenInfoFetching;
 use std::str::FromStr;
 
 /// A currency pair of two exchange tokens.

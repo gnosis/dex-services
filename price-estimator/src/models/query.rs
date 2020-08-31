@@ -1,9 +1,9 @@
 //! Module implementing parsing request query parameters.
 
 use anyhow::{bail, Context as _, Error, Result};
-use core::models::BatchId;
 use ethcontract::{Address, BlockNumber};
 use serde::Deserialize;
+use services_core::models::BatchId;
 use std::convert::TryFrom;
 
 /// Common query parameters shared across all price estimation routes.
