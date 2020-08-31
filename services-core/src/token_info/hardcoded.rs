@@ -53,20 +53,18 @@ impl Into<TokenBaseInfo> for TokenInfoOverride {
 #[serde(transparent)]
 pub struct TokenData(HashMap<TokenId, TokenInfoOverride>);
 
+#[async_trait::async_trait]
 impl TokenInfoFetching for TokenData {
-    fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
-        let info = self
-            .0
+    async fn get_token_info(&self, id: TokenId) -> Result<TokenBaseInfo> {
+        self.0
             .get(&id)
             .cloned()
             .ok_or_else(|| anyhow!("Token {:?} not found in hardcoded data", id))
-            .map(Into::into);
-        immediate!(info)
+            .map(Into::into)
     }
 
-    fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
-        let ids = Vec::from_iter(self.0.keys().copied());
-        immediate!(Ok(ids))
+    async fn all_ids(&self) -> Result<Vec<TokenId>> {
+        Ok(Vec::from_iter(self.0.keys().copied()))
     }
 }
 
