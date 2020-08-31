@@ -3,41 +3,25 @@
 use crate::{
     encoding::TokenPair,
     graph::path::Path,
-    orderbook::{self, Flow, Orderbook, OverlapError, ReducedOrderbook},
+    orderbook::{self, Flow, Orderbook, OverlapError},
 };
 use petgraph::graph::NodeIndex;
-use std::{iter::FusedIterator, mem};
+use std::iter::FusedIterator;
 
 /// An iterator over all transitive orders over a token pair for an orderbook,
 /// ordered from lowest limit price to highest.
 pub struct TransitiveOrders {
     orderbook: Orderbook,
+    /// The token pair converted to graph node indices. This valud is `None` if
+    /// the token pair is invalid.
     pair: Option<(NodeIndex, NodeIndex)>,
-    state: State,
-}
-
-/// Internal iterator state.
-enum State {
-    /// The next transitive order has already been pre-computed and is ready to
-    /// be returned.
-    NextOrder(Option<(Path<NodeIndex>, Flow)>),
-    /// The previous order needs to be filled before continuing.
-    FillPreviousOrder(Path<NodeIndex>, Flow),
-    /// The next transitive order needs to be found, and no previous orders
-    /// need to be filled.
-    Search,
+    /// The first order is always computed when the iterator is created to check
+    /// whether the orderbook is reduced in the subgraph containing the `buy`
+    /// token.
+    first_order: Option<(Path<NodeIndex>, Flow)>,
 }
 
 impl TransitiveOrders {
-    /// Creates an empty transitive orderbook iterator.
-    fn empty(orderbook: Orderbook) -> Self {
-        Self {
-            orderbook,
-            pair: None,
-            state: State::Search,
-        }
-    }
-
     /// Creates a new transitive orderbook iterator.
     pub fn new(orderbook: Orderbook, pair: TokenPair) -> Result<Self, OverlapError> {
         let (buy, sell) = if orderbook.is_token_pair_valid(pair) {
@@ -46,39 +30,24 @@ impl TransitiveOrders {
                 orderbook::node_index(pair.sell),
             )
         } else {
-            return Ok(Self::empty(orderbook));
+            return Ok(Self {
+                orderbook,
+                pair: None,
+                first_order: None,
+            });
         };
 
         // NOTE: We need to check that the orderbook is not overlapping in the
         // subgraph containing the token pair we care about, so we find the
         // first transitive order and reuse the result in the first call to
         // `next`.
-        let next_order = orderbook.find_path_and_flow(buy, sell)?;
+        let first_order = orderbook.find_path_and_flow(buy, sell)?;
 
         Ok(Self {
             orderbook,
             pair: Some((buy, sell)),
-            state: State::NextOrder(next_order),
+            first_order,
         })
-    }
-
-    /// Creates a new transitive orderbook iterator from a reduced orderbook.
-    pub fn from_reduced(orderbook: ReducedOrderbook, pair: TokenPair) -> Self {
-        let orderbook = orderbook.into_inner();
-        let pair = if orderbook.is_token_pair_valid(pair) {
-            (
-                orderbook::node_index(pair.buy),
-                orderbook::node_index(pair.sell),
-            )
-        } else {
-            return Self::empty(orderbook);
-        };
-
-        Self {
-            orderbook,
-            pair: Some(pair),
-            state: State::Search,
-        }
     }
 }
 
@@ -87,29 +56,20 @@ impl Iterator for TransitiveOrders {
 
     fn next(&mut self) -> Option<Self::Item> {
         let (buy, sell) = self.pair?;
-        let (path, flow) = match mem::replace(&mut self.state, State::Search) {
-            State::NextOrder(order) => order?,
-            State::FillPreviousOrder(path, flow) => {
-                self.orderbook
-                    .fill_path_with_flow(&path, &flow)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "failed to fill with capacity along detected path {}",
-                            orderbook::format_path(&path),
-                        )
-                    });
-
-                self.orderbook
-                    .find_path_and_flow(buy, sell)
-                    .expect("negative cycle after computing shortest path")?
-            }
-            State::Search => self
-                .orderbook
+        let (path, flow) = self.first_order.take().or_else(|| {
+            self.orderbook
                 .find_path_and_flow(buy, sell)
-                .expect("negative cycle after computing shortest path")?,
-        };
+                .expect("negative cycle after computing shortest path")
+        })?;
 
-        self.state = State::FillPreviousOrder(path, flow);
+        self.orderbook
+            .fill_path_with_flow(&path, &flow)
+            .unwrap_or_else(|| {
+                panic!(
+                    "failed to fill with capacity along detected path {}",
+                    orderbook::format_path(&path),
+                )
+            });
         Some(flow)
     }
 }

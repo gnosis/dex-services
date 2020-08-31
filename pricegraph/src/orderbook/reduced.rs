@@ -17,7 +17,7 @@ impl ReducedOrderbook {
     /// Returns an iterator over all transitive orders from lowest to highest
     /// limit price for the orderbook.
     pub fn transitive_orders(self, pair: TokenPair) -> TransitiveOrders {
-        TransitiveOrders::from_reduced(self, pair)
+        TransitiveOrders::new(self.0, pair).expect("negative cycle in reduced orderbook")
     }
 
     /// Fills the optimal transitive order for the specified token pair. This
