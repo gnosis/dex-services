@@ -757,4 +757,33 @@ mod tests {
             10_000_000.0 - flow.capacity / flow.exchange_rate.value()
         );
     }
+
+    // TODO(nlordell): Once this known issue is fixed, this unit test should no
+    // longer panic.
+    #[should_panic]
+    #[test]
+    fn search_panics_on_undetected_negative_cycle_due_to_rounding_errors() {
+        //              /---250---v
+        // 0 --1.11--> 1          2
+        //             ^--0.004--/
+        let mut orderbook = orderbook! {
+            users {
+                @1 {
+                    token 1 => 10_000_000_000,
+                }
+                @2 {
+                    token 2 => 10_000_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 0 [1_000_000_000] selling 1 [1_000_000_000],
+                owner @1 buying 2 [1_000_000] selling 1 [250_000_000],
+                owner @2 buying 1 [249_500_250] selling 2 [1_000_000],
+            }
+        };
+
+        assert!(orderbook
+            .find_optimal_transitive_order(TokenPair { buy: 0, sell: 1 })
+            .is_ok())
+    }
 }
