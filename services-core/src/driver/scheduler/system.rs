@@ -420,17 +420,17 @@ mod tests {
             .expect_get_current_auction_index()
             .times(1)
             .in_sequence(&mut sequence)
-            .returning(|| immediate!(Ok(0)));
+            .returning(|| Ok(0));
         contract
             .expect_get_current_auction_index()
             .times(1)
             .in_sequence(&mut sequence)
-            .returning(|| immediate!(Ok(0)));
+            .returning(|| Ok(0));
         contract
             .expect_get_current_auction_index()
             .times(1)
             .in_sequence(&mut sequence)
-            .returning(|| immediate!(Ok(1)));
+            .returning(|| Ok(1));
         driver
             .expect_submit_solution()
             .times(1)
@@ -498,7 +498,7 @@ mod tests {
         let mut contract = MockStableXContract::new();
         contract
             .expect_get_current_auction_index()
-            .returning(|| immediate!(Err(anyhow!(""))));
+            .returning(|| Err(anyhow!("")));
 
         let mut counter = 0;
         driver
