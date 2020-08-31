@@ -289,12 +289,13 @@ dependencies = [
 
 [[package]]
 name = "blocking"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0558bffc49dc51c6e8186de108e6ca880557d7f8e34ffdc794c7c8bbb13b4f78"
+checksum = "3f30e08a950487f80d2de5cbb72772c8bbaed6002dc8d979722dabd034ede18d"
 dependencies = [
  "async-channel",
  "atomic-waker",
+ "fastrand",
  "futures-lite 1.0.0",
  "once_cell",
  "waker-fn",
@@ -479,7 +480,7 @@ dependencies = [
  "assert_approx_eq",
  "async-std",
  "bincode",
- "blocking 0.6.0",
+ "blocking 0.6.1",
  "byteorder",
  "chrono",
  "contracts",
