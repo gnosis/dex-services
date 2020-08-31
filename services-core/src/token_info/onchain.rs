@@ -1,29 +1,23 @@
 use anyhow::Result;
-use futures::future::{BoxFuture, FutureExt};
 
 use super::{TokenBaseInfo, TokenId, TokenInfoFetching};
 use crate::contracts::stablex_contract::StableXContractImpl;
 
+#[async_trait::async_trait]
 impl TokenInfoFetching for StableXContractImpl {
-    fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
-        async move {
-            let (address, alias, decimals) = self.get_token_info(id.into()).await?;
-            Ok(TokenBaseInfo {
-                address,
-                alias,
-                decimals,
-            })
-        }
-        .boxed()
+    async fn get_token_info(&self, id: TokenId) -> Result<TokenBaseInfo> {
+        let (address, alias, decimals) = self.get_token_info(id.into()).await?;
+        Ok(TokenBaseInfo {
+            address,
+            alias,
+            decimals,
+        })
     }
 
-    fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
-        async move {
-            let num_tokens = self.num_tokens().await?;
-            let ids: Vec<TokenId> = (0..num_tokens).map(|token| token.into()).collect();
-            Ok(ids)
-        }
-        .boxed()
+    async fn all_ids(&self) -> Result<Vec<TokenId>> {
+        let num_tokens = self.num_tokens().await?;
+        let ids: Vec<TokenId> = (0..num_tokens).map(|token| token.into()).collect();
+        Ok(ids)
     }
 }
 

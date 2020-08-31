@@ -5,10 +5,7 @@ use ethcontract::{
     errors::{ExecutionError, MethodError},
     Address,
 };
-use futures::{
-    future::{BoxFuture, FutureExt},
-    stream::{self, StreamExt as _},
-};
+use futures::stream::{self, StreamExt as _};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -123,108 +120,91 @@ impl TokenInfoCache {
     }
 }
 
+#[async_trait::async_trait]
 impl TokenInfoFetching for TokenInfoCache {
-    fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
-        async move {
-            if let Some(entry) = self.cache.read().await.get(&id) {
-                return cache_entry_to_result(entry);
-            }
-
-            let info = self.inner.get_token_info(id).await;
-            match info {
-                Ok(info) => {
-                    self.cache
-                        .write()
-                        .await
-                        .insert(id, CacheEntry::TokenBaseInfo(info.clone()));
-                    Ok(info)
-                }
-                Err(err) if is_revert(&err) => {
-                    log::debug!("unretryable error: {:?}", err);
-                    self.cache
-                        .write()
-                        .await
-                        .insert(id, CacheEntry::UnretryableError(err.to_string()));
-                    Err(err)
-                }
-                Err(err) => Err(err),
-            }
+    async fn get_token_info(&self, id: TokenId) -> Result<TokenBaseInfo> {
+        if let Some(entry) = self.cache.read().await.get(&id) {
+            return cache_entry_to_result(entry);
         }
-        .boxed()
-    }
 
-    fn get_token_infos<'a>(
-        &'a self,
-        ids: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, TokenBaseInfo>>> {
-        async move {
-            let uncached_token_ids = self.uncached_tokens(ids).await;
-            // Insert the missing infos into the cache.
-            // It would be nice to be able to use `self.inner.get_token_infos` as an optimization
-            // but with the current signature of `get_token_infos` we wouldn't be able to
-            // access to the individual errors making it impossible to discern unretryable errors.
-            for id in uncached_token_ids {
-                let _ = self.get_token_info(id).await;
+        let info = self.inner.get_token_info(id).await;
+        match info {
+            Ok(info) => {
+                self.cache
+                    .write()
+                    .await
+                    .insert(id, CacheEntry::TokenBaseInfo(info.clone()));
+                Ok(info)
             }
-
-            let cache = self.cache.read().await;
-            let result = ids
-                .iter()
-                .filter_map(|id| {
-                    let entry = cache.get(id)?;
-                    let result = cache_entry_to_result(entry);
-                    let info = result.ok()?;
-                    Some((*id, info))
-                })
-                .collect();
-            Ok(result)
-        }
-        .boxed()
-    }
-
-    fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
-        self.inner.all_ids()
-    }
-
-    fn find_token_by_symbol<'a>(
-        &'a self,
-        symbol: &'a str,
-    ) -> BoxFuture<'a, Result<Option<(TokenId, TokenBaseInfo)>>> {
-        async move {
-            if let Some((id, _)) = self.find_cached_token_by_symbol(symbol).await {
-                // NOTE: In case we found a symbol, make sure that all tokens up
-                // to that ID are already cached. This ensures that if we find a
-                // token with the symbol, it is indeed the one with the lowest
-                // token ID on the exchange. Also, if the cache is already warm,
-                // this this operation will complete very fast without having to
-                // query the inner `TokenInfoFetching`.
-                let ids = (0..id.0).map(TokenId).collect::<Vec<_>>();
-                self.get_token_infos(&ids).await?;
-            } else {
-                // NOTE: Token not found - update the entire token cache.
-                self.cache_all().await?;
+            Err(err) if is_revert(&err) => {
+                log::debug!("unretryable error: {:?}", err);
+                self.cache
+                    .write()
+                    .await
+                    .insert(id, CacheEntry::UnretryableError(err.to_string()));
+                Err(err)
             }
-
-            Ok(self.find_cached_token_by_symbol(symbol).await)
+            Err(err) => Err(err),
         }
-        .boxed()
     }
 
-    fn find_token_by_address(
+    async fn get_token_infos(&self, ids: &[TokenId]) -> Result<HashMap<TokenId, TokenBaseInfo>> {
+        let uncached_token_ids = self.uncached_tokens(ids).await;
+        // Insert the missing infos into the cache.
+        // It would be nice to be able to use `self.inner.get_token_infos` as an optimization
+        // but with the current signature of `get_token_infos` we wouldn't be able to
+        // access to the individual errors making it impossible to discern unretryable errors.
+        for id in uncached_token_ids {
+            let _ = self.get_token_info(id).await;
+        }
+
+        let cache = self.cache.read().await;
+        let result = ids
+            .iter()
+            .filter_map(|id| {
+                let entry = cache.get(id)?;
+                let result = cache_entry_to_result(entry);
+                let info = result.ok()?;
+                Some((*id, info))
+            })
+            .collect();
+        Ok(result)
+    }
+
+    async fn all_ids(&self) -> Result<Vec<TokenId>> {
+        self.inner.all_ids().await
+    }
+
+    async fn find_token_by_symbol(&self, symbol: &str) -> Result<Option<(TokenId, TokenBaseInfo)>> {
+        if let Some((id, _)) = self.find_cached_token_by_symbol(symbol).await {
+            // NOTE: In case we found a symbol, make sure that all tokens up
+            // to that ID are already cached. This ensures that if we find a
+            // token with the symbol, it is indeed the one with the lowest
+            // token ID on the exchange. Also, if the cache is already warm,
+            // this this operation will complete very fast without having to
+            // query the inner `TokenInfoFetching`.
+            let ids = (0..id.0).map(TokenId).collect::<Vec<_>>();
+            self.get_token_infos(&ids).await?;
+        } else {
+            // NOTE: Token not found - update the entire token cache.
+            self.cache_all().await?;
+        }
+
+        Ok(self.find_cached_token_by_symbol(symbol).await)
+    }
+
+    async fn find_token_by_address(
         &self,
         address: Address,
-    ) -> BoxFuture<Result<Option<(TokenId, TokenBaseInfo)>>> {
-        async move {
-            let cached_info = self.find_cached_token_by_address(address).await;
-            match cached_info {
-                None => {
-                    self.cache_all().await?;
-                    Ok(self.find_cached_token_by_address(address).await)
-                }
-                some => Ok(some),
+    ) -> Result<Option<(TokenId, TokenBaseInfo)>> {
+        let cached_info = self.find_cached_token_by_address(address).await;
+        match cached_info {
+            None => {
+                self.cache_all().await?;
+                Ok(self.find_cached_token_by_address(address).await)
             }
+            some => Ok(some),
         }
-        .boxed()
     }
 }
 
@@ -253,6 +233,7 @@ mod tests {
     use super::*;
     use anyhow::anyhow;
     use ethcontract::Address;
+    use futures::FutureExt as _;
     use mockall::predicate::eq;
 
     fn revert_error() -> Error {
@@ -268,11 +249,11 @@ mod tests {
         let mut inner = MockTokenInfoFetching::new();
 
         inner.expect_get_token_info().times(1).returning(|_| {
-            immediate!(Ok(TokenBaseInfo {
+            Ok(TokenBaseInfo {
                 address: Address::from_low_u64_be(0),
                 alias: "Foo".to_owned(),
                 decimals: 18,
-            }))
+            })
         });
 
         let cache = TokenInfoCache::new(Arc::new(inner));
@@ -296,7 +277,7 @@ mod tests {
         inner
             .expect_get_token_info()
             .times(2)
-            .returning(|_| immediate!(Err(anyhow!("error"))));
+            .returning(|_| Err(anyhow!("error")));
 
         let cache = TokenInfoCache::new(Arc::new(inner));
         cache
@@ -318,7 +299,7 @@ mod tests {
         inner
             .expect_get_token_info()
             .times(1)
-            .returning(|_| immediate!(Err(revert_error())));
+            .returning(|_| Err(revert_error()));
 
         let cache = TokenInfoCache::new(Arc::new(inner));
         cache
@@ -337,10 +318,7 @@ mod tests {
     fn always_calls_all_ids_on_inner() {
         let mut inner = MockTokenInfoFetching::new();
 
-        inner
-            .expect_all_ids()
-            .times(2)
-            .returning(|| immediate!(Ok(vec![])));
+        inner.expect_all_ids().times(2).returning(|| Ok(vec![]));
 
         let cache = TokenInfoCache::new(Arc::new(inner));
         cache
@@ -388,16 +366,16 @@ mod tests {
         inner
             .expect_all_ids()
             .times(1)
-            .returning(|| immediate!(Ok(token_ids())));
+            .returning(|| Ok(token_ids()));
         inner.expect_get_token_info().returning(|token_id| {
             if token_id.0 == 2 {
-                immediate!(Err(anyhow!("")))
+                Err(anyhow!(""))
             } else {
-                immediate!(Ok(TokenBaseInfo {
+                Ok(TokenBaseInfo {
                     address: Address::from_low_u64_be(0),
                     alias: String::new(),
                     decimals: token_id.0 as u8,
-                }))
+                })
             }
         });
 
@@ -422,11 +400,11 @@ mod tests {
             .expect_get_token_info()
             .times(4)
             .returning(|token_id| {
-                immediate!(Ok(TokenBaseInfo {
+                Ok(TokenBaseInfo {
                     address: Address::from_low_u64_be(0),
                     alias: token_id.to_string(),
-                    decimals: 1
-                }))
+                    decimals: 1,
+                })
             });
 
         let cache = TokenInfoCache::new(Arc::new(inner));
@@ -485,15 +463,13 @@ mod tests {
         };
 
         let mut inner = MockTokenInfoFetching::new();
-        inner
-            .expect_all_ids()
-            .returning(|| immediate!(Ok(vec![TokenId(0)])));
+        inner.expect_all_ids().returning(|| Ok(vec![TokenId(0)]));
         inner
             .expect_get_token_info()
             .with(eq(TokenId(0)))
             .returning({
                 let owl = owl.clone();
-                move |_| immediate!(Ok(owl.clone()))
+                move |_| Ok(owl.clone())
             });
 
         let cache = TokenInfoCache::new(Arc::new(inner));
@@ -550,7 +526,7 @@ mod tests {
             .with(eq(TokenId(0)))
             .returning({
                 let owl = owl.clone();
-                move |_| immediate!(Ok(owl.clone()))
+                move |_| Ok(owl.clone())
             });
 
         let cache = TokenInfoCache::with_cache(
@@ -579,15 +555,13 @@ mod tests {
         };
 
         let mut inner = MockTokenInfoFetching::new();
-        inner
-            .expect_all_ids()
-            .returning(|| immediate!(Ok(vec![TokenId(0)])));
+        inner.expect_all_ids().returning(|| Ok(vec![TokenId(0)]));
         inner
             .expect_get_token_info()
             .with(eq(TokenId(0)))
             .returning({
                 let owl = owl.clone();
-                move |_| immediate!(Ok(owl.clone()))
+                move |_| Ok(owl.clone())
             });
 
         let cache = TokenInfoCache::new(Arc::new(inner));

@@ -345,20 +345,21 @@ mod tests {
     use super::*;
     use crate::infallible_price_source::PriceCacheUpdater;
     use anyhow::{anyhow, Result};
-    use futures::future::{BoxFuture, FutureExt as _};
+    use futures::future::FutureExt as _;
     use services_core::orderbook::NoopOrderbook;
 
     fn empty_token_info() -> impl TokenInfoFetching {
         struct TokenInfoFetcher {}
+        #[async_trait::async_trait]
         impl TokenInfoFetching for TokenInfoFetcher {
-            fn get_token_info<'a>(
-                &'a self,
+            async fn get_token_info(
+                &self,
                 _: TokenId,
-            ) -> BoxFuture<'a, Result<services_core::token_info::TokenBaseInfo>> {
-                async { Err(anyhow!("")) }.boxed()
+            ) -> Result<services_core::token_info::TokenBaseInfo> {
+                Err(anyhow!(""))
             }
-            fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
-                async { Ok(Default::default()) }.boxed()
+            async fn all_ids(&self) -> Result<Vec<TokenId>> {
+                Ok(Default::default())
             }
         }
         TokenInfoFetcher {}

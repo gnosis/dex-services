@@ -116,7 +116,7 @@ mod tests {
         let mut token_info_fetcher = MockTokenInfoFetching::new();
         token_info_fetcher
             .expect_all_ids()
-            .returning(|| immediate!(Ok(TOKENS.to_vec())));
+            .returning(|| Ok(TOKENS.to_vec()));
 
         let (tps, handle) =
             ThreadedPriceSource::new(Arc::new(token_info_fetcher), ps, UPDATE_INTERVAL);
@@ -139,7 +139,7 @@ mod tests {
         let mut token_info_fetcher = MockTokenInfoFetching::new();
         token_info_fetcher
             .expect_all_ids()
-            .returning(|| immediate!(Ok(TOKENS.to_vec())));
+            .returning(|| Ok(TOKENS.to_vec()));
 
         let (tps, handle) =
             ThreadedPriceSource::new(Arc::new(token_info_fetcher), price_source, UPDATE_INTERVAL);
