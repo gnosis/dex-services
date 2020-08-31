@@ -3,7 +3,6 @@ use super::*;
 use crate::models::{AccountState, Order};
 use anyhow::Error;
 use ethcontract::Address;
-use futures::future::{BoxFuture, FutureExt as _};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
@@ -93,34 +92,29 @@ impl FilteredOrderbookReader {
     }
 }
 
+#[async_trait::async_trait]
 impl StableXOrderBookReading for FilteredOrderbookReader {
-    fn get_auction_data_for_batch(
+    async fn get_auction_data_for_batch(
         &self,
         batch_id_to_solve: u32,
-    ) -> BoxFuture<Result<(AccountState, Vec<Order>)>> {
-        async move {
-            let auction_data = self
-                .orderbook
-                .get_auction_data_for_batch(batch_id_to_solve)
-                .await?;
-            Ok(self.filter.apply(auction_data))
-        }
-        .boxed()
+    ) -> Result<(AccountState, Vec<Order>)> {
+        let auction_data = self
+            .orderbook
+            .get_auction_data_for_batch(batch_id_to_solve)
+            .await?;
+        Ok(self.filter.apply(auction_data))
     }
 
-    fn get_auction_data_for_block(
+    async fn get_auction_data_for_block(
         &self,
         block: BlockNumber,
-    ) -> BoxFuture<Result<(AccountState, Vec<Order>)>> {
-        async move {
-            let auction_data = self.orderbook.get_auction_data_for_block(block).await?;
-            Ok(self.filter.apply(auction_data))
-        }
-        .boxed()
+    ) -> Result<(AccountState, Vec<Order>)> {
+        let auction_data = self.orderbook.get_auction_data_for_block(block).await?;
+        Ok(self.filter.apply(auction_data))
     }
 
-    fn initialize(&self) -> BoxFuture<Result<()>> {
-        self.orderbook.initialize()
+    async fn initialize(&self) -> Result<()> {
+        self.orderbook.initialize().await
     }
 }
 
@@ -128,6 +122,7 @@ impl StableXOrderBookReading for FilteredOrderbookReader {
 mod tests {
     use super::*;
     use crate::models::order::test_util::create_order_for_test;
+    use futures::FutureExt as _;
     use mockall::predicate::eq;
     use std::str::FromStr;
 
@@ -208,7 +203,7 @@ mod tests {
                     mixed_user_good_order.clone(),
                 ],
             );
-            move |_| async { Ok(result) }.boxed()
+            move |_| Ok(result)
         });
 
         let filter = OrderbookFilter {
@@ -255,7 +250,7 @@ mod tests {
                 AccountState::default(),
                 vec![bad_buy_token, bad_sell_token, good_order.clone()],
             );
-            move |_| async { Ok(result) }.boxed()
+            move |_| Ok(result)
         });
 
         let filter = OrderbookFilter {
@@ -280,7 +275,7 @@ mod tests {
         let mut inner = MockStableXOrderBookReading::default();
         inner
             .expect_get_auction_data_for_batch()
-            .return_once(move |_| async { Ok((state, vec![])) }.boxed());
+            .return_once(|_| Ok((state, vec![])));
 
         let filter = OrderbookFilter {
             tokens: TokenFilter::default(),
@@ -304,7 +299,7 @@ mod tests {
         inner
             .expect_get_auction_data_for_block()
             .with(eq(BlockNumber::Number(42.into())))
-            .return_once(|_| immediate!(Ok(Default::default())));
+            .return_once(|_| Ok(Default::default()));
 
         let filter = OrderbookFilter {
             tokens: TokenFilter::default(),

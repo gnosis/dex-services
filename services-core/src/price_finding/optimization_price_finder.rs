@@ -667,18 +667,15 @@ pub mod tests {
             .expect_get_token_prices()
             .withf(|orders| orders == [])
             .returning(|_| {
-                async {
-                    btree_map! {
-                        TokenId(0) => Some(TokenInfo::new("T1", 18, 1_000_000_000_000_000_000)),
-                    }
+                btree_map! {
+                    TokenId(0) => Some(TokenInfo::new("T1", 18, 1_000_000_000_000_000_000)),
                 }
-                .boxed()
             });
 
         let mut economic_viablity = MockEconomicViabilityComputing::new();
         economic_viablity
             .expect_min_average_fee()
-            .returning(|| immediate!(Ok(10u128.pow(18))));
+            .returning(|| Ok(10u128.pow(18)));
 
         let mut io_methods = MockIo::new();
         io_methods
