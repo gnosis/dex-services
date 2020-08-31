@@ -5,13 +5,13 @@ pub use self::gas_station::GnosisSafeGasStation;
 use crate::{contracts::Web3, http::HttpFactory};
 use anyhow::Result;
 use ethcontract::U256;
-use futures::future::BoxFuture;
 use std::sync::Arc;
 
 #[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
 pub trait GasPriceEstimating {
     /// Retrieves gas prices from the Gnosis Safe Relay api.
-    fn estimate_gas_price<'a>(&'a self) -> BoxFuture<'a, Result<U256>>;
+    async fn estimate_gas_price(&self) -> Result<U256>;
 }
 
 /// Creates the default gas price estimator for the given network.

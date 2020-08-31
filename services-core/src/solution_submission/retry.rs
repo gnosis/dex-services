@@ -197,19 +197,19 @@ mod tests {
         gas_station
             .expect_estimate_gas_price()
             .times(1)
-            .return_once(|| immediate!(Err(anyhow!(""))));
+            .return_once(|| Err(anyhow!("")));
         gas_station
             .expect_estimate_gas_price()
             .times(1)
-            .return_once(|| immediate!(Ok(5.into())));
+            .return_once(|| Ok(5.into()));
         gas_station
             .expect_estimate_gas_price()
             .times(1)
-            .return_once(|| immediate!(Ok(6.into())));
+            .return_once(|| Ok(6.into()));
         gas_station
             .expect_estimate_gas_price()
             .times(1)
-            .return_once(|| immediate!(Err(anyhow!(""))));
+            .return_once(|| Err(anyhow!("")));
 
         let mut estimator = InfallibleGasPriceEstimator::new(&gas_station, 3.into());
         assert_eq!(estimator.estimate().now_or_never().unwrap(), U256::from(3));
@@ -224,11 +224,11 @@ mod tests {
         gas_station
             .expect_estimate_gas_price()
             .times(1)
-            .return_once(|| immediate!(Ok(10.into())));
+            .return_once(|| Ok(10.into()));
         gas_station
             .expect_estimate_gas_price()
             .times(1)
-            .return_once(|| immediate!(Ok(9.into())));
+            .return_once(|| Ok(9.into()));
 
         let mut estimator = InfallibleGasPriceEstimator::new(&gas_station, 3.into());
         assert_eq!(estimator.estimate().now_or_never().unwrap(), U256::from(10));
@@ -271,7 +271,7 @@ mod tests {
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station
             .expect_estimate_gas_price()
-            .returning(|| immediate!(Err(anyhow!(""))));
+            .returning(|| Err(anyhow!("")));
 
         let args = Args {
             batch_index: 1,
@@ -307,7 +307,7 @@ mod tests {
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station
             .expect_estimate_gas_price()
-            .returning(|| async { Ok((DEFAULT_GAS_PRICE * 90).into()) }.boxed());
+            .returning(|| Ok((DEFAULT_GAS_PRICE * 90).into()));
 
         let sleep = MockAsyncSleeping::new();
 
@@ -331,7 +331,7 @@ mod tests {
 
         gas_station
             .expect_estimate_gas_price()
-            .returning(|| immediate!(Err(anyhow!(""))));
+            .returning(|| Err(anyhow!("")));
         contract
             .expect_submit_solution()
             .times(1)
@@ -381,7 +381,7 @@ mod tests {
 
         gas_station
             .expect_estimate_gas_price()
-            .returning(|| immediate!(Err(anyhow!(""))));
+            .returning(|| Err(anyhow!("")));
         contract
             .expect_submit_solution()
             .times(1)
