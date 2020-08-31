@@ -2,13 +2,13 @@ use crate::{
     infallible_price_source::PriceCacheUpdater, models::EstimationTime, solver_rounding_buffer,
 };
 use anyhow::{bail, Result};
-use core::{
-    models::{AccountState, BatchId, Order, TokenId},
-    orderbook::StableXOrderBookReading,
-};
 use ethcontract::Address;
 use futures::future;
 use pricegraph::{Pricegraph, TokenPair};
+use services_core::{
+    models::{AccountState, BatchId, Order, TokenId},
+    orderbook::StableXOrderBookReading,
+};
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
@@ -181,11 +181,11 @@ fn pricegraph_from_auction_data(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core::{
+    use futures::future::{BoxFuture, FutureExt as _};
+    use services_core::{
         models::TokenId, orderbook::NoopOrderbook, price_estimation::price_source::PriceSource,
         token_info::hardcoded::TokenData,
     };
-    use futures::future::{BoxFuture, FutureExt as _};
     use std::{collections::HashMap, num::NonZeroU128, sync::Arc};
 
     #[test]

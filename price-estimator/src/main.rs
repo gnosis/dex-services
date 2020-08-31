@@ -6,7 +6,11 @@ mod models;
 mod orderbook;
 mod solver_rounding_buffer;
 
-use core::{
+use ethcontract::PrivateKey;
+use infallible_price_source::PriceCacheUpdater;
+use orderbook::Orderbook;
+use prometheus::Registry;
+use services_core::{
     contracts::{stablex_contract::StableXContractImpl, web3_provider},
     health::{HealthReporting, HttpHealthEndpoint},
     http::HttpFactory,
@@ -17,10 +21,6 @@ use core::{
     token_info::{cached::TokenInfoCache, hardcoded::TokenData},
     util::FutureWaitExt as _,
 };
-use ethcontract::PrivateKey;
-use infallible_price_source::PriceCacheUpdater;
-use orderbook::Orderbook;
-use prometheus::Registry;
 use std::{
     collections::HashMap, net::SocketAddr, num::ParseIntError, path::PathBuf, sync::Arc,
     time::Duration,
@@ -132,7 +132,7 @@ fn main() {
         options.orderbook_file,
     );
 
-    let external_price_sources = core::price_estimation::external_price_sources(
+    let external_price_sources = services_core::price_estimation::external_price_sources(
         &http_factory,
         token_info.clone(),
         options.price_source_update_interval,

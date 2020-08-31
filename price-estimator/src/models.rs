@@ -3,9 +3,9 @@ mod markets_results;
 mod query;
 
 pub use self::{currency_pair::*, markets_results::*, query::*};
-use core::token_info::TokenBaseInfo;
 use serde::Serialize;
 use serde_with::rust::display_fromstr;
+use services_core::token_info::TokenBaseInfo;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

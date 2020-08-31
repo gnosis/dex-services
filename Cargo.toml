@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "contracts",
-    "core",
+    "services-core",
     "driver",
     "e2e",
     "price-estimator",
@@ -12,7 +12,7 @@ members = [
 ]
 default-members = [
     "contracts",
-    "core",
+    "services-core",
     "driver",
     "price-estimator",
     "pricegraph",

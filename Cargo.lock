@@ -473,42 +473,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "assert_approx_eq",
- "async-std",
- "bincode",
- "blocking 0.6.1",
- "byteorder",
- "chrono",
- "contracts",
- "ethcontract",
- "futures 0.3.5",
- "isahc",
- "lazy_static",
- "log 0.4.11",
- "mockall",
- "num",
- "pricegraph",
- "prometheus",
- "rouille",
- "serde",
- "serde_json",
- "serde_with",
- "slog",
- "slog-async",
- "slog-envlogger",
- "slog-scope",
- "slog-stdlog",
- "slog-term",
- "thiserror",
- "uint",
- "url 2.1.1",
-]
-
-[[package]]
 name = "core-foundation"
 version = "0.7.0"
 source = "git+https://github.com/servo/core-foundation-rs?tag=v0.20.1#01d69213403e5f8c8e2556f81495e98571e6e882"
@@ -786,10 +750,10 @@ checksum = "4bb454f0228b18c7f4c3b0ebbee346ed9c52e7443b0999cd543ff3571205701d"
 name = "driver"
 version = "0.1.0"
 dependencies = [
- "core",
  "ethcontract",
  "log 0.4.11",
  "prometheus",
+ "services-core",
  "structopt",
  "url 2.1.1",
 ]
@@ -806,13 +770,13 @@ version = "1.0.0"
 dependencies = [
  "anyhow",
  "contracts",
- "core",
  "crossbeam",
  "ethcontract",
  "futures 0.3.5",
  "pbr",
  "pricegraph",
  "rayon",
+ "services-core",
  "structopt",
 ]
 
@@ -2379,7 +2343,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "assert_approx_eq",
- "core",
  "ethcontract",
  "futures 0.3.5",
  "log 0.4.11",
@@ -2389,6 +2352,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "services-core",
  "structopt",
  "thiserror",
  "tokio 0.2.22",
@@ -3045,6 +3009,42 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "services-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assert_approx_eq",
+ "async-std",
+ "bincode",
+ "blocking 0.6.1",
+ "byteorder",
+ "chrono",
+ "contracts",
+ "ethcontract",
+ "futures 0.3.5",
+ "isahc",
+ "lazy_static",
+ "log 0.4.11",
+ "mockall",
+ "num",
+ "pricegraph",
+ "prometheus",
+ "rouille",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "slog",
+ "slog-async",
+ "slog-envlogger",
+ "slog-scope",
+ "slog-stdlog",
+ "slog-term",
+ "thiserror",
+ "uint",
+ "url 2.1.1",
 ]
 
 [[package]]
