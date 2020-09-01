@@ -3,6 +3,7 @@ mod data;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use pricegraph::{Market, Pricegraph, TokenPair};
+use std::time::Duration;
 
 fn read_default_pricegraph() -> Pricegraph {
     Pricegraph::read(&*data::DEFAULT_ORDERBOOK).expect("error reading orderbook")
@@ -61,8 +62,13 @@ pub fn order_for_limit_price(c: &mut Criterion) {
 }
 
 criterion_group!(
-    name = benches;
-    config = Criterion::default().sample_size(50);
-    targets = read, transitive_orderbook, estimate_limit_price, order_for_limit_price
+    name = overlapping;
+    config = Criterion::default().measurement_time(Duration::from_secs(60));
+    targets = read, transitive_orderbook
 );
-criterion_main!(benches);
+criterion_group!(
+    name = reduced;
+    config = Criterion::default().measurement_time(Duration::from_secs(10));
+    targets =  estimate_limit_price, order_for_limit_price
+);
+criterion_main!(overlapping, reduced);

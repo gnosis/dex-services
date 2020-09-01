@@ -1,16 +1,15 @@
 //! Data and logic related to token pair order management.
 
-use super::{ExchangeRate, LimitPrice, UserMap};
+use super::{map::Map, ExchangeRate, LimitPrice, UserMap};
 use crate::encoding::{Element, OrderId, TokenId, TokenPair, UserId};
 use crate::num;
 use std::cmp::Reverse;
-use std::collections::HashMap;
 use std::f64;
 
 /// A type for collecting orders and building an order map that garantees that
 /// per-pair orders are sorted for optimal access.
 #[derive(Debug, Default)]
-pub struct OrderCollector(HashMap<TokenId, HashMap<TokenId, Vec<Order>>>);
+pub struct OrderCollector(Map<TokenId, Map<TokenId, Vec<Order>>>);
 
 impl OrderCollector {
     /// Adds a new order to the order map.
@@ -42,7 +41,7 @@ impl OrderCollector {
 /// pair orders are garanteed to be in order, so that the cheapest order is
 /// always at the end of the token pair order vector.
 #[derive(Clone, Debug)]
-pub struct OrderMap(HashMap<TokenId, HashMap<TokenId, Vec<Order>>>);
+pub struct OrderMap(Map<TokenId, Map<TokenId, Vec<Order>>>);
 
 impl OrderMap {
     /// Returns an iterator over the collection of orders for each token pair.
