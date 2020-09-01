@@ -136,10 +136,8 @@ mod abitrary_impl {
     impl Arbitrary for Element {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
             let price = u.arbitrary::<PriceFraction>()?;
-            let remaining_sell_amount = u
-                .arbitrary::<u128>()?
-                .checked_rem(price.denominator)
-                .unwrap_or_default();
+            let remaining_sell_amount =
+                u.arbitrary::<u128>()? % price.denominator.saturating_add(1);
 
             Ok(Element {
                 user: H160(u.arbitrary()?),
