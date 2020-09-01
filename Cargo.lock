@@ -711,9 +711,8 @@ name = "dex-pricegraph"
 version = "0.0.1"
 dependencies = [
  "console_error_panic_hook",
- "data-encoding",
- "lazy_static",
  "pricegraph",
+ "pricegraph-data",
  "wasm-bindgen",
  "wasm-bindgen-test",
 ]
