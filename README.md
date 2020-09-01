@@ -90,6 +90,11 @@ From the root directory of the repository, run:
 ```
 docker-compose build --build-arg SOLVER_BASE=gnosispm/dex-open-solver:master stablex-debug
 docker-compose run [-v $(PWD)/:/app/dex-services] stablex-debug
+```
+
+From within the container run
+
+```
 cargo run --bin driver -- --solver-type open-solver
 ```
 

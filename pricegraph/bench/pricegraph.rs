@@ -1,12 +1,10 @@
-#[path = "../data/mod.rs"]
-mod data;
-
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use pricegraph::{Market, Pricegraph, TokenPair};
+use pricegraph_data::{DEFAULT_BATCH_ID, DEFAULT_ORDERBOOK};
 use std::time::Duration;
 
 fn read_default_pricegraph() -> Pricegraph {
-    Pricegraph::read(&*data::DEFAULT_ORDERBOOK).expect("error reading orderbook")
+    Pricegraph::read(&*DEFAULT_ORDERBOOK).expect("error reading orderbook")
 }
 
 pub fn read(c: &mut Criterion) {
@@ -18,7 +16,7 @@ pub fn transitive_orderbook(c: &mut Criterion) {
     let dai_weth = Market { base: 7, quote: 1 };
 
     c.bench_with_input(
-        BenchmarkId::new("Pricegraph::transitive_orderbook", *data::DEFAULT_BATCH_ID),
+        BenchmarkId::new("Pricegraph::transitive_orderbook", *DEFAULT_BATCH_ID),
         &(&pricegraph, dai_weth),
         |b, &(pricegraph, dai_weth)| b.iter(|| pricegraph.transitive_orderbook(dai_weth, None)),
     );

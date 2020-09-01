@@ -1,9 +1,7 @@
 extern crate wasm_bindgen_test;
 
-#[path = "../../data/mod.rs"]
-mod data;
-
 use dex_pricegraph::PriceEstimator;
+use pricegraph_data::DEFAULT_ORDERBOOK;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_test::*;
 
@@ -21,7 +19,7 @@ fn time<T>(f: impl FnOnce() -> T) -> (T, f64) {
 
 #[wasm_bindgen_test]
 fn estimate_price() {
-    let (estimator, load_time) = time(|| PriceEstimator::new(&*data::DEFAULT_ORDERBOOK).unwrap());
+    let (estimator, load_time) = time(|| PriceEstimator::new(&*DEFAULT_ORDERBOOK).unwrap());
     let (price, estimate_time) = time(|| estimator.estimate_price(7, 1, 100e18).unwrap());
 
     console_log!(
