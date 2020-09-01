@@ -6,6 +6,7 @@
 //! (i.e. orders) connecting a token pair.
 
 mod flow;
+mod map;
 mod order;
 mod reduced;
 mod scalar;

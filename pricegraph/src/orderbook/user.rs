@@ -1,17 +1,17 @@
 //! Module implementing user and user token balance management.
 
+use super::map::{self, Map};
 use crate::encoding::{Element, TokenId, UserId};
 use crate::num;
-use std::collections::{hash_map, HashMap};
 
 /// A type definiton for a mapping between user IDs to user data.
-pub type UserMap = HashMap<UserId, User>;
+pub type UserMap = Map<UserId, User>;
 
 /// User data containing balances and number of orders.
 #[derive(Clone, Debug, Default)]
 pub struct User {
     /// User balances per token.
-    balances: HashMap<TokenId, f64>,
+    balances: Map<TokenId, f64>,
 }
 
 impl User {
@@ -31,7 +31,7 @@ impl User {
     /// Deducts an amount from the balance for the given token. Returns the new
     /// balance or `None` if the user no longer has any balance.
     pub fn deduct_from_balance(&mut self, token: TokenId, amount: f64) -> f64 {
-        if let hash_map::Entry::Occupied(mut entry) = self.balances.entry(token) {
+        if let map::Entry::Occupied(mut entry) = self.balances.entry(token) {
             let balance = entry.get_mut();
             *balance -= amount;
 
