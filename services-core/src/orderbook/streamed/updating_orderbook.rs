@@ -213,22 +213,23 @@ impl UpdatingOrderbook {
     }
 }
 
+#[async_trait::async_trait]
 impl StableXOrderBookReading for UpdatingOrderbook {
     /// Blocks on updating the orderbook. This can be expensive if `initialize` hasn't been called before.
-    fn get_auction_data_for_batch(
+    async fn get_auction_data_for_batch(
         &self,
         batch_id_to_solve: u32,
-    ) -> BoxFuture<Result<(AccountState, Vec<Order>)>> {
+    ) -> Result<(AccountState, Vec<Order>)> {
         self.do_with_context(move |context| {
             immediate!(context.orderbook.auction_state_for_batch(batch_id_to_solve))
         })
-        .boxed()
+        .await
     }
 
-    fn get_auction_data_for_block(
+    async fn get_auction_data_for_block(
         &self,
         block: BlockNumber,
-    ) -> BoxFuture<Result<(AccountState, Vec<Order>)>> {
+    ) -> Result<(AccountState, Vec<Order>)> {
         self.do_with_context(move |context| {
             async move {
                 // NOTE: Get the exact timestamp for the block, this will give more
@@ -245,10 +246,10 @@ impl StableXOrderBookReading for UpdatingOrderbook {
             }
             .boxed()
         })
-        .boxed()
+        .await
     }
 
-    fn initialize(&self) -> BoxFuture<Result<()>> {
-        self.do_with_context(|_| immediate!(Ok(()))).boxed()
+    async fn initialize(&self) -> Result<()> {
+        self.do_with_context(|_| immediate!(Ok(()))).await
     }
 }

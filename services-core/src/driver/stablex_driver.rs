@@ -260,7 +260,7 @@ mod tests {
             .with(eq(batch))
             .return_once({
                 let result = (state.clone(), orders.clone());
-                |_| async { Ok(result) }.boxed()
+                move |_| Ok(result)
             });
 
         let solution = Solution {
@@ -300,7 +300,7 @@ mod tests {
 
         reader
             .expect_get_auction_data_for_batch()
-            .returning(|_| async { Err(anyhow!("Error")) }.boxed());
+            .returning(|_| Err(anyhow!("Error")));
 
         let driver = StableXDriverImpl::new(
             Arc::new(pf),
@@ -337,10 +337,7 @@ mod tests {
         reader
             .expect_get_auction_data_for_batch()
             .with(eq(batch))
-            .return_once({
-                let result = (state, orders);
-                |_| async { Ok(result) }.boxed()
-            });
+            .return_once(|_| Ok((state, orders)));
 
         pf.expect_find_prices()
             .returning(|_, _, _| async { Err(anyhow!("Error")) }.boxed());
@@ -379,7 +376,7 @@ mod tests {
         reader
             .expect_get_auction_data_for_batch()
             .with(eq(batch))
-            .return_once(move |_| async { Ok((state, orders)) }.boxed());
+            .return_once(move |_| Ok((state, orders)));
 
         let driver = StableXDriverImpl::new(
             Arc::new(pf),
@@ -437,12 +434,9 @@ mod tests {
             .expect_get_solution_objective_value()
             .with(eq(batch), always())
             .returning(|_, _| {
-                async {
-                    Err(SolutionSubmissionError::Unexpected(anyhow!(
-                        "get_solution_objective_value failed"
-                    )))
-                }
-                .boxed()
+                Err(SolutionSubmissionError::Unexpected(anyhow!(
+                    "get_solution_objective_value failed"
+                )))
             });
         submitter.expect_submit_solution().times(0);
 
@@ -482,9 +476,7 @@ mod tests {
         submitter
             .expect_get_solution_objective_value()
             .with(eq(batch), always())
-            .returning(|_, _| {
-                async { Err(SolutionSubmissionError::Benign("Benign Error".to_owned())) }.boxed()
-            });
+            .returning(|_, _| Err(SolutionSubmissionError::Benign("Benign Error".to_owned())));
         submitter.expect_submit_solution().times(0);
 
         let solution = Solution {
@@ -524,12 +516,12 @@ mod tests {
         submitter
             .expect_get_solution_objective_value()
             .with(eq(batch), always())
-            .returning(|_, _| async { Ok(42.into()) }.boxed());
+            .returning(|_, _| Ok(42.into()));
         submitter
             .expect_submit_solution()
             .with(eq(batch), always(), eq(U256::from(42)), always())
             .returning(|_, _, _, _| {
-                async { Err(SolutionSubmissionError::Benign("Benign Error".to_owned())) }.boxed()
+                Err(SolutionSubmissionError::Benign("Benign Error".to_owned()))
             });
 
         let solution = Solution {
@@ -579,7 +571,7 @@ mod tests {
                 while start.elapsed() <= latest_solution_submit_time {
                     thread::yield_now();
                 }
-                async { Ok((state, orders)) }.boxed()
+                Ok((state, orders))
             });
 
         let driver = StableXDriverImpl::new(

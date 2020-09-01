@@ -14,7 +14,7 @@ use ethcontract::{
     web3::{error::Error as Web3Error, types::TransactionReceipt},
     U256,
 };
-use futures::future::{self, BoxFuture, Either, FutureExt as _};
+use futures::future::{self, Either};
 use pricegraph::num;
 use retry::SolutionTransactionSending;
 use std::{
@@ -28,6 +28,7 @@ use thiserror::Error;
 const MIN_GAS_PRICE_INCREASE_FACTOR: f64 = 1.125 * (1.0 + f64::EPSILON);
 
 #[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
 pub trait StableXSolutionSubmitting {
     /// Return the objective value for the given solution in the given
     /// batch or an error.
@@ -36,11 +37,11 @@ pub trait StableXSolutionSubmitting {
     /// * `batch_index` - the auction for which this solutions should be evaluated
     /// * `orders` - the list of orders for which this solution is applicable
     /// * `solution` - the solution to be evaluated
-    fn get_solution_objective_value<'a>(
-        &'a self,
+    async fn get_solution_objective_value(
+        &self,
         batch_index: u32,
         solution: Solution,
-    ) -> BoxFuture<'a, Result<U256, SolutionSubmissionError>>;
+    ) -> Result<U256, SolutionSubmissionError>;
 
     /// Submits the provided solution and returns the result of the submission
     ///
@@ -49,13 +50,13 @@ pub trait StableXSolutionSubmitting {
     /// * `orders` - the list of orders for which this solution is applicable
     /// * `solution` - the solution to be evaluated
     /// * `claimed_objective_value` - the objective value of the provided solution.
-    fn submit_solution<'a>(
-        &'a self,
+    async fn submit_solution(
+        &self,
         batch_index: u32,
         solution: Solution,
         claimed_objective_value: U256,
         gas_price_cap: U256,
-    ) -> BoxFuture<'a, Result<(), SolutionSubmissionError>>;
+    ) -> Result<(), SolutionSubmissionError>;
 }
 
 /// An error with verifying or submitting a solution
@@ -185,84 +186,79 @@ impl<'a> StableXSolutionSubmitter<'a> {
     }
 }
 
+#[async_trait::async_trait]
 impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
-    fn get_solution_objective_value(
+    async fn get_solution_objective_value(
         &self,
         batch_index: u32,
         solution: Solution,
-    ) -> BoxFuture<Result<U256, SolutionSubmissionError>> {
-        async move {
-            self.contract
-                .get_solution_objective_value(batch_index, solution, None)
-                .await
-                .map_err(SolutionSubmissionError::from)
-        }
-        .boxed()
+    ) -> Result<U256, SolutionSubmissionError> {
+        self.contract
+            .get_solution_objective_value(batch_index, solution, None)
+            .await
+            .map_err(SolutionSubmissionError::from)
     }
 
-    fn submit_solution(
+    async fn submit_solution(
         &self,
         batch_index: u32,
         solution: Solution,
         claimed_objective_value: U256,
         gas_price_cap: U256,
-    ) -> BoxFuture<Result<(), SolutionSubmissionError>> {
-        async move {
-            // If the gas price cap is not at least the fast gas price then submitting the solution
-            // is not feasible because it would take too long.
-            match self.gas_price_estimating.estimate_gas_price().await {
-                Ok(gas_price) => {
-                    if gas_price_cap < gas_price {
-                        return Err(SolutionSubmissionError::Benign(format!(
-                            "Solution does not generate enough fees for the transaction \
+    ) -> Result<(), SolutionSubmissionError> {
+        // If the gas price cap is not at least the fast gas price then submitting the solution
+        // is not feasible because it would take too long.
+        match self.gas_price_estimating.estimate_gas_price().await {
+            Ok(gas_price) => {
+                if gas_price_cap < gas_price {
+                    return Err(SolutionSubmissionError::Benign(format!(
+                        "Solution does not generate enough fees for the transaction \
                              to execute quickly enough: price cap {} < fast gas price {}",
-                            gas_price_cap, gas_price,
-                        )));
-                    }
+                        gas_price_cap, gas_price,
+                    )));
                 }
-                Err(err) => log::warn!("failed to estimate gas price: {:?}", err),
             }
-            let nonce = self.contract.get_transaction_count().await?;
-            let submit_future = self.retry_with_gas_price_increase.retry(retry::Args {
-                batch_index,
-                solution: solution.clone(),
-                claimed_objective_value,
-                gas_price_cap,
-                nonce,
-            });
-            let cancel_future =
-                self.cancel_transaction_after_deadline(batch_index, nonce, gas_price_cap);
+            Err(err) => log::warn!("failed to estimate gas price: {:?}", err),
+        }
+        let nonce = self.contract.get_transaction_count().await?;
+        let submit_future = self.retry_with_gas_price_increase.retry(retry::Args {
+            batch_index,
+            solution: solution.clone(),
+            claimed_objective_value,
+            gas_price_cap,
+            nonce,
+        });
+        let cancel_future =
+            self.cancel_transaction_after_deadline(batch_index, nonce, gas_price_cap);
 
-            // Run both futures at the same time. When one of them completes check whether the
-            // result is a "nonce already used error". If this is the case then the other future's
-            // transaction must have gone through so return that one instead.
-            // We need to handle this error because exactly one of the transactions will go through
-            // but we might observe the other transaction failing first.
-            futures::pin_mut!(cancel_future);
-            match future::select(submit_future, cancel_future).await {
-                Either::Left((submit_result, cancel_future)) => {
-                    if submit_result.is_transaction_error() {
-                        log::info!("solution submission transaction is nonce error");
-                        Err(convert_cancel_result(cancel_future.await))
-                    } else {
-                        log::info!("solution submission transaction completed first");
-                        self.convert_submit_result(batch_index, solution, submit_result)
-                            .await
-                    }
+        // Run both futures at the same time. When one of them completes check whether the
+        // result is a "nonce already used error". If this is the case then the other future's
+        // transaction must have gone through so return that one instead.
+        // We need to handle this error because exactly one of the transactions will go through
+        // but we might observe the other transaction failing first.
+        futures::pin_mut!(cancel_future);
+        match future::select(submit_future, cancel_future).await {
+            Either::Left((submit_result, cancel_future)) => {
+                if submit_result.is_transaction_error() {
+                    log::info!("solution submission transaction is nonce error");
+                    Err(convert_cancel_result(cancel_future.await))
+                } else {
+                    log::info!("solution submission transaction completed first");
+                    self.convert_submit_result(batch_index, solution, submit_result)
+                        .await
                 }
-                Either::Right((cancel_result, submit_future)) => {
-                    if cancel_result.is_transaction_error() {
-                        log::info!("cancel transaction is nonce error");
-                        self.convert_submit_result(batch_index, solution, submit_future.await)
-                            .await
-                    } else {
-                        log::info!("cancel transaction completed first");
-                        Err(convert_cancel_result(cancel_result))
-                    }
+            }
+            Either::Right((cancel_result, submit_future)) => {
+                if cancel_result.is_transaction_error() {
+                    log::info!("cancel transaction is nonce error");
+                    self.convert_submit_result(batch_index, solution, submit_future.await)
+                        .await
+                } else {
+                    log::info!("cancel transaction completed first");
+                    Err(convert_cancel_result(cancel_result))
                 }
             }
         }
-        .boxed()
     }
 }
 
@@ -325,11 +321,11 @@ mod tests {
         gas_price::MockGasPriceEstimating,
         util::{FutureWaitExt as _, MockAsyncSleeping},
     };
-    use retry::MockSolutionTransactionSending;
-
     use anyhow::anyhow;
     use ethcontract::{web3::types::H2048, H256};
+    use futures::FutureExt as _;
     use mockall::predicate::{always, eq};
+    use retry::MockSolutionTransactionSending;
 
     fn erroring_gas_station() -> impl GasPriceEstimating {
         let mut gas_price_estimating = MockGasPriceEstimating::new();

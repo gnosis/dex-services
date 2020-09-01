@@ -19,7 +19,6 @@ use crate::{
 };
 use anyhow::Result;
 use average_price_source::AveragePriceSource;
-use futures::future::{BoxFuture, FutureExt as _};
 use log::warn;
 use price_source::PriceSource;
 use priority_price_source::PriorityPriceSource;
@@ -37,6 +36,7 @@ type Tokens = BTreeMap<TokenId, Option<TokenInfo>>;
 /// A trait representing a price oracle that retrieves price estimates for the
 /// tokens included in the current orderbook.
 #[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
 pub trait PriceEstimating {
     /// Retrieves price estimates for all token in the specified orders on a
     /// best-effort basis. Critically, it is not considered an error to not be
@@ -45,13 +45,12 @@ pub trait PriceEstimating {
     /// Prices are in the same format as is expected by the Smart Contract and
     /// the solver, so the amount of OWL in atoms to purchase 1e18 of the
     /// corresponding token.
-    fn get_token_prices<'a>(&'a self, orders: &[Order]) -> BoxFuture<'a, Tokens>;
+    async fn get_token_prices(&self, orders: &[Order]) -> Tokens;
 
     /// Retrieves a price estimate for ETH in OWL atoms. This price is in the
     /// same format as the above method, so the amount of OWL in atoms to
     /// purchase 1.0 ETH (or 1e18 wei).
-    #[allow(clippy::needless_lifetimes)]
-    fn get_eth_price<'a>(&'a self) -> BoxFuture<'a, Option<NonZeroU128>>;
+    async fn get_eth_price(&self) -> Option<NonZeroU128>;
 }
 
 pub struct PriceOracle {
@@ -121,8 +120,9 @@ impl PriceOracle {
     }
 }
 
+#[async_trait::async_trait]
 impl PriceEstimating for PriceOracle {
-    fn get_token_prices<'a>(&'a self, orders: &[Order]) -> BoxFuture<'a, Tokens> {
+    async fn get_token_prices(&self, orders: &[Order]) -> Tokens {
         let token_ids_to_price: HashSet<_> = orders
             .iter()
             .flat_map(|order| vec![order.buy_token, order.sell_token])
@@ -133,44 +133,38 @@ impl PriceEstimating for PriceOracle {
             .chain(iter::once(TokenId::reference()))
             .collect();
         let token_ids_to_price = Vec::<_>::from_iter(token_ids_to_price);
-        async move {
-            let prices = self.get_prices(&token_ids_to_price).await;
-            let mut token_infos = self
-                .token_info_fetcher
-                .get_token_infos(&token_ids_to_price)
-                .await
-                .unwrap_or_default();
+        let prices = self.get_prices(&token_ids_to_price).await;
+        let mut token_infos = self
+            .token_info_fetcher
+            .get_token_infos(&token_ids_to_price)
+            .await
+            .unwrap_or_default();
 
-            let mut tokens = Tokens::new();
-            for token_id in token_ids_to_price {
-                let token_info = if let Some(price) = prices.get(&token_id) {
-                    let mut token_info = TokenInfo {
-                        alias: None,
-                        decimals: None,
-                        external_price: *price,
-                    };
-                    if let Some(base_info) = token_infos.remove(&token_id) {
-                        token_info.alias = Some(base_info.alias);
-                        token_info.decimals = Some(base_info.decimals);
-                    }
-                    Some(token_info)
-                } else {
-                    None
+        let mut tokens = Tokens::new();
+        for token_id in token_ids_to_price {
+            let token_info = if let Some(price) = prices.get(&token_id) {
+                let mut token_info = TokenInfo {
+                    alias: None,
+                    decimals: None,
+                    external_price: *price,
                 };
-                tokens.insert(token_id, token_info);
-            }
-            tokens
+                if let Some(base_info) = token_infos.remove(&token_id) {
+                    token_info.alias = Some(base_info.alias);
+                    token_info.decimals = Some(base_info.decimals);
+                }
+                Some(token_info)
+            } else {
+                None
+            };
+            tokens.insert(token_id, token_info);
         }
-        .boxed()
+        tokens
     }
 
-    fn get_eth_price(&self) -> BoxFuture<'_, Option<NonZeroU128>> {
-        async move {
-            let token_id = self.eth_token_id();
-            let prices = self.source.get_prices(&[token_id]).await.ok()?;
-            prices.get(&token_id).copied()
-        }
-        .boxed()
+    async fn get_eth_price(&self) -> Option<NonZeroU128> {
+        let token_id = self.eth_token_id();
+        let prices = self.source.get_prices(&[token_id]).await.ok()?;
+        prices.get(&token_id).copied()
     }
 }
 
@@ -204,6 +198,7 @@ mod tests {
     use crate::token_info::hardcoded::{TokenData, TokenInfoOverride};
     use anyhow::anyhow;
     use ethcontract::Address;
+    use futures::FutureExt as _;
     use price_source::{MockPriceSource, NoopPriceSource};
 
     #[test]

@@ -7,7 +7,6 @@ use crate::{
 };
 use anyhow::{anyhow, Context as _, Result};
 use ethcontract::U256;
-use futures::future::{BoxFuture, FutureExt as _};
 use std::sync::Arc;
 
 /// The approximate amount of gas used in a solution per trade. In practice the value depends on how
@@ -15,16 +14,14 @@ use std::sync::Arc;
 const GAS_PER_TRADE: f64 = 120_000.0;
 
 #[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
 pub trait EconomicViabilityComputing: Send + Sync + 'static {
     /// Used by the solver so that it only considers solution that are economically viable.
     /// This is the minimum average amount of earned fees per order. The total amount of paid fees
     /// is twice this because half of the fee is burnt.
-    fn min_average_fee<'a>(&'a self) -> BoxFuture<'a, Result<u128>>;
+    async fn min_average_fee(&self) -> Result<u128>;
     /// The maximum gas price at which submitting the solution is still economically viable.
-    fn max_gas_price<'a>(
-        &'a self,
-        economic_viability_info: EconomicViabilityInfo,
-    ) -> BoxFuture<'a, Result<U256>>;
+    async fn max_gas_price(&self, economic_viability_info: EconomicViabilityInfo) -> Result<U256>;
 }
 
 /// Economic viability constraints based on the current gas and eth price.
@@ -71,41 +68,33 @@ impl EconomicViabilityComputer {
     }
 }
 
+#[async_trait::async_trait]
 impl EconomicViabilityComputing for EconomicViabilityComputer {
-    fn min_average_fee(&self) -> BoxFuture<'_, Result<u128>> {
-        async move {
-            let eth_price = self.eth_price_in_owl().await?;
-            let gas_price = self.gas_price().await?;
+    async fn min_average_fee(&self) -> Result<u128> {
+        let eth_price = self.eth_price_in_owl().await?;
+        let gas_price = self.gas_price().await?;
 
-            let fee = min_average_fee(eth_price, gas_price) * self.min_avg_fee_factor;
-            let subsidized = fee / self.subsidy_factor;
-            log::debug!(
+        let fee = min_average_fee(eth_price, gas_price) * self.min_avg_fee_factor;
+        let subsidized = fee / self.subsidy_factor;
+        log::debug!(
                 "computed min average fee to be {}, subsidized to {} based on eth price {} gas price {}",
                 fee, subsidized, eth_price, gas_price
             );
 
-            Ok(subsidized as _)
-        }
-        .boxed()
+        Ok(subsidized as _)
     }
 
-    fn max_gas_price<'a>(
-        &'a self,
-        economic_viability_info: EconomicViabilityInfo,
-    ) -> BoxFuture<'a, Result<U256>> {
-        async move {
-            let earned_fee = pricegraph::num::u256_to_f64(economic_viability_info.earned_fee);
-            let num_trades = economic_viability_info.num_executed_orders;
-            let eth_price = self.eth_price_in_owl().await?;
-            let cap = gas_price_cap(eth_price, earned_fee, num_trades);
-            let subsidized = cap * self.subsidy_factor;
-            log::debug!(
+    async fn max_gas_price(&self, economic_viability_info: EconomicViabilityInfo) -> Result<U256> {
+        let earned_fee = pricegraph::num::u256_to_f64(economic_viability_info.earned_fee);
+        let num_trades = economic_viability_info.num_executed_orders;
+        let eth_price = self.eth_price_in_owl().await?;
+        let cap = gas_price_cap(eth_price, earned_fee, num_trades);
+        let subsidized = cap * self.subsidy_factor;
+        log::debug!(
                 "computed max gas price to be {} subsidized to {} based on earned fee {} num trades {} eth price {}",
                 cap, subsidized, earned_fee, num_trades, eth_price
             );
-            Ok(U256::from(subsidized as u128))
-        }
-        .boxed()
+        Ok(U256::from(subsidized as u128))
     }
 }
 
@@ -141,17 +130,16 @@ impl FixedEconomicViabilityComputer {
     }
 }
 
+#[async_trait::async_trait]
 impl EconomicViabilityComputing for FixedEconomicViabilityComputer {
-    fn min_average_fee(&self) -> BoxFuture<'_, Result<u128>> {
-        immediate!(self
-            .min_average_fee
-            .ok_or_else(|| anyhow!("no min average fee set")))
+    async fn min_average_fee(&self) -> Result<u128> {
+        self.min_average_fee
+            .ok_or_else(|| anyhow!("no min average fee set"))
     }
 
-    fn max_gas_price<'a>(&'a self, _: EconomicViabilityInfo) -> BoxFuture<'a, Result<U256>> {
-        immediate!(self
-            .max_gas_price
-            .ok_or_else(|| anyhow!("no max gas price set")))
+    async fn max_gas_price(&self, _: EconomicViabilityInfo) -> Result<U256> {
+        self.max_gas_price
+            .ok_or_else(|| anyhow!("no max gas price set"))
     }
 }
 
@@ -165,10 +153,13 @@ impl PriorityEconomicViabilityComputer {
         PriorityEconomicViabilityComputer(inner)
     }
 
-    async fn until_success<T>(
-        &self,
-        mut operation: impl FnMut(&dyn EconomicViabilityComputing) -> BoxFuture<Result<T>>,
-    ) -> Result<T> {
+    async fn until_success<'a, T, Future>(
+        &'a self,
+        mut operation: impl FnMut(&'a dyn EconomicViabilityComputing) -> Future + 'a,
+    ) -> Result<T>
+    where
+        Future: std::future::Future<Output = Result<T>>,
+    {
         for inner in self.0.iter() {
             match operation(inner.as_ref()).await {
                 Ok(value) => return Ok(value),
@@ -181,18 +172,16 @@ impl PriorityEconomicViabilityComputer {
     }
 }
 
+#[async_trait::async_trait]
 impl EconomicViabilityComputing for PriorityEconomicViabilityComputer {
-    fn min_average_fee(&self) -> BoxFuture<'_, Result<u128>> {
+    async fn min_average_fee(&self) -> Result<u128> {
         self.until_success(EconomicViabilityComputing::min_average_fee)
-            .boxed()
+            .await
     }
 
-    fn max_gas_price<'a>(
-        &'a self,
-        economic_viability_info: EconomicViabilityInfo,
-    ) -> BoxFuture<'a, Result<U256>> {
+    async fn max_gas_price(&self, economic_viability_info: EconomicViabilityInfo) -> Result<U256> {
         self.until_success(move |computer| computer.max_gas_price(economic_viability_info))
-            .boxed()
+            .await
     }
 }
 
@@ -223,7 +212,7 @@ mod tests {
         let mut price_oracle = MockPriceEstimating::new();
         price_oracle
             .expect_get_eth_price()
-            .returning(|| immediate!(Some(nonzero!(240e18 as u128))));
+            .returning(|| Some(nonzero!(240e18 as u128)));
 
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station
@@ -260,8 +249,7 @@ mod tests {
                 .into_iter()
                 .map(|result| -> Box<dyn EconomicViabilityComputing> {
                     let mut mock = MockEconomicViabilityComputing::new();
-                    mock.expect_min_average_fee()
-                        .return_once(move || immediate!(result));
+                    mock.expect_min_average_fee().return_once(move || result);
                     Box::new(mock)
                 })
                 .collect(),

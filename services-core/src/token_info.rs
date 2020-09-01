@@ -1,7 +1,6 @@
 use crate::models::TokenId;
 use anyhow::Result;
 use ethcontract::Address;
-use futures::future::{BoxFuture, FutureExt as _};
 use lazy_static::lazy_static;
 use std::{borrow::Borrow, collections::HashMap, num::NonZeroU128};
 
@@ -9,63 +8,49 @@ pub mod cached;
 pub mod hardcoded;
 pub mod onchain;
 
+#[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
 pub trait TokenInfoFetching: Send + Sync {
     /// Retrieves some token information from a token ID.
-    fn get_token_info(&self, id: TokenId) -> BoxFuture<Result<TokenBaseInfo>>;
+    async fn get_token_info(&self, id: TokenId) -> Result<TokenBaseInfo>;
 
     /// Retrieves all token information.
     /// Default implementation calls get_token_info for each token and ignores errors.
-    fn get_token_infos<'a>(
-        &'a self,
-        ids: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, TokenBaseInfo>>> {
-        async move {
-            let mut result = HashMap::new();
-            for id in ids {
-                match self.get_token_info(*id).await {
-                    Ok(info) => {
-                        result.insert(*id, info);
-                    }
-                    Err(err) => log::warn!("failed to get token info for {}: {:?}", id, err),
+    async fn get_token_infos(&self, ids: &[TokenId]) -> Result<HashMap<TokenId, TokenBaseInfo>> {
+        let mut result = HashMap::new();
+        for id in ids {
+            match self.get_token_info(*id).await {
+                Ok(info) => {
+                    result.insert(*id, info);
                 }
+                Err(err) => log::warn!("failed to get token info for {}: {:?}", id, err),
             }
-            Ok(result)
         }
-        .boxed()
+        Ok(result)
     }
 
     /// Returns a vector with all the token IDs available
-    fn all_ids(&self) -> BoxFuture<Result<Vec<TokenId>>>;
+    async fn all_ids(&self) -> Result<Vec<TokenId>>;
 
     /// Retrieves a token by symbol.
     ///
     /// Default implementation queries token info for all IDs and searches the
     /// resulting token for the specified symbol.
-    fn find_token_by_symbol<'a>(
-        &'a self,
-        symbol: &'a str,
-    ) -> BoxFuture<'a, Result<Option<(TokenId, TokenBaseInfo)>>> {
-        async move {
-            let infos = self.get_token_infos(&self.all_ids().await?).await?;
-            Ok(search_for_token_by_symbol(infos, symbol))
-        }
-        .boxed()
+    async fn find_token_by_symbol(&self, symbol: &str) -> Result<Option<(TokenId, TokenBaseInfo)>> {
+        let infos = self.get_token_infos(&self.all_ids().await?).await?;
+        Ok(search_for_token_by_symbol(infos, symbol))
     }
 
     /// Retrieves a token by address.
     ///
     /// Default implementation queries token info for all IDs and searches the
     /// resulting token for the specified address.
-    fn find_token_by_address(
+    async fn find_token_by_address(
         &self,
         address: Address,
-    ) -> BoxFuture<Result<Option<(TokenId, TokenBaseInfo)>>> {
-        async move {
-            let infos = self.get_token_infos(&self.all_ids().await?).await?;
-            let info = infos.into_iter().find(|(_, info)| info.address == address);
-            Ok(info)
-        }
-        .boxed()
+    ) -> Result<Option<(TokenId, TokenBaseInfo)>> {
+        let infos = self.get_token_infos(&self.all_ids().await?).await?;
+        Ok(find_token_by_address(infos, address))
     }
 }
 
@@ -82,47 +67,12 @@ where
         .min_by_key(|(id, _)| *id)
 }
 
-// mockall workaround https://github.com/asomers/mockall/issues/134
-#[cfg(test)]
-mod mock {
-    use super::*;
-    #[mockall::automock]
-    pub trait TokenInfoFetching_ {
-        fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>>;
-        fn get_token_infos<'a>(
-            &'a self,
-            ids: &[TokenId],
-        ) -> BoxFuture<'a, Result<HashMap<TokenId, TokenBaseInfo>>>;
-        fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>>;
-        fn find_token_by_symbol<'a>(
-            &'a self,
-            symbol: &str,
-        ) -> BoxFuture<'a, Result<Option<(TokenId, TokenBaseInfo)>>>;
-    }
-
-    impl<T: TokenInfoFetching_ + Send + Sync> TokenInfoFetching for T {
-        fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
-            TokenInfoFetching_::get_token_info(self, id)
-        }
-        fn get_token_infos(
-            &self,
-            ids: &[TokenId],
-        ) -> BoxFuture<Result<HashMap<TokenId, TokenBaseInfo>>> {
-            TokenInfoFetching_::get_token_infos(self, ids)
-        }
-        fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
-            TokenInfoFetching_::all_ids(self)
-        }
-        fn find_token_by_symbol<'a>(
-            &'a self,
-            symbol: &'a str,
-        ) -> BoxFuture<'a, Result<Option<(TokenId, TokenBaseInfo)>>> {
-            TokenInfoFetching_::find_token_by_symbol(self, symbol)
-        }
-    }
+fn find_token_by_address(
+    infos: impl IntoIterator<Item = (TokenId, TokenBaseInfo)>,
+    address: Address,
+) -> Option<(TokenId, TokenBaseInfo)> {
+    infos.into_iter().find(|(_, info)| info.address == address)
 }
-#[cfg(test)]
-pub use mock::MockTokenInfoFetching_ as MockTokenInfoFetching;
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Clone, Debug)]
@@ -182,6 +132,7 @@ impl TokenBaseInfo {
 mod tests {
     use super::*;
     use anyhow::anyhow;
+    use futures::FutureExt as _;
 
     #[test]
     fn token_get_price() {
@@ -241,18 +192,19 @@ mod tests {
     fn default_get_token_infos_forwards_calls_and_ignores_errors() {
         // Not using mockall because we want to test the default impl.
         struct TokenInfo {};
+        #[async_trait::async_trait]
         impl TokenInfoFetching for TokenInfo {
-            fn get_token_info<'a>(&'a self, id: TokenId) -> BoxFuture<'a, Result<TokenBaseInfo>> {
-                immediate!(match id.0 {
+            async fn get_token_info(&self, id: TokenId) -> Result<TokenBaseInfo> {
+                match id.0 {
                     0 | 1 => Ok(TokenBaseInfo {
                         address: Address::from_low_u64_be(0),
                         alias: id.0.to_string(),
-                        decimals: 1
+                        decimals: 1,
                     }),
                     _ => Err(anyhow!("")),
-                })
+                }
             }
-            fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
+            async fn all_ids(&self) -> Result<Vec<TokenId>> {
                 unimplemented!()
             }
         }
@@ -289,23 +241,14 @@ mod tests {
 
     #[test]
     fn find_token_info_by_address_finds_result() {
-        let mut info = MockTokenInfoFetching::new();
-        info.expect_all_ids()
-            .returning(|| immediate!(Ok(vec![TokenId(0), TokenId(1), TokenId(2)])));
-        info.expect_get_token_infos().returning(|_| {
-            immediate!(Ok(hash_map!(
-                TokenId(0) => TokenBaseInfo::new(Address::from_low_u64_be(0), "a", 0),
-                TokenId(1) => TokenBaseInfo::new(Address::from_low_u64_be(1), "b", 1),
-                TokenId(2) => TokenBaseInfo::new(Address::from_low_u64_be(2), "c", 2),
-            )))
-        });
+        let infos = hash_map!(
+            TokenId(0) => TokenBaseInfo::new(Address::from_low_u64_be(0), "a", 0),
+            TokenId(1) => TokenBaseInfo::new(Address::from_low_u64_be(1), "b", 1),
+            TokenId(2) => TokenBaseInfo::new(Address::from_low_u64_be(2), "c", 2),
+        );
         let address = Address::from_low_u64_be(1);
-        let result = info
-            .find_token_by_address(address)
-            .now_or_never()
-            .unwrap()
-            .unwrap();
-        let expected = (TokenId(1), TokenBaseInfo::new(address, "b", 1));
-        assert_eq!(result, Some(expected));
+        let result = find_token_by_address(infos, address);
+        let expected = Some((TokenId(1), TokenBaseInfo::new(address, "b", 1)));
+        assert_eq!(result, expected);
     }
 }
