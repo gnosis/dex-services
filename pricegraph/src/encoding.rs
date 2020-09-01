@@ -132,12 +132,17 @@ mod abitrary_impl {
     // NOTE: We want `Element` to implement `Arbitrary` but cannot derive it
     // because:
     // - `Element` contains foreign types that don't implement `Arbitraty`
-    // - `remaining_sell_amount` is always smaller than `price.denominator`
+    // - `remaining_sell_amount` is always smaller than `price.denominator` and
+    //   can be an "unlimited" order.
     impl Arbitrary for Element {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
             let price = u.arbitrary::<PriceFraction>()?;
             let remaining_sell_amount =
-                u.arbitrary::<u128>()? % price.denominator.saturating_add(1);
+                if price.numerator == u128::MAX || price.denominator == u128::MAX {
+                    price.denominator
+                } else {
+                    u.arbitrary::<u128>()? % (price.denominator + 1)
+                };
 
             Ok(Element {
                 user: H160(u.arbitrary()?),
