@@ -2,7 +2,7 @@
 //! finding algorightms.
 
 use petgraph::algo::FloatMeasure;
-use std::{cmp, fmt, ops};
+use std::{fmt, ops};
 
 /// A signed fixed point number with 24 magnitude bits and 104 fractional bits.
 ///
@@ -12,24 +12,30 @@ use std::{cmp, fmt, ops};
 /// rates. Since `log2` of the exchange rate is used, and the range of these
 /// exchange rates are:
 /// ```text
-/// [MIN_AMOUNT / u128::MAX, u128::MAX / MIN_AMOUNT]
+/// [1 / u128::MAX, u128::MAX / MIN_AMOUNT]
 /// ```
+///
+/// Note that `1 / u128::MAX` is a valid exchange rate since a buy amount of `1`
+/// is a lower limit, so there is nothing preventing a solver from executing a
+/// higher amount above the minimum trade amount `MIN_AMOUNT`. Conversly, sell
+/// amounts are upper limits, so for a sell amount less than `MIN_AMOUNT`, no
+/// trades can be executed for it since any executed sell amount will be below
+/// the minimum trade amount.
 ///
 /// In the logarithmic scale, this range is:
 /// ```text
-/// [-114.71, 114.71]
+/// [-128.0, 114.72)
 /// ```
 ///
 /// Furthermore, these weights can be added at most 2^16 times (this is the
 /// maximum number of tokens in the exchange), so the total range that must be
 /// representable by the magnitude bits is:
 /// ```text
-/// [-7517784, 7517784]
+/// [-8388608, 7517785)
 /// ```
 ///
-/// This number fits in 23 bits. However, an additional bit is needed in order
-/// to be able to represent the two's complement of 7517784 (for the -7517784)
-/// while still reserving a special value for ∞ which is required by the
+/// This number just fits in a signed 24 bit integer, and the maximum positive
+/// value is not used and can be reseved for +∞ which is required by the
 /// Bellman-Ford implementation.
 ///
 /// This leaves 104 fractional bits. Note that we want **as many fractional bits
@@ -48,7 +54,7 @@ const FIXED_24X104_SCALING_FACTOR: f64 = (1u128 << 104) as _;
 /// An opaque weight for an exchange rate used by the pathfinding algorithm.
 ///
 /// Internally, the weight is a represented as an fixed point number.
-#[derive(Clone, Copy, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Weight(Fixed24x104);
 
 impl Weight {
@@ -62,7 +68,7 @@ impl Weight {
 
         let weight = value.log2() * FIXED_24X104_SCALING_FACTOR;
         debug_assert!(
-            -114.72 * FIXED_24X104_SCALING_FACTOR <= weight
+            -128.0 * FIXED_24X104_SCALING_FACTOR <= weight
                 && weight < 114.72 * FIXED_24X104_SCALING_FACTOR,
         );
 
@@ -77,9 +83,11 @@ impl FloatMeasure for Weight {
 
     fn infinite() -> Self {
         // NOTE: Use a special marker value to represent +∞ which is needed by
-        // the `petgraph` Bellman-Ford implementation. `i128::MIN` is chosen so
-        // that the the range of non-infinite values are symmetric around `0`.
-        Weight(i128::MIN)
+        // the `petgraph` Bellman-Ford implementation. `i128::MAX` is chosen
+        // since a weight with this value cannot be created using the maximum
+        // limit price and maximum number of tokens. It also allows the
+        // `PartialOrd` implementation to be automatically derived.
+        Weight(i128::MAX)
     }
 }
 
@@ -93,23 +101,6 @@ impl ops::Add for Weight {
             Weight::infinite()
         } else {
             Weight(self.0 + rhs.0)
-        }
-    }
-}
-
-impl cmp::PartialOrd for Weight {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl cmp::Ord for Weight {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        match (*self == Weight::infinite(), *other == Weight::infinite()) {
-            (true, true) => cmp::Ordering::Equal,
-            (true, false) => cmp::Ordering::Greater,
-            (false, true) => cmp::Ordering::Less,
-            _ => self.0.cmp(&other.0),
         }
     }
 }
@@ -134,6 +125,7 @@ impl fmt::Debug for Weight {
 mod tests {
     use super::*;
     use crate::{num, MIN_AMOUNT};
+    use std::cmp;
 
     #[test]
     fn weight_range_fits_in_fixed_point_number() {
@@ -151,9 +143,9 @@ mod tests {
         };
         let min_total_weight = -max_total_weight;
 
-        // NOTE: The actual minimum value is reserved to represent +∞.
-        assert!(min_total_weight > Fixed24x104::MIN + 1);
-        assert!(max_total_weight < Fixed24x104::MAX);
+        // NOTE: The actual maximum value is reserved to represent +∞.
+        assert!(max_total_weight < Fixed24x104::MAX - 1);
+        assert!(min_total_weight > Fixed24x104::MIN);
     }
 
     #[test]
