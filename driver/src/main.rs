@@ -44,7 +44,7 @@ struct Options {
     #[structopt(
         long,
         env = "DFUSION_LOG",
-        default_value = "warn,driver=info,core=info"
+        default_value = "warn,driver=info,services_core=info"
     )]
     log_filter: String,
 
