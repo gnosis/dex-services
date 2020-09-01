@@ -33,6 +33,7 @@ paths:
         - $ref: "#/components/parameters/BatchId"
         - $ref: "#/components/parameters/IgnoreAddresses"
         - $ref: "#/components/parameters/BlockNumber"
+        - $ref: "#/components/parameters/RoundingBuffer"
   /api/v1/markets/{market}/estimated-amounts-at-price/{price}:
     get:
       summary: Estimated Amounts At Price
@@ -56,6 +57,7 @@ paths:
         - $ref: "#/components/parameters/BatchId"
         - $ref: "#/components/parameters/IgnoreAddresses"
         - $ref: "#/components/parameters/BlockNumber"
+        - $ref: "#/components/parameters/RoundingBuffer"
   /api/v1/markets/{market}/estimated-best-ask-price:
     get:
       summary: Estimated Best Ask Price
@@ -75,6 +77,7 @@ paths:
         - $ref: "#/components/parameters/BatchId"
         - $ref: "#/components/parameters/IgnoreAddresses"
         - $ref: "#/components/parameters/BlockNumber"
+        - $ref: "#/components/parameters/RoundingBuffer"
   /api/v1/markets/{market}:
     get:
       summary: Market
@@ -112,6 +115,11 @@ components:
       enum: [baseunits, atoms]
       default: baseunits
       example: baseunits
+    RoundingBuffer:
+      type: string
+      enum: [enabled, disabled]
+      default: enabled
+      example: enabled
     IgnoreAddressesParameter:
       type: string
       default: ""
@@ -182,6 +190,13 @@ components:
       required: false
       schema:
         $ref: "#/components/schemas/Unit"
+    RoundingBuffer:
+      name: roundingBuffer
+      in: query
+      description: If `enabled` (the default) the orderbook is adjusted by a rounding buffer that is used by the solvers internally. This makes the results more accurately reflect how the solvers see the orderbook.  If set to `disabled` no adjustments take place which can lead to for example prices for orders that would not actually get matched by the solver.
+      required: false
+      schema:
+        $ref: "#/components/schemas/RoundingBuffer"
     BatchId:
       name: batchId
       in: query
