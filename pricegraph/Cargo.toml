@@ -4,9 +4,10 @@ version = "0.1.0"
 authors = ["Nicholas Rodrigues Lordello <nicholas.lordello@gnosis.pm>"]
 edition = "2018"
 
-[[bench]]
-name = "pricegraph"
-harness = false
+[features]
+default = []
+bench = []
+fuzz = ["arbitrary"]
 
 [dependencies]
 arbitrary = { version = "0.4", optional = true, features = ["derive"] }
@@ -16,6 +17,4 @@ thiserror = "1"
 
 [dev-dependencies]
 assert_approx_eq = "1"
-criterion = "0.3"
-data-encoding = "2"
-lazy_static = "1"
+pricegraph-data = { path = "data" }

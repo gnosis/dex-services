@@ -48,7 +48,7 @@ impl TransitiveOrder {
 ///
 /// This is used for computing transitive orderbooks.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]
 pub struct Market {
     /// The base or transaction token.
     pub base: TokenId,

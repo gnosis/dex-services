@@ -323,9 +323,9 @@ dependencies = [
 
 [[package]]
 name = "bstr"
-version = "0.2.12"
+version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2889e6d50f394968c8bf4240dc3f2a7eb4680844d27308f798229ac9d4725f41"
+checksum = "31accafdb70df7871592c058eca3985b71104e15ac32f64706022c58867da931"
 dependencies = [
  "lazy_static",
  "memchr",
@@ -2095,9 +2095,9 @@ checksum = "260e51e7efe62b592207e9e13a68e43692a7a279171d6ba57abd208bf23645ad"
 
 [[package]]
 name = "oorandom"
-version = "11.1.0"
+version = "11.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebcec7c9c2a95cacc7cd0ecb89d8a8454eca13906f6deb55258ffff0adeb9405"
+checksum = "a170cebd8021a008ea92e4db85a72f80b35df514ec664b296fdcbb654eac0b2c"
 
 [[package]]
 name = "opaque-debug"
@@ -2331,9 +2331,9 @@ checksum = "05da548ad6865900e60eaba7f589cc0783590a92e940c26953ff81ddbab2d677"
 
 [[package]]
 name = "plotters"
-version = "0.2.12"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e3bb8da247d27ae212529352020f3e5ee16e83c0c258061d27b08ab92675eeb"
+checksum = "0d1685fbe7beba33de0330629da9d955ac75bd54f33d7b79f9a895590124f6bb"
 dependencies = [
  "js-sys",
  "num-traits",
@@ -2418,16 +2418,31 @@ version = "0.1.0"
 dependencies = [
  "arbitrary",
  "assert_approx_eq",
- "criterion",
- "data-encoding",
- "lazy_static",
  "petgraph",
+ "pricegraph-data",
  "primitive-types 0.6.2",
  "thiserror",
 ]
 
 [[package]]
+name = "pricegraph-bench"
+version = "0.0.0"
+dependencies = [
+ "criterion",
+ "pricegraph",
+ "pricegraph-data",
+]
+
+[[package]]
 name = "pricegraph-data"
+version = "0.0.0"
+dependencies = [
+ "data-encoding",
+ "lazy_static",
+]
+
+[[package]]
+name = "pricegraph-data-bin"
 version = "0.0.0"
 dependencies = [
  "anyhow",
@@ -4195,9 +4210,9 @@ dependencies = [
 
 [[package]]
 name = "web-sys"
-version = "0.3.37"
+version = "0.3.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d6f51648d8c56c366144378a33290049eafdd784071077f6fe37dae64c1c4cb"
+checksum = "dda38f4e5ca63eda02c059d243aa25b5f35ab98451e518c51612cd0f1bd19a47"
 dependencies = [
  "js-sys",
  "wasm-bindgen",

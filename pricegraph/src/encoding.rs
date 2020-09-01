@@ -21,7 +21,7 @@ pub type UserId = H160;
 
 /// A struct representing a buy/sell token pair.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]
 pub struct TokenPair {
     /// The buy token.
     pub buy: TokenId,
@@ -31,7 +31,7 @@ pub struct TokenPair {
 
 /// A struct representing the validity of an order.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]
 pub struct Validity {
     /// The batch starting from which the order is valid.
     pub from: BatchId,
@@ -41,7 +41,7 @@ pub struct Validity {
 
 /// A price expressed as a fraction of buy and sell amounts.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]
 pub struct PriceFraction {
     /// The price numerator, or the buy amount.
     pub numerator: u128,
@@ -124,7 +124,7 @@ impl Element {
     }
 }
 
-#[cfg(feature = "arbitrary")]
+#[cfg(feature = "fuzz")]
 mod abitrary_impl {
     use super::*;
     use arbitrary::{Arbitrary, Result, Unstructured};
