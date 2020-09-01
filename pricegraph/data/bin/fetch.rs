@@ -51,7 +51,7 @@ async fn run() -> Result<()> {
         current_batch_id - 1
     };
     let mut output = File::create(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("orderbook-{}.hex", batch_id)),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../orderbook-{}.hex", batch_id)),
     )?;
 
     log::info!(

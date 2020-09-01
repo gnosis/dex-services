@@ -12,7 +12,7 @@ branch. From the root of the repository:
 
 ```
 $ git checkout master
-$ cargo bench -p pricegraph
+$ cargo bench -p pricegraph-bench
 ...
 Pricegraph::transitive_orderbook/5298183
                         time:   [3.4575 ms 3.5446 ms 3.6322 ms]
@@ -27,7 +27,7 @@ results contain information about the change in performance:
 
 ```
 $ git checkout my-change
-$ cargo bench -p pricegraph
+$ cargo bench -p pricegraph-bench
 ...
 Pricegraph::transitive_orderbook/5298183
                         time:   [3.1746 ms 3.2042 ms 3.2353 ms]
@@ -42,10 +42,13 @@ This crate can be fuzzed with [cargo fuzz](https://github.com/rust-fuzz/cargo-fu
 
 Fuzzing requires nightly which can be installed with `rustup install nightly`.
 Then install *cargo fuzz* with `cargo +nightly install cargo-fuzz`.
+Additionally, fuzzing must be performed from the root of the `pricegraph` crate.
 
 List fuzz targets with `cargo +nightly fuzz list`.
 
-Run a fuzz target with `cargo +nightly fuzz run orderbook`.
+Run a fuzz target with `cargo +nightly fuzz run $TARGET`.
+
+Run all targets with `fuzz/fuzz_all_targets.sh`.
 
 ## Test Data
 
@@ -58,7 +61,7 @@ The `data` subdirectory contains a `fetch` script for fetching the current
 orderbook. It can be executed from the repository root:
 
 ```
-$ INFURA_PROJECT_ID=... cargo run -p pricegraph-data --bin fetch
+$ INFURA_PROJECT_ID=... cargo run -p pricegraph-data-bin --bin fetch
 [2020-08-10T07:45:09Z INFO  fetch] retrieving orderbook at block 10630913 until batch 5323483
 [2020-08-10T07:45:09Z DEBUG fetch] retrieving page 0x0000…0000-0
 [2020-08-10T07:45:10Z DEBUG fetch] retrieving page 0x7b2e…a196-24
@@ -77,7 +80,7 @@ Additionally, solver instance files may be converted to an orderbook file with
 the `convert` script. It can be executed from the repository root:
 
 ```
-$ cargo run -p pricegraph-data --bin convert -- instance.json 123456789
+$ cargo run -p pricegraph-data-bin --bin convert -- instance.json 123456789
 [2020-08-10T11:18:32Z INFO  convert] encoding 13766 orders from `target/instance.json`
 ```
 
