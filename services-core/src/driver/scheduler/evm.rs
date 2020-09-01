@@ -224,7 +224,7 @@ mod tests {
         driver
             .expect_solve_batch()
             .with(eq(BatchId(42)), eq(Duration::from_secs(150)))
-            .returning(|_, _| immediate!(Err(DriverError::Skip(anyhow!("")))));
+            .returning(|_, _| Err(DriverError::Skip(anyhow!(""))));
 
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
@@ -257,10 +257,8 @@ mod tests {
         let mut driver = MockStableXDriver::new();
         driver
             .expect_solve_batch()
-            .returning(|_, _| immediate!(Ok(Solution::trivial())));
-        driver
-            .expect_submit_solution()
-            .returning(|_, _| immediate!(Ok(())));
+            .returning(|_, _| Ok(Solution::trivial()));
+        driver.expect_submit_solution().returning(|_, _| Ok(()));
 
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
@@ -356,14 +354,12 @@ mod tests {
         driver
             .expect_solve_batch()
             .times(1)
-            .returning(|_, _| immediate!(Err(DriverError::Retry(anyhow!("error")))));
+            .returning(|_, _| Err(DriverError::Retry(anyhow!("error"))));
         driver
             .expect_solve_batch()
             .times(1)
-            .returning(|_, _| immediate!(Ok(Solution::trivial())));
-        driver
-            .expect_submit_solution()
-            .returning(|_, _| immediate!(Ok(())));
+            .returning(|_, _| Ok(Solution::trivial()));
+        driver.expect_submit_solution().returning(|_, _| Ok(()));
 
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
@@ -395,7 +391,7 @@ mod tests {
         let mut driver = MockStableXDriver::new();
         driver
             .expect_solve_batch()
-            .returning(|_, _| immediate!(Err(DriverError::Skip(anyhow!("error")))));
+            .returning(|_, _| Err(DriverError::Skip(anyhow!("error"))));
 
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
@@ -432,11 +428,11 @@ mod tests {
         let mut driver = MockStableXDriver::new();
         driver
             .expect_solve_batch()
-            .returning(|_, _| immediate!(Ok(Solution::trivial())));
+            .returning(|_, _| Ok(Solution::trivial()));
         driver
             .expect_submit_solution()
             .times(1)
-            .returning(|_, _| immediate!(Ok(())));
+            .returning(|_, _| Ok(()));
 
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));

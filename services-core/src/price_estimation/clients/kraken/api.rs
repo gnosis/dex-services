@@ -10,11 +10,12 @@ use std::collections::HashMap;
 /// Note that this is not the full API, only the subset required for the
 /// retrieving price estimates for the solver.
 #[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
 pub trait KrakenApi {
     /// Retrieves the list of supported assets.
-    fn assets<'a>(&'a self) -> BoxFuture<'a, Result<HashMap<String, Asset>>>;
+    async fn assets(&self) -> Result<HashMap<String, Asset>>;
     /// Retrieves the list of supported asset pairs.
-    fn asset_pairs<'a>(&'a self) -> BoxFuture<'a, Result<HashMap<String, AssetPair>>>;
+    async fn asset_pairs(&self) -> Result<HashMap<String, AssetPair>>;
     /// Retrieves ticker information (with recent prices) for the given asset
     /// pair identifiers.
     fn ticker<'a, 'b>(
@@ -49,33 +50,28 @@ impl KrakenHttpApi {
     }
 }
 
+#[async_trait::async_trait]
 impl KrakenApi for KrakenHttpApi {
-    fn assets<'a>(&'a self) -> BoxFuture<'a, Result<HashMap<String, Asset>>> {
-        async move {
-            self.client
-                .get_json_async::<_, KrakenResult<_>>(
-                    format!("{}/Assets", self.base_url),
-                    HttpLabel::Kraken,
-                )
-                .await
-                .context("failed to parse assets JSON")?
-                .into_result()
-        }
-        .boxed()
+    async fn assets(&self) -> Result<HashMap<String, Asset>> {
+        self.client
+            .get_json_async::<_, KrakenResult<_>>(
+                format!("{}/Assets", self.base_url),
+                HttpLabel::Kraken,
+            )
+            .await
+            .context("failed to parse assets JSON")?
+            .into_result()
     }
 
-    fn asset_pairs<'a>(&'a self) -> BoxFuture<'a, Result<HashMap<String, AssetPair>>> {
-        async move {
-            self.client
-                .get_json_async::<_, KrakenResult<_>>(
-                    format!("{}/AssetPairs", self.base_url),
-                    HttpLabel::Kraken,
-                )
-                .await
-                .context("failed to parse asset pairs JSON")?
-                .into_result()
-        }
-        .boxed()
+    async fn asset_pairs(&self) -> Result<HashMap<String, AssetPair>> {
+        self.client
+            .get_json_async::<_, KrakenResult<_>>(
+                format!("{}/AssetPairs", self.base_url),
+                HttpLabel::Kraken,
+            )
+            .await
+            .context("failed to parse asset pairs JSON")?
+            .into_result()
     }
 
     fn ticker<'a, 'b>(

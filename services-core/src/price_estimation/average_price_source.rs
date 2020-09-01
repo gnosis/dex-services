@@ -1,7 +1,7 @@
 use super::PriceSource;
 use crate::models::TokenId;
 use anyhow::{anyhow, Result};
-use futures::future::{self, BoxFuture, FutureExt as _};
+use futures::future;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::num::NonZeroU128;
@@ -16,18 +16,16 @@ impl AveragePriceSource {
     }
 }
 
+#[async_trait::async_trait]
 impl PriceSource for AveragePriceSource {
-    fn get_prices<'a>(
-        &'a self,
-        tokens: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
+    async fn get_prices(&self, tokens: &[TokenId]) -> Result<HashMap<TokenId, NonZeroU128>> {
         average_price_sources(
             self.sources
                 .iter()
                 .map(|source| -> &dyn PriceSource { source.as_ref() }),
             tokens,
         )
-        .boxed()
+        .await
     }
 }
 

@@ -7,7 +7,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 use ethcontract::U256;
-use futures::future::{BoxFuture, FutureExt as _};
 
 const BASE_UNIT: u128 = 1_000_000_000_000_000_000u128;
 const BASE_PRICE: u128 = BASE_UNIT;
@@ -123,13 +122,14 @@ type PriceMap = HashMap<u16, u128>;
 type OrderPair = [Order; 2];
 type ExecutedOrderPair = [ExecutedOrder; 2];
 
+#[async_trait::async_trait]
 impl PriceFinding for NaiveSolver {
-    fn find_prices<'a>(
-        &'a self,
-        orders: &'a [Order],
-        state: &'a AccountState,
+    async fn find_prices(
+        &self,
+        orders: &[Order],
+        state: &AccountState,
         _: Duration,
-    ) -> BoxFuture<'a, Result<Solution>> {
+    ) -> Result<Solution> {
         // Convert orders into the form where they have remaining == denominator.
         let orders = orders
             .iter()
@@ -155,7 +155,7 @@ impl PriceFinding for NaiveSolver {
         } else {
             Solution::trivial()
         };
-        async move { Ok(solution) }.boxed()
+        Ok(solution)
     }
 }
 
@@ -334,8 +334,8 @@ pub mod tests {
     use super::*;
     use crate::models::order::test_util::order_to_executed_order;
     use crate::models::AccountState;
-
     use ethcontract::{Address, U256};
+    use futures::FutureExt as _;
     use std::collections::HashMap;
 
     #[test]
