@@ -11,3 +11,7 @@ target/
 
 # WASM
 pricegraph/wasm/pkg/
+
+# Files created by driver & solver
+instances/
+results/
