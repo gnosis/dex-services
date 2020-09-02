@@ -1,7 +1,7 @@
 //! Module containing reduced orderbook wrapper type.
 
 use crate::encoding::TokenPair;
-use crate::orderbook::{Flow, Orderbook};
+use crate::orderbook::{Flow, Orderbook, TransitiveOrders};
 
 /// A graph representation of a reduced orderbook. Reduced orderbooks are
 /// guaranteed to not contain any negative cycles.
@@ -12,6 +12,12 @@ impl ReducedOrderbook {
     /// Returns the number of orders in the orderbook.
     pub fn num_orders(&self) -> usize {
         self.0.num_orders()
+    }
+
+    /// Returns an iterator over all transitive orders from lowest to highest
+    /// limit price for the orderbook.
+    pub fn transitive_orders(self, pair: TokenPair) -> TransitiveOrders {
+        TransitiveOrders::new(self.0, pair).expect("negative cycle in reduced orderbook")
     }
 
     /// Fills the optimal transitive order for the specified token pair. This

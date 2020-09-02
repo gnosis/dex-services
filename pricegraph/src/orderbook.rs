@@ -6,6 +6,7 @@
 //! (i.e. orders) connecting a token pair.
 
 mod flow;
+mod iter;
 mod map;
 mod order;
 mod reduced;
@@ -14,6 +15,7 @@ mod user;
 mod weight;
 
 pub use self::flow::{Flow, Ring};
+pub use self::iter::TransitiveOrders;
 use self::order::{Order, OrderCollector, OrderMap};
 pub use self::reduced::ReducedOrderbook;
 pub use self::scalar::{ExchangeRate, LimitPrice};
@@ -21,7 +23,7 @@ use self::user::{User, UserMap};
 pub use self::weight::Weight;
 use crate::api::Market;
 use crate::encoding::{Element, TokenId, TokenPair};
-use crate::graph::path::NegativeCycle;
+use crate::graph::path::{NegativeCycle, Path};
 use crate::graph::shortest_paths::ShortestPathGraph;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
 use crate::num;
@@ -191,6 +193,17 @@ impl Orderbook {
         None
     }
 
+    /// Returns an iterator over all transitive orders from lowest to highest
+    /// limit price for the orderbook.
+    ///
+    /// Returns an error if the orderbook is not reduced in the subgraph
+    /// containing the token pair's buy token, i.e. one or more negative cycles
+    /// were found when searching for the shortest path starting from the buy
+    /// token and ending at the sell token.
+    pub fn transitive_orders(self, pair: TokenPair) -> Result<TransitiveOrders, OverlapError> {
+        TransitiveOrders::new(self, pair)
+    }
+
     /// Fills the optimal transitive order for the specified token pair. This
     /// method is similar to `Orderbook::fill_optimal_transitive_order_if`
     /// except it does not check a condition on the discovered path's flow
@@ -240,18 +253,11 @@ impl Orderbook {
         }
 
         let (start, end) = (node_index(pair.buy), node_index(pair.sell));
-        let shortest_path_graph = ShortestPathGraph::new(&self.projection, start)?;
-        let path = match shortest_path_graph.path_to(end) {
-            Some(path) => path,
+        let (path, flow) = match self.find_path_and_flow(start, end)? {
+            Some(result) => result,
             None => return Ok(None),
         };
 
-        let flow = self.find_path_flow(&path).unwrap_or_else(|| {
-            panic!(
-                "failed to fill detected shortest path {}",
-                format_path(&path),
-            )
-        });
         if !condition(&flow) {
             return Ok(None);
         }
@@ -312,6 +318,29 @@ impl Orderbook {
     fn get_pair_edge(&self, pair: TokenPair) -> Option<EdgeIndex> {
         let (buy, sell) = (node_index(pair.buy), node_index(pair.sell));
         self.projection.find_edge(buy, sell)
+    }
+
+    /// Finds and fills a trading path through the orderbook between the
+    /// specified tokens and computes the flow for the path.
+    fn find_path_and_flow(
+        &self,
+        start: NodeIndex,
+        end: NodeIndex,
+    ) -> Result<Option<(Path<NodeIndex>, Flow)>, OverlapError> {
+        let shortest_path_graph = ShortestPathGraph::new(&self.projection, start)?;
+        let path = match shortest_path_graph.path_to(end) {
+            Some(path) => path,
+            None => return Ok(None),
+        };
+
+        let flow = self.find_path_flow(&path).unwrap_or_else(|| {
+            panic!(
+                "failed to fill detected shortest path {}",
+                format_path(&path),
+            )
+        });
+
+        Ok(Some((path, flow)))
     }
 
     /// Fills a trading path through the orderbook to maximum capacity, reducing
