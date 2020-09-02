@@ -51,10 +51,7 @@ impl Pricegraph {
         // the marginal exchange rate.
         let mut cumulative_buy_volume = 0.0;
         let mut cumulative_sell_volume = 0.0;
-        for flow in orderbook
-            .transitive_orders(inverse_pair)
-            .filter(|flow| !flow.is_dust_trade())
-        {
+        for flow in orderbook.significant_transitive_orders(inverse_pair) {
             // NOTE: This implies that the added liquidity from the counter
             // transitive order at its exchange rate makes the estimated
             // exchange rate worse, and we are better off just buying off all
@@ -123,8 +120,7 @@ impl Pricegraph {
 
         let (total_buy_volume, total_sell_volume) = self
             .reduced_orderbook()
-            .transitive_orders(inverse_pair)
-            .filter(|flow| !flow.is_dust_trade())
+            .significant_transitive_orders(inverse_pair)
             .take_while(|flow| flow.exchange_rate <= max_xrate)
             .fold((0.0, 0.0), |(total_buy_volume, total_sell_volume), flow| {
                 (
