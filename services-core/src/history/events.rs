@@ -93,9 +93,11 @@ impl EventRegistry {
         // Create temp file to be written completely before rename
         let temp_file = File::create(&temp_path)
             .with_context(|| format!("couldn't create {}", temp_path.display()))?;
-        let mut buffered_writer = BufWriter::new(temp_file);
-        self.write_to(&mut buffered_writer)?;
-        buffered_writer.flush()?;
+        {
+            let mut buffered_writer = BufWriter::new(temp_file);
+            self.write_to(&mut buffered_writer)?;
+            buffered_writer.flush()?;
+        }
         // Rename the temp file to the originally specified path.
         fs::rename(temp_path, path)?;
         Ok(())
