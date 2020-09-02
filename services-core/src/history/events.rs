@@ -11,7 +11,7 @@ use std::{
     convert::TryFrom,
     fs,
     fs::File,
-    io::{Read, Write},
+    io::{BufReader, BufWriter, Read, Write},
     ops::Bound,
     path::Path,
 };
@@ -43,11 +43,8 @@ pub struct EventRegistry {
 }
 
 impl EventRegistry {
-    pub fn read(mut read: impl Read) -> Result<Self> {
-        let mut contents = Vec::new();
-        read.read_to_end(&mut contents)?;
-
-        EventRegistry::try_from(contents.as_slice())
+    pub fn read(reader: impl Read) -> Result<Self> {
+        Ok(bincode::deserialize_from(reader)?)
     }
 
     pub fn handle_event_data(
@@ -79,19 +76,25 @@ impl EventRegistry {
     }
 
     /// Serializes an `EventRegistry` into its bincode representation.
+    #[cfg(test)]
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
         Ok(bincode::serialize(self)?)
     }
 
+    pub fn write_to(&self, writer: impl Write) -> Result<()> {
+        bincode::serialize_into(writer, self)?;
+        Ok(())
+    }
+
     pub fn write_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
         // Write to tmp file until complete and then rename.
-        let temp_path = path.as_ref().with_extension(".temp");
+        let temp_path = path.as_ref().with_extension("temp");
 
         // Create temp file to be written completely before rename
-        let mut temp_file = File::create(&temp_path)
+        let temp_file = File::create(&temp_path)
             .with_context(|| format!("couldn't create {}", temp_path.display()))?;
-        let file_content = self.to_bytes()?;
-        temp_file.write_all(file_content.as_ref())?;
+        let buffered_writer = BufWriter::new(temp_file);
+        self.write_to(buffered_writer)?;
 
         // Rename the temp file to the originally specified path.
         fs::rename(temp_path, path)?;
@@ -187,19 +190,12 @@ fn auction_state_for_batch_from_events<'a>(
     state.canonicalized_auction_state_at_beginning_of_batch(batch_id.next().into())
 }
 
-impl TryFrom<&[u8]> for EventRegistry {
-    type Error = anyhow::Error;
-
-    fn try_from(bytes: &[u8]) -> Result<Self> {
-        bincode::deserialize(bytes).context("Failed to load event registry from bytes")
-    }
-}
-
 impl TryFrom<File> for EventRegistry {
     type Error = anyhow::Error;
 
     fn try_from(mut file: File) -> Result<Self> {
-        let events = EventRegistry::read(&mut file)
+        let buffered_reader = BufReader::new(&mut file);
+        let events = EventRegistry::read(buffered_reader)
             .with_context(|| format!("Failed to read file: {:?}", file))?;
 
         log::info!(
@@ -272,7 +268,7 @@ mod tests {
         let events = EventRegistry { events };
         let serialized_events = bincode::serialize(&events).expect("Failed to serialize events");
         let deserialized_events =
-            EventRegistry::try_from(&serialized_events[..]).expect("Failed to deserialize events");
+            EventRegistry::read(&serialized_events[..]).expect("Failed to deserialize events");
         assert_eq!(events.events, deserialized_events.events);
     }
 
