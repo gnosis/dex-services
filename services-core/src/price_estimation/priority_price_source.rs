@@ -1,7 +1,6 @@
 use super::PriceSource;
 use crate::models::TokenId;
 use anyhow::Result;
-use futures::future::{BoxFuture, FutureExt as _};
 use std::collections::HashMap;
 use std::num::NonZeroU128;
 
@@ -19,29 +18,24 @@ impl PriorityPriceSource {
     }
 }
 
+#[async_trait::async_trait]
 impl PriceSource for PriorityPriceSource {
-    fn get_prices<'a>(
-        &'a self,
-        tokens: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
-        async move {
-            let mut remaining_tokens = tokens.to_vec();
-            let mut result = HashMap::new();
-            for source in &self.sources {
-                match source.get_prices(&remaining_tokens).await {
-                    Ok(partial_result) => {
-                        remaining_tokens.retain(|token| !partial_result.contains_key(token));
-                        result.extend(partial_result);
-                    }
-                    Err(err) => log::warn!("Price Source failed: {:?}", err),
-                };
-                if remaining_tokens.is_empty() {
-                    break;
+    async fn get_prices(&self, tokens: &[TokenId]) -> Result<HashMap<TokenId, NonZeroU128>> {
+        let mut remaining_tokens = tokens.to_vec();
+        let mut result = HashMap::new();
+        for source in &self.sources {
+            match source.get_prices(&remaining_tokens).await {
+                Ok(partial_result) => {
+                    remaining_tokens.retain(|token| !partial_result.contains_key(token));
+                    result.extend(partial_result);
                 }
+                Err(err) => log::warn!("Price Source failed: {:?}", err),
+            };
+            if remaining_tokens.is_empty() {
+                break;
             }
-            Ok(result)
         }
-        .boxed()
+        Ok(result)
     }
 }
 
@@ -50,6 +44,7 @@ mod tests {
     use super::*;
     use crate::price_estimation::price_source::MockPriceSource;
     use anyhow::anyhow;
+    use futures::FutureExt as _;
 
     #[test]
     fn returns_price_from_first_available_source() {
@@ -61,9 +56,9 @@ mod tests {
             .times(1)
             .withf(|token| token == &[TokenId::from(1), TokenId::from(2)][..])
             .returning(|_| {
-                immediate!(Ok(hash_map! {
+                Ok(hash_map! {
                         TokenId::from(1) => nonzero!(100)
-                }))
+                })
             });
         // Expect second source to be called with missing tokens
         second_source
@@ -71,9 +66,9 @@ mod tests {
             .times(1)
             .withf(|token| token == &[TokenId::from(2)][..])
             .returning(|_| {
-                immediate!(Ok(hash_map! {
+                Ok(hash_map! {
                     TokenId::from(2) => nonzero!(50)
-                }))
+                })
             });
 
         let priority_source =
@@ -90,11 +85,11 @@ mod tests {
 
         first_source
             .expect_get_prices()
-            .returning(|_| immediate!(Err(anyhow!("Error"))));
+            .returning(|_| Err(anyhow!("Error")));
         second_source.expect_get_prices().returning(|_| {
-            immediate!(Ok(hash_map! {
+            Ok(hash_map! {
                 TokenId::from(1) => nonzero!(50)
-            }))
+            })
         });
 
         let priority_source =
@@ -116,9 +111,9 @@ mod tests {
         let mut source = MockPriceSource::new();
 
         source.expect_get_prices().returning(|_| {
-            immediate!(Ok(hash_map! {
+            Ok(hash_map! {
                 TokenId::from(2) => nonzero!(50)
-            }))
+            })
         });
 
         let priority_source = PriorityPriceSource::new(vec![Box::new(source)]);

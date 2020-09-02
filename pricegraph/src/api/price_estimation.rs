@@ -51,22 +51,18 @@ impl Pricegraph {
         // the marginal exchange rate.
         let mut cumulative_buy_volume = 0.0;
         let mut cumulative_sell_volume = 0.0;
-        while let Some(flow) = orderbook.fill_optimal_transitive_order_if(inverse_pair, |flow| {
-            let current_exchange_rate =
-                match ExchangeRate::new(cumulative_buy_volume / max_sell_amount) {
-                    Some(price) => price,
-                    None => return true,
-                };
-
+        for flow in orderbook.significant_transitive_orders(inverse_pair) {
             // NOTE: This implies that the added liquidity from the counter
             // transitive order at its exchange rate makes the estimated
             // exchange rate worse, and we are better off just buying off all
             // the previously discovered liquidity instead of including new
             // liquidity from this transitive order.
-            current_exchange_rate < flow.exchange_rate.inverse()
-        }) {
-            if flow.is_dust_trade() {
-                continue;
+            if matches!(
+                ExchangeRate::new(cumulative_buy_volume / max_sell_amount),
+                Some(current_exchange_rate)
+                    if current_exchange_rate >= flow.exchange_rate.inverse()
+            ) {
+                break;
             }
 
             cumulative_buy_volume += flow.capacity / flow.exchange_rate.value();
@@ -113,8 +109,6 @@ impl Pricegraph {
         pair: TokenPair,
         limit_price: f64,
     ) -> Option<TransitiveOrder> {
-        let mut orderbook = self.reduced_orderbook();
-
         // NOTE: This method works by searching for the "best" counter
         // transitive orders, as such we need to fill transitive orders in the
         // inverse direction and need to invert the limit price.
@@ -124,20 +118,16 @@ impl Pricegraph {
         };
         let max_xrate = LimitPrice::new(limit_price)?.exchange_rate().inverse();
 
-        let mut total_buy_volume = 0.0;
-        let mut total_sell_volume = 0.0;
-        while let Some(flow) = orderbook
-            .fill_optimal_transitive_order_if(inverse_pair, |flow| flow.exchange_rate <= max_xrate)
-        {
-            if flow.is_dust_trade() {
-                continue;
-            }
-
-            // NOTE: The transitive orders being filled are **counter orders**
-            // with inverted token pairs.
-            total_buy_volume += flow.capacity / flow.exchange_rate.value();
-            total_sell_volume += flow.capacity;
-        }
+        let (total_buy_volume, total_sell_volume) = self
+            .reduced_orderbook()
+            .significant_transitive_orders(inverse_pair)
+            .take_while(|flow| flow.exchange_rate <= max_xrate)
+            .fold((0.0, 0.0), |(total_buy_volume, total_sell_volume), flow| {
+                (
+                    total_buy_volume + flow.capacity / flow.exchange_rate.value(),
+                    total_sell_volume + flow.capacity,
+                )
+            });
 
         if total_buy_volume == 0.0 || total_sell_volume == 0.0 {
             None

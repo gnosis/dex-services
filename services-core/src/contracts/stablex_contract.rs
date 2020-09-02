@@ -17,8 +17,6 @@ use ethcontract::{
 };
 use futures::future::{BoxFuture, FutureExt as _};
 use lazy_static::lazy_static;
-#[cfg(test)]
-use mockall::automock;
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -83,50 +81,51 @@ pub enum NoopTransactionError {
     ExecutionError(#[from] ExecutionError),
 }
 
-#[cfg_attr(test, automock)]
+#[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
 pub trait StableXContract: Send + Sync {
     /// Retrieve the current batch ID that is accepting orders. Note that this
     /// is always `1` greater than the batch ID that is accepting solutions.
-    fn get_current_auction_index<'a>(&'a self) -> BoxFuture<'a, Result<u32>>;
+    async fn get_current_auction_index(&self) -> Result<u32>;
 
     /// Retrieve the time remaining in the batch.
-    fn get_current_auction_remaining_time<'a>(&'a self) -> BoxFuture<'a, Result<Duration>>;
+    async fn get_current_auction_remaining_time(&self) -> Result<Duration>;
 
     /// Searches for the block number of the last block of the given batch. If
     /// the batch has not yet been finalized, then the block number for the
     /// `"latest"` block is returned.
-    fn get_last_block_for_batch<'a>(&'a self, batch_id: u32) -> BoxFuture<'a, Result<u64>>;
+    async fn get_last_block_for_batch(&self, batch_id: u32) -> Result<u64>;
 
     /// Retrieve one page of indexed auction data that is filtered on chain
     /// to only include orders valid at the given batchId.
-    fn get_filtered_auction_data_paginated<'a>(
-        &'a self,
+    async fn get_filtered_auction_data_paginated(
+        &self,
         batch_index: u32,
         token_whitelist: Vec<u16>,
         page_size: u16,
         previous_page_user: Address,
         previous_page_user_offset: u16,
         block_number: Option<BlockNumber>,
-    ) -> BoxFuture<'a, Result<FilteredOrderPage>>;
+    ) -> Result<FilteredOrderPage>;
 
     /// Retrieve one page of auction data.
     /// `block` is needed because the state of the smart contract could change
     /// between blocks which would make the returned auction data inconsistent
     /// between calls.
-    fn get_auction_data_paginated<'a>(
-        &'a self,
+    async fn get_auction_data_paginated(
+        &self,
         page_size: u16,
         previous_page_user: Address,
         previous_page_user_offset: u16,
         block_number: Option<BlockNumber>,
-    ) -> BoxFuture<'a, Result<Vec<u8>>>;
+    ) -> Result<Vec<u8>>;
 
-    fn get_solution_objective_value<'a>(
-        &'a self,
+    async fn get_solution_objective_value(
+        &self,
         batch_index: u32,
         solution: Solution,
         block_number: Option<BlockNumber>,
-    ) -> BoxFuture<'a, Result<U256>>;
+    ) -> Result<U256>;
 
     fn submit_solution<'a>(
         &'a self,
@@ -137,12 +136,12 @@ pub trait StableXContract: Send + Sync {
         nonce: U256,
     ) -> BoxFuture<'a, Result<(), MethodError>>;
 
-    fn past_events<'a>(
-        &'a self,
+    async fn past_events(
+        &self,
         from_block: BlockNumber,
         to_block: BlockNumber,
         block_page_size: u64,
-    ) -> BoxFuture<'a, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>>;
+    ) -> Result<Vec<Event<batch_exchange::Event>>, ExecutionError>;
 
     /// Create a noop transaction. Useful to cancel a previous transaction that is stuck due to
     /// low gas price.
@@ -153,121 +152,103 @@ pub trait StableXContract: Send + Sync {
     ) -> BoxFuture<'a, Result<TransactionResult, NoopTransactionError>>;
 
     /// The current nonce aka transaction_count.
-    fn get_transaction_count<'a>(&'a self) -> BoxFuture<'a, Result<U256>>;
+    async fn get_transaction_count(&self) -> Result<U256>;
 }
 
+#[async_trait::async_trait]
 impl StableXContract for StableXContractImpl {
-    fn get_current_auction_index<'a>(&'a self) -> BoxFuture<'a, Result<u32>> {
-        async move {
-            self.instance
-                .get_current_batch_id()
-                .call()
-                .await
-                .map_err(Error::from)
-        }
-        .boxed()
+    async fn get_current_auction_index(&self) -> Result<u32> {
+        self.instance
+            .get_current_batch_id()
+            .call()
+            .await
+            .map_err(Error::from)
     }
 
-    fn get_current_auction_remaining_time<'a>(&'a self) -> BoxFuture<'a, Result<Duration>> {
-        async move {
-            let seconds = self
-                .instance
-                .get_seconds_remaining_in_batch()
-                .call()
-                .await?;
-            Ok(Duration::from_secs(seconds.as_u64()))
-        }
-        .boxed()
+    async fn get_current_auction_remaining_time(&self) -> Result<Duration> {
+        let seconds = self
+            .instance
+            .get_seconds_remaining_in_batch()
+            .call()
+            .await?;
+        Ok(Duration::from_secs(seconds.as_u64()))
     }
 
-    fn get_last_block_for_batch<'a>(&'a self, batch_id: u32) -> BoxFuture<'a, Result<u64>> {
-        async move {
-            let web3 = self.instance.raw_instance().web3();
-            search_batches::search_last_block_for_batch(&web3, batch_id).await
-        }
-        .boxed()
+    async fn get_last_block_for_batch(&self, batch_id: u32) -> Result<u64> {
+        let web3 = self.instance.raw_instance().web3();
+        search_batches::search_last_block_for_batch(&web3, batch_id).await
     }
 
-    fn get_filtered_auction_data_paginated<'a>(
-        &'a self,
+    async fn get_filtered_auction_data_paginated(
+        &self,
         batch_index: u32,
         token_whitelist: Vec<u16>,
         page_size: u16,
         previous_page_user: Address,
         previous_page_user_offset: u16,
         block_number: Option<BlockNumber>,
-    ) -> BoxFuture<'a, Result<FilteredOrderPage>> {
-        async move {
-            let target_batch = batch_index;
-            let mut builder = self.viewer.get_filtered_orders_paginated(
-                // Balances should be valid for the batch at which we are submitting (target batch + 1)
-                [target_batch, target_batch, target_batch + 1],
-                token_whitelist,
-                previous_page_user,
-                previous_page_user_offset,
-                page_size,
-            );
-            builder.block = block_number;
-            builder.m.tx.gas = None;
-            let future = builder.call();
-            let (indexed_elements, has_next_page, next_page_user, next_page_user_offset) =
-                future.await?;
-            Ok(FilteredOrderPage {
-                indexed_elements,
-                has_next_page,
-                next_page_user,
-                next_page_user_offset,
-            })
-        }
-        .boxed()
+    ) -> Result<FilteredOrderPage> {
+        let target_batch = batch_index;
+        let mut builder = self.viewer.get_filtered_orders_paginated(
+            // Balances should be valid for the batch at which we are submitting (target batch + 1)
+            [target_batch, target_batch, target_batch + 1],
+            token_whitelist,
+            previous_page_user,
+            previous_page_user_offset,
+            page_size,
+        );
+        builder.block = block_number;
+        builder.m.tx.gas = None;
+        let future = builder.call();
+        let (indexed_elements, has_next_page, next_page_user, next_page_user_offset) =
+            future.await?;
+        Ok(FilteredOrderPage {
+            indexed_elements,
+            has_next_page,
+            next_page_user,
+            next_page_user_offset,
+        })
     }
 
-    fn get_auction_data_paginated<'a>(
-        &'a self,
+    async fn get_auction_data_paginated(
+        &self,
         page_size: u16,
         previous_page_user: Address,
         previous_page_user_offset: u16,
         block_number: Option<BlockNumber>,
-    ) -> BoxFuture<'a, Result<Vec<u8>>> {
-        async move {
-            let mut orders_builder = self.viewer.get_encoded_orders_paginated(
-                previous_page_user,
-                previous_page_user_offset,
-                U256::from(page_size),
-            );
-            orders_builder.block = block_number;
-            orders_builder.m.tx.gas = None;
-            orders_builder.call().await.map_err(Error::from)
-        }
-        .boxed()
+    ) -> Result<Vec<u8>> {
+        let mut orders_builder = self.viewer.get_encoded_orders_paginated(
+            previous_page_user,
+            previous_page_user_offset,
+            U256::from(page_size),
+        );
+        orders_builder.block = block_number;
+        orders_builder.m.tx.gas = None;
+        orders_builder.call().await.map_err(Error::from)
     }
 
-    fn get_solution_objective_value<'a>(
-        &'a self,
+    async fn get_solution_objective_value(
+        &self,
         batch_index: u32,
         solution: Solution,
         block_number: Option<BlockNumber>,
-    ) -> BoxFuture<'a, Result<U256>> {
-        async move {
-            let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
-            let (owners, order_ids, volumes) =
-                encode_execution_for_contract(&solution.executed_orders);
-            let mut builder = self
-                .instance
-                .submit_solution(
-                    batch_index,
-                    *MAX_OBJECTIVE_VALUE,
-                    owners,
-                    order_ids,
-                    volumes,
-                    prices,
-                    token_ids_for_price,
-                )
-                .view();
-            builder.block = block_number;
-            builder.call().await.map_err(Error::from)
-        }
-        .boxed()
+    ) -> Result<U256> {
+        let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
+        let (owners, order_ids, volumes) = encode_execution_for_contract(&solution.executed_orders);
+        let mut builder = self
+            .instance
+            .submit_solution(
+                batch_index,
+                *MAX_OBJECTIVE_VALUE,
+                owners,
+                order_ids,
+                volumes,
+                prices,
+                token_ids_for_price,
+            )
+            .view();
+        builder.block = block_number;
+        builder.call().await.map_err(Error::from)
     }
 
     fn submit_solution<'a>(
@@ -305,19 +286,19 @@ impl StableXContract for StableXContractImpl {
         .boxed()
     }
 
-    fn past_events<'a>(
-        &'a self,
+    async fn past_events(
+        &self,
         from_block: BlockNumber,
         to_block: BlockNumber,
         block_page_size: u64,
-    ) -> BoxFuture<'a, Result<Vec<Event<batch_exchange::Event>>, ExecutionError>> {
+    ) -> Result<Vec<Event<batch_exchange::Event>>, ExecutionError> {
         self.instance
             .all_events()
             .from_block(from_block)
             .to_block(to_block)
             .block_page_size(block_page_size)
             .query_past_events_paginated()
-            .boxed()
+            .await
     }
 
     fn send_noop_transaction<'a>(
@@ -342,19 +323,17 @@ impl StableXContract for StableXContractImpl {
         .boxed()
     }
 
-    fn get_transaction_count<'a>(&'a self) -> BoxFuture<'a, Result<U256>> {
+    async fn get_transaction_count(&self) -> Result<U256> {
         use futures::compat::Future01CompatExt as _;
-        async move {
-            let web3 = self.instance.raw_instance().web3();
-            let account = self.account().ok_or_else(|| anyhow!("no account"))?;
-            let address = account.address();
-            web3.eth()
-                .transaction_count(address, None)
-                .compat()
-                .await
-                .map_err(From::from)
-        }
-        .boxed()
+
+        let web3 = self.instance.raw_instance().web3();
+        let account = self.account().ok_or_else(|| anyhow!("no account"))?;
+        let address = account.address();
+        web3.eth()
+            .transaction_count(address, None)
+            .compat()
+            .await
+            .map_err(From::from)
     }
 }
 
