@@ -128,7 +128,7 @@ impl UpdatingOrderbook {
         // pending blocks but we need the metadata in the functions below.
         let to_block = BlockNumber::Number(current_block.into());
         log::info!(
-            "Updating event based orderbook with from block {} to block {}.",
+            "Updating event based orderbook from block {} to block {}.",
             from_block,
             current_block,
         );

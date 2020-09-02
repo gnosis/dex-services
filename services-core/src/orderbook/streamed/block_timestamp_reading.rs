@@ -7,7 +7,7 @@ use ethcontract::{
     },
     H256,
 };
-use futures::{compat::Future01CompatExt as _, future::BoxFuture, FutureExt as _};
+use futures::compat::Future01CompatExt as _;
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
@@ -16,50 +16,48 @@ use std::{
 
 /// Helper trait to make this functionality mockable for tests.
 #[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
 pub trait BlockTimestampReading: Send + Sync {
-    fn block_timestamp<'a>(&'a mut self, block_id: BlockId) -> BoxFuture<'a, Result<u64>>;
+    async fn block_timestamp(&mut self, block_id: BlockId) -> Result<u64>;
 }
 
 /// During normal operation this is implemented by Web3.
+#[async_trait::async_trait]
 impl BlockTimestampReading for Web3 {
-    fn block_timestamp(&mut self, block_id: BlockId) -> BoxFuture<Result<u64>> {
-        async move {
-            let block = self.eth().block(block_id.clone()).compat().await;
-            let block = block
-                .with_context(|| format!("failed to get block {:?}", block_id))?
-                .with_context(|| format!("block {:?} does not exist", block_id))?;
-            Ok(block.timestamp.low_u64())
-        }
-        .boxed()
+    async fn block_timestamp(&mut self, block_id: BlockId) -> Result<u64> {
+        let block = self.eth().block(block_id.clone()).compat().await;
+        let block = block
+            .with_context(|| format!("failed to get block {:?}", block_id))?
+            .with_context(|| format!("block {:?} does not exist", block_id))?;
+        Ok(block.timestamp.low_u64())
     }
 }
 
 pub type BlockPair = (H256, Block<H256>);
 
+#[async_trait::async_trait]
 pub trait BatchedBlockReading: Send + Sync {
-    fn blocks(
+    async fn blocks(
         &mut self,
         block_hashes: HashSet<H256>,
         block_batch_size: usize,
-    ) -> BoxFuture<Result<Vec<BlockPair>>>;
+    ) -> Result<Vec<BlockPair>>;
 }
 
+#[async_trait::async_trait]
 impl BatchedBlockReading for Web3 {
-    fn blocks(
+    async fn blocks(
         &mut self,
         block_hashes: HashSet<H256>,
         block_batch_size: usize,
-    ) -> BoxFuture<Result<Vec<BlockPair>>> {
+    ) -> Result<Vec<BlockPair>> {
         let batched_web3 = ethcontract::web3::Web3::new(Batch::new(self.transport().clone()));
-        async move {
-            let mut result = Vec::with_capacity(block_hashes.len());
-            for chunk in Vec::from_iter(block_hashes.into_iter()).chunks(block_batch_size) {
-                let partial_result = query_block_timestamps_batched(&batched_web3, chunk).await?;
-                result.extend(partial_result);
-            }
-            Ok(result)
+        let mut result = Vec::with_capacity(block_hashes.len());
+        for chunk in Vec::from_iter(block_hashes.into_iter()).chunks(block_batch_size) {
+            let partial_result = query_block_timestamps_batched(&batched_web3, chunk).await?;
+            result.extend(partial_result);
         }
-        .boxed()
+        Ok(result)
     }
 }
 
@@ -161,56 +159,52 @@ impl<T> CachedBlockTimestampReader<T> {
 }
 
 impl<T: BatchedBlockReading> CachedBlockTimestampReader<T> {
-    pub fn prepare_cache(
+    pub async fn prepare_cache(
         &mut self,
         block_hashes: HashSet<H256>,
         block_batch_size: usize,
         latest_block_number: u64,
-    ) -> BoxFuture<Result<()>> {
+    ) -> Result<()> {
         let missing_hashes = block_hashes
             .into_iter()
             .filter(|hash| !self.cache.contains_key(&BlockCacheId::Hash(*hash)))
             .collect();
-        async move {
-            self.update_latest_block(latest_block_number);
-            let blocks = self.inner.blocks(missing_hashes, block_batch_size).await?;
-            for (hash, block) in blocks {
-                let timestamp = block.timestamp.as_u64();
-                self.cache(BlockCacheId::Hash(hash), timestamp);
-                if let Some(block_number) = block.number {
-                    self.cache(BlockCacheId::Number(block_number.as_u64()), timestamp);
-                }
+        self.update_latest_block(latest_block_number);
+        let blocks = self.inner.blocks(missing_hashes, block_batch_size).await?;
+        for (hash, block) in blocks {
+            let timestamp = block.timestamp.as_u64();
+            self.cache(BlockCacheId::Hash(hash), timestamp);
+            if let Some(block_number) = block.number {
+                self.cache(BlockCacheId::Number(block_number.as_u64()), timestamp);
             }
-
-            Ok(())
         }
-        .boxed()
+
+        Ok(())
     }
 }
 
+#[async_trait::async_trait]
 impl<T: BlockTimestampReading> BlockTimestampReading for CachedBlockTimestampReader<T> {
-    fn block_timestamp(&mut self, block_id: BlockId) -> BoxFuture<Result<u64>> {
-        async move {
-            let block = match BlockCacheId::try_from(block_id) {
-                Ok(block) => block,
-                Err(block_id) => return self.inner.block_timestamp(block_id).await,
-            };
+    async fn block_timestamp(&mut self, block_id: BlockId) -> Result<u64> {
+        let block = match BlockCacheId::try_from(block_id) {
+            Ok(block) => block,
+            Err(block_id) => return self.inner.block_timestamp(block_id).await,
+        };
 
-            if let Some(timestamp) = self.cache.get(&block) {
-                Ok(*timestamp)
-            } else {
-                let timestamp = self.inner.block_timestamp(block.into()).await?;
-                self.cache(block, timestamp);
-                Ok(timestamp)
-            }
+        if let Some(timestamp) = self.cache.get(&block) {
+            Ok(*timestamp)
+        } else {
+            let timestamp = self.inner.block_timestamp(block.into()).await?;
+            self.cache(block, timestamp);
+            Ok(timestamp)
         }
-        .boxed()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::FutureExt as _;
     use mockall::{predicate::eq, Sequence};
 
     #[test]
@@ -220,7 +214,7 @@ mod tests {
         inner
             .expect_block_timestamp()
             .with(eq(BlockId::Hash(hash)))
-            .return_once(|_| immediate!(Ok(1337)));
+            .return_once(|_| Ok(1337));
 
         let mut block_timestamp_reading = CachedBlockTimestampReader::new(inner, 0);
 
@@ -248,20 +242,20 @@ mod tests {
         inner
             .expect_block_timestamp()
             .with(eq(BlockId::Number(41.into())))
-            .return_once(|_| immediate!(Ok(1000)));
+            .return_once(|_| Ok(1000));
         let mut seq = Sequence::new();
         inner
             .expect_block_timestamp()
             .times(1)
             .in_sequence(&mut seq)
             .with(eq(BlockId::Number(42.into())))
-            .returning(|_| immediate!(Ok(1337)));
+            .returning(|_| Ok(1337));
         inner
             .expect_block_timestamp()
             .times(1)
             .in_sequence(&mut seq)
             .with(eq(BlockId::Number(42.into())))
-            .returning(|_| immediate!(Ok(1338)));
+            .returning(|_| Ok(1338));
 
         let mut block_timestamp_reading = CachedBlockTimestampReader::new(inner, 2);
         block_timestamp_reading.update_latest_block(43);

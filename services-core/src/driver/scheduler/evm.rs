@@ -201,12 +201,12 @@ mod tests {
             .expect_get_current_auction_index()
             .times(1)
             .in_sequence(&mut sequence)
-            .returning(|| async { Ok(42) }.boxed());
+            .returning(|| Ok(42));
         exchange
             .expect_get_current_auction_index()
             .times(1)
             .in_sequence(&mut sequence)
-            .returning(|| async { Ok(43) }.boxed());
+            .returning(|| Ok(43));
         health
             .expect_notify_ready()
             .times(1)
@@ -215,16 +215,16 @@ mod tests {
 
         exchange
             .expect_get_current_auction_index()
-            .returning(|| async { Ok(43) }.boxed());
+            .returning(|| Ok(43));
         exchange
             .expect_get_current_auction_remaining_time()
-            .returning(|| async { Ok(Duration::from_secs(270)) }.boxed());
+            .returning(|| Ok(Duration::from_secs(270)));
 
         let mut driver = MockStableXDriver::new();
         driver
             .expect_solve_batch()
             .with(eq(BatchId(42)), eq(Duration::from_secs(150)))
-            .returning(|_, _| immediate!(Err(DriverError::Skip(anyhow!("")))));
+            .returning(|_, _| Err(DriverError::Skip(anyhow!(""))));
 
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
@@ -246,21 +246,19 @@ mod tests {
         exchange
             .expect_get_current_auction_index()
             .times(2)
-            .returning(|| async { Ok(41) }.boxed());
+            .returning(|| Ok(41));
         exchange
             .expect_get_current_auction_index()
-            .returning(|| async { Ok(42) }.boxed());
+            .returning(|| Ok(42));
         exchange
             .expect_get_current_auction_remaining_time()
-            .returning(|| async { Ok(Duration::from_secs(240)) }.boxed());
+            .returning(|| Ok(Duration::from_secs(240)));
 
         let mut driver = MockStableXDriver::new();
         driver
             .expect_solve_batch()
-            .returning(|_, _| immediate!(Ok(Solution::trivial())));
-        driver
-            .expect_submit_solution()
-            .returning(|_, _| immediate!(Ok(())));
+            .returning(|_, _| Ok(Solution::trivial()));
+        driver.expect_submit_solution().returning(|_, _| Ok(()));
 
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
@@ -285,14 +283,14 @@ mod tests {
         exchange
             .expect_get_current_auction_index()
             .times(1)
-            .returning(|| async { Ok(42) }.boxed());
+            .returning(|| Ok(42));
         exchange
             .expect_get_current_auction_remaining_time()
-            .returning(|| async { Ok(Duration::from_secs(270)) }.boxed());
+            .returning(|| Ok(Duration::from_secs(270)));
         exchange
             .expect_get_current_auction_index()
             .times(1)
-            .returning(|| async { Ok(43) }.boxed());
+            .returning(|| Ok(43));
 
         let driver = MockStableXDriver::new();
 
@@ -318,10 +316,10 @@ mod tests {
         let mut exchange = MockStableXContract::new();
         exchange
             .expect_get_current_auction_index()
-            .returning(|| async { Ok(42) }.boxed());
+            .returning(|| Ok(42));
         exchange
             .expect_get_current_auction_remaining_time()
-            .returning(|| async { Ok(Duration::from_secs(1)) }.boxed());
+            .returning(|| Ok(Duration::from_secs(1)));
 
         let driver = MockStableXDriver::new();
 
@@ -347,23 +345,21 @@ mod tests {
         let mut exchange = MockStableXContract::new();
         exchange
             .expect_get_current_auction_index()
-            .returning(|| async { Ok(42) }.boxed());
+            .returning(|| Ok(42));
         exchange
             .expect_get_current_auction_remaining_time()
-            .returning(|| async { Ok(Duration::from_secs(270)) }.boxed());
+            .returning(|| Ok(Duration::from_secs(270)));
 
         let mut driver = MockStableXDriver::new();
         driver
             .expect_solve_batch()
             .times(1)
-            .returning(|_, _| immediate!(Err(DriverError::Retry(anyhow!("error")))));
+            .returning(|_, _| Err(DriverError::Retry(anyhow!("error"))));
         driver
             .expect_solve_batch()
             .times(1)
-            .returning(|_, _| immediate!(Ok(Solution::trivial())));
-        driver
-            .expect_submit_solution()
-            .returning(|_, _| immediate!(Ok(())));
+            .returning(|_, _| Ok(Solution::trivial()));
+        driver.expect_submit_solution().returning(|_, _| Ok(()));
 
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
@@ -387,15 +383,15 @@ mod tests {
         let mut exchange = MockStableXContract::new();
         exchange
             .expect_get_current_auction_index()
-            .returning(|| async { Ok(42) }.boxed());
+            .returning(|| Ok(42));
         exchange
             .expect_get_current_auction_remaining_time()
-            .returning(|| async { Ok(Duration::from_secs(270)) }.boxed());
+            .returning(|| Ok(Duration::from_secs(270)));
 
         let mut driver = MockStableXDriver::new();
         driver
             .expect_solve_batch()
-            .returning(|_, _| immediate!(Err(DriverError::Skip(anyhow!("error")))));
+            .returning(|_, _| Err(DriverError::Skip(anyhow!("error"))));
 
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));
@@ -419,24 +415,24 @@ mod tests {
         let mut exchange = MockStableXContract::new();
         exchange
             .expect_get_current_auction_index()
-            .returning(|| async { Ok(42) }.boxed());
+            .returning(|| Ok(42));
         exchange
             .expect_get_current_auction_remaining_time()
             .times(2)
-            .returning(|| async { Ok(Duration::from_secs(270)) }.boxed());
+            .returning(|| Ok(Duration::from_secs(270)));
         exchange
             .expect_get_current_auction_remaining_time()
             .times(1)
-            .returning(|| async { Ok(Duration::from_secs(250)) }.boxed());
+            .returning(|| Ok(Duration::from_secs(250)));
 
         let mut driver = MockStableXDriver::new();
         driver
             .expect_solve_batch()
-            .returning(|_, _| immediate!(Ok(Solution::trivial())));
+            .returning(|_, _| Ok(Solution::trivial()));
         driver
             .expect_submit_solution()
             .times(1)
-            .returning(|_, _| immediate!(Ok(())));
+            .returning(|_, _| Ok(()));
 
         let mut sleep = Box::new(MockAsyncSleeping::new());
         sleep.expect_sleep().returning(|_| immediate!(()));

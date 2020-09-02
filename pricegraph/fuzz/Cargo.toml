@@ -11,7 +11,7 @@ cargo-fuzz = true
 [dependencies]
 arbitrary = { version = "0.4", features = ["derive"] }
 libfuzzer-sys = "0.3"
-pricegraph = { path = "..", features = ["arbitrary"] }
+pricegraph = { path = "..", features = ["fuzz"] }
 
 [[bin]]
 name = "element_read_all"

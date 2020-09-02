@@ -2,7 +2,6 @@ use super::super::generic_client::{Api, GenericToken};
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::{Context, Result};
 use ethcontract::Address;
-use futures::future::{BoxFuture, FutureExt as _};
 use isahc::prelude::Configurable;
 use serde::Deserialize;
 use serde_with::rust::display_fromstr;
@@ -53,6 +52,7 @@ pub const DEFAULT_API_URL: &str = "https://api.1inch.exchange/v1.1/";
 
 /// 1inch API version v1.1
 /// https://1inch.exchange/#/api
+#[async_trait::async_trait]
 impl Api for OneinchHttpApi {
     type Token = Token;
 
@@ -60,23 +60,20 @@ impl Api for OneinchHttpApi {
         Self::with_url(http_factory, DEFAULT_API_URL)
     }
 
-    fn get_token_list<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Token>>> {
-        async move {
-            let url = self.api_url.join("tokens")?;
-            let token_mapping: HashMap<String, Token> = self
-                .client
-                .get_json_async(url.to_string(), HttpLabel::Oneinch)
-                .await
-                .context("failed to get token list from 1inch response")?;
-            Ok(token_mapping
-                .into_iter()
-                .map(|(_token_symbol, token_data)| token_data)
-                .collect())
-        }
-        .boxed()
+    async fn get_token_list(&self) -> Result<Vec<Token>> {
+        let url = self.api_url.join("tokens")?;
+        let token_mapping: HashMap<String, Token> = self
+            .client
+            .get_json_async(url.to_string(), HttpLabel::Oneinch)
+            .await
+            .context("failed to get token list from 1inch response")?;
+        Ok(token_mapping
+            .into_iter()
+            .map(|(_token_symbol, token_data)| token_data)
+            .collect())
     }
 
-    fn get_price<'a>(&'a self, from: &Token, to: &Token) -> BoxFuture<'a, Result<f64>> {
+    async fn get_price(&self, from: &Token, to: &Token) -> Result<f64> {
         // 1inch requires the user to specify the amount traded in atoms.
         // We compute the price when selling one full token to avoid unavoidable rounding
         // artifacts when selling exactly one token atom.
@@ -92,17 +89,14 @@ impl Api for OneinchHttpApi {
 
         let decimal_correction = 10_f64.powi(from.decimals as i32 - to.decimals as i32);
 
-        async move {
-            let traded_amounts: TradedAmounts = self
-                .client
-                .get_json_async::<_, TradedAmounts>(url?.as_str(), HttpLabel::Oneinch)
-                .await
-                .context("failed to get price from 1inch")?;
-            let num = traded_amounts.to_token_amount as f64;
-            let den = traded_amounts.from_token_amount as f64;
-            Ok(decimal_correction * num / den)
-        }
-        .boxed()
+        let traded_amounts: TradedAmounts = self
+            .client
+            .get_json_async::<_, TradedAmounts>(url?.as_str(), HttpLabel::Oneinch)
+            .await
+            .context("failed to get price from 1inch")?;
+        let num = traded_amounts.to_token_amount as f64;
+        let den = traded_amounts.from_token_amount as f64;
+        Ok(decimal_correction * num / den)
     }
 
     fn reference_token_symbol() -> &'static str {

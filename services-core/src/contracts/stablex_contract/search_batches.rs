@@ -1,14 +1,6 @@
-// NOTE: Required for automock.
-#![cfg_attr(test, allow(clippy::ptr_arg))]
-
 use anyhow::{anyhow, Result};
 use ethcontract::{prelude::Web3, transport::DynTransport, web3::types::Block, BlockNumber, H256};
-use futures::{
-    compat::Future01CompatExt as _,
-    future::{BoxFuture, FutureExt as _},
-};
-#[cfg(test)]
-use mockall::automock;
+use futures::compat::Future01CompatExt as _;
 
 fn get_block_batch_id<T>(block: &Block<T>) -> u32 {
     const BATCH_DURATION: u64 = 300;
@@ -39,37 +31,31 @@ impl Bounds {
     }
 }
 
-#[cfg_attr(test, automock)]
+#[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
 pub trait BatchIdRetrieving {
     /// Return the id of the unique batch associated with the given block
-    fn batch_id_from_block<'a>(&'a self, block_number: BlockNumber) -> BoxFuture<'a, Result<u32>>;
+    async fn batch_id_from_block(&self, block_number: BlockNumber) -> Result<u32>;
 
     /// Return a pair containing the id of the batch we are currently in and the last block number, in this order
-    fn current_batch_id_and_block_number<'a>(&'a self) -> BoxFuture<'a, Result<(u32, u64)>>;
+    async fn current_batch_id_and_block_number(&self) -> Result<(u32, u64)>;
 }
 
+#[async_trait::async_trait]
 impl BatchIdRetrieving for Web3<DynTransport> {
-    fn batch_id_from_block<'a>(&'a self, block_number: BlockNumber) -> BoxFuture<'a, Result<u32>> {
-        async move {
-            let current_block = get_block(&self, block_number).await?;
-            Ok(get_block_batch_id(&current_block))
-        }
-        .boxed()
+    async fn batch_id_from_block(&self, block_number: BlockNumber) -> Result<u32> {
+        let current_block = get_block(&self, block_number).await?;
+        Ok(get_block_batch_id(&current_block))
     }
 
-    fn current_batch_id_and_block_number<'a>(&'a self) -> BoxFuture<'a, Result<(u32, u64)>> {
-        async move {
-            let current_block = get_block(&self, BlockNumber::Latest).await?;
-            let batch_id = get_block_batch_id(&current_block);
-            let block_number = current_block
-                .number
-                .ok_or_else(|| {
-                    anyhow!("latest block {:?} has no block number", current_block.hash)
-                })?
-                .as_u64();
-            Ok((batch_id, block_number))
-        }
-        .boxed()
+    async fn current_batch_id_and_block_number(&self) -> Result<(u32, u64)> {
+        let current_block = get_block(&self, BlockNumber::Latest).await?;
+        let batch_id = get_block_batch_id(&current_block);
+        let block_number = current_block
+            .number
+            .ok_or_else(|| anyhow!("latest block {:?} has no block number", current_block.hash))?
+            .as_u64();
+        Ok((batch_id, block_number))
     }
 }
 
@@ -118,6 +104,7 @@ pub async fn search_last_block_for_batch(
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use futures::FutureExt as _;
 
     #[test]
     fn incremental_binary_search() {
@@ -140,7 +127,7 @@ pub mod tests {
                     }
                     .as_u64() as usize;
                     let batch_id = batch_ids[index];
-                    async move { Ok(batch_id) }.boxed()
+                    Ok(batch_id)
                 }
             });
 
@@ -149,7 +136,7 @@ pub mod tests {
             .returning(move || {
                 let latest_block = batch_ids.len() as u64 - 1;
                 let latest_batch_id = batch_ids[latest_block as usize];
-                async move { Ok((latest_batch_id, latest_block)) }.boxed()
+                Ok((latest_batch_id, latest_block))
             });
 
         assert_eq!(

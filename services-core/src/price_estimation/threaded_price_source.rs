@@ -6,7 +6,6 @@ use async_std::{
     sync::Mutex,
     task::{self, JoinHandle},
 };
-use futures::future::{BoxFuture, FutureExt as _};
 use std::collections::HashMap;
 use std::num::NonZeroU128;
 use std::sync::Arc;
@@ -56,19 +55,14 @@ async fn update_prices<T: PriceSource>(
     price_source.get_prices(&tokens).await
 }
 
+#[async_trait::async_trait]
 impl PriceSource for ThreadedPriceSource {
-    fn get_prices<'a>(
-        &'a self,
-        tokens: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
-        async move {
-            let price_map = self.price_map.lock().await;
-            Ok(tokens
-                .iter()
-                .filter_map(|token| Some((*token, *price_map.get(&token)?)))
-                .collect())
-        }
-        .boxed()
+    async fn get_prices(&self, tokens: &[TokenId]) -> Result<HashMap<TokenId, NonZeroU128>> {
+        let price_map = self.price_map.lock().await;
+        Ok(tokens
+            .iter()
+            .filter_map(|token| Some((*token, *price_map.get(&token)?)))
+            .collect())
     }
 }
 
@@ -110,8 +104,7 @@ mod tests {
     #[test]
     fn thread_exits_when_owner_is_dropped() {
         let mut ps = MockPriceSource::new();
-        ps.expect_get_prices()
-            .returning(|_| immediate!(Ok(HashMap::new())));
+        ps.expect_get_prices().returning(|_| Ok(HashMap::new()));
 
         let mut token_info_fetcher = MockTokenInfoFetching::new();
         token_info_fetcher
@@ -131,8 +124,7 @@ mod tests {
             let price = price.clone();
             move |_| {
                 let price_ = price.clone();
-                async move { Ok(hash_map! { TOKENS[0] => nonzero!(price_.load(ORDERING).into()) }) }
-                    .boxed()
+                Ok(hash_map! { TOKENS[0] => nonzero!(price_.load(ORDERING).into()) })
             }
         });
 

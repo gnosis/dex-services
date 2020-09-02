@@ -45,7 +45,8 @@ fn run(options: Options) -> Result<()> {
     );
 
     let mut output = File::create(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("orderbook-{}.hex", options.batch_id)),
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join(format!("../orderbook-{}.hex", options.batch_id)),
     )?;
     for order in &instance.orders {
         let balance = instance

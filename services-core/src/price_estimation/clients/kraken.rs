@@ -8,7 +8,7 @@ use crate::http::HttpFactory;
 use crate::models::TokenId;
 use crate::token_info::{TokenBaseInfo, TokenInfoFetching};
 use anyhow::{anyhow, Context, Result};
-use futures::future::{self, BoxFuture, FutureExt as _};
+use futures::future;
 use futures::stream::{self, StreamExt};
 use std::collections::HashMap;
 use std::num::NonZeroU128;
@@ -81,40 +81,35 @@ where
     }
 }
 
+#[async_trait::async_trait]
 impl<Api> PriceSource for KrakenClient<Api>
 where
     Api: KrakenApi + Sync + Send,
 {
-    fn get_prices<'a>(
-        &'a self,
-        tokens: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
-        async move {
-            let token_infos = self.token_info_fetcher.get_token_infos(tokens).await?;
-            let token_asset_pairs = self
-                .get_token_asset_pairs(token_infos)
-                .await
-                .context("failed to generate asset pairs mapping for tokens")?;
+    async fn get_prices(&self, tokens: &[TokenId]) -> Result<HashMap<TokenId, NonZeroU128>> {
+        let token_infos = self.token_info_fetcher.get_token_infos(tokens).await?;
+        let token_asset_pairs = self
+            .get_token_asset_pairs(token_infos)
+            .await
+            .context("failed to generate asset pairs mapping for tokens")?;
 
-            let asset_pairs: Vec<_> = token_asset_pairs.keys().map(String::as_str).collect();
-            let ticker_infos = self.api.ticker(&asset_pairs).await?;
+        let asset_pairs: Vec<_> = token_asset_pairs.keys().map(String::as_str).collect();
+        let ticker_infos = self.api.ticker(&asset_pairs).await?;
 
-            let prices = stream::iter(ticker_infos)
-                .filter_map(|(pair, info)| {
-                    let token_id_and_pair = token_asset_pairs.get(&pair);
-                    async move {
-                        let token_id_and_pair = token_id_and_pair?;
-                        let price = token_id_and_pair.1.get_owl_price(info.p.last_24h());
-                        log::debug!("Fetched price for token {}: {}", token_id_and_pair.0, price);
-                        Some((token_id_and_pair.0, NonZeroU128::new(price)?))
-                    }
-                })
-                .collect()
-                .await;
+        let prices = stream::iter(ticker_infos)
+            .filter_map(|(pair, info)| {
+                let token_id_and_pair = token_asset_pairs.get(&pair);
+                async move {
+                    let token_id_and_pair = token_id_and_pair?;
+                    let price = token_id_and_pair.1.get_owl_price(info.p.last_24h());
+                    log::debug!("Fetched price for token {}: {}", token_id_and_pair.0, price);
+                    Some((token_id_and_pair.0, NonZeroU128::new(price)?))
+                }
+            })
+            .collect()
+            .await;
 
-            Ok(prices)
-        }
-        .boxed()
+        Ok(prices)
     }
 }
 
@@ -154,6 +149,7 @@ mod tests {
         util::FutureWaitExt as _,
     };
     use ethcontract::Address;
+    use futures::FutureExt as _;
     use std::{collections::HashSet, time::Instant};
 
     #[test]
@@ -167,23 +163,17 @@ mod tests {
 
         let mut api = MockKrakenApi::new();
         api.expect_assets().returning(|| {
-            async {
-                Ok(hash_map! {
-                    "USDC" => Asset::new("USDC"),
-                    "XETH" => Asset::new("ETH"),
-                    "ZUSD" => Asset::new("USD"),
-                })
-            }
-            .boxed()
+            Ok(hash_map! {
+                "USDC" => Asset::new("USDC"),
+                "XETH" => Asset::new("ETH"),
+                "ZUSD" => Asset::new("USD"),
+            })
         });
         api.expect_asset_pairs().returning(|| {
-            async {
-                Ok(hash_map! {
-                    "USDCUSD" => AssetPair::new("USDC", "ZUSD"),
-                    "XETHZUSD" => AssetPair::new("XETH", "ZUSD"),
-                })
-            }
-            .boxed()
+            Ok(hash_map! {
+                "USDCUSD" => AssetPair::new("USDC", "ZUSD"),
+                "XETHZUSD" => AssetPair::new("XETH", "ZUSD"),
+            })
         });
         api.expect_ticker()
             .withf(|pairs| {
@@ -191,13 +181,10 @@ mod tests {
                 unordered_pairs == ["USDCUSD", "XETHZUSD"].iter().collect()
             })
             .returning(|_| {
-                async {
-                    Ok(hash_map! {
-                        "USDCUSD" => TickerInfo::new(1.0, 1.01),
-                        "XETHZUSD" => TickerInfo::new(100.0, 99.0),
-                    })
-                }
-                .boxed()
+                immediate!(Ok(hash_map! {
+                    "USDCUSD" => TickerInfo::new(1.0, 1.01),
+                    "XETHZUSD" => TickerInfo::new(100.0, 99.0),
+                }))
             });
 
         let client = KrakenClient::with_api_and_tokens(api, Arc::new(TokenData::from(tokens)));

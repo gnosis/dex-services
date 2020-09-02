@@ -2,7 +2,6 @@ use super::price_source::PriceSource;
 use crate::models::{BatchId, TokenId};
 use crate::orderbook::StableXOrderBookReading;
 use anyhow::Result;
-use futures::future::{BoxFuture, FutureExt as _};
 use pricegraph::Pricegraph;
 use std::collections::HashMap;
 use std::num::NonZeroU128;
@@ -19,32 +18,25 @@ impl PricegraphEstimator {
     }
 }
 
+#[async_trait::async_trait]
 impl PriceSource for PricegraphEstimator {
-    fn get_prices<'a>(
-        &'a self,
-        tokens: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
-        async move {
-            let batch = BatchId::currently_being_solved(SystemTime::now())?;
-            let (account_state, orders) = self
-                .orderbook_reader
-                .get_auction_data_for_batch(batch.into())
-                .await?;
-            let pricegraph = Pricegraph::new(orders.iter().map(|order| {
-                order.to_element(account_state.read_balance(order.sell_token, order.account_id))
-            }));
-            pricegraph.get_prices(tokens).await
-        }
-        .boxed()
+    async fn get_prices(&self, tokens: &[TokenId]) -> Result<HashMap<TokenId, NonZeroU128>> {
+        let batch = BatchId::currently_being_solved(SystemTime::now())?;
+        let (account_state, orders) = self
+            .orderbook_reader
+            .get_auction_data_for_batch(batch.into())
+            .await?;
+        let pricegraph = Pricegraph::new(orders.iter().map(|order| {
+            order.to_element(account_state.read_balance(order.sell_token, order.account_id))
+        }));
+        pricegraph.get_prices(tokens).await
     }
 }
 
 use inner::TokenPriceEstimating;
+#[async_trait::async_trait]
 impl<T: TokenPriceEstimating> PriceSource for T {
-    fn get_prices<'a>(
-        &'a self,
-        tokens: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
+    async fn get_prices(&self, tokens: &[TokenId]) -> Result<HashMap<TokenId, NonZeroU128>> {
         let result = tokens
             .iter()
             .flat_map(|token| {
@@ -52,7 +44,7 @@ impl<T: TokenPriceEstimating> PriceSource for T {
                 Some((*token, NonZeroU128::new(price_in_reference as _)?))
             })
             .collect();
-        immediate!(Ok(result))
+        Ok(result)
     }
 }
 
@@ -63,7 +55,7 @@ mod inner {
     use super::{Pricegraph, TokenId};
 
     #[cfg_attr(test, mockall::automock)]
-    pub trait TokenPriceEstimating {
+    pub trait TokenPriceEstimating: Send + Sync {
         fn estimate_token_price(&self, token: TokenId) -> Option<f64>;
     }
 
@@ -79,6 +71,7 @@ mod inner {
 mod tests {
     use super::inner::MockTokenPriceEstimating;
     use super::*;
+    use futures::FutureExt as _;
     use mockall::predicate::eq;
 
     const ONE_OWL: f64 = 1_000_000_000_000_000_000.0;

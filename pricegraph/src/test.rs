@@ -1,8 +1,5 @@
 //! Module containing test utilities and macros.
 
-#[path = "../data/mod.rs"]
-pub mod data;
-
 use crate::encoding::UserId;
 
 /// Returns a `UserId` for a test user index.
@@ -81,4 +78,5 @@ macro_rules! pricegraph {
 pub mod prelude {
     pub use super::*;
     pub use assert_approx_eq::assert_approx_eq;
+    pub use pricegraph_data as data;
 }
