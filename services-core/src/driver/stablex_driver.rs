@@ -7,7 +7,6 @@ use crate::{
     solution_submission::{SolutionSubmissionError, StableXSolutionSubmitting},
 };
 use anyhow::{Error, Result};
-use futures::future::{BoxFuture, FutureExt as _};
 use log::{info, warn};
 use std::{
     sync::Arc,
@@ -21,18 +20,15 @@ pub enum DriverError {
 }
 
 #[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
 pub trait StableXDriver: Send + Sync {
-    fn solve_batch<'a>(
-        &'a self,
+    async fn solve_batch(
+        &self,
         batch_to_solve: BatchId,
         deadline: Duration,
-    ) -> BoxFuture<'a, Result<Solution, DriverError>>;
+    ) -> Result<Solution, DriverError>;
 
-    fn submit_solution<'a>(
-        &'a self,
-        batch_to_solve: BatchId,
-        solution: Solution,
-    ) -> BoxFuture<'a, Result<()>>;
+    async fn submit_solution(&self, batch_to_solve: BatchId, solution: Solution) -> Result<()>;
 }
 
 pub struct StableXDriverImpl {
@@ -178,46 +174,40 @@ impl StableXDriverImpl {
     }
 }
 
+#[async_trait::async_trait]
 impl StableXDriver for StableXDriverImpl {
-    fn solve_batch(
+    async fn solve_batch(
         &self,
         batch_to_solve: BatchId,
         deadline: Duration,
-    ) -> BoxFuture<Result<Solution, DriverError>> {
-        async move {
-            let deadline = Instant::now() + deadline;
+    ) -> Result<Solution, DriverError> {
+        let deadline = Instant::now() + deadline;
 
-            self.metrics
-                .auction_processing_started(&Ok(batch_to_solve.into()));
-            let (account_state, orders) = self
-                .get_orderbook(batch_to_solve.into())
-                .await
-                .map_err(DriverError::Retry)?;
+        self.metrics
+            .auction_processing_started(&Ok(batch_to_solve.into()));
+        let (account_state, orders) = self
+            .get_orderbook(batch_to_solve.into())
+            .await
+            .map_err(DriverError::Retry)?;
 
-            // Make sure the solver has at least some minimal time to run to have a chance for a
-            // solution. This also fixes an assert where the solver fails if the timelimit gets rounded
-            // to 0.
-            let deadline = match deadline.checked_duration_since(Instant::now()) {
-                Some(duration) if duration > Duration::from_secs(1) => duration,
-                _ => {
-                    warn!("orderbook retrieval exceeded time limit");
-                    return Ok(Solution::trivial());
-                }
-            };
+        // Make sure the solver has at least some minimal time to run to have a chance for a
+        // solution. This also fixes an assert where the solver fails if the timelimit gets rounded
+        // to 0.
+        let deadline = match deadline.checked_duration_since(Instant::now()) {
+            Some(duration) if duration > Duration::from_secs(1) => duration,
+            _ => {
+                warn!("orderbook retrieval exceeded time limit");
+                return Ok(Solution::trivial());
+            }
+        };
 
-            self.solve(batch_to_solve, deadline, account_state, orders)
-                .await
-                .map_err(DriverError::Skip)
-        }
-        .boxed()
+        self.solve(batch_to_solve, deadline, account_state, orders)
+            .await
+            .map_err(DriverError::Skip)
     }
 
-    fn submit_solution(
-        &self,
-        batch_to_solve: BatchId,
-        solution: Solution,
-    ) -> BoxFuture<Result<()>> {
-        self.submit(batch_to_solve, solution).boxed()
+    async fn submit_solution(&self, batch_to_solve: BatchId, solution: Solution) -> Result<()> {
+        self.submit(batch_to_solve, solution).await
     }
 }
 
@@ -237,6 +227,7 @@ mod tests {
     };
     use anyhow::anyhow;
     use ethcontract::U256;
+    use futures::FutureExt as _;
     use mockall::predicate::*;
     use std::thread;
 
@@ -274,7 +265,7 @@ mod tests {
             .withf(move |o, s, t| {
                 o == orders.as_slice() && *s == state && *t <= latest_solution_submit_time
             })
-            .return_once(move |_, _, _| async { Ok(solution) }.boxed());
+            .return_once(move |_, _, _| Ok(solution));
 
         let driver = StableXDriverImpl::new(
             Arc::new(pf),
@@ -340,7 +331,7 @@ mod tests {
             .return_once(|_| Ok((state, orders)));
 
         pf.expect_find_prices()
-            .returning(|_, _, _| async { Err(anyhow!("Error")) }.boxed());
+            .returning(|_, _, _| Err(anyhow!("Error")));
 
         let driver = StableXDriverImpl::new(
             Arc::new(pf),

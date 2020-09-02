@@ -4,7 +4,6 @@
 use crate::{models::TokenId, price_estimation::price_source::PriceSource};
 use anyhow::{anyhow, Context, Error, Result};
 use ethcontract::Address;
-use futures::future::BoxFuture;
 use serde::Deserialize;
 use std::{collections::HashMap, iter::FromIterator, num::NonZeroU128, str::FromStr};
 
@@ -68,18 +67,16 @@ impl TokenInfoFetching for TokenData {
     }
 }
 
+#[async_trait::async_trait]
 impl PriceSource for TokenData {
-    fn get_prices<'a>(
-        &'a self,
-        tokens: &'a [TokenId],
-    ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
+    async fn get_prices(&self, tokens: &[TokenId]) -> Result<HashMap<TokenId, NonZeroU128>> {
         let mut result = HashMap::new();
         for token in tokens {
             if let Some(price) = self.0.get(token).and_then(|info| info.external_price) {
                 result.insert(*token, price);
             }
         }
-        immediate!(Ok(result))
+        Ok(result)
     }
 }
 

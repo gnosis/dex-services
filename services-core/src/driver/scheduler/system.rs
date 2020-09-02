@@ -367,7 +367,7 @@ mod tests {
         let mut driver = MockStableXDriver::new();
         driver
             .expect_solve_batch()
-            .returning(|_, _| immediate!(Err(DriverError::Retry(anyhow!("")))));
+            .returning(|_, _| Err(DriverError::Retry(anyhow!(""))));
         let mut sleep = MockAsyncSleeping::new();
         sleep.expect_sleep().returning(|_| immediate!(()));
 
@@ -415,7 +415,7 @@ mod tests {
             .expect_solve_batch()
             .times(1)
             .in_sequence(&mut sequence)
-            .returning(|_, _| immediate!(Ok(Solution::trivial())));
+            .returning(|_, _| Ok(Solution::trivial()));
         contract
             .expect_get_current_auction_index()
             .times(1)
@@ -435,7 +435,7 @@ mod tests {
             .expect_submit_solution()
             .times(1)
             .in_sequence(&mut sequence)
-            .returning(|_, _| immediate!(Ok(())));
+            .returning(|_, _| Ok(()));
 
         assert!(solve_and_submit(
             BatchId(0),
@@ -471,7 +471,7 @@ mod tests {
             .expect_submit_solution()
             .times(1)
             .in_sequence(&mut sequence)
-            .returning(|_, _| immediate!(Ok(())));
+            .returning(|_, _| Ok(()));
 
         assert!(submit(
             BatchId(0),
@@ -511,16 +511,16 @@ mod tests {
                     time_limit.as_secs(),
                 );
                 counter += 1;
-                immediate!(match counter % 3 {
+                match counter % 3 {
                     0 => Ok(Solution::trivial()),
                     1 => Err(DriverError::Retry(anyhow!(""))),
                     2 => Err(DriverError::Skip(anyhow!(""))),
                     _ => unreachable!(),
-                })
+                }
             });
         driver.expect_submit_solution().returning(|batch, _| {
             log::info!("driver submit solution called for batch {}", batch);
-            immediate!(Ok(()))
+            Ok(())
         });
 
         let auction_timing_configuration = AuctionTimingConfiguration {
