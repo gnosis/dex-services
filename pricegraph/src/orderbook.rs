@@ -204,70 +204,24 @@ impl Orderbook {
         TransitiveOrders::new(self, pair)
     }
 
-    /// Fills the optimal transitive order for the specified token pair. This
-    /// method is similar to `Orderbook::fill_optimal_transitive_order_if`
-    /// except it does not check a condition on the discovered path's flow
-    /// before filling.
-    pub fn fill_optimal_transitive_order(
-        &mut self,
-        pair: TokenPair,
-    ) -> Result<Option<Flow>, OverlapError> {
-        self.fill_optimal_transitive_order_if(pair, |_| true)
-    }
-
     /// Finds and returns the optimal transitive order for the specified token
     /// pair without filling it. Returns `None` if no such transitive order
     /// exists.
     ///
     /// This method returns an error if the orderbook graph is not reduced.
     pub fn find_optimal_transitive_order(
-        &mut self,
+        &self,
         pair: TokenPair,
-    ) -> Result<Option<Flow>, OverlapError> {
-        let mut flow = None;
-        let reduced_flow = self.fill_optimal_transitive_order_if(pair, |f| {
-            flow = Some(*f);
-            false
-        })?;
-        debug_assert!(reduced_flow.is_none());
-
-        Ok(flow)
-    }
-
-    /// Fills the optimal transitive order (i.e. with the lowest exchange rate)
-    /// for the specified token pair by pushing flow from the buy token to the
-    /// sell token, if the condition is met. The trading path through the
-    /// orderbook graph is filled to maximum capacity, reducing the remaining
-    /// order amounts and user balances along the way, returning the flow for
-    /// the path.
-    ///
-    /// Returns `None` if the condition is not met or there is no path between
-    /// the token pair.
-    pub fn fill_optimal_transitive_order_if(
-        &mut self,
-        pair: TokenPair,
-        mut condition: impl FnMut(&Flow) -> bool,
     ) -> Result<Option<Flow>, OverlapError> {
         if !self.is_token_pair_valid(pair) {
             return Ok(None);
         }
 
         let (start, end) = (node_index(pair.buy), node_index(pair.sell));
-        let (path, flow) = match self.find_path_and_flow(start, end)? {
-            Some(result) => result,
+        let flow = match self.find_path_and_flow(start, end)? {
+            Some((_, flow)) => flow,
             None => return Ok(None),
         };
-
-        if !condition(&flow) {
-            return Ok(None);
-        }
-
-        self.fill_path_with_flow(&path, &flow).unwrap_or_else(|| {
-            panic!(
-                "failed to fill with capacity along detected path {}",
-                format_path(&path),
-            )
-        });
 
         Ok(Some(flow))
     }
@@ -582,7 +536,7 @@ mod tests {
         //  /---0.5---v
         // 0          1
         //  ^---0.5---/
-        let mut orderbook = orderbook! {
+        let orderbook = orderbook! {
             users {
                 @0 {
                     token 0 => 10_000_000,
@@ -599,10 +553,7 @@ mod tests {
         let pair = TokenPair { buy: 1, sell: 0 };
 
         assert!(orderbook.is_overlapping());
-        assert!(orderbook.fill_optimal_transitive_order(pair).is_err());
-        assert!(orderbook
-            .fill_optimal_transitive_order_if(pair, |_| false)
-            .is_err());
+        assert!(orderbook.find_optimal_transitive_order(pair).is_err());
     }
 
     #[test]
@@ -801,7 +752,7 @@ mod tests {
         //              /---250---v
         // 0 --1.11--> 1          2
         //             ^--0.004--/
-        let mut orderbook = orderbook! {
+        let orderbook = orderbook! {
             users {
                 @1 {
                     token 1 => 10_000_000_000,
