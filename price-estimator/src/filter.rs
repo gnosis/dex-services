@@ -1,6 +1,7 @@
 use crate::{
     amounts_at_price,
     error::RejectionReason,
+    metrics::Metrics,
     models::*,
     orderbook::{Orderbook, PricegraphKind},
 };
@@ -9,24 +10,29 @@ use services_core::{
     models::TokenId,
     token_info::{TokenBaseInfo, TokenInfoFetching},
 };
-use std::convert::Infallible;
-use std::sync::Arc;
+use std::{convert::Infallible, sync::Arc, time::Instant};
 use warp::{http::StatusCode, Filter, Rejection, Reply};
 
 /// Handles all supported requests under a `/api/v1` root path.
 pub fn all(
     orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
-) -> impl Filter<Extract = impl Reply, Error = Infallible> + Clone {
+    metrics: Arc<Metrics>,
+) -> impl Filter<Extract = impl Reply, Error = Infallible> + Clone + Send {
     warp::path!("api" / "v1" / ..)
         .and(
-            markets(orderbook.clone(), token_info.clone())
-                .or(estimated_buy_amount(orderbook.clone(), token_info.clone()))
+            markets(orderbook.clone(), token_info.clone(), metrics.clone())
+                .or(estimated_buy_amount(
+                    orderbook.clone(),
+                    token_info.clone(),
+                    metrics.clone(),
+                ))
                 .or(estimated_amounts_at_price(
                     orderbook.clone(),
                     token_info.clone(),
+                    metrics.clone(),
                 ))
-                .or(estimated_best_ask_price(orderbook, token_info)),
+                .or(estimated_best_ask_price(orderbook, token_info, metrics)),
         )
         .recover(handle_rejection)
 }
@@ -51,17 +57,40 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
     Ok(warp::reply::with_status(json, code))
 }
 
+/// Times the response of the inner filter and forwards it to the metrics.
+fn metrics_wrapper<F, T>(
+    metrics: Arc<Metrics>,
+    route_name: &'static str,
+    filter: F,
+) -> impl Filter<Extract = (T,), Error = Rejection> + Clone + Send
+where
+    F: Filter<Extract = (T,), Error = Rejection> + Clone + Send,
+    T: warp::Reply,
+{
+    warp::any()
+        .map(Instant::now)
+        .and(filter)
+        .map(move |start, reply| {
+            metrics.handle_successful_response(route_name, start);
+            reply
+        })
+}
+
 /// Validate a request of the form
 /// `/markets/<baseTokenId>-<quoteTokenId>`
 /// and answer it.
 fn markets(
     orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
+    metrics: Arc<Metrics>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     markets_filter()
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_info.clone()))
         .and_then(get_markets)
+        .with(warp::wrap_fn(|filter| {
+            metrics_wrapper(metrics.clone(), "markets", filter)
+        }))
 }
 
 /// Validate a request of the form
@@ -70,11 +99,15 @@ fn markets(
 fn estimated_buy_amount(
     orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
+    metrics: Arc<Metrics>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     estimated_buy_amount_filter()
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_info.clone()))
         .and_then(estimate_buy_amount)
+        .with(warp::wrap_fn(|filter| {
+            metrics_wrapper(metrics.clone(), "estimated-buy-amount", filter)
+        }))
 }
 
 /// Validate a request of the form:
@@ -83,11 +116,15 @@ fn estimated_buy_amount(
 fn estimated_amounts_at_price(
     orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
+    metrics: Arc<Metrics>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     estimated_amounts_at_price_filter()
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_info.clone()))
         .and_then(estimate_amounts_at_price)
+        .with(warp::wrap_fn(|filter| {
+            metrics_wrapper(metrics.clone(), "estimated-amounts-at-price", filter)
+        }))
 }
 
 /// Validate a request of the form:
@@ -96,11 +133,15 @@ fn estimated_amounts_at_price(
 fn estimated_best_ask_price(
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
+    metrics: Arc<Metrics>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     estimated_best_ask_price_filter()
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_infos.clone()))
         .and_then(estimate_best_ask_price)
+        .with(warp::wrap_fn(|filter| {
+            metrics_wrapper(metrics.clone(), "estimated-best-ask-price", filter)
+        }))
 }
 
 fn markets_prefix() -> impl Filter<Extract = (CurrencyPair,), Error = Rejection> + Copy {
@@ -372,7 +413,8 @@ mod tests {
             PriceCacheUpdater::new(token_info.clone(), Vec::new()),
             1.0,
         ));
-        all(orderbook, token_info)
+        let metrics = Arc::new(Metrics::new(&prometheus::Registry::new()).unwrap());
+        all(orderbook, token_info, metrics)
     }
 
     #[test]
