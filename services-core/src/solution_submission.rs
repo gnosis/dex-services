@@ -341,18 +341,15 @@ mod tests {
 
         contract
             .expect_get_current_auction_index()
-            .return_once(|| async { Ok(1) }.boxed());
+            .return_once(|| Ok(1));
         contract
             .expect_get_solution_objective_value()
             .return_once(move |_, _, _| {
-                async {
-                    Err(anyhow!(MethodError::from_parts(
+                Err(anyhow!(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
                         .to_owned(),
                     ExecutionError::Revert(Some("SafeMath: subtraction overflow".to_owned())),
                 )))
-                }
-                .boxed()
             });
 
         let retry = MockSolutionTransactionSending::new();
@@ -399,26 +396,29 @@ mod tests {
 
         contract
             .expect_get_transaction_count()
-            .returning(|| immediate!(Ok(U256::from(0))));
+            .returning(|| Ok(U256::from(0)));
         // Get objective value on old block number returns revert reason
         contract
             .expect_get_solution_objective_value()
             .with(always(), always(), eq(Some(block_number.into())))
             .return_once(move |_, _, _| {
-                async{Err(anyhow!(MethodError::from_parts(
+                Err(anyhow!(MethodError::from_parts(
                     "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
                         .to_owned(),
                     ExecutionError::Revert(Some("Claimed objective doesn't sufficiently improve current solution".to_owned())),
-                )))}.boxed()
+                )))
             });
 
         let mut retry = MockSolutionTransactionSending::new();
         retry.expect_retry().times(1).return_once(|_| {
-            immediate!(Err(MethodError::from_parts(
+            async move {
+                Err(MethodError::from_parts(
                 "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
                     .to_owned(),
-                ExecutionError::Failure(Box::new(receipt))
-            )))
+                ExecutionError::Failure(Box::new(receipt)),
+            ))
+            }
+            .boxed()
         });
 
         let mut sleep = MockAsyncSleeping::new();
@@ -454,7 +454,7 @@ mod tests {
 
         contract
             .expect_get_transaction_count()
-            .returning(|| immediate!(Ok(U256::from(0))));
+            .returning(|| Ok(U256::from(0)));
         retry
             .expect_retry()
             .returning(|_| future::pending().boxed());
@@ -511,7 +511,7 @@ mod tests {
 
         contract
             .expect_get_transaction_count()
-            .returning(|| immediate!(Ok(U256::from(0))));
+            .returning(|| Ok(U256::from(0)));
         retry.expect_retry().return_once(|_| {
             async move {
                 receiver.await.unwrap();
@@ -558,7 +558,7 @@ mod tests {
 
         contract
             .expect_get_transaction_count()
-            .returning(|| immediate!(Ok(U256::from(0))));
+            .returning(|| Ok(U256::from(0)));
         retry.expect_retry().return_once(|_| {
             async move {
                 receiver.await.unwrap();

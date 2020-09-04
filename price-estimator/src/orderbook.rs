@@ -181,7 +181,7 @@ fn pricegraph_from_auction_data(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use futures::future::{BoxFuture, FutureExt as _};
+    use futures::FutureExt as _;
     use services_core::{
         models::TokenId, orderbook::NoopOrderbook, price_estimation::price_source::PriceSource,
         token_info::hardcoded::TokenData,
@@ -191,15 +191,16 @@ mod tests {
     #[test]
     fn updates_infallible_price_source() {
         struct PriceSource_ {};
+        #[async_trait::async_trait]
         impl PriceSource for PriceSource_ {
-            fn get_prices<'a>(
-                &'a self,
-                _tokens: &'a [TokenId],
-            ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
+            async fn get_prices(
+                &self,
+                _tokens: &[TokenId],
+            ) -> Result<HashMap<TokenId, NonZeroU128>> {
                 futures::future::ready(Ok(vec![(TokenId(1), NonZeroU128::new(3).unwrap())]
                     .into_iter()
                     .collect()))
-                .boxed()
+                .await
             }
         }
 

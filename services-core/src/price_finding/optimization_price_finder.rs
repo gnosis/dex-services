@@ -8,7 +8,6 @@ use crate::{
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use ethcontract::U256;
-use futures::future::{BoxFuture, FutureExt as _};
 use log::error;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::display_fromstr;
@@ -249,71 +248,69 @@ fn deserialize_result(result: String) -> Result<(Solution, SolverStats)> {
     Ok(output.into_solution())
 }
 
+#[async_trait::async_trait]
 impl PriceFinding for OptimisationPriceFinder {
-    fn find_prices<'a>(
-        &'a self,
-        orders: &'a [models::Order],
-        state: &'a models::AccountState,
+    async fn find_prices(
+        &self,
+        orders: &[models::Order],
+        state: &models::AccountState,
         time_limit: Duration,
-    ) -> BoxFuture<'a, Result<Solution>> {
+    ) -> Result<Solution> {
         let price_oracle = &*self.price_oracle;
-        async move {
-            let input = solver_input::Input {
-                tokens: price_oracle.get_token_prices(&orders).await,
-                ref_token: TokenId(0),
-                accounts: serialize_balances(&state, &orders),
-                orders: orders.iter().map(From::from).collect(),
-                fee: self.fee.as_ref().map(From::from),
-            };
+        let input = solver_input::Input {
+            tokens: price_oracle.get_token_prices(&orders).await,
+            ref_token: TokenId(0),
+            accounts: serialize_balances(&state, &orders),
+            orders: orders.iter().map(From::from).collect(),
+            fee: self.fee.as_ref().map(From::from),
+        };
 
-            let now = Utc::now();
-            // We are solving the batch before the current one
-            let batch_id = (now.timestamp() / 300) - 1;
-            let date = now.format("%Y-%m-%d");
-            let current_directory = env::current_dir()?;
+        let now = Utc::now();
+        // We are solving the batch before the current one
+        let batch_id = (now.timestamp() / 300) - 1;
+        let date = now.format("%Y-%m-%d");
+        let current_directory = env::current_dir()?;
 
-            let input_folder = format!("{}/instances/{}", current_directory.display(), &date);
-            let input_file = format!(
-                "{}/instance_{}_{}.json",
-                &input_folder,
-                &batch_id,
-                &now.to_rfc3339()
-            );
+        let input_folder = format!("{}/instances/{}", current_directory.display(), &date);
+        let input_file = format!(
+            "{}/instance_{}_{}.json",
+            &input_folder,
+            &batch_id,
+            &now.to_rfc3339()
+        );
 
-            let result_folder = format!(
-                "{}/results/{}/instance_{}_{}/",
-                &current_directory.display(),
-                &date,
-                &batch_id,
-                &now.to_rfc3339()
-            );
+        let result_folder = format!(
+            "{}/results/{}/instance_{}_{}/",
+            &current_directory.display(),
+            &date,
+            &batch_id,
+            &now.to_rfc3339()
+        );
 
-            // `blocking::unblock` requires the closure to be 'static.
-            let io_methods = self.io_methods.clone();
-            let solver_type = self.solver_type;
-            // The solver expects the fee amount as the total paid fees. Half of the paid fees are
-            // burned and half earned.
-            let min_avg_paid_fee_per_order = 2 * self.economic_viability.min_average_fee().await?;
-            let internal_optimizer = self.internal_optimizer;
-            let result = blocking::unblock(move || {
-                io_methods.run_solver(
-                    &input_file,
-                    &serde_json::to_string(&input)?,
-                    &result_folder,
-                    solver_type,
-                    time_limit,
-                    min_avg_paid_fee_per_order,
-                    internal_optimizer,
-                )
-            })
-            .await
-            .with_context(|| format!("error running {:?} solver", self.solver_type))?;
-            let (solution, solver_stats) =
-                deserialize_result(result).context("error deserializing solver output")?;
-            self.solver_metrics.handle_stats(&solver_stats);
-            Ok(solution)
-        }
-        .boxed()
+        // `blocking::unblock` requires the closure to be 'static.
+        let io_methods = self.io_methods.clone();
+        let solver_type = self.solver_type;
+        // The solver expects the fee amount as the total paid fees. Half of the paid fees are
+        // burned and half earned.
+        let min_avg_paid_fee_per_order = 2 * self.economic_viability.min_average_fee().await?;
+        let internal_optimizer = self.internal_optimizer;
+        let result = blocking::unblock(move || {
+            io_methods.run_solver(
+                &input_file,
+                &serde_json::to_string(&input)?,
+                &result_folder,
+                solver_type,
+                time_limit,
+                min_avg_paid_fee_per_order,
+                internal_optimizer,
+            )
+        })
+        .await
+        .with_context(|| format!("error running {:?} solver", self.solver_type))?;
+        let (solution, solver_stats) =
+            deserialize_result(result).context("error deserializing solver output")?;
+        self.solver_metrics.handle_stats(&solver_stats);
+        Ok(solution)
     }
 }
 

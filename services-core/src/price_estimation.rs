@@ -218,13 +218,10 @@ mod tests {
                 tokens == [TokenId(0), TokenId(1), TokenId(2), TokenId(3)]
             })
             .returning(|_| {
-                async {
-                    Ok(hash_map! {
-                        TokenId(1) => nonzero!(100_000),
-                        TokenId(2) => nonzero!(1_000_000_000_000_000_000),
-                    })
-                }
-                .boxed()
+                Ok(hash_map! {
+                    TokenId(1) => nonzero!(100_000),
+                    TokenId(2) => nonzero!(1_000_000_000_000_000_000),
+                })
             });
 
         let oracle = PriceOracle::with_source(tokens, source);
@@ -259,7 +256,7 @@ mod tests {
         let mut source = MockPriceSource::new();
         source
             .expect_get_prices()
-            .returning(|_| async { Err(anyhow!("error")) }.boxed());
+            .returning(|_| Err(anyhow!("error")));
 
         let oracle = PriceOracle::with_source(tokens, source);
         let prices = oracle

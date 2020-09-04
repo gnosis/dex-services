@@ -2,7 +2,6 @@ use super::super::generic_client::{Api, GenericToken};
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::{Context, Result};
 use ethcontract::Address;
-use futures::future::{BoxFuture, FutureExt as _};
 use isahc::prelude::Configurable;
 use serde::Deserialize;
 use serde_with::rust::display_fromstr;
@@ -47,6 +46,7 @@ impl DexagHttpApi {
 pub const DEFAULT_BASE_URL: &str = "https://api-v2.dex.ag";
 
 /// Parts of the dex.ag api.
+#[async_trait::async_trait]
 impl Api for DexagHttpApi {
     type Token = Token;
 
@@ -55,20 +55,17 @@ impl Api for DexagHttpApi {
     }
 
     /// https://docs.dex.ag/api/tokens
-    fn get_token_list<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Token>>> {
-        async move {
-            let mut url = self.base_url.clone();
-            url.set_path("token-list-full");
-            self.client
-                .get_json_async(url.to_string(), HttpLabel::Dexag)
-                .await
-                .context("failed to get token list from dexag response")
-        }
-        .boxed()
+    async fn get_token_list(&self) -> Result<Vec<Token>> {
+        let mut url = self.base_url.clone();
+        url.set_path("token-list-full");
+        self.client
+            .get_json_async(url.to_string(), HttpLabel::Dexag)
+            .await
+            .context("failed to get token list from dexag response")
     }
 
     /// https://docs.dex.ag/api/price
-    fn get_price<'a>(&'a self, from: &Token, to: &Token) -> BoxFuture<'a, Result<f64>> {
+    async fn get_price(&self, from: &Token, to: &Token) -> Result<f64> {
         let mut url = self.base_url.clone();
         url.set_path("price");
         url.query_pairs_mut()
@@ -77,15 +74,12 @@ impl Api for DexagHttpApi {
             .append_pair("fromAmount", "1")
             .append_pair("dex", "ag");
 
-        async move {
-            Ok(self
-                .client
-                .get_json_async::<_, Price>(url.as_str(), HttpLabel::Dexag)
-                .await
-                .context("failed to get price from dexag")?
-                .price)
-        }
-        .boxed()
+        Ok(self
+            .client
+            .get_json_async::<_, Price>(url.as_str(), HttpLabel::Dexag)
+            .await
+            .context("failed to get price from dexag")?
+            .price)
     }
 
     fn reference_token_symbol() -> &'static str {
