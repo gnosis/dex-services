@@ -277,6 +277,7 @@ fn main() {
         economic_viability.clone(),
         options.solver_internal_optimizer,
         solver_metrics,
+        stablex_metrics.clone(),
     );
 
     // Set up solution submitter.

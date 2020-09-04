@@ -3,7 +3,7 @@ use crate::solution_submission::SolutionSubmissionError;
 use anyhow::Result;
 use chrono::Utc;
 use ethcontract::U256;
-use prometheus::{IntCounterVec, IntGaugeVec, Opts, Registry};
+use prometheus::{Gauge, IntCounterVec, IntGaugeVec, Opts, Registry};
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::sync::Arc;
@@ -15,6 +15,7 @@ pub struct StableXMetrics {
     orders: IntGaugeVec,
     tokens: IntGaugeVec,
     users: IntGaugeVec,
+    min_avg_fee: Gauge,
 }
 
 impl StableXMetrics {
@@ -63,6 +64,13 @@ impl StableXMetrics {
         BookType::initialize_gauges(&users);
         registry.register(Box::new(users.clone())).unwrap();
 
+        let min_avg_fee_opts = Opts::new(
+            "dfusion_service_min_avg_fee",
+            "min avg fee as passed to the solver. This is the *total generated* fee.",
+        );
+        let min_avg_fee = Gauge::with_opts(min_avg_fee_opts).unwrap();
+        registry.register(Box::new(min_avg_fee.clone())).unwrap();
+
         Self {
             processing_times,
             failures,
@@ -70,6 +78,7 @@ impl StableXMetrics {
             orders,
             tokens,
             users,
+            min_avg_fee,
         }
     }
 
@@ -185,6 +194,10 @@ impl StableXMetrics {
             .with_label_values(stage_label)
             .set(time_elapsed_since_batch_start(batch));
         self.successes.with_label_values(stage_label).inc();
+    }
+
+    pub fn min_avg_fee_calculated(&self, min_avg_fee: u128) {
+        self.min_avg_fee.set(min_avg_fee as f64);
     }
 }
 
