@@ -11,7 +11,7 @@ use services_core::{
     token_info::{TokenBaseInfo, TokenInfoFetching},
 };
 use std::{convert::Infallible, sync::Arc, time::Instant};
-use warp::{http::StatusCode, Filter, Rejection, Reply};
+use warp::{http::StatusCode, reply::Json, Filter, Rejection, Reply};
 
 /// Handles all supported requests under a `/api/v1` root path.
 pub fn all(
@@ -19,21 +19,32 @@ pub fn all(
     token_info: Arc<dyn TokenInfoFetching>,
     metrics: Arc<Metrics>,
 ) -> impl Filter<Extract = impl Reply, Error = Infallible> + Clone + Send {
-    warp::path!("api" / "v1" / ..)
-        .and(
-            markets(orderbook.clone(), token_info.clone(), metrics.clone())
-                .or(estimated_buy_amount(
-                    orderbook.clone(),
-                    token_info.clone(),
-                    metrics.clone(),
-                ))
-                .or(estimated_amounts_at_price(
-                    orderbook.clone(),
-                    token_info.clone(),
-                    metrics.clone(),
-                ))
-                .or(estimated_best_ask_price(orderbook, token_info, metrics)),
-        )
+    let markets = markets(orderbook.clone(), token_info.clone());
+    let estimated_buy_amount = estimated_buy_amount(orderbook.clone(), token_info.clone());
+    let estimated_amounts_at_price =
+        estimated_amounts_at_price(orderbook.clone(), token_info.clone());
+    let estimated_best_ask_price = estimated_best_ask_price(orderbook, token_info);
+
+    let label = |label: &'static str| warp::any().map(move || label);
+    let routes_with_labels = warp::path!("api" / "v1" / ..).and(
+        (label("markets").and(markets))
+            .or(label("estimated_buy_amount").and(estimated_buy_amount))
+            .unify()
+            .or(label("estimated-amounts-at-price").and(estimated_amounts_at_price))
+            .unify()
+            .or(label("estimated-best-ask-price").and(estimated_best_ask_price))
+            .unify(),
+    );
+
+    let start_time = warp::any().map(Instant::now);
+    let handle_metrics = move |start, route, reply| {
+        metrics.handle_successful_response(route, start);
+        (reply,)
+    };
+
+    start_time
+        .and(routes_with_labels)
+        .map(handle_metrics)
         .recover(handle_rejection)
 }
 
@@ -57,40 +68,17 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
     Ok(warp::reply::with_status(json, code))
 }
 
-/// Times the response of the inner filter and forwards it to the metrics.
-fn metrics_wrapper<F, T>(
-    metrics: Arc<Metrics>,
-    route_name: &'static str,
-    filter: F,
-) -> impl Filter<Extract = (T,), Error = Rejection> + Clone + Send
-where
-    F: Filter<Extract = (T,), Error = Rejection> + Clone + Send,
-    T: warp::Reply,
-{
-    warp::any()
-        .map(Instant::now)
-        .and(filter)
-        .map(move |start, reply| {
-            metrics.handle_successful_response(route_name, start);
-            reply
-        })
-}
-
 /// Validate a request of the form
 /// `/markets/<baseTokenId>-<quoteTokenId>`
 /// and answer it.
 fn markets(
     orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
-    metrics: Arc<Metrics>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (Json,), Error = Rejection> + Clone {
     markets_filter()
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_info.clone()))
         .and_then(get_markets)
-        .with(warp::wrap_fn(|filter| {
-            metrics_wrapper(metrics.clone(), "markets", filter)
-        }))
 }
 
 /// Validate a request of the form
@@ -99,15 +87,11 @@ fn markets(
 fn estimated_buy_amount(
     orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
-    metrics: Arc<Metrics>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (Json,), Error = Rejection> + Clone {
     estimated_buy_amount_filter()
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_info.clone()))
         .and_then(estimate_buy_amount)
-        .with(warp::wrap_fn(|filter| {
-            metrics_wrapper(metrics.clone(), "estimated-buy-amount", filter)
-        }))
 }
 
 /// Validate a request of the form:
@@ -116,15 +100,11 @@ fn estimated_buy_amount(
 fn estimated_amounts_at_price(
     orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
-    metrics: Arc<Metrics>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (Json,), Error = Rejection> + Clone {
     estimated_amounts_at_price_filter()
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_info.clone()))
         .and_then(estimate_amounts_at_price)
-        .with(warp::wrap_fn(|filter| {
-            metrics_wrapper(metrics.clone(), "estimated-amounts-at-price", filter)
-        }))
 }
 
 /// Validate a request of the form:
@@ -133,15 +113,11 @@ fn estimated_amounts_at_price(
 fn estimated_best_ask_price(
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
-    metrics: Arc<Metrics>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (Json,), Error = Rejection> + Clone {
     estimated_best_ask_price_filter()
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_infos.clone()))
         .and_then(estimate_best_ask_price)
-        .with(warp::wrap_fn(|filter| {
-            metrics_wrapper(metrics.clone(), "estimated-best-ask-price", filter)
-        }))
 }
 
 fn markets_prefix() -> impl Filter<Extract = (CurrencyPair,), Error = Rejection> + Copy {
@@ -204,7 +180,7 @@ async fn get_markets(
     query: QueryParameters,
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
-) -> Result<impl Reply, Rejection> {
+) -> Result<Json, Rejection> {
     let market = get_market(pair, &*token_infos).await?;
     // This route intentionally uses the raw pricegraph without rounding buffer so that orders are
     // unmodified.
@@ -231,7 +207,7 @@ async fn estimate_buy_amount(
     query: QueryParameters,
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
-) -> Result<impl Reply, Rejection> {
+) -> Result<Json, Rejection> {
     let token_pair = get_market(pair, &*token_infos).await?.bid_pair();
     let (sell_amount_in_quote, sell_amount_in_quote_atoms) = match query.unit {
         Unit::Atoms => (
@@ -281,7 +257,7 @@ async fn estimate_amounts_at_price(
     query: QueryParameters,
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
-) -> Result<impl Reply, Rejection> {
+) -> Result<Json, Rejection> {
     let token_pair = get_market(pair, &*token_infos).await?.bid_pair();
     let pricegraph = orderbook
         .pricegraph(
@@ -354,7 +330,7 @@ async fn estimate_best_ask_price(
     query: QueryParameters,
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
-) -> Result<impl Reply, Rejection> {
+) -> Result<Json, Rejection> {
     let market = get_market(pair, &*token_infos).await?;
     let token_pair = market.bid_pair();
     let price = orderbook
