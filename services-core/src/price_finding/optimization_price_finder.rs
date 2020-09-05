@@ -1,6 +1,9 @@
 use crate::{
     economic_viability::EconomicViabilityComputing,
-    metrics::solver_metrics::{SolverMetrics, SolverStats},
+    metrics::{
+        solver_metrics::{SolverMetrics, SolverStats},
+        StableXMetrics,
+    },
     models::{self, solution::Solution, TokenId, TokenInfo},
     price_estimation::PriceEstimating,
     price_finding::price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
@@ -203,6 +206,7 @@ pub struct OptimisationPriceFinder {
     economic_viability: Arc<dyn EconomicViabilityComputing>,
     internal_optimizer: InternalOptimizer,
     solver_metrics: SolverMetrics,
+    stablex_metrics: Arc<StableXMetrics>,
 }
 
 impl OptimisationPriceFinder {
@@ -213,6 +217,7 @@ impl OptimisationPriceFinder {
         economic_viability: Arc<dyn EconomicViabilityComputing>,
         internal_optimizer: InternalOptimizer,
         solver_metrics: SolverMetrics,
+        stablex_metrics: Arc<StableXMetrics>,
     ) -> Self {
         OptimisationPriceFinder {
             io_methods: Arc::new(DefaultIo),
@@ -222,6 +227,7 @@ impl OptimisationPriceFinder {
             economic_viability,
             internal_optimizer,
             solver_metrics,
+            stablex_metrics,
         }
     }
 }
@@ -292,7 +298,8 @@ impl PriceFinding for OptimisationPriceFinder {
         let solver_type = self.solver_type;
         // The solver expects the fee amount as the total paid fees. Half of the paid fees are
         // burned and half earned.
-        let min_avg_paid_fee_per_order = 2 * self.economic_viability.min_average_fee().await?;
+        let min_avg_fee = 2 * self.economic_viability.min_average_fee().await?;
+        self.stablex_metrics.min_avg_fee_calculated(min_avg_fee);
         let internal_optimizer = self.internal_optimizer;
         let result = blocking::unblock(move || {
             io_methods.run_solver(
@@ -301,7 +308,7 @@ impl PriceFinding for OptimisationPriceFinder {
                 &result_folder,
                 solver_type,
                 time_limit,
-                min_avg_paid_fee_per_order,
+                min_avg_fee,
                 internal_optimizer,
             )
         })
@@ -695,6 +702,7 @@ pub mod tests {
             economic_viability: Arc::new(economic_viablity),
             internal_optimizer: InternalOptimizer::Scip,
             solver_metrics: SolverMetrics::new(Arc::new(Registry::new())),
+            stablex_metrics: Arc::new(StableXMetrics::new(Arc::new(Registry::new()))),
         };
         let orders = vec![];
         assert!(solver

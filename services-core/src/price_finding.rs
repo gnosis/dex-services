@@ -8,7 +8,8 @@ pub use self::{
     price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
 };
 use crate::{
-    economic_viability::EconomicViabilityComputing, metrics::SolverMetrics,
+    economic_viability::EconomicViabilityComputing,
+    metrics::{SolverMetrics, StableXMetrics},
     price_estimation::PriceEstimating,
 };
 use log::info;
@@ -21,6 +22,7 @@ pub fn create_price_finder(
     min_avg_fee: Arc<dyn EconomicViabilityComputing>,
     internal_optimizer: InternalOptimizer,
     solver_metrics: SolverMetrics,
+    stablex_metrics: Arc<StableXMetrics>,
 ) -> Arc<dyn PriceFinding + Send + Sync> {
     if solver_type == SolverType::NaiveSolver {
         info!("Using naive price finder");
@@ -34,6 +36,7 @@ pub fn create_price_finder(
             min_avg_fee,
             internal_optimizer,
             solver_metrics,
+            stablex_metrics,
         ))
     }
 }
