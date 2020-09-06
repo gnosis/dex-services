@@ -88,3 +88,27 @@ impl Market {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test::prelude::*;
+
+    #[test]
+    fn transitive_order_overlapping_xrate() {
+        // NOTE: A transitive order buying 0.999 (1 minus fees) for 100 overlaps
+        // with an inverse transitive order buying 99.9 (100 minus fees) for 1
+        assert_approx_eq!(
+            TransitiveOrder {
+                buy: 1.0 / FEE_FACTOR,
+                sell: 100.0,
+            }
+            .overlapping_exchange_rate(),
+            TransitiveOrder {
+                buy: 100.0 / FEE_FACTOR,
+                sell: 1.0,
+            }
+            .exchange_rate()
+        )
+    }
+}
