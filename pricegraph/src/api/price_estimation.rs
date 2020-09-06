@@ -70,10 +70,10 @@ impl Pricegraph {
         // NOTE: While technically an order with a dust buy amount is not a dust
         // order (since the solver may chose to use an executed buy amount
         // greater than the dust amount), the pricegraph has determined that
-        // there are no overlapping order with a sufficiently high buy amount,
-        // so there is no price that can be set for the specified sell amount
-        // and be overlapping with existing orders such that an executed buy
-        // amount could be found greater than the dust amount.
+        // there are no overlapping order with a sufficiently low price, so
+        // there is no price that can be used for the specified sell amount and
+        // be overlapping with existing orders such that an executed buy amount
+        // could be found greater than the dust amount.
         let min_buy_amount = max_sell_amount * price;
         if num::is_dust_amount(min_buy_amount) {
             return None;
