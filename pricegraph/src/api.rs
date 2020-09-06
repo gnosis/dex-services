@@ -42,6 +42,12 @@ impl TransitiveOrder {
     pub fn effective_exchange_rate(&self) -> f64 {
         self.exchange_rate() * FEE_FACTOR
     }
+
+    /// Retrieves the minimum exchange rate such that it overlaps with the
+    /// transitive order, accounting for fees on both sides of the trade.
+    pub fn overlapping_exchange_rate(&self) -> f64 {
+        1.0 / (self.exchange_rate() * FEE_FACTOR.powi(2))
+    }
 }
 
 /// A struct representing a market.

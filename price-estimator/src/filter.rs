@@ -315,7 +315,6 @@ async fn estimate_best_ask_price(
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<impl Reply, Rejection> {
     let market = get_market(pair, &*token_infos).await?;
-    let token_pair = market.bid_pair();
     let price = orderbook
         .pricegraph(
             query.time,
@@ -324,9 +323,8 @@ async fn estimate_best_ask_price(
         )
         .await
         .map_err(RejectionReason::InternalError)?
-        .estimate_limit_price(token_pair, 0.0)
-        // The price above is in base, but we need to return it in quote.
-        .map(|p| 1.0 / p);
+        .best_ask_transitive_order(market)
+        .map(|order| order.overlapping_exchange_rate().recip());
 
     let result = PriceEstimateResult(price);
     let result = match query.unit {
