@@ -13,7 +13,7 @@ use warp::log::Info;
 pub struct Metrics {
     response_status: IntCounterVec,
     response_time: Histogram,
-    response_time_success: HistogramVec,
+    response_time_per_route: HistogramVec,
 }
 
 impl Metrics {
@@ -33,22 +33,22 @@ impl Metrics {
         registry.register(Box::new(response_time.clone()))?;
 
         let opts = HistogramOpts::new(
-            "price_estimator_response_time_success",
+            "price_estimator_response_time_per_route",
             "The duration it takes for the price estimator to successfully respond for each route.",
         );
-        let response_time_success = HistogramVec::new(opts, &["route"]).unwrap();
-        registry.register(Box::new(response_time_success.clone()))?;
+        let response_time_per_route = HistogramVec::new(opts, &["route"]).unwrap();
+        registry.register(Box::new(response_time_per_route.clone()))?;
 
         Ok(Self {
             response_status,
             response_time,
-            response_time_success,
+            response_time_per_route,
         })
     }
 
     pub fn handle_successful_response(&self, route: &str, start: Instant) {
         let response_time = start.elapsed().as_secs_f64();
-        self.response_time_success
+        self.response_time_per_route
             .with_label_values(&[route])
             .observe(response_time);
     }
