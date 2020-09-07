@@ -6,16 +6,17 @@
 1. [Introduction](#introduction)
 2. [Getting Started](#getting-started)
     1. [Requirements](#requirements)
-    2. [Installation](#installation)
+    2. [Installation](#setup)
 3. [Batch Exchange](#batchexchange)
     1. [Running](#running-batchexchange)
 4. [Testing](#tests)
     1. [End to End](#end-to-end-tests)
     2. [Unit tests](#unit-tests)
-5. [Optimization Solver](#running-with-optimization-solver)
-6. [Configuration](#configuration)
+5. [Open Solver](#running-with-open-solver)
+6. [Optimization Solver](#running-with-linear-optimization-solver)
+7. [Configuration](#configuration)
     1. [Orderbook Filtering](#orderbook-filter-example)
-7. [Troubleshooting](#troubleshooting)
+8. [Troubleshooting](#troubleshooting)
     1. [Logging](#logging)
     2. [Docker Compose](#docker-compose-build)
     3. [Different Networks](#different-networks)
@@ -33,7 +34,7 @@ This repository contains the backend logic for the Gnosis Protocol based on [thi
 - Rust (stable)
 - Docker and Docker-compose (stable)
 
-The project may work with other versions of these tools but they are not tested.
+The project may work with other versions of these tools, but they are not tested.
 
 ### Setup
 
@@ -141,10 +142,10 @@ OPTIONS:
         --auction-data-page-size <auction-data-page-size>
             Specify the number of blocks to fetch events for at a time for constructing the orderbook for the solver
             [env: AUCTION_DATA_PAGE_SIZE=]  [default: 500]
-        --default-max-gas-price <default-max-gas-price>
+        --fallback-max-gas-price <fallback-max-gas-price>
             The default maximum gas price. This is used when computing the maximum gas price based on ether price in owl
-            fails [env: DEFAULT_MAX_GAS_PRICE=]  [default: 100000000000]
-        --default-min-avg-fee-per-order <default-min-avg-fee-per-order>
+            fails [env: FALLBACK_MAX_GAS_PRICE=]  [default: 100000000000]
+        --fallback-min-avg-fee-per-order <fallback-min-avg-fee-per-order>
             The default minimum average fee per order. This is passed to the solver in case the computing its value
             fails. Its unit is [OWL] [env: MIN_AVG_FEE_PER_ORDER=]  [default: 0]
         --earliest-solution-submit-time <earliest-solution-submit-time>
