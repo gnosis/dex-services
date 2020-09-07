@@ -14,7 +14,9 @@ impl Pricegraph {
     /// Note that this price is in exchange format, that is, it is expressed as
     /// the ratio between buy and sell amounts, with implicit fees.
     pub fn estimate_limit_price(&self, pair: TokenPair, max_sell_amount: f64) -> Option<f64> {
-        let mut orderbook = self.reduced_orderbook();
+        if !num::is_strictly_positive_and_finite(max_sell_amount) {
+            return None;
+        }
 
         // NOTE: This method works by searching for the "best" counter
         // transitive orders, as such we need to fill transitive orders in the
@@ -24,34 +26,16 @@ impl Pricegraph {
             sell: pair.buy,
         };
 
-        if max_sell_amount == 0.0 {
-            // NOTE: For a 0 volume we simulate sending an tiny epsilon of value
-            // through the network without actually filling any orders.
-            // Additionally, the exchange rates are for transitive orders in the
-            // inverse direction, so we need to invert the exchange rate and
-            // account for the fees so that the estimated exchange rate actually
-            // overlaps with the last counter transtive order's exchange rate.
-            return Some(
-                orderbook
-                    .find_optimal_transitive_order(inverse_pair)?
-                    .exchange_rate
-                    .inverse()
-                    .price()
-                    .value(),
-            );
-        }
-
-        if !num::is_strictly_positive_and_finite(max_sell_amount) {
-            return None;
-        }
-
         // NOTE: Iteratively compute the how much cumulative buy volume is
         // available at successively "worse" exchange rates until all the
         // specified sell amount can be used to buy the available liquidity at
         // the marginal exchange rate.
         let mut cumulative_buy_volume = 0.0;
         let mut cumulative_sell_volume = 0.0;
-        for flow in orderbook.significant_transitive_orders(inverse_pair) {
+        for flow in self
+            .reduced_orderbook()
+            .significant_transitive_orders(inverse_pair)
+        {
             // NOTE: This implies that the added liquidity from the counter
             // transitive order at its exchange rate makes the estimated
             // exchange rate worse, and we are better off just buying off all
@@ -434,34 +418,27 @@ mod tests {
     }
 
     #[test]
-    fn estimates_epsilon_limit_price() {
-        //   /--------1.0-------\
-        //  /---1.0---v          v
-        // 1          2          3
-        //            ^---0.9---/
+    fn estimate_returns_none_on_invalid_sell_amounts() {
+        // 1 ---1.0---> 2
         let pricegraph = pricegraph! {
             users {
                 @1 {
-                    token 2 => 10_000_000,
-                    token 3 => 10_000_000,
-                }
-                @2 {
                     token 2 => 10_000_000,
                 }
             }
             orders {
                 owner @1 buying 1 [10_000_000] selling 2 [10_000_000],
-                owner @1 buying 1 [10_000_000] selling 3 [10_000_000],
-                owner @2 buying 3 [9_000_000] selling 2 [10_000_000],
             }
         };
+        let pair = TokenPair { buy: 2, sell: 1 };
 
-        assert_approx_eq!(
-            pricegraph
-                .estimate_limit_price(TokenPair { buy: 2, sell: 1 }, 0.0)
-                .unwrap(),
-            (1.0 / 0.9) / FEE_FACTOR.powi(3)
-        );
+        // NOTE: Make sure that the pricegraph instance returns estimates for
+        // valid amounts for the token pair.
+        assert!(pricegraph.estimate_limit_price(pair, 1_000_000.0).is_some());
+
+        for invalid_amount in &[-42.0, -0.0, 0.0, f64::INFINITY, f64::NEG_INFINITY, f64::NAN] {
+            assert_eq!(pricegraph.estimate_limit_price(pair, *invalid_amount), None,);
+        }
     }
 
     #[test]
