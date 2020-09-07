@@ -4,7 +4,8 @@ use services_core::driver::{
     stablex_driver::StableXDriverImpl,
 };
 use services_core::economic_viability::{
-    EconomicViabilityComputer, FixedEconomicViabilityComputer, PriorityEconomicViabilityComputer,
+    EconomicViabilityComputer, EconomicViabilityComputing, FixedEconomicViabilityComputer,
+    PriorityEconomicViabilityComputer,
 };
 use services_core::gas_price::{self, GasPriceEstimating};
 use services_core::health::{HealthReporting, HttpHealthEndpoint};
@@ -165,14 +166,11 @@ struct Options {
     )]
     earliest_solution_submit_time: Duration,
 
-    /// Subsidy factor used to compute the minimum average fee per order in a
-    /// solution as well as the gas cap for economically viable solution.
-    #[structopt(
-        long,
-        env = "ECONOMIC_VIABILITY_SUBSIDY_FACTOR",
-        default_value = "10.0"
-    )]
-    economic_viability_subsidy_factor: f64,
+    /// Subsidy factor used to compute the minimum average fee per order in a solution as well as
+    /// the gas cap for economically viable solution.
+    /// If not set then only default_min_avg_fee_per_order and default_max_gas_price are used.
+    #[structopt(long, env = "ECONOMIC_VIABILITY_SUBSIDY_FACTOR")]
+    economic_viability_subsidy_factor: Option<f64>,
 
     /// We multiply the economically viable min average fee by this amount to ensure that if a
     /// solution has this minimum amount it will still be end up economically viable even when the
@@ -256,18 +254,21 @@ fn main() {
         .unwrap(),
     );
 
-    let economic_viability = Arc::new(PriorityEconomicViabilityComputer::new(vec![
-        Box::new(EconomicViabilityComputer::new(
+    let mut economic_viabilities = Vec::<Box<dyn EconomicViabilityComputing>>::new();
+    if let Some(subsidy_factor) = options.economic_viability_subsidy_factor {
+        economic_viabilities.push(Box::new(EconomicViabilityComputer::new(
             price_oracle.clone(),
             gas_station.clone(),
-            options.economic_viability_subsidy_factor,
+            subsidy_factor,
             options.economic_viability_min_avg_fee_factor,
-        )),
-        Box::new(FixedEconomicViabilityComputer::new(
-            Some(options.default_min_avg_fee_per_order),
-            Some(options.default_max_gas_price.into()),
-        )),
-    ]));
+        )));
+    }
+    // This should come after the subsidy calculation so that it is only used when that fails.
+    economic_viabilities.push(Box::new(FixedEconomicViabilityComputer::new(
+        Some(options.default_min_avg_fee_per_order),
+        Some(options.default_max_gas_price.into()),
+    )));
+    let economic_viability = Arc::new(PriorityEconomicViabilityComputer::new(economic_viabilities));
 
     // Setup price.
     let price_finder = price_finding::create_price_finder(
