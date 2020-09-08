@@ -4,7 +4,8 @@ use services_core::driver::{
     stablex_driver::StableXDriverImpl,
 };
 use services_core::economic_viability::{
-    EconomicViabilityComputer, FixedEconomicViabilityComputer, PriorityEconomicViabilityComputer,
+    EconomicViabilityComputer, EconomicViabilityComputing, FixedEconomicViabilityComputer,
+    PriorityEconomicViabilityComputer,
 };
 use services_core::gas_price::{self, GasPriceEstimating};
 use services_core::health::{HealthReporting, HttpHealthEndpoint};
@@ -28,6 +29,7 @@ use std::num::ParseIntError;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+use structopt::clap::arg_enum;
 use structopt::StructOpt;
 use url::Url;
 
@@ -194,6 +196,17 @@ struct Options {
     #[structopt(long, env = "FALLBACK_MAX_GAS_PRICE", default_value = "100000000000")]
     fallback_max_gas_price: u128,
 
+    /// How to calculate the economic viability constraints. `Dynamic` means that current eth price
+    /// is taken into account while `Static` means that default_min_avg_fee_per_order and
+    /// default_max_gas_price will always be used.
+    #[structopt(
+        long,
+        env = "ECONOMIC_VIABILITY_STRATEGY",
+        possible_values = &EconomicViabilityStrategy::variants(),
+        default_value
+    )]
+    economic_viability_strategy: EconomicViabilityStrategy,
+
     /// The kind of scheduler to use.
     #[structopt(long, env = "SCHEDULER", default_value = "system")]
     scheduler: SchedulerKind,
@@ -211,6 +224,20 @@ struct Options {
     /// the startup time.
     #[structopt(long, env = "ORDERBOOK_FILE", parse(from_os_str))]
     orderbook_file: Option<PathBuf>,
+}
+
+arg_enum! {
+    #[derive(Debug)]
+    enum EconomicViabilityStrategy {
+        Dynamic,
+        Static,
+    }
+}
+
+impl Default for EconomicViabilityStrategy {
+    fn default() -> Self {
+        Self::Dynamic
+    }
 }
 
 fn main() {
@@ -256,18 +283,24 @@ fn main() {
         .unwrap(),
     );
 
-    let economic_viability = Arc::new(PriorityEconomicViabilityComputer::new(vec![
-        Box::new(EconomicViabilityComputer::new(
+    let mut economic_viabilities = Vec::<Box<dyn EconomicViabilityComputing>>::new();
+    if matches!(
+        options.economic_viability_strategy,
+        EconomicViabilityStrategy::Dynamic
+    ) {
+        economic_viabilities.push(Box::new(EconomicViabilityComputer::new(
             price_oracle.clone(),
             gas_station.clone(),
             options.economic_viability_subsidy_factor,
             options.economic_viability_min_avg_fee_factor,
-        )),
-        Box::new(FixedEconomicViabilityComputer::new(
-            Some(options.fallback_min_avg_fee_per_order),
-            Some(options.fallback_max_gas_price.into()),
-        )),
-    ]));
+        )));
+    }
+    // This should come after the subsidy calculation so that it is only used when that fails.
+    economic_viabilities.push(Box::new(FixedEconomicViabilityComputer::new(
+        Some(options.default_min_avg_fee_per_order),
+        Some(options.default_max_gas_price.into()),
+    )));
+    let economic_viability = Arc::new(PriorityEconomicViabilityComputer::new(economic_viabilities));
 
     // Setup price.
     let price_finder = price_finding::create_price_finder(

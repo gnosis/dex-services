@@ -91,6 +91,27 @@ impl Pricegraph {
 
         transitive_orderbook
     }
+
+    /// Computes the best ask order for the specified market. Returns `None` if
+    /// there are no remaining transitive orders after all overlapping ring
+    /// trades have been removed.
+    pub fn best_ask_transitive_order(&self, market: Market) -> Option<TransitiveOrder> {
+        Some(
+            self.reduced_orderbook()
+                .find_optimal_transitive_order(market.ask_pair())?
+                .as_transitive_order(),
+        )
+    }
+
+    /// Computes the best bid order for the specified market. See
+    /// `Pricegraph::best_ask_order` for more details.
+    pub fn best_bid_transitive_order(&self, market: Market) -> Option<TransitiveOrder> {
+        Some(
+            self.reduced_orderbook()
+                .find_optimal_transitive_order(market.bid_pair())?
+                .as_transitive_order(),
+        )
+    }
 }
 
 /// Fills transitive orders along a token pair, optionally specifying a

@@ -42,6 +42,12 @@ impl TransitiveOrder {
     pub fn effective_exchange_rate(&self) -> f64 {
         self.exchange_rate() * FEE_FACTOR
     }
+
+    /// Retrieves the minimum exchange rate such that it overlaps with the
+    /// transitive order, accounting for fees on both sides of the trade.
+    pub fn overlapping_exchange_rate(&self) -> f64 {
+        1.0 / (self.exchange_rate() * FEE_FACTOR.powi(2))
+    }
 }
 
 /// A struct representing a market.
@@ -80,5 +86,29 @@ impl Market {
             base: self.quote,
             quote: self.base,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test::prelude::*;
+
+    #[test]
+    fn transitive_order_overlapping_xrate() {
+        // NOTE: A transitive order buying 0.999 (1 minus fees) for 100 overlaps
+        // with an inverse transitive order buying 99.9 (100 minus fees) for 1
+        assert_approx_eq!(
+            TransitiveOrder {
+                buy: 1.0 / FEE_FACTOR,
+                sell: 100.0,
+            }
+            .overlapping_exchange_rate(),
+            TransitiveOrder {
+                buy: 100.0 / FEE_FACTOR,
+                sell: 1.0,
+            }
+            .exchange_rate()
+        )
     }
 }

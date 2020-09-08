@@ -2,12 +2,14 @@ mod amounts_at_price;
 mod error;
 mod filter;
 mod infallible_price_source;
+mod metrics;
 mod models;
 mod orderbook;
 mod solver_rounding_buffer;
 
 use ethcontract::PrivateKey;
 use infallible_price_source::PriceCacheUpdater;
+use metrics::Metrics;
 use orderbook::Orderbook;
 use prometheus::Registry;
 use services_core::{
@@ -106,7 +108,8 @@ fn main() {
         options
     );
 
-    let (driver_http_metrics, health) = setup_monitoring();
+    let (metrics, driver_http_metrics, health) = setup_monitoring();
+    let metrics = Arc::new(metrics);
     let http_factory = HttpFactory::new(options.timeout, driver_http_metrics);
     let web3 = web3_provider(&http_factory, options.node_url.as_str(), options.timeout).unwrap();
     // The private key is not actually used but StableXContractImpl requires it.
@@ -164,7 +167,8 @@ fn main() {
     // go through to locally running instance. This does mean we set the header for non openapi
     // requests too. This doesn't have security implications because this is a public,
     // unauthenticated api anyway.
-    let filter = filter::all(orderbook, token_info)
+    let filter = filter::all(orderbook, token_info, metrics.clone())
+        .with(warp::log::custom(move |info| metrics.handle_response(info)))
         .with(warp::log("price_estimator"))
         .with(warp::reply::with::header(
             "Access-Control-Allow-Origin",
@@ -195,7 +199,7 @@ fn duration_secs(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_secs(s.parse()?))
 }
 
-fn setup_monitoring() -> (HttpMetrics, Arc<dyn HealthReporting>) {
+fn setup_monitoring() -> (Metrics, HttpMetrics, Arc<dyn HealthReporting>) {
     let health = Arc::new(HttpHealthEndpoint::new());
     let prometheus_registry = Arc::new(Registry::new());
 
@@ -206,5 +210,8 @@ fn setup_monitoring() -> (HttpMetrics, Arc<dyn HealthReporting>) {
     })
     .start_in_background();
 
-    (HttpMetrics::new(&prometheus_registry).unwrap(), health)
+    let http_metrics = HttpMetrics::new(&prometheus_registry).unwrap();
+    let metrics = Metrics::new(prometheus_registry.as_ref()).unwrap();
+
+    (metrics, http_metrics, health)
 }
