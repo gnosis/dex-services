@@ -14,6 +14,11 @@ use orderbook::Orderbook;
 use prometheus::Registry;
 use services_core::{
     contracts::{stablex_contract::StableXContractImpl, web3_provider},
+    economic_viability::{
+        EconomicViabilityComputer, EconomicViabilityComputing, FixedEconomicViabilityComputer,
+        PriorityEconomicViabilityComputer,
+    },
+    gas_price,
     health::{HealthReporting, HttpHealthEndpoint},
     http::HttpFactory,
     http_server::{DefaultRouter, RouilleServer, Serving},
@@ -27,7 +32,7 @@ use std::{
     collections::HashMap, net::SocketAddr, num::ParseIntError, path::PathBuf, sync::Arc,
     time::Duration,
 };
-use structopt::StructOpt;
+use structopt::{clap::arg_enum, StructOpt};
 use tokio::{runtime, time};
 use url::Url;
 use warp::Filter;
@@ -98,6 +103,47 @@ struct Options {
     /// an estimate and the solver submitting a solution.
     #[structopt(long, env = "EXTRA_ROUNDING_BUFFER_FACTOR", default_value = "2.0")]
     extra_rounding_buffer_factor: f64,
+
+    // These are copies of the same arguments used in the driver for economic viability.
+    // It would be nice if we could avoid copy pasting these. Maybe structopt/clap has a feature
+    // like serde's flatten that would allow us to do this.
+    #[structopt(
+        long,
+        env = "ECONOMIC_VIABILITY_SUBSIDY_FACTOR",
+        default_value = "10.0"
+    )]
+    economic_viability_subsidy_factor: f64,
+    #[structopt(
+        long,
+        env = "ECONOMIC_VIABILITY_MIN_AVG_FEE_FACTOR",
+        default_value = "1.1"
+    )]
+    economic_viability_min_avg_fee_factor: f64,
+    #[structopt(long, env = "MIN_AVG_FEE_PER_ORDER", default_value = "0")]
+    fallback_min_avg_fee_per_order: u128,
+    #[structopt(long, env = "FALLBACK_MAX_GAS_PRICE", default_value = "100000000000")]
+    fallback_max_gas_price: u128,
+    #[structopt(
+        long,
+        env = "ECONOMIC_VIABILITY_STRATEGY",
+        possible_values = &EconomicViabilityStrategy::variants(),
+        default_value
+    )]
+    economic_viability_strategy: EconomicViabilityStrategy,
+}
+
+arg_enum! {
+    #[derive(Debug)]
+    enum EconomicViabilityStrategy {
+        Dynamic,
+        Static,
+    }
+}
+
+impl Default for EconomicViabilityStrategy {
+    fn default() -> Self {
+        Self::Dynamic
+    }
 }
 
 fn main() {
@@ -119,6 +165,8 @@ fn main() {
             .wait()
             .unwrap(),
     );
+    // TODO: do not hardcode mainnet network id. Can use command line argument like driver.
+    let gas_station = gas_price::create_estimator(1, &http_factory, &web3).unwrap();
 
     let cache: HashMap<_, _> = options.token_data.clone().into();
     let token_info = TokenInfoCache::with_cache(contract.clone(), cache);
@@ -152,6 +200,26 @@ fn main() {
     let _ = orderbook.update().wait();
     log::info!("Orderbook initialized.");
 
+    // This is also copied from the driver and should be generalized into a function.
+    let mut economic_viabilities = Vec::<Box<dyn EconomicViabilityComputing>>::new();
+    if matches!(
+        options.economic_viability_strategy,
+        EconomicViabilityStrategy::Dynamic
+    ) {
+        economic_viabilities.push(Box::new(EconomicViabilityComputer::new(
+            orderbook.clone(),
+            gas_station.clone(),
+            options.economic_viability_subsidy_factor,
+            options.economic_viability_min_avg_fee_factor,
+        )));
+    }
+    // This should come after the subsidy calculation so that it is only used when that fails.
+    economic_viabilities.push(Box::new(FixedEconomicViabilityComputer::new(
+        Some(options.fallback_min_avg_fee_per_order),
+        Some(options.fallback_max_gas_price.into()),
+    )));
+    let economic_viability = Arc::new(PriorityEconomicViabilityComputer::new(economic_viabilities));
+
     let mut runtime = runtime::Builder::new()
         .threaded_scheduler()
         .enable_all()
@@ -167,7 +235,7 @@ fn main() {
     // go through to locally running instance. This does mean we set the header for non openapi
     // requests too. This doesn't have security implications because this is a public,
     // unauthenticated api anyway.
-    let filter = filter::all(orderbook, token_info, metrics.clone())
+    let filter = filter::all(orderbook, token_info, metrics.clone(), economic_viability)
         .with(warp::log::custom(move |info| metrics.handle_response(info)))
         .with(warp::log("price_estimator"))
         .with(warp::reply::with::header(
