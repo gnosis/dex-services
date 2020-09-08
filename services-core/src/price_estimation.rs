@@ -13,6 +13,7 @@ use self::orderbook_based::PricegraphEstimator;
 use crate::contracts::stablex_contract::StableXContractImpl;
 use crate::token_info::{cached::TokenInfoCache, hardcoded::TokenData, TokenInfoFetching};
 use crate::{
+    economic_viability::EthPricing,
     http::HttpFactory,
     models::{Order, TokenId, TokenInfo},
     orderbook::StableXOrderBookReading,
@@ -46,11 +47,6 @@ pub trait PriceEstimating {
     /// the solver, so the amount of OWL in atoms to purchase 1e18 of the
     /// corresponding token.
     async fn get_token_prices(&self, orders: &[Order]) -> Tokens;
-
-    /// Retrieves a price estimate for ETH in OWL atoms. This price is in the
-    /// same format as the above method, so the amount of OWL in atoms to
-    /// purchase 1.0 ETH (or 1e18 wei).
-    async fn get_eth_price(&self) -> Option<NonZeroU128>;
 }
 
 pub struct PriceOracle {
@@ -160,7 +156,10 @@ impl PriceEstimating for PriceOracle {
         }
         tokens
     }
+}
 
+#[async_trait::async_trait]
+impl EthPricing for PriceOracle {
     async fn get_eth_price(&self) -> Option<NonZeroU128> {
         let token_id = self.eth_token_id();
         let prices = self.source.get_prices(&[token_id]).await.ok()?;

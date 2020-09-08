@@ -7,6 +7,7 @@ use crate::{
 };
 use pricegraph::{Market, Pricegraph, TokenPair, TransitiveOrder};
 use services_core::{
+    economic_viability::EconomicViabilityComputing,
     models::TokenId,
     token_info::{TokenBaseInfo, TokenInfoFetching},
 };
@@ -18,12 +19,14 @@ pub fn all(
     orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
     metrics: Arc<Metrics>,
+    economic_viability: Arc<dyn EconomicViabilityComputing>,
 ) -> impl Filter<Extract = impl Reply, Error = Infallible> + Clone + Send {
     let markets = markets(orderbook.clone(), token_info.clone());
     let estimated_buy_amount = estimated_buy_amount(orderbook.clone(), token_info.clone());
     let estimated_amounts_at_price =
         estimated_amounts_at_price(orderbook.clone(), token_info.clone());
     let estimated_best_ask_price = estimated_best_ask_price(orderbook, token_info);
+    let minimum_order_size_owl = minimum_order_size_owl(economic_viability);
 
     let label = |label: &'static str| warp::any().map(move || label);
     let routes_with_labels = warp::path!("api" / "v1" / ..).and(
@@ -33,6 +36,8 @@ pub fn all(
             .or(label("estimated-amounts-at-price").and(estimated_amounts_at_price))
             .unify()
             .or(label("estimated-best-ask-price").and(estimated_best_ask_price))
+            .unify()
+            .or(label("minimum-order-size-owl").and(minimum_order_size_owl))
             .unify(),
     );
 
@@ -69,6 +74,30 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
 }
 
 /// Validate a request of the form
+/// `/minimum-order-size-owl` and answer it.
+fn minimum_order_size_owl(
+    economic_viability: Arc<dyn EconomicViabilityComputing>,
+) -> impl Filter<Extract = (Json,), Error = Rejection> + Clone {
+    warp::path!("minimum-order-size-owl")
+        .and(warp::any().map(move || economic_viability.clone()))
+        .and_then(get_minimum_order_size_owl)
+}
+
+async fn get_minimum_order_size_owl(
+    economic_viability: Arc<dyn EconomicViabilityComputing>,
+) -> Result<Json, Rejection> {
+    let fee_ratio = 1000;
+    // Multiply by 2 because economic viability returns earned fee while we want generated fee.
+    let result = economic_viability
+        .min_average_fee()
+        .await
+        .map_err(RejectionReason::InternalError)?
+        * 2
+        * fee_ratio;
+    Result::<Json, Rejection>::Ok(warp::reply::json(&result))
+}
+
+/// Validate a request of the form
 /// `/markets/<baseTokenId>-<quoteTokenId>`
 /// and answer it.
 fn markets(
@@ -76,6 +105,7 @@ fn markets(
     token_info: Arc<dyn TokenInfoFetching>,
 ) -> impl Filter<Extract = (Json,), Error = Rejection> + Clone {
     markets_filter()
+        .and(warp::get())
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_info.clone()))
         .and_then(get_markets)
@@ -361,7 +391,9 @@ mod tests {
     use crate::infallible_price_source::PriceCacheUpdater;
     use anyhow::{anyhow, Result};
     use futures::future::FutureExt as _;
-    use services_core::orderbook::NoopOrderbook;
+    use services_core::{
+        economic_viability::FixedEconomicViabilityComputer, orderbook::NoopOrderbook,
+    };
 
     fn empty_token_info() -> impl TokenInfoFetching {
         struct TokenInfoFetcher {}
@@ -388,7 +420,8 @@ mod tests {
             1.0,
         ));
         let metrics = Arc::new(Metrics::new(&prometheus::Registry::new()).unwrap());
-        all(orderbook, token_info, metrics)
+        let economic_viability = Arc::new(FixedEconomicViabilityComputer::new(None, None));
+        all(orderbook, token_info, metrics, economic_viability)
     }
 
     #[test]

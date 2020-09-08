@@ -6,6 +6,7 @@ use ethcontract::Address;
 use futures::future;
 use pricegraph::{Pricegraph, TokenPair};
 use services_core::{
+    economic_viability::EthPricing,
     models::{AccountState, BatchId, Order, TokenId},
     orderbook::StableXOrderBookReading,
 };
@@ -160,6 +161,19 @@ impl Orderbook {
             self.extra_rounding_buffer_factor,
         );
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl EthPricing for Orderbook {
+    async fn get_eth_price(&self) -> Option<std::num::NonZeroU128> {
+        let eth_token_id = TokenId(1);
+        Some(
+            self.infallible_price_source
+                .inner()
+                .await
+                .price(eth_token_id),
+        )
     }
 }
 

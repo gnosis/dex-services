@@ -1,17 +1,22 @@
 //! Module implementing minimum average fee computation based on reference token
 //! price estimates.
 
-use crate::{
-    gas_price::GasPriceEstimating, models::solution::EconomicViabilityInfo,
-    price_estimation::PriceEstimating,
-};
+use crate::{gas_price::GasPriceEstimating, models::solution::EconomicViabilityInfo};
 use anyhow::{anyhow, Context as _, Result};
 use ethcontract::U256;
-use std::sync::Arc;
+use std::{num::NonZeroU128, sync::Arc};
 
 /// The approximate amount of gas used in a solution per trade. In practice the value depends on how
 /// much gas is used in the reversion of the previous solution.
 const GAS_PER_TRADE: f64 = 120_000.0;
+
+#[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
+pub trait EthPricing {
+    /// Retrieves a price estimate for ETH in OWL atoms.
+    /// The amount of OWL in atoms to purchase 1.0 ETH (or 1e18 wei).
+    async fn get_eth_price(&self) -> Option<NonZeroU128>;
+}
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
@@ -26,7 +31,7 @@ pub trait EconomicViabilityComputing: Send + Sync + 'static {
 
 /// Economic viability constraints based on the current gas and eth price.
 pub struct EconomicViabilityComputer {
-    price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
+    price_oracle: Arc<dyn EthPricing + Send + Sync>,
     gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
     subsidy_factor: f64,
     /// We multiply the min average fee by this amount to ensure that if a solution has this minimum
@@ -37,7 +42,7 @@ pub struct EconomicViabilityComputer {
 
 impl EconomicViabilityComputer {
     pub fn new(
-        price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
+        price_oracle: Arc<dyn EthPricing + Send + Sync>,
         gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
         subsidy_factor: f64,
         min_avg_fee_factor: f64,
@@ -188,10 +193,7 @@ impl EconomicViabilityComputing for PriorityEconomicViabilityComputer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        gas_price::MockGasPriceEstimating, price_estimation::MockPriceEstimating,
-        util::FutureWaitExt as _,
-    };
+    use crate::{gas_price::MockGasPriceEstimating, util::FutureWaitExt as _};
     use assert_approx_eq::assert_approx_eq;
 
     #[test]
@@ -209,7 +211,7 @@ mod tests {
 
     #[test]
     fn uses_gas_and_eth_price_estimates_with_subsidy() {
-        let mut price_oracle = MockPriceEstimating::new();
+        let mut price_oracle = MockEthPricing::new();
         price_oracle
             .expect_get_eth_price()
             .returning(|| Some(nonzero!(240e18 as u128)));
