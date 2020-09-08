@@ -1,9 +1,8 @@
 use crate::models;
-use anyhow::{anyhow, Error, Result};
+use anyhow::Result;
 use log::debug;
 use std::process::Command;
 use std::process::Output;
-use std::str::FromStr;
 use std::time::Duration;
 
 #[derive(Clone)]
@@ -22,21 +21,12 @@ impl Default for Fee {
     }
 }
 
-/// The internal optimizer used by the standard and fallback solvers.
-#[derive(Clone, Copy, Debug)]
-pub enum InternalOptimizer {
-    Scip,
-    Gurobi,
-}
-
-impl FromStr for InternalOptimizer {
-    type Err = Error;
-    fn from_str(string: &str) -> Result<Self> {
-        match string {
-            "scip" => Ok(Self::Scip),
-            "gurobi" => Ok(Self::Gurobi),
-            _ => Err(anyhow!("internal optimizer does not exit")),
-        }
+arg_enum! {
+    /// The internal optimizer used by the standard and fallback solvers.
+    #[derive(Clone, Copy, Debug)]
+    pub enum InternalOptimizer {
+        Scip,
+        Gurobi,
     }
 }
 
@@ -65,25 +55,13 @@ impl OptModel {
     }
 }
 
-#[derive(Clone, Debug, Copy, PartialEq)]
-pub enum SolverType {
-    NaiveSolver,
-    StandardSolver,
-    OpenSolver,
-    BestRingSolver,
-}
-
-impl FromStr for SolverType {
-    type Err = Error;
-
-    fn from_str(solver_type_str: &str) -> Result<Self> {
-        match solver_type_str.to_lowercase().as_str() {
-            "standard-solver" => Ok(SolverType::StandardSolver),
-            "naive-solver" => Ok(SolverType::NaiveSolver),
-            "open-solver" => Ok(SolverType::OpenSolver),
-            "best-ring-solver" => Ok(SolverType::BestRingSolver),
-            _ => Err(anyhow!("solver type does not exit")),
-        }
+arg_enum! {
+    #[derive(Clone, Debug, Copy, PartialEq)]
+    pub enum SolverType {
+        NaiveSolver,
+        StandardSolver,
+        OpenSolver,
+        BestRingSolver,
     }
 }
 
@@ -177,5 +155,5 @@ pub trait PriceFinding {
         orders: &[models::Order],
         state: &models::AccountState,
         time_limit: Duration,
-    ) -> Result<models::Solution, Error>;
+    ) -> Result<models::Solution>;
 }

@@ -66,12 +66,22 @@ struct Options {
     /// 'fallback-solver' for a more conservative solver than the standard solver;
     /// 'best-ring-solver' for a solver searching only for the best ring;
     /// 'open-solver' for the open-source solver
-    #[structopt(long, env = "SOLVER_TYPE", default_value = "naive-solver")]
+    #[structopt(
+        long,
+        env = "SOLVER_TYPE",
+        default_value = "NaiveSolver",
+        possible_values = SolverType::variant_names(),
+    )]
     solver_type: SolverType,
 
     /// Which internal optimizer the solver should use. It is passed as
     /// `--solver` to the solver. Choices are "scip" and "gurobi".
-    #[structopt(long, env = "SOLVER_INTERNAL_OPTIMIZER", default_value = "scip")]
+    #[structopt(
+        long,
+        env = "SOLVER_INTERNAL_OPTIMIZER",
+        default_value = "scip",
+        possible_values = InternalOptimizer::variant_names(),
+    )]
     solver_internal_optimizer: InternalOptimizer,
 
     /// JSON encoded backup token information to provide to the solver.
@@ -208,7 +218,12 @@ struct Options {
     economic_viability_strategy: EconomicViabilityStrategy,
 
     /// The kind of scheduler to use.
-    #[structopt(long, env = "SCHEDULER", default_value = "system")]
+    #[structopt(
+        long,
+        env = "SCHEDULER",
+        default_value = "system",
+        possible_values = SchedulerKind::variant_names(),
+    )]
     scheduler: SchedulerKind,
 
     /// Time interval in seconds in which price sources should be updated.

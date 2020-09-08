@@ -6,8 +6,7 @@ use crate::{
     contracts::stablex_contract::StableXContract, driver::stablex_driver::StableXDriver,
     health::HealthReporting, models::batch_id::SOLVING_WINDOW,
 };
-use anyhow::{anyhow, Error, Result};
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 /// A scheduler that can be started in order to run the driver for each batch.
 pub trait Scheduler {
@@ -82,13 +81,15 @@ impl Default for AuctionTimingConfiguration {
     }
 }
 
-/// The different kinds of schedulers.
-#[derive(Debug)]
-pub enum SchedulerKind {
-    /// A system based scheduler that uses system time to run the driver.
-    System,
-    /// An EVM based scheduler that queries block-chain state to run the driver.
-    Evm,
+arg_enum! {
+    /// The different kinds of schedulers.
+    #[derive(Debug)]
+    pub enum SchedulerKind {
+        /// A system based scheduler that uses system time to run the driver.
+        System,
+        /// An EVM based scheduler that queries block-chain state to run the driver.
+        Evm,
+    }
 }
 
 impl SchedulerKind {
@@ -105,18 +106,6 @@ impl SchedulerKind {
                 Box::new(SystemScheduler::new(exchange, driver, health, config))
             }
             SchedulerKind::Evm => Box::new(EvmScheduler::new(exchange, driver, health, config)),
-        }
-    }
-}
-
-impl FromStr for SchedulerKind {
-    type Err = Error;
-
-    fn from_str(value: &str) -> Result<Self> {
-        match value.to_lowercase().as_str() {
-            "system" => Ok(SchedulerKind::System),
-            "evm" => Ok(SchedulerKind::Evm),
-            _ => Err(anyhow!("unknown scheduler kind '{}'", value)),
         }
     }
 }

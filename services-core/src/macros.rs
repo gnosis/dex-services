@@ -36,6 +36,67 @@ macro_rules! immediate {
     }};
 }
 
+/// Macro for generating an enum to be used as an argument, with `FromStr`
+/// implementation as well a utility method for iterating variants.
+macro_rules! arg_enum {
+    (
+        $(#[$attr:meta])*
+        $vis:vis enum $name:ident {$(
+            $(#[$variant_attr:meta])*
+            $variant:ident,
+        )*}
+    ) => {
+        $(#[$attr])*
+        $vis enum $name {$(
+            $(#[$variant_attr])*
+            $variant,
+        )*}
+
+        impl $name {
+            /// Returns a slice with all variants for this enum.
+            pub fn variants() -> &'static [Self] {
+                &[$(
+                    Self::$variant,
+                )*]
+            }
+
+            /// Returns a slice with all variant names for this enum.
+            pub fn variant_names() -> &'static [&'static str] {
+                &[$(
+                    stringify!($variant),
+                )*]
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str(match self {$(
+                    Self::$variant => stringify!($variant),
+                )*})
+            }
+        }
+
+        impl std::str::FromStr for $name {
+            type Err = anyhow::Error;
+
+            fn from_str(value: &str) -> anyhow::Result<Self> {
+                match value {
+                    $(
+                        _ if value.eq_ignore_ascii_case(stringify!($variant)) => {
+                            Ok(Self::$variant)
+                        }
+                    )*
+                    _ => anyhow::bail!(
+                        "unknown {} variant '{}'",
+                        stringify!(name),
+                        value,
+                    ),
+                }
+            }
+        }
+    };
+}
+
 #[cfg(test)]
 macro_rules! nonzero {
     ($expression:expr) => {
