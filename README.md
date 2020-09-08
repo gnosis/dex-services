@@ -143,10 +143,10 @@ OPTIONS:
             Specify the number of blocks to fetch events for at a time for constructing the orderbook for the solver
             [env: AUCTION_DATA_PAGE_SIZE=]  [default: 500]
         --fallback-max-gas-price <fallback-max-gas-price>
-            The default maximum gas price. This is used when computing the maximum gas price based on ether price in owl
+            The fallback maximum gas price. This is used when computing the maximum gas price based on ether price in owl
             fails [env: FALLBACK_MAX_GAS_PRICE=]  [default: 100000000000]
         --fallback-min-avg-fee-per-order <fallback-min-avg-fee-per-order>
-            The default minimum average fee per order. This is passed to the solver in case the computing its value
+            The fallback minimum average fee per order. This is passed to the solver in case the computing its value
             fails. Its unit is [OWL] [env: MIN_AVG_FEE_PER_ORDER=]  [default: 0]
         --earliest-solution-submit-time <earliest-solution-submit-time>
             The earliest offset from the start of a batch in seconds at which point we should submit the solution. This
