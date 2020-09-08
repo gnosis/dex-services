@@ -309,9 +309,9 @@ dependencies = [
 
 [[package]]
 name = "blocking"
-version = "0.6.1"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f30e08a950487f80d2de5cbb72772c8bbaed6002dc8d979722dabd034ede18d"
+checksum = "2640778f8053e72c11f621b0a5175a0560a269282aa98ed85107773ab8e2a556"
 dependencies = [
  "async-channel",
  "atomic-waker",
@@ -3086,7 +3086,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "bincode",
- "blocking 0.6.1",
+ "blocking 1.0.0",
  "byteorder",
  "chrono",
  "contracts",
