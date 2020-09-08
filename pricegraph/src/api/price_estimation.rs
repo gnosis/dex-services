@@ -9,12 +9,15 @@ use crate::Pricegraph;
 impl Pricegraph {
     /// Estimates an exchange rate for the specified token pair and sell volume.
     /// Returns `None` if no counter transitive orders buying the specified sell
-    /// token for the specified buy token exist.
+    /// token for the specified buy token exist, or if the trade would end up
+    /// being a dust trade.
     ///
     /// Note that this price is in exchange format, that is, it is expressed as
     /// the ratio between buy and sell amounts, with implicit fees.
     pub fn estimate_limit_price(&self, pair: TokenPair, max_sell_amount: f64) -> Option<f64> {
-        if !num::is_strictly_positive_and_finite(max_sell_amount) {
+        if !num::is_strictly_positive_and_finite(max_sell_amount)
+            || num::is_dust_amount(max_sell_amount)
+        {
             return None;
         }
 
@@ -60,11 +63,23 @@ impl Pricegraph {
         }
 
         let total_sell_volume = max_sell_amount.max(cumulative_sell_volume);
-        Some(
-            ExchangeRate::new(cumulative_buy_volume / total_sell_volume)?
-                .price()
-                .value(),
-        )
+        let price = ExchangeRate::new(cumulative_buy_volume / total_sell_volume)?
+            .price()
+            .value();
+
+        // NOTE: While technically an order with a dust buy amount is not a dust
+        // order (since the solver may chose to use an executed buy amount
+        // greater than the dust amount), the pricegraph has determined that
+        // there are no overlapping order with a sufficiently low price, so
+        // there is no price that can be used for the specified sell amount and
+        // be overlapping with existing orders such that an executed buy amount
+        // could be found greater than the dust amount.
+        let min_buy_amount = max_sell_amount * price;
+        if num::is_dust_amount(min_buy_amount) {
+            return None;
+        }
+
+        Some(price)
     }
 
     /// Returns a transitive order with a buy amount calculated such that there
@@ -437,7 +452,7 @@ mod tests {
         assert!(pricegraph.estimate_limit_price(pair, 1_000_000.0).is_some());
 
         for invalid_amount in &[-42.0, -0.0, 0.0, f64::INFINITY, f64::NEG_INFINITY, f64::NAN] {
-            assert_eq!(pricegraph.estimate_limit_price(pair, *invalid_amount), None,);
+            assert_eq!(pricegraph.estimate_limit_price(pair, *invalid_amount), None);
         }
     }
 
@@ -675,5 +690,55 @@ mod tests {
             pricegraph.estimate_limit_price(TokenPair { buy: 5, sell: 7 }, 10_001.0),
             None,
         );
+    }
+
+    #[test]
+    fn estimate_returns_none_for_dust_sell_amounts() {
+        // 1 ---0.1---> 2 ---2.0---> 3
+        let pricegraph = pricegraph! {
+            users {
+                @1 {
+                    token 2 => 10_000_000,
+                }
+                @2 {
+                    token 3 => 10_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 1 [ 1_000_000] selling 2 [10_000_000],
+                owner @2 buying 2 [20_000_000] selling 3 [10_000_000],
+            }
+        };
+        let pair = TokenPair { buy: 2, sell: 1 };
+
+        // NOTE: Check that dust maximum sell amounts return `None`
+        assert!(pricegraph.estimate_limit_price(pair, 10_000.0).is_some());
+        assert!(pricegraph.estimate_limit_price(pair, 9_999.0).is_none());
+    }
+
+    #[test]
+    fn estimate_returns_none_for_dust_buy_amounts() {
+        // 1 ---2.0---> 2
+        let pricegraph = pricegraph! {
+            users {
+                @1 {
+                    token 2 => 10_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 1 [20_000_000] selling 2 [10_000_000],
+            }
+        };
+        let pair = TokenPair { buy: 2, sell: 1 };
+
+        // NOTE: Check that if we try to sell less that ~20K of token 1, the
+        // price estimate returns `None`, this is because there is no possible
+        // executed buy amount that respects the limit price of the user @1's
+        // order while simultaneously being greater than the dust amount given
+        // the specified maximum sell amount.
+        assert!(pricegraph
+            .estimate_limit_price(pair, 20_000.0 * FEE_FACTOR.powi(2) + 1.0)
+            .is_some());
+        assert!(pricegraph.estimate_limit_price(pair, 15_000.0).is_none());
     }
 }
