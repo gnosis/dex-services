@@ -10,6 +10,45 @@ use std::{num::NonZeroU128, sync::Arc};
 /// much gas is used in the reversion of the previous solution.
 const GAS_PER_TRADE: f64 = 120_000.0;
 
+arg_enum! {
+    #[derive(Debug)]
+    pub enum EconomicViabilityStrategy {
+        Dynamic,
+        Static,
+    }
+}
+
+impl EconomicViabilityStrategy {
+    /// Create a economic viability instance as commonly used from command line arguments.
+    /// If the strategy is dynamic use a priority source of the subsidy factor and fallback,
+    /// if static use only the fallback.
+    pub fn from_arguments(
+        &self,
+        subsidy_factor: f64,
+        min_avg_fee_factor: f64,
+        fallback_min_avg_fee_per_order: u128,
+        fallback_max_gas_price: u128,
+        eth_price: Arc<dyn EthPricing + Send + Sync>,
+        gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
+    ) -> impl EconomicViabilityComputing {
+        let mut economic_viabilities = Vec::<Box<dyn EconomicViabilityComputing>>::new();
+        if matches!(self, EconomicViabilityStrategy::Dynamic) {
+            economic_viabilities.push(Box::new(EconomicViabilityComputer::new(
+                eth_price,
+                gas_station,
+                subsidy_factor,
+                min_avg_fee_factor,
+            )));
+        }
+        // This should come after the subsidy calculation so that it is only used when that fails.
+        economic_viabilities.push(Box::new(FixedEconomicViabilityComputer::new(
+            Some(fallback_min_avg_fee_per_order),
+            Some(fallback_max_gas_price.into()),
+        )));
+        PriorityEconomicViabilityComputer::new(economic_viabilities)
+    }
+}
+
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait EthPricing {
