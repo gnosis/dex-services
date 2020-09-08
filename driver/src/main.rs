@@ -197,8 +197,8 @@ struct Options {
     fallback_max_gas_price: u128,
 
     /// How to calculate the economic viability constraints. `Dynamic` means that current eth price
-    /// is taken into account while `Static` means that default_min_avg_fee_per_order and
-    /// default_max_gas_price will always be used.
+    /// is taken into account while `Static` means that fallback_min_avg_fee_per_order and
+    /// fallback_max_gas_price will always be used.
     #[structopt(
         long,
         env = "ECONOMIC_VIABILITY_STRATEGY",
@@ -297,8 +297,8 @@ fn main() {
     }
     // This should come after the subsidy calculation so that it is only used when that fails.
     economic_viabilities.push(Box::new(FixedEconomicViabilityComputer::new(
-        Some(options.default_min_avg_fee_per_order),
-        Some(options.default_max_gas_price.into()),
+        Some(options.fallback_min_avg_fee_per_order),
+        Some(options.fallback_max_gas_price.into()),
     )));
     let economic_viability = Arc::new(PriorityEconomicViabilityComputer::new(economic_viabilities));
 
