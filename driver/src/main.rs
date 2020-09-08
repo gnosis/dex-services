@@ -186,19 +186,19 @@ struct Options {
     )]
     economic_viability_min_avg_fee_factor: f64,
 
-    /// The default minimum average fee per order. This is passed to the solver
+    /// The fallback minimum average fee per order. This is passed to the solver
     /// in case the computing its value fails. Its unit is [OWL]
     #[structopt(long, env = "MIN_AVG_FEE_PER_ORDER", default_value = "0")]
-    default_min_avg_fee_per_order: u128,
+    fallback_min_avg_fee_per_order: u128,
 
-    /// The default maximum gas price. This is used when computing the maximum gas price based on
+    /// The fallback maximum gas price. This is used when computing the maximum gas price based on
     /// ether price in owl fails.
-    #[structopt(long, env = "DEFAULT_MAX_GAS_PRICE", default_value = "100000000000")]
-    default_max_gas_price: u128,
+    #[structopt(long, env = "FALLBACK_MAX_GAS_PRICE", default_value = "100000000000")]
+    fallback_max_gas_price: u128,
 
     /// How to calculate the economic viability constraints. `Dynamic` means that current eth price
-    /// is taken into account while `Static` means that default_min_avg_fee_per_order and
-    /// default_max_gas_price will always be used.
+    /// is taken into account while `Static` means that fallback_min_avg_fee_per_order and
+    /// fallback_max_gas_price will always be used.
     #[structopt(
         long,
         env = "ECONOMIC_VIABILITY_STRATEGY",
@@ -297,8 +297,8 @@ fn main() {
     }
     // This should come after the subsidy calculation so that it is only used when that fails.
     economic_viabilities.push(Box::new(FixedEconomicViabilityComputer::new(
-        Some(options.default_min_avg_fee_per_order),
-        Some(options.default_max_gas_price.into()),
+        Some(options.fallback_min_avg_fee_per_order),
+        Some(options.fallback_max_gas_price.into()),
     )));
     let economic_viability = Arc::new(PriorityEconomicViabilityComputer::new(economic_viabilities));
 
