@@ -112,7 +112,7 @@ impl EvmScheduler {
             );
             match self.driver.solve_batch(batch_id.into(), time_limit).await {
                 Ok(solution) => {
-                    info!("successfully solved batch {}", batch_id);
+                    info!("received solution for batch {}", batch_id);
                     return Ok(Some(solution));
                 }
                 Err(DriverError::Retry(err)) => {
@@ -140,7 +140,7 @@ impl EvmScheduler {
         }
 
         match self.driver.submit_solution(batch_id.into(), solution).await {
-            Ok(()) => info!("successfully submitted solution for batch {}", batch_id),
+            Ok(()) => info!("successfully completed batch {}", batch_id),
             Err(err) => error!(
                 "failed to submit solution for batch {}: {:?}",
                 batch_id, err
