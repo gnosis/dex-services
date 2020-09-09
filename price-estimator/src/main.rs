@@ -58,6 +58,11 @@ struct Options {
     #[structopt(long, env = "ETHEREUM_NODE_URL")]
     node_url: Url,
 
+    /// The network ID used for gas estimations.
+    /// For example 1 for mainnet, 4 for rinkeby.
+    #[structopt(long, env = "NETWORK_ID", default_value = "1")]
+    network_id: u64,
+
     /// The timeout in seconds of web3 JSON RPC calls.
     #[structopt(
         long,
@@ -165,8 +170,8 @@ fn main() {
             .wait()
             .unwrap(),
     );
-    // TODO: do not hardcode mainnet network id. Can use command line argument like driver.
-    let gas_station = gas_price::create_estimator(1, &http_factory, &web3).unwrap();
+    let gas_station =
+        gas_price::create_estimator(options.network_id, &http_factory, &web3).unwrap();
 
     let cache: HashMap<_, _> = options.token_data.clone().into();
     let token_info = TokenInfoCache::with_cache(contract.clone(), cache);
