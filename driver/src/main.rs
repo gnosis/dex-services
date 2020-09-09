@@ -79,7 +79,7 @@ struct Options {
     #[structopt(
         long,
         env = "SOLVER_INTERNAL_OPTIMIZER",
-        default_value = "scip",
+        default_value = "Scip",
         possible_values = InternalOptimizer::variant_names(),
     )]
     solver_internal_optimizer: InternalOptimizer,
@@ -221,7 +221,7 @@ struct Options {
     #[structopt(
         long,
         env = "SCHEDULER",
-        default_value = "system",
+        default_value = "System",
         possible_values = SchedulerKind::variant_names(),
     )]
     scheduler: SchedulerKind,
