@@ -6,9 +6,15 @@ pub fn order_at_price_with_rounding_buffer(
     token_pair: TokenPair,
     limit_price: f64,
     pricegraph: &Pricegraph,
-    rounding_buffer: f64,
+    rounding_buffer: Option<f64>,
 ) -> Option<TransitiveOrder> {
     let order = pricegraph.order_for_limit_price(token_pair, limit_price)?;
+
+    let rounding_buffer = match rounding_buffer {
+        None => return Some(order),
+        Some(rounding_buffer) => rounding_buffer,
+    };
+
     // We know that an order is still overlapping if it has a limit price <= this one. The limit
     // price of this order is usually larger (better for the seller) than the user requested limit
     // price.
@@ -72,7 +78,7 @@ mod tests {
             TokenPair { buy: 1, sell: 0 },
             limit_price,
             &pricegraph,
-            rounding_buffer,
+            Some(rounding_buffer),
         );
         assert_eq!(
             result,
@@ -106,7 +112,7 @@ mod tests {
             TokenPair { buy: 1, sell: 0 },
             limit_price,
             &pricegraph,
-            rounding_buffer,
+            Some(rounding_buffer),
         );
         let sell = (denominator as f64) * FEE_FACTOR;
         assert_eq!(

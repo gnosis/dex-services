@@ -1,5 +1,7 @@
 use crate::{
-    infallible_price_source::PriceCacheUpdater, models::EstimationTime, solver_rounding_buffer,
+    infallible_price_source::PriceCacheUpdater,
+    models::{EstimationTime, RoundingBuffer},
+    solver_rounding_buffer,
 };
 use anyhow::{bail, Result};
 use ethcontract::Address;
@@ -11,15 +13,6 @@ use services_core::{
     orderbook::StableXOrderBookReading,
 };
 use tokio::sync::RwLock;
-
-#[derive(Debug)]
-pub enum PricegraphKind {
-    // pricegraph instance with the original orders from the orderbook
-    Raw,
-    // pricegraph instance with the orders to which the rounding buffer has been applied
-    #[allow(dead_code)]
-    WithRoundingBuffer,
-}
 
 struct PricegraphCache {
     pricegraph_raw: Pricegraph,
@@ -55,13 +48,13 @@ impl Orderbook {
         &self,
         time: EstimationTime,
         ignore_addresses: &[Address],
-        pricegraph_type: PricegraphKind,
+        rounding_buffer: RoundingBuffer,
     ) -> Result<Pricegraph> {
         if time == EstimationTime::Now && ignore_addresses.is_empty() {
-            Ok(self.cached_pricegraph(pricegraph_type).await)
+            Ok(self.cached_pricegraph(rounding_buffer).await)
         } else {
             let mut auction_data = self.auction_data(time).await?;
-            if matches!(pricegraph_type, PricegraphKind::WithRoundingBuffer) {
+            if matches!(rounding_buffer, RoundingBuffer::Enabled) {
                 self.apply_rounding_buffer_to_auction_data(&mut auction_data)
                     .await?;
             }
@@ -139,11 +132,11 @@ impl Orderbook {
         }
     }
 
-    async fn cached_pricegraph(&self, pricegraph_type: PricegraphKind) -> Pricegraph {
+    async fn cached_pricegraph(&self, pricegraph_type: RoundingBuffer) -> Pricegraph {
         let cache = self.pricegraph_cache.read().await;
         match pricegraph_type {
-            PricegraphKind::Raw => &cache.pricegraph_raw,
-            PricegraphKind::WithRoundingBuffer => &cache.pricegraph_with_rounding_buffer,
+            RoundingBuffer::Disabled => &cache.pricegraph_raw,
+            RoundingBuffer::Enabled => &cache.pricegraph_with_rounding_buffer,
         }
         .clone()
     }

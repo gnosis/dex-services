@@ -1,9 +1,5 @@
 use crate::{
-    amounts_at_price,
-    error::RejectionReason,
-    metrics::Metrics,
-    models::*,
-    orderbook::{Orderbook, PricegraphKind},
+    amounts_at_price, error::RejectionReason, metrics::Metrics, models::*, orderbook::Orderbook,
 };
 use pricegraph::{Market, Pricegraph, TokenPair, TransitiveOrder};
 use services_core::{
@@ -215,7 +211,11 @@ async fn get_markets(
     // This route intentionally uses the raw pricegraph without rounding buffer so that orders are
     // unmodified.
     let transitive_orderbook = orderbook
-        .pricegraph(query.time, &query.ignore_addresses, PricegraphKind::Raw)
+        .pricegraph(
+            query.time,
+            &query.ignore_addresses,
+            RoundingBuffer::Disabled,
+        )
         .await
         .map_err(RejectionReason::InternalError)?
         .transitive_orderbook(market, None);
@@ -250,20 +250,19 @@ async fn estimate_buy_amount(
             (amount, amount.as_atoms(&token_info) as _)
         }
     };
-    let rounding_buffer = orderbook.rounding_buffer(token_pair).await;
     let pricegraph = orderbook
-        .pricegraph(
-            query.time,
-            &query.ignore_addresses,
-            PricegraphKind::WithRoundingBuffer,
-        )
+        .pricegraph(query.time, &query.ignore_addresses, query.rounding_buffer)
         .await
         .map_err(RejectionReason::InternalError)?;
     // This reduced sell amount is what the solver would see after applying the rounding buffer.
-    let transitive_order = pricegraph.order_for_sell_amount(
-        token_pair,
-        f64::max(sell_amount_in_quote_atoms - rounding_buffer, 0.0),
-    );
+    let sell_amount_in_quote_atoms = match query.rounding_buffer {
+        RoundingBuffer::Enabled => f64::max(
+            sell_amount_in_quote_atoms - orderbook.rounding_buffer(token_pair).await,
+            0.0,
+        ),
+        RoundingBuffer::Disabled => sell_amount_in_quote_atoms,
+    };
+    let transitive_order = pricegraph.order_for_sell_amount(token_pair, sell_amount_in_quote_atoms);
 
     let mut buy_amount_in_base =
         Amount::Atoms(transitive_order.map(|order| order.buy).unwrap_or_default() as _);
@@ -290,14 +289,13 @@ async fn estimate_amounts_at_price(
 ) -> Result<Json, Rejection> {
     let token_pair = get_market(pair, &*token_infos).await?.bid_pair();
     let pricegraph = orderbook
-        .pricegraph(
-            query.time,
-            &query.ignore_addresses,
-            PricegraphKind::WithRoundingBuffer,
-        )
+        .pricegraph(query.time, &query.ignore_addresses, query.rounding_buffer)
         .await
         .map_err(RejectionReason::InternalError)?;
-    let rounding_buffer = orderbook.rounding_buffer(token_pair).await;
+    let rounding_buffer = match query.rounding_buffer {
+        RoundingBuffer::Enabled => Some(orderbook.rounding_buffer(token_pair).await),
+        RoundingBuffer::Disabled => None,
+    };
     let result = match query.unit {
         Unit::Atoms => estimate_amounts_at_price_atoms(
             token_pair,
@@ -332,7 +330,7 @@ fn estimate_amounts_at_price_atoms(
     token_pair: TokenPair,
     price_in_quote: f64,
     pricegraph: &Pricegraph,
-    rounding_buffer: f64,
+    rounding_buffer: Option<f64>,
 ) -> EstimatedOrderResult {
     // NOTE: The price in quote is `sell_amount / buy_amount` which is the
     // inverse of an exchange rate.
@@ -363,11 +361,7 @@ async fn estimate_best_ask_price(
 ) -> Result<Json, Rejection> {
     let market = get_market(pair, &*token_infos).await?;
     let price = orderbook
-        .pricegraph(
-            query.time,
-            &query.ignore_addresses,
-            PricegraphKind::WithRoundingBuffer,
-        )
+        .pricegraph(query.time, &query.ignore_addresses, query.rounding_buffer)
         .await
         .map_err(RejectionReason::InternalError)?
         .best_ask_transitive_order(market)
