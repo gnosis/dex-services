@@ -3,4 +3,4 @@ services:
   stablex:
     image: stablex-binary-private
     environment:
-      - SOLVER_TYPE=best-ring-solver
+      - SOLVER_TYPE=BestRingSolver

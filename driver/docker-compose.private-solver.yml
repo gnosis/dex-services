@@ -3,4 +3,4 @@ services:
   stablex:
     image: stablex-binary-private
     environment:
-      - SOLVER_TYPE=standard-solver
+      - SOLVER_TYPE=StandardSolver

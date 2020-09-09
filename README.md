@@ -96,7 +96,7 @@ docker-compose run [-v $(PWD)/:/app/dex-services] stablex-debug
 From within the container run
 
 ```
-cargo run --bin driver -- --solver-type open-solver
+cargo run --bin driver -- --solver-type OpenSolver
 ```
 
 The `-v` argument is optional will mount the repository from your host filesystem inside the container, so that you can still perform code changes locally without having to rebuild the container.
@@ -131,10 +131,10 @@ USAGE:
     driver [OPTIONS] --network-id <network-id> --node-url <node-url> --private-key <private-key>
 
 FLAGS:
-    -h, --help
+    -h, --help       
             Prints help information
 
-    -V, --version
+    -V, --version    
             Prints version information
 
 
@@ -142,12 +142,6 @@ OPTIONS:
         --auction-data-page-size <auction-data-page-size>
             Specify the number of blocks to fetch events for at a time for constructing the orderbook for the solver
             [env: AUCTION_DATA_PAGE_SIZE=]  [default: 500]
-        --fallback-max-gas-price <fallback-max-gas-price>
-            The fallback maximum gas price. This is used when computing the maximum gas price based on ether price in owl
-            fails [env: FALLBACK_MAX_GAS_PRICE=]  [default: 100000000000]
-        --fallback-min-avg-fee-per-order <fallback-min-avg-fee-per-order>
-            The fallback minimum average fee per order. This is passed to the solver in case the computing its value
-            fails. Its unit is [OWL] [env: MIN_AVG_FEE_PER_ORDER=]  [default: 0]
         --earliest-solution-submit-time <earliest-solution-submit-time>
             The earliest offset from the start of a batch in seconds at which point we should submit the solution. This
             is useful when there are multiple solvers one of provides solutions more often but also worse solutions than
@@ -157,9 +151,19 @@ OPTIONS:
             We multiply the economically viable min average fee by this amount to ensure that if a solution has this
             minimum amount it will still be end up economically viable even when the gas or eth price moves slightly
             between solution computation and submission [env: ECONOMIC_VIABILITY_MIN_AVG_FEE_FACTOR=]  [default: 1.1]
+        --economic-viability-strategy <economic-viability-strategy>
+            How to calculate the economic viability constraints. `Dynamic` means that current eth price is taken into
+            account while `Static` means that fallback_min_avg_fee_per_order and fallback_max_gas_price will always be
+            used [env: ECONOMIC_VIABILITY_STRATEGY=]  [default: Dynamic]  [possible values: Dynamic, Static]
         --economic-viability-subsidy-factor <economic-viability-subsidy-factor>
             Subsidy factor used to compute the minimum average fee per order in a solution as well as the gas cap for
             economically viable solution [env: ECONOMIC_VIABILITY_SUBSIDY_FACTOR=]  [default: 10.0]
+        --fallback-max-gas-price <fallback-max-gas-price>
+            The fallback maximum gas price. This is used when computing the maximum gas price based on ether price in
+            owl fails [env: FALLBACK_MAX_GAS_PRICE=]  [default: 100000000000]
+        --fallback-min-avg-fee-per-order <fallback-min-avg-fee-per-order>
+            The fallback minimum average fee per order. This is passed to the solver in case the computing its value
+            fails. Its unit is [OWL] [env: MIN_AVG_FEE_PER_ORDER=]  [default: 0]
         --http-timeout <http-timeout>
             The default timeout in milliseconds of HTTP requests to remote services such as the Gnosis Safe gas station
             and exchange REST APIs for fetching price estimates [env: HTTP_TIMEOUT=]  [default: 10000]
@@ -168,9 +172,9 @@ OPTIONS:
             LATEST_SOLUTION_SUBMIT_TIME=]  [default: 210]
         --log-filter <log-filter>
             The log filter to use.
-
+            
             This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug'). [env: DFUSION_LOG=]  [default:
-            warn,driver=info,core=info]
+            warn,driver=info,services_core=info]
     -i, --network-id <network-id>
             The network ID used for signing transactions (e.g. 1 for mainnet, 4 for rinkeby, 5777 for ganache) [env:
             NETWORK_ID=]
@@ -182,7 +186,7 @@ OPTIONS:
             ORDERBOOK_FILE=]
         --orderbook-filter <orderbook-filter>
             JSON encoded object of which tokens/orders to ignore.
-
+            
             For example: '{ "tokens": {"Whitelist": [1, 2]}, "users": { "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A": {
             "OrderIds": [0, 1] }, "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B": "All" } }' More examples can be found in
             the tests of orderbook/filtered_orderboook.rs [env: ORDERBOOK_FILTER=]  [default: {}]
@@ -196,26 +200,27 @@ OPTIONS:
             The timeout in milliseconds of web3 JSON RPC calls, defaults to 10000ms [env: WEB3_RPC_TIMEOUT=]  [default:
             10000]
         --scheduler <scheduler>
-            The kind of scheduler to use [env: SCHEDULER=]  [default: system]
+            The kind of scheduler to use [env: SCHEDULER=]  [default: System]  [possible values: System, Evm]
 
         --solver-internal-optimizer <solver-internal-optimizer>
             Which internal optimizer the solver should use. It is passed as `--solver` to the solver. Choices are "scip"
-            and "gurobi" [env: SOLVER_INTERNAL_OPTIMIZER=]  [default: scip]
+            and "gurobi" [env: SOLVER_INTERNAL_OPTIMIZER=]  [default: Scip]  [possible values: Scip, Gurobi]
         --solver-type <solver-type>
-            Which style of solver to use. Can be one of: 'naive-solver' for the naive solver; 'standard-solver' for
-            mixed integer programming solver; 'fallback-solver' for a more conservative solver than the standard solver;
-            'best-ring-solver' for a solver searching only for the best ring; 'open-solver' for the open-source solver
-            [env: SOLVER_TYPE=]  [default: naive-solver]
+            Which style of solver to use. Can be one of: 'NaiveSolver' for the naive solver; 'StandardSolver' for mixed
+            integer programming solver; 'FallbackSolver' for a more conservative solver than the standard solver;
+            'BestRingSolver' for a solver searching only for the best ring; 'OpenSolver' for the open-source solver
+            [env: SOLVER_TYPE=]  [default: NaiveSolver]  [possible values: NaiveSolver, StandardSolver, OpenSolver,
+            BestRingSolver]
         --target-start-solve-time <target-start-solve-time>
             The offset from the start of a batch in seconds at which point we should start solving [env:
             TARGET_START_SOLVE_TIME=]  [default: 30]
         --token-data <token-data>
             JSON encoded backup token information to provide to the solver.
-
+            
             For example: '{ "T0001": { "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", "alias": "WETH",
             "decimals": 18, "externalPrice": 200000000000000000000, }, "T0004": { "address":
             "0x0000000000000000000000000000000000000000", "alias": "USDC", "decimals": 6, "externalPrice":
-            1000000000000000000000000000000, } }' [env: TOKEN_DATA=]  [default: {}]           TOKEN_DATA=]  [default: {}]
+            1000000000000000000000000000000, } }' [env: TOKEN_DATA=]  [default: {}]
 ```
 
 ### Orderbook Filter Example
