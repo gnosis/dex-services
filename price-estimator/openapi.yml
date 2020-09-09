@@ -92,6 +92,17 @@ paths:
         - $ref: "#/components/parameters/BatchId"
         - $ref: "#/components/parameters/IgnoreAddresses"
         - $ref: "#/components/parameters/BlockNumber"
+  /api/v1/minimum-order-size-owl:
+    get:
+      summary: Minimum Order Size Owl
+      description: The minimum size of an order in owl atoms for it to be considered by the solver according to current economic viability constraints.
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MinimumOrderSizeOwlResponse"
 components:
   schemas:
     NumberParameter:
@@ -145,6 +156,8 @@ components:
         bids:
           - price: 5508028446685.359
             volume": 3.2264600472733105
+    MinimumOrderSizeOwlResponse:
+      type: number
   parameters:
     Market:
       name: market
