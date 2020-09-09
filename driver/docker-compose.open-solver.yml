@@ -3,4 +3,4 @@ services:
   stablex:
     image: stablex-binary-public
     environment:
-      - SOLVER_TYPE=open-solver
+      - SOLVER_TYPE=OpenSolver

@@ -61,16 +61,17 @@ struct Options {
     network_id: u64,
 
     /// Which style of solver to use. Can be one of:
-    /// 'naive-solver' for the naive solver;
-    /// 'standard-solver' for mixed integer programming solver;
-    /// 'fallback-solver' for a more conservative solver than the standard solver;
-    /// 'best-ring-solver' for a solver searching only for the best ring;
-    /// 'open-solver' for the open-source solver
+    /// 'NaiveSolver' for the naive solver;
+    /// 'StandardSolver' for mixed integer programming solver;
+    /// 'FallbackSolver' for a more conservative solver than the standard solver;
+    /// 'BestRingSolver' for a solver searching only for the best ring;
+    /// 'OpenSolver' for the open-source solver
     #[structopt(
         long,
         env = "SOLVER_TYPE",
         default_value = "NaiveSolver",
         possible_values = SolverType::variant_names(),
+        case_insensitive = true,
     )]
     solver_type: SolverType,
 
@@ -81,6 +82,7 @@ struct Options {
         env = "SOLVER_INTERNAL_OPTIMIZER",
         default_value = "Scip",
         possible_values = InternalOptimizer::variant_names(),
+        case_insensitive = true,
     )]
     solver_internal_optimizer: InternalOptimizer,
 
@@ -223,6 +225,7 @@ struct Options {
         env = "SCHEDULER",
         default_value = "System",
         possible_values = SchedulerKind::variant_names(),
+        case_insensitive = true,
     )]
     scheduler: SchedulerKind,
 

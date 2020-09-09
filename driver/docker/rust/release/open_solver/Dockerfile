@@ -1,3 +1,3 @@
 FROM stablex-binary-public
 
-ENV SOLVER_TYPE=open-solver
+ENV SOLVER_TYPE=OpenSolver
