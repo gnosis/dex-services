@@ -12,8 +12,8 @@ use uint::FromDecStrErr;
 const DEFAULT_MAINNET_URI: &str = "https://safe-relay.gnosis.io/api/v1/gas-station/";
 const DEFAULT_RINKEBY_URI: &str = "https://safe-relay.rinkeby.gnosis.io/api/v1/gas-station/";
 
-pub fn api_url_from_network_id(network_id: u64) -> Option<&'static str> {
-    match network_id {
+pub fn api_url_from_chain_id(chain_id: u64) -> Option<&'static str> {
+    match chain_id {
         1 => Some(DEFAULT_MAINNET_URI),
         4 => Some(DEFAULT_RINKEBY_URI),
         _ => None,
