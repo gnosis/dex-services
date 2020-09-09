@@ -14,10 +14,7 @@ use orderbook::Orderbook;
 use prometheus::Registry;
 use services_core::{
     contracts::{stablex_contract::StableXContractImpl, web3_provider},
-    economic_viability::{
-        EconomicViabilityComputer, EconomicViabilityComputing, FixedEconomicViabilityComputer,
-        PriorityEconomicViabilityComputer,
-    },
+    economic_viability::EconomicViabilityStrategy,
     gas_price,
     health::{HealthReporting, HttpHealthEndpoint},
     http::HttpFactory,
@@ -32,7 +29,7 @@ use std::{
     collections::HashMap, net::SocketAddr, num::ParseIntError, path::PathBuf, sync::Arc,
     time::Duration,
 };
-use structopt::{clap::arg_enum, StructOpt};
+use structopt::StructOpt;
 use tokio::{runtime, time};
 use url::Url;
 use warp::Filter;
@@ -131,24 +128,11 @@ struct Options {
     #[structopt(
         long,
         env = "ECONOMIC_VIABILITY_STRATEGY",
-        possible_values = &EconomicViabilityStrategy::variants(),
-        default_value
+        default_value = "Dynamic",
+        possible_values = EconomicViabilityStrategy::variant_names(),
+        case_insensitive = true,
     )]
     economic_viability_strategy: EconomicViabilityStrategy,
-}
-
-arg_enum! {
-    #[derive(Debug)]
-    enum EconomicViabilityStrategy {
-        Dynamic,
-        Static,
-    }
-}
-
-impl Default for EconomicViabilityStrategy {
-    fn default() -> Self {
-        Self::Dynamic
-    }
 }
 
 fn main() {
@@ -205,25 +189,14 @@ fn main() {
     let _ = orderbook.update().wait();
     log::info!("Orderbook initialized.");
 
-    // This is also copied from the driver and should be generalized into a function.
-    let mut economic_viabilities = Vec::<Box<dyn EconomicViabilityComputing>>::new();
-    if matches!(
-        options.economic_viability_strategy,
-        EconomicViabilityStrategy::Dynamic
-    ) {
-        economic_viabilities.push(Box::new(EconomicViabilityComputer::new(
-            orderbook.clone(),
-            gas_station.clone(),
-            options.economic_viability_subsidy_factor,
-            options.economic_viability_min_avg_fee_factor,
-        )));
-    }
-    // This should come after the subsidy calculation so that it is only used when that fails.
-    economic_viabilities.push(Box::new(FixedEconomicViabilityComputer::new(
-        Some(options.fallback_min_avg_fee_per_order),
-        Some(options.fallback_max_gas_price.into()),
-    )));
-    let economic_viability = Arc::new(PriorityEconomicViabilityComputer::new(economic_viabilities));
+    let economic_viability = Arc::new(options.economic_viability_strategy.from_arguments(
+        options.economic_viability_subsidy_factor,
+        options.economic_viability_min_avg_fee_factor,
+        options.fallback_min_avg_fee_per_order,
+        options.fallback_max_gas_price,
+        orderbook.clone(),
+        gas_station.clone(),
+    ));
 
     let mut runtime = runtime::Builder::new()
         .threaded_scheduler()
