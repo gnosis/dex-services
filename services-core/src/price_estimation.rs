@@ -56,7 +56,7 @@ pub struct PriceOracle {
     /// The price source to use.
     source: Box<dyn PriceSource + Send + Sync>,
     /// The id of the token in which network transactions fees are paid
-    native_token: TokenId
+    native_token: TokenId,
 }
 
 impl PriceOracle {
