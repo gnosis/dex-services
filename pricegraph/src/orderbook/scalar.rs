@@ -96,6 +96,12 @@ impl ExchangeRate {
         ExchangeRate(assert_strictly_positive_and_finite(1.0 / self.0))
     }
 
+    /// Returns `true` if the exchange rate is the identity (`1.0`) withing a
+    /// rounding error.
+    pub fn is_identity(self) -> bool {
+        (self.value() - Self::IDENTITY.value()).abs() <= f64::EPSILON
+    }
+
     /// Computes the edge weight for an exchange rate for the orderbook
     /// projection graph.
     ///

@@ -9,6 +9,7 @@ mod flow;
 mod iter;
 mod map;
 mod order;
+mod prices;
 mod reduced;
 mod scalar;
 mod user;
@@ -17,6 +18,7 @@ mod weight;
 pub use self::flow::{Flow, Ring};
 pub use self::iter::TransitiveOrders;
 use self::order::{Order, OrderCollector, OrderMap};
+pub use self::prices::Prices;
 pub use self::reduced::ReducedOrderbook;
 pub use self::scalar::{ExchangeRate, LimitPrice};
 use self::user::{User, UserMap};
@@ -143,6 +145,11 @@ impl Orderbook {
 
         debug_assert!(!self.is_overlapping());
         ReducedOrderbook(self)
+    }
+
+    /// Returns a
+    pub fn find_solver_price_estimates(self) -> Prices {
+        Prices::new(self)
     }
 
     /// Fills a ring trade over the specified market, and returns the flow

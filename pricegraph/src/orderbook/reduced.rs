@@ -34,7 +34,7 @@ impl ReducedOrderbook {
     /// Finds and returns the optimal transitive order for the specified token
     /// pair without filling it. Returns `None` if no such transitive order
     /// exists.
-    pub fn find_optimal_transitive_order(&mut self, pair: TokenPair) -> Option<Flow> {
+    pub fn find_optimal_transitive_order(&self, pair: TokenPair) -> Option<Flow> {
         self.0
             .find_optimal_transitive_order(pair)
             .expect("negative cycle in reduced orderbook")
