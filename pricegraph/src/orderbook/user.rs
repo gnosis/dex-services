@@ -2,7 +2,7 @@
 
 use super::map::{self, Map};
 use crate::encoding::{Element, TokenId, UserId};
-use crate::num;
+use primitive_types::U256;
 
 /// A type definiton for a mapping between user IDs to user data.
 pub type UserMap = Map<UserId, User>;
@@ -11,41 +11,39 @@ pub type UserMap = Map<UserId, User>;
 #[derive(Clone, Debug, Default)]
 pub struct User {
     /// User balances per token.
-    balances: Map<TokenId, f64>,
+    balances: Map<TokenId, u128>,
 }
 
 impl User {
     /// Adds an encoded orderbook element to the user data, including the
     /// reported balance and incrementing the number of orders.
     pub fn set_balance(&mut self, element: &Element) {
-        self.balances
-            .entry(element.pair.sell)
-            .or_insert_with(|| num::u256_to_f64(element.balance));
+        self.balances.entry(element.pair.sell).or_insert_with(|| {
+            if element.balance > U256::from(u128::MAX) {
+                u128::MAX
+            } else {
+                element.balance.low_u128()
+            }
+        });
     }
 
     /// Return's the user's balance for the specified token.
-    pub fn balance_of(&self, token: TokenId) -> f64 {
-        self.balances.get(&token).copied().unwrap_or(0.0)
+    /// Panics if the user doesn't have a balance.
+    pub fn balance_of(&self, token: TokenId) -> u128 {
+        self.balances.get(&token).copied().unwrap_or(0)
     }
 
     /// Deducts an amount from the balance for the given token. Returns the new
-    /// balance or `None` if the user no longer has any balance.
-    pub fn deduct_from_balance(&mut self, token: TokenId, amount: f64) -> f64 {
+    /// balance.
+    pub fn deduct_from_balance(&mut self, token: TokenId, amount: u128) -> u128 {
         if let map::Entry::Occupied(mut entry) = self.balances.entry(token) {
             let balance = entry.get_mut();
-            *balance -= amount;
-
-            debug_assert!(
-                *balance >= -num::max_rounding_error(amount),
-                "user balance underflow for token {}",
-                token,
-            );
-
-            if *balance > 0.0 {
-                *balance
-            } else {
+            *balance = balance.saturating_sub(amount);
+            if *balance == 0 {
                 entry.remove_entry();
-                0.0
+                0
+            } else {
+                *balance
             }
         } else {
             debug_assert!(
@@ -53,7 +51,7 @@ impl User {
                 "deducted amount from user with empty balace for token {}",
                 token,
             );
-            0.0
+            0
         }
     }
 

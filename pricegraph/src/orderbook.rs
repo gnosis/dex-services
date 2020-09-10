@@ -29,6 +29,7 @@ use crate::graph::subgraph::{ControlFlow, Subgraphs};
 use crate::num;
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::NodeIndexable;
+use primitive_types::U256;
 use std::cmp;
 use std::f64;
 use thiserror::Error;
@@ -249,7 +250,7 @@ impl Orderbook {
         while let Some(true) = self
             .orders
             .best_order_for_pair(pair)
-            .map(|order| num::is_dust_amount(order.get_effective_amount(&self.users)))
+            .map(|order| num::is_dust_amount_i(order.get_effective_amount(&self.users)))
         {
             self.orders.remove_pair_order(pair);
         }
@@ -328,7 +329,7 @@ impl Orderbook {
             transitive_xrate *= order.exchange_rate;
             max_xrate = cmp::max(max_xrate, transitive_xrate);
 
-            let sell_amount = order.get_effective_amount(&self.users);
+            let sell_amount = order.get_effective_amount(&self.users) as f64;
             capacity = num::min(capacity, sell_amount * transitive_xrate.value());
         }
 
@@ -355,23 +356,17 @@ impl Orderbook {
 
             // NOTE: `capacity` is expressed in the buy token, so we need to
             // divide by the exchange rate to get the sell amount being filled.
-            let fill_amount = flow.capacity / transitive_xrate.value();
-
-            order.amount -= fill_amount;
-            debug_assert!(
-                order.amount >= -num::max_rounding_error(fill_amount),
-                "remaining amount underflow for order {}-{}",
-                order.user,
-                order.id,
-            );
-
+            let fill_amount = (flow.capacity / transitive_xrate.value()) as u128;
             let new_balance = user.deduct_from_balance(pair.sell, fill_amount);
 
-            if num::is_dust_amount(new_balance) {
+            if num::is_dust_amount_i(new_balance) {
                 user.clear_balance(pair.sell);
                 self.update_projection_graph_node(pair.sell);
-            } else if num::is_dust_amount(order.amount) {
-                self.update_projection_graph_edge(pair);
+            } else if let Some(amount) = &mut order.amount {
+                *amount = amount.saturating_sub(fill_amount);
+                if num::is_dust_amount_i(*amount) {
+                    self.update_projection_graph_edge(pair);
+                }
             }
         }
 
@@ -437,8 +432,9 @@ fn format_path(path: &[NodeIndex]) -> String {
 /// amount or balance is less than the minimum amount that the exchange allows
 /// for trades
 fn is_dust_order(element: &Element) -> bool {
-    num::is_dust_amount(element.remaining_sell_amount as _)
-        || num::is_dust_amount(num::u256_to_f64(element.balance))
+    num::is_dust_amount_i(element.remaining_sell_amount as _)
+        || (element.balance < U256::from(u128::MAX)
+            && num::is_dust_amount_i(element.balance.low_u128()))
 }
 
 /// An error indicating an invalid operation was performed on an overlapping
@@ -710,40 +706,43 @@ mod tests {
         assert_eq!(orderbook.num_orders(), 3);
 
         let transitive_xrate_0_1 = FEE_FACTOR;
-        assert_approx_eq!(
+        assert_eq!(
             orderbook
                 .orders
                 .best_order_for_pair(TokenPair { buy: 0, sell: 1 })
                 .unwrap()
-                .amount,
-            1_000_000.0 - flow.capacity / transitive_xrate_0_1
+                .amount
+                .unwrap(),
+            1_000_000 - (flow.capacity / transitive_xrate_0_1) as u128
         );
-        assert_approx_eq!(
+        assert_eq!(
             orderbook.users[&user_id(1)].balance_of(1),
-            1_000_000.0 - flow.capacity / transitive_xrate_0_1
+            1_000_000 - (flow.capacity / transitive_xrate_0_1) as u128
         );
 
-        assert_approx_eq!(
+        assert_eq!(
             orderbook
                 .orders
                 .best_order_for_pair(TokenPair { buy: 1, sell: 2 })
                 .unwrap()
-                .amount,
-            1_000_000.0
+                .amount
+                .unwrap(),
+            1_000_000,
         );
-        assert_approx_eq!(orderbook.users[&user_id(5)].balance_of(2), 1_000_000.0);
+        assert_eq!(orderbook.users[&user_id(5)].balance_of(2), 1_000_000);
 
-        assert_approx_eq!(
+        assert_eq!(
             orderbook
                 .orders
                 .best_order_for_pair(TokenPair { buy: 3, sell: 4 })
                 .unwrap()
-                .amount,
-            2_000_000.0 - flow.capacity / flow.exchange_rate.value()
+                .amount
+                .unwrap(),
+            2_000_000 - (flow.capacity / flow.exchange_rate.value()) as u128
         );
-        assert_approx_eq!(
+        assert_eq!(
             orderbook.users[&user_id(4)].balance_of(4),
-            10_000_000.0 - flow.capacity / flow.exchange_rate.value()
+            10_000_000 - (flow.capacity / flow.exchange_rate.value()) as u128
         );
     }
 

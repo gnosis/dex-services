@@ -2,9 +2,7 @@
 
 use super::{map::Map, ExchangeRate, LimitPrice, UserMap};
 use crate::encoding::{Element, OrderId, TokenId, TokenPair, UserId};
-use crate::num;
 use std::cmp::Reverse;
-use std::f64;
 
 /// A type for collecting orders and building an order map that garantees that
 /// per-pair orders are sorted for optimal access.
@@ -127,7 +125,8 @@ pub struct Order {
     /// The maximum capacity for this order, this is equivalent to the order's
     /// remaining sell amount. Note that orders are also limited by their user's
     /// balance.
-    pub amount: f64,
+    /// None means unlimited.
+    pub amount: Option<u128>,
     /// The effective exchange rate for this order.
     pub exchange_rate: ExchangeRate,
 }
@@ -136,9 +135,9 @@ impl Order {
     /// Creates a new order from an ID and an orderbook element.
     pub fn new(element: &Element) -> Option<Self> {
         let amount = if is_unbounded(&element) {
-            f64::INFINITY
+            None
         } else {
-            element.remaining_sell_amount as _
+            Some(element.remaining_sell_amount)
         };
         let exchange_rate = LimitPrice::from_fraction(&element.price)?.exchange_rate();
 
@@ -154,9 +153,12 @@ impl Order {
     /// Retrieves the effective remaining amount for this order based on user
     /// balances. This is the minimum between the remaining order amount and
     /// the user's sell token balance.
-    pub fn get_effective_amount(&self, users: &UserMap) -> f64 {
+    pub fn get_effective_amount(&self, users: &UserMap) -> u128 {
         let balance = users[&self.user].balance_of(self.pair.sell);
-        num::min(self.amount, balance)
+        match self.amount {
+            None => balance,
+            Some(amount) => amount.min(balance),
+        }
     }
 }
 
