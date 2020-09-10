@@ -80,13 +80,7 @@ pub fn is_strictly_positive_and_finite(value: f64) -> bool {
 
 /// Returns true if an amount is considered a dust amount. See `MIN_AMOUNT`
 /// documentation for more details.
-pub fn is_dust_amount_f(amount: f64) -> bool {
-    amount < MIN_AMOUNT as f64
-}
-
-/// Returns true if an amount is considered a dust amount. See `MIN_AMOUNT`
-/// documentation for more details.
-pub fn is_dust_amount_i(amount: u128) -> bool {
+pub fn is_dust_amount(amount: u128) -> bool {
     amount < MIN_AMOUNT
 }
 

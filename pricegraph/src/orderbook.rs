@@ -250,7 +250,7 @@ impl Orderbook {
         while let Some(true) = self
             .orders
             .best_order_for_pair(pair)
-            .map(|order| num::is_dust_amount_i(order.get_effective_amount(&self.users)))
+            .map(|order| num::is_dust_amount(order.get_effective_amount(&self.users)))
         {
             self.orders.remove_pair_order(pair);
         }
@@ -359,12 +359,12 @@ impl Orderbook {
             let fill_amount = (flow.capacity / transitive_xrate.value()) as u128;
             let new_balance = user.deduct_from_balance(pair.sell, fill_amount);
 
-            if num::is_dust_amount_i(new_balance) {
+            if num::is_dust_amount(new_balance) {
                 user.clear_balance(pair.sell);
                 self.update_projection_graph_node(pair.sell);
             } else if let Some(amount) = &mut order.amount {
                 *amount = amount.saturating_sub(fill_amount);
-                if num::is_dust_amount_i(*amount) {
+                if num::is_dust_amount(*amount) {
                     self.update_projection_graph_edge(pair);
                 }
             }
@@ -432,9 +432,9 @@ fn format_path(path: &[NodeIndex]) -> String {
 /// amount or balance is less than the minimum amount that the exchange allows
 /// for trades
 fn is_dust_order(element: &Element) -> bool {
-    num::is_dust_amount_i(element.remaining_sell_amount as _)
+    num::is_dust_amount(element.remaining_sell_amount as _)
         || (element.balance < U256::from(u128::MAX)
-            && num::is_dust_amount_i(element.balance.low_u128()))
+            && num::is_dust_amount(element.balance.low_u128()))
 }
 
 /// An error indicating an invalid operation was performed on an overlapping
