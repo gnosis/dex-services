@@ -28,13 +28,13 @@ impl EconomicViabilityStrategy {
         min_avg_fee_factor: f64,
         fallback_min_avg_fee_per_order: u128,
         fallback_max_gas_price: u128,
-        eth_price: Arc<dyn EthPricing + Send + Sync>,
+        native_token_price: Arc<dyn NativeTokenPricing + Send + Sync>,
         gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
     ) -> impl EconomicViabilityComputing {
         let mut economic_viabilities = Vec::<Box<dyn EconomicViabilityComputing>>::new();
         if matches!(self, EconomicViabilityStrategy::Dynamic) {
             economic_viabilities.push(Box::new(EconomicViabilityComputer::new(
-                eth_price,
+                native_token_price,
                 gas_station,
                 subsidy_factor,
                 min_avg_fee_factor,
@@ -51,10 +51,10 @@ impl EconomicViabilityStrategy {
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
-pub trait EthPricing {
+pub trait NativeTokenPricing {
     /// Retrieves a price estimate for ETH in OWL atoms.
     /// The amount of OWL in atoms to purchase 1.0 ETH (or 1e18 wei).
-    async fn get_eth_price(&self) -> Option<NonZeroU128>;
+    async fn get_native_token_price(&self) -> Option<NonZeroU128>;
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -68,20 +68,20 @@ pub trait EconomicViabilityComputing: Send + Sync + 'static {
     async fn max_gas_price(&self, economic_viability_info: EconomicViabilityInfo) -> Result<U256>;
 }
 
-/// Economic viability constraints based on the current gas and eth price.
+/// Economic viability constraints based on the current gas and native token price.
 pub struct EconomicViabilityComputer {
-    price_oracle: Arc<dyn EthPricing + Send + Sync>,
+    price_oracle: Arc<dyn NativeTokenPricing + Send + Sync>,
     gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
     subsidy_factor: f64,
     /// We multiply the min average fee by this amount to ensure that if a solution has this minimum
-    /// amount it will still be end up economically viable even when the gas or eth price moves
+    /// amount it will still be end up economically viable even when the gas or native token price moves
     /// slightly between solution computation and submission.
     min_avg_fee_factor: f64,
 }
 
 impl EconomicViabilityComputer {
     pub fn new(
-        price_oracle: Arc<dyn EthPricing + Send + Sync>,
+        price_oracle: Arc<dyn NativeTokenPricing + Send + Sync>,
         gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
         subsidy_factor: f64,
         min_avg_fee_factor: f64,
@@ -94,12 +94,12 @@ impl EconomicViabilityComputer {
         }
     }
 
-    async fn eth_price_in_owl(&self) -> Result<f64> {
+    async fn native_token_price_in_owl(&self) -> Result<f64> {
         self.price_oracle
-            .get_eth_price()
+            .get_native_token_price()
             .await
             .map(|price| price.get() as f64)
-            .ok_or_else(|| anyhow!("failed to find ETH price estimate"))
+            .ok_or_else(|| anyhow!("failed to find native token price estimate"))
     }
 
     async fn gas_price(&self) -> Result<f64> {
@@ -115,14 +115,14 @@ impl EconomicViabilityComputer {
 #[async_trait::async_trait]
 impl EconomicViabilityComputing for EconomicViabilityComputer {
     async fn min_average_fee(&self) -> Result<u128> {
-        let eth_price = self.eth_price_in_owl().await?;
+        let native_token_price = self.native_token_price_in_owl().await?;
         let gas_price = self.gas_price().await?;
 
-        let fee = min_average_fee(eth_price, gas_price) * self.min_avg_fee_factor;
+        let fee = min_average_fee(native_token_price, gas_price) * self.min_avg_fee_factor;
         let subsidized = fee / self.subsidy_factor;
         log::debug!(
-                "computed min average fee to be {}, subsidized to {} based on eth price {} gas price {}",
-                fee, subsidized, eth_price, gas_price
+                "computed min average fee to be {}, subsidized to {} based on native token price {} gas price {}",
+                fee, subsidized, native_token_price, gas_price
             );
 
         Ok(subsidized as _)
@@ -131,30 +131,30 @@ impl EconomicViabilityComputing for EconomicViabilityComputer {
     async fn max_gas_price(&self, economic_viability_info: EconomicViabilityInfo) -> Result<U256> {
         let earned_fee = pricegraph::num::u256_to_f64(economic_viability_info.earned_fee);
         let num_trades = economic_viability_info.num_executed_orders;
-        let eth_price = self.eth_price_in_owl().await?;
-        let cap = gas_price_cap(eth_price, earned_fee, num_trades);
+        let native_token_price = self.native_token_price_in_owl().await?;
+        let cap = gas_price_cap(native_token_price, earned_fee, num_trades);
         let subsidized = cap * self.subsidy_factor;
         log::debug!(
-                "computed max gas price to be {} subsidized to {} based on earned fee {} num trades {} eth price {}",
-                cap, subsidized, earned_fee, num_trades, eth_price
+                "computed max gas price to be {} subsidized to {} based on earned fee {} num trades {} native token price {}",
+                cap, subsidized, earned_fee, num_trades, native_token_price
             );
         Ok(U256::from(subsidized as u128))
     }
 }
 
-/// Computes the min average fee per order based on the current ETH price in
+/// Computes the min average fee per order based on the current native token price in
 /// reference token and a gas price estimate. Returns the minimum average fee
 /// in reference token that must be accumulated per order in order for a
 /// solution to be economically viable.
-fn min_average_fee(eth_price: f64, gas_price: f64) -> f64 {
-    let owl_per_eth = eth_price / 1e18;
+fn min_average_fee(native_token_price: f64, gas_price: f64) -> f64 {
+    let owl_per_eth = native_token_price / 1e18;
     let gas_price_in_owl = owl_per_eth * gas_price;
     GAS_PER_TRADE * gas_price_in_owl
 }
 
 /// The gas price cap is selected so that submitting solution is still roughly profitable.
-fn gas_price_cap(eth_price: f64, earned_fee: f64, num_trades: usize) -> f64 {
-    let owl_per_eth = eth_price / 1e18;
+fn gas_price_cap(native_token_price: f64, earned_fee: f64, num_trades: usize) -> f64 {
+    let owl_per_eth = native_token_price / 1e18;
     let gas_use = GAS_PER_TRADE * (num_trades as f64);
     earned_fee / (owl_per_eth * gas_use)
 }
@@ -238,8 +238,8 @@ mod tests {
     #[test]
     fn computes_min_average_fee() {
         let gas_price = 40e9;
-        let eth_price = 240e18;
-        assert_approx_eq!(min_average_fee(eth_price, gas_price), 1152e15);
+        let native_token_price = 240e18;
+        assert_approx_eq!(min_average_fee(native_token_price, gas_price), 1152e15);
     }
 
     #[test]
@@ -249,10 +249,10 @@ mod tests {
     }
 
     #[test]
-    fn uses_gas_and_eth_price_estimates_with_subsidy() {
-        let mut price_oracle = MockEthPricing::new();
+    fn uses_gas_and_native_token_price_estimates_with_subsidy() {
+        let mut price_oracle = MockNativeTokenPricing::new();
         price_oracle
-            .expect_get_eth_price()
+            .expect_get_native_token_price()
             .returning(|| Some(nonzero!(240e18 as u128)));
 
         let mut gas_station = MockGasPriceEstimating::new();

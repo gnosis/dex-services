@@ -8,7 +8,7 @@ use ethcontract::Address;
 use futures::future;
 use pricegraph::{Pricegraph, TokenPair};
 use services_core::{
-    economic_viability::EthPricing,
+    economic_viability::NativeTokenPricing,
     models::{AccountState, BatchId, Order, TokenId},
     orderbook::StableXOrderBookReading,
 };
@@ -25,6 +25,7 @@ pub struct Orderbook {
     pricegraph_cache: RwLock<PricegraphCache>,
     extra_rounding_buffer_factor: f64,
     infallible_price_source: PriceCacheUpdater,
+    native_token: TokenId,
 }
 
 impl Orderbook {
@@ -32,6 +33,7 @@ impl Orderbook {
         orderbook_reading: Box<dyn StableXOrderBookReading>,
         infallible_price_source: PriceCacheUpdater,
         extra_rounding_buffer_factor: f64,
+        native_token: TokenId,
     ) -> Self {
         Self {
             orderbook_reading,
@@ -41,6 +43,7 @@ impl Orderbook {
             }),
             infallible_price_source,
             extra_rounding_buffer_factor,
+            native_token,
         }
     }
 
@@ -158,14 +161,13 @@ impl Orderbook {
 }
 
 #[async_trait::async_trait]
-impl EthPricing for Orderbook {
-    async fn get_eth_price(&self) -> Option<std::num::NonZeroU128> {
-        let eth_token_id = TokenId(1);
+impl NativeTokenPricing for Orderbook {
+    async fn get_native_token_price(&self) -> Option<std::num::NonZeroU128> {
         Some(
             self.infallible_price_source
                 .inner()
                 .await
-                .price(eth_token_id),
+                .price(self.native_token),
         )
     }
 }
@@ -213,7 +215,7 @@ mod tests {
 
         let token_info = Arc::new(TokenData::default());
         let infallible = PriceCacheUpdater::new(token_info, vec![Box::new(PriceSource_ {})]);
-        let orderbook = Orderbook::new(Box::new(NoopOrderbook), infallible, 2.0);
+        let orderbook = Orderbook::new(Box::new(NoopOrderbook), infallible, 2.0, TokenId(1));
         let price = || {
             orderbook
                 .infallible_price_source

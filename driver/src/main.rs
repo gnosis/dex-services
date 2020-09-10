@@ -186,7 +186,7 @@ struct Options {
 
     /// We multiply the economically viable min average fee by this amount to ensure that if a
     /// solution has this minimum amount it will still be end up economically viable even when the
-    /// gas or eth price moves slightly between solution computation and submission.
+    /// gas or native token price moves slightly between solution computation and submission.
     #[structopt(
         long,
         env = "ECONOMIC_VIABILITY_MIN_AVG_FEE_FACTOR",
@@ -204,7 +204,7 @@ struct Options {
     #[structopt(long, env = "FALLBACK_MAX_GAS_PRICE", default_value = "100000000000")]
     fallback_max_gas_price: u128,
 
-    /// How to calculate the economic viability constraints. `Dynamic` means that current eth price
+    /// How to calculate the economic viability constraints. `Dynamic` means that current native token price
     /// is taken into account while `Static` means that fallback_min_avg_fee_per_order and
     /// fallback_max_gas_price will always be used.
     #[structopt(
@@ -239,6 +239,11 @@ struct Options {
     /// the startup time.
     #[structopt(long, env = "ORDERBOOK_FILE", parse(from_os_str))]
     orderbook_file: Option<PathBuf>,
+
+    /// ID for the token which is used to pay network transaction fees on the
+    /// target chaing (e.g. WETH on mainnet, DAI on xDAI).
+    #[structopt(long, env = "NATIVE_TOKEN_ID", default_value = "1")]
+    native_token_id: u16,
 }
 
 fn main() {
@@ -280,6 +285,7 @@ fn main() {
             contract.clone(),
             options.token_data,
             options.price_source_update_interval,
+            options.native_token_id.into(),
         )
         .unwrap(),
     );
