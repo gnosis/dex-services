@@ -149,12 +149,13 @@ OPTIONS:
             saves gas [env: EARLIEST_SOLUTION_SUBMIT_TIME=]  [default: 0]
         --economic-viability-min-avg-fee-factor <economic-viability-min-avg-fee-factor>
             We multiply the economically viable min average fee by this amount to ensure that if a solution has this
-            minimum amount it will still be end up economically viable even when the gas or eth price moves slightly
-            between solution computation and submission [env: ECONOMIC_VIABILITY_MIN_AVG_FEE_FACTOR=]  [default: 1.1]
+            minimum amount it will still be end up economically viable even when the gas or native token price moves
+            slightly between solution computation and submission [env: ECONOMIC_VIABILITY_MIN_AVG_FEE_FACTOR=]
+            [default: 1.1]
         --economic-viability-strategy <economic-viability-strategy>
-            How to calculate the economic viability constraints. `Dynamic` means that current eth price is taken into
-            account while `Static` means that fallback_min_avg_fee_per_order and fallback_max_gas_price will always be
-            used [env: ECONOMIC_VIABILITY_STRATEGY=]  [default: Dynamic]  [possible values: Dynamic, Static]
+            How to calculate the economic viability constraints. `Dynamic` means that current native token price is
+            taken into account while `Static` means that fallback_min_avg_fee_per_order and fallback_max_gas_price will
+            always be used [env: ECONOMIC_VIABILITY_STRATEGY=]  [default: Dynamic]  [possible values: Dynamic, Static]
         --economic-viability-subsidy-factor <economic-viability-subsidy-factor>
             Subsidy factor used to compute the minimum average fee per order in a solution as well as the gas cap for
             economically viable solution [env: ECONOMIC_VIABILITY_SUBSIDY_FACTOR=]  [default: 10.0]
@@ -175,6 +176,9 @@ OPTIONS:
             
             This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug'). [env: DFUSION_LOG=]  [default:
             warn,driver=info,services_core=info]
+        --native-token-id <native-token-id>
+            Use an orderbook file for persisting an event cache in order to speed up the startup time [env:
+            NATIVE_TOKEN_ID=]  [default: 1]
     -i, --network-id <network-id>
             The network ID used for signing transactions (e.g. 1 for mainnet, 4 for rinkeby, 5777 for ganache) [env:
             NETWORK_ID=]

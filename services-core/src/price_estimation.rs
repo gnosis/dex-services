@@ -13,7 +13,7 @@ use self::orderbook_based::PricegraphEstimator;
 use crate::contracts::stablex_contract::StableXContractImpl;
 use crate::token_info::{cached::TokenInfoCache, hardcoded::TokenData, TokenInfoFetching};
 use crate::{
-    economic_viability::EthPricing,
+    economic_viability::NativeTokenPricing,
     http::HttpFactory,
     models::{Order, TokenId, TokenInfo},
     orderbook::StableXOrderBookReading,
@@ -55,6 +55,8 @@ pub struct PriceOracle {
     token_info_fetcher: Arc<dyn TokenInfoFetching>,
     /// The price source to use.
     source: Box<dyn PriceSource + Send + Sync>,
+    /// The id of the token in which network transactions fees are paid
+    native_token: TokenId
 }
 
 impl PriceOracle {
@@ -65,6 +67,7 @@ impl PriceOracle {
         contract: Arc<StableXContractImpl>,
         token_data: TokenData,
         update_interval: Duration,
+        native_token: TokenId,
     ) -> Result<Self> {
         let cache: HashMap<_, _> = token_data.clone().into();
         let token_info_fetcher = Arc::new(TokenInfoCache::with_cache(contract, cache));
@@ -80,6 +83,7 @@ impl PriceOracle {
         Ok(PriceOracle {
             token_info_fetcher,
             source: prioritized_source,
+            native_token,
         })
     }
 
@@ -91,6 +95,7 @@ impl PriceOracle {
         PriceOracle {
             token_info_fetcher,
             source: Box::new(source),
+            native_token: TokenId(1),
         }
     }
 
@@ -107,12 +112,6 @@ impl PriceOracle {
                 HashMap::new()
             }
         }
-    }
-
-    fn eth_token_id(&self) -> TokenId {
-        // This is the token id for WETH on the mainnet deployment. Can make this configurable later
-        // if needed.
-        TokenId(1)
     }
 }
 
@@ -159,11 +158,10 @@ impl PriceEstimating for PriceOracle {
 }
 
 #[async_trait::async_trait]
-impl EthPricing for PriceOracle {
-    async fn get_eth_price(&self) -> Option<NonZeroU128> {
-        let token_id = self.eth_token_id();
-        let prices = self.source.get_prices(&[token_id]).await.ok()?;
-        prices.get(&token_id).copied()
+impl NativeTokenPricing for PriceOracle {
+    async fn get_native_token_price(&self) -> Option<NonZeroU128> {
+        let prices = self.source.get_prices(&[self.native_token]).await.ok()?;
+        prices.get(&self.native_token).copied()
     }
 }
 

@@ -11,7 +11,7 @@ use std::fs;
 
 const ARTIFACTS: &[(&str, &[&str])] = &[
     (
-        "@gnosis.pm/dex-contracts@0.4.1",
+        "@fleupold/dex-contracts@0.4.2",
         &["BatchExchange", "BatchExchangeViewer"],
     ),
     ("@gnosis.pm/owl-token@3.1.0", &["TokenOWL", "TokenOWLProxy"]),

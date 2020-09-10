@@ -412,6 +412,7 @@ mod tests {
             Box::new(NoopOrderbook),
             PriceCacheUpdater::new(token_info.clone(), Vec::new()),
             1.0,
+            TokenId(1),
         ));
         let metrics = Arc::new(Metrics::new(&prometheus::Registry::new()).unwrap());
         let economic_viability = Arc::new(FixedEconomicViabilityComputer::new(None, None));

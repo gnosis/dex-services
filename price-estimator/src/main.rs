@@ -133,6 +133,11 @@ struct Options {
         case_insensitive = true,
     )]
     economic_viability_strategy: EconomicViabilityStrategy,
+
+    /// Use an orderbook file for persisting an event cache in order to speed up
+    /// the startup time.
+    #[structopt(long, env = "NATIVE_TOKEN_ID", default_value = "1")]
+    native_token_id: u16,
 }
 
 fn main() {
@@ -185,6 +190,7 @@ fn main() {
         Box::new(orderbook),
         infallible_price_source,
         options.extra_rounding_buffer_factor,
+        options.native_token_id.into(),
     ));
     let _ = orderbook.update().wait();
     log::info!("Orderbook initialized.");
