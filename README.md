@@ -177,8 +177,8 @@ OPTIONS:
             This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug'). [env: DFUSION_LOG=]  [default:
             warn,driver=info,services_core=info]
         --native-token-id <native-token-id>
-            Use an orderbook file for persisting an event cache in order to speed up the startup time [env:
-            NATIVE_TOKEN_ID=]  [default: 1]
+            ID for the token which is used to pay network transaction fees on the target chaing (e.g. WETH on mainnet,
+            DAI on xDAI) [env: NATIVE_TOKEN_ID=]  [default: 1]
     -i, --network-id <network-id>
             The network ID used for signing transactions (e.g. 1 for mainnet, 4 for rinkeby, 5777 for ganache) [env:
             NETWORK_ID=]

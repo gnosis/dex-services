@@ -240,8 +240,8 @@ struct Options {
     #[structopt(long, env = "ORDERBOOK_FILE", parse(from_os_str))]
     orderbook_file: Option<PathBuf>,
 
-    /// Use an orderbook file for persisting an event cache in order to speed up
-    /// the startup time.
+    /// ID for the token which is used to pay network transaction fees on the
+    /// target chaing (e.g. WETH on mainnet, DAI on xDAI).
     #[structopt(long, env = "NATIVE_TOKEN_ID", default_value = "1")]
     native_token_id: u16,
 }
