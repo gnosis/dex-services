@@ -109,6 +109,13 @@ impl OrderMap {
     }
 }
 
+/// The remaining amount in an order can be unlimited or fixed.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Amount {
+    Unlimited,
+    Remaining(u128),
+}
+
 /// A single order with a reference to the user.
 ///
 /// Note that we approximate amounts and prices with floating point numbers.
@@ -125,8 +132,7 @@ pub struct Order {
     /// The maximum capacity for this order, this is equivalent to the order's
     /// remaining sell amount. Note that orders are also limited by their user's
     /// balance.
-    /// None means unlimited.
-    pub amount: Option<u128>,
+    pub amount: Amount,
     /// The effective exchange rate for this order.
     pub exchange_rate: ExchangeRate,
 }
@@ -135,9 +141,9 @@ impl Order {
     /// Creates a new order from an ID and an orderbook element.
     pub fn new(element: &Element) -> Option<Self> {
         let amount = if is_unbounded(&element) {
-            None
+            Amount::Unlimited
         } else {
-            Some(element.remaining_sell_amount)
+            Amount::Remaining(element.remaining_sell_amount)
         };
         let exchange_rate = LimitPrice::from_fraction(&element.price)?.exchange_rate();
 
@@ -156,8 +162,8 @@ impl Order {
     pub fn get_effective_amount(&self, users: &UserMap) -> u128 {
         let balance = users[&self.user].balance_of(self.pair.sell);
         match self.amount {
-            None => balance,
-            Some(amount) => amount.min(balance),
+            Amount::Unlimited => balance,
+            Amount::Remaining(amount) => amount.min(balance),
         }
     }
 }

@@ -16,7 +16,7 @@ mod weight;
 
 pub use self::flow::{Flow, Ring};
 pub use self::iter::TransitiveOrders;
-use self::order::{Order, OrderCollector, OrderMap};
+use self::order::{Amount, Order, OrderCollector, OrderMap};
 pub use self::reduced::ReducedOrderbook;
 pub use self::scalar::{ExchangeRate, LimitPrice};
 use self::user::{User, UserMap};
@@ -362,7 +362,7 @@ impl Orderbook {
             if num::is_dust_amount(new_balance) {
                 user.clear_balance(pair.sell);
                 self.update_projection_graph_node(pair.sell);
-            } else if let Some(amount) = &mut order.amount {
+            } else if let Amount::Remaining(amount) = &mut order.amount {
                 *amount = amount.saturating_sub(fill_amount);
                 if num::is_dust_amount(*amount) {
                     self.update_projection_graph_edge(pair);
@@ -433,8 +433,8 @@ fn format_path(path: &[NodeIndex]) -> String {
 /// for trades
 fn is_dust_order(element: &Element) -> bool {
     num::is_dust_amount(element.remaining_sell_amount as _)
-        || (element.balance < U256::from(u128::MAX)
-            && num::is_dust_amount(element.balance.low_u128()))
+        || (num::is_dust_amount(element.balance.low_u128())
+            && element.balance < U256::from(u128::MAX))
 }
 
 /// An error indicating an invalid operation was performed on an overlapping
@@ -711,9 +711,8 @@ mod tests {
                 .orders
                 .best_order_for_pair(TokenPair { buy: 0, sell: 1 })
                 .unwrap()
-                .amount
-                .unwrap(),
-            1_000_000 - (flow.capacity / transitive_xrate_0_1) as u128
+                .amount,
+            Amount::Remaining(1_000_000 - (flow.capacity / transitive_xrate_0_1) as u128)
         );
         assert_eq!(
             orderbook.users[&user_id(1)].balance_of(1),
@@ -725,9 +724,8 @@ mod tests {
                 .orders
                 .best_order_for_pair(TokenPair { buy: 1, sell: 2 })
                 .unwrap()
-                .amount
-                .unwrap(),
-            1_000_000,
+                .amount,
+            Amount::Remaining(1_000_000),
         );
         assert_eq!(orderbook.users[&user_id(5)].balance_of(2), 1_000_000);
 
@@ -736,9 +734,8 @@ mod tests {
                 .orders
                 .best_order_for_pair(TokenPair { buy: 3, sell: 4 })
                 .unwrap()
-                .amount
-                .unwrap(),
-            2_000_000 - (flow.capacity / flow.exchange_rate.value()) as u128
+                .amount,
+            Amount::Remaining(2_000_000 - (flow.capacity / flow.exchange_rate.value()) as u128)
         );
         assert_eq!(
             orderbook.users[&user_id(4)].balance_of(4),
