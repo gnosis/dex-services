@@ -61,6 +61,7 @@ impl Orderbook {
         for (order, element) in elements
             .into_iter()
             .filter(|element| !is_dust_order(element))
+            .filter(|element| element.pair.buy != element.pair.sell)
             .filter_map(|element| Order::new(&element).map(move |order| (order, element)))
         {
             let TokenPair { buy, sell } = element.pair;
@@ -608,6 +609,22 @@ mod tests {
             orders {
                 owner @1 buying 1 [1_000_000_000] selling 0 [0],
                 owner @1 buying 1 [0] selling 0 [1_000_000_000],
+            }
+        };
+
+        assert_eq!(orderbook.num_orders(), 0);
+    }
+
+    #[test]
+    fn ignores_orders_with_invalid_market() {
+        let orderbook = orderbook! {
+            users {
+                @1 {
+                    token 0 => 1_000_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 0 [1_000_000_000] selling 0 [1_000_000_000],
             }
         };
 
