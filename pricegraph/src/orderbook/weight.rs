@@ -135,7 +135,7 @@ mod tests {
         assert_eq!(-f64::MAX as i128, i128::MIN);
 
         const MAX_TOKENS: f64 = (1 << 16) as _;
-        let max_xrate = 2.0f64.powi(128) / MIN_AMOUNT;
+        let max_xrate = 2.0f64.powi(128) / MIN_AMOUNT as f64;
 
         let max_total_weight = {
             let weight = max_xrate.log2() * MAX_TOKENS * FIXED_24X104_SCALING_FACTOR;

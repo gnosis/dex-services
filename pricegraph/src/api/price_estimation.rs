@@ -16,7 +16,7 @@ impl Pricegraph {
     /// the ratio between buy and sell amounts, with implicit fees.
     pub fn estimate_limit_price(&self, pair: TokenPair, max_sell_amount: f64) -> Option<f64> {
         if !num::is_strictly_positive_and_finite(max_sell_amount)
-            || num::is_dust_amount(max_sell_amount)
+            || num::is_dust_amount(max_sell_amount as u128)
         {
             return None;
         }
@@ -75,7 +75,7 @@ impl Pricegraph {
         // be overlapping with existing orders such that an executed buy amount
         // could be found greater than the dust amount.
         let min_buy_amount = max_sell_amount * price;
-        if num::is_dust_amount(min_buy_amount) {
+        if num::is_dust_amount(min_buy_amount as u128) {
             return None;
         }
 
