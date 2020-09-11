@@ -51,11 +51,6 @@ struct Options {
     #[structopt(short, long, env = "ETHEREUM_NODE_URL")]
     node_url: Url,
 
-    /// The network ID used for signing transactions (e.g. 1 for mainnet, 4 for
-    /// rinkeby, 5777 for ganache).
-    #[structopt(short = "i", long, env = "NETWORK_ID")]
-    network_id: u64,
-
     /// Which style of solver to use. Can be one of:
     /// 'NaiveSolver' for the naive solver;
     /// 'StandardSolver' for mixed integer programming solver;
@@ -256,11 +251,11 @@ fn main() {
 
     // Set up shared HTTP client and HTTP services.
     let http_factory = HttpFactory::new(options.http_timeout, http_metrics);
-    let (web3, gas_station) = setup_http_services(&http_factory, &options);
+    let (web3, gas_station) = setup_http_services(&http_factory, &options).wait();
 
     // Set up connection to exchange contract
     let contract = Arc::new(
-        StableXContractImpl::new(&web3, options.private_key.clone(), options.network_id)
+        StableXContractImpl::new(&web3, options.private_key.clone())
             .wait()
             .unwrap(),
     );
@@ -362,13 +357,14 @@ fn setup_monitoring() -> (
     (stablex_metrics, http_metrics, solver_metrics, health)
 }
 
-fn setup_http_services(
+async fn setup_http_services(
     http_factory: &HttpFactory,
     options: &Options,
 ) -> (Web3, Arc<dyn GasPriceEstimating + Send + Sync>) {
     let web3 = web3_provider(http_factory, options.node_url.as_str(), options.rpc_timeout).unwrap();
-    let gas_station =
-        gas_price::create_estimator(options.network_id, &http_factory, &web3).unwrap();
+    let gas_station = gas_price::create_estimator(&http_factory, &web3)
+        .await
+        .unwrap();
     (web3, gas_station)
 }
 
