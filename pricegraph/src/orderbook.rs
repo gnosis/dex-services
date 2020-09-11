@@ -80,15 +80,12 @@ impl Orderbook {
             // be.
             debug_assert_eq!(token_node, node_index(token_id));
         }
-        projection.extend_with_edges(orders.all_pairs().map({
-            |(pair, orders)| {
-                let cheapest_order = orders
-                    .last()
-                    .expect("unexpected token pair in orders map without any orders");
+        projection.extend_with_edges(orders.best_order_for_all_pairs().map({
+            |(pair, order)| {
                 (
                     node_index(pair.buy),
                     node_index(pair.sell),
-                    cheapest_order.exchange_rate.weight(),
+                    order.exchange_rate.weight(),
                 )
             }
         }));
@@ -102,7 +99,7 @@ impl Orderbook {
 
     /// Returns the number of orders in the orderbook.
     pub fn num_orders(&self) -> usize {
-        self.orders.all_pairs().map(|(_, o)| o.len()).sum()
+        self.orders.count()
     }
 
     /// Detects whether the orderbook is overlapping, that is if the orderbook's
@@ -235,11 +232,7 @@ impl Orderbook {
 
     /// Updates all projection graph edges that enter a token.
     fn update_projection_graph_node(&mut self, sell: TokenId) {
-        let pairs = self
-            .orders
-            .pairs_and_orders_for_sell_token(sell)
-            .map(|(pair, _)| pair)
-            .collect::<Vec<_>>();
+        let pairs = self.orders.pairs_for_sell_token(sell).collect::<Vec<_>>();
         for pair in pairs {
             self.update_projection_graph_edge(pair);
         }
@@ -258,7 +251,7 @@ impl Orderbook {
             .best_order_for_pair(pair)
             .map(|order| num::is_dust_amount(order.get_effective_amount(&self.users)))
         {
-            self.orders.remove_pair_order(pair);
+            self.orders.remove_best_order_for_pair(pair);
         }
 
         let edge = self.get_pair_edge(pair).unwrap_or_else(|| {

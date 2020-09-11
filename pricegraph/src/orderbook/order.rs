@@ -44,12 +44,13 @@ impl OrderCollector {
 pub struct OrderMap(Map<TokenId, Map<TokenId, Vec<Order>>>);
 
 impl OrderMap {
-    /// Returns an iterator over the collection of orders for each token pair.
-    pub fn all_pairs(&self) -> impl Iterator<Item = (TokenPair, &'_ [Order])> + '_ {
-        self.0.iter().flat_map(|(&sell, o)| {
-            o.iter()
-                .map(move |(&buy, o)| (TokenPair { sell, buy }, o.as_slice()))
-        })
+    /// Returns the total order count.
+    pub fn count(&self) -> usize {
+        self.0
+            .values()
+            .flat_map(|o| o.values())
+            .map(|o| o.len())
+            .sum()
     }
 
     /// Returns an iterator over the collection of orders for each token pair.
@@ -61,18 +62,17 @@ impl OrderMap {
     }
 
     /// Returns an iterator over the orders matching a given sell token.
-    pub fn pairs_and_orders_for_sell_token(
-        &self,
-        sell: TokenId,
-    ) -> impl Iterator<Item = (TokenPair, &'_ [Order])> + '_ {
-        self.0.get(&sell).into_iter().flat_map(move |o| {
-            o.iter()
-                .map(move |(&buy, o)| (TokenPair { sell, buy }, o.as_slice()))
-        })
+    pub fn pairs_for_sell_token(&self, sell: TokenId) -> impl Iterator<Item = TokenPair> + '_ {
+        self.0
+            .get(&sell)
+            .into_iter()
+            .flat_map(move |o| o.keys().map(move |&buy| TokenPair { sell, buy }))
     }
 
     /// Returns the orders for an order pair. Returns `None` if that pair has
     /// no orders.
+    ///
+    /// Note
     fn orders_for_pair(&self, pair: TokenPair) -> Option<&[Order]> {
         Some(self.0.get(&pair.sell)?.get(&pair.buy)?.as_slice())
     }
@@ -83,9 +83,25 @@ impl OrderMap {
         self.0.get_mut(&pair.sell)?.get_mut(&pair.buy)
     }
 
+    /// Returns an iterator over all token pairs of their cheapest orders.
+    pub fn best_order_for_all_pairs(&self) -> impl Iterator<Item = (TokenPair, &'_ Order)> + '_ {
+        self.0.iter().flat_map(|(&sell, o)| {
+            o.iter()
+                .filter_map(move |(&buy, o)| Some((TokenPair { sell, buy }, o.last()?)))
+        })
+    }
+
+    /// Returns a sorted iterator (from cheapest to most expensive) of all
+    /// orders fot the specified token pair.
+    pub fn best_orders_for_pair(&self, pair: TokenPair) -> impl Iterator<Item = &'_ Order> + '_ {
+        self.orders_for_pair(pair)
+            .into_iter()
+            .flat_map(|orders| orders.iter().rev())
+    }
+
     /// Returns a reference to the cheapest order given an order pair.
     pub fn best_order_for_pair(&self, pair: TokenPair) -> Option<&Order> {
-        self.orders_for_pair(pair)?.last()
+        self.best_orders_for_pair(pair).next()
     }
 
     /// Returns a mutable reference to the cheapest order given an order pair.
@@ -94,7 +110,7 @@ impl OrderMap {
     }
 
     /// Removes the current cheapest order pair from the mapping.
-    pub fn remove_pair_order(&mut self, pair: TokenPair) -> Option<Order> {
+    pub fn remove_best_order_for_pair(&mut self, pair: TokenPair) -> Option<Order> {
         let sell_orders = self.0.get_mut(&pair.sell)?;
         let pair_orders = sell_orders.get_mut(&pair.buy)?;
 

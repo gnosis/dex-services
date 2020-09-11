@@ -82,7 +82,7 @@ impl Prices {
 fn find_uniform_prices(
     orderbook: &Orderbook,
     cycle: &NegativeCycle<NodeIndex>,
-) -> (Vec<(ExchangeRate, f64)>, f64) {
+) -> (Vec<(TokenId, ExchangeRate, f64)>, f64) {
     debug_assert!(
         cycle.len() > 2,
         "cycle must have at least two pairs {}",
@@ -107,10 +107,10 @@ fn find_uniform_prices(
             *transitive_xrate *= order.exchange_rate;
             let capacity = order.get_effective_amount(&orderbook.users) * transitive_xrate.value();
 
-            Some((*transitive_xrate, capacity))
+            Some((pair.sell, *transitive_xrate, capacity))
         })
         .collect::<Vec<_>>();
-    let (cycle_xrate, _) = executed_trades
+    let (_, cycle_xrate, _) = executed_trades
         .last()
         .expect("cycle has at least two pairs");
 
@@ -121,13 +121,13 @@ fn find_uniform_prices(
 
     let min_capacity = executed_trades
         .iter()
-        .map(|(_, capacity)| *capacity)
+        .map(|(_, _, capacity)| *capacity)
         .min_by(|a, b| num::compare(*a, *b))
         .expect("cycle has at least two pairs");
     let target_capacity = min_capacity * total_adjustment;
 
     let mut current_adjustment = 1.0;
-    for (xrate, capacity) in &mut executed_trades {
+    for (_, xrate, capacity) in &mut executed_trades {
         if *capacity * current_adjustment < target_capacity {
             // NOTE: This means that this executed trade is a "market order" in
             // that it limits the flow through the path. Its exchange rate can
@@ -142,7 +142,7 @@ fn find_uniform_prices(
     }
 
     debug_assert!({
-        let (cycle_xrate, _) = executed_trades
+        let (_, cycle_xrate, _) = executed_trades
             .last()
             .expect("cycle has at least two pairs");
         cycle_xrate.is_identity()
@@ -168,6 +168,53 @@ fn set_prices_for_cycle(
     // around this cycle. The end result is a price vector such that the xrate
     // for all orders that are not fully filled are exactly their limit xrates
     // and the xrate of the cycle is `1.0` (i.e. weight of `0`).
+    let (executed_trades, capacity) = find_uniform_prices(orderbook, cycle);
 
-    todo!();
+    // NOTE: Compute the fee exchange rate for the starting token.
+    let fee_xrate = if fee_token_cycle {
+        // NOTE: If the fee token is included in the cycle, just use the identiy
+        // exchange rate, since we have already shifted the cycle to start (and
+        // end) with the fee token.
+        ExchangeRate::IDENTITY
+    } else {
+        // NOTE: Find the optimal fee token connection, i.e. the one with the
+        // lowest price that can sell enough fee token for the traded amounts.
+        let mut fee_xrate = None;
+
+        const FEE: f64 = 0.001;
+        for (token, xrate, _) in &executed_trades {
+            let fee = FEE * capacity * xrate.value();
+            if let Some((_, token_fee_xrate)) = orderbook
+                .orders
+                .best_orders_for_pair(TokenPair {
+                    buy: *token,
+                    sell: FEE_TOKEN,
+                })
+                .scan(0.0, |available_fee, order| {
+                    *available_fee += order.get_effective_amount(&orderbook.users);
+                    Some((*available_fee, *xrate * order.exchange_rate))
+                })
+                .find(|(available_fee, _)| *available_fee >= fee)
+            {
+                let fee_xrate = fee_xrate.get_or_insert(token_fee_xrate);
+                if *fee_xrate > token_fee_xrate {
+                    *fee_xrate = token_fee_xrate;
+                }
+            }
+        }
+
+        match fee_xrate {
+            Some(value) => value,
+            None => {
+                // NOTE: There is no fee connection for this ring trade :(
+                return;
+            }
+        }
+    };
+
+    prices.extend(
+        executed_trades[..executed_trades.len() - 1]
+            .iter()
+            .map(|(token, xrate, _)| (*token, fee_xrate * *xrate)),
+    );
 }
