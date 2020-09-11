@@ -363,6 +363,8 @@ impl Orderbook {
                 user.clear_balance(pair.sell);
                 self.update_projection_graph_node(pair.sell);
             } else if let Amount::Remaining(amount) = &mut order.amount {
+                // TODO: add a debug assert to see that we are not over filling orders.
+                // Will do this when we use BigRational.
                 *amount = amount.saturating_sub(fill_amount);
                 if num::is_dust_amount(*amount) {
                     self.update_projection_graph_edge(pair);

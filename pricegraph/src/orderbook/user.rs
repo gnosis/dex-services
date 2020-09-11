@@ -61,11 +61,7 @@ impl User {
 }
 
 fn u256_to_u128_saturating(u256: &U256) -> u128 {
-    if u256.0[2] == 0 && u256.0[3] == 0 {
-        u256.low_u128()
-    } else {
-        u128::MAX
-    }
+    u256.min(&u128::MAX.into()).low_u128()
 }
 
 #[cfg(test)]
