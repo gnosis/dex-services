@@ -55,11 +55,6 @@ struct Options {
     #[structopt(long, env = "ETHEREUM_NODE_URL")]
     node_url: Url,
 
-    /// The network ID used for gas estimations.
-    /// For example 1 for mainnet, 4 for rinkeby.
-    #[structopt(long, env = "NETWORK_ID", default_value = "1")]
-    network_id: u64,
-
     /// The timeout in seconds of web3 JSON RPC calls.
     #[structopt(
         long,
@@ -154,13 +149,10 @@ fn main() {
     let web3 = web3_provider(&http_factory, options.node_url.as_str(), options.timeout).unwrap();
     // The private key is not actually used but StableXContractImpl requires it.
     let private_key = PrivateKey::from_raw([1u8; 32]).unwrap();
-    let contract = Arc::new(
-        StableXContractImpl::new(&web3, private_key, 0)
-            .wait()
-            .unwrap(),
-    );
-    let gas_station =
-        gas_price::create_estimator(options.network_id, &http_factory, &web3).unwrap();
+    let contract = Arc::new(StableXContractImpl::new(&web3, private_key).wait().unwrap());
+    let gas_station = gas_price::create_estimator(&http_factory, &web3)
+        .wait()
+        .unwrap();
 
     let cache: HashMap<_, _> = options.token_data.clone().into();
     let token_info = TokenInfoCache::with_cache(contract.clone(), cache);

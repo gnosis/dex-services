@@ -15,7 +15,11 @@ use ethcontract::{
     transaction::{confirm::ConfirmParams, Account, GasPrice, ResolveCondition, TransactionResult},
     Address, BlockNumber, PrivateKey, U256,
 };
-use futures::future::{BoxFuture, FutureExt as _};
+use futures::{
+    compat::Future01CompatExt as _,
+    future::{BoxFuture, FutureExt as _},
+};
+
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -33,8 +37,9 @@ pub struct StableXContractImpl {
 }
 
 impl StableXContractImpl {
-    pub async fn new(web3: &contracts::Web3, key: PrivateKey, network_id: u64) -> Result<Self> {
-        let defaults = contracts::method_defaults(key, network_id)?;
+    pub async fn new(web3: &contracts::Web3, key: PrivateKey) -> Result<Self> {
+        let chain_id = web3.eth().chain_id().compat().await?.as_u64();
+        let defaults = contracts::method_defaults(key, chain_id)?;
 
         let viewer = BatchExchangeViewer::deployed(&web3).await?;
         let mut instance = BatchExchange::deployed(&web3).await?;
@@ -324,8 +329,6 @@ impl StableXContract for StableXContractImpl {
     }
 
     async fn get_transaction_count(&self) -> Result<U256> {
-        use futures::compat::Future01CompatExt as _;
-
         let web3 = self.instance.raw_instance().web3();
         let account = self.account().ok_or_else(|| anyhow!("no account"))?;
         let address = account.address();
