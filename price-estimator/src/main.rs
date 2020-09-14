@@ -42,7 +42,7 @@ struct Options {
     /// This follows the `slog-envlogger` syntax (e.g. 'info,price_estimator=debug').
     #[structopt(
         long,
-        env = "DFUSION_LOG",
+        env = "LOG_FILTER",
         default_value = "warn,price_estimator=info,services_core=info,warp::filters::log=info"
     )]
     log_filter: String,
@@ -52,17 +52,17 @@ struct Options {
 
     /// The Ethereum node URL to connect to. Make sure that the node allows for
     /// queries without a gas limit to be able to fetch the orderbook.
-    #[structopt(long, env = "ETHEREUM_NODE_URL")]
+    #[structopt(long, env = "NODE_URL")]
     node_url: Url,
 
     /// The timeout in seconds of web3 JSON RPC calls.
     #[structopt(
         long,
-        env = "TIMEOUT",
+        env = "RPC_TIMEOUT",
         default_value = "10",
         parse(try_from_str = duration_secs),
     )]
-    timeout: Duration,
+    rpc_timeout: Duration,
 
     #[structopt(long, env = "ORDERBOOK_FILE", parse(from_os_str))]
     orderbook_file: Option<PathBuf>,
@@ -116,7 +116,7 @@ struct Options {
         default_value = "1.1"
     )]
     economic_viability_min_avg_fee_factor: f64,
-    #[structopt(long, env = "MIN_AVG_FEE_PER_ORDER", default_value = "0")]
+    #[structopt(long, env = "FALLBACK_MIN_AVG_FEE_PER_ORDER", default_value = "0")]
     fallback_min_avg_fee_per_order: u128,
     #[structopt(long, env = "FALLBACK_MAX_GAS_PRICE", default_value = "100000000000")]
     fallback_max_gas_price: u128,
@@ -130,7 +130,7 @@ struct Options {
     economic_viability_strategy: EconomicViabilityStrategy,
 
     /// ID for the token which is used to pay network transaction fees on the
-    /// target chaing (e.g. WETH on mainnet, DAI on xDAI).
+    /// target chain (e.g. WETH on mainnet, DAI on xDAI).
     #[structopt(long, env = "NATIVE_TOKEN_ID", default_value = "1")]
     native_token_id: u16,
 }
@@ -145,8 +145,13 @@ fn main() {
 
     let (metrics, driver_http_metrics, health) = setup_monitoring();
     let metrics = Arc::new(metrics);
-    let http_factory = HttpFactory::new(options.timeout, driver_http_metrics);
-    let web3 = web3_provider(&http_factory, options.node_url.as_str(), options.timeout).unwrap();
+    let http_factory = HttpFactory::new(options.rpc_timeout, driver_http_metrics);
+    let web3 = web3_provider(
+        &http_factory,
+        options.node_url.as_str(),
+        options.rpc_timeout,
+    )
+    .unwrap();
     // The private key is not actually used but StableXContractImpl requires it.
     let private_key = PrivateKey::from_raw([1u8; 32]).unwrap();
     let contract = Arc::new(StableXContractImpl::new(&web3, private_key).wait().unwrap());
