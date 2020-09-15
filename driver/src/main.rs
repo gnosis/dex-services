@@ -41,14 +41,14 @@ struct Options {
     /// This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug').
     #[structopt(
         long,
-        env = "DFUSION_LOG",
+        env = "LOG_FILTER",
         default_value = "warn,driver=info,services_core=info"
     )]
     log_filter: String,
 
     /// The Ethereum node URL to connect to. Make sure that the node allows for
     /// queries without a gas limit to be able to fetch the orderbook.
-    #[structopt(short, long, env = "ETHEREUM_NODE_URL")]
+    #[structopt(short, long, env = "NODE_URL")]
     node_url: Url,
 
     /// Which style of solver to use. Can be one of:
@@ -121,7 +121,7 @@ struct Options {
     /// The timeout in milliseconds of web3 JSON RPC calls, defaults to 10000ms
     #[structopt(
         long,
-        env = "WEB3_RPC_TIMEOUT",
+        env = "RPC_TIMEOUT",
         default_value = "10000",
         parse(try_from_str = duration_millis),
     )]
@@ -191,7 +191,7 @@ struct Options {
 
     /// The fallback minimum average fee per order. This is passed to the solver
     /// in case the computing its value fails. Its unit is [OWL]
-    #[structopt(long, env = "MIN_AVG_FEE_PER_ORDER", default_value = "0")]
+    #[structopt(long, env = "FALLBACK_MIN_AVG_FEE_PER_ORDER", default_value = "0")]
     fallback_min_avg_fee_per_order: u128,
 
     /// The fallback maximum gas price. This is used when computing the maximum gas price based on
@@ -236,7 +236,7 @@ struct Options {
     orderbook_file: Option<PathBuf>,
 
     /// ID for the token which is used to pay network transaction fees on the
-    /// target chaing (e.g. WETH on mainnet, DAI on xDAI).
+    /// target chain (e.g. WETH on mainnet, DAI on xDAI).
     #[structopt(long, env = "NATIVE_TOKEN_ID", default_value = "1")]
     native_token_id: u16,
 }

@@ -58,7 +58,7 @@ The repo ships with a very naive solver, that can at the moment only match two o
 ### Running BatchExchange
 
 You can run the rust binary locally (without docker). For that you will have to export the following environment variables:
-- ETHEREUM_NODE_URL (for test environments this is usually http://localhost:8545. You can use an [Infura](https://infura.io/) node for rinkeby/mainnet)
+- NODE_URL (for test environments this is usually http://localhost:8545. You can use an [Infura](https://infura.io/) node for rinkeby/mainnet)
 - NETWORK_ID (chainId, e.g. 5777 for ganache, 4 for rinkeby, 1 for mainnet)
 - PRIVATE_KEY (the hex key without leading 0x that should be used to sign transactions. Needs to be funded with eth for gas)
 
@@ -128,7 +128,7 @@ driver 0.1.0
 Gnosis Exchange protocol driver.
 
 USAGE:
-    driver [OPTIONS] --network-id <network-id> --node-url <node-url> --private-key <private-key>
+    driver [OPTIONS] --node-url <node-url> --private-key <private-key>
 
 FLAGS:
     -h, --help       
@@ -164,7 +164,7 @@ OPTIONS:
             owl fails [env: FALLBACK_MAX_GAS_PRICE=]  [default: 100000000000]
         --fallback-min-avg-fee-per-order <fallback-min-avg-fee-per-order>
             The fallback minimum average fee per order. This is passed to the solver in case the computing its value
-            fails. Its unit is [OWL] [env: MIN_AVG_FEE_PER_ORDER=]  [default: 0]
+            fails. Its unit is [OWL] [env: FALLBACK_MIN_AVG_FEE_PER_ORDER=]  [default: 0]
         --http-timeout <http-timeout>
             The default timeout in milliseconds of HTTP requests to remote services such as the Gnosis Safe gas station
             and exchange REST APIs for fetching price estimates [env: HTTP_TIMEOUT=]  [default: 10000]
@@ -174,17 +174,14 @@ OPTIONS:
         --log-filter <log-filter>
             The log filter to use.
             
-            This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug'). [env: DFUSION_LOG=]  [default:
+            This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug'). [env: LOG_FILTER=]  [default:
             warn,driver=info,services_core=info]
         --native-token-id <native-token-id>
-            ID for the token which is used to pay network transaction fees on the target chaing (e.g. WETH on mainnet,
+            ID for the token which is used to pay network transaction fees on the target chain (e.g. WETH on mainnet,
             DAI on xDAI) [env: NATIVE_TOKEN_ID=]  [default: 1]
-    -i, --network-id <network-id>
-            The network ID used for signing transactions (e.g. 1 for mainnet, 4 for rinkeby, 5777 for ganache) [env:
-            NETWORK_ID=]
     -n, --node-url <node-url>
             The Ethereum node URL to connect to. Make sure that the node allows for queries without a gas limit to be
-            able to fetch the orderbook [env: ETHEREUM_NODE_URL=]
+            able to fetch the orderbook [env: NODE_URL=]
         --orderbook-file <orderbook-file>
             Use an orderbook file for persisting an event cache in order to speed up the startup time [env:
             ORDERBOOK_FILE=]
@@ -201,7 +198,7 @@ OPTIONS:
             The private key used by the driver to sign transactions [env: PRIVATE_KEY]
 
         --rpc-timeout <rpc-timeout>
-            The timeout in milliseconds of web3 JSON RPC calls, defaults to 10000ms [env: WEB3_RPC_TIMEOUT=]  [default:
+            The timeout in milliseconds of web3 JSON RPC calls, defaults to 10000ms [env: RPC_TIMEOUT=]  [default:
             10000]
         --scheduler <scheduler>
             The kind of scheduler to use [env: SCHEDULER=]  [default: System]  [possible values: System, Evm]
