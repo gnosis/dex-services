@@ -128,7 +128,7 @@ driver 0.1.0
 Gnosis Exchange protocol driver.
 
 USAGE:
-    driver [OPTIONS] --network-id <network-id> --node-url <node-url> --private-key <private-key>
+    driver [OPTIONS] --node-url <node-url> --private-key <private-key>
 
 FLAGS:
     -h, --help       
@@ -177,11 +177,8 @@ OPTIONS:
             This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug'). [env: LOG_FILTER=]  [default:
             warn,driver=info,services_core=info]
         --native-token-id <native-token-id>
-            ID for the token which is used to pay network transaction fees on the target chaing (e.g. WETH on mainnet,
+            ID for the token which is used to pay network transaction fees on the target chain (e.g. WETH on mainnet,
             DAI on xDAI) [env: NATIVE_TOKEN_ID=]  [default: 1]
-    -i, --network-id <network-id>
-            The network ID used for signing transactions (e.g. 1 for mainnet, 4 for rinkeby, 5777 for ganache) [env:
-            NETWORK_ID=]
     -n, --node-url <node-url>
             The Ethereum node URL to connect to. Make sure that the node allows for queries without a gas limit to be
             able to fetch the orderbook [env: NODE_URL=]
