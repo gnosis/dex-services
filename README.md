@@ -174,7 +174,7 @@ OPTIONS:
         --log-filter <log-filter>
             The log filter to use.
             
-            This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug'). [env: DFUSION_LOG=]  [default:
+            This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug'). [env: LOG_FILTER=]  [default:
             warn,driver=info,services_core=info]
         --native-token-id <native-token-id>
             ID for the token which is used to pay network transaction fees on the target chaing (e.g. WETH on mainnet,
