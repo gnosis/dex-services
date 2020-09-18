@@ -107,21 +107,22 @@ where
                 path
             }
             PredecessorStore::Bounded(predecessors_at_step, _) => {
-                let steps = predecessors_at_step.len();
-                path = Vec::with_capacity(steps);
-                let mut step = steps;
-                loop {
-                    if step == 0 {
-                        return None;
-                    }
-                    step -= 1;
+                let max_path_len = predecessors_at_step.len();
+                path = Vec::with_capacity(max_path_len);
+                let mut found = false;
+                for step in (0..max_path_len).rev() {
                     if let Some(pred) = predecessors_at_step[step][self.graph.to_index(current)] {
                         path.push(current);
                         if pred == self.source {
-                            break path;
+                            found = true;
+                            break;
                         }
                         current = pred;
                     }
+                }
+                match found {
+                    false => return None,
+                    true => path,
                 }
             }
         };
