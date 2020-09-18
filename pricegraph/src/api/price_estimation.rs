@@ -9,12 +9,17 @@ use crate::Pricegraph;
 impl Pricegraph {
     /// Estimates an exchange rate for the specified token pair and sell volume.
     /// Returns `None` if no counter transitive orders buying the specified sell
-    /// token for the specified buy token exist.
+    /// token for the specified buy token exist, or if the trade would end up
+    /// being a dust trade.
     ///
     /// Note that this price is in exchange format, that is, it is expressed as
     /// the ratio between buy and sell amounts, with implicit fees.
     pub fn estimate_limit_price(&self, pair: TokenPair, max_sell_amount: f64) -> Option<f64> {
-        let mut orderbook = self.reduced_orderbook();
+        if !num::is_strictly_positive_and_finite(max_sell_amount)
+            || num::is_dust_amount(max_sell_amount as u128)
+        {
+            return None;
+        }
 
         // NOTE: This method works by searching for the "best" counter
         // transitive orders, as such we need to fill transitive orders in the
@@ -24,49 +29,27 @@ impl Pricegraph {
             sell: pair.buy,
         };
 
-        if max_sell_amount == 0.0 {
-            // NOTE: For a 0 volume we simulate sending an tiny epsilon of value
-            // through the network without actually filling any orders.
-            // Additionally, the exchange rates are for transitive orders in the
-            // inverse direction, so we need to invert the exchange rate and
-            // account for the fees so that the estimated exchange rate actually
-            // overlaps with the last counter transtive order's exchange rate.
-            return Some(
-                orderbook
-                    .find_optimal_transitive_order(inverse_pair)?
-                    .exchange_rate
-                    .inverse()
-                    .price()
-                    .value(),
-            );
-        }
-
-        if !num::is_strictly_positive_and_finite(max_sell_amount) {
-            return None;
-        }
-
         // NOTE: Iteratively compute the how much cumulative buy volume is
         // available at successively "worse" exchange rates until all the
         // specified sell amount can be used to buy the available liquidity at
         // the marginal exchange rate.
         let mut cumulative_buy_volume = 0.0;
         let mut cumulative_sell_volume = 0.0;
-        while let Some(flow) = orderbook.fill_optimal_transitive_order_if(inverse_pair, |flow| {
-            let current_exchange_rate =
-                match ExchangeRate::new(cumulative_buy_volume / max_sell_amount) {
-                    Some(price) => price,
-                    None => return true,
-                };
-
+        for flow in self
+            .reduced_orderbook()
+            .significant_transitive_orders(inverse_pair)
+        {
             // NOTE: This implies that the added liquidity from the counter
             // transitive order at its exchange rate makes the estimated
             // exchange rate worse, and we are better off just buying off all
             // the previously discovered liquidity instead of including new
             // liquidity from this transitive order.
-            current_exchange_rate < flow.exchange_rate.inverse()
-        }) {
-            if flow.is_dust_trade() {
-                continue;
+            if matches!(
+                ExchangeRate::new(cumulative_buy_volume / max_sell_amount),
+                Some(current_exchange_rate)
+                    if current_exchange_rate >= flow.exchange_rate.inverse()
+            ) {
+                break;
             }
 
             cumulative_buy_volume += flow.capacity / flow.exchange_rate.value();
@@ -80,11 +63,23 @@ impl Pricegraph {
         }
 
         let total_sell_volume = max_sell_amount.max(cumulative_sell_volume);
-        Some(
-            ExchangeRate::new(cumulative_buy_volume / total_sell_volume)?
-                .price()
-                .value(),
-        )
+        let price = ExchangeRate::new(cumulative_buy_volume / total_sell_volume)?
+            .price()
+            .value();
+
+        // NOTE: While technically an order with a dust buy amount is not a dust
+        // order (since the solver may chose to use an executed buy amount
+        // greater than the dust amount), the pricegraph has determined that
+        // there are no overlapping order with a sufficiently low price, so
+        // there is no price that can be used for the specified sell amount and
+        // be overlapping with existing orders such that an executed buy amount
+        // could be found greater than the dust amount.
+        let min_buy_amount = max_sell_amount * price;
+        if num::is_dust_amount(min_buy_amount as u128) {
+            return None;
+        }
+
+        Some(price)
     }
 
     /// Returns a transitive order with a buy amount calculated such that there
@@ -113,8 +108,6 @@ impl Pricegraph {
         pair: TokenPair,
         limit_price: f64,
     ) -> Option<TransitiveOrder> {
-        let mut orderbook = self.reduced_orderbook();
-
         // NOTE: This method works by searching for the "best" counter
         // transitive orders, as such we need to fill transitive orders in the
         // inverse direction and need to invert the limit price.
@@ -124,20 +117,16 @@ impl Pricegraph {
         };
         let max_xrate = LimitPrice::new(limit_price)?.exchange_rate().inverse();
 
-        let mut total_buy_volume = 0.0;
-        let mut total_sell_volume = 0.0;
-        while let Some(flow) = orderbook
-            .fill_optimal_transitive_order_if(inverse_pair, |flow| flow.exchange_rate <= max_xrate)
-        {
-            if flow.is_dust_trade() {
-                continue;
-            }
-
-            // NOTE: The transitive orders being filled are **counter orders**
-            // with inverted token pairs.
-            total_buy_volume += flow.capacity / flow.exchange_rate.value();
-            total_sell_volume += flow.capacity;
-        }
+        let (total_buy_volume, total_sell_volume) = self
+            .reduced_orderbook()
+            .significant_transitive_orders(inverse_pair)
+            .take_while(|flow| flow.exchange_rate <= max_xrate)
+            .fold((0.0, 0.0), |(total_buy_volume, total_sell_volume), flow| {
+                (
+                    total_buy_volume + flow.capacity / flow.exchange_rate.value(),
+                    total_sell_volume + flow.capacity,
+                )
+            });
 
         if total_buy_volume == 0.0 || total_sell_volume == 0.0 {
             None
@@ -444,34 +433,27 @@ mod tests {
     }
 
     #[test]
-    fn estimates_epsilon_limit_price() {
-        //   /--------1.0-------\
-        //  /---1.0---v          v
-        // 1          2          3
-        //            ^---0.9---/
+    fn estimate_returns_none_on_invalid_sell_amounts() {
+        // 1 ---1.0---> 2
         let pricegraph = pricegraph! {
             users {
                 @1 {
-                    token 2 => 10_000_000,
-                    token 3 => 10_000_000,
-                }
-                @2 {
                     token 2 => 10_000_000,
                 }
             }
             orders {
                 owner @1 buying 1 [10_000_000] selling 2 [10_000_000],
-                owner @1 buying 1 [10_000_000] selling 3 [10_000_000],
-                owner @2 buying 3 [9_000_000] selling 2 [10_000_000],
             }
         };
+        let pair = TokenPair { buy: 2, sell: 1 };
 
-        assert_approx_eq!(
-            pricegraph
-                .estimate_limit_price(TokenPair { buy: 2, sell: 1 }, 0.0)
-                .unwrap(),
-            (1.0 / 0.9) / FEE_FACTOR.powi(3)
-        );
+        // NOTE: Make sure that the pricegraph instance returns estimates for
+        // valid amounts for the token pair.
+        assert!(pricegraph.estimate_limit_price(pair, 1_000_000.0).is_some());
+
+        for invalid_amount in &[-42.0, -0.0, 0.0, f64::INFINITY, f64::NEG_INFINITY, f64::NAN] {
+            assert_eq!(pricegraph.estimate_limit_price(pair, *invalid_amount), None);
+        }
     }
 
     #[test]
@@ -708,5 +690,55 @@ mod tests {
             pricegraph.estimate_limit_price(TokenPair { buy: 5, sell: 7 }, 10_001.0),
             None,
         );
+    }
+
+    #[test]
+    fn estimate_returns_none_for_dust_sell_amounts() {
+        // 1 ---0.1---> 2 ---2.0---> 3
+        let pricegraph = pricegraph! {
+            users {
+                @1 {
+                    token 2 => 10_000_000,
+                }
+                @2 {
+                    token 3 => 10_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 1 [ 1_000_000] selling 2 [10_000_000],
+                owner @2 buying 2 [20_000_000] selling 3 [10_000_000],
+            }
+        };
+        let pair = TokenPair { buy: 2, sell: 1 };
+
+        // NOTE: Check that dust maximum sell amounts return `None`
+        assert!(pricegraph.estimate_limit_price(pair, 10_000.0).is_some());
+        assert!(pricegraph.estimate_limit_price(pair, 9_999.0).is_none());
+    }
+
+    #[test]
+    fn estimate_returns_none_for_dust_buy_amounts() {
+        // 1 ---2.0---> 2
+        let pricegraph = pricegraph! {
+            users {
+                @1 {
+                    token 2 => 10_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 1 [20_000_000] selling 2 [10_000_000],
+            }
+        };
+        let pair = TokenPair { buy: 2, sell: 1 };
+
+        // NOTE: Check that if we try to sell less that ~20K of token 1, the
+        // price estimate returns `None`, this is because there is no possible
+        // executed buy amount that respects the limit price of the user @1's
+        // order while simultaneously being greater than the dust amount given
+        // the specified maximum sell amount.
+        assert!(pricegraph
+            .estimate_limit_price(pair, 20_000.0 * FEE_FACTOR.powi(2) + 1.0)
+            .is_some());
+        assert!(pricegraph.estimate_limit_price(pair, 15_000.0).is_none());
     }
 }

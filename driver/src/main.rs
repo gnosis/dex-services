@@ -1,25 +1,23 @@
-use core::contracts::{stablex_contract::StableXContractImpl, web3_provider, Web3};
-use core::driver::{
+use services_core::contracts::{stablex_contract::StableXContractImpl, web3_provider, Web3};
+use services_core::driver::{
     scheduler::{AuctionTimingConfiguration, SchedulerKind},
     stablex_driver::StableXDriverImpl,
 };
-use core::economic_viability::{
-    EconomicViabilityComputer, FixedEconomicViabilityComputer, PriorityEconomicViabilityComputer,
-};
-use core::gas_price::{self, GasPriceEstimating};
-use core::health::{HealthReporting, HttpHealthEndpoint};
-use core::http::HttpFactory;
-use core::http_server::{DefaultRouter, RouilleServer, Serving};
-use core::logging;
-use core::metrics::{HttpMetrics, MetricsHandler, SolverMetrics, StableXMetrics};
-use core::orderbook::{
+use services_core::economic_viability::EconomicViabilityStrategy;
+use services_core::gas_price::{self, GasPriceEstimating};
+use services_core::health::{HealthReporting, HttpHealthEndpoint};
+use services_core::http::HttpFactory;
+use services_core::http_server::{DefaultRouter, RouilleServer, Serving};
+use services_core::logging;
+use services_core::metrics::{HttpMetrics, MetricsHandler, SolverMetrics, StableXMetrics};
+use services_core::orderbook::{
     EventBasedOrderbook, FilteredOrderbookReader, OrderbookFilter, StableXOrderBookReading,
 };
-use core::price_estimation::PriceOracle;
-use core::price_finding::{self, Fee, InternalOptimizer, SolverType};
-use core::solution_submission::StableXSolutionSubmitter;
-use core::token_info::hardcoded::TokenData;
-use core::util::FutureWaitExt as _;
+use services_core::price_estimation::PriceOracle;
+use services_core::price_finding::{self, Fee, InternalOptimizer, SolverType};
+use services_core::solution_submission::StableXSolutionSubmitter;
+use services_core::token_info::hardcoded::TokenData;
+use services_core::util::FutureWaitExt as _;
 
 use ethcontract::PrivateKey;
 use log::info;
@@ -43,44 +41,53 @@ struct Options {
     /// This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug').
     #[structopt(
         long,
-        env = "DFUSION_LOG",
-        default_value = "warn,driver=info,core=info"
+        env = "LOG_FILTER",
+        default_value = "warn,driver=info,services_core=info"
     )]
     log_filter: String,
 
     /// The Ethereum node URL to connect to. Make sure that the node allows for
     /// queries without a gas limit to be able to fetch the orderbook.
-    #[structopt(short, long, env = "ETHEREUM_NODE_URL")]
+    #[structopt(short, long, env = "NODE_URL")]
     node_url: Url,
 
-    /// The network ID used for signing transactions (e.g. 1 for mainnet, 4 for
-    /// rinkeby, 5777 for ganache).
-    #[structopt(short = "i", long, env = "NETWORK_ID")]
-    network_id: u64,
-
     /// Which style of solver to use. Can be one of:
-    /// 'naive-solver' for the naive solver;
-    /// 'standard-solver' for mixed integer programming solver;
-    /// 'fallback-solver' for a more conservative solver than the standard solver;
-    /// 'best-ring-solver' for a solver searching only for the best ring;
-    /// 'open-solver' for the open-source solver
-    #[structopt(long, env = "SOLVER_TYPE", default_value = "naive-solver")]
+    /// 'NaiveSolver' for the naive solver;
+    /// 'StandardSolver' for mixed integer programming solver;
+    /// 'FallbackSolver' for a more conservative solver than the standard solver;
+    /// 'BestRingSolver' for a solver searching only for the best ring;
+    /// 'OpenSolver' for the open-source solver
+    #[structopt(
+        long,
+        env = "SOLVER_TYPE",
+        default_value = "NaiveSolver",
+        possible_values = SolverType::variant_names(),
+        case_insensitive = true,
+    )]
     solver_type: SolverType,
 
     /// Which internal optimizer the solver should use. It is passed as
     /// `--solver` to the solver. Choices are "scip" and "gurobi".
-    #[structopt(long, env = "SOLVER_INTERNAL_OPTIMIZER", default_value = "scip")]
+    #[structopt(
+        long,
+        env = "SOLVER_INTERNAL_OPTIMIZER",
+        default_value = "Scip",
+        possible_values = InternalOptimizer::variant_names(),
+        case_insensitive = true,
+    )]
     solver_internal_optimizer: InternalOptimizer,
 
     /// JSON encoded backup token information to provide to the solver.
     ///
     /// For example: '{
     ///   "T0001": {
+    ///     "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
     ///     "alias": "WETH",
     ///     "decimals": 18,
     ///     "externalPrice": 200000000000000000000,
     ///   },
     ///   "T0004": {
+    ///     "address": "0x0000000000000000000000000000000000000000",
     ///     "alias": "USDC",
     ///     "decimals": 6,
     ///     "externalPrice": 1000000000000000000000000000000,
@@ -114,7 +121,7 @@ struct Options {
     /// The timeout in milliseconds of web3 JSON RPC calls, defaults to 10000ms
     #[structopt(
         long,
-        env = "WEB3_RPC_TIMEOUT",
+        env = "RPC_TIMEOUT",
         default_value = "10000",
         parse(try_from_str = duration_millis),
     )]
@@ -174,7 +181,7 @@ struct Options {
 
     /// We multiply the economically viable min average fee by this amount to ensure that if a
     /// solution has this minimum amount it will still be end up economically viable even when the
-    /// gas or eth price moves slightly between solution computation and submission.
+    /// gas or native token price moves slightly between solution computation and submission.
     #[structopt(
         long,
         env = "ECONOMIC_VIABILITY_MIN_AVG_FEE_FACTOR",
@@ -182,18 +189,36 @@ struct Options {
     )]
     economic_viability_min_avg_fee_factor: f64,
 
-    /// The default minimum average fee per order. This is passed to the solver
+    /// The fallback minimum average fee per order. This is passed to the solver
     /// in case the computing its value fails. Its unit is [OWL]
-    #[structopt(long, env = "MIN_AVG_FEE_PER_ORDER", default_value = "0")]
-    default_min_avg_fee_per_order: u128,
+    #[structopt(long, env = "FALLBACK_MIN_AVG_FEE_PER_ORDER", default_value = "0")]
+    fallback_min_avg_fee_per_order: u128,
 
-    /// The default maximum gas price. This is used when computing the maximum gas price based on
+    /// The fallback maximum gas price. This is used when computing the maximum gas price based on
     /// ether price in owl fails.
-    #[structopt(long, env = "DEFAULT_MAX_GAS_PRICE", default_value = "100000000000")]
-    default_max_gas_price: u128,
+    #[structopt(long, env = "FALLBACK_MAX_GAS_PRICE", default_value = "100000000000")]
+    fallback_max_gas_price: u128,
+
+    /// How to calculate the economic viability constraints. `Dynamic` means that current native token price
+    /// is taken into account while `Static` means that fallback_min_avg_fee_per_order and
+    /// fallback_max_gas_price will always be used.
+    #[structopt(
+        long,
+        env = "ECONOMIC_VIABILITY_STRATEGY",
+        default_value = "Dynamic",
+        possible_values = EconomicViabilityStrategy::variant_names(),
+        case_insensitive = true,
+    )]
+    economic_viability_strategy: EconomicViabilityStrategy,
 
     /// The kind of scheduler to use.
-    #[structopt(long, env = "SCHEDULER", default_value = "system")]
+    #[structopt(
+        long,
+        env = "SCHEDULER",
+        default_value = "System",
+        possible_values = SchedulerKind::variant_names(),
+        case_insensitive = true,
+    )]
     scheduler: SchedulerKind,
 
     /// Time interval in seconds in which price sources should be updated.
@@ -209,6 +234,11 @@ struct Options {
     /// the startup time.
     #[structopt(long, env = "ORDERBOOK_FILE", parse(from_os_str))]
     orderbook_file: Option<PathBuf>,
+
+    /// ID for the token which is used to pay network transaction fees on the
+    /// target chain (e.g. WETH on mainnet, DAI on xDAI).
+    #[structopt(long, env = "NATIVE_TOKEN_ID", default_value = "1")]
+    native_token_id: u16,
 }
 
 fn main() {
@@ -217,15 +247,15 @@ fn main() {
     info!("Starting driver with runtime options: {:#?}", options);
 
     // Set up metrics and health monitoring and serve in separate thread.
-    let (stablex_metrics, http_metrics, solver_metrics, _health) = setup_monitoring();
+    let (stablex_metrics, http_metrics, solver_metrics, health) = setup_monitoring();
 
     // Set up shared HTTP client and HTTP services.
     let http_factory = HttpFactory::new(options.http_timeout, http_metrics);
-    let (web3, gas_station) = setup_http_services(&http_factory, &options);
+    let (web3, gas_station) = setup_http_services(&http_factory, &options).wait();
 
     // Set up connection to exchange contract
     let contract = Arc::new(
-        StableXContractImpl::new(&web3, options.private_key.clone(), options.network_id)
+        StableXContractImpl::new(&web3, options.private_key.clone())
             .wait()
             .unwrap(),
     );
@@ -250,22 +280,19 @@ fn main() {
             contract.clone(),
             options.token_data,
             options.price_source_update_interval,
+            options.native_token_id.into(),
         )
         .unwrap(),
     );
 
-    let economic_viability = Arc::new(PriorityEconomicViabilityComputer::new(vec![
-        Box::new(EconomicViabilityComputer::new(
-            price_oracle.clone(),
-            gas_station.clone(),
-            options.economic_viability_subsidy_factor,
-            options.economic_viability_min_avg_fee_factor,
-        )),
-        Box::new(FixedEconomicViabilityComputer::new(
-            Some(options.default_min_avg_fee_per_order),
-            Some(options.default_max_gas_price.into()),
-        )),
-    ]));
+    let economic_viability = Arc::new(options.economic_viability_strategy.from_arguments(
+        options.economic_viability_subsidy_factor,
+        options.economic_viability_min_avg_fee_factor,
+        options.fallback_min_avg_fee_per_order,
+        options.fallback_max_gas_price,
+        price_oracle.clone(),
+        gas_station.clone(),
+    ));
 
     // Setup price.
     let price_finder = price_finding::create_price_finder(
@@ -275,6 +302,7 @@ fn main() {
         economic_viability.clone(),
         options.solver_internal_optimizer,
         solver_metrics,
+        stablex_metrics.clone(),
     );
 
     // Set up solution submitter.
@@ -295,9 +323,10 @@ fn main() {
         options.earliest_solution_submit_time,
     );
 
-    let mut scheduler = options
-        .scheduler
-        .create(contract, Arc::new(driver), scheduler_config);
+    let mut scheduler =
+        options
+            .scheduler
+            .create(contract, Arc::new(driver), scheduler_config, health);
     orderbook
         .initialize()
         .wait()
@@ -328,13 +357,14 @@ fn setup_monitoring() -> (
     (stablex_metrics, http_metrics, solver_metrics, health)
 }
 
-fn setup_http_services(
+async fn setup_http_services(
     http_factory: &HttpFactory,
     options: &Options,
 ) -> (Web3, Arc<dyn GasPriceEstimating + Send + Sync>) {
     let web3 = web3_provider(http_factory, options.node_url.as_str(), options.rpc_timeout).unwrap();
-    let gas_station =
-        gas_price::create_estimator(options.network_id, &http_factory, &web3).unwrap();
+    let gas_station = gas_price::create_estimator(&http_factory, &web3)
+        .await
+        .unwrap();
     (web3, gas_station)
 }
 

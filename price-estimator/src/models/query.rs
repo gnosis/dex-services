@@ -1,9 +1,9 @@
 //! Module implementing parsing request query parameters.
 
 use anyhow::{bail, Context as _, Error, Result};
-use core::models::BatchId;
-use ethcontract::Address;
+use ethcontract::{Address, BlockNumber};
 use serde::Deserialize;
+use services_core::models::BatchId;
 use std::convert::TryFrom;
 
 /// Common query parameters shared across all price estimation routes.
@@ -19,6 +19,7 @@ pub struct QueryParameters {
     pub time: EstimationTime,
     /// Addresses whose orders should be ignored.
     pub ignore_addresses: Vec<Address>,
+    pub rounding_buffer: RoundingBuffer,
 }
 
 /// Units for token amounts.
@@ -38,7 +39,7 @@ impl Default for Unit {
 }
 
 /// When to perform a price estimate.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum EstimationTime {
     /// Estimate with the current open orderbook.
     Now,
@@ -46,10 +47,23 @@ pub enum EstimationTime {
     Batch(BatchId),
     /// The `Pricegraph` will be contructed from the events up to, and
     /// including, the specified block.
-    Block(u64),
+    Block(BlockNumber),
     /// The `Pricegraph` will be contructed from the events that occured up to,
     /// and including, the specified timestamp.
     Timestamp(u64),
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum RoundingBuffer {
+    Enabled,
+    Disabled,
+}
+
+impl Default for RoundingBuffer {
+    fn default() -> Self {
+        Self::Enabled
+    }
 }
 
 /// Intermediate raw query parameters used for parsing.
@@ -64,6 +78,7 @@ struct RawQuery {
     timestamp: Option<u64>,
     // String instead of Vec<Address> because the urlencoded standard does not support lists.
     ignore_addresses: Option<String>,
+    rounding_buffer: Option<RoundingBuffer>,
 }
 
 impl TryFrom<RawQuery> for QueryParameters {
@@ -82,11 +97,12 @@ impl TryFrom<RawQuery> for QueryParameters {
             time: match (raw.batch_id, raw.block_number, raw.timestamp) {
                 (None, None, None) => EstimationTime::Now,
                 (Some(batch_id), None, None) => EstimationTime::Batch(batch_id),
-                (None, Some(block_number), None) => EstimationTime::Block(block_number),
+                (None, Some(block_number), None) => EstimationTime::Block(block_number.into()),
                 (None, None, Some(timestamp)) => EstimationTime::Timestamp(timestamp),
                 _ => bail!("only one of 'batchId', 'blockNumber', or 'timestamp' parameters can be specified"),
             },
-            ignore_addresses: raw.ignore_addresses.as_deref().map(parse_addresses).transpose()?.unwrap_or_default()
+            ignore_addresses: raw.ignore_addresses.as_deref().map(parse_addresses).transpose()?.unwrap_or_default(),
+            rounding_buffer: raw.rounding_buffer.unwrap_or_default(),
         })
     }
 }
@@ -127,6 +143,7 @@ mod tests {
         assert_eq!(query.hops, None);
         assert_eq!(query.time, EstimationTime::Now);
         assert_eq!(query.ignore_addresses, Vec::new());
+        assert_eq!(query.rounding_buffer, RoundingBuffer::Enabled);
     }
 
     #[test]
@@ -186,12 +203,21 @@ mod tests {
     }
 
     #[test]
+    fn orderbook_kind_query_parameter() {
+        let query = query_params("?roundingBuffer=enabled").unwrap();
+        assert_eq!(query.rounding_buffer, RoundingBuffer::Enabled);
+
+        let query = query_params("?roundingBuffer=disabled").unwrap();
+        assert_eq!(query.rounding_buffer, RoundingBuffer::Disabled);
+    }
+
+    #[test]
     fn generation_query_parameters() {
         let query = query_params("?batchId=42").unwrap();
         assert_eq!(query.time, EstimationTime::Batch(42.into()));
 
         let query = query_params("?blockNumber=123").unwrap();
-        assert_eq!(query.time, EstimationTime::Block(123));
+        assert_eq!(query.time, EstimationTime::Block(123.into()));
 
         let query = query_params("?timestamp=1337").unwrap();
         assert_eq!(query.time, EstimationTime::Timestamp(1337));

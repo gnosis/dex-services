@@ -1,16 +1,13 @@
 //! Data and logic related to token pair order management.
 
-use super::{ExchangeRate, LimitPrice, UserMap};
+use super::{map::Map, ExchangeRate, LimitPrice, UserMap};
 use crate::encoding::{Element, OrderId, TokenId, TokenPair, UserId};
-use crate::num;
 use std::cmp::Reverse;
-use std::collections::HashMap;
-use std::f64;
 
 /// A type for collecting orders and building an order map that garantees that
 /// per-pair orders are sorted for optimal access.
 #[derive(Debug, Default)]
-pub struct OrderCollector(HashMap<TokenId, HashMap<TokenId, Vec<Order>>>);
+pub struct OrderCollector(Map<TokenId, Map<TokenId, Vec<Order>>>);
 
 impl OrderCollector {
     /// Adds a new order to the order map.
@@ -42,7 +39,7 @@ impl OrderCollector {
 /// pair orders are garanteed to be in order, so that the cheapest order is
 /// always at the end of the token pair order vector.
 #[derive(Clone, Debug)]
-pub struct OrderMap(HashMap<TokenId, HashMap<TokenId, Vec<Order>>>);
+pub struct OrderMap(Map<TokenId, Map<TokenId, Vec<Order>>>);
 
 impl OrderMap {
     /// Returns an iterator over the collection of orders for each token pair.
@@ -112,6 +109,13 @@ impl OrderMap {
     }
 }
 
+/// The remaining amount in an order can be unlimited or fixed.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Amount {
+    Unlimited,
+    Remaining(u128),
+}
+
 /// A single order with a reference to the user.
 ///
 /// Note that we approximate amounts and prices with floating point numbers.
@@ -128,7 +132,7 @@ pub struct Order {
     /// The maximum capacity for this order, this is equivalent to the order's
     /// remaining sell amount. Note that orders are also limited by their user's
     /// balance.
-    pub amount: f64,
+    pub amount: Amount,
     /// The effective exchange rate for this order.
     pub exchange_rate: ExchangeRate,
 }
@@ -137,9 +141,9 @@ impl Order {
     /// Creates a new order from an ID and an orderbook element.
     pub fn new(element: &Element) -> Option<Self> {
         let amount = if is_unbounded(&element) {
-            f64::INFINITY
+            Amount::Unlimited
         } else {
-            element.remaining_sell_amount as _
+            Amount::Remaining(element.remaining_sell_amount)
         };
         let exchange_rate = LimitPrice::from_fraction(&element.price)?.exchange_rate();
 
@@ -155,9 +159,12 @@ impl Order {
     /// Retrieves the effective remaining amount for this order based on user
     /// balances. This is the minimum between the remaining order amount and
     /// the user's sell token balance.
-    pub fn get_effective_amount(&self, users: &UserMap) -> f64 {
+    pub fn get_effective_amount(&self, users: &UserMap) -> u128 {
         let balance = users[&self.user].balance_of(self.pair.sell);
-        num::min(self.amount, balance)
+        match self.amount {
+            Amount::Unlimited => balance,
+            Amount::Remaining(amount) => amount.min(balance),
+        }
     }
 }
 

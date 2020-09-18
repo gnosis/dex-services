@@ -1,24 +1,18 @@
 use crate::{
-    infallible_price_source::PriceCacheUpdater, models::EstimationTime, solver_rounding_buffer,
+    infallible_price_source::PriceCacheUpdater,
+    models::{EstimationTime, RoundingBuffer},
+    solver_rounding_buffer,
 };
 use anyhow::{bail, Result};
-use core::{
-    models::{AccountState, BatchId, Order, TokenId},
-    orderbook::StableXOrderBookReading,
-};
 use ethcontract::Address;
 use futures::future;
 use pricegraph::{Pricegraph, TokenPair};
+use services_core::{
+    economic_viability::NativeTokenPricing,
+    models::{AccountState, BatchId, Order, TokenId},
+    orderbook::StableXOrderBookReading,
+};
 use tokio::sync::RwLock;
-
-#[derive(Debug)]
-pub enum PricegraphKind {
-    // pricegraph instance with the original orders from the orderbook
-    Raw,
-    // pricegraph instance with the orders to which the rounding buffer has been applied
-    #[allow(dead_code)]
-    WithRoundingBuffer,
-}
 
 struct PricegraphCache {
     pricegraph_raw: Pricegraph,
@@ -31,6 +25,7 @@ pub struct Orderbook {
     pricegraph_cache: RwLock<PricegraphCache>,
     extra_rounding_buffer_factor: f64,
     infallible_price_source: PriceCacheUpdater,
+    native_token: TokenId,
 }
 
 impl Orderbook {
@@ -38,6 +33,7 @@ impl Orderbook {
         orderbook_reading: Box<dyn StableXOrderBookReading>,
         infallible_price_source: PriceCacheUpdater,
         extra_rounding_buffer_factor: f64,
+        native_token: TokenId,
     ) -> Self {
         Self {
             orderbook_reading,
@@ -47,6 +43,7 @@ impl Orderbook {
             }),
             infallible_price_source,
             extra_rounding_buffer_factor,
+            native_token,
         }
     }
 
@@ -54,31 +51,27 @@ impl Orderbook {
         &self,
         time: EstimationTime,
         ignore_addresses: &[Address],
-        pricegraph_type: PricegraphKind,
+        rounding_buffer: RoundingBuffer,
     ) -> Result<Pricegraph> {
-        let mut auction_data = match (time, ignore_addresses.is_empty()) {
-            (EstimationTime::Now, true) => {
-                return Ok(self.cached_pricegraph(pricegraph_type).await)
+        if time == EstimationTime::Now && ignore_addresses.is_empty() {
+            Ok(self.cached_pricegraph(rounding_buffer).await)
+        } else {
+            let mut auction_data = self.auction_data(time).await?;
+            if matches!(rounding_buffer, RoundingBuffer::Enabled) {
+                self.apply_rounding_buffer_to_auction_data(&mut auction_data)
+                    .await?;
             }
-            (EstimationTime::Now, false) => self.auction_data(BatchId::now()).await?,
-            (EstimationTime::Batch(batch_id), _) => self.auction_data(batch_id).await?,
-            (EstimationTime::Block(_), _) | (EstimationTime::Timestamp(_), _) => {
-                bail!("not yet implemented")
-            }
-        };
-        if matches!(pricegraph_type, PricegraphKind::WithRoundingBuffer) {
-            self.apply_rounding_buffer_to_auction_data(&mut auction_data)
-                .await?;
+
+            Ok(pricegraph_from_auction_data(
+                &auction_data,
+                ignore_addresses,
+            ))
         }
-        Ok(pricegraph_from_auction_data(
-            &auction_data,
-            ignore_addresses,
-        ))
     }
 
     /// Recreate the pricegraph orderbook and update the infallible price source.
     pub async fn update(&self) -> Result<()> {
-        let mut auction_data = self.auction_data(BatchId::now()).await?;
+        let mut auction_data = self.auction_data(EstimationTime::Now).await?;
 
         // TODO: Move this cpu heavy computation out of the async function using spawn_blocking.
         let pricegraph = pricegraph_from_auction_data(&auction_data, &[]);
@@ -121,17 +114,32 @@ impl Orderbook {
         }
     }
 
-    async fn auction_data(&self, batch_id: BatchId) -> Result<AuctionData> {
-        self.orderbook_reading
-            .get_auction_data_for_batch(batch_id.into())
-            .await
+    async fn auction_data(&self, time: EstimationTime) -> Result<AuctionData> {
+        match time {
+            EstimationTime::Now => {
+                self.orderbook_reading
+                    .get_auction_data_for_batch(BatchId::now().into())
+                    .await
+            }
+            EstimationTime::Batch(batch_id) => {
+                self.orderbook_reading
+                    .get_auction_data_for_batch(batch_id.into())
+                    .await
+            }
+            EstimationTime::Block(block_number) => {
+                self.orderbook_reading
+                    .get_auction_data_for_block(block_number)
+                    .await
+            }
+            EstimationTime::Timestamp(_) => bail!("not yet implemented"),
+        }
     }
 
-    async fn cached_pricegraph(&self, pricegraph_type: PricegraphKind) -> Pricegraph {
+    async fn cached_pricegraph(&self, pricegraph_type: RoundingBuffer) -> Pricegraph {
         let cache = self.pricegraph_cache.read().await;
         match pricegraph_type {
-            PricegraphKind::Raw => &cache.pricegraph_raw,
-            PricegraphKind::WithRoundingBuffer => &cache.pricegraph_with_rounding_buffer,
+            RoundingBuffer::Disabled => &cache.pricegraph_raw,
+            RoundingBuffer::Enabled => &cache.pricegraph_with_rounding_buffer,
         }
         .clone()
     }
@@ -149,6 +157,18 @@ impl Orderbook {
             self.extra_rounding_buffer_factor,
         );
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl NativeTokenPricing for Orderbook {
+    async fn get_native_token_price(&self) -> Option<std::num::NonZeroU128> {
+        Some(
+            self.infallible_price_source
+                .inner()
+                .await
+                .price(self.native_token),
+        )
     }
 }
 
@@ -170,31 +190,32 @@ fn pricegraph_from_auction_data(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core::{
+    use futures::FutureExt as _;
+    use services_core::{
         models::TokenId, orderbook::NoopOrderbook, price_estimation::price_source::PriceSource,
         token_info::hardcoded::TokenData,
     };
-    use futures::future::{BoxFuture, FutureExt as _};
     use std::{collections::HashMap, num::NonZeroU128, sync::Arc};
 
     #[test]
     fn updates_infallible_price_source() {
         struct PriceSource_ {};
+        #[async_trait::async_trait]
         impl PriceSource for PriceSource_ {
-            fn get_prices<'a>(
-                &'a self,
-                _tokens: &'a [TokenId],
-            ) -> BoxFuture<'a, Result<HashMap<TokenId, NonZeroU128>>> {
+            async fn get_prices(
+                &self,
+                _tokens: &[TokenId],
+            ) -> Result<HashMap<TokenId, NonZeroU128>> {
                 futures::future::ready(Ok(vec![(TokenId(1), NonZeroU128::new(3).unwrap())]
                     .into_iter()
                     .collect()))
-                .boxed()
+                .await
             }
         }
 
         let token_info = Arc::new(TokenData::default());
         let infallible = PriceCacheUpdater::new(token_info, vec![Box::new(PriceSource_ {})]);
-        let orderbook = Orderbook::new(Box::new(NoopOrderbook), infallible, 2.0);
+        let orderbook = Orderbook::new(Box::new(NoopOrderbook), infallible, 2.0, TokenId(1));
         let price = || {
             orderbook
                 .infallible_price_source

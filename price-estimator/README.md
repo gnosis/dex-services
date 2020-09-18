@@ -10,7 +10,7 @@ Alternatively locally with docker
 docker run -p 80:8080 -e SWAGGER_JSON=/openapi.yml --mount type=bind,src="$PWD/openapi.yml",dst=/openapi.yml swaggerapi/swagger-ui
 ```
 
-and open http://localhost:80 .
+and open <http://localhost:80>.
 
 ## Testing
 

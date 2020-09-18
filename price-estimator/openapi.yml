@@ -32,6 +32,8 @@ paths:
         - $ref: "#/components/parameters/Unit"
         - $ref: "#/components/parameters/BatchId"
         - $ref: "#/components/parameters/IgnoreAddresses"
+        - $ref: "#/components/parameters/BlockNumber"
+        - $ref: "#/components/parameters/RoundingBuffer"
   /api/v1/markets/{market}/estimated-amounts-at-price/{price}:
     get:
       summary: Estimated Amounts At Price
@@ -54,6 +56,8 @@ paths:
         - $ref: "#/components/parameters/Unit"
         - $ref: "#/components/parameters/BatchId"
         - $ref: "#/components/parameters/IgnoreAddresses"
+        - $ref: "#/components/parameters/BlockNumber"
+        - $ref: "#/components/parameters/RoundingBuffer"
   /api/v1/markets/{market}/estimated-best-ask-price:
     get:
       summary: Estimated Best Ask Price
@@ -72,6 +76,8 @@ paths:
         - $ref: "#/components/parameters/Unit"
         - $ref: "#/components/parameters/BatchId"
         - $ref: "#/components/parameters/IgnoreAddresses"
+        - $ref: "#/components/parameters/BlockNumber"
+        - $ref: "#/components/parameters/RoundingBuffer"
   /api/v1/markets/{market}:
     get:
       summary: Market
@@ -88,6 +94,18 @@ paths:
         - $ref: "#/components/parameters/Unit"
         - $ref: "#/components/parameters/BatchId"
         - $ref: "#/components/parameters/IgnoreAddresses"
+        - $ref: "#/components/parameters/BlockNumber"
+  /api/v1/minimum-order-size-owl:
+    get:
+      summary: Minimum Order Size Owl
+      description: The minimum size of an order in owl atoms for it to be considered by the solver according to current economic viability constraints.
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MinimumOrderSizeOwlResponse"
 components:
   schemas:
     NumberParameter:
@@ -97,6 +115,11 @@ components:
       enum: [baseunits, atoms]
       default: baseunits
       example: baseunits
+    RoundingBuffer:
+      type: string
+      enum: [enabled, disabled]
+      default: enabled
+      example: enabled
     IgnoreAddressesParameter:
       type: string
       default: ""
@@ -141,6 +164,8 @@ components:
         bids:
           - price: 5508028446685.359
             volume": 3.2264600472733105
+    MinimumOrderSizeOwlResponse:
+      type: number
   parameters:
     Market:
       name: market
@@ -149,7 +174,15 @@ components:
       required: true
       schema:
         type: string
-        example: 1-7
+      examples:
+        token_ids:
+          summary: Token Ids
+          value: 1-7
+        symbols:
+          summary: Symbols
+          value: WETH-DAI
+        addresses:
+          value: 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2-0x6b175474e89094c44da98b954eedeac495271d0f
     Unit:
       name: unit
       in: query
@@ -157,6 +190,13 @@ components:
       required: false
       schema:
         $ref: "#/components/schemas/Unit"
+    RoundingBuffer:
+      name: roundingBuffer
+      in: query
+      description: If `enabled` (the default) the orderbook is adjusted by a rounding buffer that is used by the solvers internally. This makes the results more accurately reflect how the solvers see the orderbook.  If set to `disabled` no adjustments take place which can lead to for example prices for orders that would not actually get matched by the solver.
+      required: false
+      schema:
+        $ref: "#/components/schemas/RoundingBuffer"
     BatchId:
       name: batchId
       in: query
@@ -178,3 +218,10 @@ components:
         list:
           summary: Two Addresses
           value: 0x00000000000000000000000000000000000000a0,0x00000000000000000000000000000000000000A1
+    BlockNumber:
+      name: blockNumber
+      in: query
+      description: The block number to compute the estimate for. This will use the open orderbook at that block (i.e. orders that will be considered for solving the current batch at the block number). This parameter cannot be specified together with the "batchId" query parameter.
+      required: false
+      schema:
+        type: integer

@@ -5,22 +5,9 @@ authors = ["Nicholas Rodrigues Lordello <nicholas.lordello@gnosis.pm>"]
 edition = "2018"
 publish = false
 
-[[bin]]
-name = "convert"
-path = "convert.rs"
-
-[[bin]]
-name = "fetch"
-path = "fetch.rs"
+[lib]
+path = "lib.rs"
 
 [dependencies]
-anyhow = "1.0.32"
-contracts = { path = "../../contracts" }
-env_logger = "0.7.1"
-futures = { version = "0.3.5", features = ["compat"] }
-hex = "0.4.2"
-log = "0.4.11"
-serde = { version = "1.0.115", features = ["derive"] }
-serde_json = "1.0.57"
-serde_with = "1.4.0"
-structopt = "0.3.16"
+data-encoding = "2"
+lazy_static = "1"

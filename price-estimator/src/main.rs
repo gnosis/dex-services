@@ -2,12 +2,20 @@ mod amounts_at_price;
 mod error;
 mod filter;
 mod infallible_price_source;
+mod metrics;
 mod models;
 mod orderbook;
 mod solver_rounding_buffer;
 
-use core::{
+use ethcontract::PrivateKey;
+use infallible_price_source::PriceCacheUpdater;
+use metrics::Metrics;
+use orderbook::Orderbook;
+use prometheus::Registry;
+use services_core::{
     contracts::{stablex_contract::StableXContractImpl, web3_provider},
+    economic_viability::EconomicViabilityStrategy,
+    gas_price,
     health::{HealthReporting, HttpHealthEndpoint},
     http::HttpFactory,
     http_server::{DefaultRouter, RouilleServer, Serving},
@@ -17,10 +25,6 @@ use core::{
     token_info::{cached::TokenInfoCache, hardcoded::TokenData},
     util::FutureWaitExt as _,
 };
-use ethcontract::PrivateKey;
-use infallible_price_source::PriceCacheUpdater;
-use orderbook::Orderbook;
-use prometheus::Registry;
 use std::{
     collections::HashMap, net::SocketAddr, num::ParseIntError, path::PathBuf, sync::Arc,
     time::Duration,
@@ -38,8 +42,8 @@ struct Options {
     /// This follows the `slog-envlogger` syntax (e.g. 'info,price_estimator=debug').
     #[structopt(
         long,
-        env = "DFUSION_LOG",
-        default_value = "warn,price_estimator=info,core=info,warp::filters::log=info"
+        env = "LOG_FILTER",
+        default_value = "warn,price_estimator=info,services_core=info,warp::filters::log=info"
     )]
     log_filter: String,
 
@@ -48,17 +52,17 @@ struct Options {
 
     /// The Ethereum node URL to connect to. Make sure that the node allows for
     /// queries without a gas limit to be able to fetch the orderbook.
-    #[structopt(long, env = "ETHEREUM_NODE_URL")]
+    #[structopt(long, env = "NODE_URL")]
     node_url: Url,
 
     /// The timeout in seconds of web3 JSON RPC calls.
     #[structopt(
         long,
-        env = "TIMEOUT",
+        env = "RPC_TIMEOUT",
         default_value = "10",
         parse(try_from_str = duration_secs),
     )]
-    timeout: Duration,
+    rpc_timeout: Duration,
 
     #[structopt(long, env = "ORDERBOOK_FILE", parse(from_os_str))]
     orderbook_file: Option<PathBuf>,
@@ -96,6 +100,39 @@ struct Options {
     /// an estimate and the solver submitting a solution.
     #[structopt(long, env = "EXTRA_ROUNDING_BUFFER_FACTOR", default_value = "2.0")]
     extra_rounding_buffer_factor: f64,
+
+    // These are copies of the same arguments used in the driver for economic viability.
+    // It would be nice if we could avoid copy pasting these. Maybe structopt/clap has a feature
+    // like serde's flatten that would allow us to do this.
+    #[structopt(
+        long,
+        env = "ECONOMIC_VIABILITY_SUBSIDY_FACTOR",
+        default_value = "10.0"
+    )]
+    economic_viability_subsidy_factor: f64,
+    #[structopt(
+        long,
+        env = "ECONOMIC_VIABILITY_MIN_AVG_FEE_FACTOR",
+        default_value = "1.1"
+    )]
+    economic_viability_min_avg_fee_factor: f64,
+    #[structopt(long, env = "FALLBACK_MIN_AVG_FEE_PER_ORDER", default_value = "0")]
+    fallback_min_avg_fee_per_order: u128,
+    #[structopt(long, env = "FALLBACK_MAX_GAS_PRICE", default_value = "100000000000")]
+    fallback_max_gas_price: u128,
+    #[structopt(
+        long,
+        env = "ECONOMIC_VIABILITY_STRATEGY",
+        default_value = "Dynamic",
+        possible_values = EconomicViabilityStrategy::variant_names(),
+        case_insensitive = true,
+    )]
+    economic_viability_strategy: EconomicViabilityStrategy,
+
+    /// ID for the token which is used to pay network transaction fees on the
+    /// target chain (e.g. WETH on mainnet, DAI on xDAI).
+    #[structopt(long, env = "NATIVE_TOKEN_ID", default_value = "1")]
+    native_token_id: u16,
 }
 
 fn main() {
@@ -106,16 +143,21 @@ fn main() {
         options
     );
 
-    let (driver_http_metrics, health) = setup_monitoring();
-    let http_factory = HttpFactory::new(options.timeout, driver_http_metrics);
-    let web3 = web3_provider(&http_factory, options.node_url.as_str(), options.timeout).unwrap();
+    let (metrics, driver_http_metrics, health) = setup_monitoring();
+    let metrics = Arc::new(metrics);
+    let http_factory = HttpFactory::new(options.rpc_timeout, driver_http_metrics);
+    let web3 = web3_provider(
+        &http_factory,
+        options.node_url.as_str(),
+        options.rpc_timeout,
+    )
+    .unwrap();
     // The private key is not actually used but StableXContractImpl requires it.
     let private_key = PrivateKey::from_raw([1u8; 32]).unwrap();
-    let contract = Arc::new(
-        StableXContractImpl::new(&web3, private_key, 0)
-            .wait()
-            .unwrap(),
-    );
+    let contract = Arc::new(StableXContractImpl::new(&web3, private_key).wait().unwrap());
+    let gas_station = gas_price::create_estimator(&http_factory, &web3)
+        .wait()
+        .unwrap();
 
     let cache: HashMap<_, _> = options.token_data.clone().into();
     let token_info = TokenInfoCache::with_cache(contract.clone(), cache);
@@ -132,7 +174,7 @@ fn main() {
         options.orderbook_file,
     );
 
-    let external_price_sources = core::price_estimation::external_price_sources(
+    let external_price_sources = services_core::price_estimation::external_price_sources(
         &http_factory,
         token_info.clone(),
         options.price_source_update_interval,
@@ -145,9 +187,19 @@ fn main() {
         Box::new(orderbook),
         infallible_price_source,
         options.extra_rounding_buffer_factor,
+        options.native_token_id.into(),
     ));
     let _ = orderbook.update().wait();
     log::info!("Orderbook initialized.");
+
+    let economic_viability = Arc::new(options.economic_viability_strategy.from_arguments(
+        options.economic_viability_subsidy_factor,
+        options.economic_viability_min_avg_fee_factor,
+        options.fallback_min_avg_fee_per_order,
+        options.fallback_max_gas_price,
+        orderbook.clone(),
+        gas_station.clone(),
+    ));
 
     let mut runtime = runtime::Builder::new()
         .threaded_scheduler()
@@ -164,7 +216,8 @@ fn main() {
     // go through to locally running instance. This does mean we set the header for non openapi
     // requests too. This doesn't have security implications because this is a public,
     // unauthenticated api anyway.
-    let filter = filter::all(orderbook, token_info)
+    let filter = filter::all(orderbook, token_info, metrics.clone(), economic_viability)
+        .with(warp::log::custom(move |info| metrics.handle_response(info)))
         .with(warp::log("price_estimator"))
         .with(warp::reply::with::header(
             "Access-Control-Allow-Origin",
@@ -195,7 +248,7 @@ fn duration_secs(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_secs(s.parse()?))
 }
 
-fn setup_monitoring() -> (HttpMetrics, Arc<dyn HealthReporting>) {
+fn setup_monitoring() -> (Metrics, HttpMetrics, Arc<dyn HealthReporting>) {
     let health = Arc::new(HttpHealthEndpoint::new());
     let prometheus_registry = Arc::new(Registry::new());
 
@@ -206,5 +259,8 @@ fn setup_monitoring() -> (HttpMetrics, Arc<dyn HealthReporting>) {
     })
     .start_in_background();
 
-    (HttpMetrics::new(&prometheus_registry).unwrap(), health)
+    let http_metrics = HttpMetrics::new(&prometheus_registry).unwrap();
+    let metrics = Metrics::new(prometheus_registry.as_ref()).unwrap();
+
+    (metrics, http_metrics, health)
 }

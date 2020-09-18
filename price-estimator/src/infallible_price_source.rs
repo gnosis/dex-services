@@ -1,10 +1,10 @@
 use anyhow::Result;
-use core::{
+use pricegraph::Pricegraph;
+use services_core::{
     models::TokenId,
     price_estimation::{average_price_source, price_source::PriceSource},
     token_info::{TokenBaseInfo, TokenInfoFetching},
 };
-use pricegraph::Pricegraph;
 use std::{collections::HashMap, num::NonZeroU128, sync::Arc};
 use tokio::sync::{RwLock, RwLockReadGuard};
 
@@ -93,6 +93,7 @@ impl PriceCacheUpdater {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ethcontract::Address;
 
     #[test]
     fn use_existing_price() {
@@ -107,6 +108,7 @@ mod tests {
     fn fallback_to_base_unit() {
         let token = TokenId(1);
         let token_info = TokenBaseInfo {
+            address: Address::from_low_u64_be(0),
             alias: String::new(),
             decimals: 1,
         };

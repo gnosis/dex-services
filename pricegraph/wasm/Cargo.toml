@@ -13,6 +13,5 @@ pricegraph = { version = "0.1.0", path = ".." }
 wasm-bindgen = "0.2"
 
 [dev-dependencies]
-data-encoding = "2"
-lazy_static = "1"
+pricegraph-data = { path = "../data" }
 wasm-bindgen-test = "0.3"

@@ -97,8 +97,10 @@ where
         let mut current = dest;
         path = match &self.predecessor_store {
             PredecessorStore::Unbounded(predecessors, _) => {
-                path = Vec::with_capacity(predecessors.len());
+                let max_path_len = predecessors.len();
+                path = Vec::with_capacity(max_path_len);
                 while current != self.source {
+                    assert!(path.len() <= max_path_len, "undetected negative cycle");
                     path.push(current);
                     current = predecessors[self.graph.to_index(current)]?;
                 }

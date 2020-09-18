@@ -1,8 +1,8 @@
 use anyhow::Result;
 use contracts::batch_exchange::event_data::Trade;
-use core::{history::Settlement, models::BatchId};
 use e2e::cmd::{self, Reporting};
 use pricegraph::{Element, Pricegraph, TokenPair, FEE_FACTOR, U256};
+use services_core::{history::Settlement, models::BatchId};
 use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
 

@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-core = { path = "../core" }
+services-core = { path = "../services-core" }
 ethcontract = "0.7.2"
 log = "0.4.11"
 prometheus = { version = "0.9.0", default-features= false }
-structopt = "0.3.16"
+structopt = "0.3.17"
 url = "2.1.1"
 

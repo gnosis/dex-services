@@ -1,9 +1,9 @@
 //! Module containing currency pair model implementation.
 
-use anyhow::{anyhow, bail, Error, Result};
-use core::token_info::TokenInfoFetching;
+use anyhow::{anyhow, Error, Result};
 use ethcontract::Address;
 use pricegraph::{Market, TokenId};
+use services_core::token_info::TokenInfoFetching;
 use std::str::FromStr;
 
 /// A currency pair of two exchange tokens.
@@ -62,7 +62,13 @@ impl TokenRef {
     pub async fn as_token_id(&self, token_infos: &dyn TokenInfoFetching) -> Result<TokenId> {
         match self {
             TokenRef::Id(id) => Ok(*id),
-            TokenRef::Address(_) => bail!("not yet implemented"),
+            TokenRef::Address(address) => {
+                let (id, _) = token_infos
+                    .find_token_by_address(*address)
+                    .await?
+                    .ok_or_else(|| anyhow!("token address {} not found", address))?;
+                Ok(id.into())
+            }
             TokenRef::Symbol(symbol) => {
                 let (id, _) = token_infos
                     .find_token_by_symbol(symbol)

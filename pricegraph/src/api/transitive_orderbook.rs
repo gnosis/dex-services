@@ -91,6 +91,27 @@ impl Pricegraph {
 
         transitive_orderbook
     }
+
+    /// Computes the best ask order for the specified market. Returns `None` if
+    /// there are no remaining transitive orders after all overlapping ring
+    /// trades have been removed.
+    pub fn best_ask_transitive_order(&self, market: Market) -> Option<TransitiveOrder> {
+        Some(
+            self.reduced_orderbook()
+                .find_optimal_transitive_order(market.ask_pair())?
+                .as_transitive_order(),
+        )
+    }
+
+    /// Computes the best bid order for the specified market. See
+    /// `Pricegraph::best_ask_order` for more details.
+    pub fn best_bid_transitive_order(&self, market: Market) -> Option<TransitiveOrder> {
+        Some(
+            self.reduced_orderbook()
+                .find_optimal_transitive_order(market.bid_pair())?
+                .as_transitive_order(),
+        )
+    }
 }
 
 /// Fills transitive orders along a token pair, optionally specifying a
@@ -109,7 +130,7 @@ impl Pricegraph {
 ///
 /// This method panics if the spread is zero or negative.
 fn fill_transitive_orders(
-    mut orderbook: Orderbook,
+    orderbook: Orderbook,
     pair: TokenPair,
     spread: Option<f64>,
 ) -> Result<Vec<TransitiveOrder>, OverlapError> {
@@ -117,22 +138,18 @@ fn fill_transitive_orders(
         assert!(spread > 0.0, "invalid spread");
     }
 
-    let mut orders = Vec::new();
-    let mut max_xrate = None;
+    let mut transitive_orders = orderbook.transitive_orders(pair)?.peekable();
+    let max_xrate = spread
+        .and_then(|spread| {
+            let flow = transitive_orders.peek()?;
+            Some(flow.exchange_rate.value() * (1.0 + spread))
+        })
+        .unwrap_or(f64::INFINITY);
 
-    while let Some(flow) = orderbook.fill_optimal_transitive_order_if(pair, |flow| {
-        if let Some(spread) = spread {
-            let max_xrate =
-                max_xrate.get_or_insert_with(|| flow.exchange_rate.value() * (1.0 + spread));
-            flow.exchange_rate <= *max_xrate
-        } else {
-            true
-        }
-    })? {
-        orders.push(flow.as_transitive_order());
-    }
-
-    Ok(orders)
+    Ok(transitive_orders
+        .take_while(|flow| flow.exchange_rate <= max_xrate)
+        .map(|flow| flow.as_transitive_order())
+        .collect())
 }
 
 #[cfg(test)]

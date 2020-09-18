@@ -6,29 +6,35 @@
 //! (i.e. orders) connecting a token pair.
 
 mod flow;
+mod iter;
+mod map;
 mod order;
 mod reduced;
 mod scalar;
 mod user;
+mod weight;
 
 pub use self::flow::{Flow, Ring};
-use self::order::{Order, OrderCollector, OrderMap};
+pub use self::iter::TransitiveOrders;
+use self::order::{Amount, Order, OrderCollector, OrderMap};
 pub use self::reduced::ReducedOrderbook;
 pub use self::scalar::{ExchangeRate, LimitPrice};
 use self::user::{User, UserMap};
+pub use self::weight::Weight;
 use crate::api::Market;
 use crate::encoding::{Element, TokenId, TokenPair};
-use crate::graph::path::NegativeCycle;
+use crate::graph::path::{NegativeCycle, Path};
 use crate::graph::shortest_paths::ShortestPathGraph;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
 use crate::num;
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::NodeIndexable;
+use primitive_types::U256;
 use std::cmp;
 use std::f64;
 use thiserror::Error;
 
-type OrderbookGraph = DiGraph<TokenId, f64>;
+type OrderbookGraph = DiGraph<TokenId, Weight>;
 
 /// A graph representation of a complete orderbook.
 #[derive(Clone, Debug)]
@@ -55,6 +61,7 @@ impl Orderbook {
         for (order, element) in elements
             .into_iter()
             .filter(|element| !is_dust_order(element))
+            .filter(|element| element.pair.buy != element.pair.sell)
             .filter_map(|element| Order::new(&element).map(move |order| (order, element)))
         {
             let TokenPair { buy, sell } = element.pair;
@@ -188,15 +195,15 @@ impl Orderbook {
         None
     }
 
-    /// Fills the optimal transitive order for the specified token pair. This
-    /// method is similar to `Orderbook::fill_optimal_transitive_order_if`
-    /// except it does not check a condition on the discovered path's flow
-    /// before filling.
-    pub fn fill_optimal_transitive_order(
-        &mut self,
-        pair: TokenPair,
-    ) -> Result<Option<Flow>, OverlapError> {
-        self.fill_optimal_transitive_order_if(pair, |_| true)
+    /// Returns an iterator over all transitive orders from lowest to highest
+    /// limit price for the orderbook.
+    ///
+    /// Returns an error if the orderbook is not reduced in the subgraph
+    /// containing the token pair's buy token, i.e. one or more negative cycles
+    /// were found when searching for the shortest path starting from the buy
+    /// token and ending at the sell token.
+    pub fn transitive_orders(self, pair: TokenPair) -> Result<TransitiveOrders, OverlapError> {
+        TransitiveOrders::new(self, pair)
     }
 
     /// Finds and returns the optimal transitive order for the specified token
@@ -205,60 +212,18 @@ impl Orderbook {
     ///
     /// This method returns an error if the orderbook graph is not reduced.
     pub fn find_optimal_transitive_order(
-        &mut self,
+        &self,
         pair: TokenPair,
-    ) -> Result<Option<Flow>, OverlapError> {
-        let mut flow = None;
-        let reduced_flow = self.fill_optimal_transitive_order_if(pair, |f| {
-            flow = Some(*f);
-            false
-        })?;
-        debug_assert!(reduced_flow.is_none());
-
-        Ok(flow)
-    }
-
-    /// Fills the optimal transitive order (i.e. with the lowest exchange rate)
-    /// for the specified token pair by pushing flow from the buy token to the
-    /// sell token, if the condition is met. The trading path through the
-    /// orderbook graph is filled to maximum capacity, reducing the remaining
-    /// order amounts and user balances along the way, returning the flow for
-    /// the path.
-    ///
-    /// Returns `None` if the condition is not met or there is no path between
-    /// the token pair.
-    pub fn fill_optimal_transitive_order_if(
-        &mut self,
-        pair: TokenPair,
-        mut condition: impl FnMut(&Flow) -> bool,
     ) -> Result<Option<Flow>, OverlapError> {
         if !self.is_token_pair_valid(pair) {
             return Ok(None);
         }
 
         let (start, end) = (node_index(pair.buy), node_index(pair.sell));
-        let shortest_path_graph = ShortestPathGraph::new(&self.projection, start, None)?;
-        let path = match shortest_path_graph.path_to(end) {
-            Some(path) => path,
+        let flow = match self.find_path_and_flow(start, end)? {
+            Some((_, flow)) => flow,
             None => return Ok(None),
         };
-
-        let flow = self.find_path_flow(&path).unwrap_or_else(|| {
-            panic!(
-                "failed to fill detected shortest path {}",
-                format_path(&path),
-            )
-        });
-        if !condition(&flow) {
-            return Ok(None);
-        }
-
-        self.fill_path_with_flow(&path, &flow).unwrap_or_else(|| {
-            panic!(
-                "failed to fill with capacity along detected path {}",
-                format_path(&path),
-            )
-        });
 
         Ok(Some(flow))
     }
@@ -311,6 +276,29 @@ impl Orderbook {
         self.projection.find_edge(buy, sell)
     }
 
+    /// Finds and fills a trading path through the orderbook between the
+    /// specified tokens and computes the flow for the path.
+    fn find_path_and_flow(
+        &self,
+        start: NodeIndex,
+        end: NodeIndex,
+    ) -> Result<Option<(Path<NodeIndex>, Flow)>, OverlapError> {
+        let shortest_path_graph = ShortestPathGraph::new(&self.projection, start, None)?;
+        let path = match shortest_path_graph.path_to(end) {
+            Some(path) => path,
+            None => return Ok(None),
+        };
+
+        let flow = self.find_path_flow(&path).unwrap_or_else(|| {
+            panic!(
+                "failed to fill detected shortest path {}",
+                format_path(&path),
+            )
+        });
+
+        Ok(Some((path, flow)))
+    }
+
     /// Fills a trading path through the orderbook to maximum capacity, reducing
     /// the remaining order amounts and user balances along the way, returning
     /// the flow along the trading path or `None` if the path was invalid.
@@ -342,7 +330,7 @@ impl Orderbook {
             transitive_xrate *= order.exchange_rate;
             max_xrate = cmp::max(max_xrate, transitive_xrate);
 
-            let sell_amount = order.get_effective_amount(&self.users);
+            let sell_amount = order.get_effective_amount(&self.users) as f64;
             capacity = num::min(capacity, sell_amount * transitive_xrate.value());
         }
 
@@ -369,23 +357,19 @@ impl Orderbook {
 
             // NOTE: `capacity` is expressed in the buy token, so we need to
             // divide by the exchange rate to get the sell amount being filled.
-            let fill_amount = flow.capacity / transitive_xrate.value();
-
-            order.amount -= fill_amount;
-            debug_assert!(
-                order.amount >= -num::max_rounding_error(fill_amount),
-                "remaining amount underflow for order {}-{}",
-                order.user,
-                order.id,
-            );
-
+            let fill_amount = (flow.capacity / transitive_xrate.value()) as u128;
             let new_balance = user.deduct_from_balance(pair.sell, fill_amount);
 
             if num::is_dust_amount(new_balance) {
                 user.clear_balance(pair.sell);
                 self.update_projection_graph_node(pair.sell);
-            } else if num::is_dust_amount(order.amount) {
-                self.update_projection_graph_edge(pair);
+            } else if let Amount::Remaining(amount) = &mut order.amount {
+                // TODO: add a debug assert to see that we are not over filling orders.
+                // Will do this when we use BigRational.
+                *amount = amount.saturating_sub(fill_amount);
+                if num::is_dust_amount(*amount) {
+                    self.update_projection_graph_edge(pair);
+                }
             }
         }
 
@@ -452,7 +436,8 @@ fn format_path(path: &[NodeIndex]) -> String {
 /// for trades
 fn is_dust_order(element: &Element) -> bool {
     num::is_dust_amount(element.remaining_sell_amount as _)
-        || num::is_dust_amount(num::u256_to_f64(element.balance))
+        || (num::is_dust_amount(element.balance.low_u128())
+            && element.balance < U256::from(u128::MAX))
 }
 
 /// An error indicating an invalid operation was performed on an overlapping
@@ -472,14 +457,15 @@ mod tests {
     use super::*;
     use crate::test::prelude::*;
     use crate::FEE_FACTOR;
+    use petgraph::algo::FloatMeasure;
 
     impl Orderbook {
         /// Retrieve the weight of an edge in the projection graph. This is used for
         /// testing that the projection graph is in sync with the order map.
-        fn get_projected_pair_weight(&self, pair: TokenPair) -> f64 {
+        fn get_projected_pair_weight(&self, pair: TokenPair) -> Weight {
             let edge = match self.get_pair_edge(pair) {
                 Some(edge) => edge,
-                None => return f64::INFINITY,
+                None => return Weight::infinite(),
             };
             self.projection[edge]
         }
@@ -549,7 +535,7 @@ mod tests {
         //  /---0.5---v
         // 0          1
         //  ^---0.5---/
-        let mut orderbook = orderbook! {
+        let orderbook = orderbook! {
             users {
                 @0 {
                     token 0 => 10_000_000,
@@ -566,10 +552,7 @@ mod tests {
         let pair = TokenPair { buy: 1, sell: 0 };
 
         assert!(orderbook.is_overlapping());
-        assert!(orderbook.fill_optimal_transitive_order(pair).is_err());
-        assert!(orderbook
-            .fill_optimal_transitive_order_if(pair, |_| false)
-            .is_err());
+        assert!(orderbook.find_optimal_transitive_order(pair).is_err());
     }
 
     #[test]
@@ -600,7 +583,7 @@ mod tests {
         let order = orderbook.orders.best_order_for_pair(pair).unwrap();
         assert_eq!(orderbook.num_orders(), 2);
         assert_eq!(order.user, user_id(2));
-        assert_approx_eq!(
+        assert_eq!(
             order.exchange_rate.weight(),
             orderbook.get_projected_pair_weight(pair)
         );
@@ -609,7 +592,10 @@ mod tests {
         let order = orderbook.orders.best_order_for_pair(pair);
         assert_eq!(orderbook.num_orders(), 1);
         assert!(order.is_none());
-        assert!(orderbook.get_projected_pair_weight(pair).is_infinite());
+        assert_eq!(
+            orderbook.get_projected_pair_weight(pair),
+            Weight::infinite()
+        );
     }
 
     #[test]
@@ -623,6 +609,22 @@ mod tests {
             orders {
                 owner @1 buying 1 [1_000_000_000] selling 0 [0],
                 owner @1 buying 1 [0] selling 0 [1_000_000_000],
+            }
+        };
+
+        assert_eq!(orderbook.num_orders(), 0);
+    }
+
+    #[test]
+    fn ignores_orders_with_invalid_market() {
+        let orderbook = orderbook! {
+            users {
+                @1 {
+                    token 0 => 1_000_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 0 [1_000_000_000] selling 0 [1_000_000_000],
             }
         };
 
@@ -689,13 +691,13 @@ mod tests {
         // 2 -> 3 | 500_000 |  499_500 |   1.0
         // 3 -> 4 | 499_500 |  998_000 |   0.5
 
-        assert_approx_eq!(
+        assert_eq!(
             orderbook.get_projected_pair_weight(TokenPair { buy: 1, sell: 2 }),
             // NOTE: user 2's order has no more balance so expect the new weight
             // between tokens 1 and 2 to be user 5's order with the worse price
             // of 2:1 (meaning it needs twice as much token 1 to get the same
             // amount of token 2 when pushing flow through that edge).
-            (2.0 * FEE_FACTOR).log2()
+            Weight::new(2.0 * FEE_FACTOR),
         );
         // NOTE: User 2's other order selling token 2 for 4 also has no more
         // balance so check that it was also removed from the order map and from
@@ -704,9 +706,10 @@ mod tests {
             .orders
             .best_order_for_pair(TokenPair { buy: 4, sell: 2 })
             .is_none());
-        assert!(orderbook
-            .get_projected_pair_weight(TokenPair { buy: 4, sell: 2 })
-            .is_infinite());
+        assert_eq!(
+            orderbook.get_projected_pair_weight(TokenPair { buy: 4, sell: 2 }),
+            Weight::infinite(),
+        );
         // NOTE: User 3's order selling token 3 for 2 has become a dust order
         // (since it has a remaining amount of about 500), check that it was
         // removed.
@@ -714,47 +717,74 @@ mod tests {
             .orders
             .best_order_for_pair(TokenPair { buy: 2, sell: 3 })
             .is_none());
-        assert!(orderbook
-            .get_projected_pair_weight(TokenPair { buy: 2, sell: 3 })
-            .is_infinite());
+        assert_eq!(
+            orderbook.get_projected_pair_weight(TokenPair { buy: 2, sell: 3 }),
+            Weight::infinite(),
+        );
 
         assert_eq!(orderbook.num_orders(), 3);
 
         let transitive_xrate_0_1 = FEE_FACTOR;
-        assert_approx_eq!(
+        assert_eq!(
             orderbook
                 .orders
                 .best_order_for_pair(TokenPair { buy: 0, sell: 1 })
                 .unwrap()
                 .amount,
-            1_000_000.0 - flow.capacity / transitive_xrate_0_1
+            Amount::Remaining(1_000_000 - (flow.capacity / transitive_xrate_0_1) as u128)
         );
-        assert_approx_eq!(
+        assert_eq!(
             orderbook.users[&user_id(1)].balance_of(1),
-            1_000_000.0 - flow.capacity / transitive_xrate_0_1
+            1_000_000 - (flow.capacity / transitive_xrate_0_1) as u128
         );
 
-        assert_approx_eq!(
+        assert_eq!(
             orderbook
                 .orders
                 .best_order_for_pair(TokenPair { buy: 1, sell: 2 })
                 .unwrap()
                 .amount,
-            1_000_000.0
+            Amount::Remaining(1_000_000),
         );
-        assert_approx_eq!(orderbook.users[&user_id(5)].balance_of(2), 1_000_000.0);
+        assert_eq!(orderbook.users[&user_id(5)].balance_of(2), 1_000_000);
 
-        assert_approx_eq!(
+        assert_eq!(
             orderbook
                 .orders
                 .best_order_for_pair(TokenPair { buy: 3, sell: 4 })
                 .unwrap()
                 .amount,
-            2_000_000.0 - flow.capacity / flow.exchange_rate.value()
+            Amount::Remaining(2_000_000 - (flow.capacity / flow.exchange_rate.value()) as u128)
         );
-        assert_approx_eq!(
+        assert_eq!(
             orderbook.users[&user_id(4)].balance_of(4),
-            10_000_000.0 - flow.capacity / flow.exchange_rate.value()
+            10_000_000 - (flow.capacity / flow.exchange_rate.value()) as u128
         );
+    }
+
+    #[test]
+    fn search_panics_on_undetected_negative_cycle_due_to_rounding_errors() {
+        //              /---250---v
+        // 0 --1.11--> 1          2
+        //             ^--0.004--/
+        let orderbook = orderbook! {
+            users {
+                @1 {
+                    token 1 => 10_000_000_000,
+                }
+                @2 {
+                    token 2 => 10_000_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 0 [1_000_000_000] selling 1 [1_000_000_000],
+                owner @1 buying 2 [1_000_000] selling 1 [250_000_000],
+                owner @2 buying 1 [249_500_250] selling 2 [1_000_000],
+            }
+        };
+
+        assert!(orderbook
+            .find_optimal_transitive_order(TokenPair { buy: 0, sell: 1 })
+            .is_ok())
     }
 }

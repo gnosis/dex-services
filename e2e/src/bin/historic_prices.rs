@@ -1,7 +1,7 @@
 use anyhow::Result;
-use core::{history::Settlement, models::BatchId};
 use e2e::cmd::{self, Reporting, SampleChannel};
 use pricegraph::{Element, Pricegraph, TokenId};
+use services_core::{history::Settlement, models::BatchId};
 use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
 

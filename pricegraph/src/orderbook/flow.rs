@@ -32,7 +32,7 @@ impl Flow {
 
     /// Returns true if this flow is a dust trade.
     pub fn is_dust_trade(&self) -> bool {
-        num::is_dust_amount(self.min_trade)
+        num::is_dust_amount(self.min_trade as u128)
     }
 }
 

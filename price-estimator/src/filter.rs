@@ -1,33 +1,51 @@
 use crate::{
-    amounts_at_price,
-    error::RejectionReason,
-    models::*,
-    orderbook::{Orderbook, PricegraphKind},
+    amounts_at_price, error::RejectionReason, metrics::Metrics, models::*, orderbook::Orderbook,
 };
-use core::{
+use pricegraph::{Market, Pricegraph, TokenPair, TransitiveOrder};
+use services_core::{
+    economic_viability::EconomicViabilityComputing,
     models::TokenId,
     token_info::{TokenBaseInfo, TokenInfoFetching},
 };
-use pricegraph::{Market, Pricegraph, TokenPair, TransitiveOrder};
-use std::convert::Infallible;
-use std::sync::Arc;
-use warp::{http::StatusCode, Filter, Rejection, Reply};
+use std::{convert::Infallible, sync::Arc, time::Instant};
+use warp::{http::StatusCode, reply::Json, Filter, Rejection, Reply};
 
 /// Handles all supported requests under a `/api/v1` root path.
 pub fn all(
     orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
-) -> impl Filter<Extract = impl Reply, Error = Infallible> + Clone {
-    warp::path!("api" / "v1" / ..)
-        .and(
-            markets(orderbook.clone(), token_info.clone())
-                .or(estimated_buy_amount(orderbook.clone(), token_info.clone()))
-                .or(estimated_amounts_at_price(
-                    orderbook.clone(),
-                    token_info.clone(),
-                ))
-                .or(estimated_best_ask_price(orderbook, token_info)),
-        )
+    metrics: Arc<Metrics>,
+    economic_viability: Arc<dyn EconomicViabilityComputing>,
+) -> impl Filter<Extract = impl Reply, Error = Infallible> + Clone + Send {
+    let markets = markets(orderbook.clone(), token_info.clone());
+    let estimated_buy_amount = estimated_buy_amount(orderbook.clone(), token_info.clone());
+    let estimated_amounts_at_price =
+        estimated_amounts_at_price(orderbook.clone(), token_info.clone());
+    let estimated_best_ask_price = estimated_best_ask_price(orderbook, token_info);
+    let minimum_order_size_owl = minimum_order_size_owl(economic_viability);
+
+    let label = |label: &'static str| warp::any().map(move || label);
+    let routes_with_labels = warp::path!("api" / "v1" / ..).and(
+        (label("markets").and(markets))
+            .or(label("estimated_buy_amount").and(estimated_buy_amount))
+            .unify()
+            .or(label("estimated-amounts-at-price").and(estimated_amounts_at_price))
+            .unify()
+            .or(label("estimated-best-ask-price").and(estimated_best_ask_price))
+            .unify()
+            .or(label("minimum-order-size-owl").and(minimum_order_size_owl))
+            .unify(),
+    );
+
+    let start_time = warp::any().map(Instant::now);
+    let handle_metrics = move |start, route, reply| {
+        metrics.handle_successful_response(route, start);
+        (reply,)
+    };
+
+    start_time
+        .and(routes_with_labels)
+        .map(handle_metrics)
         .recover(handle_rejection)
 }
 
@@ -52,13 +70,38 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
 }
 
 /// Validate a request of the form
+/// `/minimum-order-size-owl` and answer it.
+fn minimum_order_size_owl(
+    economic_viability: Arc<dyn EconomicViabilityComputing>,
+) -> impl Filter<Extract = (Json,), Error = Rejection> + Clone {
+    warp::path!("minimum-order-size-owl")
+        .and(warp::any().map(move || economic_viability.clone()))
+        .and_then(get_minimum_order_size_owl)
+}
+
+async fn get_minimum_order_size_owl(
+    economic_viability: Arc<dyn EconomicViabilityComputing>,
+) -> Result<Json, Rejection> {
+    let fee_ratio = 1000;
+    // Multiply by 2 because economic viability returns earned fee while we want generated fee.
+    let result = economic_viability
+        .min_average_fee()
+        .await
+        .map_err(RejectionReason::InternalError)?
+        * 2
+        * fee_ratio;
+    Result::<Json, Rejection>::Ok(warp::reply::json(&result))
+}
+
+/// Validate a request of the form
 /// `/markets/<baseTokenId>-<quoteTokenId>`
 /// and answer it.
 fn markets(
     orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (Json,), Error = Rejection> + Clone {
     markets_filter()
+        .and(warp::get())
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_info.clone()))
         .and_then(get_markets)
@@ -70,7 +113,7 @@ fn markets(
 fn estimated_buy_amount(
     orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (Json,), Error = Rejection> + Clone {
     estimated_buy_amount_filter()
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_info.clone()))
@@ -83,7 +126,7 @@ fn estimated_buy_amount(
 fn estimated_amounts_at_price(
     orderbook: Arc<Orderbook>,
     token_info: Arc<dyn TokenInfoFetching>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (Json,), Error = Rejection> + Clone {
     estimated_amounts_at_price_filter()
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_info.clone()))
@@ -96,7 +139,7 @@ fn estimated_amounts_at_price(
 fn estimated_best_ask_price(
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (Json,), Error = Rejection> + Clone {
     estimated_best_ask_price_filter()
         .and(warp::any().map(move || orderbook.clone()))
         .and(warp::any().map(move || token_infos.clone()))
@@ -163,12 +206,16 @@ async fn get_markets(
     query: QueryParameters,
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
-) -> Result<impl Reply, Rejection> {
+) -> Result<Json, Rejection> {
     let market = get_market(pair, &*token_infos).await?;
     // This route intentionally uses the raw pricegraph without rounding buffer so that orders are
     // unmodified.
     let transitive_orderbook = orderbook
-        .pricegraph(query.time, &query.ignore_addresses, PricegraphKind::Raw)
+        .pricegraph(
+            query.time,
+            &query.ignore_addresses,
+            RoundingBuffer::Disabled,
+        )
         .await
         .map_err(RejectionReason::InternalError)?
         .transitive_orderbook(market, None);
@@ -190,7 +237,7 @@ async fn estimate_buy_amount(
     query: QueryParameters,
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
-) -> Result<impl Reply, Rejection> {
+) -> Result<Json, Rejection> {
     let token_pair = get_market(pair, &*token_infos).await?.bid_pair();
     let (sell_amount_in_quote, sell_amount_in_quote_atoms) = match query.unit {
         Unit::Atoms => (
@@ -203,20 +250,19 @@ async fn estimate_buy_amount(
             (amount, amount.as_atoms(&token_info) as _)
         }
     };
-    let rounding_buffer = orderbook.rounding_buffer(token_pair).await;
     let pricegraph = orderbook
-        .pricegraph(
-            query.time,
-            &query.ignore_addresses,
-            PricegraphKind::WithRoundingBuffer,
-        )
+        .pricegraph(query.time, &query.ignore_addresses, query.rounding_buffer)
         .await
         .map_err(RejectionReason::InternalError)?;
     // This reduced sell amount is what the solver would see after applying the rounding buffer.
-    let transitive_order = pricegraph.order_for_sell_amount(
-        token_pair,
-        f64::max(sell_amount_in_quote_atoms - rounding_buffer, 0.0),
-    );
+    let sell_amount_in_quote_atoms = match query.rounding_buffer {
+        RoundingBuffer::Enabled => f64::max(
+            sell_amount_in_quote_atoms - orderbook.rounding_buffer(token_pair).await,
+            0.0,
+        ),
+        RoundingBuffer::Disabled => sell_amount_in_quote_atoms,
+    };
+    let transitive_order = pricegraph.order_for_sell_amount(token_pair, sell_amount_in_quote_atoms);
 
     let mut buy_amount_in_base =
         Amount::Atoms(transitive_order.map(|order| order.buy).unwrap_or_default() as _);
@@ -240,17 +286,16 @@ async fn estimate_amounts_at_price(
     query: QueryParameters,
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
-) -> Result<impl Reply, Rejection> {
+) -> Result<Json, Rejection> {
     let token_pair = get_market(pair, &*token_infos).await?.bid_pair();
     let pricegraph = orderbook
-        .pricegraph(
-            query.time,
-            &query.ignore_addresses,
-            PricegraphKind::WithRoundingBuffer,
-        )
+        .pricegraph(query.time, &query.ignore_addresses, query.rounding_buffer)
         .await
         .map_err(RejectionReason::InternalError)?;
-    let rounding_buffer = orderbook.rounding_buffer(token_pair).await;
+    let rounding_buffer = match query.rounding_buffer {
+        RoundingBuffer::Enabled => Some(orderbook.rounding_buffer(token_pair).await),
+        RoundingBuffer::Disabled => None,
+    };
     let result = match query.unit {
         Unit::Atoms => estimate_amounts_at_price_atoms(
             token_pair,
@@ -285,7 +330,7 @@ fn estimate_amounts_at_price_atoms(
     token_pair: TokenPair,
     price_in_quote: f64,
     pricegraph: &Pricegraph,
-    rounding_buffer: f64,
+    rounding_buffer: Option<f64>,
 ) -> EstimatedOrderResult {
     // NOTE: The price in quote is `sell_amount / buy_amount` which is the
     // inverse of an exchange rate.
@@ -313,20 +358,14 @@ async fn estimate_best_ask_price(
     query: QueryParameters,
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
-) -> Result<impl Reply, Rejection> {
+) -> Result<Json, Rejection> {
     let market = get_market(pair, &*token_infos).await?;
-    let token_pair = market.bid_pair();
     let price = orderbook
-        .pricegraph(
-            query.time,
-            &query.ignore_addresses,
-            PricegraphKind::WithRoundingBuffer,
-        )
+        .pricegraph(query.time, &query.ignore_addresses, query.rounding_buffer)
         .await
         .map_err(RejectionReason::InternalError)?
-        .estimate_limit_price(token_pair, 0.0)
-        // The price above is in base, but we need to return it in quote.
-        .map(|p| 1.0 / p);
+        .best_ask_transitive_order(market)
+        .map(|order| order.overlapping_exchange_rate().recip());
 
     let result = PriceEstimateResult(price);
     let result = match query.unit {
@@ -345,20 +384,23 @@ mod tests {
     use super::*;
     use crate::infallible_price_source::PriceCacheUpdater;
     use anyhow::{anyhow, Result};
-    use core::orderbook::NoopOrderbook;
-    use futures::future::{BoxFuture, FutureExt as _};
+    use futures::future::FutureExt as _;
+    use services_core::{
+        economic_viability::FixedEconomicViabilityComputer, orderbook::NoopOrderbook,
+    };
 
     fn empty_token_info() -> impl TokenInfoFetching {
         struct TokenInfoFetcher {}
+        #[async_trait::async_trait]
         impl TokenInfoFetching for TokenInfoFetcher {
-            fn get_token_info<'a>(
-                &'a self,
+            async fn get_token_info(
+                &self,
                 _: TokenId,
-            ) -> BoxFuture<'a, Result<core::token_info::TokenBaseInfo>> {
-                async { Err(anyhow!("")) }.boxed()
+            ) -> Result<services_core::token_info::TokenBaseInfo> {
+                Err(anyhow!(""))
             }
-            fn all_ids<'a>(&'a self) -> BoxFuture<'a, Result<Vec<TokenId>>> {
-                async { Ok(Default::default()) }.boxed()
+            async fn all_ids(&self) -> Result<Vec<TokenId>> {
+                Ok(Default::default())
             }
         }
         TokenInfoFetcher {}
@@ -370,8 +412,11 @@ mod tests {
             Box::new(NoopOrderbook),
             PriceCacheUpdater::new(token_info.clone(), Vec::new()),
             1.0,
+            TokenId(1),
         ));
-        all(orderbook, token_info)
+        let metrics = Arc::new(Metrics::new(&prometheus::Registry::new()).unwrap());
+        let economic_viability = Arc::new(FixedEconomicViabilityComputer::new(None, None));
+        all(orderbook, token_info, metrics, economic_viability)
     }
 
     #[test]
