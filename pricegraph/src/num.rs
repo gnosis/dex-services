@@ -44,6 +44,44 @@ pub fn u256_to_f64(u: U256) -> f64 {
     (u.low_u128() as f64) * factor
 }
 
+/// Lossy saturating conversion from a `f64` to a `U256`.
+///
+/// The conversion follows roughly the same rules as converting `f64` to other
+/// primitive integer types. Namely, the conversion of `value: f64` behaves as
+/// follows:
+/// - `NaN` => `0`
+/// - `(-∞, 0]` => `0`
+/// - `(0, u256::MAX]` => `value as u256`
+/// - `(u256::MAX, +∞)` => `u256::MAX`
+///
+/// # Note
+///
+/// Copied from <https://github.com/gnosis/ethcontract-rs/blob/d69faf37ddb7af572d916bbfc4fd7614d23d1e25/src/conv.rs#L16-L43>
+pub fn f64_to_u256(value: f64) -> U256 {
+    if value >= 1.0 {
+        let bits = value.to_bits();
+        // NOTE: Don't consider the sign or check that the subtraction will
+        //   underflow since we already checked that the value is greater
+        //   than 1.0.
+        let exponent = ((bits >> 52) & 0x7ff) - 1023;
+        let mantissa = (bits & 0x0f_ffff_ffff_ffff) | 0x10_0000_0000_0000;
+        if exponent <= 52 {
+            U256::from(mantissa >> (52 - exponent))
+        } else if exponent >= 256 {
+            U256::MAX
+        } else {
+            U256::from(mantissa) << U256::from(exponent - 52)
+        }
+    } else {
+        0.into()
+    }
+}
+
+/// Saturating conversion from an unsigned 256-bit integer to a `u128`.
+pub fn u256_to_u128_saturating(u256: U256) -> u128 {
+    u256.min(u128::MAX.into()).low_u128()
+}
+
 /// Calculates the minimum of two floats. Note that we cannot use the standard
 /// library `std::cmp::min` here since `f64` does not implement `Ord`. This be
 /// because there is no real ordering for `NaN`s and `NaN < 0 == false` and
@@ -129,5 +167,19 @@ mod tests {
         assert!(!is_strictly_positive_and_finite(f64::INFINITY));
         assert!(!is_strictly_positive_and_finite(f64::NEG_INFINITY));
         assert!(!is_strictly_positive_and_finite(-1.0));
+    }
+
+    #[test]
+    fn u256_to_u128() {
+        assert_eq!(
+            u256_to_u128_saturating((u128::MAX - 1).into()),
+            u128::MAX - 1
+        );
+        assert_eq!(u256_to_u128_saturating(u128::MAX.into()), u128::MAX);
+        assert_eq!(
+            u256_to_u128_saturating(U256::from(u128::MAX) + U256::from(1)),
+            u128::MAX
+        );
+        assert_eq!(u256_to_u128_saturating(U256::MAX), u128::MAX);
     }
 }

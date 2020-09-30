@@ -2,6 +2,7 @@
 
 use super::{map::Map, ExchangeRate, LimitPrice, UserMap};
 use crate::encoding::{Element, OrderId, TokenId, TokenPair, UserId};
+use primitive_types::U256;
 use std::cmp::Reverse;
 
 /// A type for collecting orders and building an order map that garantees that
@@ -159,11 +160,11 @@ impl Order {
     /// Retrieves the effective remaining amount for this order based on user
     /// balances. This is the minimum between the remaining order amount and
     /// the user's sell token balance.
-    pub fn get_effective_amount(&self, users: &UserMap) -> u128 {
+    pub fn get_effective_amount(&self, users: &UserMap) -> U256 {
         let balance = users[&self.user].balance_of(self.pair.sell);
         match self.amount {
             Amount::Unlimited => balance,
-            Amount::Remaining(amount) => amount.min(balance),
+            Amount::Remaining(amount) => balance.min(amount.into()),
         }
     }
 }

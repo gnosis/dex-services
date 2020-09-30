@@ -248,11 +248,11 @@ impl Orderbook {
     /// order or removing the edge entirely if no orders remain for the given
     /// token pair.
     fn update_projection_graph_edge(&mut self, pair: TokenPair) {
-        while let Some(true) = self
-            .orders
-            .best_order_for_pair(pair)
-            .map(|order| num::is_dust_amount(order.get_effective_amount(&self.users)))
-        {
+        while let Some(true) = self.orders.best_order_for_pair(pair).map(|order| {
+            num::is_dust_amount(num::u256_to_u128_saturating(
+                order.get_effective_amount(&self.users),
+            ))
+        }) {
             self.orders.remove_pair_order(pair);
         }
 
@@ -330,7 +330,7 @@ impl Orderbook {
             transitive_xrate *= order.exchange_rate;
             max_xrate = cmp::max(max_xrate, transitive_xrate);
 
-            let sell_amount = order.get_effective_amount(&self.users) as f64;
+            let sell_amount = num::u256_to_f64(order.get_effective_amount(&self.users));
             capacity = num::min(capacity, sell_amount * transitive_xrate.value());
         }
 
@@ -357,16 +357,16 @@ impl Orderbook {
 
             // NOTE: `capacity` is expressed in the buy token, so we need to
             // divide by the exchange rate to get the sell amount being filled.
-            let fill_amount = (flow.capacity / transitive_xrate.value()) as u128;
+            let fill_amount = num::f64_to_u256(flow.capacity / transitive_xrate.value());
             let new_balance = user.deduct_from_balance(pair.sell, fill_amount);
 
-            if num::is_dust_amount(new_balance) {
+            if num::is_dust_amount(num::u256_to_u128_saturating(new_balance)) {
                 user.clear_balance(pair.sell);
                 self.update_projection_graph_node(pair.sell);
             } else if let Amount::Remaining(amount) = &mut order.amount {
                 // TODO: add a debug assert to see that we are not over filling orders.
                 // Will do this when we use BigRational.
-                *amount = amount.saturating_sub(fill_amount);
+                *amount = amount.saturating_sub(num::u256_to_u128_saturating(fill_amount));
                 if num::is_dust_amount(*amount) {
                     self.update_projection_graph_edge(pair);
                 }
@@ -735,7 +735,7 @@ mod tests {
         );
         assert_eq!(
             orderbook.users[&user_id(1)].balance_of(1),
-            1_000_000 - (flow.capacity / transitive_xrate_0_1) as u128
+            U256::from(1_000_000 - (flow.capacity / transitive_xrate_0_1) as u128)
         );
 
         assert_eq!(
@@ -746,7 +746,10 @@ mod tests {
                 .amount,
             Amount::Remaining(1_000_000),
         );
-        assert_eq!(orderbook.users[&user_id(5)].balance_of(2), 1_000_000);
+        assert_eq!(
+            orderbook.users[&user_id(5)].balance_of(2),
+            U256::from(1_000_000)
+        );
 
         assert_eq!(
             orderbook
@@ -758,7 +761,7 @@ mod tests {
         );
         assert_eq!(
             orderbook.users[&user_id(4)].balance_of(4),
-            10_000_000 - (flow.capacity / flow.exchange_rate.value()) as u128
+            U256::from(10_000_000 - (flow.capacity / flow.exchange_rate.value()) as u128)
         );
     }
 
