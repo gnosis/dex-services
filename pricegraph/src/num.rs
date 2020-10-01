@@ -182,4 +182,87 @@ mod tests {
         );
         assert_eq!(u256_to_u128_saturating(U256::MAX), u128::MAX);
     }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn convert_u256_to_f64() {
+        assert_eq!(u256_to_f64(0.into()), 0.0);
+        assert_eq!(u256_to_f64(42.into()), 42.0);
+        assert_eq!(
+            u256_to_f64(1_000_000_000_000_000_000u128.into()),
+            1_000_000_000_000_000_000.0,
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::unreadable_literal
+    )]
+    fn convert_u256_to_f64_precision_loss() {
+        assert_eq!(
+            u256_to_f64(u64::max_value().into()),
+            u64::max_value() as f64,
+        );
+        assert_eq!(
+            u256_to_f64(U256::MAX),
+            115792089237316195423570985008687907853269984665640564039457584007913129639935.0,
+        );
+        assert_eq!(
+            u256_to_f64(U256::MAX),
+            115792089237316200000000000000000000000000000000000000000000000000000000000000.0,
+        );
+    }
+
+    #[test]
+    fn convert_f64_to_u256() {
+        assert_eq!(f64_to_u256(0.0), 0.into());
+        assert_eq!(f64_to_u256(13.37), 13.into());
+        assert_eq!(f64_to_u256(42.0), 42.into());
+        assert_eq!(f64_to_u256(999.999), 999.into());
+        assert_eq!(
+            f64_to_u256(1_000_000_000_000_000_000.0),
+            1_000_000_000_000_000_000u128.into(),
+        );
+    }
+
+    #[test]
+    fn convert_f64_to_u256_large() {
+        let value = U256::from(1) << U256::from(255);
+        assert_eq!(
+            f64_to_u256(
+                format!("{}", value)
+                    .parse::<f64>()
+                    .expect("unexpected error parsing f64")
+            ),
+            value,
+        );
+    }
+
+    #[test]
+    #[allow(clippy::unreadable_literal)]
+    fn convert_f64_to_u256_overflow() {
+        assert_eq!(
+            f64_to_u256(
+                115792089237316200000000000000000000000000000000000000000000000000000000000000.0
+            ),
+            U256::MAX,
+        );
+        assert_eq!(
+            f64_to_u256(
+                999999999999999999999999999999999999999999999999999999999999999999999999999999.0
+            ),
+            U256::MAX,
+        );
+    }
+
+    #[test]
+    fn convert_f64_to_u256_non_normal() {
+        assert_eq!(f64_to_u256(f64::EPSILON), 0.into());
+        assert_eq!(f64_to_u256(f64::from_bits(0)), 0.into());
+        assert_eq!(f64_to_u256(f64::NAN), 0.into());
+        assert_eq!(f64_to_u256(f64::NEG_INFINITY), 0.into());
+        assert_eq!(f64_to_u256(f64::INFINITY), U256::MAX);
+    }
 }
