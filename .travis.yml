@@ -39,7 +39,7 @@ jobs:
         # Unit Tests and Linting
         - cargo test
         # Make sure README is up to date
-        - (! diff README.md <(cargo run --bin driver -- --help) | grep -E "^>" || (echo "[ERROR] README.md doesn't contain output of \`cargo run --bin driver -- --help\`"; false))
+        - diff <(sed -n '/^driver /,/^```/p' README.md | ghead -n -1) <(cargo run --bin driver -- --help)
         # Build image with compiled binary
         - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:$OPEN_SOLVER_VERSION -f driver/docker/rust/Dockerfile .
         # StableX e2e Tests (Ganache) - open solver
