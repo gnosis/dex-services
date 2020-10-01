@@ -458,7 +458,7 @@ mod tests {
     }
 
     #[test]
-    fn transitive_orderbook_with_unlimited_order_and_large_balance() {
+    fn transitive_orderbook_with_unlimited_order_and_large_balance_doesnt_oom() {
         let pricegraph = Pricegraph::new(vec![Element {
             user: Default::default(),
             balance: U256::MAX,
@@ -472,6 +472,15 @@ mod tests {
             id: 0,
         }]);
 
-        pricegraph.transitive_orderbook(Market { base: 1, quote: 0 }, None);
+        let transitive_orderbook =
+            pricegraph.transitive_orderbook(Market { base: 1, quote: 0 }, None);
+
+        // NOTE: Previously, this orderbook would cause an OOM error since it
+        // would only be able to reduce a maximum of `u128::MAX` per iteration.
+        // Since this has a balance of `U256::MAX`, this would mean that it
+        // would require `2^128` iterations, creating that many transitive
+        // orders, which clearly does not fit in memory.
+        assert_eq!(transitive_orderbook.asks.len(), 1);
+        assert!(transitive_orderbook.bids.is_empty());
     }
 }
