@@ -155,7 +155,9 @@ fn fill_transitive_orders(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::encoding::{Element, PriceFraction, Validity};
     use crate::test::prelude::*;
+    use primitive_types::U256;
 
     #[test]
     fn transitive_orderbook_empty_same_token() {
@@ -453,5 +455,32 @@ mod tests {
         let transitive_orderbook =
             pricegraph.transitive_orderbook(Market { base: 3, quote: 2 }, None);
         assert!(transitive_orderbook.asks.is_empty() && transitive_orderbook.bids.is_empty());
+    }
+
+    #[test]
+    fn transitive_orderbook_with_unlimited_order_and_large_balance_doesnt_oom() {
+        let pricegraph = Pricegraph::new(vec![Element {
+            user: Default::default(),
+            balance: U256::MAX,
+            pair: TokenPair { buy: 0, sell: 1 },
+            valid: Validity { from: 0, to: 0 },
+            price: PriceFraction {
+                numerator: u128::MAX,
+                denominator: 10u128.pow(18),
+            },
+            remaining_sell_amount: 10u128.pow(18),
+            id: 0,
+        }]);
+
+        let transitive_orderbook =
+            pricegraph.transitive_orderbook(Market { base: 1, quote: 0 }, None);
+
+        // NOTE: Previously, this orderbook would cause an OOM error since it
+        // would only be able to reduce a maximum of `u128::MAX` per iteration.
+        // Since this has a balance of `U256::MAX`, this would mean that it
+        // would require `2^128` iterations, creating that many transitive
+        // orders, which clearly does not fit in memory.
+        assert_eq!(transitive_orderbook.asks.len(), 1);
+        assert!(transitive_orderbook.bids.is_empty());
     }
 }
