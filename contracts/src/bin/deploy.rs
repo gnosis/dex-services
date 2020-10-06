@@ -15,10 +15,11 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
-fn main() {
+#[tokio::main]
+async fn main() {
     env_logger::init_from_env(Env::default().default_filter_or("warn,deploy=info"));
 
-    if let Err(err) = futures::executor::block_on(run()) {
+    if let Err(err) = run().await {
         log::error!("Error deploying contracts: {:?}", err);
         std::process::exit(-1);
     }
