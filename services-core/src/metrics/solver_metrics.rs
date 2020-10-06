@@ -117,7 +117,7 @@ impl SolverMetrics {
         self.obj_val.set(f64_or_0(&stats.solver, "obj_val"));
         self.obj_val_sc.set(f64_or_0(&stats.solver, "obj_val_sc"));
 
-        if stats.solver.get("termination_condition") == Some(&json!("interrupted")) {
+        if stats.solver.get("exit_status") == Some(&json!("interrupted")) {
             self.interrupted.inc();
         }
     }
