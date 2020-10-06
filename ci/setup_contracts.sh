@@ -3,4 +3,4 @@
 set -e
 
 docker-compose up -d ganache-cli
-(cd contracts/deploy; cargo run)
+(cd contracts; cargo run --bin deploy --features bin)

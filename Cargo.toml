@@ -1,8 +1,7 @@
 [workspace]
 members = [
     "contracts",
-    "contracts/deploy",
-    "contracts/vendor",
+    "services-core",
     "driver",
     "e2e",
     "price-estimator",
@@ -12,12 +11,11 @@ members = [
     "pricegraph/data/bin",
     "pricegraph/fuzz",
     "pricegraph/wasm",
-    "services-core",
 ]
 default-members = [
     "contracts",
+    "services-core",
     "driver",
     "price-estimator",
     "pricegraph",
-    "services-core",
 ]

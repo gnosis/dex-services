@@ -1,6 +1,8 @@
 use contracts::{ERC20Mintable, IERC20};
-use ethcontract::{web3::Transport, Account, Address, U256};
-use services_core::contracts::Web3;
+use ethcontract::{
+    web3::{api::Web3, transports::Http, Transport},
+    Account, Address, U256,
+};
 use std::{
     fmt::Debug,
     future::Future,
@@ -26,7 +28,7 @@ pub trait FutureWaitExt: Future + Sized {
 
 impl<F> FutureWaitExt for F where F: Future {}
 
-pub fn wait_for(web3: &Web3, seconds: u32) {
+pub fn wait_for(web3: &Web3<Http>, seconds: u32) {
     web3.transport()
         .execute("evm_increaseTime", vec![seconds.into()])
         .wait()
@@ -54,7 +56,7 @@ where
 }
 
 pub fn create_accounts_with_funded_tokens(
-    web3: &Web3,
+    web3: &Web3<Http>,
     num_tokens: usize,
     num_users: usize,
     token_minted: u32,

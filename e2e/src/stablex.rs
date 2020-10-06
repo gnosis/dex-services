@@ -2,11 +2,10 @@ use crate::common::{
     approve, create_accounts_with_funded_tokens, wait_for, FutureWaitExt, MAX_GAS,
 };
 use contracts::{BatchExchange, TokenOWL, IERC20};
-use ethcontract::{Account, Address, U256};
-use services_core::contracts::Web3;
+use ethcontract::{Account, Address, Http, Web3, U256};
 
 pub fn setup_stablex(
-    web3: &Web3,
+    web3: &Web3<Http>,
     num_tokens: usize,
     num_users: usize,
     token_minted: u32,
@@ -49,7 +48,7 @@ pub fn setup_stablex(
     (instance, accounts, tokens)
 }
 
-pub fn close_auction(web3: &Web3, instance: &BatchExchange) {
+pub fn close_auction(web3: &Web3<Http>, instance: &BatchExchange) {
     let seconds_remaining = instance
         .get_seconds_remaining_in_batch()
         .call()

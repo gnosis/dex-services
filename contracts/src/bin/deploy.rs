@@ -47,7 +47,7 @@ async fn run() -> Result<()> {
 
                 log::debug!(
                     "writing deployment to {}",
-                    contracts::paths::contract_address_file(NAME).display(),
+                    paths::contract_address_file(NAME).display(),
                 );
                 write_contract_address(stringify!($contract), instance.address())
                     .with_context(|| format!("failed to write contract address for {}", NAME))?;
@@ -98,9 +98,7 @@ fn write_contract_address(name: &str, address: Address) -> Result<()> {
 /// See `build.rs` for more information.
 fn touch_build_script() -> Result<()> {
     let timestamp = FileTime::from_system_time(SystemTime::now());
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../")
-        .join("build.rs");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("build.rs");
 
     filetime::set_file_times(path, timestamp, timestamp)?;
 

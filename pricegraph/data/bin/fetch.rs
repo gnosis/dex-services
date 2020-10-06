@@ -1,7 +1,10 @@
 use anyhow::Result;
-use contracts::{ethcontract::Address, BatchExchange, BatchExchangeViewer};
+use contracts::{
+    ethcontract::{Address, Web3},
+    BatchExchange, BatchExchangeViewer,
+};
 use env_logger::Env;
-use services_core::http::HttpFactory;
+use ethcontract::Http;
 use std::{
     env,
     fs::File,
@@ -27,12 +30,8 @@ async fn run() -> Result<()> {
         "https://mainnet.infura.io/v3/{}",
         env::var("INFURA_PROJECT_ID")?,
     );
-    let web3 = services_core::contracts::web3_provider(
-        &HttpFactory::default(),
-        &url,
-        std::time::Duration::from_secs(10),
-    )
-    .unwrap();
+    let http = Http::new(&url)?;
+    let web3 = Web3::new(http);
 
     let exchange = BatchExchange::deployed(&web3).await?;
     let viewer = BatchExchangeViewer::deployed(&web3).await?;
