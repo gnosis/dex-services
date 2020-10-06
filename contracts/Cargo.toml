@@ -18,15 +18,16 @@ bin = [
     "anyhow",
     "env_logger",
     "ethcontract-generate",
+    "ethcontract/http",
     "filetime",
     "futures",
     "log",
     "serde_json",
-    "tokio"
+    "tokio",
 ]
 
 [dependencies]
-ethcontract = { version = "0.8", features = ["http"] }
+ethcontract = { version = "0.8", default-features = false }
 serde = "1.0.116"
 
 # [bin-dependencies]
