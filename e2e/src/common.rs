@@ -4,9 +4,10 @@ use ethcontract::{
         CallFuture, Deploy, DeployBuilder, DeployFuture, Detokenizable, MethodBuilder,
         MethodSendFuture, ViewMethodBuilder,
     },
-    web3::{api::Web3, futures::Future as F, transports::Http, Transport},
+    web3::{futures::Future as F, Transport},
     Account, Address, U256,
 };
+use services_core::contracts::Web3;
 use std::{
     fmt::Debug,
     future::Future,
@@ -86,7 +87,7 @@ where
     }
 }
 
-pub fn wait_for(web3: &Web3<Http>, seconds: u32) {
+pub fn wait_for(web3: &Web3, seconds: u32) {
     web3.transport()
         .execute("evm_increaseTime", vec![seconds.into()])
         .wait()
@@ -114,7 +115,7 @@ where
 }
 
 pub fn create_accounts_with_funded_tokens(
-    web3: &Web3<Http>,
+    web3: &Web3,
     num_tokens: usize,
     num_users: usize,
     token_minted: u32,
