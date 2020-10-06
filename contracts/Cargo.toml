@@ -22,6 +22,7 @@ bin = [
     "futures",
     "log",
     "serde_json",
+    "tokio",
 ]
 
 [dependencies]
@@ -36,6 +37,7 @@ filetime = { version = "0.2.12", optional = true }
 futures = { version = "0.3.6", features = ["compat"], optional = true }
 log = { version = "0.4.11", optional = true }
 serde_json = { version = "1.0.59", optional = true }
+tokio = { version = "0.2", optional = true, features = ["macros"] }
 
 [build-dependencies]
 ethcontract-generate = "0.7.2"
