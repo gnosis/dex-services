@@ -4,8 +4,9 @@ use e2e::{
     docker_logs,
     stablex::{close_auction, setup_stablex},
 };
-use ethcontract::{Account, Http, PrivateKey, Web3, U256};
+use ethcontract::{Account, PrivateKey, U256};
 use futures::future::{join_all, FutureExt as _};
+use services_core::http::HttpFactory;
 use std::{
     env,
     time::{Duration, Instant},
@@ -13,8 +14,12 @@ use std::{
 
 #[test]
 fn test_with_ganache() {
-    let http = Http::new("http://localhost:8545").expect("transport failed");
-    let web3 = Web3::new(http);
+    let web3 = services_core::contracts::web3_provider(
+        &HttpFactory::default(),
+        "http://localhost:8545",
+        Duration::from_secs(10),
+    )
+    .unwrap();
     let (instance, accounts, tokens) = setup_stablex(&web3, 3, 3, 100);
 
     // Dynamically fetching the id allows the test to be run multiple times,
@@ -121,8 +126,12 @@ fn test_with_ganache() {
 #[test]
 fn test_rinkeby() {
     // Setup instance and default tx params
-    let http = Http::new("https://node.rinkeby.gnosisdev.com/").expect("transport failed");
-    let web3 = Web3::new(http);
+    let web3 = services_core::contracts::web3_provider(
+        &HttpFactory::default(),
+        "https://node.rinkeby.gnosisdev.com/",
+        Duration::from_secs(10),
+    )
+    .unwrap();
     let mut instance =
         BatchExchange::deployed(&web3).wait_and_expect("Cannot get deployed Batch Exchange");
     let secret = {

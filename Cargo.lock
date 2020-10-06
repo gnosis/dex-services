@@ -141,18 +141,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-native-tls"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e9e7a929bd34c68a82d58a4de7f86fffdaf97fb2af850162a7bb19dd7269b33"
-dependencies = [
- "async-std",
- "native-tls",
- "thiserror",
- "url 2.1.1",
-]
-
-[[package]]
 name = "async-std"
 version = "1.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -482,33 +470,10 @@ checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 name = "contracts"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "env_logger",
  "ethcontract",
  "ethcontract-generate",
- "filetime",
- "futures 0.3.6",
- "log 0.4.11",
  "serde",
- "serde_json",
- "tokio",
 ]
-
-[[package]]
-name = "core-foundation"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57d24c7a13c43e870e37c1556b74555437870a04514f7685f5b354e090567171"
-dependencies = [
- "core-foundation-sys",
- "libc",
-]
-
-[[package]]
-name = "core-foundation-sys"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3a71ab494c0b5b860bdc8407ae08978052417070c2ced38573a9157ad75b8ac"
 
 [[package]]
 name = "cpuid-bool"
@@ -725,6 +690,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4d0e2d24e5ee3b23a01de38eefdcd978907890701f08ffffd4cb457ca4ee8d6"
 
 [[package]]
+name = "deploy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "contracts",
+ "env_logger",
+ "ethcontract",
+ "filetime",
+ "log 0.4.11",
+ "tokio",
+]
+
+[[package]]
 name = "derive_arbitrary"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -915,7 +893,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "58fdf676999e87b8eed25cd7f09dc67d6520b085b87865dac32a78aa3ff4a415"
 dependencies = [
  "ethcontract-common",
- "ethcontract-derive",
  "futures 0.3.6",
  "futures-timer",
  "hex",
@@ -944,19 +921,6 @@ dependencies = [
  "thiserror",
  "tiny-keccak 2.0.2",
  "web3",
-]
-
-[[package]]
-name = "ethcontract-derive"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "140327000af5583ec8dfef610f0b90f6fbdbe92623d5ff33af5302419b798a62"
-dependencies = [
- "ethcontract-common",
- "ethcontract-generate",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -1054,21 +1018,6 @@ name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
-
-[[package]]
-name = "foreign-types"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6f339eb8adc052cd2ca78910fda869aefa38d22d5cb648e6485e4d3fc06f3b1"
-dependencies = [
- "foreign-types-shared",
-]
-
-[[package]]
-name = "foreign-types-shared"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 
 [[package]]
 name = "fragile"
@@ -1407,19 +1356,6 @@ dependencies = [
  "tower-service",
  "tracing",
  "want",
-]
-
-[[package]]
-name = "hyper-tls"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d979acc56dcb5b8dddba3917601745e877576475aa046df3226eabdecef78eed"
-dependencies = [
- "bytes",
- "hyper",
- "native-tls",
- "tokio",
- "tokio-tls",
 ]
 
 [[package]]
@@ -1827,24 +1763,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "native-tls"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b0d88c06fe90d5ee94048ba40409ef1d9315d86f6f38c2efdaad4fb50c58b2d"
-dependencies = [
- "lazy_static",
- "libc",
- "log 0.4.11",
- "openssl",
- "openssl-probe",
- "openssl-sys",
- "schannel",
- "security-framework",
- "security-framework-sys",
- "tempfile",
-]
-
-[[package]]
 name = "nb-connect"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1983,20 +1901,6 @@ name = "opaque-debug"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
-
-[[package]]
-name = "openssl"
-version = "0.10.30"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d575eff3665419f9b83678ff2815858ad9d11567e082f5ac1814baba4e2bcb4"
-dependencies = [
- "bitflags",
- "cfg-if",
- "foreign-types",
- "lazy_static",
- "libc",
- "openssl-sys",
-]
 
 [[package]]
 name = "openssl-probe"
@@ -2299,6 +2203,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "services-core",
  "structopt",
 ]
 
@@ -2810,29 +2715,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "security-framework"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64808902d7d99f78eaddd2b4e2509713babc3dc3c85ad6f4c447680f3c01e535"
-dependencies = [
- "bitflags",
- "core-foundation",
- "core-foundation-sys",
- "libc",
- "security-framework-sys",
-]
-
-[[package]]
-name = "security-framework-sys"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17bf11d99252f512695eb468de5516e5cf75455521e69dfe343f3b74e4748405"
-dependencies = [
- "core-foundation-sys",
- "libc",
-]
-
-[[package]]
 name = "semver"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3102,21 +2984,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "soketto"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5c71ed3d54db0a699f4948e1bb3e45b450fa31fe602621dee6680361d569c88"
-dependencies = [
- "base64 0.12.3",
- "bytes",
- "futures 0.3.6",
- "httparse",
- "log 0.4.11",
- "rand 0.7.3",
- "sha-1 0.9.1",
-]
-
-[[package]]
 name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3365,16 +3232,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio-tls"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a70f4fcd7b3b24fb194f837560168208f669ca8cb70d0c4b862944452396343"
-dependencies = [
- "native-tls",
- "tokio",
-]
-
-[[package]]
 name = "tokio-tungstenite"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3615,6 +3472,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
+name = "vendor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "contracts",
+ "env_logger",
+ "ethcontract-generate",
+ "log 0.4.11",
+ "serde_json",
+]
+
+[[package]]
 name = "version_check"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3800,8 +3669,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50d03f64be59921dbc5791f05af61a87594bb454518fe4e97d827405422279a0"
 dependencies = [
  "arrayvec",
- "async-native-tls",
- "async-std",
  "base64 0.12.3",
  "derive_more",
  "ethabi",
@@ -3809,17 +3676,14 @@ dependencies = [
  "futures 0.3.6",
  "futures-timer",
  "hyper",
- "hyper-tls",
  "jsonrpc-core",
  "log 0.4.11",
- "native-tls",
  "parking_lot",
  "rlp",
  "rustc-hex",
  "secp256k1 0.17.2",
  "serde",
  "serde_json",
- "soketto",
  "tiny-keccak 2.0.2",
  "url 2.1.1",
 ]

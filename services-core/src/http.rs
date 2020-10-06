@@ -45,7 +45,6 @@ impl HttpFactory {
     }
 }
 
-#[cfg(test)]
 impl Default for HttpFactory {
     fn default() -> Self {
         HttpFactory::new(Duration::from_secs(10), HttpMetrics::default())

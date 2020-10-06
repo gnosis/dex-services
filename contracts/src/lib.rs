@@ -1,4 +1,3 @@
-#[cfg(feature = "bin")]
 pub mod paths;
 
 pub use ethcontract;

@@ -4,14 +4,14 @@ This crate contains `ethcontract` generated bindings to the Gnosis Protocol
 contracts. Additionally it includes a `deploy` script for deploying contracts
 to a test-net for E2E testing.
 
-## `deploy` Script
+## `deploy` Binary
 
-A `[[bin]]` script for deploying Gnosis Protocol contracts to a test network.
+A binary for deploying Gnosis Protocol contracts to a test network.
 This script requires a test node such as Ganache listening on `127.0.0.1:8545`.
 It can be run from the repository root:
 
 ```
-$ (cd contracts; cargo run --bin deploy --features bin)
+$ (cd contracts/deploy; cargo run)
    Compiling contracts v0.1.0 (/var/home/nlordell/Developer/dex-services/contracts)
     Finished dev [unoptimized + debuginfo] target(s) in 4.87s
      Running `/var/home/nlordell/Developer/dex-services/target/debug/deploy`
@@ -37,14 +37,14 @@ script to generate bindings with the injected test network addresses. This is
 done automatically on `cargo build` by leveraging the `cargo:rerun-if-changed`
 build script feature.
 
-## `vendor` Script
+## `vendor` Binary
 
-A `[[bin]]` script for vendoring Smart Contract JSON artifacts used by various
+A binary for vendoring Smart Contract JSON artifacts used by various
 service components from npmjs packages. These artifacts get retrieved from
 `unpkg.io` and vendored to `contracts/artifacts`.
 
 ```
-$ (cd contracts; cargo run --bin vendor --features bin)
+$ (cd contracts/vendor; cargo run)
    Compiling contracts v0.1.0 (/var/home/nlordell/Developer/gnosis/dex-services/contracts)
     Finished dev [unoptimized + debuginfo] target(s) in 8.08s
      Running `/var/home/nlordell/Developer/gnosis/dex-services/target/debug/vendor`

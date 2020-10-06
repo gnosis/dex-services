@@ -4,40 +4,9 @@ version = "0.1.0"
 authors = ["Nicholas Rodrigues Lordello <nicholas.lordello@gnosis.pm>"]
 edition = "2018"
 
-[[bin]]
-name = "deploy"
-required-features = ["bin"]
-
-[[bin]]
-name = "vendor"
-required-features = ["bin"]
-
-[features]
-default = []
-bin = [
-    "anyhow",
-    "env_logger",
-    "ethcontract-generate",
-    "filetime",
-    "futures",
-    "log",
-    "serde_json",
-    "tokio"
-]
-
 [dependencies]
-ethcontract = { version = "0.8", features = ["http"] }
-serde = "1.0.116"
-
-# [bin-dependencies]
-anyhow = { version = "1.0.32", optional = true }
-env_logger = { version = "0.7.1", optional = true }
-ethcontract-generate = { version = "0.8", optional = true }
-filetime = { version = "0.2.12", optional = true }
-futures = { version = "0.3.6", optional = true }
-log = { version = "0.4.11", optional = true }
-serde_json = { version = "1.0.58", optional = true }
-tokio = { version = "0.2.22", optional = true, features = ["macros"] }
+ethcontract = { version = "0.8", default-features = false }
+serde = "1.0"
 
 [build-dependencies]
 ethcontract-generate = "0.8"
