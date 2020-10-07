@@ -1,6 +1,6 @@
-use prometheus::{Gauge, Registry, IntCounter};
+use prometheus::{Gauge, IntCounter, Registry};
 use serde::Deserialize;
-use serde_json::{Number, Value, json};
+use serde_json::{json, Number, Value};
 use std::{collections::HashMap, sync::Arc};
 
 /// This struct deserializes the metrics part of the solver generated solution json file.
@@ -52,7 +52,11 @@ impl SolverMetrics {
             gauge
         };
 
-        let interrupted = IntCounter::new("dfusion_solver_interrupted", "Increments when solving ran out of time").unwrap();
+        let interrupted = IntCounter::new(
+            "dfusion_solver_interrupted",
+            "Increments when solving ran out of time",
+        )
+        .unwrap();
         registry.register(Box::new(interrupted.clone())).unwrap();
 
         macro_rules! create {
