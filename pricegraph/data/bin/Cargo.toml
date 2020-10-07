@@ -14,7 +14,7 @@ name = "fetch"
 path = "fetch.rs"
 
 [dependencies]
-anyhow = "1.0.32"
+anyhow = "1.0.33"
 contracts = { path = "../../../contracts" }
 env_logger = "0.7.1"
 futures = { version = "0.3.6", features = ["compat"] }
