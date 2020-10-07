@@ -29,7 +29,7 @@ ethcontract = "0.7.2"
 serde = "1.0.116"
 
 # [bin-dependencies]
-anyhow = { version = "1.0.32", optional = true }
+anyhow = { version = "1.0.33", optional = true }
 env_logger = { version = "0.7.1", optional = true }
 ethcontract-generate = { version = "0.7.2", optional = true }
 filetime = { version = "0.2.12", optional = true }
