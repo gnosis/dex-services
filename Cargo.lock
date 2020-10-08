@@ -3157,9 +3157,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "1.5.0"
+version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f87df303fd746404ca055fffb3a1850243ee3404f9bda4dc5760132814dd0734"
+checksum = "8bac272128fb3b1e98872dca27a05c18d8b78b9bd089d3edb7b5871501b50bce"
 dependencies = [
  "serde",
  "serde_with_macros",
@@ -3167,9 +3167,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with_macros"
-version = "1.2.0"
+version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe2c6a4cb9be4c26e73a98dc94fdd90b876971e3b575eeed6d4b82c7d17aa4a5"
+checksum = "3c747a9ab2e833b807f74f6b6141530655010bfa9c9c06d5508bce75c8f8072f"
 dependencies = [
  "darling",
  "proc-macro2",
