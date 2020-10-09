@@ -8,6 +8,6 @@ services-core = { path = "../services-core" }
 ethcontract = "0.7.2"
 log = "0.4.11"
 prometheus = { version = "0.10.0", default-features= false }
-structopt = "0.3.18"
+structopt = "0.3.19"
 url = "2.1.1"
 
