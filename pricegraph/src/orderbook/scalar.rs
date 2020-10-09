@@ -12,7 +12,7 @@ use std::{cmp, ops};
 /// and **never equal to** the limit price of an order.
 ///
 /// Prices are guaranteed to be a strictly positive finite real numbers.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LimitPrice(f64);
 
 impl LimitPrice {
@@ -63,7 +63,7 @@ impl LimitPrice {
 /// rate for an order.
 ///
 /// Exchange rates are guaranteed to be a strictly positive finite real numbers.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ExchangeRate(f64);
 
 impl ExchangeRate {
@@ -109,6 +109,12 @@ impl ExchangeRate {
 macro_rules! impl_cmp {
     ($($t:ty),*) => {$(
         impl Eq for $t {}
+
+        impl PartialOrd for $t {
+            fn partial_cmp(&self, rhs: &Self) -> Option<cmp::Ordering> {
+                self.0.partial_cmp(&rhs.0)
+            }
+        }
 
         impl Ord for $t {
             fn cmp(&self, rhs: &Self) -> cmp::Ordering {
