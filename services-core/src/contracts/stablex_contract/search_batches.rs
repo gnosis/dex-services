@@ -113,10 +113,7 @@ pub mod tests {
         let mut mock_batch_id_retrieving = MockBatchIdRetrieving::new();
         mock_batch_id_retrieving
             .expect_batch_id_from_block()
-            .withf(|block_number: &BlockNumber| match block_number {
-                BlockNumber::Number(_) => true,
-                _ => false,
-            })
+            .withf(|block_number: &BlockNumber| matches!(block_number, BlockNumber::Number(_)))
             .returning({
                 let batch_ids = batch_ids.clone();
                 move |block_number: BlockNumber| {
