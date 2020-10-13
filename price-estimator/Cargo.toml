@@ -7,7 +7,7 @@ edition = "2018"
 anyhow = "1.0"
 async-trait = "0.1.41"
 services-core = { path = "../services-core" }
-ethcontract = "0.7"
+ethcontract = "0.8"
 futures = "0.3"
 log = "0.4"
 pricegraph = { path = "../pricegraph" }

@@ -25,7 +25,7 @@ bin = [
 ]
 
 [dependencies]
-ethcontract = "0.7.2"
+ethcontract = "0.8.0"
 serde = "1.0.116"
 
 # [bin-dependencies]

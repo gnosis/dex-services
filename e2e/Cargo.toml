@@ -8,7 +8,7 @@ anyhow = "1"
 contracts = { path = "../contracts" }
 services-core = { path = "../services-core" }
 crossbeam = "0.8"
-ethcontract = "0.7.2"
+ethcontract = "0.8.0"
 futures = { version = "0.3.6", features = ["compat"] }
 pbr = "1.0.3"
 pricegraph = { path = "../pricegraph" }
