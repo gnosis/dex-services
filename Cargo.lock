@@ -506,7 +506,7 @@ dependencies = [
  "anyhow",
  "env_logger",
  "ethcontract",
- "ethcontract-generate",
+ "ethcontract-generate 0.8.0",
  "filetime",
  "futures 0.3.6",
  "log 0.4.11",
@@ -1041,7 +1041,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "deffc048863bfac48885716f4eb58716b8d93a60a8bb058555634403765d8891"
 dependencies = [
  "ethabi 9.0.1",
- "ethcontract-common",
+ "ethcontract-common 0.7.2",
  "ethcontract-derive",
  "futures 0.3.6",
  "futures-timer",
@@ -1055,7 +1055,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "uint",
- "web3",
+ "web3 0.10.0",
  "zeroize",
 ]
 
@@ -1072,7 +1072,23 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tiny-keccak 2.0.2",
- "web3",
+ "web3 0.10.0",
+]
+
+[[package]]
+name = "ethcontract-common"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baad5ea355d7779eeb1c24bd2a6ec1c0fe7ac75c2105d77a7090463630ad96c7"
+dependencies = [
+ "ethabi 12.0.0",
+ "hex",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "thiserror",
+ "tiny-keccak 2.0.2",
+ "web3 0.13.0",
 ]
 
 [[package]]
@@ -1081,8 +1097,8 @@ version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b05cceba850b7b0665a4b434ddd95e855c6e26380d732b35c77a7decddce53f8"
 dependencies = [
- "ethcontract-common",
- "ethcontract-generate",
+ "ethcontract-common 0.7.2",
+ "ethcontract-generate 0.7.2",
  "proc-macro2",
  "quote",
  "syn",
@@ -1097,7 +1113,23 @@ dependencies = [
  "Inflector",
  "anyhow",
  "curl",
- "ethcontract-common",
+ "ethcontract-common 0.7.2",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "url 2.1.1",
+]
+
+[[package]]
+name = "ethcontract-generate"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4643e53caf3dbfd6c646ea867c4291ae9ebef4f3f677e6a02952023b481732a"
+dependencies = [
+ "Inflector",
+ "anyhow",
+ "curl",
+ "ethcontract-common 0.8.0",
  "proc-macro2",
  "quote",
  "syn",
@@ -4429,6 +4461,29 @@ dependencies = [
  "tokio-uds 0.1.7",
  "url 2.1.1",
  "websocket",
+]
+
+[[package]]
+name = "web3"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50d03f64be59921dbc5791f05af61a87594bb454518fe4e97d827405422279a0"
+dependencies = [
+ "arrayvec",
+ "derive_more",
+ "ethabi 12.0.0",
+ "ethereum-types 0.9.2",
+ "futures 0.3.6",
+ "futures-timer",
+ "jsonrpc-core",
+ "log 0.4.11",
+ "parking_lot 0.11.0",
+ "rlp",
+ "rustc-hex",
+ "secp256k1",
+ "serde",
+ "serde_json",
+ "tiny-keccak 2.0.2",
 ]
 
 [[package]]
