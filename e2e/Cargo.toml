@@ -13,4 +13,4 @@ futures = { version = "0.3.6", features = ["compat"] }
 pbr = "1.0.3"
 pricegraph = { path = "../pricegraph" }
 rayon = "1.4"
-structopt = "0.3.18"
+structopt = "0.3.20"
