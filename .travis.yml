@@ -10,7 +10,7 @@ language: rust
 env:
   global:
     - OPEN_SOLVER_VERSION=v0.1.1
-    - PRIVATE_SOLVER_VERSION=v0.8.4
+    - PRIVATE_SOLVER_VERSION=v0.8.5
 
 jobs:
   fast_finish: true
