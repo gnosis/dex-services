@@ -168,6 +168,9 @@ OPTIONS:
         --http-timeout <http-timeout>
             The default timeout in milliseconds of HTTP requests to remote services such as the Gnosis Safe gas station
             and exchange REST APIs for fetching price estimates [env: HTTP_TIMEOUT=]  [default: 10000]
+        --ignore-external-price-source <ignore-external-price-source>
+            Whether to ignore external price sources (e.g. 1Inch, Kraken etc) when estimating token prices [env:
+            IGNORE_EXTERNAL_PRICE_SOURCE=]
         --latest-solution-submit-time <latest-solution-submit-time>
             The offset from the start of the batch to cap the solver's execution time [env:
             LATEST_SOLUTION_SUBMIT_TIME=]  [default: 210]

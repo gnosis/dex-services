@@ -239,6 +239,11 @@ struct Options {
     /// target chain (e.g. WETH on mainnet, DAI on xDAI).
     #[structopt(long, env = "NATIVE_TOKEN_ID", default_value = "1")]
     native_token_id: u16,
+
+    /// Whether to ignore external price sources (e.g. 1Inch, Kraken etc)
+    /// when estimating token prices
+    #[structopt(long, env="IGNORE_EXTERNAL_PRICE_SOURCE")]
+    ignore_external_price_source: bool,
 }
 
 fn main() {
@@ -281,6 +286,7 @@ fn main() {
             options.token_data,
             options.price_source_update_interval,
             options.native_token_id.into(),
+            options.ignore_external_price_source,
         )
         .unwrap(),
     );
