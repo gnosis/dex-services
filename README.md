@@ -168,9 +168,6 @@ OPTIONS:
         --http-timeout <http-timeout>
             The default timeout in milliseconds of HTTP requests to remote services such as the Gnosis Safe gas station
             and exchange REST APIs for fetching price estimates [env: HTTP_TIMEOUT=]  [default: 10000]
-        --ignore-external-price-source <ignore-external-price-source>
-            Whether to ignore external price sources (e.g. 1Inch, Kraken etc) when estimating token prices [env:
-            IGNORE_EXTERNAL_PRICE_SOURCE=true]  [default: false]
         --latest-solution-submit-time <latest-solution-submit-time>
             The offset from the start of the batch to cap the solver's execution time [env:
             LATEST_SOLUTION_SUBMIT_TIME=]  [default: 210]
@@ -225,6 +222,9 @@ OPTIONS:
             "decimals": 18, "externalPrice": 200000000000000000000, }, "T0004": { "address":
             "0x0000000000000000000000000000000000000000", "alias": "USDC", "decimals": 6, "externalPrice":
             1000000000000000000000000000000, } }' [env: TOKEN_DATA=]  [default: {}]
+        --use-external-price-source <use-external-price-source>
+            Whether to rely on external price sources (e.g. 1Inch, Kraken etc) when estimating token prices [env:
+            USE_EXTERNAL_PRICE_SOURCE=]  [default: true]
 ```
 
 ### Orderbook Filter Example

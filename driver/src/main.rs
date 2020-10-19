@@ -240,10 +240,10 @@ struct Options {
     #[structopt(long, env = "NATIVE_TOKEN_ID", default_value = "1")]
     native_token_id: u16,
 
-    /// Whether to ignore external price sources (e.g. 1Inch, Kraken etc)
+    /// Whether to rely on external price sources (e.g. 1Inch, Kraken etc)
     /// when estimating token prices
-    #[structopt(long, env="IGNORE_EXTERNAL_PRICE_SOURCE", parse(try_from_str), default_value="false")]
-    ignore_external_price_source: bool,
+    #[structopt(long, env="USE_EXTERNAL_PRICE_SOURCE", parse(try_from_str), default_value="true")]
+    use_external_price_source: bool,
 }
 
 fn main() {
@@ -286,7 +286,7 @@ fn main() {
             options.token_data,
             options.price_source_update_interval,
             options.native_token_id.into(),
-            options.ignore_external_price_source,
+            options.use_external_price_source,
         )
         .unwrap(),
     );
