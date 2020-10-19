@@ -242,7 +242,7 @@ struct Options {
 
     /// Whether to ignore external price sources (e.g. 1Inch, Kraken etc)
     /// when estimating token prices
-    #[structopt(long, env="IGNORE_EXTERNAL_PRICE_SOURCE")]
+    #[structopt(long, env="IGNORE_EXTERNAL_PRICE_SOURCE", parse(try_from_str), default_value="false")]
     ignore_external_price_source: bool,
 }
 
