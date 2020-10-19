@@ -16,7 +16,7 @@ path = "fetch.rs"
 [dependencies]
 anyhow = "1.0.33"
 contracts = { path = "../../../contracts" }
-env_logger = "0.7.1"
+env_logger = "0.8.1"
 ethcontract = { version = "0.8", features = ["http-tls"] }
 futures = "0.3.6"
 hex = "0.4.2"
