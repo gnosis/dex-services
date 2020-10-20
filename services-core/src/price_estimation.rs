@@ -72,9 +72,14 @@ impl PriceOracle {
     ) -> Result<Self> {
         let cache: HashMap<_, _> = token_data.clone().into();
         let token_info_fetcher = Arc::new(TokenInfoCache::with_cache(contract, cache));
-        let mut price_sources: Vec<Box<dyn PriceSource + Send + Sync>> = vec![Box::new(PricegraphEstimator::new(orderbook_reader))];
+        let mut price_sources: Vec<Box<dyn PriceSource + Send + Sync>> =
+            vec![Box::new(PricegraphEstimator::new(orderbook_reader))];
         if use_external_price_source {
-            price_sources.extend(external_price_sources(http_factory, token_info_fetcher.clone(), update_interval)?);
+            price_sources.extend(external_price_sources(
+                http_factory,
+                token_info_fetcher.clone(),
+                update_interval,
+            )?);
         }
         let averaged_source = Box::new(AveragePriceSource::new(price_sources));
         let prioritized_source = Box::new(PriorityPriceSource::new(vec![

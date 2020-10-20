@@ -242,7 +242,12 @@ struct Options {
 
     /// Whether to rely on external price sources (e.g. 1Inch, Kraken etc)
     /// when estimating token prices
-    #[structopt(long, env="USE_EXTERNAL_PRICE_SOURCE", parse(try_from_str), default_value="true")]
+    #[structopt(
+        long,
+        env = "USE_EXTERNAL_PRICE_SOURCE",
+        parse(try_from_str),
+        default_value = "true"
+    )]
     use_external_price_source: bool,
 }
 
