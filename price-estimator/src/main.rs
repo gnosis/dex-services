@@ -192,14 +192,14 @@ fn main() {
     let _ = orderbook.update().wait();
     log::info!("Orderbook initialized.");
 
-    let economic_viability = Arc::new(options.economic_viability_strategy.from_arguments(
+    let economic_viability = options.economic_viability_strategy.from_arguments(
         options.economic_viability_subsidy_factor,
         options.economic_viability_min_avg_fee_factor,
         options.fallback_min_avg_fee_per_order,
         options.fallback_max_gas_price,
         orderbook.clone(),
         gas_station.clone(),
-    ));
+    );
 
     let mut runtime = runtime::Builder::new()
         .threaded_scheduler()

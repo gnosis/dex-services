@@ -4,6 +4,7 @@
 use crate::{gas_price::GasPriceEstimating, models::solution::EconomicViabilityInfo};
 use anyhow::{anyhow, Context as _, Result};
 use ethcontract::U256;
+use futures::future;
 use std::{num::NonZeroU128, sync::Arc};
 
 /// The approximate amount of gas used in a solution per trade. In practice the value depends on how
@@ -13,8 +14,9 @@ const GAS_PER_TRADE: f64 = 120_000.0;
 arg_enum! {
     #[derive(Debug)]
     pub enum EconomicViabilityStrategy {
-        Dynamic,
         Static,
+        Dynamic,
+        DynamicBoundedByStatic,
     }
 }
 
@@ -30,22 +32,29 @@ impl EconomicViabilityStrategy {
         fallback_max_gas_price: u128,
         native_token_price: Arc<dyn NativeTokenPricing + Send + Sync>,
         gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
-    ) -> impl EconomicViabilityComputing {
-        let mut economic_viabilities = Vec::<Box<dyn EconomicViabilityComputing>>::new();
-        if matches!(self, EconomicViabilityStrategy::Dynamic) {
-            economic_viabilities.push(Box::new(EconomicViabilityComputer::new(
-                native_token_price,
-                gas_station,
-                subsidy_factor,
-                min_avg_fee_factor,
-            )));
-        }
-        // This should come after the subsidy calculation so that it is only used when that fails.
-        economic_viabilities.push(Box::new(FixedEconomicViabilityComputer::new(
+    ) -> Arc<dyn EconomicViabilityComputing> {
+        let fixed = FixedEconomicViabilityComputer::new(
             Some(fallback_min_avg_fee_per_order),
             Some(fallback_max_gas_price.into()),
-        )));
-        PriorityEconomicViabilityComputer::new(economic_viabilities)
+        );
+        let dynamic = EconomicViabilityComputer::new(
+            native_token_price,
+            gas_station,
+            subsidy_factor,
+            min_avg_fee_factor,
+        );
+        match self {
+            EconomicViabilityStrategy::Static => Arc::new(fixed),
+            EconomicViabilityStrategy::Dynamic => {
+                Arc::new(PriorityEconomicViabilityComputer::new(vec![
+                    Box::new(dynamic),
+                    Box::new(fixed),
+                ]))
+            }
+            EconomicViabilityStrategy::DynamicBoundedByStatic => Arc::new(
+                BoundedEconomicViabilityComputer::new(Box::new(dynamic), Box::new(fixed)),
+            ),
+        }
     }
 }
 
@@ -229,11 +238,67 @@ impl EconomicViabilityComputing for PriorityEconomicViabilityComputer {
     }
 }
 
+/// Use the better result of two computers. If first fails second is used.
+/// For min-avg-fee lower is better, for max-gas-price higher is better.
+pub struct BoundedEconomicViabilityComputer {
+    first: Box<dyn EconomicViabilityComputing>,
+    second: Box<dyn EconomicViabilityComputing>,
+}
+
+impl BoundedEconomicViabilityComputer {
+    pub fn new(
+        first: Box<dyn EconomicViabilityComputing>,
+        second: Box<dyn EconomicViabilityComputing>,
+    ) -> Self {
+        Self { first, second }
+    }
+
+    async fn bounded<'a, T, Future>(
+        &'a self,
+        operation: impl Fn(&'a dyn EconomicViabilityComputing) -> Future + 'a,
+        comparison: impl Fn(T, T) -> T,
+    ) -> Result<T>
+    where
+        Future: std::future::Future<Output = Result<T>>,
+    {
+        let (first, second) = future::join(
+            operation(self.first.as_ref()),
+            operation(self.second.as_ref()),
+        )
+        .await;
+        let second = second?;
+        Ok(match first {
+            Ok(first) => comparison(first, second),
+            Err(err) => {
+                log::warn!("failed first operation: {:?}", err);
+                second
+            }
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl EconomicViabilityComputing for BoundedEconomicViabilityComputer {
+    async fn min_average_fee(&self) -> Result<u128> {
+        self.bounded(EconomicViabilityComputing::min_average_fee, std::cmp::min)
+            .await
+    }
+
+    async fn max_gas_price(&self, economic_viability_info: EconomicViabilityInfo) -> Result<U256> {
+        self.bounded(
+            move |computer| computer.max_gas_price(economic_viability_info),
+            std::cmp::max,
+        )
+        .await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{gas_price::MockGasPriceEstimating, util::FutureWaitExt as _};
     use assert_approx_eq::assert_approx_eq;
+    use futures::future::FutureExt as _;
 
     #[test]
     fn computes_min_average_fee() {
@@ -297,5 +362,62 @@ mod tests {
         );
 
         assert_eq!(priority_min_avg_fee.min_average_fee().wait().unwrap(), 42);
+    }
+
+    #[test]
+    fn bounded_uses_min_of_first_and_second_min_avg_fee() {
+        let mut first = MockEconomicViabilityComputing::new();
+        first.expect_min_average_fee().return_once(|| Ok(10));
+        let mut second = MockEconomicViabilityComputing::new();
+        second.expect_min_average_fee().return_once(|| Ok(5));
+        let bounded = BoundedEconomicViabilityComputer::new(Box::new(first), Box::new(second));
+        assert_eq!(
+            bounded.min_average_fee().now_or_never().unwrap().unwrap(),
+            5
+        );
+    }
+
+    #[test]
+    fn bounded_uses_max_of_first_and_second_max_gas_price() {
+        let mut first = MockEconomicViabilityComputing::new();
+        first.expect_max_gas_price().return_once(|_| Ok(10.into()));
+        let mut second = MockEconomicViabilityComputing::new();
+        second.expect_max_gas_price().return_once(|_| Ok(5.into()));
+        let bounded = BoundedEconomicViabilityComputer::new(Box::new(first), Box::new(second));
+        assert_eq!(
+            bounded
+                .max_gas_price(Default::default())
+                .now_or_never()
+                .unwrap()
+                .unwrap(),
+            10.into(),
+        );
+    }
+
+    #[test]
+    fn bounded_fails_if_second_fails() {
+        let mut first = MockEconomicViabilityComputing::new();
+        first.expect_min_average_fee().return_once(|| Ok(10));
+        let mut second = MockEconomicViabilityComputing::new();
+        second
+            .expect_min_average_fee()
+            .return_once(|| Err(anyhow!("")));
+        let bounded = BoundedEconomicViabilityComputer::new(Box::new(first), Box::new(second));
+        assert!(bounded.min_average_fee().now_or_never().unwrap().is_err());
+    }
+
+    #[test]
+    fn bounded_uses_second_on_error() {
+        let mut first = MockEconomicViabilityComputing::new();
+        first
+            .expect_min_average_fee()
+            .return_once(|| Err(anyhow!("")));
+        let mut second = MockEconomicViabilityComputing::new();
+        second.expect_min_average_fee().return_once(|| Ok(5));
+        let bounded = BoundedEconomicViabilityComputer::new(Box::new(first), Box::new(second));
+        assert_eq!(
+            bounded.min_average_fee().now_or_never().unwrap().unwrap(),
+            5
+        );
     }
 }

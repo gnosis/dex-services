@@ -199,9 +199,10 @@ struct Options {
     #[structopt(long, env = "FALLBACK_MAX_GAS_PRICE", default_value = "100000000000")]
     fallback_max_gas_price: u128,
 
-    /// How to calculate the economic viability constraints. `Dynamic` means that current native token price
-    /// is taken into account while `Static` means that fallback_min_avg_fee_per_order and
-    /// fallback_max_gas_price will always be used.
+    /// How to calculate the economic viability constraints.
+    /// `Static`: Use fallback_min_avg_fee_per_order and fallback_max_gas_price.
+    /// `Dynamic`: Use current native token price, gas price and subsidy factor. Use Static if cannot get prices.
+    /// `DynamicBoundedByStatic`: Use Dynamic first. If it fails or the result is worse (larger min-avg-fee, lower max-gas-price) than Static, use Static instead.
     #[structopt(
         long,
         env = "ECONOMIC_VIABILITY_STRATEGY",
@@ -296,14 +297,14 @@ fn main() {
         .unwrap(),
     );
 
-    let economic_viability = Arc::new(options.economic_viability_strategy.from_arguments(
+    let economic_viability = options.economic_viability_strategy.from_arguments(
         options.economic_viability_subsidy_factor,
         options.economic_viability_min_avg_fee_factor,
         options.fallback_min_avg_fee_per_order,
         options.fallback_max_gas_price,
         price_oracle.clone(),
         gas_station.clone(),
-    ));
+    );
 
     // Setup price.
     let price_finder = price_finding::create_price_finder(

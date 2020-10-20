@@ -18,7 +18,7 @@ pub struct Solution {
     pub executed_orders: Vec<ExecutedOrder>,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct EconomicViabilityInfo {
     pub num_executed_orders: usize,
     pub earned_fee: U256,
