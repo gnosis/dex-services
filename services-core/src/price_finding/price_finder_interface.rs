@@ -153,5 +153,6 @@ pub trait PriceFinding {
         orders: &[models::Order],
         state: &models::AccountState,
         time_limit: Duration,
+        min_avg_earned_fee: u128,
     ) -> Result<models::Solution>;
 }
