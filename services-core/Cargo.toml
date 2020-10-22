@@ -37,5 +37,5 @@ url = "2.1.1"
 
 [dev-dependencies]
 assert_approx_eq = "1"
-mockall = "0.8.1"
+mockall = "0.8.3"
 
