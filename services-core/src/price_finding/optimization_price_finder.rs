@@ -1,5 +1,4 @@
 use crate::{
-    economic_viability::EconomicViabilityComputing,
     metrics::{
         solver_metrics::{SolverMetrics, SolverStats},
         StableXMetrics,
@@ -203,7 +202,6 @@ pub struct OptimisationPriceFinder {
     fee: Option<Fee>,
     solver_type: SolverType,
     price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
-    economic_viability: Arc<dyn EconomicViabilityComputing>,
     internal_optimizer: InternalOptimizer,
     solver_metrics: SolverMetrics,
     stablex_metrics: Arc<StableXMetrics>,
@@ -214,7 +212,6 @@ impl OptimisationPriceFinder {
         fee: Option<Fee>,
         solver_type: SolverType,
         price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
-        economic_viability: Arc<dyn EconomicViabilityComputing>,
         internal_optimizer: InternalOptimizer,
         solver_metrics: SolverMetrics,
         stablex_metrics: Arc<StableXMetrics>,
@@ -224,7 +221,6 @@ impl OptimisationPriceFinder {
             fee,
             solver_type,
             price_oracle,
-            economic_viability,
             internal_optimizer,
             solver_metrics,
             stablex_metrics,
@@ -261,6 +257,7 @@ impl PriceFinding for OptimisationPriceFinder {
         orders: &[models::Order],
         state: &models::AccountState,
         time_limit: Duration,
+        min_avg_earned_fee: u128,
     ) -> Result<Solution> {
         let price_oracle = &*self.price_oracle;
         let input = solver_input::Input {
@@ -298,7 +295,7 @@ impl PriceFinding for OptimisationPriceFinder {
         let solver_type = self.solver_type;
         // The solver expects the fee amount as the total paid fees. Half of the paid fees are
         // burned and half earned.
-        let min_avg_fee = 2 * self.economic_viability.min_average_fee().await?;
+        let min_avg_fee = 2 * min_avg_earned_fee;
         self.stablex_metrics.min_avg_fee_calculated(min_avg_fee);
         let internal_optimizer = self.internal_optimizer;
         let result = blocking::unblock(move || {
@@ -385,9 +382,8 @@ impl Io for DefaultIo {
 pub mod tests {
     use super::*;
     use crate::{
-        economic_viability::MockEconomicViabilityComputing, models::AccountState,
-        price_estimation::MockPriceEstimating, util::test_util::map_from_slice,
-        util::FutureWaitExt as _,
+        models::AccountState, price_estimation::MockPriceEstimating,
+        util::test_util::map_from_slice, util::FutureWaitExt as _,
     };
     use ethcontract::Address;
     use prometheus::Registry;
@@ -676,11 +672,6 @@ pub mod tests {
                 }
             });
 
-        let mut economic_viablity = MockEconomicViabilityComputing::new();
-        economic_viablity
-            .expect_min_average_fee()
-            .returning(|| Ok(10u128.pow(18)));
-
         let mut io_methods = MockIo::new();
         io_methods
             .expect_run_solver()
@@ -699,7 +690,6 @@ pub mod tests {
             fee: Some(fee),
             solver_type: SolverType::StandardSolver,
             price_oracle: Arc::new(price_oracle),
-            economic_viability: Arc::new(economic_viablity),
             internal_optimizer: InternalOptimizer::Scip,
             solver_metrics: SolverMetrics::new(Arc::new(Registry::new())),
             stablex_metrics: Arc::new(StableXMetrics::new(Arc::new(Registry::new()))),
@@ -709,7 +699,8 @@ pub mod tests {
             .find_prices(
                 &orders,
                 &AccountState::with_balance_for(&orders),
-                Duration::from_secs(180)
+                Duration::from_secs(180),
+                10u128.pow(18)
             )
             .wait()
             .is_err());

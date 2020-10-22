@@ -310,7 +310,6 @@ fn main() {
         Some(Fee::default()),
         options.solver_type,
         price_oracle,
-        economic_viability.clone(),
         options.solver_internal_optimizer,
         solver_metrics,
         stablex_metrics.clone(),
