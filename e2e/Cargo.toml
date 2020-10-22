@@ -12,5 +12,5 @@ crossbeam = "0.8"
 futures = { version = "0.3.6" }
 pbr = "1.0.3"
 pricegraph = { path = "../pricegraph" }
-rayon = "1.4"
+rayon = "1.5"
 structopt = "0.3.20"
