@@ -32,12 +32,17 @@ impl EconomicViabilityStrategy {
         gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
     ) -> Result<Arc<dyn EconomicViabilityComputing>> {
         Ok(match self {
-            Self::Dynamic => Arc::new(EconomicViabilityComputer::new(
-                native_token_price,
-                gas_station,
-                subsidy_factor,
-                min_avg_fee_factor,
-            )),
+            Self::Dynamic => {
+                if static_max_gas_price.is_some() || static_min_avg_fee_per_order.is_some() {
+                    return Err(anyhow!("Got Dynamic strategy but also parameters for Static strategy."));
+                }
+                Arc::new(EconomicViabilityComputer::new(
+                    native_token_price,
+                    gas_station,
+                    subsidy_factor,
+                    min_avg_fee_factor,
+                ))
+            }
             Self::Static => {
                 let min_avg_fee = static_min_avg_fee_per_order
                     .ok_or_else(|| anyhow!("Static strategy but no min_avg_fee passed."))?;
