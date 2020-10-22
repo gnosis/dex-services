@@ -189,19 +189,17 @@ struct Options {
     )]
     economic_viability_min_avg_fee_factor: f64,
 
-    /// The fallback minimum average fee per order. This is passed to the solver
-    /// in case the computing its value fails. Its unit is [OWL]
-    #[structopt(long, env = "FALLBACK_MIN_AVG_FEE_PER_ORDER", default_value = "0")]
-    fallback_min_avg_fee_per_order: u128,
+    /// The static minimum average fee per order used for the Static strategy.
+    #[structopt(long, env = "STATIC_MIN_AVG_FEE_PER_ORDER")]
+    static_min_avg_fee_per_order: Option<u128>,
 
-    /// The fallback maximum gas price. This is used when computing the maximum gas price based on
-    /// ether price in owl fails.
-    #[structopt(long, env = "FALLBACK_MAX_GAS_PRICE", default_value = "100000000000")]
-    fallback_max_gas_price: u128,
+    /// The static max gas price fee per order used for the Static strategy.
+    #[structopt(long, env = "STATIC_MAX_GAS_PRICE")]
+    static_max_gas_price: Option<u128>,
 
     /// How to calculate the economic viability constraints. `Dynamic` means that current native token price
-    /// is taken into account while `Static` means that fallback_min_avg_fee_per_order and
-    /// fallback_max_gas_price will always be used.
+    /// is taken into account while `Static` means that static_min_avg_fee_per_order and
+    /// static_max_gas_price will always be used.
     #[structopt(
         long,
         env = "ECONOMIC_VIABILITY_STRATEGY",
@@ -296,14 +294,17 @@ fn main() {
         .unwrap(),
     );
 
-    let economic_viability = Arc::new(options.economic_viability_strategy.from_arguments(
-        options.economic_viability_subsidy_factor,
-        options.economic_viability_min_avg_fee_factor,
-        options.fallback_min_avg_fee_per_order,
-        options.fallback_max_gas_price,
-        price_oracle.clone(),
-        gas_station.clone(),
-    ));
+    let economic_viability = options
+        .economic_viability_strategy
+        .from_arguments(
+            options.economic_viability_subsidy_factor,
+            options.economic_viability_min_avg_fee_factor,
+            options.static_min_avg_fee_per_order,
+            options.static_max_gas_price,
+            price_oracle.clone(),
+            gas_station.clone(),
+        )
+        .unwrap();
 
     // Setup price.
     let price_finder = price_finding::create_price_finder(

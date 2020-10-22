@@ -26,26 +26,29 @@ impl EconomicViabilityStrategy {
         &self,
         subsidy_factor: f64,
         min_avg_fee_factor: f64,
-        fallback_min_avg_fee_per_order: u128,
-        fallback_max_gas_price: u128,
+        static_min_avg_fee_per_order: Option<u128>,
+        static_max_gas_price: Option<u128>,
         native_token_price: Arc<dyn NativeTokenPricing + Send + Sync>,
         gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
-    ) -> impl EconomicViabilityComputing {
-        let mut economic_viabilities = Vec::<Box<dyn EconomicViabilityComputing>>::new();
-        if matches!(self, EconomicViabilityStrategy::Dynamic) {
-            economic_viabilities.push(Box::new(EconomicViabilityComputer::new(
+    ) -> Result<Arc<dyn EconomicViabilityComputing>> {
+        Ok(match self {
+            Self::Dynamic => Arc::new(EconomicViabilityComputer::new(
                 native_token_price,
                 gas_station,
                 subsidy_factor,
                 min_avg_fee_factor,
-            )));
-        }
-        // This should come after the subsidy calculation so that it is only used when that fails.
-        economic_viabilities.push(Box::new(FixedEconomicViabilityComputer::new(
-            Some(fallback_min_avg_fee_per_order),
-            Some(fallback_max_gas_price.into()),
-        )));
-        PriorityEconomicViabilityComputer::new(economic_viabilities)
+            )),
+            Self::Static => {
+                let min_avg_fee = static_min_avg_fee_per_order
+                    .ok_or_else(|| anyhow!("Static strategy but no min_avg_fee passed."))?;
+                let max_gas_price = static_max_gas_price
+                    .ok_or_else(|| anyhow!("Static strategy but no max_gas_price passed."))?;
+                Arc::new(FixedEconomicViabilityComputer::new(
+                    Some(min_avg_fee),
+                    Some(max_gas_price.into()),
+                ))
+            }
+        })
     }
 }
 
@@ -187,48 +190,6 @@ impl EconomicViabilityComputing for FixedEconomicViabilityComputer {
     }
 }
 
-/// Takes the first successful inner computer.
-pub struct PriorityEconomicViabilityComputer(Vec<Box<dyn EconomicViabilityComputing>>);
-
-impl PriorityEconomicViabilityComputer {
-    /// Creates a new priority minimum average fee computing from the specified
-    /// implementations.
-    pub fn new(inner: Vec<Box<dyn EconomicViabilityComputing>>) -> Self {
-        PriorityEconomicViabilityComputer(inner)
-    }
-
-    async fn until_success<'a, T, Future>(
-        &'a self,
-        mut operation: impl FnMut(&'a dyn EconomicViabilityComputing) -> Future + 'a,
-    ) -> Result<T>
-    where
-        Future: std::future::Future<Output = Result<T>>,
-    {
-        for inner in self.0.iter() {
-            match operation(inner.as_ref()).await {
-                Ok(value) => return Ok(value),
-                Err(err) => log::warn!("failed operation: {:?}", err),
-            }
-        }
-        Err(anyhow!(
-            "failed operation with all internal implementations"
-        ))
-    }
-}
-
-#[async_trait::async_trait]
-impl EconomicViabilityComputing for PriorityEconomicViabilityComputer {
-    async fn min_average_fee(&self) -> Result<u128> {
-        self.until_success(EconomicViabilityComputing::min_average_fee)
-            .await
-    }
-
-    async fn max_gas_price(&self, economic_viability_info: EconomicViabilityInfo) -> Result<U256> {
-        self.until_success(move |computer| computer.max_gas_price(economic_viability_info))
-            .await
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -281,21 +242,5 @@ mod tests {
             economic_viability.max_gas_price(info).wait().unwrap(),
             U256::from(5787037037037u128)
         );
-    }
-
-    #[test]
-    fn priority_impl_takes_first_success() {
-        let priority_min_avg_fee = PriorityEconomicViabilityComputer::new(
-            vec![Err(anyhow!("some error")), Ok(42), Ok(1337)]
-                .into_iter()
-                .map(|result| -> Box<dyn EconomicViabilityComputing> {
-                    let mut mock = MockEconomicViabilityComputing::new();
-                    mock.expect_min_average_fee().return_once(move || result);
-                    Box::new(mock)
-                })
-                .collect(),
-        );
-
-        assert_eq!(priority_min_avg_fee.min_average_fee().wait().unwrap(), 42);
     }
 }

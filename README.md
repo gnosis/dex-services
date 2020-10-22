@@ -154,17 +154,11 @@ OPTIONS:
             [default: 1.1]
         --economic-viability-strategy <economic-viability-strategy>
             How to calculate the economic viability constraints. `Dynamic` means that current native token price is
-            taken into account while `Static` means that fallback_min_avg_fee_per_order and fallback_max_gas_price will
+            taken into account while `Static` means that static_min_avg_fee_per_order and static_max_gas_price will
             always be used [env: ECONOMIC_VIABILITY_STRATEGY=]  [default: Dynamic]  [possible values: Dynamic, Static]
         --economic-viability-subsidy-factor <economic-viability-subsidy-factor>
             Subsidy factor used to compute the minimum average fee per order in a solution as well as the gas cap for
             economically viable solution [env: ECONOMIC_VIABILITY_SUBSIDY_FACTOR=]  [default: 10.0]
-        --fallback-max-gas-price <fallback-max-gas-price>
-            The fallback maximum gas price. This is used when computing the maximum gas price based on ether price in
-            owl fails [env: FALLBACK_MAX_GAS_PRICE=]  [default: 100000000000]
-        --fallback-min-avg-fee-per-order <fallback-min-avg-fee-per-order>
-            The fallback minimum average fee per order. This is passed to the solver in case the computing its value
-            fails. Its unit is [OWL] [env: FALLBACK_MIN_AVG_FEE_PER_ORDER=]  [default: 0]
         --http-timeout <http-timeout>
             The default timeout in milliseconds of HTTP requests to remote services such as the Gnosis Safe gas station
             and exchange REST APIs for fetching price estimates [env: HTTP_TIMEOUT=]  [default: 10000]
@@ -212,6 +206,12 @@ OPTIONS:
             'BestRingSolver' for a solver searching only for the best ring; 'OpenSolver' for the open-source solver
             [env: SOLVER_TYPE=]  [default: NaiveSolver]  [possible values: NaiveSolver, StandardSolver, OpenSolver,
             BestRingSolver]
+        --static-max-gas-price <static-max-gas-price>
+            The static max gas price fee per order used for the Static strategy [env: STATIC_MAX_GAS_PRICE=]
+
+        --static-min-avg-fee-per-order <static-min-avg-fee-per-order>
+            The static minimum average fee per order used for the Static strategy [env: STATIC_MIN_AVG_FEE_PER_ORDER=]
+
         --target-start-solve-time <target-start-solve-time>
             The offset from the start of a batch in seconds at which point we should start solving [env:
             TARGET_START_SOLVE_TIME=]  [default: 30]

@@ -116,10 +116,10 @@ struct Options {
         default_value = "1.1"
     )]
     economic_viability_min_avg_fee_factor: f64,
-    #[structopt(long, env = "FALLBACK_MIN_AVG_FEE_PER_ORDER", default_value = "0")]
-    fallback_min_avg_fee_per_order: u128,
-    #[structopt(long, env = "FALLBACK_MAX_GAS_PRICE", default_value = "100000000000")]
-    fallback_max_gas_price: u128,
+    #[structopt(long, env = "STATIC_MIN_AVG_FEE_PER_ORDER")]
+    static_min_avg_fee_per_order: Option<u128>,
+    #[structopt(long, env = "STATIC_MAX_GAS_PRICE")]
+    static_max_gas_price: Option<u128>,
     #[structopt(
         long,
         env = "ECONOMIC_VIABILITY_STRATEGY",
@@ -192,14 +192,17 @@ fn main() {
     let _ = orderbook.update().wait();
     log::info!("Orderbook initialized.");
 
-    let economic_viability = Arc::new(options.economic_viability_strategy.from_arguments(
-        options.economic_viability_subsidy_factor,
-        options.economic_viability_min_avg_fee_factor,
-        options.fallback_min_avg_fee_per_order,
-        options.fallback_max_gas_price,
-        orderbook.clone(),
-        gas_station.clone(),
-    ));
+    let economic_viability = options
+        .economic_viability_strategy
+        .from_arguments(
+            options.economic_viability_subsidy_factor,
+            options.economic_viability_min_avg_fee_factor,
+            options.static_min_avg_fee_per_order,
+            options.static_max_gas_price,
+            orderbook.clone(),
+            gas_station.clone(),
+        )
+        .unwrap();
 
     let mut runtime = runtime::Builder::new()
         .threaded_scheduler()
