@@ -34,7 +34,9 @@ impl EconomicViabilityStrategy {
         Ok(match self {
             Self::Dynamic => {
                 if static_max_gas_price.is_some() || static_min_avg_fee_per_order.is_some() {
-                    return Err(anyhow!("Got Dynamic strategy but also parameters for Static strategy."));
+                    return Err(anyhow!(
+                        "Got Dynamic strategy but also parameters for Static strategy."
+                    ));
                 }
                 Arc::new(EconomicViabilityComputer::new(
                     native_token_price,
