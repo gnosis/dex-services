@@ -35,7 +35,7 @@ pub struct StableXDriverImpl {
     price_finder: Arc<dyn PriceFinding + Send + Sync>,
     orderbook_reader: Arc<dyn StableXOrderBookReading>,
     solution_submitter: Arc<dyn StableXSolutionSubmitting + Send + Sync>,
-    economic_viability: Arc<dyn EconomicViabilityComputing + Send + Sync>,
+    economic_viability: Arc<dyn EconomicViabilityComputing>,
     metrics: Arc<StableXMetrics>,
 }
 
@@ -44,7 +44,7 @@ impl StableXDriverImpl {
         price_finder: Arc<dyn PriceFinding + Send + Sync>,
         orderbook_reader: Arc<dyn StableXOrderBookReading>,
         solution_submitter: Arc<dyn StableXSolutionSubmitting + Send + Sync>,
-        economic_viability: Arc<dyn EconomicViabilityComputing + Send + Sync>,
+        economic_viability: Arc<dyn EconomicViabilityComputing>,
         metrics: Arc<StableXMetrics>,
     ) -> Self {
         Self {
