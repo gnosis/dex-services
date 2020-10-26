@@ -7,7 +7,6 @@ use ethcontract::{
     },
     H256,
 };
-use futures::compat::Future01CompatExt as _;
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
@@ -25,7 +24,7 @@ pub trait BlockTimestampReading: Send + Sync {
 #[async_trait::async_trait]
 impl BlockTimestampReading for Web3 {
     async fn block_timestamp(&mut self, block_id: BlockId) -> Result<u64> {
-        let block = self.eth().block(block_id.clone()).compat().await;
+        let block = self.eth().block(block_id).await;
         let block = block
             .with_context(|| format!("failed to get block {:?}", block_id))?
             .with_context(|| format!("block {:?} does not exist", block_id))?;
@@ -70,7 +69,7 @@ async fn query_block_timestamps_batched(
     block_hashes.iter().for_each(|hash| {
         batched_web3.eth().block(BlockId::Hash(*hash));
     });
-    let result = batched_web3.transport().submit_batch().compat().await;
+    let result = batched_web3.transport().submit_batch().await;
     result
         .with_context(|| "Batch RPC call to get block hashes failed")?
         .into_iter()

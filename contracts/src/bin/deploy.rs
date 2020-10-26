@@ -7,7 +7,6 @@ use contracts::*;
 use env_logger::Env;
 use ethcontract::{Address, Http, Web3};
 use filetime::FileTime;
-use futures::compat::Future01CompatExt as _;
 use std::{
     fs,
     path::Path,
@@ -15,10 +14,11 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
-fn main() {
+#[tokio::main]
+async fn main() {
     env_logger::init_from_env(Env::default().default_filter_or("warn,deploy=info"));
 
-    if let Err(err) = futures::executor::block_on(run()) {
+    if let Err(err) = run().await {
         log::error!("Error deploying contracts: {:?}", err);
         std::process::exit(-1);
     }
@@ -27,9 +27,8 @@ fn main() {
 async fn run() -> Result<()> {
     const NODE_URL: &str = "http://localhost:8545";
 
-    let (eloop, http) = Http::new(NODE_URL)?;
+    let http = Http::new(NODE_URL)?;
     let web3 = Web3::new(http);
-    eloop.into_remote();
 
     log::info!("checking connection to local test node {}", NODE_URL);
     wait_for_node(&web3).await?;
@@ -114,7 +113,7 @@ async fn wait_for_node(web3: &Web3<Http>) -> Result<()> {
 
     let start = Instant::now();
     while start.elapsed() < NODE_READY_TIMEOUT {
-        if web3.eth().accounts().compat().await.is_ok() {
+        if web3.eth().accounts().await.is_ok() {
             return Ok(());
         }
 

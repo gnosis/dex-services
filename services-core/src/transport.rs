@@ -3,8 +3,7 @@ use anyhow::Error;
 use ethcontract::jsonrpc::types::{Call, Output, Request};
 use ethcontract::web3::helpers;
 use ethcontract::web3::{BatchTransport, Error as Web3Error, RequestId, Transport};
-use futures::compat::Compat;
-use futures::future::{BoxFuture, FutureExt, TryFutureExt};
+use futures::future::{BoxFuture, FutureExt};
 use isahc::config::{Configurable, VersionNegotiation};
 use log::{debug, info, warn};
 use serde::Deserialize;
@@ -121,7 +120,7 @@ impl Debug for HttpTransport {
 }
 
 impl Transport for HttpTransport {
-    type Out = Compat<BoxFuture<'static, RpcResult>>;
+    type Out = BoxFuture<'static, RpcResult>;
 
     fn prepare(&self, method: &str, params: Vec<Value>) -> (RequestId, Call) {
         let id = self.0.id.fetch_add(1, Ordering::SeqCst);
@@ -131,16 +130,12 @@ impl Transport for HttpTransport {
     }
 
     fn send(&self, id: RequestId, request: Call) -> Self::Out {
-        self.0
-            .clone()
-            .execute_single_rpc(id, request)
-            .boxed()
-            .compat()
+        self.0.clone().execute_single_rpc(id, request).boxed()
     }
 }
 
 impl BatchTransport for HttpTransport {
-    type Batch = Compat<BoxFuture<'static, Result<Vec<RpcResult>, Web3Error>>>;
+    type Batch = BoxFuture<'static, Result<Vec<RpcResult>, Web3Error>>;
 
     fn send_batch<T>(&self, requests: T) -> Self::Batch
     where
@@ -148,10 +143,6 @@ impl BatchTransport for HttpTransport {
     {
         let id = self.0.id.fetch_add(1, Ordering::SeqCst);
         let requests = requests.into_iter().map(|r| r.1).collect();
-        self.0
-            .clone()
-            .execute_batch_rpc(id, requests)
-            .boxed()
-            .compat()
+        self.0.clone().execute_batch_rpc(id, requests).boxed()
     }
 }

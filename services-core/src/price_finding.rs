@@ -8,7 +8,6 @@ pub use self::{
     price_finder_interface::{Fee, InternalOptimizer, PriceFinding, SolverType},
 };
 use crate::{
-    economic_viability::EconomicViabilityComputing,
     metrics::{SolverMetrics, StableXMetrics},
     price_estimation::PriceEstimating,
 };
@@ -19,7 +18,6 @@ pub fn create_price_finder(
     fee: Option<Fee>,
     solver_type: SolverType,
     price_oracle: Arc<dyn PriceEstimating + Send + Sync>,
-    min_avg_fee: Arc<dyn EconomicViabilityComputing>,
     internal_optimizer: InternalOptimizer,
     solver_metrics: SolverMetrics,
     stablex_metrics: Arc<StableXMetrics>,
@@ -33,7 +31,6 @@ pub fn create_price_finder(
             fee,
             solver_type,
             price_oracle,
-            min_avg_fee,
             internal_optimizer,
             solver_metrics,
             stablex_metrics,

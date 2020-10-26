@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
 use ethcontract::{prelude::Web3, transport::DynTransport, web3::types::Block, BlockNumber, H256};
-use futures::compat::Future01CompatExt as _;
 
 fn get_block_batch_id<T>(block: &Block<T>) -> u32 {
     const BATCH_DURATION: u64 = 300;
@@ -13,7 +12,6 @@ async fn get_block(
 ) -> Result<ethcontract::web3::types::Block<H256>> {
     web3.eth()
         .block(block_number.into())
-        .compat()
         .await?
         .ok_or_else(|| anyhow!("block {:?} is missing", block_number))
 }
@@ -113,10 +111,7 @@ pub mod tests {
         let mut mock_batch_id_retrieving = MockBatchIdRetrieving::new();
         mock_batch_id_retrieving
             .expect_batch_id_from_block()
-            .withf(|block_number: &BlockNumber| match block_number {
-                BlockNumber::Number(_) => true,
-                _ => false,
-            })
+            .withf(|block_number: &BlockNumber| matches!(block_number, BlockNumber::Number(_)))
             .returning({
                 let batch_ids = batch_ids.clone();
                 move |block_number: BlockNumber| {

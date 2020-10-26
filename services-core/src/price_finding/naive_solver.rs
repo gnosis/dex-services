@@ -129,6 +129,7 @@ impl PriceFinding for NaiveSolver {
         orders: &[Order],
         state: &AccountState,
         _: Duration,
+        _: u128,
     ) -> Result<Solution> {
         // Convert orders into the form where they have remaining == denominator.
         let orders = orders
@@ -345,7 +346,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver
-            .find_prices(&orders, &state, Duration::default())
+            .find_prices(&orders, &state, Duration::default(), 0)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -374,7 +375,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(fee.clone());
         let res = solver
-            .find_prices(&orders, &state, Duration::default())
+            .find_prices(&orders, &state, Duration::default(), 0)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -389,7 +390,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver
-            .find_prices(&orders, &state, Duration::default())
+            .find_prices(&orders, &state, Duration::default(), 0)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -419,7 +420,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(fee.clone());
         let res = solver
-            .find_prices(&orders, &state, Duration::default())
+            .find_prices(&orders, &state, Duration::default(), 0)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -433,7 +434,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver
-            .find_prices(&orders, &state, Duration::default())
+            .find_prices(&orders, &state, Duration::default(), 0)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -461,7 +462,7 @@ pub mod tests {
         });
         let solver = NaiveSolver::new(fee.clone());
         let res = solver
-            .find_prices(&orders, &state, Duration::default())
+            .find_prices(&orders, &state, Duration::default(), 0)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -542,7 +543,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver
-            .find_prices(&orders, &state, Duration::default())
+            .find_prices(&orders, &state, Duration::default(), 0)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -591,7 +592,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver
-            .find_prices(&orders, &state, Duration::default())
+            .find_prices(&orders, &state, Duration::default(), 0)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -628,7 +629,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver
-            .find_prices(&orders, &state, Duration::default())
+            .find_prices(&orders, &state, Duration::default(), 0)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -669,7 +670,7 @@ pub mod tests {
         });
         let solver = NaiveSolver::new(fee.clone());
         let res = solver
-            .find_prices(&orders, &state, Duration::default())
+            .find_prices(&orders, &state, Duration::default(), 0)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -727,7 +728,7 @@ pub mod tests {
         });
         let solver = NaiveSolver::new(fee.clone());
         let res = solver
-            .find_prices(&orders, &state, Duration::default())
+            .find_prices(&orders, &state, Duration::default(), 0)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -770,7 +771,7 @@ pub mod tests {
         });
         let solver = NaiveSolver::new(fee);
         let res = solver
-            .find_prices(&orders, &state, Duration::default())
+            .find_prices(&orders, &state, Duration::default(), 0)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -784,7 +785,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver
-            .find_prices(&orders, &state, Duration::default())
+            .find_prices(&orders, &state, Duration::default(), 0)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -821,7 +822,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(None);
         let res = solver
-            .find_prices(&orders, &state, Duration::default())
+            .find_prices(&orders, &state, Duration::default(), 0)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -873,7 +874,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(fee.clone());
         let res = solver
-            .find_prices(&orders, &state, Duration::default())
+            .find_prices(&orders, &state, Duration::default(), 0)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -936,7 +937,7 @@ pub mod tests {
 
         let solver = NaiveSolver::new(fee.clone());
         let res = solver
-            .find_prices(&orders, &state, Duration::default())
+            .find_prices(&orders, &state, Duration::default(), 0)
             .now_or_never()
             .unwrap()
             .unwrap();

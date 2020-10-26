@@ -131,10 +131,10 @@ USAGE:
     driver [OPTIONS] --node-url <node-url> --private-key <private-key>
 
 FLAGS:
-    -h, --help       
+    -h, --help
             Prints help information
 
-    -V, --version    
+    -V, --version
             Prints version information
 
 
@@ -154,17 +154,11 @@ OPTIONS:
             [default: 1.1]
         --economic-viability-strategy <economic-viability-strategy>
             How to calculate the economic viability constraints. `Dynamic` means that current native token price is
-            taken into account while `Static` means that fallback_min_avg_fee_per_order and fallback_max_gas_price will
+            taken into account while `Static` means that static_min_avg_fee_per_order and static_max_gas_price will
             always be used [env: ECONOMIC_VIABILITY_STRATEGY=]  [default: Dynamic]  [possible values: Dynamic, Static]
         --economic-viability-subsidy-factor <economic-viability-subsidy-factor>
             Subsidy factor used to compute the minimum average fee per order in a solution as well as the gas cap for
             economically viable solution [env: ECONOMIC_VIABILITY_SUBSIDY_FACTOR=]  [default: 10.0]
-        --fallback-max-gas-price <fallback-max-gas-price>
-            The fallback maximum gas price. This is used when computing the maximum gas price based on ether price in
-            owl fails [env: FALLBACK_MAX_GAS_PRICE=]  [default: 100000000000]
-        --fallback-min-avg-fee-per-order <fallback-min-avg-fee-per-order>
-            The fallback minimum average fee per order. This is passed to the solver in case the computing its value
-            fails. Its unit is [OWL] [env: FALLBACK_MIN_AVG_FEE_PER_ORDER=]  [default: 0]
         --http-timeout <http-timeout>
             The default timeout in milliseconds of HTTP requests to remote services such as the Gnosis Safe gas station
             and exchange REST APIs for fetching price estimates [env: HTTP_TIMEOUT=]  [default: 10000]
@@ -173,7 +167,7 @@ OPTIONS:
             LATEST_SOLUTION_SUBMIT_TIME=]  [default: 210]
         --log-filter <log-filter>
             The log filter to use.
-            
+
             This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug'). [env: LOG_FILTER=]  [default:
             warn,driver=info,services_core=info]
         --native-token-id <native-token-id>
@@ -187,7 +181,7 @@ OPTIONS:
             ORDERBOOK_FILE=]
         --orderbook-filter <orderbook-filter>
             JSON encoded object of which tokens/orders to ignore.
-            
+
             For example: '{ "tokens": {"Whitelist": [1, 2]}, "users": { "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A": {
             "OrderIds": [0, 1] }, "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B": "All" } }' More examples can be found in
             the tests of orderbook/filtered_orderboook.rs [env: ORDERBOOK_FILTER=]  [default: {}]
@@ -212,16 +206,25 @@ OPTIONS:
             'BestRingSolver' for a solver searching only for the best ring; 'OpenSolver' for the open-source solver
             [env: SOLVER_TYPE=]  [default: NaiveSolver]  [possible values: NaiveSolver, StandardSolver, OpenSolver,
             BestRingSolver]
+        --static-max-gas-price <static-max-gas-price>
+            The static max gas price fee per order used for the Static strategy [env: STATIC_MAX_GAS_PRICE=]
+
+        --static-min-avg-fee-per-order <static-min-avg-fee-per-order>
+            The static minimum average fee per order used for the Static strategy [env: STATIC_MIN_AVG_FEE_PER_ORDER=]
+
         --target-start-solve-time <target-start-solve-time>
             The offset from the start of a batch in seconds at which point we should start solving [env:
             TARGET_START_SOLVE_TIME=]  [default: 30]
         --token-data <token-data>
             JSON encoded backup token information to provide to the solver.
-            
+
             For example: '{ "T0001": { "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", "alias": "WETH",
             "decimals": 18, "externalPrice": 200000000000000000000, }, "T0004": { "address":
             "0x0000000000000000000000000000000000000000", "alias": "USDC", "decimals": 6, "externalPrice":
             1000000000000000000000000000000, } }' [env: TOKEN_DATA=]  [default: {}]
+        --use-external-price-source <use-external-price-source>
+            Whether to rely on external price sources (e.g. 1Inch, Kraken etc) when estimating token prices [env:
+            USE_EXTERNAL_PRICE_SOURCE=]  [default: true]
 ```
 
 ### Orderbook Filter Example

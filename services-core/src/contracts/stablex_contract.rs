@@ -13,12 +13,9 @@ use ethcontract::{
     contract::Event,
     errors::{ExecutionError, MethodError},
     transaction::{confirm::ConfirmParams, Account, GasPrice, ResolveCondition, TransactionResult},
-    Address, BlockNumber, PrivateKey, U256,
+    Address, BlockId, BlockNumber, PrivateKey, U256,
 };
-use futures::{
-    compat::Future01CompatExt as _,
-    future::{BoxFuture, FutureExt as _},
-};
+use futures::future::{BoxFuture, FutureExt as _};
 
 use lazy_static::lazy_static;
 use std::collections::HashMap;
@@ -38,7 +35,7 @@ pub struct StableXContractImpl {
 
 impl StableXContractImpl {
     pub async fn new(web3: &contracts::Web3, key: PrivateKey) -> Result<Self> {
-        let chain_id = web3.eth().chain_id().compat().await?.as_u64();
+        let chain_id = web3.eth().chain_id().await?.as_u64();
         let defaults = contracts::method_defaults(key, chain_id)?;
 
         let viewer = BatchExchangeViewer::deployed(&web3).await?;
@@ -202,7 +199,7 @@ impl StableXContract for StableXContractImpl {
             previous_page_user_offset,
             page_size,
         );
-        builder.block = block_number;
+        builder.block = block_number.map(BlockId::Number);
         builder.m.tx.gas = None;
         let future = builder.call();
         let (indexed_elements, has_next_page, next_page_user, next_page_user_offset) =
@@ -227,7 +224,7 @@ impl StableXContract for StableXContractImpl {
             previous_page_user_offset,
             U256::from(page_size),
         );
-        orders_builder.block = block_number;
+        orders_builder.block = block_number.map(BlockId::Number);
         orders_builder.m.tx.gas = None;
         orders_builder.call().await.map_err(Error::from)
     }
@@ -252,7 +249,7 @@ impl StableXContract for StableXContractImpl {
                 token_ids_for_price,
             )
             .view();
-        builder.block = block_number;
+        builder.block = block_number.map(BlockId::Number);
         builder.call().await.map_err(Error::from)
     }
 
@@ -302,7 +299,7 @@ impl StableXContract for StableXContractImpl {
             .from_block(from_block)
             .to_block(to_block)
             .block_page_size(block_page_size)
-            .query_past_events_paginated()
+            .query_paginated()
             .await
     }
 
@@ -334,7 +331,6 @@ impl StableXContract for StableXContractImpl {
         let address = account.address();
         web3.eth()
             .transaction_count(address, None)
-            .compat()
             .await
             .map_err(From::from)
     }

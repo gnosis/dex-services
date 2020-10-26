@@ -1,21 +1,25 @@
 use contracts::{BatchExchange, IERC20};
 use e2e::{
-    common::{wait_for_condition, FutureBuilderExt, FutureWaitExt},
+    common::{wait_for_condition, FutureBuilderExt as _, FutureWaitExt as _},
     docker_logs,
     stablex::{close_auction, setup_stablex},
 };
-use ethcontract::{web3::futures::Future as _, Account, Http, PrivateKey, Web3, U256};
-use futures::future::join_all;
+use ethcontract::{Account, PrivateKey, U256};
+use futures::future::{join_all, FutureExt as _};
+use services_core::{contracts::Web3, http::HttpFactory};
 use std::{
     env,
     time::{Duration, Instant},
 };
 
+fn web3(url: &str) -> Web3 {
+    services_core::contracts::web3_provider(&HttpFactory::default(), url, Duration::from_secs(10))
+        .expect("transport failed")
+}
+
 #[test]
 fn test_with_ganache() {
-    let (eloop, http) = Http::new("http://localhost:8545").expect("transport failed");
-    eloop.into_remote();
-    let web3 = Web3::new(http);
+    let web3 = web3("http://localhost:8545");
     let (instance, accounts, tokens) = setup_stablex(&web3, 3, 3, 100);
 
     // Dynamically fetching the id allows the test to be run multiple times,
@@ -110,9 +114,7 @@ fn test_with_ganache() {
 #[test]
 fn test_rinkeby() {
     // Setup instance and default tx params
-    let (eloop, http) = Http::new("https://node.rinkeby.gnosisdev.com/").expect("transport failed");
-    eloop.into_remote();
-    let web3 = Web3::new(http);
+    let web3 = web3("https://node.rinkeby.gnosisdev.com/");
     let mut instance =
         BatchExchange::deployed(&web3).wait_and_expect("Cannot get deployed Batch Exchange");
     let secret = {
@@ -149,34 +151,40 @@ fn test_rinkeby() {
         .gas(1_000_000.into())
         .gas_price(8_000_000_000u64.into())
         .from(account.clone())
-        .send();
+        .send()
+        .boxed();
     let second_approve = IERC20::at(&web3, token_b)
         .approve(instance.address(), 1_000_000.into())
         .nonce(nonce + 1)
         .gas(1_000_000.into())
         .gas_price(8_000_000_000u64.into())
         .from(account)
-        .send();
+        .send()
+        .boxed();
 
     // Deposit Funds
     let first_deposit = instance
         .deposit(token_a, 1_000_000.into())
         .nonce(nonce + 2)
-        .send();
+        .send()
+        .boxed();
     let second_deposit = instance
         .deposit(token_b, 1_000_000.into())
         .nonce(nonce + 3)
-        .send();
+        .send()
+        .boxed();
 
     // Place orders
     let first_order = instance
         .place_order(0, 7, batch + 2, 1_000_000, 10_000_000)
         .nonce(nonce + 4)
-        .send();
+        .send()
+        .boxed();
     let second_order = instance
         .place_order(7, 0, batch + 1, 1_000_000, 10_000_000)
         .nonce(nonce + 5)
-        .send();
+        .send()
+        .boxed();
 
     // Wait for all transactions to be confirmed
     println!("Waiting for transactions to be confirmed");

@@ -35,7 +35,7 @@ pub struct StableXDriverImpl {
     price_finder: Arc<dyn PriceFinding + Send + Sync>,
     orderbook_reader: Arc<dyn StableXOrderBookReading>,
     solution_submitter: Arc<dyn StableXSolutionSubmitting + Send + Sync>,
-    economic_viability: Arc<dyn EconomicViabilityComputing + Send + Sync>,
+    economic_viability: Arc<dyn EconomicViabilityComputing>,
     metrics: Arc<StableXMetrics>,
 }
 
@@ -44,7 +44,7 @@ impl StableXDriverImpl {
         price_finder: Arc<dyn PriceFinding + Send + Sync>,
         orderbook_reader: Arc<dyn StableXOrderBookReading>,
         solution_submitter: Arc<dyn StableXSolutionSubmitting + Send + Sync>,
-        economic_viability: Arc<dyn EconomicViabilityComputing + Send + Sync>,
+        economic_viability: Arc<dyn EconomicViabilityComputing>,
         metrics: Arc<StableXMetrics>,
     ) -> Self {
         Self {
@@ -77,9 +77,10 @@ impl StableXDriverImpl {
             info!("No orders in batch {}", batch_to_solve);
             return Ok(Solution::trivial());
         }
+        let min_avg_fee = self.economic_viability.min_average_fee().await?;
         let price_finder_result = self
             .price_finder
-            .find_prices(&orders, &account_state, deadline)
+            .find_prices(&orders, &account_state, deadline, min_avg_fee)
             .await;
         self.metrics
             .auction_solution_computed(batch_to_solve.into(), &price_finder_result);
@@ -237,7 +238,7 @@ mod tests {
         let submitter = MockStableXSolutionSubmitting::default();
         let mut pf = MockPriceFinding::default();
         let economic_viability =
-            Arc::new(FixedEconomicViabilityComputer::new(None, Some(0.into())));
+            Arc::new(FixedEconomicViabilityComputer::new(Some(0), Some(0.into())));
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
@@ -262,10 +263,10 @@ mod tests {
             ],
         };
         pf.expect_find_prices()
-            .withf(move |o, s, t| {
+            .withf(move |o, s, t, _| {
                 o == orders.as_slice() && *s == state && *t <= latest_solution_submit_time
             })
-            .return_once(move |_, _, _| Ok(solution));
+            .return_once(move |_, _, _, _| Ok(solution));
 
         let driver = StableXDriverImpl::new(
             Arc::new(pf),
@@ -316,7 +317,7 @@ mod tests {
         let submitter = MockStableXSolutionSubmitting::default();
         let mut pf = MockPriceFinding::default();
         let economic_viability =
-            Arc::new(FixedEconomicViabilityComputer::new(None, Some(0.into())));
+            Arc::new(FixedEconomicViabilityComputer::new(Some(0), Some(0.into())));
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
@@ -331,7 +332,7 @@ mod tests {
             .return_once(|_| Ok((state, orders)));
 
         pf.expect_find_prices()
-            .returning(|_, _, _| Err(anyhow!("Error")));
+            .returning(|_, _, _, _| Err(anyhow!("Error")));
 
         let driver = StableXDriverImpl::new(
             Arc::new(pf),

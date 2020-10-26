@@ -9,8 +9,8 @@ dist: bionic
 language: rust
 env:
   global:
-    - OPEN_SOLVER_VERSION=v0.1.0
-    - PRIVATE_SOLVER_VERSION=v0.8.4
+    - OPEN_SOLVER_VERSION=v0.1.1
+    - PRIVATE_SOLVER_VERSION=v0.8.5
 
 jobs:
   fast_finish: true
@@ -38,6 +38,8 @@ jobs:
         - cargo build --locked --workspace --all-targets
         # Unit Tests and Linting
         - cargo test
+        # Make sure README is up to date
+        - diff --ignore-trailing-space <(sed -n '/^driver /,/^```/p' README.md | head -n -1) <(cargo run --bin driver -- --help)
         # Build image with compiled binary
         - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:$OPEN_SOLVER_VERSION -f driver/docker/rust/Dockerfile .
         # StableX e2e Tests (Ganache) - open solver
