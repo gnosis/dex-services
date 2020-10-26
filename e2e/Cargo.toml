@@ -9,7 +9,7 @@ contracts = { path = "../contracts" }
 services-core = { path = "../services-core" }
 ethcontract = { version = "0.8", default-features = false }
 crossbeam = "0.8"
-futures = { version = "0.3.6" }
+futures = { version = "0.3.7" }
 pbr = "1.0.3"
 pricegraph = { path = "../pricegraph" }
 rayon = "1.5"
