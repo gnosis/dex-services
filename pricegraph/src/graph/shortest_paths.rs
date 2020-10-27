@@ -7,7 +7,6 @@ use petgraph::algo::FloatMeasure;
 use petgraph::visit::{
     Data, EdgeRef, GraphBase, IntoEdges, IntoNodeIdentifiers, NodeCount, NodeIndexable,
 };
-
 use bounded::Bounded;
 use unbounded::Unbounded;
 
@@ -16,18 +15,36 @@ mod unbounded;
 
 /// A vector associating to each node index a distance from the source.
 type Distances<G> = Vec<<G as Data>::EdgeWeight>;
+
+/// A Vector associating to each node index the preceding node on the shortest path
 type PredecessorVec<G> = Vec<Option<<G as GraphBase>::NodeId>>;
 
 trait PredecessorStoring<G: GraphBase + Data> {
+    /// Returns the current distance of a node from the source.
     fn distance(&self, node_index: usize) -> G::EdgeWeight;
+
+    /// Updates the distance of a node from the source.
     fn update_distance(&mut self, node_index: usize, updated_distance: G::EdgeWeight);
+
+    /// Updates the predecessor of a node.
     fn update_predecessor(&mut self, node_index: usize, updated_predecessor: Option<G::NodeId>);
 
+    /// Returns shortest path from source to destination node, if a path exists.
     fn path_to(&self, source: G::NodeId, dest: G::NodeId, graph: G) -> Option<Path<G::NodeId>>;
+
+    /// Lists all nodes that can be reached from the source (excluding the source itself).
     fn connected_nodes(&self, graph: G) -> Vec<G::NodeId>;
+
+    /// Callback for any work that needs to be done before each pass of the bellman-ford algorithm
     fn prepare_next_relaxation_step(&mut self);
+
+    /// Checks for negative weight cycle and, if any is found, creates loop in
+    /// the predecessor store
     fn mark_cycle(&mut self, graph: G) -> Option<G::NodeId>;
-    fn find_cycle(&mut self, search_start: G::NodeId, graph: G) -> Option<NegativeCycle<G::NodeId>>;
+
+    /// Returns a negative cycle from the starting node, if it exists.
+    fn find_cycle(&mut self, search_start: G::NodeId, graph: G)
+        -> Option<NegativeCycle<G::NodeId>>;
 }
 
 
@@ -41,8 +58,9 @@ pub struct ShortestPathGraph<'a, G: Data> {
 
 impl<'a, G> ShortestPathGraph<'a, G>
 where
-    G: 'a + IntoEdges + NodeIndexable,
+    G: 'a + IntoNodeIdentifiers + IntoEdges + NodeIndexable + NodeCount,
     G::NodeId: Ord,
+    G::EdgeWeight: FloatMeasure,
 {
     /// Returns the current distance of a node from the source.
     fn distance(&self, node: G::NodeId) -> G::EdgeWeight {
@@ -63,35 +81,18 @@ where
 
     /// Returns shortest path from source to destination node, if a path exists.
     pub fn path_to(&self, dest: G::NodeId) -> Option<Path<G::NodeId>> {
-        self.predecessor_store.path_to(self.source, dest, self.graph)
+        self.predecessor_store
+            .path_to(self.source, dest, self.graph)
     }
 
-    /// Lists all nodes that can be reached from the source.
+    /// Lists all nodes that can be reached from the source (including the source itself).
     pub fn connected_nodes(&self) -> Vec<G::NodeId> {
         let mut node_indices = self.predecessor_store.connected_nodes(self.graph);
         debug_assert!(!node_indices.contains(&self.source));
         node_indices.push(self.source);
         node_indices
     }
-}
 
-fn nodes_from_predecessors<G: NodeIndexable>(
-    graph: G,
-    predecessors: &[Option<<G as GraphBase>::NodeId>],
-) -> Vec<G::NodeId> {
-    predecessors
-        .iter()
-        .enumerate()
-        .filter_map(|(i, &pre)| pre.map(|_| graph.from_index(i)))
-        .collect::<Vec<_>>()
-}
-
-impl<'a, G> ShortestPathGraph<'a, G>
-where
-    G: 'a + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
-    G::NodeId: Ord,
-    G::EdgeWeight: FloatMeasure,
-{
     /// Initializes a shortest path graph that will be later built with the
     /// Bellman-Ford algorithm.
     fn empty(g: G, source: G::NodeId, hops: Option<usize>) -> Self {
@@ -129,14 +130,7 @@ where
         };
         self.predecessor_store.find_cycle(search_start, self.graph)
     }
-}
 
-impl<'a, G> ShortestPathGraph<'a, G>
-where
-    G: 'a + NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
-    G::NodeId: Ord,
-    G::EdgeWeight: FloatMeasure,
-{
     /// Creates a representation of all shortest paths from the given source
     /// to any other node in the graph.
     ///
@@ -194,6 +188,17 @@ where
         Some(negative_cycle) => Err(negative_cycle),
         None => Ok(shortest_path_graph),
     }
+}
+
+fn nodes_from_predecessors<G: NodeIndexable>(
+    graph: G,
+    predecessors: &[Option<<G as GraphBase>::NodeId>],
+) -> Vec<G::NodeId> {
+    predecessors
+        .iter()
+        .enumerate()
+        .filter_map(|(i, &pre)| pre.map(|_| graph.from_index(i)))
+        .collect::<Vec<_>>()
 }
 
 #[cfg(test)]

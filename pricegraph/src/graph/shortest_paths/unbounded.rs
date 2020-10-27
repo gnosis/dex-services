@@ -1,10 +1,13 @@
-use super::{Distances, PredecessorVec, PredecessorStoring, nodes_from_predecessors};
+//! The module contains the implementation of bellman-ford where the shortest path may
+//! contain of arbitrarily many edges
+
 use super::super::path::{find_cycle, NegativeCycle, Path};
-use petgraph::visit::{Data, NodeIndexable, IntoNodeIdentifiers, IntoEdges, EdgeRef};
+use super::{nodes_from_predecessors, Distances, PredecessorStoring, PredecessorVec};
 use petgraph::algo::FloatMeasure;
+use petgraph::visit::{Data, EdgeRef, IntoEdges, IntoNodeIdentifiers, NodeIndexable};
 
 pub struct Unbounded<G: Data> {
-    predecessors: PredecessorVec<G>, 
+    predecessors: PredecessorVec<G>,
     distances: Distances<G>,
 }
 
@@ -17,7 +20,7 @@ impl<G: Data> Unbounded<G> {
     }
 }
 
-impl<G> PredecessorStoring<G> for Unbounded<G> 
+impl<G> PredecessorStoring<G> for Unbounded<G>
 where
     G: Data + NodeIndexable + IntoNodeIdentifiers + IntoEdges,
     G::EdgeWeight: FloatMeasure,
@@ -34,7 +37,8 @@ where
         self.predecessors[node_index] = updated_predecessor;
     }
 
-    fn path_to(&self, source: G::NodeId, dest: G::NodeId, graph: G) -> Option<Path<G::NodeId>> {        let max_path_len = self.predecessors.len();
+    fn path_to(&self, source: G::NodeId, dest: G::NodeId, graph: G) -> Option<Path<G::NodeId>> {
+        let max_path_len = self.predecessors.len();
         let mut path = Vec::with_capacity(max_path_len);
         let mut current = dest;
         while current != source {
@@ -69,7 +73,11 @@ where
         None
     }
 
-    fn find_cycle(&mut self, search_start: G::NodeId, graph: G) -> Option<NegativeCycle<G::NodeId>> {
+    fn find_cycle(
+        &mut self,
+        search_start: G::NodeId,
+        graph: G,
+    ) -> Option<NegativeCycle<G::NodeId>> {
         find_cycle(graph, &self.predecessors, search_start, None)
     }
 }
