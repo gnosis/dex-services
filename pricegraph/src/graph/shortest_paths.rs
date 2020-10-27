@@ -2,80 +2,52 @@
 //! implementation of the Bellman-Ford graph search algorigthm that returns the
 //! detected negative cycle on error.
 
-use super::path::{find_cycle, NegativeCycle, Path};
+use super::path::{NegativeCycle, Path};
 use petgraph::algo::FloatMeasure;
 use petgraph::visit::{
     Data, EdgeRef, GraphBase, IntoEdges, IntoNodeIdentifiers, NodeCount, NodeIndexable,
 };
+use std::marker::PhantomData;
+
+use bounded::Bounded;
+use unbounded::Unbounded;
+
+mod bounded;
+mod unbounded;
 
 /// A vector associating to each node index a distance from the source.
-type Distance<G> = Vec<<G as Data>::EdgeWeight>;
-
+type Distances<G> = Vec<<G as Data>::EdgeWeight>;
 type PredecessorVec<G> = Vec<Option<<G as GraphBase>::NodeId>>;
 
-struct UpdatableDistance<G: Data> {
-    current: Distance<G>,
-    update: Distance<G>,
+trait PredecessorStoring<G: GraphBase + Data> {
+    fn distance(&self, node_index: usize) -> G::EdgeWeight;
+    fn update_distance(&mut self, node_index: usize, updated_distance: G::EdgeWeight);
+    fn update_predecessor(&mut self, node_index: usize, updated_predecessor: Option<G::NodeId>);
+
+    fn path_to(&self, source: G::NodeId, dest: G::NodeId, graph: G) -> Option<Path<G::NodeId>>;
+    fn connected_nodes(&self, graph: G) -> Vec<G::NodeId>;
+    fn prepare_next_relaxation_step(&mut self);
+    fn mark_cycle(&mut self, graph: G) -> Option<G::NodeId>;
+    fn find_cycle(&mut self, search_start: G::NodeId, graph: G) -> Option<NegativeCycle<G::NodeId>>;
 }
 
-/// Stores the information needed to manage the predecessor list.
-/// For each node index, this type contains the information needed to
-/// compute predecessor nodes and the distance in the graph from a source
-/// node.
-enum PredecessorStore<G: GraphBase + Data> {
-    Unbounded(PredecessorVec<G>, Distance<G>),
-    Bounded(Vec<PredecessorVec<G>>, UpdatableDistance<G>),
-}
-
-impl<G: GraphBase + Data> PredecessorStore<G> {
-    fn distance(&self, node_index: usize) -> &G::EdgeWeight {
-        match self {
-            PredecessorStore::Unbounded(_, distance) => &distance[node_index],
-            PredecessorStore::Bounded(_, distance) => &distance.current[node_index],
-        }
-    }
-
-    fn update_distance(&mut self, node_index: usize, updated_distance: G::EdgeWeight) {
-        match self {
-            PredecessorStore::Unbounded(_, distance) => {
-                distance[node_index] = updated_distance;
-            }
-            PredecessorStore::Bounded(_, distance) => {
-                distance.update[node_index] = updated_distance;
-            }
-        };
-    }
-
-    fn update_predecessor(&mut self, node_index: usize, updated_predecessor: Option<G::NodeId>) {
-        match self {
-            PredecessorStore::Unbounded(predecessors, _) => {
-                predecessors[node_index] = updated_predecessor;
-            }
-            PredecessorStore::Bounded(predecessors_at_step, _) => {
-                predecessors_at_step
-                    .last_mut()
-                    .expect("Cannot update uninitialized predecessor vector")[node_index] =
-                    updated_predecessor;
-            }
-        };
-    }
-}
 
 /// Structure that can be used to derive the shorthest path from a source to any
 /// reachable destination in the graph.
-pub struct ShortestPathGraph<G: GraphBase + Data> {
+pub struct ShortestPathGraph<'a, G: 'a + Data> {
     graph: G,
-    predecessor_store: PredecessorStore<G>,
+    predecessor_store: Box<dyn PredecessorStoring<G>>,
     source: G::NodeId,
+    phantom: PhantomData<&'a G>,
 }
 
-impl<G> ShortestPathGraph<G>
+impl<'a, G> ShortestPathGraph<'a, G>
 where
-    G: IntoEdges + NodeIndexable,
+    G: 'a + IntoEdges + NodeIndexable,
     G::NodeId: Ord,
 {
     /// Returns the current distance of a node from the source.
-    fn distance(&self, node: G::NodeId) -> &G::EdgeWeight {
+    fn distance(&self, node: G::NodeId) -> G::EdgeWeight {
         self.predecessor_store.distance(self.graph.to_index(node))
     }
 
@@ -93,65 +65,12 @@ where
 
     /// Returns shortest path from source to destination node, if a path exists.
     pub fn path_to(&self, dest: G::NodeId) -> Option<Path<G::NodeId>> {
-        let mut path;
-        let mut current = dest;
-        path = match &self.predecessor_store {
-            PredecessorStore::Unbounded(predecessors, _) => {
-                let max_path_len = predecessors.len();
-                path = Vec::with_capacity(max_path_len);
-                while current != self.source {
-                    assert!(path.len() <= max_path_len, "undetected negative cycle");
-                    path.push(current);
-                    current = predecessors[self.graph.to_index(current)]?;
-                }
-                path
-            }
-            PredecessorStore::Bounded(predecessors_at_step, _) => {
-                let max_path_len = predecessors_at_step.len();
-                path = Vec::with_capacity(max_path_len);
-                let mut found = false;
-                for step in (0..max_path_len).rev() {
-                    if let Some(pred) = predecessors_at_step[step][self.graph.to_index(current)] {
-                        path.push(current);
-                        if pred == self.source {
-                            found = true;
-                            break;
-                        }
-                        current = pred;
-                    }
-                }
-                match found {
-                    false => return None,
-                    true => path,
-                }
-            }
-        };
-
-        path.push(self.source);
-        // NOTE: `path` is in reverse order, since it was built by walking the path
-        // backwards, so reverse it and done!
-        path.reverse();
-        Some(Path(path))
+        self.predecessor_store.path_to(self.source, dest, self.graph)
     }
 
     /// Lists all nodes that can be reached from the source.
     pub fn connected_nodes(&self) -> Vec<G::NodeId> {
-        let mut node_indices: Vec<_> = match &self.predecessor_store {
-            PredecessorStore::Unbounded(predecessors, _) => {
-                nodes_from_predecessors(self.graph, &predecessors)
-            }
-            PredecessorStore::Bounded(predecessors_at_step, _) => {
-                let mut repeating_node_indices: Vec<_> = predecessors_at_step
-                    .iter()
-                    .map(|predecessors| nodes_from_predecessors(self.graph, &predecessors))
-                    .flatten()
-                    .collect();
-                repeating_node_indices.sort();
-                repeating_node_indices.dedup();
-                repeating_node_indices
-            }
-        };
-
+        let mut node_indices = self.predecessor_store.connected_nodes(self.graph);
         debug_assert!(!node_indices.contains(&self.source));
         node_indices.push(self.source);
         node_indices
@@ -169,9 +88,9 @@ fn nodes_from_predecessors<G: NodeIndexable>(
         .collect::<Vec<_>>()
 }
 
-impl<G> ShortestPathGraph<G>
+impl<'a, G> ShortestPathGraph<'a, G>
 where
-    G: IntoNodeIdentifiers + IntoEdges + NodeIndexable,
+    G: 'a + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
     G::NodeId: Ord,
     G::EdgeWeight: FloatMeasure,
 {
@@ -179,78 +98,30 @@ where
     /// Bellman-Ford algorithm.
     fn empty(g: G, source: G::NodeId, hops: Option<usize>) -> Self {
         let predecessors = vec![None; g.node_bound()];
-        let mut distance = vec![<_>::infinite(); g.node_bound()];
-        distance[g.to_index(source)] = <_>::zero();
+        let mut distances = vec![<_>::infinite(); g.node_bound()];
+        distances[g.to_index(source)] = <_>::zero();
 
-        let predecessor_store = match hops {
-            None => PredecessorStore::Unbounded(predecessors, distance),
-            Some(h) => {
-                let mut predecessors_at_step: Vec<_> = Vec::with_capacity(h);
-                predecessors_at_step.push(predecessors);
-                let distance = UpdatableDistance {
-                    current: distance.clone(),
-                    update: distance,
-                };
-                PredecessorStore::Bounded(predecessors_at_step, distance)
-            }
+        let predecessor_store: Box<dyn PredecessorStoring<G>> = match hops {
+            None => Box::new(Unbounded::new(predecessors, distances)),
+            Some(h) => Box::new(Bounded::new(predecessors, distances, h))
         };
 
         ShortestPathGraph {
             graph: g,
             predecessor_store,
             source,
+            phantom: PhantomData
         }
     }
 
     fn prepare_next_relaxation_step(&mut self) {
-        if let PredecessorStore::Bounded(predecessors_at_step, distance) =
-            &mut self.predecessor_store
-        {
-            predecessors_at_step.push(vec![None; self.graph.node_bound()]);
-            distance.current = distance.update.clone();
-        }
+        self.predecessor_store.prepare_next_relaxation_step();
     }
 
     /// Checks for negative weight cycle and, if any is found, creates loop in
     /// the predecessor store
     fn mark_cycle(&mut self) -> Option<G::NodeId> {
-        match &mut self.predecessor_store {
-            PredecessorStore::Unbounded(..) => {
-                // This is the last step of the Bellman-Ford algorithm. It tries to relax
-                // each node: if a node can be relaxed then a negative cycle exists and is
-                // created in the predecessor store; otherwise no such cycle exists.
-                for i in self.graph.node_identifiers() {
-                    for edge in self.graph.edges(i) {
-                        let j = edge.target();
-                        let w = *edge.weight();
-                        if *self.distance(i) + w < *self.distance(j) {
-                            self.update_predecessor(j, Some(i));
-                            return Some(j);
-                        }
-                    }
-                }
-                None
-            }
-            PredecessorStore::Bounded(predecessors_at_step, _) => {
-                let steps = predecessors_at_step.len();
-                for end_node in self.graph.node_identifiers() {
-                    let mut node = end_node;
-                    for step in (0..steps).rev() {
-                        node = if let Some(pred) =
-                            predecessors_at_step[step][self.graph.to_index(node)]
-                        {
-                            if pred == end_node {
-                                return Some(end_node);
-                            }
-                            pred
-                        } else {
-                            node
-                        };
-                    }
-                }
-                None
-            }
-        }
+        self.predecessor_store.mark_cycle(self.graph)
     }
 
     /// Returns a negative cycle, if it exists.
@@ -259,41 +130,13 @@ where
             Some(node) => node,
             None => return None,
         };
-        match &self.predecessor_store {
-            PredecessorStore::Unbounded(predecessors, _) => {
-                find_cycle(self.graph, &predecessors, search_start, None)
-            }
-            PredecessorStore::Bounded(predecessors_at_step, _) => {
-                let steps = predecessors_at_step.len();
-                let mut cycle = Vec::with_capacity(steps);
-                let mut node = search_start;
-                for step in (0..steps).rev() {
-                    node = if let Some(pred) = predecessors_at_step[step][self.graph.to_index(node)]
-                    {
-                        cycle.push(node);
-                        if pred == search_start {
-                            cycle.push(search_start);
-
-                            // NOTE: `cycle` is in reverse order, since it was built by walking the cycle
-                            // backwards, so reverse it and done!
-                            cycle.reverse();
-
-                            return Some(NegativeCycle(cycle));
-                        }
-                        pred
-                    } else {
-                        node
-                    };
-                }
-                panic!("Detected cycle could not be found")
-            }
-        }
+        self.predecessor_store.find_cycle(search_start, self.graph)
     }
 }
 
-impl<G> ShortestPathGraph<G>
+impl<'a, G> ShortestPathGraph<'a, G>
 where
-    G: NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
+    G: 'a + NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
     G::NodeId: Ord,
     G::EdgeWeight: FloatMeasure,
 {
@@ -317,13 +160,13 @@ where
 ///
 /// The orginal source can be found here:
 /// https://docs.rs/petgraph/0.5.0/src/petgraph/algo/mod.rs.html#745-792
-fn bellman_ford<G>(
+fn bellman_ford<'a, G>(
     g: G,
     source: G::NodeId,
     hops: Option<usize>,
-) -> Result<ShortestPathGraph<G>, NegativeCycle<G::NodeId>>
+) -> Result<ShortestPathGraph<'a, G>, NegativeCycle<G::NodeId>>
 where
-    G: NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
+    G: 'a + NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
     G::NodeId: Ord,
     G::EdgeWeight: FloatMeasure,
 {
@@ -337,8 +180,8 @@ where
                 let i = edge.source();
                 let j = edge.target();
                 let w = *edge.weight();
-                if *shortest_path_graph.distance(i) + w < *shortest_path_graph.distance(j) {
-                    shortest_path_graph.update_distance(j, *shortest_path_graph.distance(i) + w);
+                if shortest_path_graph.distance(i) + w < shortest_path_graph.distance(j) {
+                    shortest_path_graph.update_distance(j, shortest_path_graph.distance(i) + w);
                     shortest_path_graph.update_predecessor(j, Some(i));
                     did_update = true;
                 }
