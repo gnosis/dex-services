@@ -23,6 +23,7 @@ pub struct Args {
     pub claimed_objective_value: U256,
     pub gas_price_cap: U256,
     pub nonce: U256,
+    pub gas_limit: U256,
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -124,6 +125,7 @@ async fn retry(
         claimed_objective_value,
         gas_price_cap,
         nonce,
+        gas_limit,
     }: Args,
 ) -> Result<(), MethodError> {
     let effective_gas_price_cap = U256::from(
@@ -139,9 +141,11 @@ async fn retry(
         let gas_price = gas_price(estimated_price, gas_price_increase_count, gas_price_cap);
         assert!(gas_price <= gas_price_cap);
         log::info!(
-            "solution submission try {} with gas price {}",
+            "solution submission try {} with gas price {} nonce {} gas_limit {}",
             gas_price_increase_count,
-            gas_price
+            gas_price,
+            nonce,
+            gas_limit
         );
 
         let solution_submission_future = contract
@@ -151,6 +155,7 @@ async fn retry(
                 claimed_objective_value,
                 gas_price,
                 nonce,
+                gas_limit,
             )
             .map(FutureOutput::SolutionSubmission);
         futures.push(solution_submission_future.boxed());
@@ -253,12 +258,14 @@ mod tests {
         static SUBMIT_SOLUTION_CALL_COUNT: AtomicUsize = AtomicUsize::new(0);
 
         let mut contract = MockStableXContract::new();
-        contract.expect_submit_solution().returning(
-            |_, _, _, _, _| match SUBMIT_SOLUTION_CALL_COUNT.fetch_add(1, SeqCst) {
-                0 => future::pending().boxed(),
-                _ => immediate!(Ok(())),
-            },
-        );
+        contract
+            .expect_submit_solution()
+            .returning(
+                |_, _, _, _, _, _| match SUBMIT_SOLUTION_CALL_COUNT.fetch_add(1, SeqCst) {
+                    0 => future::pending().boxed(),
+                    _ => immediate!(Ok(())),
+                },
+            );
 
         let mut sleep = MockAsyncSleeping::new();
         sleep
@@ -279,6 +286,7 @@ mod tests {
             claimed_objective_value: 1.into(),
             gas_price_cap: (DEFAULT_GAS_PRICE * 10).into(),
             nonce: 0.into(),
+            gas_limit: 0.into(),
         };
         let result = retry(&contract, &gas_station, &sleep, args)
             .now_or_never()
@@ -299,8 +307,9 @@ mod tests {
                 always(),
                 eq(U256::from(DEFAULT_GAS_PRICE * 90)),
                 always(),
+                always(),
             )
-            .returning(|_, _, _, _, _| futures::future::pending().boxed());
+            .returning(|_, _, _, _, _, _| futures::future::pending().boxed());
         // There should not be a second call to submit_solution because 90 to 100 is not a large
         // enough gas price increase.
 
@@ -317,6 +326,7 @@ mod tests {
             claimed_objective_value: 1.into(),
             gas_price_cap: (DEFAULT_GAS_PRICE * 100).into(),
             nonce: 0.into(),
+            gas_limit: 0.into(),
         };
         let result = retry(&contract, &gas_station, &sleep, args).now_or_never();
         assert!(result.is_none());
@@ -335,7 +345,7 @@ mod tests {
         contract
             .expect_submit_solution()
             .times(1)
-            .return_once(|_, _, _, _, _| {
+            .return_once(|_, _, _, _, _, _| {
                 async move {
                     receiver.await.unwrap();
                     Ok(())
@@ -346,7 +356,7 @@ mod tests {
         contract
             .expect_submit_solution()
             .times(1)
-            .return_once(|_, _, _, _, _| {
+            .return_once(|_, _, _, _, _, _| {
                 sender.send(()).unwrap();
                 futures::future::pending().boxed()
             });
@@ -360,6 +370,7 @@ mod tests {
             claimed_objective_value: 1.into(),
             gas_price_cap: (DEFAULT_GAS_PRICE * 10).into(),
             nonce: 0.into(),
+            gas_limit: 0.into(),
         };
         let result = retry(&contract, &gas_station, &sleep, args).wait();
         assert!(result.is_ok());
@@ -385,7 +396,7 @@ mod tests {
         contract
             .expect_submit_solution()
             .times(1)
-            .return_once(|_, _, _, _, _| {
+            .return_once(|_, _, _, _, _, _| {
                 async move {
                     receiver.await.unwrap();
                     Ok(())
@@ -396,7 +407,7 @@ mod tests {
         contract
             .expect_submit_solution()
             .times(1)
-            .return_once(|_, _, _, _, _| {
+            .return_once(|_, _, _, _, _, _| {
                 sender.send(()).unwrap();
                 immediate!(Err(nonce_error()))
             });
@@ -410,6 +421,7 @@ mod tests {
             claimed_objective_value: 1.into(),
             gas_price_cap: (DEFAULT_GAS_PRICE * 10).into(),
             nonce: 0.into(),
+            gas_limit: 0.into(),
         };
         let result = retry(&contract, &gas_station, &sleep, args).wait();
         assert!(result.is_ok());

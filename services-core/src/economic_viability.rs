@@ -1,14 +1,13 @@
 //! Module implementing minimum average fee computation based on reference token
 //! price estimates.
 
-use crate::{gas_price::GasPriceEstimating, models::solution::EconomicViabilityInfo};
+use crate::{
+    gas_price::GasPriceEstimating,
+    models::solution::{EconomicViabilityInfo, GAS_PER_TRADE},
+};
 use anyhow::{anyhow, Context as _, Result};
 use ethcontract::U256;
 use std::{num::NonZeroU128, sync::Arc};
-
-/// The approximate amount of gas used in a solution per trade. In practice the value depends on how
-/// much gas is used in the reversion of the previous solution.
-const GAS_PER_TRADE: f64 = 120_000.0;
 
 arg_enum! {
     #[derive(Debug)]
@@ -159,13 +158,13 @@ impl EconomicViabilityComputing for EconomicViabilityComputer {
 fn min_average_fee(native_token_price: f64, gas_price: f64) -> f64 {
     let owl_per_eth = native_token_price / 1e18;
     let gas_price_in_owl = owl_per_eth * gas_price;
-    GAS_PER_TRADE * gas_price_in_owl
+    GAS_PER_TRADE as f64 * gas_price_in_owl
 }
 
 /// The gas price cap is selected so that submitting solution is still roughly profitable.
 fn gas_price_cap(native_token_price: f64, earned_fee: f64, num_trades: usize) -> f64 {
     let owl_per_eth = native_token_price / 1e18;
-    let gas_use = GAS_PER_TRADE * (num_trades as f64);
+    let gas_use = GAS_PER_TRADE as f64 * (num_trades as f64);
     earned_fee / (owl_per_eth * gas_use)
 }
 

@@ -24,6 +24,10 @@ pub struct EconomicViabilityInfo {
     pub earned_fee: U256,
 }
 
+/// The approximate amount of gas used in a solution per trade. In practice the value depends on how
+/// much gas is used in the reversion of the previous solution.
+pub const GAS_PER_TRADE: u32 = 120_000;
+
 impl Solution {
     pub fn trivial() -> Self {
         Solution {
@@ -57,6 +61,10 @@ impl Solution {
         }
         token_imbalance /= 2;
         bigint_u256::bigint_to_u256_saturating(&token_imbalance)
+    }
+
+    pub fn gas_limit(&self) -> U256 {
+        U256::from(self.executed_orders.len() * GAS_PER_TRADE as usize)
     }
 }
 

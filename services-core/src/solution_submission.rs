@@ -227,6 +227,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
             claimed_objective_value,
             gas_price_cap,
             nonce,
+            gas_limit: solution.gas_limit(),
         });
         let cancel_future =
             self.cancel_transaction_after_deadline(batch_index, nonce, gas_price_cap);

@@ -136,6 +136,7 @@ pub trait StableXContract: Send + Sync {
         claimed_objective_value: U256,
         gas_price: U256,
         nonce: U256,
+        gas_limit: U256,
     ) -> BoxFuture<'a, Result<(), MethodError>>;
 
     async fn past_events(
@@ -260,6 +261,7 @@ impl StableXContract for StableXContractImpl {
         claimed_objective_value: U256,
         gas_price: U256,
         nonce: U256,
+        gas_limit: U256,
     ) -> BoxFuture<'a, Result<(), MethodError>> {
         async move {
             let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
@@ -277,10 +279,7 @@ impl StableXContract for StableXContractImpl {
                     token_ids_for_price,
                 )
                 .gas_price(GasPrice::Value(gas_price))
-                // NOTE: Gas estimate might be off, as we race with other solution
-                //   submissions and thus might have to revert trades which costs
-                //   more gas than expected.
-                .gas(6_000_000.into())
+                .gas(gas_limit)
                 .nonce(nonce);
             method.tx.resolve = Some(ResolveCondition::Confirmed(ConfirmParams::mined()));
             method.send().await.map(|_| ())
