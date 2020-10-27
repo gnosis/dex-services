@@ -7,6 +7,7 @@ use petgraph::algo::FloatMeasure;
 use petgraph::visit::{
     Data, EdgeRef, GraphBase, IntoEdges, IntoNodeIdentifiers, NodeCount, NodeIndexable,
 };
+use std::hash::Hash;
 use bounded::Bounded;
 use unbounded::Unbounded;
 
@@ -59,7 +60,7 @@ pub struct ShortestPathGraph<'a, G: Data> {
 impl<'a, G> ShortestPathGraph<'a, G>
 where
     G: 'a + IntoNodeIdentifiers + IntoEdges + NodeIndexable + NodeCount,
-    G::NodeId: Ord,
+    G::NodeId: Ord + Hash,
     G::EdgeWeight: FloatMeasure,
 {
     /// Returns the current distance of a node from the source.
@@ -158,7 +159,7 @@ fn bellman_ford<'a, G>(
 ) -> Result<ShortestPathGraph<'a, G>, NegativeCycle<G::NodeId>>
 where
     G: 'a + NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
-    G::NodeId: Ord,
+    G::NodeId: Ord + Hash,
     G::EdgeWeight: FloatMeasure,
 {
     let mut shortest_path_graph = ShortestPathGraph::empty(g, source, hops);

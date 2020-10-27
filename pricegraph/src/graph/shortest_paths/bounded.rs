@@ -2,6 +2,8 @@ use super::{Distances, PredecessorVec, PredecessorStoring, nodes_from_predecesso
 use super::super::path::{NegativeCycle, Path};
 use petgraph::visit::{Data, NodeIndexable, IntoNodeIdentifiers};
 use petgraph::algo::FloatMeasure;
+use std::collections::HashSet;
+use std::hash::Hash;
 
 struct UpdatableDistances<G: Data> {
     current: Distances<G>,
@@ -34,7 +36,7 @@ where
 impl<G> PredecessorStoring<G> for Bounded<G> 
 where 
     G: Data + NodeIndexable + IntoNodeIdentifiers,
-    G::NodeId: Ord,
+    G::NodeId: Ord + Hash,
     G::EdgeWeight: FloatMeasure
 {
     fn distance(&self, node_index: usize) -> G::EdgeWeight {
@@ -81,16 +83,13 @@ where
     }
 
     fn connected_nodes(&self, graph: G) -> Vec<G::NodeId>  {
-        let mut repeating_node_indices: Vec<_> = self.predecessors_at_step
+        self.predecessors_at_step
             .iter()
             .map(|predecessors| nodes_from_predecessors(graph, &predecessors))
             .flatten()
-            .collect();
-        {
-            repeating_node_indices.sort();
-            repeating_node_indices.dedup();
-        }
-        repeating_node_indices
+            .collect::<HashSet<_>>()
+            .drain()
+            .collect()
     }
 
     fn prepare_next_relaxation_step(&mut self) {
