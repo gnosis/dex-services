@@ -87,7 +87,7 @@ impl<'a> InfallibleGasPriceEstimator<'a> {
 
     /// Get a fresh price estimate or if that fails return the most recent previous result.
     async fn estimate(&mut self) -> U256 {
-        match self.gas_price_estimating.estimate_gas_price().await {
+        match self.gas_price_estimating.estimate().await {
             Ok(gas_estimate) => {
                 // `retry` relies on the gas price always increasing.
                 self.previous_gas_price = self.previous_gas_price.max(gas_estimate);
@@ -195,19 +195,19 @@ mod tests {
     fn infallible_gas_price_estimator_uses_default_and_previous_result() {
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station
-            .expect_estimate_gas_price()
+            .expect_estimate()
             .times(1)
             .return_once(|| Err(anyhow!("")));
         gas_station
-            .expect_estimate_gas_price()
+            .expect_estimate()
             .times(1)
             .return_once(|| Ok(5.into()));
         gas_station
-            .expect_estimate_gas_price()
+            .expect_estimate()
             .times(1)
             .return_once(|| Ok(6.into()));
         gas_station
-            .expect_estimate_gas_price()
+            .expect_estimate()
             .times(1)
             .return_once(|| Err(anyhow!("")));
 
@@ -222,11 +222,11 @@ mod tests {
     fn infallible_gas_price_estimator_does_not_decrease() {
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station
-            .expect_estimate_gas_price()
+            .expect_estimate()
             .times(1)
             .return_once(|| Ok(10.into()));
         gas_station
-            .expect_estimate_gas_price()
+            .expect_estimate()
             .times(1)
             .return_once(|| Ok(9.into()));
 
@@ -269,9 +269,7 @@ mod tests {
             });
 
         let mut gas_station = MockGasPriceEstimating::new();
-        gas_station
-            .expect_estimate_gas_price()
-            .returning(|| Err(anyhow!("")));
+        gas_station.expect_estimate().returning(|| Err(anyhow!("")));
 
         let args = Args {
             batch_index: 1,
@@ -306,7 +304,7 @@ mod tests {
 
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station
-            .expect_estimate_gas_price()
+            .expect_estimate()
             .returning(|| Ok((DEFAULT_GAS_PRICE * 90).into()));
 
         let sleep = MockAsyncSleeping::new();
@@ -329,9 +327,7 @@ mod tests {
         let mut sleep = MockAsyncSleeping::new();
         let (sender, receiver) = futures::channel::oneshot::channel();
 
-        gas_station
-            .expect_estimate_gas_price()
-            .returning(|| Err(anyhow!("")));
+        gas_station.expect_estimate().returning(|| Err(anyhow!("")));
         contract
             .expect_submit_solution()
             .times(1)
@@ -379,9 +375,7 @@ mod tests {
         let mut sleep = MockAsyncSleeping::new();
         let (sender, receiver) = futures::channel::oneshot::channel();
 
-        gas_station
-            .expect_estimate_gas_price()
-            .returning(|| Err(anyhow!("")));
+        gas_station.expect_estimate().returning(|| Err(anyhow!("")));
         contract
             .expect_submit_solution()
             .times(1)
