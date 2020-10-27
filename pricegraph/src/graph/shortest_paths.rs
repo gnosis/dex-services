@@ -41,9 +41,9 @@ trait PredecessorStoring<G: GraphBase + Data> {
     fn mark_cycle(&mut self, graph: G) -> Option<G::NodeId>;
 
     /// Returns a negative cycle from the starting node, if it exists.
-    fn find_cycle(&mut self, search_start: G::NodeId, graph: G) -> Option<NegativeCycle<G::NodeId>>;
+    fn find_cycle(&mut self, search_start: G::NodeId, graph: G)
+        -> Option<NegativeCycle<G::NodeId>>;
 }
-
 
 /// Structure that can be used to derive the shorthest path from a source to any
 /// reachable destination in the graph.
@@ -55,8 +55,9 @@ pub struct ShortestPathGraph<'a, G: Data> {
 
 impl<'a, G> ShortestPathGraph<'a, G>
 where
-    G: 'a + IntoEdges + NodeIndexable,
+    G: 'a + IntoNodeIdentifiers + IntoEdges + NodeIndexable + NodeCount,
     G::NodeId: Ord,
+    G::EdgeWeight: FloatMeasure,
 {
     /// Returns the current distance of a node from the source.
     fn distance(&self, node: G::NodeId) -> G::EdgeWeight {
@@ -77,7 +78,8 @@ where
 
     /// Returns shortest path from source to destination node, if a path exists.
     pub fn path_to(&self, dest: G::NodeId) -> Option<Path<G::NodeId>> {
-        self.predecessor_store.path_to(self.source, dest, self.graph)
+        self.predecessor_store
+            .path_to(self.source, dest, self.graph)
     }
 
     /// Lists all nodes that can be reached from the source (including the source itself).
@@ -87,25 +89,7 @@ where
         node_indices.push(self.source);
         node_indices
     }
-}
 
-fn nodes_from_predecessors<G: NodeIndexable>(
-    graph: G,
-    predecessors: &[Option<<G as GraphBase>::NodeId>],
-) -> Vec<G::NodeId> {
-    predecessors
-        .iter()
-        .enumerate()
-        .filter_map(|(i, &pre)| pre.map(|_| graph.from_index(i)))
-        .collect::<Vec<_>>()
-}
-
-impl<'a, G> ShortestPathGraph<'a, G>
-where
-    G: 'a + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
-    G::NodeId: Ord,
-    G::EdgeWeight: FloatMeasure,
-{
     /// Initializes a shortest path graph that will be later built with the
     /// Bellman-Ford algorithm.
     fn empty(g: G, source: G::NodeId) -> Self {
@@ -138,24 +122,14 @@ where
         };
         self.predecessor_store.find_cycle(search_start, self.graph)
     }
-}
 
-impl<'a, G> ShortestPathGraph<'a, G>
-where
-    G: 'a + NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
-    G::NodeId: Ord,
-    G::EdgeWeight: FloatMeasure,
-{
     /// Creates a representation of all shortest paths from the given source
     /// to any other node in the graph.
     ///
     /// Shortest paths are well defined if and only if the graph does not
     /// contain any negative weight cycle reachabe from the source. If a
     /// negative weight cycle is detected, it is returned as an error.
-    pub fn new(
-        g: G,
-        source: G::NodeId,
-    ) -> Result<Self, NegativeCycle<G::NodeId>> {
+    pub fn new(g: G, source: G::NodeId) -> Result<Self, NegativeCycle<G::NodeId>> {
         bellman_ford(g, source)
     }
 }
@@ -203,6 +177,17 @@ where
     }
 }
 
+fn nodes_from_predecessors<G: NodeIndexable>(
+    graph: G,
+    predecessors: &[Option<<G as GraphBase>::NodeId>],
+) -> Vec<G::NodeId> {
+    predecessors
+        .iter()
+        .enumerate()
+        .filter_map(|(i, &pre)| pre.map(|_| graph.from_index(i)))
+        .collect::<Vec<_>>()
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
@@ -221,9 +206,7 @@ pub mod tests {
             (4, 3, 200.0),
         ]);
 
-        let negative_cycle = ShortestPathGraph::new(&graph, 0.into())
-            .err()
-            .unwrap();
+        let negative_cycle = ShortestPathGraph::new(&graph, 0.into()).err().unwrap();
 
         assert_eq!(
             negative_cycle.0,
