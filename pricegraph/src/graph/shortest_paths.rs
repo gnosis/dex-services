@@ -2,51 +2,50 @@
 //! implementation of the Bellman-Ford graph search algorigthm that returns the
 //! detected negative cycle on error.
 
-use super::path::{find_cycle, NegativeCycle, Path};
+use super::path::{NegativeCycle, Path};
 use petgraph::algo::FloatMeasure;
 use petgraph::visit::{
     Data, EdgeRef, GraphBase, IntoEdges, IntoNodeIdentifiers, NodeCount, NodeIndexable,
 };
 
+use bounded::Bounded;
+use unbounded::Unbounded;
+
+mod bounded;
+mod unbounded;
+
 /// A vector associating to each node index a distance from the source.
-type Distance<G> = Vec<<G as Data>::EdgeWeight>;
+type Distances<G> = Vec<<G as Data>::EdgeWeight>;
+type PredecessorVec<G> = Vec<Option<<G as GraphBase>::NodeId>>;
 
-/// Stores the information needed to manage the predecessor list.
-/// For each node index, this type contains its predecessor node and
-/// distance in the graph from a source node.
-struct PredecessorStore<G: GraphBase + Data> {
-    predecessors: Vec<Option<G::NodeId>>,
-    distance: Distance<G>,
+trait PredecessorStoring<G: GraphBase + Data> {
+    fn distance(&self, node_index: usize) -> G::EdgeWeight;
+    fn update_distance(&mut self, node_index: usize, updated_distance: G::EdgeWeight);
+    fn update_predecessor(&mut self, node_index: usize, updated_predecessor: Option<G::NodeId>);
+
+    fn path_to(&self, source: G::NodeId, dest: G::NodeId, graph: G) -> Option<Path<G::NodeId>>;
+    fn connected_nodes(&self, graph: G) -> Vec<G::NodeId>;
+    fn prepare_next_relaxation_step(&mut self);
+    fn mark_cycle(&mut self, graph: G) -> Option<G::NodeId>;
+    fn find_cycle(&mut self, search_start: G::NodeId, graph: G) -> Option<NegativeCycle<G::NodeId>>;
 }
 
-impl<G: GraphBase + Data> PredecessorStore<G> {
-    fn distance(&self, node_index: usize) -> &G::EdgeWeight {
-        &self.distance[node_index]
-    }
-
-    fn update_distance(&mut self, node_index: usize, updated_distance: G::EdgeWeight) {
-        self.distance[node_index] = updated_distance;
-    }
-
-    fn update_predecessor(&mut self, node_index: usize, updated_predecessor: Option<G::NodeId>) {
-        self.predecessors[node_index] = updated_predecessor;
-    }
-}
 
 /// Structure that can be used to derive the shorthest path from a source to any
 /// reachable destination in the graph.
-pub struct ShortestPathGraph<G: GraphBase + Data> {
+pub struct ShortestPathGraph<'a, G: Data> {
     graph: G,
-    predecessor_store: PredecessorStore<G>,
+    predecessor_store: Box<dyn PredecessorStoring<G> + 'a>,
     source: G::NodeId,
 }
 
-impl<G> ShortestPathGraph<G>
+impl<'a, G> ShortestPathGraph<'a, G>
 where
-    G: IntoEdges + NodeIndexable,
+    G: 'a + IntoEdges + NodeIndexable,
+    G::NodeId: Ord,
 {
     /// Returns the current distance of a node from the source.
-    fn distance(&self, node: G::NodeId) -> &G::EdgeWeight {
+    fn distance(&self, node: G::NodeId) -> G::EdgeWeight {
         self.predecessor_store.distance(self.graph.to_index(node))
     }
 
@@ -64,52 +63,45 @@ where
 
     /// Returns shortest path from source to destination node, if a path exists.
     pub fn path_to(&self, dest: G::NodeId) -> Option<Path<G::NodeId>> {
-        let max_path_len = self.predecessor_store.predecessors.len();
-        let mut path = Vec::with_capacity(max_path_len);
-        let mut current = dest;
-        while current != self.source {
-            assert!(path.len() <= max_path_len, "undetected negative cycle");
-            path.push(current);
-            current = self.predecessor_store.predecessors[self.graph.to_index(current)]?;
-        }
-        path.push(self.source);
-
-        // NOTE: `path` is in reverse order, since it was built by walking the path
-        // backwards, so reverse it and done!
-        path.reverse();
-        Some(Path(path))
+        self.predecessor_store.path_to(self.source, dest, self.graph)
     }
 
     /// Lists all nodes that can be reached from the source.
     pub fn connected_nodes(&self) -> Vec<G::NodeId> {
-        let mut node_indices: Vec<_> = self
-            .predecessor_store
-            .predecessors
-            .iter()
-            .enumerate()
-            .filter_map(|(i, &pre)| pre.map(|_| self.graph.from_index(i)))
-            .collect();
+        let mut node_indices = self.predecessor_store.connected_nodes(self.graph);
         debug_assert!(!node_indices.contains(&self.source));
         node_indices.push(self.source);
         node_indices
     }
 }
 
-impl<G> ShortestPathGraph<G>
+fn nodes_from_predecessors<G: NodeIndexable>(
+    graph: G,
+    predecessors: &[Option<<G as GraphBase>::NodeId>],
+) -> Vec<G::NodeId> {
+    predecessors
+        .iter()
+        .enumerate()
+        .filter_map(|(i, &pre)| pre.map(|_| graph.from_index(i)))
+        .collect::<Vec<_>>()
+}
+
+impl<'a, G> ShortestPathGraph<'a, G>
 where
-    G: IntoNodeIdentifiers + IntoEdges + NodeIndexable,
+    G: 'a + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
+    G::NodeId: Ord,
     G::EdgeWeight: FloatMeasure,
 {
     /// Initializes a shortest path graph that will be later built with the
     /// Bellman-Ford algorithm.
-    fn empty(g: G, source: G::NodeId) -> Self {
+    fn empty(g: G, source: G::NodeId, hops: Option<usize>) -> Self {
         let predecessors = vec![None; g.node_bound()];
-        let mut distance = vec![<_>::infinite(); g.node_bound()];
-        distance[g.to_index(source)] = <_>::zero();
+        let mut distances = vec![<_>::infinite(); g.node_bound()];
+        distances[g.to_index(source)] = <_>::zero();
 
-        let predecessor_store = PredecessorStore {
-            predecessors,
-            distance,
+        let predecessor_store: Box<dyn PredecessorStoring<G>> = match hops {
+            None => Box::new(Unbounded::new(predecessors, distances)),
+            Some(h) => Box::new(Bounded::new(predecessors, distances, h))
         };
 
         ShortestPathGraph {
@@ -119,25 +111,14 @@ where
         }
     }
 
+    fn prepare_next_relaxation_step(&mut self) {
+        self.predecessor_store.prepare_next_relaxation_step();
+    }
+
     /// Checks for negative weight cycle and, if any is found, creates loop in
     /// the predecessor store
     fn mark_cycle(&mut self) -> Option<G::NodeId> {
-        // This is the last step of the Bellman-Ford algorithm. It tries to relax
-        // each node: if a node can be relaxed then a negative cycle exists and is
-        // created in the predecessor store; otherwise no such cycle exists.
-
-        for i in self.graph.node_identifiers() {
-            for edge in self.graph.edges(i) {
-                let j = edge.target();
-                let w = *edge.weight();
-
-                if *self.distance(i) + w < *self.distance(j) {
-                    self.update_predecessor(j, Some(i));
-                    return Some(j);
-                }
-            }
-        }
-        None
+        self.predecessor_store.mark_cycle(self.graph)
     }
 
     /// Returns a negative cycle, if it exists.
@@ -146,19 +127,14 @@ where
             Some(node) => node,
             None => return None,
         };
-
-        find_cycle(
-            self.graph,
-            &self.predecessor_store.predecessors,
-            search_start,
-            None,
-        )
+        self.predecessor_store.find_cycle(search_start, self.graph)
     }
 }
 
-impl<G> ShortestPathGraph<G>
+impl<'a, G> ShortestPathGraph<'a, G>
 where
-    G: NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
+    G: 'a + NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
+    G::NodeId: Ord,
     G::EdgeWeight: FloatMeasure,
 {
     /// Creates a representation of all shortest paths from the given source
@@ -167,8 +143,12 @@ where
     /// Shortest paths are well defined if and only if the graph does not
     /// contain any negative weight cycle reachabe from the source. If a
     /// negative weight cycle is detected, it is returned as an error.
-    pub fn new(g: G, source: G::NodeId) -> Result<Self, NegativeCycle<G::NodeId>> {
-        bellman_ford(g, source)
+    pub fn new(
+        g: G,
+        source: G::NodeId,
+        hops: Option<usize>,
+    ) -> Result<Self, NegativeCycle<G::NodeId>> {
+        bellman_ford(g, source, hops)
     }
 }
 
@@ -177,31 +157,34 @@ where
 ///
 /// The orginal source can be found here:
 /// https://docs.rs/petgraph/0.5.0/src/petgraph/algo/mod.rs.html#745-792
-fn bellman_ford<G>(
+fn bellman_ford<'a, G>(
     g: G,
     source: G::NodeId,
-) -> Result<ShortestPathGraph<G>, NegativeCycle<G::NodeId>>
+    hops: Option<usize>,
+) -> Result<ShortestPathGraph<'a, G>, NegativeCycle<G::NodeId>>
 where
-    G: NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
+    G: 'a + NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
+    G::NodeId: Ord,
     G::EdgeWeight: FloatMeasure,
 {
-    let mut shortest_path_graph = ShortestPathGraph::empty(g, source);
+    let mut shortest_path_graph = ShortestPathGraph::empty(g, source, hops);
 
     // scan up to |V| - 1 times.
-    for _ in 1..g.node_count() {
+    for _ in 1..=hops.unwrap_or(g.node_count() - 1) {
         let mut did_update = false;
         for i in g.node_identifiers() {
             for edge in g.edges(i) {
                 let i = edge.source();
                 let j = edge.target();
                 let w = *edge.weight();
-                if *shortest_path_graph.distance(i) + w < *shortest_path_graph.distance(j) {
-                    shortest_path_graph.update_distance(j, *shortest_path_graph.distance(i) + w);
+                if shortest_path_graph.distance(i) + w < shortest_path_graph.distance(j) {
+                    shortest_path_graph.update_distance(j, shortest_path_graph.distance(i) + w);
                     shortest_path_graph.update_predecessor(j, Some(i));
                     did_update = true;
                 }
             }
         }
+        shortest_path_graph.prepare_next_relaxation_step();
         if !did_update {
             break;
         }
@@ -231,7 +214,9 @@ pub mod tests {
             (4, 3, 200.0),
         ]);
 
-        let negative_cycle = ShortestPathGraph::new(&graph, 0.into()).err().unwrap();
+        let negative_cycle = ShortestPathGraph::new(&graph, 0.into(), None)
+            .err()
+            .unwrap();
 
         assert_eq!(
             negative_cycle.0,
@@ -274,10 +259,103 @@ pub mod tests {
             (3, 4, 1.0),
         ]);
 
-        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into()).unwrap();
+        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into(), None).unwrap();
         let path = shortest_path_graph.path_to(5.into()).unwrap();
 
         assert_eq!(path, Path(vec![0.into(), 3.into(), 4.into(), 5.into()]));
+    }
+
+    #[test]
+    fn bounded_search_finds_shortest_path() {
+        //  0 --2.0-> 1 --1.0-> 2
+        //  |         |         |
+        // 4.0       7.0        |
+        //  v         v         |
+        //  3         5        5.0
+        //  |         ^         |
+        // 1.0       1.0        |
+        //  |         |         |
+        //  \-------> 4 <-------/
+        let graph = Graph::<(), f64>::from_edges(&[
+            (0, 1, 2.0),
+            (0, 3, 4.0),
+            (1, 2, 1.0),
+            (1, 5, 7.0),
+            (2, 4, 5.0),
+            (4, 5, 1.0),
+            (3, 4, 1.0),
+        ]);
+
+        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into(), Some(0)).unwrap();
+        assert_eq!(shortest_path_graph.path_to(5.into()), None);
+
+        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into(), Some(1)).unwrap();
+        assert_eq!(shortest_path_graph.path_to(5.into()), None);
+
+        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into(), Some(2)).unwrap();
+        let path = shortest_path_graph.path_to(5.into()).unwrap();
+        assert_eq!(path, Path(vec![0.into(), 1.into(), 5.into()]));
+
+        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into(), Some(3)).unwrap();
+        let path = shortest_path_graph.path_to(5.into()).unwrap();
+        assert_eq!(path, Path(vec![0.into(), 3.into(), 4.into(), 5.into()]));
+
+        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into(), Some(1000)).unwrap();
+        let path = shortest_path_graph.path_to(5.into()).unwrap();
+        // The four-step path [0, 1, 2, 4, 5] has larger weight than [0, 3, 4, 5].
+        assert_eq!(path, Path(vec![0.into(), 3.into(), 4.into(), 5.into()]));
+    }
+
+    #[test]
+    fn bounded_search_with_negative_cycle_through_origin() {
+        //    0 --1.0-> 1
+        //    ∧         |
+        // -100.0      1.0
+        //    |         v
+        //    3 <-1.0-- 2
+        let graph =
+            Graph::<(), f64>::from_edges(&[(0, 1, 1.0), (1, 2, 1.0), (2, 3, 1.0), (3, 0, -100.0)]);
+        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into(), Some(3)).unwrap();
+        let path = shortest_path_graph.path_to(3.into()).unwrap();
+        assert_eq!(path, Path(vec![0.into(), 1.into(), 2.into(), 3.into()]));
+
+        let negative_cycle = ShortestPathGraph::new(&graph, 0.into(), Some(4))
+            .err()
+            .unwrap();
+        assert_eq!(
+            negative_cycle.0,
+            vec![0.into(), 1.into(), 2.into(), 3.into(), 0.into()]
+        );
+    }
+
+    #[test]
+    fn bounded_search_with_negative_cycle_not_involving_origin() {
+        //   0 --1.0-> 1 --1.0-> 2
+        //             ∧         |
+        //          -100.0      1.0
+        //             |         v
+        //             4 <-1.0-- 3
+        let graph = Graph::<(), f64>::from_edges(&[
+            (0, 1, 1.0),
+            (1, 2, 1.0),
+            (2, 3, 1.0),
+            (3, 4, 1.0),
+            (4, 1, -100.0),
+        ]);
+        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into(), Some(4)).unwrap();
+        let path = shortest_path_graph.path_to(4.into()).unwrap();
+        assert_eq!(
+            path,
+            Path(vec![0.into(), 1.into(), 2.into(), 3.into(), 4.into()])
+        );
+
+        let negative_cycle = ShortestPathGraph::new(&graph, 0.into(), Some(5))
+            .err()
+            .unwrap();
+        assert_eq!(
+            negative_cycle.0,
+            vec![1.into(), 2.into(), 3.into(), 4.into(), 1.into()]
+        );
     }
 
     #[test]
@@ -303,7 +381,7 @@ pub mod tests {
             (7, 0, 1.0),
         ]);
 
-        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into()).unwrap();
+        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into(), None).unwrap();
         let mut connected_nodes = shortest_path_graph.connected_nodes();
         connected_nodes.sort();
 
@@ -311,5 +389,62 @@ pub mod tests {
             connected_nodes,
             vec![0.into(), 2.into(), 4.into(), 5.into(), 6.into(), 7.into()]
         );
+    }
+
+    #[test]
+    fn bounded_shortest_path_graph_finds_connected_nodes() {
+        //           2 <-1.0-- 3
+        //           ∧
+        //          1.0
+        //           |
+        // 1 --1.0-> 0 <-1.0-- 7 <---- -4.0
+        //           |         ∧         |
+        //          1.0       1.0        |
+        //           v         |         |
+        //           4 --1.0-> 5 --1.0-> 6
+        let graph = Graph::<(), f64>::from_edges(&[
+            (1, 0, 1.0),
+            (0, 2, 1.0),
+            (3, 2, 1.0),
+            (0, 4, 1.0),
+            (4, 5, 1.0),
+            (5, 6, 1.0),
+            (5, 7, 1.0),
+            (6, 7, -4.0),
+            (7, 0, 1.0),
+        ]);
+
+        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into(), Some(0)).unwrap();
+        let connected_nodes = shortest_path_graph.connected_nodes();
+        assert_eq!(connected_nodes, vec![0.into()]);
+
+        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into(), Some(1)).unwrap();
+        let mut connected_nodes = shortest_path_graph.connected_nodes();
+        connected_nodes.sort();
+        assert_eq!(connected_nodes, vec![0.into(), 2.into(), 4.into()]);
+
+        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into(), Some(2)).unwrap();
+        let mut connected_nodes = shortest_path_graph.connected_nodes();
+        connected_nodes.sort();
+        assert_eq!(
+            connected_nodes,
+            vec![0.into(), 2.into(), 4.into(), 5.into()]
+        );
+
+        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into(), Some(3)).unwrap();
+        let mut connected_nodes = shortest_path_graph.connected_nodes();
+        connected_nodes.sort();
+        assert_eq!(
+            connected_nodes,
+            vec![0.into(), 2.into(), 4.into(), 5.into(), 6.into(), 7.into()]
+        );
+
+        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into(), Some(1000)).unwrap();
+        let mut connected_nodes = shortest_path_graph.connected_nodes();
+        connected_nodes.sort();
+        assert_eq!(
+            connected_nodes,
+            vec![0.into(), 2.into(), 4.into(), 5.into(), 6.into(), 7.into()]
+        )
     }
 }
