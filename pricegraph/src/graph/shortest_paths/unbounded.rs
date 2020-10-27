@@ -1,3 +1,6 @@
+//! The module contains the implementation of bellman-ford where the shortest path may
+//! contain of arbitrarily many edges
+
 use super::{Distances, PredecessorVec, PredecessorStoring, nodes_from_predecessors};
 use super::super::path::{find_cycle, NegativeCycle, Path};
 use petgraph::visit::{Data, NodeIndexable, IntoNodeIdentifiers, IntoEdges, EdgeRef};
