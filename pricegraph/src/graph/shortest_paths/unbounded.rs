@@ -5,24 +5,27 @@ use super::super::path::{find_cycle, NegativeCycle, Path};
 use super::{nodes_from_predecessors, Distances, PredecessorStoring, PredecessorVec};
 use petgraph::algo::FloatMeasure;
 use petgraph::visit::{Data, EdgeRef, IntoEdges, IntoNodeIdentifiers, NodeIndexable};
+use std::marker::PhantomData;
 
-pub struct Unbounded<G: Data> {
+pub struct Unbounded<'a, G: 'a + Data> {
     predecessors: PredecessorVec<G>,
     distances: Distances<G>,
+    phantom: PhantomData<&'a G>
 }
 
-impl<G: Data> Unbounded<G> {
+impl<'a, G: 'a + Data> Unbounded<'a, G> {
     pub fn new(predecessors: PredecessorVec<G>, distances: Distances<G>) -> Self {
         Self {
             predecessors,
             distances,
+            phantom: PhantomData,
         }
     }
 }
 
-impl<G> PredecessorStoring<G> for Unbounded<G>
+impl<'a, G> PredecessorStoring<G> for Unbounded<'a, G>
 where
-    G: Data + NodeIndexable + IntoNodeIdentifiers + IntoEdges,
+    G: 'a + Data + NodeIndexable + IntoNodeIdentifiers + IntoEdges,
     G::EdgeWeight: FloatMeasure,
 {
     fn distance(&self, node_index: usize) -> G::EdgeWeight {

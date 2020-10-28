@@ -49,19 +49,33 @@ trait PredecessorStoring<G: GraphBase + Data> {
 }
 
 
-/// Structure that can be used to derive the shorthest path from a source to any
-/// reachable destination in the graph.
-pub struct ShortestPathGraph<'a, G: Data> {
-    graph: G,
-    predecessor_store: Box<dyn PredecessorStoring<G> + 'a>,
-    source: G::NodeId,
+trait ShortestPathGraphT<G: GraphBase + IntoEdges> {
+    /// Returns the current distance of a node from the source.
+    fn distance(&self, node: G::NodeId) -> G::EdgeWeight;
+    /// Updates the distance of a node from the source.
+    fn update_distance(&mut self, node: G::NodeId, updated_distance: G::EdgeWeight);
+    /// Returns shortest path from source to destination node, if a path exists.
+    fn update_predecessor(&mut self, node: G::NodeId, updated_predecessor: Option<G::NodeId>);
+    
+    /// Returns shortest path from source to destination node, if a path exists.
+    fn path_to(&self, dest: G::NodeId) -> Option<Path<G::NodeId>>;
+
+    /// Lists all nodes that can be reached from the source (including the source itself).
+    fn connected_nodes(&self) -> Vec<G::NodeId>;
+
+    fn prepare_next_relaxation_step(&mut self);
+
+    fn mark_cycle(&mut self) -> Option<G::NodeId>;
+
+    fn find_cycle(&mut self) -> Option<NegativeCycle<G::NodeId>>;
 }
 
-impl<'a, G> ShortestPathGraph<'a, G>
+impl<G, P> ShortestPathGraphT<G> for ShortestPathGraph<G, P> 
 where
-    G: 'a + IntoNodeIdentifiers + IntoEdges + NodeIndexable + NodeCount,
+    G: IntoNodeIdentifiers + IntoEdges + NodeIndexable + NodeCount,
     G::NodeId: Ord + Hash,
     G::EdgeWeight: FloatMeasure,
+    P: PredecessorStoring<G>,
 {
     /// Returns the current distance of a node from the source.
     fn distance(&self, node: G::NodeId) -> G::EdgeWeight {
@@ -81,36 +95,17 @@ where
     }
 
     /// Returns shortest path from source to destination node, if a path exists.
-    pub fn path_to(&self, dest: G::NodeId) -> Option<Path<G::NodeId>> {
+    fn path_to(&self, dest: G::NodeId) -> Option<Path<G::NodeId>> {
         self.predecessor_store
             .path_to(self.source, dest, self.graph)
     }
 
     /// Lists all nodes that can be reached from the source (including the source itself).
-    pub fn connected_nodes(&self) -> Vec<G::NodeId> {
+    fn connected_nodes(&self) -> Vec<G::NodeId> {
         let mut node_indices = self.predecessor_store.connected_nodes(self.graph);
         debug_assert!(!node_indices.contains(&self.source));
         node_indices.push(self.source);
         node_indices
-    }
-
-    /// Initializes a shortest path graph that will be later built with the
-    /// Bellman-Ford algorithm.
-    fn empty(g: G, source: G::NodeId, hops: Option<usize>) -> Self {
-        let predecessors = vec![None; g.node_bound()];
-        let mut distances = vec![<_>::infinite(); g.node_bound()];
-        distances[g.to_index(source)] = <_>::zero();
-
-        let predecessor_store: Box<dyn PredecessorStoring<G>> = match hops {
-            None => Box::new(Unbounded::new(predecessors, distances)),
-            Some(h) => Box::new(Bounded::new(predecessors, distances, h))
-        };
-
-        ShortestPathGraph {
-            graph: g,
-            predecessor_store,
-            source,
-        }
     }
 
     fn prepare_next_relaxation_step(&mut self) {
@@ -131,6 +126,43 @@ where
         };
         self.predecessor_store.find_cycle(search_start, self.graph)
     }
+}
+
+/// Structure that can be used to derive the shorthest path from a source to any
+/// reachable destination in the graph.
+pub struct ShortestPathGraph<G: Data, P> {
+    graph: G,
+    source: G::NodeId,
+    predecessor_store: P,
+}
+
+impl<'a, G, P> ShortestPathGraph<G, P>
+where
+    G: 'a + IntoNodeIdentifiers + IntoEdges + NodeIndexable + NodeCount,
+    G::NodeId: Ord + Hash,
+    G::EdgeWeight: FloatMeasure,
+    P: PredecessorStoring<G>,
+{
+    /// Initializes a shortest path graph that will be later built with the
+    /// Bellman-Ford algorithm.
+    fn empty(g: G, source: G::NodeId, hops: Option<usize>) -> Box<dyn ShortestPathGraphT<G> + 'a> {
+        let predecessors = vec![None; g.node_bound()];
+        let mut distances = vec![<_>::infinite(); g.node_bound()];
+        distances[g.to_index(source)] = <_>::zero();
+
+        match hops {
+            None => Box::new(ShortestPathGraph {
+                graph: g,
+                predecessor_store: Unbounded::new(predecessors, distances),
+                source,
+            }),
+            Some(h) => Box::new(ShortestPathGraph {
+                graph: g,
+                predecessor_store: Bounded::new(predecessors, distances, h),
+                source,
+            }),
+        }
+    }
 
     /// Creates a representation of all shortest paths from the given source
     /// to any other node in the graph.
@@ -142,7 +174,7 @@ where
         g: G,
         source: G::NodeId,
         hops: Option<usize>,
-    ) -> Result<Self, NegativeCycle<G::NodeId>> {
+    ) -> Result<Box<dyn ShortestPathGraphT<G> + 'a>, NegativeCycle<G::NodeId>> {
         bellman_ford(g, source, hops)
     }
 }
@@ -156,7 +188,7 @@ fn bellman_ford<'a, G>(
     g: G,
     source: G::NodeId,
     hops: Option<usize>,
-) -> Result<ShortestPathGraph<'a, G>, NegativeCycle<G::NodeId>>
+) -> Result<Box<dyn ShortestPathGraphT<G>>, NegativeCycle<G::NodeId>>
 where
     G: 'a + NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
     G::NodeId: Ord + Hash,

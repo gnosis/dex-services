@@ -4,18 +4,20 @@ use petgraph::visit::{Data, NodeIndexable, IntoNodeIdentifiers};
 use petgraph::algo::FloatMeasure;
 use std::collections::HashSet;
 use std::hash::Hash;
+use std::marker::PhantomData;
 
 struct UpdatableDistances<G: Data> {
     current: Distances<G>,
     pending: Distances<G>,
 }
 
-pub struct Bounded<G: Data> {
+pub struct Bounded<'a, G: 'a + Data> {
     predecessors_at_step: Vec<PredecessorVec<G>>,
     distances: UpdatableDistances<G>,
+    phantom: PhantomData<&'a G>
 }
 
-impl<G: Data> Bounded<G> 
+impl<'a, G: 'a + Data> Bounded<'a, G> 
 where 
     G::EdgeWeight: FloatMeasure
 {
@@ -29,13 +31,14 @@ where
         Self {
             predecessors_at_step, 
             distances,
+            phantom: PhantomData,
         }
     }
 }
 
-impl<G> PredecessorStoring<G> for Bounded<G> 
+impl<'a, G> PredecessorStoring<G> for Bounded<'a, G> 
 where 
-    G: Data + NodeIndexable + IntoNodeIdentifiers,
+    G: 'a + Data + NodeIndexable + IntoNodeIdentifiers,
     G::NodeId: Ord + Hash,
     G::EdgeWeight: FloatMeasure
 {
