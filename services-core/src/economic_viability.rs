@@ -115,7 +115,7 @@ impl EconomicViabilityComputer {
     async fn gas_price(&self) -> Result<f64> {
         let gas_price = self
             .gas_station
-            .estimate_gas_price()
+            .estimate()
             .await
             .context("failed to get gas price")?;
         Ok(pricegraph::num::u256_to_f64(gas_price))
@@ -225,7 +225,7 @@ mod tests {
 
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station
-            .expect_estimate_gas_price()
+            .expect_estimate()
             .returning(|| Ok((40e9 as u128).into()));
         let subsidy = 10.0f64;
         let min_avg_fee_factor = 1.1f64;
