@@ -3,10 +3,11 @@
 
 use crate::{
     gas_price::GasPriceEstimating,
-    models::solution::{EconomicViabilityInfo, GAS_PER_TRADE},
+    models::solution::{self, EconomicViabilityInfo},
 };
 use anyhow::{anyhow, Context as _, Result};
 use ethcontract::U256;
+use pricegraph::num;
 use std::{num::NonZeroU128, sync::Arc};
 
 arg_enum! {
@@ -158,13 +159,14 @@ impl EconomicViabilityComputing for EconomicViabilityComputer {
 fn min_average_fee(native_token_price: f64, gas_price: f64) -> f64 {
     let owl_per_eth = native_token_price / 1e18;
     let gas_price_in_owl = owl_per_eth * gas_price;
-    GAS_PER_TRADE as f64 * gas_price_in_owl
+    let gas_per_trade = num::u256_to_f64(solution::gas_use(1, false));
+    gas_per_trade * gas_price_in_owl
 }
 
 /// The gas price cap is selected so that submitting solution is still roughly profitable.
 fn gas_price_cap(native_token_price: f64, earned_fee: f64, num_trades: usize) -> f64 {
     let owl_per_eth = native_token_price / 1e18;
-    let gas_use = GAS_PER_TRADE as f64 * (num_trades as f64);
+    let gas_use = num::u256_to_f64(solution::gas_use(num_trades, false));
     earned_fee / (owl_per_eth * gas_use)
 }
 
@@ -206,13 +208,13 @@ mod tests {
     fn computes_min_average_fee() {
         let gas_price = 40e9;
         let native_token_price = 240e18;
-        assert_approx_eq!(min_average_fee(native_token_price, gas_price), 1152e15);
+        assert_approx_eq!(min_average_fee(native_token_price, gas_price), 9.6e17);
     }
 
     #[test]
     fn computes_gas_price_cap() {
-        // 50 owl fee, ~600 gwei gas price cap
-        assert_approx_eq!(gas_price_cap(240e18, 50e18, 3), 578703703703.7037);
+        // 50 owl fee, ~700 gwei gas price cap
+        assert_approx_eq!(gas_price_cap(240e18, 50e18, 3), 694444444444.4445);
     }
 
     #[test]
@@ -237,7 +239,7 @@ mod tests {
 
         assert_eq!(
             economic_viability.min_average_fee().wait().unwrap(),
-            ((1152e15 * min_avg_fee_factor) / subsidy) as u128, // 0.1152 OWL
+            ((9.6e17 * min_avg_fee_factor) / subsidy) as u128, // 0.1152 OWL
         );
 
         let info = EconomicViabilityInfo {
@@ -246,7 +248,7 @@ mod tests {
         };
         assert_eq!(
             economic_viability.max_gas_price(info).wait().unwrap(),
-            U256::from(5787037037037u128)
+            U256::from(6944444444444u128)
         );
     }
 }

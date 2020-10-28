@@ -3,7 +3,7 @@ mod retry;
 use crate::{
     contracts::stablex_contract::{NoopTransactionError, StableXContract},
     gas_price::GasPriceEstimating,
-    models::{BatchId, Solution},
+    models::{solution, BatchId, Solution},
     util::AsyncSleeping,
 };
 
@@ -221,13 +221,14 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
             Err(err) => log::warn!("failed to estimate gas price: {:?}", err),
         }
         let nonce = self.contract.get_transaction_count().await?;
+        let gas_limit = solution::gas_use(solution.executed_orders.len(), true);
         let submit_future = self.retry_with_gas_price_increase.retry(retry::Args {
             batch_index,
             solution: solution.clone(),
             claimed_objective_value,
             gas_price_cap,
             nonce,
-            gas_limit: solution.gas_limit(),
+            gas_limit,
         });
         let cancel_future =
             self.cancel_transaction_after_deadline(batch_index, nonce, gas_price_cap);
