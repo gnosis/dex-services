@@ -151,7 +151,7 @@ where
     let mut shortest_path_graph = ShortestPathGraph::empty(g, source);
 
     // scan up to |V| - 1 times.
-    for _ in 1..=g.node_count() - 1 {
+    for _ in 1..g.node_count() {
         let mut did_update = false;
         for i in g.node_identifiers() {
             for edge in g.edges(i) {
