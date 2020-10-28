@@ -47,17 +47,18 @@ trait PredecessorStoring<G: GraphBase + Data> {
 
 /// Structure that can be used to derive the shorthest path from a source to any
 /// reachable destination in the graph.
-pub struct ShortestPathGraph<'a, G: Data> {
+pub struct ShortestPathGraph<G: Data, P: PredecessorStoring<G>> {
     graph: G,
-    predecessor_store: Box<dyn PredecessorStoring<G> + 'a>,
+    predecessor_store: P,
     source: G::NodeId,
 }
 
-impl<'a, G> ShortestPathGraph<'a, G>
+impl<'a, G, P> ShortestPathGraph<G, P>
 where
     G: 'a + IntoNodeIdentifiers + IntoEdges + NodeIndexable + NodeCount,
     G::NodeId: Ord,
     G::EdgeWeight: FloatMeasure,
+    P: PredecessorStoring<G> + 'a,
 {
     /// Returns the current distance of a node from the source.
     fn distance(&self, node: G::NodeId) -> G::EdgeWeight {
@@ -99,7 +100,7 @@ where
 
         ShortestPathGraph {
             graph: g,
-            predecessor_store: Box::new(Unbounded::new(predecessors, distances)),
+            predecessor_store: Unbounded::new(predecessors, distances),
             source,
         }
     }
@@ -139,14 +140,15 @@ where
 ///
 /// The orginal source can be found here:
 /// https://docs.rs/petgraph/0.5.0/src/petgraph/algo/mod.rs.html#745-792
-fn bellman_ford<'a, G>(
+fn bellman_ford<'a, G, P>(
     g: G,
     source: G::NodeId,
-) -> Result<ShortestPathGraph<'a, G>, NegativeCycle<G::NodeId>>
+) -> Result<ShortestPathGraph<'a, G, P>, NegativeCycle<G::NodeId>>
 where
     G: 'a + NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
     G::NodeId: Ord,
     G::EdgeWeight: FloatMeasure,
+    P: PredecessorStoring<G> + 'a,
 {
     let mut shortest_path_graph = ShortestPathGraph::empty(g, source);
 
