@@ -4,7 +4,7 @@ use anyhow::Result;
 use ethcontract::U256;
 use isahc::http::uri::Uri;
 use pricegraph::num;
-use std::time::Duration;
+use std::{convert::TryInto, time::Duration};
 
 // Gas price estimation with https://www.gasnow.org/ , api at https://taichi.network/#gasnow .
 
@@ -54,13 +54,14 @@ impl GasNow {
 impl GasPriceEstimating for GasNow {
     async fn estimate_with_limits(&self, _gas_limit: U256, time_limit: Duration) -> Result<U256> {
         let response = self.gas_price().await?.data;
-        let points = &[
+        let points: &[(f64, f64)] = &[
             (RAPID.as_secs_f64(), response.rapid),
             (FAST.as_secs_f64(), response.fast),
             (STANDARD.as_secs_f64(), response.standard),
             (SLOW.as_secs_f64(), response.slow),
         ];
-        let result = linear_interpolation::interpolate(time_limit.as_secs_f64(), points);
+        let result =
+            linear_interpolation::interpolate(time_limit.as_secs_f64(), points.try_into()?);
         Ok(num::f64_to_u256(result))
     }
 }
