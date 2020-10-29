@@ -1,7 +1,7 @@
-use super::{Distances, PredecessorVec, PredecessorStoring, nodes_from_predecessors};
 use super::super::path::{NegativeCycle, Path};
-use petgraph::visit::{Data, NodeIndexable, IntoNodeIdentifiers};
+use super::{nodes_from_predecessors, Distances, PredecessorStoring, PredecessorVec};
 use petgraph::algo::FloatMeasure;
+use petgraph::visit::{Data, IntoNodeIdentifiers, NodeIndexable};
 use std::collections::HashSet;
 use std::hash::Hash;
 
@@ -15,9 +15,9 @@ pub struct Bounded<G: Data> {
     distances: UpdatableDistances<G>,
 }
 
-impl<G: Data> Bounded<G> 
-where 
-    G::EdgeWeight: FloatMeasure
+impl<G: Data> Bounded<G>
+where
+    G::EdgeWeight: FloatMeasure,
 {
     pub fn new(predecessors: PredecessorVec<G>, distances: Distances<G>, bound: usize) -> Self {
         let mut predecessors_at_step: Vec<_> = Vec::with_capacity(bound);
@@ -27,17 +27,17 @@ where
             pending: distances,
         };
         Self {
-            predecessors_at_step, 
+            predecessors_at_step,
             distances,
         }
     }
 }
 
-impl<G> PredecessorStoring<G> for Bounded<G> 
-where 
+impl<G> PredecessorStoring<G> for Bounded<G>
+where
     G: Data + NodeIndexable + IntoNodeIdentifiers,
     G::NodeId: Ord + Hash,
-    G::EdgeWeight: FloatMeasure
+    G::EdgeWeight: FloatMeasure,
 {
     fn distance(&self, node_index: usize) -> G::EdgeWeight {
         self.distances.current[node_index]
@@ -49,9 +49,9 @@ where
 
     fn update_predecessor(&mut self, node_index: usize, updated_predecessor: Option<G::NodeId>) {
         self.predecessors_at_step
-                    .last_mut()
-                    .expect("Cannot update uninitialized predecessor vector")[node_index] =
-                    updated_predecessor;
+            .last_mut()
+            .expect("Cannot update uninitialized predecessor vector")[node_index] =
+            updated_predecessor;
     }
 
     fn path_to(&self, source: G::NodeId, dest: G::NodeId, graph: G) -> Option<Path<G::NodeId>> {
@@ -82,7 +82,7 @@ where
         }
     }
 
-    fn connected_nodes(&self, graph: G) -> Vec<G::NodeId>  {
+    fn connected_nodes(&self, graph: G) -> Vec<G::NodeId> {
         self.predecessors_at_step
             .iter()
             .map(|predecessors| nodes_from_predecessors(graph, &predecessors))
@@ -104,9 +104,7 @@ where
         for end_node in graph.node_identifiers() {
             let mut node = end_node;
             for step in (0..steps).rev() {
-                node = if let Some(pred) =
-                    self.predecessors_at_step[step][graph.to_index(node)]
-                {
+                node = if let Some(pred) = self.predecessors_at_step[step][graph.to_index(node)] {
                     if pred == end_node {
                         return Some(end_node);
                     }
@@ -119,13 +117,16 @@ where
         None
     }
 
-    fn find_cycle(&mut self, search_start: G::NodeId, graph: G) -> Option<NegativeCycle<G::NodeId>> {
+    fn find_cycle(
+        &mut self,
+        search_start: G::NodeId,
+        graph: G,
+    ) -> Option<NegativeCycle<G::NodeId>> {
         let steps = self.predecessors_at_step.len();
         let mut cycle = Vec::with_capacity(steps);
         let mut node = search_start;
         for step in (0..steps).rev() {
-            node = if let Some(pred) = self.predecessors_at_step[step][graph.to_index(node)]
-            {
+            node = if let Some(pred) = self.predecessors_at_step[step][graph.to_index(node)] {
                 cycle.push(node);
                 if pred == search_start {
                     cycle.push(search_start);
@@ -143,5 +144,4 @@ where
         }
         panic!("Detected cycle could not be found")
     }
-    
 }

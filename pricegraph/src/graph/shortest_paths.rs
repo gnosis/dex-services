@@ -3,12 +3,12 @@
 //! detected negative cycle on error.
 
 use super::path::{NegativeCycle, Path};
+use bounded::Bounded;
 use petgraph::algo::FloatMeasure;
 use petgraph::visit::{
     Data, EdgeRef, GraphBase, IntoEdges, IntoNodeIdentifiers, NodeCount, NodeIndexable,
 };
 use std::hash::Hash;
-use bounded::Bounded;
 use unbounded::Unbounded;
 
 mod bounded;
@@ -47,7 +47,6 @@ trait PredecessorStoring<G: GraphBase + Data> {
     fn find_cycle(&mut self, search_start: G::NodeId, graph: G)
         -> Option<NegativeCycle<G::NodeId>>;
 }
-
 
 /// Structure that can be used to derive the shorthest path from a source to any
 /// reachable destination in the graph.
@@ -103,7 +102,7 @@ where
 
         let predecessor_store: Box<dyn PredecessorStoring<G>> = match hops {
             None => Box::new(Unbounded::new(predecessors, distances)),
-            Some(h) => Box::new(Bounded::new(predecessors, distances, h))
+            Some(h) => Box::new(Bounded::new(predecessors, distances, h)),
         };
 
         ShortestPathGraph {
@@ -370,18 +369,11 @@ pub mod tests {
         //   |                   ^
         //    \-------3----------/
         // Shortest path from A to D (via B) violates 2 hop bound
-        let graph = Graph::<(), f64>::from_edges(&[
-            (0, 1, 1.0),
-            (1, 2, 1.0),
-            (2, 3, 1.0),
-            (0, 2, 3.0),
-        ]);
+        let graph =
+            Graph::<(), f64>::from_edges(&[(0, 1, 1.0), (1, 2, 1.0), (2, 3, 1.0), (0, 2, 3.0)]);
         let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into(), Some(2)).unwrap();
         let path = shortest_path_graph.path_to(3.into()).unwrap();
-        assert_eq!(
-            path,
-            Path(vec![0.into(), 2.into(), 3.into()])
-        );
+        assert_eq!(path, Path(vec![0.into(), 2.into(), 3.into()]));
     }
 
     #[test]
