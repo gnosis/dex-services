@@ -3,12 +3,12 @@
 //! detected negative cycle on error.
 
 use super::path::{NegativeCycle, Path};
+use bounded::Bounded;
 use petgraph::algo::FloatMeasure;
 use petgraph::visit::{
     Data, EdgeRef, GraphBase, IntoEdges, IntoNodeIdentifiers, NodeCount, NodeIndexable,
 };
 use std::hash::Hash;
-use bounded::Bounded;
 use unbounded::Unbounded;
 
 mod bounded;
@@ -71,7 +71,6 @@ pub trait ShortestPathGraph<G: GraphBase + IntoEdges> {
     fn find_cycle(&mut self) -> Option<NegativeCycle<G::NodeId>>;
 }
 
-
 /// Structure that can be used to derive the shorthest path from a source to any
 /// reachable destination in the graph.
 pub struct ShortestPathGraphImpl<G: Data, P> {
@@ -85,7 +84,7 @@ where
     G: IntoNodeIdentifiers + IntoEdges + NodeIndexable + NodeCount,
     G::NodeId: Ord + Hash,
     G::EdgeWeight: FloatMeasure,
-    P: PredecessorStoring<G>
+    P: PredecessorStoring<G>,
 {
     /// Returns the current distance of a node from the source.
     fn distance(&self, node: G::NodeId) -> G::EdgeWeight {
@@ -138,36 +137,38 @@ where
 /// Shortest paths are well defined if and only if the graph does not
 /// contain any negative weight cycle reachabe from the source. If a
 /// negative weight cycle is detected, it is returned as an error.
-pub fn new_shortest_path_graph<'a, G>(g: G,
+pub fn new_shortest_path_graph<'a, G>(
+    g: G,
     source: G::NodeId,
-    hops: Option<usize>) -> Result<Box<dyn ShortestPathGraph<G> + 'a>, NegativeCycle<G::NodeId>>
-where 
+    hops: Option<usize>,
+) -> Result<Box<dyn ShortestPathGraph<G> + 'a>, NegativeCycle<G::NodeId>>
+where
     G: 'a + IntoNodeIdentifiers + IntoEdges + NodeIndexable + NodeCount,
     G::NodeId: Ord + Hash,
-    G::EdgeWeight: FloatMeasure,    
+    G::EdgeWeight: FloatMeasure,
 {
     let predecessors = vec![None; g.node_bound()];
-        let mut distances = vec![<_>::infinite(); g.node_bound()];
-        distances[g.to_index(source)] = <_>::zero();
+    let mut distances = vec![<_>::infinite(); g.node_bound()];
+    distances[g.to_index(source)] = <_>::zero();
 
-        match hops {
-            None => {
-                let graph = ShortestPathGraphImpl {
-                    graph: g,
-                    predecessor_store: Unbounded::new(predecessors, distances),
-                   source,
-                };
-                Ok(Box::new(bellman_ford(g, hops, graph)?))
-            },
-            Some(h) => {
-                let graph = ShortestPathGraphImpl {
-                    graph: g,
-                    predecessor_store: Bounded::new(predecessors, distances, h),
-                    source,
-                };
-                Ok(Box::new(bellman_ford(g, hops, graph)?))
-            }
+    match hops {
+        None => {
+            let graph = ShortestPathGraphImpl {
+                graph: g,
+                predecessor_store: Unbounded::new(predecessors, distances),
+                source,
+            };
+            Ok(Box::new(bellman_ford(g, hops, graph)?))
         }
+        Some(h) => {
+            let graph = ShortestPathGraphImpl {
+                graph: g,
+                predecessor_store: Bounded::new(predecessors, distances, h),
+                source,
+            };
+            Ok(Box::new(bellman_ford(g, hops, graph)?))
+        }
+    }
 }
 
 /// This implementation follows closely the one that can be found in the
@@ -184,7 +185,7 @@ where
     G: NodeCount + IntoNodeIdentifiers + IntoEdges + NodeIndexable,
     G::NodeId: Ord + Hash,
     G::EdgeWeight: FloatMeasure,
-    P: ShortestPathGraph<G>
+    P: ShortestPathGraph<G>,
 {
     // scan up to |V| - 1 times.
     for _ in 1..=hops.unwrap_or(g.node_count() - 1) {

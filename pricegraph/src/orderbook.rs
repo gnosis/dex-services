@@ -132,7 +132,7 @@ impl Orderbook {
         Subgraphs::new(self.projection.node_indices()).for_each(|token| loop {
             let cycle = match new_shortest_path_graph(&self.projection, token, None) {
                 Ok(shortest_path_graph) => break shortest_path_graph.connected_nodes(),
-                Err(cycle) => cycle
+                Err(cycle) => cycle,
             };
             self.fill_path(&cycle).unwrap_or_else(|| {
                 panic!(
