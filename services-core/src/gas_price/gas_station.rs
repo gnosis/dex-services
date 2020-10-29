@@ -1,4 +1,5 @@
 //! Gnosis Safe gas station `GasPriceEstimating` implementation.
+//! Api documentation at https://safe-relay.gnosis.io/ .
 
 use super::GasPriceEstimating;
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
@@ -63,12 +64,8 @@ impl GnosisSafeGasStation {
 
 #[async_trait::async_trait]
 impl GasPriceEstimating for GnosisSafeGasStation {
-    async fn estimate(&self) -> Result<U256> {
-        Ok(self.gas_prices().await?.fast)
-    }
-
     async fn estimate_with_limits(&self, _gas_limit: U256, _time_limit: Duration) -> Result<U256> {
-        self.estimate().await
+        Ok(self.gas_prices().await?.fast)
     }
 }
 
