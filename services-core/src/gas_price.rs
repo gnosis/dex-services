@@ -1,10 +1,9 @@
 mod eth_node;
 mod ethgasstation;
-mod gas_station;
 mod gasnow;
+mod gnosis_safe;
 mod linear_interpolation;
 
-pub use self::gas_station::GnosisSafeGasStation;
 use crate::{contracts::Web3, http::HttpFactory};
 use anyhow::Result;
 use ethcontract::U256;
@@ -31,8 +30,8 @@ pub async fn create_estimator(
     web3: &Web3,
 ) -> Result<Arc<dyn GasPriceEstimating + Send + Sync>> {
     let network_id = web3.net().version().await?;
-    Ok(match gas_station::api_url_from_network_id(&network_id) {
-        Some(url) => Arc::new(GnosisSafeGasStation::new(http_factory, url)?),
+    Ok(match gnosis_safe::api_url_from_network_id(&network_id) {
+        Some(url) => Arc::new(gnosis_safe::GnosisSafeGasStation::new(http_factory, url)?),
         None => Arc::new(web3.clone()),
     })
 }
