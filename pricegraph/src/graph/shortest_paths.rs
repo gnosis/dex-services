@@ -365,6 +365,26 @@ pub mod tests {
     }
 
     #[test]
+    fn bounded_search_finds_shortest_path_respecting_bound() {
+        //   A -- 1 --> B --1--> C --1-->D
+        //   |                   ^
+        //    \-------3----------/
+        // Shortest path from A to D (via B) violates 2 hop bound
+        let graph = Graph::<(), f64>::from_edges(&[
+            (0, 1, 1.0),
+            (1, 2, 1.0),
+            (2, 3, 1.0),
+            (0, 2, 3.0),
+        ]);
+        let shortest_path_graph = ShortestPathGraph::new(&graph, 0.into(), Some(2)).unwrap();
+        let path = shortest_path_graph.path_to(3.into()).unwrap();
+        assert_eq!(
+            path,
+            Path(vec![0.into(), 2.into(), 3.into()])
+        );
+    }
+
+    #[test]
     fn shortest_path_graph_finds_connected_nodes() {
         //           2 <-1.0-- 3
         //           ∧
