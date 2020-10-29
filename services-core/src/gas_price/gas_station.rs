@@ -1,4 +1,5 @@
 //! Gnosis Safe gas station `GasPriceEstimating` implementation.
+//! Api documentation at https://safe-relay.gnosis.io/ .
 
 use super::GasPriceEstimating;
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
@@ -6,6 +7,7 @@ use anyhow::Result;
 use ethcontract::U256;
 use isahc::http::uri::Uri;
 use serde::Deserialize;
+use std::time::Duration;
 use uint::FromDecStrErr;
 
 /// The default uris at which the gas station api is available under.
@@ -62,8 +64,7 @@ impl GnosisSafeGasStation {
 
 #[async_trait::async_trait]
 impl GasPriceEstimating for GnosisSafeGasStation {
-    /// Retrieves the current gas prices from the gas station.
-    async fn estimate_gas_price(&self) -> Result<U256> {
+    async fn estimate_with_limits(&self, _gas_limit: U256, _time_limit: Duration) -> Result<U256> {
         Ok(self.gas_prices().await?.fast)
     }
 }
@@ -117,7 +118,7 @@ pub mod tests {
     fn real_request() {
         let gas_station =
             GnosisSafeGasStation::new(&HttpFactory::default(), DEFAULT_MAINNET_URI).unwrap();
-        let gas_price = gas_station.estimate_gas_price().wait().unwrap();
+        let gas_price = gas_station.estimate().wait().unwrap();
         println!("{:?}", gas_price);
     }
 }

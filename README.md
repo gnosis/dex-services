@@ -153,9 +153,10 @@ OPTIONS:
             slightly between solution computation and submission [env: ECONOMIC_VIABILITY_MIN_AVG_FEE_FACTOR=]
             [default: 1.1]
         --economic-viability-strategy <economic-viability-strategy>
-            How to calculate the economic viability constraints. `Dynamic` means that current native token price is
-            taken into account while `Static` means that static_min_avg_fee_per_order and static_max_gas_price will
-            always be used [env: ECONOMIC_VIABILITY_STRATEGY=]  [default: Dynamic]  [possible values: Dynamic, Static]
+            How to calculate the economic viability constraints. `Static`: Use fallback_min_avg_fee_per_order and
+            fallback_max_gas_price. `Dynamic`: Use current native token price, gas price and subsidy factor. `Combined`:
+            Use the better (lower min-avg-fee) of the above [env: ECONOMIC_VIABILITY_STRATEGY=]  [default: Dynamic]
+            [possible values: Static, Dynamic, Combined]
         --economic-viability-subsidy-factor <economic-viability-subsidy-factor>
             Subsidy factor used to compute the minimum average fee per order in a solution as well as the gas cap for
             economically viable solution [env: ECONOMIC_VIABILITY_SUBSIDY_FACTOR=]  [default: 10.0]
