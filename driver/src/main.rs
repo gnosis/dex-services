@@ -197,9 +197,10 @@ struct Options {
     #[structopt(long, env = "STATIC_MAX_GAS_PRICE")]
     static_max_gas_price: Option<u128>,
 
-    /// How to calculate the economic viability constraints. `Dynamic` means that current native token price
-    /// is taken into account while `Static` means that static_min_avg_fee_per_order and
-    /// static_max_gas_price will always be used.
+    /// How to calculate the economic viability constraints.
+    /// `Static`: Use fallback_min_avg_fee_per_order and fallback_max_gas_price.
+    /// `Dynamic`: Use current native token price, gas price and subsidy factor.
+    /// `Combined`: Use the better (lower min-avg-fee) of the above.
     #[structopt(
         long,
         env = "ECONOMIC_VIABILITY_STRATEGY",
