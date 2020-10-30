@@ -18,13 +18,13 @@ pub fn transitive_orderbook(c: &mut Criterion) {
     c.bench_with_input(
         BenchmarkId::new("Pricegraph::transitive_orderbook", *DEFAULT_BATCH_ID),
         &(&pricegraph, dai_weth),
-        |b, &(pricegraph, dai_weth)| b.iter(|| pricegraph.transitive_orderbook(dai_weth, None)),
+        |b, &(pricegraph, dai_weth)| b.iter(|| pricegraph.transitive_orderbook(dai_weth, None, None)),
     );
 }
 
 pub fn estimate_limit_price(c: &mut Criterion) {
     let pricegraph = read_default_pricegraph();
-    let dai_weth = TokenPair { buy: 7, sell: 1 };
+    let dai_weth = TokenPair { buy: 7, sell: 1 }.into_unbounded_range();
     let eth = 1e18;
     let volumes = &[0.1 * eth, eth, 10.0 * eth, 100.0 * eth, 1000.0 * eth];
 
@@ -43,7 +43,7 @@ pub fn estimate_limit_price(c: &mut Criterion) {
 
 pub fn order_for_limit_price(c: &mut Criterion) {
     let pricegraph = read_default_pricegraph();
-    let dai_weth = TokenPair { buy: 7, sell: 1 };
+    let dai_weth = TokenPair { buy: 7, sell: 1 }.into_unbounded_range();
     let prices = &[200.0, 190.0, 180.0, 150.0, 100.0];
 
     let mut group = c.benchmark_group("Pricegraph::order_for_limit_price");

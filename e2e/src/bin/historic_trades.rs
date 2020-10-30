@@ -109,7 +109,7 @@ impl OrderMetadata {
             pricegraph::num::u256_to_f64(order.balance).min(order.remaining_sell_amount as _);
         let limit_price = order.price.numerator as f64 / order.price.denominator as f64;
         let estimated_limit_price =
-            pricegraph.estimate_limit_price(order.pair, effective_sell_amount);
+            pricegraph.estimate_limit_price(order.pair.into_unbounded_range(), effective_sell_amount);
 
         // NOTE: Compare the settled exchange rate to the limit price, this is
         // because the limit price must be respected by the actual executed
