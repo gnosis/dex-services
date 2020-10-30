@@ -1,14 +1,14 @@
-use pricegraph::{Pricegraph, TokenPair, TransitiveOrder};
+use pricegraph::{Pricegraph, TokenPairRange, TransitiveOrder};
 
 /// An overlapping order where buy / sell ≈ price and the amounts take into account that the solver
 /// will subtract the rounding buffer from the sell amount.
 pub fn order_at_price_with_rounding_buffer(
-    token_pair: TokenPair,
+    token_pair_range: TokenPairRange,
     limit_price: f64,
     pricegraph: &Pricegraph,
     rounding_buffer: Option<f64>,
 ) -> Option<TransitiveOrder> {
-    let order = pricegraph.order_for_limit_price(token_pair, limit_price)?;
+    let order = pricegraph.order_for_limit_price(token_pair_range, limit_price)?;
 
     let rounding_buffer = match rounding_buffer {
         None => return Some(order),
@@ -44,7 +44,7 @@ pub fn order_at_price_with_rounding_buffer(
         let buy = order_that_user_places.buy;
         log::debug!(
             "unable to fulfill price constraint for token pair {}-{} at price {} using buy amount {} sell amount {}",
-            token_pair.buy, token_pair.sell, limit_price, buy, sell
+            token_pair_range.pair.buy, token_pair_range.pair.sell, limit_price, buy, sell
         );
         Some(TransitiveOrder { sell, buy })
     }
@@ -75,7 +75,7 @@ mod tests {
         let limit_price = 0.5;
         let rounding_buffer = 1000.0;
         let result = order_at_price_with_rounding_buffer(
-            TokenPair { buy: 1, sell: 0 },
+            TokenPair { buy: 1, sell: 0 }.into_unbounded_range(),
             limit_price,
             &pricegraph,
             Some(rounding_buffer),
@@ -109,7 +109,7 @@ mod tests {
         let limit_price = 0.998;
         let rounding_buffer = 1000.0;
         let result = order_at_price_with_rounding_buffer(
-            TokenPair { buy: 1, sell: 0 },
+            TokenPair { buy: 1, sell: 0 }.into_unbounded_range(),
             limit_price,
             &pricegraph,
             Some(rounding_buffer),

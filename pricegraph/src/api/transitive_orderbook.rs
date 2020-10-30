@@ -2,7 +2,7 @@
 //! over a market.
 
 use crate::api::{Market, TransitiveOrder};
-use crate::encoding::TokenPair;
+use crate::encoding::TokenPairRange;
 use crate::num;
 use crate::orderbook::{Orderbook, OverlapError, Ring};
 use crate::{Pricegraph, FEE_FACTOR};
@@ -54,7 +54,7 @@ impl Pricegraph {
     /// # Panics
     ///
     /// This method panics if the spread is zero or negative.
-    pub fn transitive_orderbook(&self, market: Market, spread: Option<f64>) -> TransitiveOrderbook {
+    pub fn transitive_orderbook(&self, market: Market, hops: Option<usize>, spread: Option<f64>) -> TransitiveOrderbook {
         let mut orderbook = self.full_orderbook();
 
         let mut transitive_orderbook = TransitiveOrderbook::default();
@@ -74,11 +74,11 @@ impl Pricegraph {
         debug_assert_eq!(inverse_ring, None);
 
         transitive_orderbook.asks.extend(
-            fill_transitive_orders(orderbook.clone(), market.ask_pair(), spread)
+            fill_transitive_orders(orderbook.clone(), market.ask_pair().into_range(hops), spread)
                 .expect("overlapping orders in reduced orderbook"),
         );
         transitive_orderbook.bids.extend(
-            fill_transitive_orders(orderbook, market.bid_pair(), spread)
+            fill_transitive_orders(orderbook, market.bid_pair().into_range(hops), spread)
                 .expect("overlapping orders in reduced orderbook"),
         );
 
@@ -98,7 +98,7 @@ impl Pricegraph {
     pub fn best_ask_transitive_order(&self, market: Market) -> Option<TransitiveOrder> {
         Some(
             self.reduced_orderbook()
-                .find_optimal_transitive_order(market.ask_pair())?
+                .find_optimal_transitive_order(market.ask_pair().into_unbounded_range())?
                 .as_transitive_order(),
         )
     }
@@ -108,7 +108,7 @@ impl Pricegraph {
     pub fn best_bid_transitive_order(&self, market: Market) -> Option<TransitiveOrder> {
         Some(
             self.reduced_orderbook()
-                .find_optimal_transitive_order(market.bid_pair())?
+                .find_optimal_transitive_order(market.bid_pair().into_unbounded_range())?
                 .as_transitive_order(),
         )
     }
@@ -131,14 +131,14 @@ impl Pricegraph {
 /// This method panics if the spread is zero or negative.
 fn fill_transitive_orders(
     orderbook: Orderbook,
-    pair: TokenPair,
+    pair_range: TokenPairRange,
     spread: Option<f64>,
 ) -> Result<Vec<TransitiveOrder>, OverlapError> {
     if let Some(spread) = spread {
         assert!(spread > 0.0, "invalid spread");
     }
 
-    let mut transitive_orders = orderbook.transitive_orders(pair)?.peekable();
+    let mut transitive_orders = orderbook.transitive_orders(pair_range)?.peekable();
     let max_xrate = spread
         .and_then(|spread| {
             let flow = transitive_orders.peek()?;
@@ -155,14 +155,14 @@ fn fill_transitive_orders(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::encoding::{Element, PriceFraction, Validity};
+    use crate::encoding::{Element, PriceFraction, Validity, TokenPair};
     use crate::test::prelude::*;
     use primitive_types::U256;
 
     #[test]
     fn transitive_orderbook_empty_same_token() {
         let pricegraph = Pricegraph::new(std::iter::empty());
-        let orderbook = pricegraph.transitive_orderbook(Market { base: 0, quote: 0 }, None);
+        let orderbook = pricegraph.transitive_orderbook(Market { base: 0, quote: 0 }, None, None);
         assert!(orderbook.asks.is_empty());
         assert!(orderbook.bids.is_empty());
     }
@@ -181,7 +181,7 @@ mod tests {
             }
         };
 
-        let orderbook = pricegraph.transitive_orderbook(Market { base: 0, quote: 1 }, None);
+        let orderbook = pricegraph.transitive_orderbook(Market { base: 0, quote: 1 },None,  None);
         assert_eq!(orderbook.asks, vec![]);
         assert_eq!(
             orderbook.bids,
@@ -193,7 +193,7 @@ mod tests {
         let bid_price = orderbook.bid_prices().next().unwrap();
         assert_approx_eq!(bid_price.0, 0.5 / FEE_FACTOR);
 
-        let orderbook = pricegraph.transitive_orderbook(Market { base: 1, quote: 0 }, None);
+        let orderbook = pricegraph.transitive_orderbook(Market { base: 1, quote: 0 }, None, None);
         assert_eq!(
             orderbook.asks,
             vec![TransitiveOrder {
@@ -279,7 +279,7 @@ mod tests {
         };
 
         let transitive_orderbook =
-            pricegraph.transitive_orderbook(Market { base: 1, quote: 2 }, None);
+            pricegraph.transitive_orderbook(Market { base: 1, quote: 2 }, None, None);
 
         // Transitive order `2 -> 3 -> 1` buying 2 selling 1
         assert_eq!(transitive_orderbook.asks.len(), 1);
@@ -318,7 +318,7 @@ mod tests {
         };
 
         let transitive_orderbook =
-            pricegraph.transitive_orderbook(Market { base: 0, quote: 1 }, None);
+            pricegraph.transitive_orderbook(Market { base: 0, quote: 1 }, None, None);
 
         // Transitive orders `1 -> 0` buying 1 selling 0
         assert_eq!(transitive_orderbook.asks.len(), 2);
@@ -364,21 +364,21 @@ mod tests {
         };
         let market = Market { base: 1, quote: 2 };
 
-        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, Some(0.5));
+        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, None, Some(0.5));
         assert_eq!(bids.len(), 1);
         assert_approx_eq!(bids[0].buy, 1_000_000.0);
         assert_approx_eq!(bids[0].sell, 1_000_000.0);
 
-        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, Some(1.0));
+        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, None, Some(1.0));
         assert_eq!(bids.len(), 1);
 
         let TransitiveOrderbook { bids, .. } =
-            pricegraph.transitive_orderbook(market, Some((2.0 * FEE_FACTOR) - 1.0));
+            pricegraph.transitive_orderbook(market, None, Some((2.0 * FEE_FACTOR) - 1.0));
         assert_eq!(bids.len(), 2);
         assert_approx_eq!(bids[1].buy, 1_000_000.0);
         assert_approx_eq!(bids[1].sell, 500_000.0 / FEE_FACTOR);
 
-        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, Some(3.0));
+        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, None, Some(3.0));
         assert_eq!(bids.len(), 3);
         assert_approx_eq!(bids[2].buy, 4_000_000.0);
         assert_approx_eq!(bids[2].sell, 1_000_000.0);
@@ -415,7 +415,7 @@ mod tests {
         };
         let market = Market { base: 1, quote: 2 };
 
-        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, None);
+        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, None, None);
         assert_eq!(bids.len(), 3);
 
         assert_approx_eq!(bids[0].buy, 1_000_000.0);
@@ -453,7 +453,7 @@ mod tests {
             }
         };
         let transitive_orderbook =
-            pricegraph.transitive_orderbook(Market { base: 3, quote: 2 }, None);
+            pricegraph.transitive_orderbook(Market { base: 3, quote: 2 }, None, None);
         assert!(transitive_orderbook.asks.is_empty() && transitive_orderbook.bids.is_empty());
     }
 
@@ -473,7 +473,7 @@ mod tests {
         }]);
 
         let transitive_orderbook =
-            pricegraph.transitive_orderbook(Market { base: 1, quote: 0 }, None);
+            pricegraph.transitive_orderbook(Market { base: 1, quote: 0 }, None, None);
 
         // NOTE: Previously, this orderbook would cause an OOM error since it
         // would only be able to reduce a maximum of `u128::MAX` per iteration.

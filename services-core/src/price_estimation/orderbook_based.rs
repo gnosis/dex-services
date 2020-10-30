@@ -40,7 +40,7 @@ impl<T: TokenPriceEstimating> PriceSource for T {
         let result = tokens
             .iter()
             .flat_map(|token| {
-                let price_in_reference = self.estimate_token_price(*token)?;
+                let price_in_reference = self.estimate_token_price(*token, None)?;
                 Some((*token, NonZeroU128::new(price_in_reference as _)?))
             })
             .collect();
@@ -56,12 +56,12 @@ mod inner {
 
     #[cfg_attr(test, mockall::automock)]
     pub trait TokenPriceEstimating: Send + Sync {
-        fn estimate_token_price(&self, token: TokenId) -> Option<f64>;
+        fn estimate_token_price(&self, token: TokenId, hops: Option<usize>) -> Option<f64>;
     }
 
     impl TokenPriceEstimating for Pricegraph {
-        fn estimate_token_price(&self, token: TokenId) -> Option<f64> {
-            let estimate = self.estimate_token_price(token.0)?;
+        fn estimate_token_price(&self, token: TokenId, hops: Option<usize>) -> Option<f64> {
+            let estimate = self.estimate_token_price(token.0, hops)?;
             Some(estimate)
         }
     }
@@ -81,11 +81,11 @@ mod tests {
         let mut pricegraph = MockTokenPriceEstimating::new();
         pricegraph
             .expect_estimate_token_price()
-            .with(eq(TokenId(1)))
+            .with(eq(TokenId(1)), eq(None))
             .return_const(0.5 * ONE_OWL);
         pricegraph
             .expect_estimate_token_price()
-            .with(eq(TokenId(2)))
+            .with(eq(TokenId(2)), eq(None))
             .return_const(2.0 * ONE_OWL);
 
         let result = pricegraph
@@ -105,11 +105,11 @@ mod tests {
         let mut pricegraph = MockTokenPriceEstimating::new();
         pricegraph
             .expect_estimate_token_price()
-            .with(eq(TokenId(1)))
+            .with(eq(TokenId(1)), eq(None))
             .return_const(0.5 * ONE_OWL);
         pricegraph
             .expect_estimate_token_price()
-            .with(eq(TokenId(2)))
+            .with(eq(TokenId(2)), eq(None))
             .return_const(None);
 
         let result = pricegraph

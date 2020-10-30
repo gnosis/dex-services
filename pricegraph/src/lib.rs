@@ -113,7 +113,7 @@ mod tests {
             let pricegraph = Pricegraph::read(raw_orderbook).unwrap();
 
             let order = pricegraph
-                .order_for_sell_amount(dai_weth.bid_pair(), volume)
+                .order_for_sell_amount(dai_weth.bid_pair().into_unbounded_range(), volume)
                 .unwrap();
             println!(
                 "#{}: estimated order for buying {} DAI for {} WETH",
@@ -123,7 +123,7 @@ mod tests {
             );
 
             let TransitiveOrderbook { asks, bids } =
-                pricegraph.transitive_orderbook(dai_weth, Some(spread));
+                pricegraph.transitive_orderbook(dai_weth, None, Some(spread));
             println!(
                 "#{}: DAI-WETH market contains {} ask orders and {} bid orders within a {}% spread:",
                 batch_id,

@@ -1,7 +1,7 @@
 use crate::{
     amounts_at_price, error::RejectionReason, metrics::Metrics, models::*, orderbook::Orderbook,
 };
-use pricegraph::{Market, Pricegraph, TokenPair, TransitiveOrder};
+use pricegraph::{Market, Pricegraph, TokenPairRange, TransitiveOrder};
 use services_core::{
     economic_viability::EconomicViabilityComputing,
     models::TokenId,
@@ -218,7 +218,7 @@ async fn get_markets(
         )
         .await
         .map_err(RejectionReason::InternalError)?
-        .transitive_orderbook(market, None);
+        .transitive_orderbook(market, query.hops, None);
     let result = MarketsResult::from(&transitive_orderbook);
     let result = match query.unit {
         Unit::Atoms => result,
@@ -238,14 +238,17 @@ async fn estimate_buy_amount(
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<Json, Rejection> {
-    let token_pair = get_market(pair, &*token_infos).await?.bid_pair();
+    let token_pair_range = TokenPairRange {
+        pair: get_market(pair, &*token_infos).await?.bid_pair(),
+        hops: query.hops
+    };
     let (sell_amount_in_quote, sell_amount_in_quote_atoms) = match query.unit {
         Unit::Atoms => (
             Amount::Atoms(sell_amount_in_quote as _),
             sell_amount_in_quote,
         ),
         Unit::BaseUnits => {
-            let token_info = get_token_info(token_pair.sell, token_infos.as_ref()).await?;
+            let token_info = get_token_info(token_pair_range.pair.sell, token_infos.as_ref()).await?;
             let amount = Amount::BaseUnits(sell_amount_in_quote);
             (amount, amount.as_atoms(&token_info) as _)
         }
@@ -257,23 +260,23 @@ async fn estimate_buy_amount(
     // This reduced sell amount is what the solver would see after applying the rounding buffer.
     let sell_amount_in_quote_atoms = match query.rounding_buffer {
         RoundingBuffer::Enabled => f64::max(
-            sell_amount_in_quote_atoms - orderbook.rounding_buffer(token_pair).await,
+            sell_amount_in_quote_atoms - orderbook.rounding_buffer(token_pair_range.pair).await,
             0.0,
         ),
         RoundingBuffer::Disabled => sell_amount_in_quote_atoms,
     };
-    let transitive_order = pricegraph.order_for_sell_amount(token_pair, sell_amount_in_quote_atoms);
+    let transitive_order = pricegraph.order_for_sell_amount(token_pair_range, sell_amount_in_quote_atoms);
 
     let mut buy_amount_in_base =
         Amount::Atoms(transitive_order.map(|order| order.buy).unwrap_or_default() as _);
     if query.unit == Unit::BaseUnits {
-        let token_info = get_token_info(token_pair.buy, token_infos.as_ref()).await?;
+        let token_info = get_token_info(token_pair_range.pair.buy, token_infos.as_ref()).await?;
         buy_amount_in_base = buy_amount_in_base.into_base_units(&token_info)
     };
 
     let result = EstimatedOrderResult {
-        base_token_id: token_pair.buy,
-        quote_token_id: token_pair.sell,
+        base_token_id: token_pair_range.pair.buy,
+        quote_token_id: token_pair_range.pair.sell,
         sell_amount_in_quote,
         buy_amount_in_base,
     };
@@ -287,30 +290,33 @@ async fn estimate_amounts_at_price(
     orderbook: Arc<Orderbook>,
     token_infos: Arc<dyn TokenInfoFetching>,
 ) -> Result<Json, Rejection> {
-    let token_pair = get_market(pair, &*token_infos).await?.bid_pair();
+    let token_pair_range = TokenPairRange {
+        pair: get_market(pair, &*token_infos).await?.bid_pair(),
+        hops: query.hops,
+    } ;
     let pricegraph = orderbook
         .pricegraph(query.time, &query.ignore_addresses, query.rounding_buffer)
         .await
         .map_err(RejectionReason::InternalError)?;
     let rounding_buffer = match query.rounding_buffer {
-        RoundingBuffer::Enabled => Some(orderbook.rounding_buffer(token_pair).await),
+        RoundingBuffer::Enabled => Some(orderbook.rounding_buffer(token_pair_range.pair).await),
         RoundingBuffer::Disabled => None,
     };
     let result = match query.unit {
         Unit::Atoms => estimate_amounts_at_price_atoms(
-            token_pair,
+            token_pair_range,
             price_in_quote,
             &pricegraph,
             rounding_buffer,
         ),
         Unit::BaseUnits => {
-            let buy_token_info = get_token_info(token_pair.buy, token_infos.as_ref()).await?;
-            let sell_token_info = get_token_info(token_pair.sell, token_infos.as_ref()).await?;
+            let buy_token_info = get_token_info(token_pair_range.pair.buy, token_infos.as_ref()).await?;
+            let sell_token_info = get_token_info(token_pair_range.pair.sell, token_infos.as_ref()).await?;
             let price_in_quote_atoms = price_in_quote
                 * (sell_token_info.base_unit_in_atoms().get() as f64
                     / buy_token_info.base_unit_in_atoms().get() as f64);
             let mut result = estimate_amounts_at_price_atoms(
-                token_pair,
+                token_pair_range,
                 price_in_quote_atoms,
                 &pricegraph,
                 rounding_buffer,
@@ -327,7 +333,7 @@ async fn estimate_amounts_at_price(
 
 /// Like `estimate_amounts_at_price` but the price is given and returned in atoms.
 fn estimate_amounts_at_price_atoms(
-    token_pair: TokenPair,
+    token_pair_range: TokenPairRange,
     price_in_quote: f64,
     pricegraph: &Pricegraph,
     rounding_buffer: Option<f64>,
@@ -336,7 +342,7 @@ fn estimate_amounts_at_price_atoms(
     // inverse of an exchange rate.
     let limit_price = 1.0 / price_in_quote;
     let order = amounts_at_price::order_at_price_with_rounding_buffer(
-        token_pair,
+        token_pair_range,
         limit_price,
         pricegraph,
         rounding_buffer,
@@ -346,8 +352,8 @@ fn estimate_amounts_at_price_atoms(
         sell: 0.0,
     });
     EstimatedOrderResult {
-        base_token_id: token_pair.buy,
-        quote_token_id: token_pair.sell,
+        base_token_id: token_pair_range.pair.buy,
+        quote_token_id: token_pair_range.pair.sell,
         sell_amount_in_quote: Amount::Atoms(order.sell as _),
         buy_amount_in_base: Amount::Atoms(order.buy as _),
     }
