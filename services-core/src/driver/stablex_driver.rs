@@ -237,8 +237,7 @@ mod tests {
         let mut reader = MockStableXOrderBookReading::default();
         let submitter = MockStableXSolutionSubmitting::default();
         let mut pf = MockPriceFinding::default();
-        let economic_viability =
-            Arc::new(FixedEconomicViabilityComputer::new(Some(0), Some(0.into())));
+        let economic_viability = Arc::new(FixedEconomicViabilityComputer::new(0, 0.into()));
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
@@ -316,8 +315,7 @@ mod tests {
         let mut reader = MockStableXOrderBookReading::default();
         let submitter = MockStableXSolutionSubmitting::default();
         let mut pf = MockPriceFinding::default();
-        let economic_viability =
-            Arc::new(FixedEconomicViabilityComputer::new(Some(0), Some(0.into())));
+        let economic_viability = Arc::new(FixedEconomicViabilityComputer::new(0, 0.into()));
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];
@@ -498,8 +496,7 @@ mod tests {
         let reader = MockStableXOrderBookReading::default();
         let mut submitter = MockStableXSolutionSubmitting::default();
         let pf = MockPriceFinding::default();
-        let economic_viability =
-            Arc::new(FixedEconomicViabilityComputer::new(None, Some(0.into())));
+        let economic_viability = Arc::new(FixedEconomicViabilityComputer::new(0, 0.into()));
         let metrics = StableXMetrics::default();
 
         let orders = vec![create_order_for_test(), create_order_for_test()];

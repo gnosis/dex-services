@@ -13,8 +13,9 @@ const GAS_PER_TRADE: f64 = 120_000.0;
 arg_enum! {
     #[derive(Debug)]
     pub enum EconomicViabilityStrategy {
-        Dynamic,
         Static,
+        Dynamic,
+        Combined,
     }
 }
 
@@ -31,29 +32,31 @@ impl EconomicViabilityStrategy {
         native_token_price: Arc<dyn NativeTokenPricing + Send + Sync>,
         gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
     ) -> Result<Arc<dyn EconomicViabilityComputing>> {
+        let make_dynamic = || {
+            DynamicEconomicViabilityComputer::new(
+                native_token_price,
+                gas_station,
+                subsidy_factor,
+                min_avg_fee_factor,
+            )
+        };
+        let make_fixed = || -> Result<_> {
+            let min_avg_fee =
+                static_min_avg_fee_per_order.ok_or_else(|| anyhow!("no min_avg_fee passed."))?;
+            let max_gas_price =
+                static_max_gas_price.ok_or_else(|| anyhow!("no max_gas_price passed."))?;
+            Ok(FixedEconomicViabilityComputer::new(
+                min_avg_fee,
+                max_gas_price.into(),
+            ))
+        };
         Ok(match self {
-            Self::Dynamic => {
-                if static_max_gas_price.is_some() || static_min_avg_fee_per_order.is_some() {
-                    return Err(anyhow!(
-                        "Got Dynamic strategy but also parameters for Static strategy."
-                    ));
-                }
-                Arc::new(EconomicViabilityComputer::new(
-                    native_token_price,
-                    gas_station,
-                    subsidy_factor,
-                    min_avg_fee_factor,
-                ))
-            }
-            Self::Static => {
-                let min_avg_fee = static_min_avg_fee_per_order
-                    .ok_or_else(|| anyhow!("Static strategy but no min_avg_fee passed."))?;
-                let max_gas_price = static_max_gas_price
-                    .ok_or_else(|| anyhow!("Static strategy but no max_gas_price passed."))?;
-                Arc::new(FixedEconomicViabilityComputer::new(
-                    Some(min_avg_fee),
-                    Some(max_gas_price.into()),
-                ))
+            Self::Dynamic => Arc::new(make_dynamic()),
+            Self::Static => Arc::new(make_fixed()?),
+            Self::Combined => {
+                let fixed = make_fixed()?;
+                let dynamic = Box::new(make_dynamic());
+                Arc::new(CombinedEconomicViabilityComputer { fixed, dynamic })
             }
         })
     }
@@ -79,7 +82,7 @@ pub trait EconomicViabilityComputing: Send + Sync + 'static {
 }
 
 /// Economic viability constraints based on the current gas and native token price.
-pub struct EconomicViabilityComputer {
+pub struct DynamicEconomicViabilityComputer {
     price_oracle: Arc<dyn NativeTokenPricing + Send + Sync>,
     gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
     subsidy_factor: f64,
@@ -89,14 +92,14 @@ pub struct EconomicViabilityComputer {
     min_avg_fee_factor: f64,
 }
 
-impl EconomicViabilityComputer {
+impl DynamicEconomicViabilityComputer {
     pub fn new(
         price_oracle: Arc<dyn NativeTokenPricing + Send + Sync>,
         gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
         subsidy_factor: f64,
         min_avg_fee_factor: f64,
     ) -> Self {
-        EconomicViabilityComputer {
+        DynamicEconomicViabilityComputer {
             price_oracle,
             gas_station,
             subsidy_factor,
@@ -115,7 +118,7 @@ impl EconomicViabilityComputer {
     async fn gas_price(&self) -> Result<f64> {
         let gas_price = self
             .gas_station
-            .estimate_gas_price()
+            .estimate()
             .await
             .context("failed to get gas price")?;
         Ok(pricegraph::num::u256_to_f64(gas_price))
@@ -123,7 +126,7 @@ impl EconomicViabilityComputer {
 }
 
 #[async_trait::async_trait]
-impl EconomicViabilityComputing for EconomicViabilityComputer {
+impl EconomicViabilityComputing for DynamicEconomicViabilityComputer {
     async fn min_average_fee(&self) -> Result<u128> {
         let native_token_price = self.native_token_price_in_owl().await?;
         let gas_price = self.gas_price().await?;
@@ -171,12 +174,12 @@ fn gas_price_cap(native_token_price: f64, earned_fee: f64, num_trades: usize) ->
 
 /// Fixed values.
 pub struct FixedEconomicViabilityComputer {
-    min_average_fee: Option<u128>,
-    max_gas_price: Option<U256>,
+    min_average_fee: u128,
+    max_gas_price: U256,
 }
 
 impl FixedEconomicViabilityComputer {
-    pub fn new(min_average_fee: Option<u128>, max_gas_price: Option<U256>) -> Self {
+    pub fn new(min_average_fee: u128, max_gas_price: U256) -> Self {
         Self {
             min_average_fee,
             max_gas_price,
@@ -187,13 +190,46 @@ impl FixedEconomicViabilityComputer {
 #[async_trait::async_trait]
 impl EconomicViabilityComputing for FixedEconomicViabilityComputer {
     async fn min_average_fee(&self) -> Result<u128> {
-        self.min_average_fee
-            .ok_or_else(|| anyhow!("no min average fee set"))
+        Ok(self.min_average_fee)
     }
 
     async fn max_gas_price(&self, _: EconomicViabilityInfo) -> Result<U256> {
-        self.max_gas_price
-            .ok_or_else(|| anyhow!("no max gas price set"))
+        Ok(self.max_gas_price)
+    }
+}
+
+/// Use whichever computer yields a more trader friendly min average fee.
+pub struct CombinedEconomicViabilityComputer {
+    fixed: FixedEconomicViabilityComputer,
+    // This is always DynamicViabilityComputing but for easier mock testing we use box.
+    dynamic: Box<dyn EconomicViabilityComputing>,
+}
+
+#[async_trait::async_trait]
+impl EconomicViabilityComputing for CombinedEconomicViabilityComputer {
+    async fn min_average_fee(&self) -> Result<u128> {
+        Ok(match self.dynamic.min_average_fee().await {
+            Ok(fee) => fee.min(self.fixed.min_average_fee),
+            Err(err) => {
+                log::warn!("dynamic economic viability failed: {}", err);
+                self.fixed.min_average_fee
+            }
+        })
+    }
+
+    async fn max_gas_price(&self, economic_viability_info: EconomicViabilityInfo) -> Result<U256> {
+        let avg_fee = economic_viability_info.earned_fee
+            / U256::from(economic_viability_info.num_executed_orders);
+        // If the real average fee is worse than the fallback min average fee then we must have used
+        // the dynamic computer for min_average_fee so we use it again for the max gas price.
+        if avg_fee < U256::from(self.fixed.min_average_fee) {
+            self.dynamic.max_gas_price(economic_viability_info).await
+        // If the real fee is >= the fallback min average fee we could have used either computer so
+        // there is nothing wrong with using the fallback max gas price even though it might be
+        // bigger than the dynamic's computer max gas price.
+        } else {
+            Ok(self.fixed.max_gas_price)
+        }
     }
 }
 
@@ -202,6 +238,7 @@ mod tests {
     use super::*;
     use crate::{gas_price::MockGasPriceEstimating, util::FutureWaitExt as _};
     use assert_approx_eq::assert_approx_eq;
+    use futures::FutureExt as _;
 
     #[test]
     fn computes_min_average_fee() {
@@ -225,11 +262,11 @@ mod tests {
 
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station
-            .expect_estimate_gas_price()
+            .expect_estimate()
             .returning(|| Ok((40e9 as u128).into()));
         let subsidy = 10.0f64;
         let min_avg_fee_factor = 1.1f64;
-        let economic_viability = EconomicViabilityComputer::new(
+        let economic_viability = DynamicEconomicViabilityComputer::new(
             Arc::new(price_oracle),
             Arc::new(gas_station),
             subsidy,
@@ -249,5 +286,53 @@ mod tests {
             economic_viability.max_gas_price(info).wait().unwrap(),
             U256::from(5787037037037u128)
         );
+    }
+
+    #[test]
+    fn combined_strategy_picks_min_min_average_fee() {
+        for (fixed_fee, dynamic_fee, expected_fee) in &[(5, 10, 5), (5, 1, 1)] {
+            let fixed = FixedEconomicViabilityComputer::new(*fixed_fee, 0.into());
+            let mut dynamic = MockEconomicViabilityComputing::new();
+            dynamic
+                .expect_min_average_fee()
+                .times(1)
+                .returning(move || Ok(*dynamic_fee));
+            let combined = CombinedEconomicViabilityComputer {
+                fixed,
+                dynamic: Box::new(dynamic),
+            };
+            let result = combined.min_average_fee().now_or_never().unwrap().unwrap();
+            assert_eq!(result, *expected_fee);
+        }
+    }
+
+    #[test]
+    fn combined_strategy_picks_correct_max_gas_price() {
+        let fixed_gas = U256::from(1);
+        let fixed_fee = 15u128;
+        let dynamic_gas = U256::from(2);
+        let fixed = FixedEconomicViabilityComputer::new(fixed_fee, fixed_gas);
+        let mut dynamic = MockEconomicViabilityComputing::new();
+        dynamic
+            .expect_max_gas_price()
+            .returning(move |_| Ok(dynamic_gas));
+        let combined = CombinedEconomicViabilityComputer {
+            fixed,
+            dynamic: Box::new(dynamic),
+        };
+        // In the first run the average fee of the solution is >= the fixed_fee so the fixed gas
+        // price should be chosen and in the second run < so the dynamic should be chosen.
+        for (earned_fee, expected_gas) in &[(15, 1), (14, 2)] {
+            let info = EconomicViabilityInfo {
+                num_executed_orders: 1,
+                earned_fee: U256::from(*earned_fee),
+            };
+            let result = combined
+                .max_gas_price(info)
+                .now_or_never()
+                .unwrap()
+                .unwrap();
+            assert_eq!(result, U256::from(*expected_gas));
+        }
     }
 }

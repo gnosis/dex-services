@@ -107,7 +107,7 @@ where
 
         ShortestPathGraph {
             graph: g,
-            predecessor_store,
+            predecessor_store: Box::new(Unbounded::new(predecessors, distances)),
             source,
         }
     }

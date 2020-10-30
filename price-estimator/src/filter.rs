@@ -415,7 +415,7 @@ mod tests {
             TokenId(1),
         ));
         let metrics = Arc::new(Metrics::new(&prometheus::Registry::new()).unwrap());
-        let economic_viability = Arc::new(FixedEconomicViabilityComputer::new(None, None));
+        let economic_viability = Arc::new(FixedEconomicViabilityComputer::new(0, 0.into()));
         all(orderbook, token_info, metrics, economic_viability)
     }
 

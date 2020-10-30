@@ -1,17 +1,28 @@
 mod eth_node;
+mod ethgasstation;
 mod gas_station;
+mod gasnow;
+mod linear_interpolation;
 
 pub use self::gas_station::GnosisSafeGasStation;
 use crate::{contracts::Web3, http::HttpFactory};
 use anyhow::Result;
 use ethcontract::U256;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
+
+const DEFAULT_GAS_LIMIT: u32 = 21000;
+const DEFAULT_TIME_LIMIT: Duration = Duration::from_secs(30);
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
-pub trait GasPriceEstimating {
-    /// Retrieves gas prices from the Gnosis Safe Relay api.
-    async fn estimate_gas_price(&self) -> Result<U256>;
+pub trait GasPriceEstimating: Send + Sync {
+    /// Estimate the gas price for a transaction to be mined "quickly".
+    async fn estimate(&self) -> Result<U256> {
+        self.estimate_with_limits(DEFAULT_GAS_LIMIT.into(), DEFAULT_TIME_LIMIT)
+            .await
+    }
+    /// Estimate the gas price for a transaction that uses <gas> to be mined within <time_limit>.
+    async fn estimate_with_limits(&self, gas_limit: U256, time_limit: Duration) -> Result<U256>;
 }
 
 /// Creates the default gas price estimator for the given network.
