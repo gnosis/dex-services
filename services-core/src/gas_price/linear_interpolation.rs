@@ -1,11 +1,35 @@
+use anyhow::{anyhow, Error};
+use std::convert::TryFrom;
+
+/// Not empty and contains unique x values sorted in ascending order.
+#[derive(Copy, Clone, Debug)]
+pub struct Points<'a>(&'a [(f64, f64)]);
+
+impl<'a> TryFrom<&'a [(f64, f64)]> for Points<'a> {
+    type Error = Error;
+
+    fn try_from(points: &'a [(f64, f64)]) -> Result<Self, Self::Error> {
+        let is_finite = points
+            .iter()
+            .all(|point| point.0.is_finite() && point.1.is_finite());
+        let is_sorted_and_unique = points.windows(2).all(|window| window[0].0 < window[1].0);
+        if points.is_empty() {
+            Err(anyhow!("points is empty"))
+        } else if !is_finite {
+            Err(anyhow!("points contains non finite value"))
+        } else if !is_sorted_and_unique {
+            Err(anyhow!("points is not sorted an unique"))
+        } else {
+            Ok(Self(points))
+        }
+    }
+}
+
 /// Linearly interpolate `value` between `points`.
 ///
-/// `points` must not be empty and contain unique x values sorted in ascending order.
 /// If `value` is smaller than the first point or larger than the last it is clamped.
-pub fn interpolate(value: f64, points: &[(f64, f64)]) -> f64 {
-    assert!(!points.is_empty());
-    assert!(points.windows(2).all(|window| window[0].0 < window[1].0));
-
+pub fn interpolate(value: f64, points: Points) -> f64 {
+    let points = points.0;
     if value < points[0].0 {
         points[0].1
     } else if let Some(window) = points
@@ -27,7 +51,7 @@ mod tests {
 
     #[test]
     fn interpolate_() {
-        let points = &[(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)];
+        let points = Points::try_from([(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)].as_ref()).unwrap();
         assert_approx_eq!(interpolate(0.5, points), 1.0);
         assert_approx_eq!(interpolate(1.0, points), 1.0);
         assert_approx_eq!(interpolate(1.5, points), 1.5);
@@ -39,7 +63,7 @@ mod tests {
 
     #[test]
     fn interpolate_works_with_single_point() {
-        let points = &[(1.0, 1.0)];
+        let points = Points::try_from([(1.0, 1.0)].as_ref()).unwrap();
         assert_approx_eq!(interpolate(0.5, points), 1.0);
         assert_approx_eq!(interpolate(1.0, points), 1.0);
         assert_approx_eq!(interpolate(1.5, points), 1.0);
@@ -47,7 +71,7 @@ mod tests {
 
     #[test]
     fn interpolate_works_with_varying_x_and_y_deltas() {
-        let points = &[(0.0, 1.0), (1.0, 0.0), (3.0, 1.0)];
+        let points = Points::try_from([(0.0, 1.0), (1.0, 0.0), (3.0, 1.0)].as_ref()).unwrap();
         assert_approx_eq!(interpolate(0.0, points), 1.0);
         assert_approx_eq!(interpolate(0.4, points), 0.6);
         assert_approx_eq!(interpolate(0.5, points), 0.5);
@@ -57,5 +81,26 @@ mod tests {
         assert_approx_eq!(interpolate(2.0, points), 0.5);
         assert_approx_eq!(interpolate(2.5, points), 0.75);
         assert_approx_eq!(interpolate(3.0, points), 1.0);
+    }
+
+    #[test]
+    fn points_must_not_be_empty() {
+        assert!(Points::try_from([].as_ref()).is_err());
+    }
+
+    #[test]
+    fn points_must_not_be_nan() {
+        assert!(Points::try_from([(f64::NAN, 0.0)].as_ref()).is_err());
+        assert!(Points::try_from([(0.0, f64::NAN)].as_ref()).is_err());
+    }
+
+    #[test]
+    fn points_must_be_sorted() {
+        assert!(Points::try_from([(1.0, 0.0), (0.0, 0.0)].as_ref()).is_err());
+    }
+
+    #[test]
+    fn points_must_be_unique() {
+        assert!(Points::try_from([(0.0, 0.0), (0.0, 1.0)].as_ref()).is_err());
     }
 }
