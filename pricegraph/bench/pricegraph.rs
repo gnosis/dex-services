@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use pricegraph::{Market, Pricegraph, TokenPair};
-use pricegraph_data::{DEFAULT_BATCH_ID, DEFAULT_ORDERBOOK};
+use pricegraph_data::{DEFAULT_ORDERBOOK};
 use std::time::Duration;
 
 fn read_default_pricegraph() -> Pricegraph {
@@ -14,14 +14,19 @@ pub fn read(c: &mut Criterion) {
 pub fn transitive_orderbook(c: &mut Criterion) {
     let pricegraph = read_default_pricegraph();
     let dai_weth = Market { base: 7, quote: 1 };
+    let hops = &[None, Some(1), Some(2), Some(5), Some(10), Some(30)];
 
-    c.bench_with_input(
-        BenchmarkId::new("Pricegraph::transitive_orderbook", *DEFAULT_BATCH_ID),
-        &(&pricegraph, dai_weth),
-        |b, &(pricegraph, dai_weth)| {
-            b.iter(|| pricegraph.transitive_orderbook(dai_weth, None, None))
-        },
-    );
+    let mut group = c.benchmark_group("Pricegraph::transitive_orderbook_with_hops");
+    for hops in hops {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(format!("{:?}", hops)),
+            &(&pricegraph, dai_weth, hops),
+            |b, &(pricegraph, dai_weth, hops)| {
+                b.iter(|| pricegraph.transitive_orderbook(dai_weth, *hops, None))
+            },
+        );
+    }
+    group.finish();
 }
 
 pub fn estimate_limit_price(c: &mut Criterion) {
