@@ -1,4 +1,5 @@
 mod eth_node;
+mod ethgasstation;
 mod gas_station;
 mod gasnow;
 mod linear_interpolation;
