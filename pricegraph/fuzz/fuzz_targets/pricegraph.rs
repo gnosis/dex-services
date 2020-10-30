@@ -12,8 +12,15 @@ const MAX_TOKEN_ID: u16 = 16;
 
 #[derive(Arbitrary, Debug)]
 enum Operation {
-    OrderForSellAmount { pair_range: TokenPairRange, sell_amount: f64 },
-    TransitiveOrderbook { market: Market, hops: Option<usize>, spread: Option<f64> },
+    OrderForSellAmount {
+        pair_range: TokenPairRange,
+        sell_amount: f64,
+    },
+    TransitiveOrderbook {
+        market: Market,
+        hops: Option<usize>,
+        spread: Option<f64>,
+    },
 }
 
 #[derive(Arbitrary, Debug)]
@@ -36,10 +43,17 @@ fuzz_target!(|arguments: Arguments| {
 
     let pricegraph = Pricegraph::new(arguments.elements);
     match arguments.operation {
-        Operation::OrderForSellAmount { pair_range, sell_amount } => {
+        Operation::OrderForSellAmount {
+            pair_range,
+            sell_amount,
+        } => {
             pricegraph.order_for_sell_amount(pair_range, sell_amount);
         }
-        Operation::TransitiveOrderbook { market, hops, spread } => {
+        Operation::TransitiveOrderbook {
+            market,
+            hops,
+            spread,
+        } => {
             if let Some(spread) = spread {
                 if !spread.is_finite() || spread <= 0.0 {
                     return;

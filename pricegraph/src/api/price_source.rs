@@ -29,10 +29,7 @@ impl Pricegraph {
             buy: token,
             sell: FEE_TOKEN,
         };
-        let range = TokenPairRange {
-            pair,
-            hops
-        };
+        let range = TokenPairRange { pair, hops };
 
         let price_in_token = self.estimate_limit_price(range, OWL_BASE_UNIT)?;
         let price_in_reference = 1.0 / price_in_token;
@@ -55,7 +52,10 @@ mod tests {
             orders {}
         };
 
-        assert_approx_eq!(pricegraph.estimate_token_price(0, None).unwrap(), OWL_BASE_UNIT);
+        assert_approx_eq!(
+            pricegraph.estimate_token_price(0, None).unwrap(),
+            OWL_BASE_UNIT
+        );
     }
 
     #[test]

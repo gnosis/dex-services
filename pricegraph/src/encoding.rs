@@ -42,10 +42,7 @@ impl TokenPair {
     }
 
     pub fn into_range(self, hops: Option<usize>) -> TokenPairRange {
-        TokenPairRange {
-            pair: self,
-            hops,
-        }
+        TokenPairRange { pair: self, hops }
     }
 }
 

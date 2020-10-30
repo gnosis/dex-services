@@ -240,7 +240,7 @@ async fn estimate_buy_amount(
 ) -> Result<Json, Rejection> {
     let token_pair_range = TokenPairRange {
         pair: get_market(pair, &*token_infos).await?.bid_pair(),
-        hops: query.hops
+        hops: query.hops,
     };
     let (sell_amount_in_quote, sell_amount_in_quote_atoms) = match query.unit {
         Unit::Atoms => (
@@ -248,7 +248,8 @@ async fn estimate_buy_amount(
             sell_amount_in_quote,
         ),
         Unit::BaseUnits => {
-            let token_info = get_token_info(token_pair_range.pair.sell, token_infos.as_ref()).await?;
+            let token_info =
+                get_token_info(token_pair_range.pair.sell, token_infos.as_ref()).await?;
             let amount = Amount::BaseUnits(sell_amount_in_quote);
             (amount, amount.as_atoms(&token_info) as _)
         }
@@ -265,7 +266,8 @@ async fn estimate_buy_amount(
         ),
         RoundingBuffer::Disabled => sell_amount_in_quote_atoms,
     };
-    let transitive_order = pricegraph.order_for_sell_amount(token_pair_range, sell_amount_in_quote_atoms);
+    let transitive_order =
+        pricegraph.order_for_sell_amount(token_pair_range, sell_amount_in_quote_atoms);
 
     let mut buy_amount_in_base =
         Amount::Atoms(transitive_order.map(|order| order.buy).unwrap_or_default() as _);
@@ -293,7 +295,7 @@ async fn estimate_amounts_at_price(
     let token_pair_range = TokenPairRange {
         pair: get_market(pair, &*token_infos).await?.bid_pair(),
         hops: query.hops,
-    } ;
+    };
     let pricegraph = orderbook
         .pricegraph(query.time, &query.ignore_addresses, query.rounding_buffer)
         .await
@@ -310,8 +312,10 @@ async fn estimate_amounts_at_price(
             rounding_buffer,
         ),
         Unit::BaseUnits => {
-            let buy_token_info = get_token_info(token_pair_range.pair.buy, token_infos.as_ref()).await?;
-            let sell_token_info = get_token_info(token_pair_range.pair.sell, token_infos.as_ref()).await?;
+            let buy_token_info =
+                get_token_info(token_pair_range.pair.buy, token_infos.as_ref()).await?;
+            let sell_token_info =
+                get_token_info(token_pair_range.pair.sell, token_infos.as_ref()).await?;
             let price_in_quote_atoms = price_in_quote
                 * (sell_token_info.base_unit_in_atoms().get() as f64
                     / buy_token_info.base_unit_in_atoms().get() as f64);

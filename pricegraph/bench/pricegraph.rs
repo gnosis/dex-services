@@ -18,7 +18,9 @@ pub fn transitive_orderbook(c: &mut Criterion) {
     c.bench_with_input(
         BenchmarkId::new("Pricegraph::transitive_orderbook", *DEFAULT_BATCH_ID),
         &(&pricegraph, dai_weth),
-        |b, &(pricegraph, dai_weth)| b.iter(|| pricegraph.transitive_orderbook(dai_weth, None, None)),
+        |b, &(pricegraph, dai_weth)| {
+            b.iter(|| pricegraph.transitive_orderbook(dai_weth, None, None))
+        },
     );
 }
 

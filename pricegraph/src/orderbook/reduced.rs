@@ -26,7 +26,10 @@ impl ReducedOrderbook {
     ///
     /// This is a convenience method for:
     /// `orderbook.transtive_orders().filter(|flow| !flow.is_dust_trade())`.
-    pub fn significant_transitive_orders(self, pair_range: TokenPairRange) -> impl Iterator<Item = Flow> {
+    pub fn significant_transitive_orders(
+        self,
+        pair_range: TokenPairRange,
+    ) -> impl Iterator<Item = Flow> {
         self.transitive_orders(pair_range)
             .filter(|flow| !flow.is_dust_trade())
     }

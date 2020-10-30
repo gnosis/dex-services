@@ -14,7 +14,11 @@ impl Pricegraph {
     ///
     /// Note that this price is in exchange format, that is, it is expressed as
     /// the ratio between buy and sell amounts, with implicit fees.
-    pub fn estimate_limit_price(&self, pair_range: TokenPairRange, max_sell_amount: f64) -> Option<f64> {
+    pub fn estimate_limit_price(
+        &self,
+        pair_range: TokenPairRange,
+        max_sell_amount: f64,
+    ) -> Option<f64> {
         if !num::is_strictly_positive_and_finite(max_sell_amount)
             || num::is_dust_amount(max_sell_amount as u128)
         {
@@ -198,39 +202,57 @@ mod tests {
 
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 2, sell: 1 }.into_unbounded_range(), 500_000.0)
+                .estimate_limit_price(
+                    TokenPair { buy: 2, sell: 1 }.into_unbounded_range(),
+                    500_000.0
+                )
                 .unwrap(),
             99.0 / FEE_FACTOR.powi(2)
         );
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 1, sell: 2 }.into_unbounded_range(), 50_000_000.0)
+                .estimate_limit_price(
+                    TokenPair { buy: 1, sell: 2 }.into_unbounded_range(),
+                    50_000_000.0
+                )
                 .unwrap(),
             1.0 / (101.0 * FEE_FACTOR.powi(2))
         );
 
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 2, sell: 1 }.into_unbounded_range(), 1_500_000.0)
+                .estimate_limit_price(
+                    TokenPair { buy: 2, sell: 1 }.into_unbounded_range(),
+                    1_500_000.0
+                )
                 .unwrap(),
             95.0 / FEE_FACTOR.powi(2)
         );
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 1, sell: 2 }.into_unbounded_range(), 150_000_000.0)
+                .estimate_limit_price(
+                    TokenPair { buy: 1, sell: 2 }.into_unbounded_range(),
+                    150_000_000.0
+                )
                 .unwrap(),
             1.0 / (105.0 * FEE_FACTOR.powi(2))
         );
 
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 2, sell: 1 }.into_unbounded_range(), 2_500_000.0)
+                .estimate_limit_price(
+                    TokenPair { buy: 2, sell: 1 }.into_unbounded_range(),
+                    2_500_000.0
+                )
                 .unwrap(),
             90.0 / FEE_FACTOR.powi(2)
         );
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 1, sell: 2 }.into_unbounded_range(), 250_000_000.0)
+                .estimate_limit_price(
+                    TokenPair { buy: 1, sell: 2 }.into_unbounded_range(),
+                    250_000_000.0
+                )
                 .unwrap(),
             1.0 / (110.0 * FEE_FACTOR.powi(2))
         );
@@ -263,7 +285,10 @@ mod tests {
         // would receive at most `100_000_000 / FEE_FACTOR` of token 2.
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 2, sell: 1 }.into_unbounded_range(), 200_000_000.0)
+                .estimate_limit_price(
+                    TokenPair { buy: 2, sell: 1 }.into_unbounded_range(),
+                    200_000_000.0
+                )
                 .unwrap(),
             0.5 / FEE_FACTOR
         );
@@ -274,7 +299,10 @@ mod tests {
         // order at `0.01` price.
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }.into_unbounded_range(), 2_000_000.0)
+                .estimate_limit_price(
+                    TokenPair { buy: 4, sell: 3 }.into_unbounded_range(),
+                    2_000_000.0
+                )
                 .unwrap(),
             0.5 / FEE_FACTOR
         );
@@ -283,13 +311,19 @@ mod tests {
         // from the second 3->4 order at the `100:1` limit price.
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }.into_unbounded_range(), 101_000_000.0 * FEE_FACTOR)
+                .estimate_limit_price(
+                    TokenPair { buy: 4, sell: 3 }.into_unbounded_range(),
+                    101_000_000.0 * FEE_FACTOR
+                )
                 .unwrap(),
             0.01 / FEE_FACTOR.powi(2)
         );
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }.into_unbounded_range(), 200_000_000.0 * FEE_FACTOR)
+                .estimate_limit_price(
+                    TokenPair { buy: 4, sell: 3 }.into_unbounded_range(),
+                    200_000_000.0 * FEE_FACTOR
+                )
                 .unwrap(),
             0.01 / FEE_FACTOR.powi(2)
         );
@@ -298,7 +332,10 @@ mod tests {
         // `2_000_000 / FEE_FACTOR`.
         assert_approx_eq!(
             pricegraph
-                .estimate_limit_price(TokenPair { buy: 4, sell: 3 }.into_unbounded_range(), 400_000_000.0)
+                .estimate_limit_price(
+                    TokenPair { buy: 4, sell: 3 }.into_unbounded_range(),
+                    400_000_000.0
+                )
                 .unwrap(),
             0.005 / FEE_FACTOR
         );
@@ -326,7 +363,10 @@ mod tests {
         // NOTE: Partially use liquidity provided by the first order.
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }.into_unbounded_range(), 500_000.0)
+                .order_for_sell_amount(
+                    TokenPair { buy: 2, sell: 1 }.into_unbounded_range(),
+                    500_000.0
+                )
                 .unwrap()
                 .buy,
             50_000_000.0 / FEE_FACTOR.powi(2)
@@ -336,7 +376,10 @@ mod tests {
         // can send at most `100_000_000 / FEE_FACTOR` because of fees.
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }.into_unbounded_range(), 1_000_000.0 * FEE_FACTOR)
+                .order_for_sell_amount(
+                    TokenPair { buy: 2, sell: 1 }.into_unbounded_range(),
+                    1_000_000.0 * FEE_FACTOR
+                )
                 .unwrap()
                 .buy,
             100_000_000.0 / FEE_FACTOR
@@ -357,14 +400,20 @@ mod tests {
         );
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }.into_unbounded_range(), 1_500_000.0)
+                .order_for_sell_amount(
+                    TokenPair { buy: 2, sell: 1 }.into_unbounded_range(),
+                    1_500_000.0
+                )
                 .unwrap()
                 .buy,
             100_000_000.0 / FEE_FACTOR
         );
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }.into_unbounded_range(), 2_000_000.0 * FEE_FACTOR)
+                .order_for_sell_amount(
+                    TokenPair { buy: 2, sell: 1 }.into_unbounded_range(),
+                    2_000_000.0 * FEE_FACTOR
+                )
                 .unwrap()
                 .buy,
             100_000_000.0 / FEE_FACTOR
@@ -373,7 +422,10 @@ mod tests {
         // NOTE: Partially use liquidity from the first and second orders.
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }.into_unbounded_range(), 3_000_000.0 * FEE_FACTOR)
+                .order_for_sell_amount(
+                    TokenPair { buy: 2, sell: 1 }.into_unbounded_range(),
+                    3_000_000.0 * FEE_FACTOR
+                )
                 .unwrap()
                 .buy,
             150_000_000.0 / FEE_FACTOR
@@ -384,14 +436,20 @@ mod tests {
         // third order's limit price).
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }.into_unbounded_range(), 4_000_000.0 * FEE_FACTOR)
+                .order_for_sell_amount(
+                    TokenPair { buy: 2, sell: 1 }.into_unbounded_range(),
+                    4_000_000.0 * FEE_FACTOR
+                )
                 .unwrap()
                 .buy,
             200_000_000.0 / FEE_FACTOR
         );
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }.into_unbounded_range(), 8_000_000.0 * FEE_FACTOR)
+                .order_for_sell_amount(
+                    TokenPair { buy: 2, sell: 1 }.into_unbounded_range(),
+                    8_000_000.0 * FEE_FACTOR
+                )
                 .unwrap()
                 .buy,
             200_000_000.0 / FEE_FACTOR
@@ -400,7 +458,10 @@ mod tests {
         // NOTE: Partially use liquidity from all orders.
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }.into_unbounded_range(), 10_000_000.0 * FEE_FACTOR)
+                .order_for_sell_amount(
+                    TokenPair { buy: 2, sell: 1 }.into_unbounded_range(),
+                    10_000_000.0 * FEE_FACTOR
+                )
                 .unwrap()
                 .buy,
             250_000_000.0 / FEE_FACTOR
@@ -409,7 +470,10 @@ mod tests {
         // NOTE: Exactly use all liquidity from all orders.
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }.into_unbounded_range(), 12_000_000.0 * FEE_FACTOR)
+                .order_for_sell_amount(
+                    TokenPair { buy: 2, sell: 1 }.into_unbounded_range(),
+                    12_000_000.0 * FEE_FACTOR
+                )
                 .unwrap()
                 .buy,
             300_000_000.0 / FEE_FACTOR
@@ -420,7 +484,10 @@ mod tests {
         // the total liquidity in the orderbook.
         assert_approx_eq!(
             pricegraph
-                .order_for_sell_amount(TokenPair { buy: 2, sell: 1 }.into_unbounded_range(), 100_000_000.0)
+                .order_for_sell_amount(
+                    TokenPair { buy: 2, sell: 1 }.into_unbounded_range(),
+                    100_000_000.0
+                )
                 .unwrap()
                 .buy,
             300_000_000.0 / FEE_FACTOR
@@ -444,17 +511,23 @@ mod tests {
 
         // NOTE: Make sure that the pricegraph instance returns estimates for
         // valid amounts for the token pair.
-        assert!(pricegraph.estimate_limit_price(pair_range, 1_000_000.0).is_some());
+        assert!(pricegraph
+            .estimate_limit_price(pair_range, 1_000_000.0)
+            .is_some());
 
         for invalid_amount in &[-42.0, -0.0, 0.0, f64::INFINITY, f64::NEG_INFINITY, f64::NAN] {
-            assert_eq!(pricegraph.estimate_limit_price(pair_range, *invalid_amount), None);
+            assert_eq!(
+                pricegraph.estimate_limit_price(pair_range, *invalid_amount),
+                None
+            );
         }
     }
 
     #[test]
     fn order_for_limit_returns_none() {
         let pricegraph = Pricegraph::new(std::iter::empty());
-        let result = pricegraph.order_for_limit_price(TokenPair { buy: 0, sell: 1 }.into_unbounded_range(), 1.0);
+        let result = pricegraph
+            .order_for_limit_price(TokenPair { buy: 0, sell: 1 }.into_unbounded_range(), 1.0);
         assert_eq!(result, None);
     }
 
@@ -486,11 +559,17 @@ mod tests {
         let order = pricegraph
             // NOTE: 1 for 1.001 is not enough to match any volume because
             // fees need to be applied twice!
-            .order_for_limit_price(TokenPair { buy: 2, sell: 1 }.into_unbounded_range(), 1.0 / FEE_FACTOR);
+            .order_for_limit_price(
+                TokenPair { buy: 2, sell: 1 }.into_unbounded_range(),
+                1.0 / FEE_FACTOR,
+            );
         assert_eq!(order, None);
 
         let TransitiveOrder { buy, sell } = pricegraph
-            .order_for_limit_price(TokenPair { buy: 2, sell: 1 }.into_unbounded_range(), 1.0 / FEE_FACTOR.powi(2))
+            .order_for_limit_price(
+                TokenPair { buy: 2, sell: 1 }.into_unbounded_range(),
+                1.0 / FEE_FACTOR.powi(2),
+            )
             .unwrap();
         assert_approx_eq!(buy, 1_000_000.0);
         assert_approx_eq!(sell, 1_000_000.0 * FEE_FACTOR);
@@ -502,7 +581,10 @@ mod tests {
         assert_approx_eq!(sell, 3_000_000.0 * FEE_FACTOR);
 
         let TransitiveOrder { buy, sell } = pricegraph
-            .order_for_limit_price(TokenPair { buy: 2, sell: 1 }.into_unbounded_range(), 0.25 / FEE_FACTOR.powi(2))
+            .order_for_limit_price(
+                TokenPair { buy: 2, sell: 1 }.into_unbounded_range(),
+                0.25 / FEE_FACTOR.powi(2),
+            )
             .unwrap();
         assert_approx_eq!(buy, 3_000_000.0);
         assert_approx_eq!(sell, 7_000_000.0 * FEE_FACTOR);
@@ -568,21 +650,33 @@ mod tests {
 
         // Token 3 is not part of the orderbook.
         assert_eq!(
-            pricegraph.estimate_limit_price(TokenPair { buy: 1, sell: 3 }.into_unbounded_range(), 500_000.0),
+            pricegraph.estimate_limit_price(
+                TokenPair { buy: 1, sell: 3 }.into_unbounded_range(),
+                500_000.0
+            ),
             None,
         );
         // Tokens 4 and 1 are not connected.
         assert_eq!(
-            pricegraph.estimate_limit_price(TokenPair { buy: 4, sell: 1 }.into_unbounded_range(), 500_000.0),
+            pricegraph.estimate_limit_price(
+                TokenPair { buy: 4, sell: 1 }.into_unbounded_range(),
+                500_000.0
+            ),
             None,
         );
         // Tokens 5 and 42 are out of bounds.
         assert_eq!(
-            pricegraph.estimate_limit_price(TokenPair { buy: 5, sell: 1 }.into_unbounded_range(), 500_000.0),
+            pricegraph.estimate_limit_price(
+                TokenPair { buy: 5, sell: 1 }.into_unbounded_range(),
+                500_000.0
+            ),
             None,
         );
         assert_eq!(
-            pricegraph.estimate_limit_price(TokenPair { buy: 2, sell: 42 }.into_unbounded_range(), 500_000.0),
+            pricegraph.estimate_limit_price(
+                TokenPair { buy: 2, sell: 42 }.into_unbounded_range(),
+                500_000.0
+            ),
             None,
         );
     }
@@ -664,25 +758,37 @@ mod tests {
 
         // NOTE: This would trade ~10_000 -> ~1_000 -> ~100_000 -> ~1_000_000
         assert_eq!(
-            pricegraph.estimate_limit_price(TokenPair { buy: 0, sell: 3 }.into_unbounded_range(), 10_001.0),
+            pricegraph.estimate_limit_price(
+                TokenPair { buy: 0, sell: 3 }.into_unbounded_range(),
+                10_001.0
+            ),
             None,
         );
 
         // NOTE: This would trade ~1_000 -> ~100_000 -> ~1_000_000
         assert_eq!(
-            pricegraph.estimate_limit_price(TokenPair { buy: 1, sell: 3 }.into_unbounded_range(), 10_001.0),
+            pricegraph.estimate_limit_price(
+                TokenPair { buy: 1, sell: 3 }.into_unbounded_range(),
+                10_001.0
+            ),
             None,
         );
 
         // NOTE: This would trade ~9_000 -> ~90_000
         assert_eq!(
-            pricegraph.estimate_limit_price(TokenPair { buy: 0, sell: 4 }.into_unbounded_range(), 10_001.0),
+            pricegraph.estimate_limit_price(
+                TokenPair { buy: 0, sell: 4 }.into_unbounded_range(),
+                10_001.0
+            ),
             None,
         );
 
         // NOTE: This would trade ~10_000 -> ~10_000 -> ~100
         assert_eq!(
-            pricegraph.estimate_limit_price(TokenPair { buy: 5, sell: 7 }.into_unbounded_range(), 10_001.0),
+            pricegraph.estimate_limit_price(
+                TokenPair { buy: 5, sell: 7 }.into_unbounded_range(),
+                10_001.0
+            ),
             None,
         );
     }
@@ -707,8 +813,12 @@ mod tests {
         let pair_range = TokenPair { buy: 2, sell: 1 }.into_unbounded_range();
 
         // NOTE: Check that dust maximum sell amounts return `None`
-        assert!(pricegraph.estimate_limit_price(pair_range, 10_000.0).is_some());
-        assert!(pricegraph.estimate_limit_price(pair_range, 9_999.0).is_none());
+        assert!(pricegraph
+            .estimate_limit_price(pair_range, 10_000.0)
+            .is_some());
+        assert!(pricegraph
+            .estimate_limit_price(pair_range, 9_999.0)
+            .is_none());
     }
 
     #[test]
@@ -734,6 +844,8 @@ mod tests {
         assert!(pricegraph
             .estimate_limit_price(pair_range, 20_000.0 * FEE_FACTOR.powi(2) + 1.0)
             .is_some());
-        assert!(pricegraph.estimate_limit_price(pair_range, 15_000.0).is_none());
+        assert!(pricegraph
+            .estimate_limit_price(pair_range, 15_000.0)
+            .is_none());
     }
 }
