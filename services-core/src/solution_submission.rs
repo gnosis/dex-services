@@ -208,7 +208,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
     ) -> Result<(), SolutionSubmissionError> {
         // If the gas price cap is not at least the fast gas price then submitting the solution
         // is not feasible because it would take too long.
-        match self.gas_price_estimating.estimate_gas_price().await {
+        match self.gas_price_estimating.estimate().await {
             Ok(gas_price) => {
                 if gas_price_cap < gas_price {
                     return Err(SolutionSubmissionError::Benign(format!(
@@ -330,7 +330,7 @@ mod tests {
     fn erroring_gas_station() -> impl GasPriceEstimating {
         let mut gas_price_estimating = MockGasPriceEstimating::new();
         gas_price_estimating
-            .expect_estimate_gas_price()
+            .expect_estimate()
             .returning(|| Err(anyhow!("")));
         gas_price_estimating
     }
@@ -487,9 +487,7 @@ mod tests {
         let retry = MockSolutionTransactionSending::new();
         let sleep = MockAsyncSleeping::new();
         let mut gas_price = MockGasPriceEstimating::new();
-        gas_price
-            .expect_estimate_gas_price()
-            .returning(|| Ok(10.into()));
+        gas_price.expect_estimate().returning(|| Ok(10.into()));
         let submitter = StableXSolutionSubmitter::with_retry_and_sleep(
             Arc::new(contract),
             Arc::new(gas_price),

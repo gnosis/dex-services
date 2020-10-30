@@ -137,7 +137,7 @@ where
 /// Shortest paths are well defined if and only if the graph does not
 /// contain any negative weight cycle reachabe from the source. If a
 /// negative weight cycle is detected, it is returned as an error.
-pub fn new_shortest_path_graph<'a, G>(
+pub fn shortest_path<'a, G>(
     g: G,
     source: G::NodeId,
     hops: Option<usize>,
@@ -243,9 +243,7 @@ pub mod tests {
             (4, 3, 200.0),
         ]);
 
-        let negative_cycle = new_shortest_path_graph(&graph, 0.into(), None)
-            .err()
-            .unwrap();
+        let negative_cycle = shortest_path(&graph, 0.into(), None).err().unwrap();
 
         assert_eq!(
             negative_cycle.0,
@@ -288,9 +286,13 @@ pub mod tests {
             (3, 4, 1.0),
         ]);
 
-        let shortest_path_graph = new_shortest_path_graph(&graph, 0.into(), None).unwrap();
+        let shortest_path_graph = shortest_path(&graph, 0.into(), None).unwrap();
         let path = shortest_path_graph.path_to(5.into()).unwrap();
+        assert_eq!(path, Path(vec![0.into(), 3.into(), 4.into(), 5.into()]));
 
+        let shortest_path_graph = shortest_path(&graph, 0.into(), Some(1000)).unwrap();
+        let path = shortest_path_graph.path_to(5.into()).unwrap();
+        // The four-step path [0, 1, 2, 4, 5] has larger weight than [0, 3, 4, 5].
         assert_eq!(path, Path(vec![0.into(), 3.into(), 4.into(), 5.into()]));
     }
 
@@ -315,21 +317,21 @@ pub mod tests {
             (3, 4, 1.0),
         ]);
 
-        let shortest_path_graph = new_shortest_path_graph(&graph, 0.into(), Some(0)).unwrap();
+        let shortest_path_graph = shortest_path(&graph, 0.into(), Some(0)).unwrap();
         assert_eq!(shortest_path_graph.path_to(5.into()), None);
 
-        let shortest_path_graph = new_shortest_path_graph(&graph, 0.into(), Some(1)).unwrap();
+        let shortest_path_graph = shortest_path(&graph, 0.into(), Some(1)).unwrap();
         assert_eq!(shortest_path_graph.path_to(5.into()), None);
 
-        let shortest_path_graph = new_shortest_path_graph(&graph, 0.into(), Some(2)).unwrap();
+        let shortest_path_graph = shortest_path(&graph, 0.into(), Some(2)).unwrap();
         let path = shortest_path_graph.path_to(5.into()).unwrap();
         assert_eq!(path, Path(vec![0.into(), 1.into(), 5.into()]));
 
-        let shortest_path_graph = new_shortest_path_graph(&graph, 0.into(), Some(3)).unwrap();
+        let shortest_path_graph = shortest_path(&graph, 0.into(), Some(3)).unwrap();
         let path = shortest_path_graph.path_to(5.into()).unwrap();
         assert_eq!(path, Path(vec![0.into(), 3.into(), 4.into(), 5.into()]));
 
-        let shortest_path_graph = new_shortest_path_graph(&graph, 0.into(), Some(1000)).unwrap();
+        let shortest_path_graph = shortest_path(&graph, 0.into(), Some(1000)).unwrap();
         let path = shortest_path_graph.path_to(5.into()).unwrap();
         // The four-step path [0, 1, 2, 4, 5] has larger weight than [0, 3, 4, 5].
         assert_eq!(path, Path(vec![0.into(), 3.into(), 4.into(), 5.into()]));
@@ -344,13 +346,11 @@ pub mod tests {
         //    3 <-1.0-- 2
         let graph =
             Graph::<(), f64>::from_edges(&[(0, 1, 1.0), (1, 2, 1.0), (2, 3, 1.0), (3, 0, -100.0)]);
-        let shortest_path_graph = new_shortest_path_graph(&graph, 0.into(), Some(3)).unwrap();
+        let shortest_path_graph = shortest_path(&graph, 0.into(), Some(3)).unwrap();
         let path = shortest_path_graph.path_to(3.into()).unwrap();
         assert_eq!(path, Path(vec![0.into(), 1.into(), 2.into(), 3.into()]));
 
-        let negative_cycle = new_shortest_path_graph(&graph, 0.into(), Some(4))
-            .err()
-            .unwrap();
+        let negative_cycle = shortest_path(&graph, 0.into(), Some(4)).err().unwrap();
         assert_eq!(
             negative_cycle.0,
             vec![0.into(), 1.into(), 2.into(), 3.into(), 0.into()]
@@ -371,16 +371,14 @@ pub mod tests {
             (3, 4, 1.0),
             (4, 1, -100.0),
         ]);
-        let shortest_path_graph = new_shortest_path_graph(&graph, 0.into(), Some(4)).unwrap();
+        let shortest_path_graph = shortest_path(&graph, 0.into(), Some(4)).unwrap();
         let path = shortest_path_graph.path_to(4.into()).unwrap();
         assert_eq!(
             path,
             Path(vec![0.into(), 1.into(), 2.into(), 3.into(), 4.into()])
         );
 
-        let negative_cycle = new_shortest_path_graph(&graph, 0.into(), Some(5))
-            .err()
-            .unwrap();
+        let negative_cycle = shortest_path(&graph, 0.into(), Some(5)).err().unwrap();
         assert_eq!(
             negative_cycle.0,
             vec![1.into(), 2.into(), 3.into(), 4.into(), 1.into()]
@@ -410,7 +408,7 @@ pub mod tests {
             (7, 0, 1.0),
         ]);
 
-        let shortest_path_graph = new_shortest_path_graph(&graph, 0.into(), None).unwrap();
+        let shortest_path_graph = shortest_path(&graph, 0.into(), None).unwrap();
         let mut connected_nodes = shortest_path_graph.connected_nodes();
         connected_nodes.sort();
 
@@ -443,16 +441,16 @@ pub mod tests {
             (7, 0, 1.0),
         ]);
 
-        let shortest_path_graph = new_shortest_path_graph(&graph, 0.into(), Some(0)).unwrap();
+        let shortest_path_graph = shortest_path(&graph, 0.into(), Some(0)).unwrap();
         let connected_nodes = shortest_path_graph.connected_nodes();
         assert_eq!(connected_nodes, vec![0.into()]);
 
-        let shortest_path_graph = new_shortest_path_graph(&graph, 0.into(), Some(1)).unwrap();
+        let shortest_path_graph = shortest_path(&graph, 0.into(), Some(1)).unwrap();
         let mut connected_nodes = shortest_path_graph.connected_nodes();
         connected_nodes.sort();
         assert_eq!(connected_nodes, vec![0.into(), 2.into(), 4.into()]);
 
-        let shortest_path_graph = new_shortest_path_graph(&graph, 0.into(), Some(2)).unwrap();
+        let shortest_path_graph = shortest_path(&graph, 0.into(), Some(2)).unwrap();
         let mut connected_nodes = shortest_path_graph.connected_nodes();
         connected_nodes.sort();
         assert_eq!(
@@ -460,7 +458,7 @@ pub mod tests {
             vec![0.into(), 2.into(), 4.into(), 5.into()]
         );
 
-        let shortest_path_graph = new_shortest_path_graph(&graph, 0.into(), Some(3)).unwrap();
+        let shortest_path_graph = shortest_path(&graph, 0.into(), Some(3)).unwrap();
         let mut connected_nodes = shortest_path_graph.connected_nodes();
         connected_nodes.sort();
         assert_eq!(
@@ -468,7 +466,7 @@ pub mod tests {
             vec![0.into(), 2.into(), 4.into(), 5.into(), 6.into(), 7.into()]
         );
 
-        let shortest_path_graph = new_shortest_path_graph(&graph, 0.into(), Some(1000)).unwrap();
+        let shortest_path_graph = shortest_path(&graph, 0.into(), Some(1000)).unwrap();
         let mut connected_nodes = shortest_path_graph.connected_nodes();
         connected_nodes.sort();
         assert_eq!(
