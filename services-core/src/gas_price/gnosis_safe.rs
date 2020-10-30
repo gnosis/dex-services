@@ -41,15 +41,29 @@ pub struct GasPrices {
     pub fastest: f64,
 }
 
+// The gnosis safe gas station looks at the gas price of all transactions in the last 200 blocks.
+// The fast gas price is the price at the 75th percentile of gas prices and so on.
 const FAST_PERCENTILE: f64 = 0.75;
 const STANDARD_PERCENTILE: f64 = 0.5;
 const SAFE_LOW_PERCENTILE: f64 = 0.3;
 
+// For this module we need to estimate confirmation times. So we need some way of converting the
+// percentiles into time. The standard percentile is 50% which means transactions at this gas price
+// were included in 50% of the blocks. Thus for every block a transaction at this price has a 0.5
+// chance to be included. We treat this as a geometric distribution in which the expected time for
+// the event to happen (transaction is included in block) is 1/p. Blocks happen every 15 seconds so
+// this is how we get a time estimate.
+// In reality this estimation can be problematic when gas prices are changing quickly. When prices
+// are rising, the prices calculated based on the last 200 blocks lag behind the real price. For
+// this reason we insert two extra points for the linear interpolation below in estimate_limits.
+// We do not make use of the lowest and fastest gas price because they are too strong outliers. The
+// lowest gas price is skewed by miners including their own transactions at 1 gwei. The highest gas
+// price can be 1000 times the fast gas price which is not reasonable.
 const SECONDS_PER_BLOCK: f64 = 15.0;
 // Treat percentiles as probabilities for geometric distribution.
-const FAST_TIME: f64 = SECONDS_PER_BLOCK * 1.0 / FAST_PERCENTILE;
-const STANDARD_TIME: f64 = SECONDS_PER_BLOCK * 1.0 / STANDARD_PERCENTILE;
-const SAFE_LOW_TIME: f64 = SECONDS_PER_BLOCK * 1.0 / SAFE_LOW_PERCENTILE;
+const FAST_TIME: f64 = SECONDS_PER_BLOCK * FAST_PERCENTILE;
+const STANDARD_TIME: f64 = SECONDS_PER_BLOCK * STANDARD_PERCENTILE;
+const SAFE_LOW_TIME: f64 = SECONDS_PER_BLOCK * SAFE_LOW_PERCENTILE;
 
 /// Retrieve gas prices from the Gnosis Safe gas station service.
 #[derive(Debug)]
@@ -94,9 +108,6 @@ fn estimate_with_limits(
     _gas_limit: U256,
     time_limit: Duration,
 ) -> Result<f64> {
-    // We insert two extra points for the linear interpolation because this gas estimator reacts
-    // slowly to gas price changes which means that for example in times of rising gas prices
-    // fast might not be fast enough.
     let points: &[(f64, f64)] = &[
         (0.0, response.fast * 2.0),
         (FAST_TIME, response.fast),
@@ -147,10 +158,12 @@ pub mod tests {
         println!("{:?}", response);
         for i in 0..10 {
             let time_limit = Duration::from_secs(i * 10);
+            let price =
+                estimate_with_limits(&response, DEFAULT_GAS_LIMIT.into(), time_limit).unwrap();
             println!(
                 "gas price estimate for {} seconds: {} gwei",
                 time_limit.as_secs(),
-                estimate_with_limits(&response, DEFAULT_GAS_LIMIT.into(), time_limit).unwrap(),
+                price / 1e9,
             );
         }
     }
