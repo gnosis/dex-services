@@ -117,7 +117,7 @@ impl Orderbook {
         // NOTE: We detect negative cycles from each disconnected subgraph.
         Subgraphs::new(self.projection.node_indices().skip(1))
             .for_each_until(
-                |token| match ShortestPathGraph::new(&self.projection, token) {
+                |token| match ShortestPathGraph::new(&self.projection, token, None) {
                     Ok(shortest_path_graph) => {
                         ControlFlow::Continue(shortest_path_graph.connected_nodes())
                     }
@@ -130,7 +130,7 @@ impl Orderbook {
     /// Reduces the orderbook by matching all overlapping ring trades.
     pub fn reduce_overlapping_orders(mut self) -> ReducedOrderbook {
         Subgraphs::new(self.projection.node_indices()).for_each(|token| loop {
-            let cycle = match ShortestPathGraph::new(&self.projection, token) {
+            let cycle = match ShortestPathGraph::new(&self.projection, token, None) {
                 Ok(shortest_path_graph) => break shortest_path_graph.connected_nodes(),
                 Err(cycle) => cycle,
             };
@@ -164,7 +164,7 @@ impl Orderbook {
         let (base, quote) = (node_index(market.base), node_index(market.quote));
 
         loop {
-            let cycle = match ShortestPathGraph::new(&self.projection, quote) {
+            let cycle = match ShortestPathGraph::new(&self.projection, quote, None) {
                 Ok(_) => break,
                 Err(cycle) => cycle,
             };
@@ -286,7 +286,7 @@ impl Orderbook {
         start: NodeIndex,
         end: NodeIndex,
     ) -> Result<Option<(Path<NodeIndex>, Flow)>, OverlapError> {
-        let shortest_path_graph = ShortestPathGraph::new(&self.projection, start)?;
+        let shortest_path_graph = ShortestPathGraph::new(&self.projection, start, None)?;
         let path = match shortest_path_graph.path_to(end) {
             Some(path) => path,
             None => return Ok(None),
