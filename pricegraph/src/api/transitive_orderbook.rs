@@ -254,6 +254,87 @@ mod tests {
     }
 
     #[test]
+    fn transitive_orderbook_hops() {
+        //  0 --2.0-> 1 --1.0-> 5 <--\
+        //  |         |         |    |
+        // 1.0       2.0       0.5  1.0
+        //  ∨         ∨         ∨    |
+        //  2         3         6----/
+        //  |         ∧         |
+        // 1.0       2.0        |
+        //  |         |         |
+        //  \-------> 4 <------0.5
+        let pricegraph = pricegraph! {
+            users {
+                @1 {
+                    token 1 => 2_000_000,
+                }
+                @2 {
+                    token 2 => 1_000_000,
+                }
+                @3 {
+                    token 3 => 2_000_000,
+                }
+                @4 {
+                    token 5 => 1_000_000,
+                }
+                @5 {
+                    token 4 => 1_000_000,
+                }
+                @6 {
+                    token 3 => 2_000_000,
+                }
+                @7 {
+                    token 6 => 500_000,
+                }
+                @8 {
+                    token 5 => 10_000_000,
+                }
+                @9 {
+                    token 4 => 1_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 0 [1_000_000] selling 1 [2_000_000],
+                owner @2 buying 0 [1_000_000] selling 2 [1_000_000],
+                owner @3 buying 1 [1_000_000] selling 3 [2_000_000],
+                owner @4 buying 1 [1_000_000] selling 5 [1_000_000],
+                owner @5 buying 2 [1_000_000] selling 4 [1_000_000],
+                owner @6 buying 4 [1_000_000] selling 3 [2_000_000],
+                owner @7 buying 5 [1_000_000] selling 6 [500_000],
+                owner @8 buying 6 [10_000_000] selling 5 [10_000_000],
+                owner @9 buying 6 [1_000_000] selling 4 [1_000_000],
+            }
+        };
+        let market = Market { base: 0, quote: 3 };
+
+        // All transitive orders need at most two hops to be computed.
+        // There is a small negative loop between the tokens 5 and 6
+        // which makes the path 0 -> 1 -> 5 -> 6 -> 4 -> 3 disappear.
+
+        let TransitiveOrderbook { bids, asks } =
+            pricegraph.transitive_orderbook(market, Some(10), None);
+        assert_eq!(asks.len(), 0);
+        assert_eq!(bids.len(), 2);
+        assert_approx_eq!(bids[0].buy, 500_000.0 * FEE_FACTOR);
+        assert_approx_eq!(bids[0].sell, 2_000_000.0);
+        assert_approx_eq!(bids[1].buy, 1_000_000.0);
+        assert_approx_eq!(bids[1].sell, 2_000_000.0 / FEE_FACTOR.powi(2));
+
+        let TransitiveOrderbook { bids, asks } =
+            pricegraph.transitive_orderbook(market, Some(2), None);
+        assert_eq!(asks.len(), 0);
+        assert_eq!(bids.len(), 1);
+        assert_approx_eq!(bids[0].buy, 500_000.0 * FEE_FACTOR);
+        assert_approx_eq!(bids[0].sell, 2_000_000.0);
+
+        let TransitiveOrderbook { bids, asks } =
+            pricegraph.transitive_orderbook(market, Some(1), None);
+        assert_eq!(asks.len(), 0);
+        assert_eq!(bids.len(), 0);
+    }
+
+    #[test]
     fn detects_overlapping_transitive_orders() {
         // 0 --1.0--> 1 --0.5--> 2 --1.0--> 3 --1.0--> 4
         //            ^---------1.0--------/^---0.5---/
@@ -438,6 +519,84 @@ mod tests {
 
         assert_approx_eq!(bids[2].buy, 4_000_000.0);
         assert_approx_eq!(bids[2].sell, 1_000_000.0);
+    }
+
+    #[test]
+    fn fills_all_transitive_orders_with_hops_and_no_spread() {
+        //    /--1.0--v
+        //   /        v---2.0--\
+        //  /---4.0---v         \
+        // 1          2          3
+        //  \                    ^
+        //   \--------1.0-------/
+        let pricegraph = pricegraph! {
+            users {
+                @1 {
+                    token 2 => 1_000_000,
+                    token 3 => 1_000_000,
+                }
+                @2 {
+                    token 2 => 1_000_000,
+                }
+                @3 {
+                    token 2 => 1_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 1 [1_000_000] selling 2 [1_000_000],
+                owner @2 buying 3 [2_000_000] selling 2 [1_000_000],
+                owner @3 buying 1 [4_000_000] selling 2 [1_000_000],
+
+                owner @1 buying 1 [1_000_000] selling 3 [1_000_000],
+            }
+        };
+        let market = Market { base: 1, quote: 2 };
+
+        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, Some(1), None);
+        assert_eq!(bids.len(), 2);
+
+        assert_approx_eq!(bids[0].buy, 1_000_000.0);
+        assert_approx_eq!(bids[0].sell, 1_000_000.0);
+
+        assert_approx_eq!(bids[1].buy, 4_000_000.0);
+        assert_approx_eq!(bids[1].sell, 1_000_000.0);
+    }
+
+    #[test]
+    fn fills_all_transitive_orders_with_hops_and_spread() {
+        //    /--1.0--v
+        //   /        v---2.0--\
+        //  /---4.0---v         \
+        // 1          2          3
+        //  \                    ^
+        //   \--------1.0-------/
+        let pricegraph = pricegraph! {
+            users {
+                @1 {
+                    token 2 => 1_000_000,
+                    token 3 => 1_000_000,
+                }
+                @2 {
+                    token 2 => 1_000_000,
+                }
+                @3 {
+                    token 2 => 1_000_000,
+                }
+            }
+            orders {
+                owner @1 buying 1 [1_000_000] selling 2 [1_000_000],
+                owner @2 buying 3 [2_000_000] selling 2 [1_000_000],
+                owner @3 buying 1 [4_000_000] selling 2 [1_000_000],
+
+                owner @1 buying 1 [1_000_000] selling 3 [1_000_000],
+            }
+        };
+        let market = Market { base: 1, quote: 2 };
+
+        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, Some(1), Some(3.0));
+        assert_eq!(bids.len(), 2);
+        assert_approx_eq!(bids[1].buy, 4_000_000.0);
+        assert_approx_eq!(bids[1].sell, 1_000_000.0);
     }
 
     #[test]

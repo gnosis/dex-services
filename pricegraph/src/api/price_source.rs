@@ -94,4 +94,42 @@ mod tests {
             rounding_error
         );
     }
+
+    #[test]
+    fn estimates_correct_token_price_with_hops() {
+        const LOTS: u128 = 100 * OWL_BASE_UNIT as u128;
+
+        //   /-------0.5--------\
+        //  /                    v
+        // 0 --1.0--> 1 <--1.0-- 2
+        let pricegraph = pricegraph! {
+            users {
+                @1 {
+                    token 1 => LOTS,
+                    token 2 => LOTS,
+                }
+                @2 {
+                    token 1 => LOTS,
+                }
+            }
+            orders {
+                owner @1 buying 0 [LOTS    ] selling 1 [LOTS],
+                owner @1 buying 0 [LOTS / 2] selling 2 [LOTS],
+                owner @2 buying 2 [LOTS    ] selling 1 [LOTS],
+            }
+        };
+        let rounding_error = num::max_rounding_error_with_epsilon(OWL_BASE_UNIT);
+
+        assert_approx_eq!(
+            pricegraph.estimate_token_price(1, Some(1)).unwrap(),
+            OWL_BASE_UNIT * FEE_FACTOR.powi(2),
+            2.0 * rounding_error // adjust rounding error by the same factor that is used to adjust the price
+        );
+        // Same as without hops
+        assert_approx_eq!(
+            pricegraph.estimate_token_price(2, Some(1)).unwrap(),
+            (OWL_BASE_UNIT / 2.0) * FEE_FACTOR.powi(2),
+            rounding_error
+        );
+    }
 }

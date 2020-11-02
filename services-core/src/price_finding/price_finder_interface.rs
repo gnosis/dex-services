@@ -99,8 +99,10 @@ pub fn execute_open_solver(
     input_file: &str,
     min_avg_fee_per_order: u128,
 ) -> Result<Output> {
-    let mut command = Command::new("gp_match");
+    let mut command = Command::new("python");
     let open_solver_command = command
+        .current_dir("/app/open_solver")
+        .args(&["-m", "src.match"])
         .arg(input_file)
         .arg(format!(
             "--solution={}{}",
