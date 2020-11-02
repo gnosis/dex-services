@@ -1,6 +1,7 @@
 use crate::{
     models::{AccountState, BatchId, Order},
     orderbook::streamed::State,
+    serialization::Version,
 };
 use anyhow::{Context, Result};
 use contracts::batch_exchange;
@@ -9,12 +10,12 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     convert::TryFrom,
-    fs,
-    fs::File,
+    fs::{self, File},
     io::{BufReader, BufWriter, Read, Write},
     ops::Bound,
     path::Path,
 };
+use typenum::U1;
 
 // Ethereum events (logs) can be both created and removed. Removals happen if the chain reorganizes
 // and ends up not including block that was previously thought to be part of the chain.
@@ -39,6 +40,7 @@ struct Value {
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct EventRegistry {
+    version: Version<U1>,
     events: BTreeMap<EventSortKey, Value>,
 }
 
@@ -264,7 +266,10 @@ mod tests {
                 )
             })
             .collect();
-        let events = EventRegistry { events };
+        let events = EventRegistry {
+            version: Default::default(),
+            events,
+        };
         let serialized_events = bincode::serialize(&events).expect("Failed to serialize events");
         let deserialized_events =
             EventRegistry::read(&serialized_events[..]).expect("Failed to deserialize events");
@@ -292,7 +297,10 @@ mod tests {
 
         let mut events = BTreeMap::new();
         events.insert(event_key, value);
-        let initial_events = EventRegistry { events };
+        let initial_events = EventRegistry {
+            version: Default::default(),
+            events,
+        };
 
         let test_path = Path::new("/tmp/my_test_events.ron");
         initial_events.write_to_file(test_path).unwrap();
