@@ -1,8 +1,8 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use pricegraph::{Market, Pricegraph, TokenPair};
-use pricegraph_data::{DEFAULT_ORDERBOOK};
-use std::time::Duration;
 use itertools::Itertools;
+use pricegraph::{Market, Pricegraph, TokenPair};
+use pricegraph_data::DEFAULT_ORDERBOOK;
+use std::time::Duration;
 
 fn read_default_pricegraph() -> Pricegraph {
     Pricegraph::read(&*DEFAULT_ORDERBOOK).expect("error reading orderbook")
@@ -40,7 +40,7 @@ pub fn estimate_limit_price(c: &mut Criterion) {
     let mut group = c.benchmark_group("Pricegraph::estimate_limit_price");
     for (volume, hops) in volumes.iter().cartesian_product(hops) {
         group.bench_with_input(
-            BenchmarkId::from_parameter(format!("volume:{}-hops{:?}",volume,hops)),
+            BenchmarkId::from_parameter(format!("volume:{}-hops{:?}", volume, hops)),
             &(&pricegraph, dai_weth, *volume, *hops),
             |b, &(pricegraph, pair, volume, hops)| {
                 b.iter(|| pricegraph.estimate_limit_price(pair.into_range(hops), volume))
@@ -59,7 +59,7 @@ pub fn order_for_limit_price(c: &mut Criterion) {
     let mut group = c.benchmark_group("Pricegraph::order_for_limit_price");
     for (price, hops) in prices.iter().cartesian_product(hops) {
         group.bench_with_input(
-            BenchmarkId::from_parameter(format!("price:{}-hops:{:?}",price,hops)),
+            BenchmarkId::from_parameter(format!("price:{}-hops:{:?}", price, hops)),
             &(&pricegraph, dai_weth, *price, *hops),
             |b, &(pricegraph, pair, price, hops)| {
                 b.iter(|| pricegraph.order_for_limit_price(pair.into_range(hops), price))
