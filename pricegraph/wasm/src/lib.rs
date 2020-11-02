@@ -42,6 +42,6 @@ impl PriceEstimator {
     #[wasm_bindgen(js_name = "estimatePrice")]
     pub fn estimate_price(&self, buy: TokenId, sell: TokenId, volume: f64) -> Option<f64> {
         self.pricegraph
-            .estimate_limit_price(TokenPair { buy, sell }, volume)
+            .estimate_limit_price(TokenPair { buy, sell }.into_unbounded_range(), volume)
     }
 }

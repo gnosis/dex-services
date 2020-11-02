@@ -72,7 +72,9 @@ fn check_batch_prices(
         .filter(|(_, token)| *token != 0)
     {
         let price = prices[token_index];
-        let estimate = pricegraph.estimate_token_price(token).map(|p| p as u128);
+        let estimate = pricegraph
+            .estimate_token_price(token, None)
+            .map(|p| p as u128);
 
         samples.record_sample(Row {
             batch,

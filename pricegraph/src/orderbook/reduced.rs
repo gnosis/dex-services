@@ -1,6 +1,6 @@
 //! Module containing reduced orderbook wrapper type.
 
-use crate::encoding::TokenPair;
+use crate::encoding::TokenPairRange;
 use crate::orderbook::{Flow, Orderbook, TransitiveOrders};
 
 /// A graph representation of a reduced orderbook. Reduced orderbooks are
@@ -16,8 +16,8 @@ impl ReducedOrderbook {
 
     /// Returns an iterator over all transitive orders from lowest to highest
     /// limit price for the orderbook.
-    pub fn transitive_orders(self, pair: TokenPair) -> TransitiveOrders {
-        TransitiveOrders::new(self.0, pair).expect("negative cycle in reduced orderbook")
+    pub fn transitive_orders(self, pair_range: TokenPairRange) -> TransitiveOrders {
+        TransitiveOrders::new(self.0, pair_range).expect("negative cycle in reduced orderbook")
     }
 
     /// Returns an iterator over all significant transitive orders (i.e. **not**
@@ -26,17 +26,20 @@ impl ReducedOrderbook {
     ///
     /// This is a convenience method for:
     /// `orderbook.transtive_orders().filter(|flow| !flow.is_dust_trade())`.
-    pub fn significant_transitive_orders(self, pair: TokenPair) -> impl Iterator<Item = Flow> {
-        self.transitive_orders(pair)
+    pub fn significant_transitive_orders(
+        self,
+        pair_range: TokenPairRange,
+    ) -> impl Iterator<Item = Flow> {
+        self.transitive_orders(pair_range)
             .filter(|flow| !flow.is_dust_trade())
     }
 
     /// Finds and returns the optimal transitive order for the specified token
     /// pair without filling it. Returns `None` if no such transitive order
     /// exists.
-    pub fn find_optimal_transitive_order(&mut self, pair: TokenPair) -> Option<Flow> {
+    pub fn find_optimal_transitive_order(&mut self, pair_range: TokenPairRange) -> Option<Flow> {
         self.0
-            .find_optimal_transitive_order(pair)
+            .find_optimal_transitive_order(pair_range)
             .expect("negative cycle in reduced orderbook")
     }
 

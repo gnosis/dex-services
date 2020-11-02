@@ -22,7 +22,7 @@ pub use self::scalar::{ExchangeRate, LimitPrice};
 use self::user::{User, UserMap};
 pub use self::weight::Weight;
 use crate::api::Market;
-use crate::encoding::{Element, TokenId, TokenPair};
+use crate::encoding::{Element, TokenId, TokenPair, TokenPairRange};
 use crate::graph::path::{NegativeCycle, Path};
 use crate::graph::shortest_paths::shortest_path;
 use crate::graph::subgraph::{ControlFlow, Subgraphs};
@@ -203,8 +203,11 @@ impl Orderbook {
     /// containing the token pair's buy token, i.e. one or more negative cycles
     /// were found when searching for the shortest path starting from the buy
     /// token and ending at the sell token.
-    pub fn transitive_orders(self, pair: TokenPair) -> Result<TransitiveOrders, OverlapError> {
-        TransitiveOrders::new(self, pair)
+    pub fn transitive_orders(
+        self,
+        pair_range: TokenPairRange,
+    ) -> Result<TransitiveOrders, OverlapError> {
+        TransitiveOrders::new(self, pair_range)
     }
 
     /// Finds and returns the optimal transitive order for the specified token
@@ -214,14 +217,17 @@ impl Orderbook {
     /// This method returns an error if the orderbook graph is not reduced.
     pub fn find_optimal_transitive_order(
         &self,
-        pair: TokenPair,
+        pair_range: TokenPairRange,
     ) -> Result<Option<Flow>, OverlapError> {
-        if !self.is_token_pair_valid(pair) {
+        if !self.is_token_pair_valid(pair_range.pair) {
             return Ok(None);
         }
 
-        let (start, end) = (node_index(pair.buy), node_index(pair.sell));
-        let flow = match self.find_path_and_flow(start, end)? {
+        let (start, end) = (
+            node_index(pair_range.pair.buy),
+            node_index(pair_range.pair.sell),
+        );
+        let flow = match self.find_path_and_flow(start, end, pair_range.hops)? {
             Some((_, flow)) => flow,
             None => return Ok(None),
         };
@@ -283,8 +289,9 @@ impl Orderbook {
         &self,
         start: NodeIndex,
         end: NodeIndex,
+        hops: Option<usize>,
     ) -> Result<Option<(Path<NodeIndex>, Flow)>, OverlapError> {
-        let shortest_path_graph = shortest_path(&self.projection, start, None)?;
+        let shortest_path_graph = shortest_path(&self.projection, start, hops)?;
         let path = match shortest_path_graph.path_to(end) {
             Some(path) => path,
             None => return Ok(None),
@@ -553,7 +560,9 @@ mod tests {
         let pair = TokenPair { buy: 1, sell: 0 };
 
         assert!(orderbook.is_overlapping());
-        assert!(orderbook.find_optimal_transitive_order(pair).is_err());
+        assert!(orderbook
+            .find_optimal_transitive_order(pair.into_unbounded_range())
+            .is_err());
     }
 
     #[test]
@@ -788,7 +797,7 @@ mod tests {
         };
 
         assert!(orderbook
-            .find_optimal_transitive_order(TokenPair { buy: 0, sell: 1 })
+            .find_optimal_transitive_order(TokenPair { buy: 0, sell: 1 }.into_unbounded_range())
             .is_ok())
     }
 }

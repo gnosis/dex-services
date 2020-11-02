@@ -29,6 +29,41 @@ pub struct TokenPair {
     pub sell: TokenId,
 }
 
+impl TokenPair {
+    pub fn inverse(self) -> Self {
+        TokenPair {
+            buy: self.sell,
+            sell: self.buy,
+        }
+    }
+
+    pub fn into_unbounded_range(self) -> TokenPairRange {
+        self.into_range(None)
+    }
+
+    pub fn into_range(self, hops: Option<usize>) -> TokenPairRange {
+        TokenPairRange { pair: self, hops }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub struct TokenPairRange {
+    /// The traded pair.
+    pub pair: TokenPair,
+    /// The maximum number of transitive trades allowed to trade the pair.
+    pub hops: Option<usize>,
+}
+
+impl TokenPairRange {
+    pub fn inverse(self) -> Self {
+        TokenPairRange {
+            pair: self.pair.inverse(),
+            hops: self.hops,
+        }
+    }
+}
+
 /// A struct representing the validity of an order.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]

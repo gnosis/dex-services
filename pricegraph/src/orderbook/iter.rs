@@ -1,7 +1,7 @@
 //! Module containing transitive order iterator for an orderbook.
 
 use crate::{
-    encoding::TokenPair,
+    encoding::TokenPairRange,
     graph::path::Path,
     orderbook::{self, Flow, Orderbook, OverlapError},
 };
@@ -19,21 +19,24 @@ pub struct TransitiveOrders {
     /// whether the orderbook is reduced in the subgraph containing the `buy`
     /// token.
     first_order: Option<(Path<NodeIndex>, Flow)>,
+    /// The number of hops that can be considered during path finding (None being infinite)
+    hops: Option<usize>,
 }
 
 impl TransitiveOrders {
     /// Creates a new transitive orderbook iterator.
-    pub fn new(orderbook: Orderbook, pair: TokenPair) -> Result<Self, OverlapError> {
-        let (buy, sell) = if orderbook.is_token_pair_valid(pair) {
+    pub fn new(orderbook: Orderbook, pair_range: TokenPairRange) -> Result<Self, OverlapError> {
+        let (buy, sell) = if orderbook.is_token_pair_valid(pair_range.pair) {
             (
-                orderbook::node_index(pair.buy),
-                orderbook::node_index(pair.sell),
+                orderbook::node_index(pair_range.pair.buy),
+                orderbook::node_index(pair_range.pair.sell),
             )
         } else {
             return Ok(Self {
                 orderbook,
                 pair: None,
                 first_order: None,
+                hops: None,
             });
         };
 
@@ -41,12 +44,13 @@ impl TransitiveOrders {
         // subgraph containing the token pair we care about, so we find the
         // first transitive order and reuse the result in the first call to
         // `next`.
-        let first_order = orderbook.find_path_and_flow(buy, sell)?;
+        let first_order = orderbook.find_path_and_flow(buy, sell, pair_range.hops)?;
 
         Ok(Self {
             orderbook,
             pair: Some((buy, sell)),
             first_order,
+            hops: pair_range.hops,
         })
     }
 }
@@ -58,7 +62,7 @@ impl Iterator for TransitiveOrders {
         let (buy, sell) = self.pair?;
         let (path, flow) = self.first_order.take().or_else(|| {
             self.orderbook
-                .find_path_and_flow(buy, sell)
+                .find_path_and_flow(buy, sell, self.hops)
                 .expect("negative cycle after computing shortest path")
         })?;
 
@@ -78,7 +82,7 @@ impl FusedIterator for TransitiveOrders {}
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::encoding::TokenPair;
     use crate::test::prelude::*;
     use crate::FEE_FACTOR;
 
@@ -104,7 +108,7 @@ mod tests {
                 owner @2 buying 0 [3_000_000] selling 2 [1_000_000],
             }
         };
-        let pair = TokenPair { buy: 0, sell: 2 };
+        let pair = TokenPair { buy: 0, sell: 2 }.into_unbounded_range();
 
         let orders = orderbook
             .clone()
@@ -155,7 +159,7 @@ mod tests {
                 owner @1 buying 0 [5_000_000] selling 1 [10_000_000],
             }
         };
-        let pair = TokenPair { buy: 1, sell: 0 };
+        let pair = TokenPair { buy: 1, sell: 0 }.into_unbounded_range();
 
         assert!(orderbook.is_overlapping());
         assert!(orderbook.transitive_orders(pair).is_err());
