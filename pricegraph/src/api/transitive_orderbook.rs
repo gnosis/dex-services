@@ -552,7 +552,8 @@ mod tests {
         };
         let market = Market { base: 1, quote: 2 };
 
-        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, Some(1), None);
+        let TransitiveOrderbook { bids, .. } =
+            pricegraph.transitive_orderbook(market, Some(1), None);
         assert_eq!(bids.len(), 2);
 
         assert_approx_eq!(bids[0].buy, 1_000_000.0);
@@ -593,7 +594,8 @@ mod tests {
         };
         let market = Market { base: 1, quote: 2 };
 
-        let TransitiveOrderbook { bids, .. } = pricegraph.transitive_orderbook(market, Some(1), Some(3.0));
+        let TransitiveOrderbook { bids, .. } =
+            pricegraph.transitive_orderbook(market, Some(1), Some(3.0));
         assert_eq!(bids.len(), 2);
         assert_approx_eq!(bids[1].buy, 4_000_000.0);
         assert_approx_eq!(bids[1].sell, 1_000_000.0);
