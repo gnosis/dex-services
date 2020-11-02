@@ -504,17 +504,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "serde_with",
- "slog",
- "slog-async",
- "slog-envlogger",
- "slog-scope",
- "slog-stdlog",
- "slog-term",
- "thiserror",
- "typenum",
- "uint",
- "url 2.1.1",
 ]
 
 [[package]]
@@ -3015,6 +3004,7 @@ dependencies = [
  "slog-stdlog",
  "slog-term",
  "thiserror",
+ "typenum",
  "uint",
  "url 2.1.1",
 ]

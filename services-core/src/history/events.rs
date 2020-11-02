@@ -1,6 +1,6 @@
 use crate::{
     models::{AccountState, BatchId, Order},
-    orderbook::{streamed::State, StableXOrderBookReading},
+    orderbook::streamed::State,
     serialization::Version,
 };
 use anyhow::{Context, Result};
