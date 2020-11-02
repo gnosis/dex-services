@@ -20,6 +20,7 @@ pub mod models;
 pub mod orderbook;
 pub mod price_estimation;
 pub mod price_finding;
+pub mod serialization;
 pub mod solution_submission;
 pub mod time;
 pub mod token_info;

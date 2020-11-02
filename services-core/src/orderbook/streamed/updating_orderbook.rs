@@ -70,8 +70,8 @@ impl UpdatingOrderbook {
                     if path.exists() {
                         // Exclude warning when file doesn't exist (i.e. on first startup)
                         warn!(
-                            "Failed to construct orderbook from path (using default): {}",
-                            error
+                            "Failed to construct orderbook from path (using default): {:?}",
+                            error,
                         );
                     }
                 }

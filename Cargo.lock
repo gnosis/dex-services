@@ -3004,6 +3004,7 @@ dependencies = [
  "slog-stdlog",
  "slog-term",
  "thiserror",
+ "typenum",
  "uint",
  "url 2.1.1",
 ]
