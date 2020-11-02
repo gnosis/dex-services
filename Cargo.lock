@@ -2322,6 +2322,7 @@ name = "pricegraph-bench"
 version = "0.0.0"
 dependencies = [
  "criterion",
+ "itertools",
  "pricegraph",
  "pricegraph-data",
 ]
