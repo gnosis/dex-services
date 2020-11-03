@@ -15,7 +15,7 @@ use std::{
     ops::Bound,
     path::Path,
 };
-use typenum::U1;
+use typenum::U2;
 
 // Ethereum events (logs) can be both created and removed. Removals happen if the chain reorganizes
 // and ends up not including block that was previously thought to be part of the chain.
@@ -40,7 +40,7 @@ struct Value {
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct EventRegistry {
-    version: Version<U1>,
+    version: Version<U2>,
     events: BTreeMap<EventSortKey, Value>,
 }
 
