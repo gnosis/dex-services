@@ -190,11 +190,11 @@ struct Options {
     economic_viability_min_avg_fee_factor: f64,
 
     /// The static minimum average fee per order used for the Static strategy.
-    #[structopt(long, env = "STATIC_MIN_AVG_FEE_PER_ORDER")]
+    #[structopt(long, env = "STATIC_MIN_AVG_FEE_PER_ORDER", default_value = "0")]
     static_min_avg_fee_per_order: Option<u128>,
 
     /// The static max gas price fee per order used for the Static strategy.
-    #[structopt(long, env = "STATIC_MAX_GAS_PRICE")]
+    #[structopt(long, env = "STATIC_MAX_GAS_PRICE", default_value = "100000000000")]
     static_max_gas_price: Option<u128>,
 
     /// How to calculate the economic viability constraints.

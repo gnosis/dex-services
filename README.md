@@ -153,8 +153,8 @@ OPTIONS:
             slightly between solution computation and submission [env: ECONOMIC_VIABILITY_MIN_AVG_FEE_FACTOR=]
             [default: 1.1]
         --economic-viability-strategy <economic-viability-strategy>
-            How to calculate the economic viability constraints. `Static`: Use fallback_min_avg_fee_per_order and
-            fallback_max_gas_price. `Dynamic`: Use current native token price, gas price and subsidy factor. `Combined`:
+            How to calculate the economic viability constraints. `Static`: Use static_min_avg_fee_per_order and
+            static_max_gas_price. `Dynamic`: Use current native token price, gas price and subsidy factor. `Combined`:
             Use the better (lower min-avg-fee) of the above [env: ECONOMIC_VIABILITY_STRATEGY=]  [default: Dynamic]
             [possible values: Static, Dynamic, Combined]
         --economic-viability-subsidy-factor <economic-viability-subsidy-factor>
@@ -208,10 +208,10 @@ OPTIONS:
             [env: SOLVER_TYPE=]  [default: NaiveSolver]  [possible values: NaiveSolver, StandardSolver, OpenSolver,
             BestRingSolver]
         --static-max-gas-price <static-max-gas-price>
-            The static max gas price fee per order used for the Static strategy [env: STATIC_MAX_GAS_PRICE=]
+            The static max gas price fee per order used for the Static strategy [env: STATIC_MAX_GAS_PRICE=] [default: 100000000000]
 
         --static-min-avg-fee-per-order <static-min-avg-fee-per-order>
-            The static minimum average fee per order used for the Static strategy [env: STATIC_MIN_AVG_FEE_PER_ORDER=]
+            The static minimum average fee per order used for the Static strategy [env: STATIC_MIN_AVG_FEE_PER_ORDER=] [default: 0]
 
         --target-start-solve-time <target-start-solve-time>
             The offset from the start of a batch in seconds at which point we should start solving [env:
