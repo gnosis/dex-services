@@ -47,6 +47,7 @@ jobs:
         - cargo test -p e2e ganache -- --nocapture
         - docker-compose logs
         # Build image with compiled binary
+        - docker build --tag stablex-binary-private --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:$PRIVATE_SOLVER_VERSION -f driver/docker/rust/Dockerfile .
         # StableX e2e Tests (Ganache) - private solver
         - docker build --tag stablex-binary-private --build-arg SOLVER_BASE=163030813197.dkr.ecr.eu-central-1.amazonaws.com/dex-solver:$PRIVATE_SOLVER_VERSION --build-arg ECONOMIC_VIABILITY_STRATEGY=static --build-arg STATIC_MIN_AVG_FEE_PER_ORDER=0 --build-arg STATIC_MAX_GAS_PRICE=100000000000 -f driver/docker/rust/Dockerfile .
         - docker-compose down
