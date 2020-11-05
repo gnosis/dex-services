@@ -159,7 +159,7 @@ OPTIONS:
             [possible values: Static, Dynamic, Combined]
         --economic-viability-subsidy-factor <economic-viability-subsidy-factor>
             Subsidy factor used to compute the minimum average fee per order in a solution as well as the gas cap for
-            economically viable solution [env: ECONOMIC_VIABILITY_SUBSIDY_FACTOR=]  [default: 0.0]
+            economically viable solution [env: ECONOMIC_VIABILITY_SUBSIDY_FACTOR=]  [default: 10.0]
         --http-timeout <http-timeout>
             The default timeout in milliseconds of HTTP requests to remote services such as the Gnosis Safe gas station
             and exchange REST APIs for fetching price estimates [env: HTTP_TIMEOUT=]  [default: 10000]
