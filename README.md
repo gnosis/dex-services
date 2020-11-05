@@ -153,13 +153,13 @@ OPTIONS:
             slightly between solution computation and submission [env: ECONOMIC_VIABILITY_MIN_AVG_FEE_FACTOR=]
             [default: 1.1]
         --economic-viability-strategy <economic-viability-strategy>
-            How to calculate the economic viability constraints. `Static`: Use static_min_avg_fee_per_order and
-            static_max_gas_price. `Dynamic`: Use current native token price, gas price and subsidy factor. `Combined`:
+            How to calculate the economic viability constraints. `Static`: Use fallback_min_avg_fee_per_order and
+            fallback_max_gas_price. `Dynamic`: Use current native token price, gas price and subsidy factor. `Combined`:
             Use the better (lower min-avg-fee) of the above [env: ECONOMIC_VIABILITY_STRATEGY=]  [default: Dynamic]
             [possible values: Static, Dynamic, Combined]
         --economic-viability-subsidy-factor <economic-viability-subsidy-factor>
             Subsidy factor used to compute the minimum average fee per order in a solution as well as the gas cap for
-            economically viable solution [env: ECONOMIC_VIABILITY_SUBSIDY_FACTOR=]  [default: 10.0]
+            economically viable solution [env: ECONOMIC_VIABILITY_SUBSIDY_FACTOR=]  [default: 0.0]
         --http-timeout <http-timeout>
             The default timeout in milliseconds of HTTP requests to remote services such as the Gnosis Safe gas station
             and exchange REST APIs for fetching price estimates [env: HTTP_TIMEOUT=]  [default: 10000]
@@ -168,7 +168,7 @@ OPTIONS:
             LATEST_SOLUTION_SUBMIT_TIME=]  [default: 210]
         --log-filter <log-filter>
             The log filter to use.
-
+            
             This follows the `slog-envlogger` syntax (e.g. 'info,driver=debug'). [env: LOG_FILTER=]  [default:
             warn,driver=info,services_core=info]
         --native-token-id <native-token-id>
@@ -182,7 +182,7 @@ OPTIONS:
             ORDERBOOK_FILE=]
         --orderbook-filter <orderbook-filter>
             JSON encoded object of which tokens/orders to ignore.
-
+            
             For example: '{ "tokens": {"Whitelist": [1, 2]}, "users": { "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A": {
             "OrderIds": [0, 1] }, "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B": "All" } }' More examples can be found in
             the tests of orderbook/filtered_orderboook.rs [env: ORDERBOOK_FILTER=]  [default: {}]
@@ -208,17 +208,17 @@ OPTIONS:
             [env: SOLVER_TYPE=]  [default: NaiveSolver]  [possible values: NaiveSolver, StandardSolver, OpenSolver,
             BestRingSolver]
         --static-max-gas-price <static-max-gas-price>
-            The static max gas price fee per order used for the Static strategy [env: STATIC_MAX_GAS_PRICE=] [default: 100000000000]
+            The static max gas price fee per order used for the Static strategy [env: STATIC_MAX_GAS_PRICE=]
 
         --static-min-avg-fee-per-order <static-min-avg-fee-per-order>
-            The static minimum average fee per order used for the Static strategy [env: STATIC_MIN_AVG_FEE_PER_ORDER=] [default: 0]
+            The static minimum average fee per order used for the Static strategy [env: STATIC_MIN_AVG_FEE_PER_ORDER=]
 
         --target-start-solve-time <target-start-solve-time>
             The offset from the start of a batch in seconds at which point we should start solving [env:
             TARGET_START_SOLVE_TIME=]  [default: 30]
         --token-data <token-data>
             JSON encoded backup token information to provide to the solver.
-
+            
             For example: '{ "T0001": { "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", "alias": "WETH",
             "decimals": 18, "externalPrice": 200000000000000000000, }, "T0004": { "address":
             "0x0000000000000000000000000000000000000000", "alias": "USDC", "decimals": 6, "externalPrice":
