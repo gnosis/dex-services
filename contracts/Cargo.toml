@@ -27,13 +27,13 @@ bin = [
 ]
 
 [dependencies]
-ethcontract = { version = "0.8", default-features = false }
+ethcontract = { version = "0.9",  default-features = false }
 serde = "1.0.117"
 
 # [bin-dependencies]
 anyhow = { version = "1.0.34", optional = true }
 env_logger = { version = "0.8.1", optional = true }
-ethcontract-generate = { version = "0.8", optional = true }
+ethcontract-generate = { version = "0.9", optional = true }
 filetime = { version = "0.2.13", optional = true }
 futures = { version = "0.3.8", optional = true }
 log = { version = "0.4.11", optional = true }
@@ -41,4 +41,4 @@ serde_json = { version = "1.0.59", optional = true }
 tokio = { version = "0.2", optional = true, features = ["macros"] }
 
 [build-dependencies]
-ethcontract-generate = "0.8"
+ethcontract-generate = "0.9"
