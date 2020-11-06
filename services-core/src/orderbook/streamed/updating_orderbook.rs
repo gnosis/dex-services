@@ -74,7 +74,7 @@ impl UpdatingOrderbook {
                             error,
                         );
                     } else {
-                        warn!(
+                        info!(
                             "Orderbook at specified path not found: {:?}",
                             error,
                         );
