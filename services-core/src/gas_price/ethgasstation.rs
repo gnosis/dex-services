@@ -1,9 +1,7 @@
 use super::{linear_interpolation, GasPriceEstimating};
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::Result;
-use ethcontract::U256;
 use isahc::http::uri::Uri;
-use pricegraph::num;
 use std::{convert::TryInto, time::Duration};
 
 // Gas price estimation with https://ethgasstation.info/ , api https://docs.ethgasstation.info/gas-price .
@@ -47,10 +45,10 @@ impl EthGasStation {
 
 #[async_trait::async_trait]
 impl GasPriceEstimating for EthGasStation {
-    async fn estimate_with_limits(&self, _gas_limit: U256, time_limit: Duration) -> Result<U256> {
+    async fn estimate_with_limits(&self, _gas_limit: f64, time_limit: Duration) -> Result<f64> {
         let response = self.gas_price().await?;
         let result = estimate_with_limits(&response, time_limit)?;
-        Ok(num::f64_to_u256(result))
+        Ok(result)
     }
 }
 
