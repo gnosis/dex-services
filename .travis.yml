@@ -41,7 +41,7 @@ jobs:
         # Make sure README is up to date
         - diff --ignore-trailing-space <(sed -n '/^driver /,/^```/p' README.md | head -n -1) <(cargo run --bin driver -- --help)
         # Build image with compiled binary
-        - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:$OPEN_SOLVER_VERSION --build-arg ECONOMIC_VIABILITY_STRATEGY=static --build-arg STATIC_MIN_AVG_FEE_PER_ORDER=0 --build-arg STATIC_MAX_GAS_PRICE=100000000000 -f driver/docker/rust/Dockerfile .
+        - docker build --tag stablex-binary-public --build-arg SOLVER_BASE=gnosispm/dex-open-solver:$OPEN_SOLVER_VERSION -f driver/docker/rust/Dockerfile .
         # StableX e2e Tests (Ganache) - open solver
         - docker-compose -f docker-compose.yml -f driver/docker-compose.open-solver.yml up -d stablex-test
         - cargo test -p e2e ganache -- --nocapture
