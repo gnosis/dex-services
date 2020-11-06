@@ -175,7 +175,7 @@ struct Options {
     #[structopt(
         long,
         env = "ECONOMIC_VIABILITY_SUBSIDY_FACTOR",
-        default_value = "10.0"
+        default_value = "1.0"
     )]
     economic_viability_subsidy_factor: f64,
 
