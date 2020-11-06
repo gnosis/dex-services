@@ -73,6 +73,8 @@ impl UpdatingOrderbook {
                             "Failed to construct orderbook from path (using default): {:?}",
                             error,
                         );
+                    } else {
+                        info!("Orderbook at specified path not found: {:?}", error,);
                     }
                 }
             },

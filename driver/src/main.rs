@@ -172,11 +172,7 @@ struct Options {
 
     /// Subsidy factor used to compute the minimum average fee per order in a
     /// solution as well as the gas cap for economically viable solution.
-    #[structopt(
-        long,
-        env = "ECONOMIC_VIABILITY_SUBSIDY_FACTOR",
-        default_value = "10.0"
-    )]
+    #[structopt(long, env = "ECONOMIC_VIABILITY_SUBSIDY_FACTOR", default_value = "1.0")]
     economic_viability_subsidy_factor: f64,
 
     /// We multiply the economically viable min average fee by this amount to ensure that if a
