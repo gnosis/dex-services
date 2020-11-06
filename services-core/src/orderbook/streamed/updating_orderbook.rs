@@ -74,10 +74,7 @@ impl UpdatingOrderbook {
                             error,
                         );
                     } else {
-                        info!(
-                            "Orderbook at specified path not found: {:?}",
-                            error,
-                        );
+                        info!("Orderbook at specified path not found: {:?}", error,);
                     }
                 }
             },
