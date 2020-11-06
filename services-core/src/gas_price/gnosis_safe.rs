@@ -4,9 +4,7 @@
 use super::{linear_interpolation, GasPriceEstimating};
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
 use anyhow::Result;
-use ethcontract::U256;
 use isahc::http::uri::Uri;
-use pricegraph::num;
 use serde::Deserialize;
 use serde_with::rust::display_fromstr;
 use std::{convert::TryInto, time::Duration};
@@ -91,21 +89,21 @@ impl GnosisSafeGasStation {
 impl GasPriceEstimating for GnosisSafeGasStation {
     // The default implementation calls estimate_with_limits with 30 seconds which would result in
     // the standard time instead of fast. So to keep that behavior we implement it manually.
-    async fn estimate(&self) -> Result<U256> {
+    async fn estimate(&self) -> Result<f64> {
         let response = self.gas_prices().await?;
-        Ok(num::f64_to_u256(response.fast))
+        Ok(response.fast)
     }
 
-    async fn estimate_with_limits(&self, gas_limit: U256, time_limit: Duration) -> Result<U256> {
+    async fn estimate_with_limits(&self, gas_limit: f64, time_limit: Duration) -> Result<f64> {
         let response = self.gas_prices().await?;
         let result = estimate_with_limits(&response, gas_limit, time_limit)?;
-        Ok(num::f64_to_u256(result))
+        Ok(result)
     }
 }
 
 fn estimate_with_limits(
     response: &GasPrices,
-    _gas_limit: U256,
+    _gas_limit: f64,
     time_limit: Duration,
 ) -> Result<f64> {
     let points: &[(f64, f64)] = &[
@@ -158,8 +156,7 @@ pub mod tests {
         println!("{:?}", response);
         for i in 0..10 {
             let time_limit = Duration::from_secs(i * 10);
-            let price =
-                estimate_with_limits(&response, DEFAULT_GAS_LIMIT.into(), time_limit).unwrap();
+            let price = estimate_with_limits(&response, DEFAULT_GAS_LIMIT, time_limit).unwrap();
             println!(
                 "gas price estimate for {} seconds: {} gwei",
                 time_limit.as_secs(),
