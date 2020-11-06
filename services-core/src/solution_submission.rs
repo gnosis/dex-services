@@ -6,7 +6,6 @@ use crate::{
     models::{BatchId, Solution},
     util::AsyncSleeping,
 };
-
 use anyhow::{anyhow, Error, Result};
 use ethcontract::{
     errors::{ExecutionError, MethodError},
@@ -55,7 +54,7 @@ pub trait StableXSolutionSubmitting {
         batch_index: u32,
         solution: Solution,
         claimed_objective_value: U256,
-        gas_price_cap: U256,
+        gas_price_cap: f64,
     ) -> Result<(), SolutionSubmissionError>;
 }
 
@@ -164,7 +163,7 @@ impl<'a> StableXSolutionSubmitter<'a> {
         &self,
         batch_index: u32,
         nonce: U256,
-        gas_price_cap: U256,
+        gas_price_cap: f64,
     ) -> Result<(), NoopTransactionError> {
         // Add some extra time in case of desync between real time and ethereum node current block time.
         let deadline = BatchId::from(batch_index).solve_end_time() + Duration::from_secs(30);
@@ -172,15 +171,13 @@ impl<'a> StableXSolutionSubmitter<'a> {
             .duration_since(SystemTime::now())
             .unwrap_or_default();
         self.async_sleep.sleep(remaining).await;
-        let gas_price = U256::from(
-            (num::u256_to_f64(gas_price_cap) * MIN_GAS_PRICE_INCREASE_FACTOR).ceil() as u128,
-        );
+        let gas_price = (gas_price_cap * MIN_GAS_PRICE_INCREASE_FACTOR).ceil();
         log::info!(
             "cancelling transaction because it took too long, using gas price {}",
             gas_price
         );
         self.contract
-            .send_noop_transaction(gas_price, nonce)
+            .send_noop_transaction(num::f64_to_u256(gas_price), nonce)
             .await
             .map(|_| ())
     }
@@ -204,7 +201,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
         batch_index: u32,
         solution: Solution,
         claimed_objective_value: U256,
-        gas_price_cap: U256,
+        gas_price_cap: f64,
     ) -> Result<(), SolutionSubmissionError> {
         // If the gas price cap is not at least the fast gas price then submitting the solution
         // is not feasible because it would take too long.
@@ -435,7 +432,7 @@ mod tests {
             sleep,
         );
         let result = submitter
-            .submit_solution(0, Solution::trivial(), U256::zero(), U256::zero())
+            .submit_solution(0, Solution::trivial(), U256::zero(), 0.0)
             .now_or_never()
             .unwrap();
 

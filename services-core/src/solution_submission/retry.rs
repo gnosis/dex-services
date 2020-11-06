@@ -14,14 +14,14 @@ use std::{sync::Arc, time::Duration};
 
 use super::MIN_GAS_PRICE_INCREASE_FACTOR;
 
-const DEFAULT_GAS_PRICE: u64 = 15_000_000_000;
+const DEFAULT_GAS_PRICE: f64 = 15_000_000_000.0;
 const SINGLE_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct Args {
     pub batch_index: u32,
     pub solution: Solution,
     pub claimed_objective_value: U256,
-    pub gas_price_cap: U256,
+    pub gas_price_cap: f64,
     pub nonce: U256,
 }
 
@@ -71,13 +71,13 @@ impl<'a> SolutionTransactionSending for RetryWithGasPriceIncrease<'a> {
 
 struct InfallibleGasPriceEstimator<'a> {
     gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
-    previous_gas_price: U256,
+    previous_gas_price: f64,
 }
 
 impl<'a> InfallibleGasPriceEstimator<'a> {
     fn new(
         gas_price_estimating: &'a (dyn GasPriceEstimating + Sync),
-        default_gas_price: U256,
+        default_gas_price: f64,
     ) -> Self {
         Self {
             gas_price_estimating,
@@ -86,7 +86,7 @@ impl<'a> InfallibleGasPriceEstimator<'a> {
     }
 
     /// Get a fresh price estimate or if that fails return the most recent previous result.
-    async fn estimate(&mut self) -> U256 {
+    async fn estimate(&mut self) -> f64 {
         match self.gas_price_estimating.estimate().await {
             Ok(gas_estimate) => {
                 // `retry` relies on the gas price always increasing.
@@ -103,10 +103,10 @@ impl<'a> InfallibleGasPriceEstimator<'a> {
     }
 }
 
-fn gas_price(estimated_price: U256, price_increase_count: u32, cap: U256) -> U256 {
+fn gas_price(estimated_price: f64, price_increase_count: u32, cap: f64) -> f64 {
     let factor = 1.5f64.powf(price_increase_count as f64);
-    let new_price = num::u256_to_f64(estimated_price) * factor;
-    cap.min(U256::from(new_price as u128))
+    let new_price = estimated_price * factor;
+    cap.min(new_price)
 }
 
 enum FutureOutput {
@@ -126,12 +126,10 @@ async fn retry(
         nonce,
     }: Args,
 ) -> Result<(), MethodError> {
-    let effective_gas_price_cap = U256::from(
-        (gas_price_cap.as_u128() as f64 / MIN_GAS_PRICE_INCREASE_FACTOR).floor() as u128,
-    );
+    let effective_gas_price_cap = (gas_price_cap / MIN_GAS_PRICE_INCREASE_FACTOR).floor();
     assert!(effective_gas_price_cap <= gas_price_cap);
     let mut gas_price_estimator =
-        InfallibleGasPriceEstimator::new(gas_price_estimating, DEFAULT_GAS_PRICE.into());
+        InfallibleGasPriceEstimator::new(gas_price_estimating, DEFAULT_GAS_PRICE);
     let mut futures = FuturesUnordered::new();
 
     for gas_price_increase_count in 0u32.. {
@@ -149,7 +147,7 @@ async fn retry(
                 batch_index,
                 solution.clone(),
                 claimed_objective_value,
-                gas_price,
+                num::f64_to_u256(gas_price),
                 nonce,
             )
             .map(FutureOutput::SolutionSubmission);
@@ -187,6 +185,7 @@ mod tests {
         util::{FutureWaitExt as _, MockAsyncSleeping},
     };
     use anyhow::anyhow;
+    use assert_approx_eq::assert_approx_eq;
     use futures::future;
     use mockall::predicate::*;
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
@@ -212,10 +211,10 @@ mod tests {
             .return_once(|| Err(anyhow!("")));
 
         let mut estimator = InfallibleGasPriceEstimator::new(&gas_station, 3.into());
-        assert_eq!(estimator.estimate().now_or_never().unwrap(), U256::from(3));
-        assert_eq!(estimator.estimate().now_or_never().unwrap(), U256::from(5));
-        assert_eq!(estimator.estimate().now_or_never().unwrap(), U256::from(6));
-        assert_eq!(estimator.estimate().now_or_never().unwrap(), U256::from(6));
+        assert_approx_eq!(estimator.estimate().now_or_never().unwrap(), 3.0);
+        assert_approx_eq!(estimator.estimate().now_or_never().unwrap(), 5.0);
+        assert_approx_eq!(estimator.estimate().now_or_never().unwrap(), 6.0);
+        assert_approx_eq!(estimator.estimate().now_or_never().unwrap(), 6.0);
     }
 
     #[test]
@@ -231,21 +230,21 @@ mod tests {
             .return_once(|| Ok(9.into()));
 
         let mut estimator = InfallibleGasPriceEstimator::new(&gas_station, 3.into());
-        assert_eq!(estimator.estimate().now_or_never().unwrap(), U256::from(10));
-        assert_eq!(estimator.estimate().now_or_never().unwrap(), U256::from(10));
+        assert_approx_eq!(estimator.estimate().now_or_never().unwrap(), 10.0);
+        assert_approx_eq!(estimator.estimate().now_or_never().unwrap(), 10.0);
     }
 
     #[test]
     fn gas_price_increases_as_expected_and_hits_limit() {
-        let estimated = U256::from(5);
-        let cap = U256::from(50);
-        assert_eq!(gas_price(estimated, 0, cap), U256::from(5));
-        assert_eq!(gas_price(estimated, 1, cap), U256::from(7));
-        assert_eq!(gas_price(estimated, 2, cap), U256::from(11));
-        assert_eq!(gas_price(estimated, 3, cap), U256::from(16));
-        assert_eq!(gas_price(estimated, 4, cap), U256::from(25));
-        assert_eq!(gas_price(estimated, 5, cap), U256::from(37));
-        assert_eq!(gas_price(estimated, 6, cap), U256::from(50));
+        let estimated = 5.0;
+        let cap = 50.0;
+        assert_approx_eq!(gas_price(estimated, 0, cap).round(), 5.0);
+        assert_approx_eq!(gas_price(estimated, 1, cap).round(), 8.0);
+        assert_approx_eq!(gas_price(estimated, 2, cap).round(), 11.0);
+        assert_approx_eq!(gas_price(estimated, 3, cap).round(), 17.0);
+        assert_approx_eq!(gas_price(estimated, 4, cap).round(), 25.0);
+        assert_approx_eq!(gas_price(estimated, 5, cap).round(), 38.0);
+        assert_approx_eq!(gas_price(estimated, 6, cap).round(), 50.0);
     }
 
     #[test]
@@ -275,7 +274,7 @@ mod tests {
             batch_index: 1,
             solution: Solution::trivial(),
             claimed_objective_value: 1.into(),
-            gas_price_cap: (DEFAULT_GAS_PRICE * 10).into(),
+            gas_price_cap: DEFAULT_GAS_PRICE * 10.0,
             nonce: 0.into(),
         };
         let result = retry(&contract, &gas_station, &sleep, args)
@@ -295,7 +294,7 @@ mod tests {
                 always(),
                 always(),
                 always(),
-                eq(U256::from(DEFAULT_GAS_PRICE * 90)),
+                eq(num::f64_to_u256(DEFAULT_GAS_PRICE * 90.0)),
                 always(),
             )
             .returning(|_, _, _, _, _| futures::future::pending().boxed());
@@ -305,7 +304,7 @@ mod tests {
         let mut gas_station = MockGasPriceEstimating::new();
         gas_station
             .expect_estimate()
-            .returning(|| Ok((DEFAULT_GAS_PRICE * 90).into()));
+            .returning(|| Ok(DEFAULT_GAS_PRICE * 90.0));
 
         let sleep = MockAsyncSleeping::new();
 
@@ -313,7 +312,7 @@ mod tests {
             batch_index: 1,
             solution: Solution::trivial(),
             claimed_objective_value: 1.into(),
-            gas_price_cap: (DEFAULT_GAS_PRICE * 100).into(),
+            gas_price_cap: DEFAULT_GAS_PRICE * 100.0,
             nonce: 0.into(),
         };
         let result = retry(&contract, &gas_station, &sleep, args).now_or_never();
@@ -354,7 +353,7 @@ mod tests {
             batch_index: 1,
             solution: Solution::trivial(),
             claimed_objective_value: 1.into(),
-            gas_price_cap: (DEFAULT_GAS_PRICE * 10).into(),
+            gas_price_cap: DEFAULT_GAS_PRICE * 10.0,
             nonce: 0.into(),
         };
         let result = retry(&contract, &gas_station, &sleep, args).wait();
@@ -402,7 +401,7 @@ mod tests {
             batch_index: 1,
             solution: Solution::trivial(),
             claimed_objective_value: 1.into(),
-            gas_price_cap: (DEFAULT_GAS_PRICE * 10).into(),
+            gas_price_cap: DEFAULT_GAS_PRICE * 10.0,
             nonce: 0.into(),
         };
         let result = retry(&contract, &gas_station, &sleep, args).wait();
