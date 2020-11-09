@@ -8,8 +8,8 @@ use crate::{contracts::Web3, http::HttpFactory};
 use anyhow::Result;
 use std::{sync::Arc, time::Duration};
 
-const DEFAULT_GAS_LIMIT: f64 = 21000.0;
-const DEFAULT_TIME_LIMIT: Duration = Duration::from_secs(30);
+pub const DEFAULT_GAS_LIMIT: f64 = 21000.0;
+pub const DEFAULT_TIME_LIMIT: Duration = Duration::from_secs(30);
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
