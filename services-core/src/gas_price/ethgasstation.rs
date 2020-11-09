@@ -29,8 +29,7 @@ struct Response {
 }
 
 impl EthGasStation {
-    #[allow(dead_code)]
-    fn new(http_factory: &HttpFactory) -> Result<Self> {
+    pub fn new(http_factory: &HttpFactory) -> Result<Self> {
         let client = http_factory.create()?;
         let uri = Uri::from_static(API_URI);
         Ok(Self { client, uri })

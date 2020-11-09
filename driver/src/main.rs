@@ -368,7 +368,7 @@ fn setup_monitoring() -> (
 async fn setup_http_services(
     http_factory: &HttpFactory,
     options: &Options,
-) -> (Web3, Arc<dyn GasPriceEstimating + Send + Sync>) {
+) -> (Web3, Arc<dyn GasPriceEstimating>) {
     let web3 = web3_provider(http_factory, options.node_url.as_str(), options.rpc_timeout).unwrap();
     let gas_station = gas_price::create_estimator(&http_factory, &web3)
         .await

@@ -30,7 +30,7 @@ impl EconomicViabilityStrategy {
         static_min_avg_fee_per_order: Option<u128>,
         static_max_gas_price: Option<u128>,
         native_token_price: Arc<dyn NativeTokenPricing + Send + Sync>,
-        gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
+        gas_station: Arc<dyn GasPriceEstimating>,
     ) -> Result<Arc<dyn EconomicViabilityComputing>> {
         let make_dynamic = || {
             DynamicEconomicViabilityComputer::new(
@@ -84,7 +84,7 @@ pub trait EconomicViabilityComputing: Send + Sync + 'static {
 /// Economic viability constraints based on the current gas and native token price.
 pub struct DynamicEconomicViabilityComputer {
     price_oracle: Arc<dyn NativeTokenPricing + Send + Sync>,
-    gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
+    gas_station: Arc<dyn GasPriceEstimating>,
     subsidy_factor: f64,
     /// We multiply the min average fee by this amount to ensure that if a solution has this minimum
     /// amount it will still be end up economically viable even when the gas or native token price moves
@@ -95,7 +95,7 @@ pub struct DynamicEconomicViabilityComputer {
 impl DynamicEconomicViabilityComputer {
     pub fn new(
         price_oracle: Arc<dyn NativeTokenPricing + Send + Sync>,
-        gas_station: Arc<dyn GasPriceEstimating + Send + Sync>,
+        gas_station: Arc<dyn GasPriceEstimating>,
         subsidy_factor: f64,
         min_avg_fee_factor: f64,
     ) -> Self {

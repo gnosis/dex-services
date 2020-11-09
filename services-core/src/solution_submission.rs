@@ -101,7 +101,7 @@ pub struct StableXSolutionSubmitter<'a> {
 impl<'a> StableXSolutionSubmitter<'a> {
     pub fn new(
         contract: Arc<dyn StableXContract>,
-        gas_price_estimating: Arc<dyn GasPriceEstimating + Send + Sync>,
+        gas_price_estimating: Arc<dyn GasPriceEstimating>,
     ) -> Self {
         Self::with_retry_and_sleep(
             contract.clone(),

@@ -39,7 +39,7 @@ pub trait SolutionTransactionSending {
 
 pub struct RetryWithGasPriceIncrease<'a> {
     contract: Arc<dyn StableXContract>,
-    gas_price_estimating: Arc<dyn GasPriceEstimating + Send + Sync>,
+    gas_price_estimating: Arc<dyn GasPriceEstimating>,
     async_sleep: Box<dyn AsyncSleeping + 'a>,
     now: Box<dyn Now + 'a>,
 }
@@ -47,7 +47,7 @@ pub struct RetryWithGasPriceIncrease<'a> {
 impl<'a> RetryWithGasPriceIncrease<'a> {
     pub fn new(
         contract: Arc<dyn StableXContract>,
-        gas_price_estimating: Arc<dyn GasPriceEstimating + Send + Sync>,
+        gas_price_estimating: Arc<dyn GasPriceEstimating>,
     ) -> Self {
         Self::with_sleep_and_now(
             contract,
@@ -59,7 +59,7 @@ impl<'a> RetryWithGasPriceIncrease<'a> {
 
     pub fn with_sleep_and_now(
         contract: Arc<dyn StableXContract>,
-        gas_price_estimating: Arc<dyn GasPriceEstimating + Send + Sync>,
+        gas_price_estimating: Arc<dyn GasPriceEstimating>,
         async_sleep: impl AsyncSleeping + 'a,
         now: impl Now + 'a,
     ) -> Self {
