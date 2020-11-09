@@ -34,8 +34,7 @@ const STANDARD: Duration = Duration::from_secs(300);
 const SLOW: Duration = Duration::from_secs(600);
 
 impl GasNow {
-    #[allow(dead_code)]
-    fn new(http_factory: &HttpFactory) -> Result<Self> {
+    pub fn new(http_factory: &HttpFactory) -> Result<Self> {
         let client = http_factory.create()?;
         let uri = Uri::from_static(API_URI);
         Ok(Self { client, uri })
