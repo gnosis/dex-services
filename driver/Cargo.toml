@@ -9,5 +9,5 @@ ethcontract = { version = "0.8", default-features = false }
 log = "0.4.11"
 prometheus = { version = "0.10.0", default-features= false }
 structopt = "0.3.20"
-url = "2.1.1"
+url = "2.2.0"
 

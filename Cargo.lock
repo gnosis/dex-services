@@ -149,7 +149,7 @@ dependencies = [
  "async-std",
  "native-tls",
  "thiserror",
- "url 2.1.1",
+ "url 2.2.0",
 ]
 
 [[package]]
@@ -860,7 +860,7 @@ dependencies = [
  "prometheus",
  "services-core",
  "structopt",
- "url 2.1.1",
+ "url 2.2.0",
 ]
 
 [[package]]
@@ -1004,7 +1004,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
- "url 2.1.1",
+ "url 2.2.0",
 ]
 
 [[package]]
@@ -1101,6 +1101,16 @@ name = "foreign-types-shared"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
+
+[[package]]
+name = "form_urlencoded"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ece68d15c92e84fa4f19d3780f1294e5ca82a78a6d515f1efaabcc144688be00"
+dependencies = [
+ "matches",
+ "percent-encoding 2.1.0",
+]
 
 [[package]]
 name = "fragile"
@@ -2301,7 +2311,7 @@ dependencies = [
  "structopt",
  "thiserror",
  "tokio",
- "url 2.1.1",
+ "url 2.2.0",
  "warp",
 ]
 
@@ -2947,7 +2957,7 @@ dependencies = [
  "dtoa",
  "itoa",
  "serde",
- "url 2.1.1",
+ "url 2.2.0",
 ]
 
 [[package]]
@@ -3007,7 +3017,7 @@ dependencies = [
  "thiserror",
  "typenum",
  "uint",
- "url 2.1.1",
+ "url 2.2.0",
 ]
 
 [[package]]
@@ -3527,7 +3537,7 @@ dependencies = [
  "log 0.4.11",
  "rand 0.7.3",
  "sha-1 0.9.1",
- "url 2.1.1",
+ "url 2.2.0",
  "utf-8",
 ]
 
@@ -3625,10 +3635,11 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.1.1"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "829d4a8476c35c9bf0bbce5a3b23f4106f79728039b726d292bb93bc106787cb"
+checksum = "5909f2b0817350449ed73e8bcd81c8c3c8d9a7a5d8acba4b27db277f1868976e"
 dependencies = [
+ "form_urlencoded",
  "idna 0.2.0",
  "matches",
  "percent-encoding 2.1.0",
@@ -3871,7 +3882,7 @@ dependencies = [
  "serde_json",
  "soketto",
  "tiny-keccak 2.0.2",
- "url 2.1.1",
+ "url 2.2.0",
 ]
 
 [[package]]
