@@ -47,7 +47,7 @@ mod tests {
     use futures::future::FutureExt;
 
     #[test]
-    fn prioritize_picks_first() {
+    fn prioritize_picks_first_if_first_succeeds() {
         let mut estimator_0 = MockGasPriceEstimating::new();
         let estimator_1 = MockGasPriceEstimating::new();
 
@@ -59,7 +59,7 @@ mod tests {
     }
 
     #[test]
-    fn prioritize_picks_second() {
+    fn prioritize_picks_second_if_first_fails() {
         let mut estimator_0 = MockGasPriceEstimating::new();
         let mut estimator_1 = MockGasPriceEstimating::new();
 
@@ -72,5 +72,24 @@ mod tests {
         let priority = PriorityGasPrice::new(vec![Box::new(estimator_0), Box::new(estimator_1)]);
         let result = priority.estimate().now_or_never().unwrap().unwrap();
         assert_approx_eq!(result, 2.0);
+    }
+
+    #[test]
+    fn prioritize_fails_if_all_fail() {
+        let mut estimator_0 = MockGasPriceEstimating::new();
+        let mut estimator_1 = MockGasPriceEstimating::new();
+
+        estimator_0
+            .expect_estimate()
+            .times(1)
+            .returning(|| Err(anyhow!("")));
+        estimator_1
+            .expect_estimate()
+            .times(1)
+            .returning(|| Err(anyhow!("")));
+
+        let priority = PriorityGasPrice::new(vec![Box::new(estimator_0), Box::new(estimator_1)]);
+        let result = priority.estimate().now_or_never().unwrap();
+        assert!(result.is_err());
     }
 }
