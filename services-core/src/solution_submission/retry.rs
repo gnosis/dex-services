@@ -1,8 +1,8 @@
 use super::IsOpenEthereumTransactionError as _;
 use crate::util::{self, AsyncSleeping, Now};
 use crate::{
-    contracts::stablex_contract::StableXContract,
-    gas_price::{GasPriceEstimating, DEFAULT_GAS_LIMIT},
+    contracts::stablex_contract::{StableXContract, SOLUTION_SUBMISSION_GAS_LIMIT},
+    gas_price::GasPriceEstimating,
     models::Solution,
 };
 use anyhow::Result;
@@ -85,15 +85,14 @@ enum FutureOutput {
 }
 
 impl<'a> RetryWithGasPriceIncrease<'a> {
-    async fn new_gas_price(&self, args: &Args) -> Option<f64> {
+    async fn new_gas_price_for_target_time(&self, args: &Args) -> Option<f64> {
         let time_remaining = args
             .target_confirm_time
             .saturating_duration_since(self.now.instant_now());
-        // TODO: Use real gas limit once the gas estimators take that into account and we can
-        // predict it more accurately.
+        // TODO: Use a more accurate gas limit once the gas estimators take that into account.
         let estimated_gas_price = match self
             .gas_price_estimating
-            .estimate_with_limits(DEFAULT_GAS_LIMIT, time_remaining)
+            .estimate_with_limits(SOLUTION_SUBMISSION_GAS_LIMIT as f64, time_remaining)
             .await
         {
             Ok(gas_price) => gas_price,
@@ -133,25 +132,35 @@ impl<'a> RetryWithGasPriceIncrease<'a> {
     }
 
     async fn retry_(&self, args: Args) -> Result<(), MethodError> {
+        // Like in `StableXSolutionSubmitter::submit_solution` we need to handle the situation where
+        // we observe a nonce error from one future before the completion of another. It is also
+        // possible that a previous submission transaction completes first instead of the most
+        // recent one.
+        // That is why we keep track of all past transaction futures in this variable.
         let mut futures = FuturesUnordered::new();
         let mut highest_used_gas_price = 0.0;
         loop {
-            if let Some(gas_price) = self.new_gas_price(&args).await {
+            if let Some(gas_price) = self.new_gas_price_for_target_time(&args).await {
                 if gas_price >= highest_used_gas_price * MIN_GAS_PRICE_INCREASE_FACTOR {
                     highest_used_gas_price = gas_price;
                     futures.push(self.submit_solution(&args, gas_price));
                 }
             }
 
+            // We also store the sleep future and have converted both future's return type to the
+            // `FutureOutput` enum so that they can be stored in the FuturesUnordered.
             futures.push(self.wait_interval());
 
-            // Like in `StableXSolutionSubmitter::submit_solution` we need to handle the situation where
-            // we observe a nonce error from one future before the completion of another. It is also
-            // possible that a previous submission transaction completes first instead of the most
-            // recent one.
-            // Unwrap because the timeout future always exists.
+            // We check which type of future completes first. We can unwrap `next` because there is
+            // always the wait_interval future. If it completes first then `while let` does not
+            // match and we go into the next loop with a new gas price.
+            // We need a while loop to work around the possibility of observing transaction futures
+            // completing in an unexpected ordering. If we get a transaction error a different
+            // transaction future could still complete.
+            // Only when we observe an error that isn't a transaction error or we get to the last
+            // transaction future we can be sure that we are done.
             while let FutureOutput::SolutionSubmission(result) = futures.next().await.unwrap() {
-                // Comparison against `1` instead of `empty` because the timeout future always exists.
+                // Compare to `1` instead of `empty` because of the wait_interval future.
                 let is_last_transaction_future = futures.len() == 1;
                 if !result.is_transaction_error() || is_last_transaction_future {
                     return result;

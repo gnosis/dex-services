@@ -201,7 +201,7 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
             + BatchId::from(batch_index)
                 .solve_end_time()
                 .duration_since(SystemTime::now())
-                .unwrap_or_default();
+                .unwrap_or_else(|_| Duration::from_secs(0));
         let nonce = self.contract.get_transaction_count().await?;
         let submit_future = self.retry_with_gas_price_increase.retry(retry::Args {
             batch_index,
