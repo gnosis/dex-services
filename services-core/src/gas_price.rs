@@ -32,7 +32,7 @@ pub async fn create_estimator(
     let network_id = web3.net().version().await?;
     let mut estimators = Vec::<Box<dyn GasPriceEstimating>>::new();
 
-    if network_id == "1" {
+    if is_mainnet(&network_id) {
         let gasnow = gasnow::GasNow::new(http_factory)?;
         estimators.push(Box::new(gasnow));
 
@@ -48,4 +48,8 @@ pub async fn create_estimator(
     estimators.push(Box::new(web3.clone()));
 
     Ok(Arc::new(priority::PriorityGasPrice::new(estimators)))
+}
+
+fn is_mainnet(network_id: &str) -> bool {
+    network_id == "1"
 }
