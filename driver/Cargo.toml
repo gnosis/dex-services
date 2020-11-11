@@ -5,9 +5,8 @@ edition = "2018"
 
 [dependencies]
 services-core = { path = "../services-core" }
-ethcontract = { version = "0.8", default-features = false }
+ethcontract = { version = "0.9", default-features = false }
 log = "0.4.11"
 prometheus = { version = "0.10.0", default-features= false }
 structopt = "0.3.20"
 url = "2.2.0"
-

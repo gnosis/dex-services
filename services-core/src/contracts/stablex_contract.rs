@@ -15,7 +15,11 @@ use ethcontract::{
     transaction::{confirm::ConfirmParams, Account, GasPrice, ResolveCondition, TransactionResult},
     Address, BlockId, BlockNumber, PrivateKey, U256,
 };
-use futures::future::{BoxFuture, FutureExt as _};
+use futures::{
+    future::BoxFuture,
+    stream::{BoxStream, StreamExt},
+    FutureExt as _,
+};
 
 use lazy_static::lazy_static;
 use std::collections::HashMap;
@@ -140,12 +144,12 @@ pub trait StableXContract: Send + Sync {
         nonce: U256,
     ) -> BoxFuture<'a, Result<(), MethodError>>;
 
-    async fn past_events(
-        &self,
+    async fn past_events<'a>(
+        &'a self,
         from_block: BlockNumber,
         to_block: BlockNumber,
         block_page_size: u64,
-    ) -> Result<Vec<Event<batch_exchange::Event>>, ExecutionError>;
+    ) -> Result<BoxStream<'a, Result<Event<batch_exchange::Event>, ExecutionError>>, ExecutionError>;
 
     /// Create a noop transaction. Useful to cancel a previous transaction that is stuck due to
     /// low gas price.
@@ -290,19 +294,22 @@ impl StableXContract for StableXContractImpl {
         .boxed()
     }
 
-    async fn past_events(
-        &self,
+    async fn past_events<'a>(
+        &'a self,
         from_block: BlockNumber,
         to_block: BlockNumber,
         block_page_size: u64,
-    ) -> Result<Vec<Event<batch_exchange::Event>>, ExecutionError> {
-        self.instance
+    ) -> Result<BoxStream<'a, Result<Event<batch_exchange::Event>, ExecutionError>>, ExecutionError>
+    {
+        let stream = self
+            .instance
             .all_events()
             .from_block(from_block)
             .to_block(to_block)
             .block_page_size(block_page_size)
             .query_paginated()
-            .await
+            .await?;
+        Ok(stream.boxed())
     }
 
     fn send_noop_transaction<'a>(

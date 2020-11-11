@@ -17,8 +17,8 @@ path = "fetch.rs"
 anyhow = "1.0.34"
 contracts = { path = "../../../contracts" }
 env_logger = "0.8.1"
-ethcontract = { version = "0.8", features = ["http-tls"] }
-futures = "0.3.7"
+ethcontract = { version = "0.9", features = ["http-tls"] }
+futures = "0.3.8"
 hex = "0.4.2"
 log = "0.4.11"
 serde = { version = "1.0.117", features = ["derive"] }

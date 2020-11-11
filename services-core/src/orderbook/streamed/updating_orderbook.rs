@@ -7,14 +7,16 @@ use crate::{
 };
 use anyhow::{anyhow, bail, ensure, Result};
 use block_timestamp_reading::{BlockTimestampReading, CachedBlockTimestampReader};
-use ethcontract::{contract::Event, BlockNumber, H256};
-use futures::future::{BoxFuture, FutureExt as _};
-use futures::lock::Mutex;
+use ethcontract::{errors::ExecutionError, BlockNumber, H256};
+use futures::{
+    future::{BoxFuture, FutureExt as _},
+    lock::Mutex,
+    stream::{Stream, StreamExt as _},
+};
 use log::{error, info, warn};
-use std::collections::HashSet;
-use std::convert::TryFrom;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{collections::HashSet, convert::TryFrom, path::PathBuf, sync::Arc};
+
+type Event = ethcontract::contract::Event<contracts::batch_exchange::Event>;
 
 const BLOCK_CONFIRMATION_COUNT: u64 = 25;
 
@@ -90,7 +92,7 @@ impl UpdatingOrderbook {
         let mut context_guard = self.context.lock().await;
         match context_guard.as_mut() {
             Some(context) => {
-                self.update_with_events(context).await?;
+                self.update(context).await?;
                 callback(context).await
             }
             None => {
@@ -103,7 +105,7 @@ impl UpdatingOrderbook {
                     ),
                 };
                 self.load_orderbook_from_file(&mut context);
-                self.update_with_events(&mut context).await?;
+                self.update(&mut context).await?;
                 let result = callback(&mut context).await;
                 *context_guard = Some(context);
                 result
@@ -111,7 +113,10 @@ impl UpdatingOrderbook {
         }
     }
 
-    async fn update_with_events(&self, context: &mut Context) -> Result<()> {
+    /// Gather all new events since the last update and update the orderbook.
+    async fn update(&self, context: &mut Context) -> Result<()> {
+        // We cannot use BlockNumber::Pending here because we are not guaranteed to get metadata for
+        // pending blocks but we need the metadata in the functions below.
         let current_block = self.web3.eth().block_number().await?.as_u64();
         let from_block = context
             .last_handled_block
@@ -124,72 +129,47 @@ impl UpdatingOrderbook {
                 current_block, BLOCK_CONFIRMATION_COUNT, from_block
             )
         );
-        // We cannot use BlockNumber::Pending here because we are not guaranteed to get metadata for
-        // pending blocks but we need the metadata in the functions below.
-        let to_block = BlockNumber::Number(current_block.into());
         log::info!(
             "Updating event based orderbook from block {} to block {}.",
             from_block,
             current_block,
         );
-        let events = self
-            .contract
-            .past_events(
-                BlockNumber::Number(from_block.into()),
-                to_block,
-                self.block_page_size as _,
-            )
-            .await?;
-        self.handle_events(context, events, from_block, current_block)
-            .await?;
+        self.update_with_events_between_blocks(context, from_block, current_block)
+            .await
+    }
+
+    async fn update_with_events_between_blocks(
+        &self,
+        context: &mut Context,
+        from_block: u64,
+        to_block: u64,
+    ) -> Result<()> {
+        let mut events = self.chunked_events(from_block, to_block).await?;
+        context
+            .orderbook
+            .delete_events_starting_at_block(from_block);
+        while let Some(chunk) = events.next().await {
+            let events = chunk?;
+            self.prepare_timestamp_cache(context, &events, to_block)
+                .await?;
+            for event in events {
+                self.handle_event(context, event).await?;
+            }
+            context.last_handled_block = to_block;
+        }
+
         // Update the orderbook on disk before exit.
         if let Some(filestore) = &self.filestore {
             if let Err(write_error) = context.orderbook.write_to_file(filestore) {
                 error!("Failed to write to orderbook {}", write_error);
             }
         }
-        context.last_handled_block = current_block;
-        Ok(())
-    }
 
-    async fn handle_events(
-        &self,
-        context: &mut Context,
-        events: Vec<Event<contracts::batch_exchange::Event>>,
-        delete_events_starting_at_block: u64,
-        latest_block: u64,
-    ) -> Result<()> {
-        log::info!("Received {} events.", events.len());
-        let block_hashes = events
-            .iter()
-            .map(|event| {
-                let metadata = event
-                    .meta
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("event without metadata: {:?}", event))?;
-                Ok(metadata.block_hash)
-            })
-            .collect::<Result<HashSet<H256>>>()?;
-        context
-            .block_timestamp_reader
-            .prepare_cache(block_hashes, self.block_page_size, latest_block)
-            .await?;
-        context
-            .orderbook
-            .delete_events_starting_at_block(delete_events_starting_at_block);
-        for event in events {
-            self.handle_event(context, event).await?;
-        }
-        log::info!("Finished applying events");
         Ok(())
     }
 
     /// Apply a single event to the orderbook.
-    async fn handle_event(
-        &self,
-        context: &mut Context,
-        event: Event<contracts::batch_exchange::Event>,
-    ) -> Result<()> {
+    async fn handle_event(&self, context: &mut Context, event: Event) -> Result<()> {
         match event {
             Event {
                 data,
@@ -210,6 +190,48 @@ impl UpdatingOrderbook {
             Event { meta: None, .. } => bail!("event without metadata"),
         }
         Ok(())
+    }
+
+    async fn chunked_events(
+        &self,
+        from_block: u64,
+        to_block: u64,
+    ) -> Result<impl Stream<Item = Result<Vec<Event>, ExecutionError>> + '_> {
+        let event_stream = self
+            .contract
+            .past_events(
+                BlockNumber::Number(from_block.into()),
+                BlockNumber::Number(to_block.into()),
+                self.block_page_size as _,
+            )
+            .await?;
+        let event_chunks = event_stream
+            .ready_chunks(self.block_page_size)
+            .map(|chunk| chunk.into_iter().collect::<Result<Vec<_>, _>>());
+        Ok(event_chunks)
+    }
+
+    // Retrieve the needed timestamps using a batch transport.
+    async fn prepare_timestamp_cache(
+        &self,
+        context: &mut Context,
+        events: &[Event],
+        latest_block: u64,
+    ) -> Result<()> {
+        let block_hashes = events
+            .iter()
+            .map(|event| {
+                let metadata = event
+                    .meta
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("event without metadata: {:?}", event))?;
+                Ok(metadata.block_hash)
+            })
+            .collect::<Result<HashSet<H256>>>()?;
+        context
+            .block_timestamp_reader
+            .prepare_cache(block_hashes, self.block_page_size, latest_block)
+            .await
     }
 }
 
