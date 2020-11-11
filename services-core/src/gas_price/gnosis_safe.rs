@@ -1,10 +1,9 @@
 //! Gnosis Safe gas station `GasPriceEstimating` implementation.
 //! Api documentation at https://safe-relay.gnosis.io/ .
 
-use super::{linear_interpolation, GasPriceEstimating};
-use crate::http::{HttpClient, HttpFactory, HttpLabel};
+use super::{linear_interpolation, GasPriceEstimating, Transport};
+
 use anyhow::Result;
-use isahc::http::uri::Uri;
 use serde::Deserialize;
 use serde_with::rust::display_fromstr;
 use std::{convert::TryInto, time::Duration};
@@ -65,28 +64,24 @@ const SAFE_LOW_TIME: f64 = SECONDS_PER_BLOCK / SAFE_LOW_PERCENTILE;
 
 /// Retrieve gas prices from the Gnosis Safe gas station service.
 #[derive(Debug)]
-pub struct GnosisSafeGasStation {
-    client: HttpClient,
-    uri: Uri,
+pub struct GnosisSafeGasStation<T> {
+    transport: T,
+    uri: &'static str,
 }
 
-impl GnosisSafeGasStation {
-    pub fn new(http_factory: &HttpFactory, api_uri: &str) -> Result<GnosisSafeGasStation> {
-        let client = http_factory.create()?;
-        let uri: Uri = api_uri.parse()?;
-        Ok(GnosisSafeGasStation { client, uri })
+impl<T: Transport> GnosisSafeGasStation<T> {
+    pub fn new(transport: T, uri: &'static str) -> GnosisSafeGasStation<T> {
+        GnosisSafeGasStation { transport, uri }
     }
 
     /// Retrieves the current gas prices from the gas station.
     pub async fn gas_prices(&self) -> Result<GasPrices> {
-        self.client
-            .get_json_async(&self.uri, HttpLabel::GasStation)
-            .await
+        self.transport.get_json(&self.uri).await
     }
 }
 
 #[async_trait::async_trait]
-impl GasPriceEstimating for GnosisSafeGasStation {
+impl<T: Transport + Send + Sync> GasPriceEstimating for GnosisSafeGasStation<T> {
     // The default implementation calls estimate_with_limits with 30 seconds which would result in
     // the standard time instead of fast. So to keep that behavior we implement it manually.
     async fn estimate(&self) -> Result<f64> {
@@ -121,9 +116,10 @@ fn estimate_with_limits(
 
 #[cfg(test)]
 pub mod tests {
+    use super::super::tests::TestTransport;
     use super::super::DEFAULT_GAS_LIMIT;
     use super::*;
-    use crate::util::FutureWaitExt as _;
+    use crate::util::FutureWaitExt;
     use assert_approx_eq::assert_approx_eq;
 
     #[test]
@@ -164,8 +160,7 @@ pub mod tests {
     #[test]
     #[ignore]
     fn real_request() {
-        let gas_station =
-            GnosisSafeGasStation::new(&HttpFactory::default(), DEFAULT_MAINNET_URI).unwrap();
+        let gas_station = GnosisSafeGasStation::new(TestTransport::default(), DEFAULT_MAINNET_URI);
         let response = gas_station.gas_prices().wait().unwrap();
         println!("{:?}", response);
         for i in 0..10 {

@@ -1,16 +1,13 @@
-use super::{linear_interpolation, GasPriceEstimating};
-use crate::http::{HttpClient, HttpFactory, HttpLabel};
+use super::{linear_interpolation, GasPriceEstimating, Transport};
 use anyhow::Result;
-use isahc::http::uri::Uri;
 use std::{convert::TryInto, time::Duration};
 
 // Gas price estimation with https://www.gasnow.org/ , api at https://taichi.network/#gasnow .
 
 const API_URI: &str = "https://www.gasnow.org/api/v3/gas/price";
 
-pub struct GasNow {
-    client: HttpClient,
-    uri: Uri,
+pub struct GasNow<T> {
+    transport: T,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -33,22 +30,18 @@ const FAST: Duration = Duration::from_secs(60);
 const STANDARD: Duration = Duration::from_secs(300);
 const SLOW: Duration = Duration::from_secs(600);
 
-impl GasNow {
-    pub fn new(http_factory: &HttpFactory) -> Result<Self> {
-        let client = http_factory.create()?;
-        let uri = Uri::from_static(API_URI);
-        Ok(Self { client, uri })
+impl<T: Transport> GasNow<T> {
+    pub fn new(transport: T) -> Self {
+        Self { transport }
     }
 
     async fn gas_price(&self) -> Result<Response> {
-        self.client
-            .get_json_async(&self.uri, HttpLabel::GasStation)
-            .await
+        self.transport.get_json(API_URI).await
     }
 }
 
 #[async_trait::async_trait]
-impl GasPriceEstimating for GasNow {
+impl<T: Transport> GasPriceEstimating for GasNow<T> {
     async fn estimate_with_limits(&self, _gas_limit: f64, time_limit: Duration) -> Result<f64> {
         let response = self.gas_price().await?.data;
         let points: &[(f64, f64)] = &[
@@ -65,6 +58,7 @@ impl GasPriceEstimating for GasNow {
 
 #[cfg(test)]
 mod tests {
+    use super::super::tests::TestTransport;
     use super::*;
     use crate::util::FutureWaitExt;
 
@@ -72,7 +66,7 @@ mod tests {
     #[test]
     #[ignore]
     fn real_request() {
-        let gasnow = GasNow::new(&HttpFactory::default()).unwrap();
+        let gasnow = GasNow::new(TestTransport::default());
         let response = gasnow.gas_price().wait();
         println!("{:?}", response);
     }
