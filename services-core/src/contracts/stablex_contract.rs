@@ -25,6 +25,8 @@ use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::time::Duration;
 
+pub const SOLUTION_SUBMISSION_GAS_LIMIT: u32 = 6_000_000;
+
 lazy_static! {
     // In the BatchExchange smart contract, the objective value will be multiplied by
     // 1 + IMPROVEMENT_DENOMINATOR = 101. Hence, the maximal possible objective value is:
@@ -284,7 +286,7 @@ impl StableXContract for StableXContractImpl {
                 // NOTE: Gas estimate might be off, as we race with other solution
                 //   submissions and thus might have to revert trades which costs
                 //   more gas than expected.
-                .gas(6_000_000.into())
+                .gas(SOLUTION_SUBMISSION_GAS_LIMIT.into())
                 .nonce(nonce);
             method.tx.resolve = Some(ResolveCondition::Confirmed(ConfirmParams::mined()));
             method.send().await.map(|_| ())
