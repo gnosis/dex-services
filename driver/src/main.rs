@@ -4,7 +4,7 @@ use services_core::driver::{
     stablex_driver::StableXDriverImpl,
 };
 use services_core::economic_viability::EconomicViabilityStrategy;
-use services_core::gas_price::{self, GasPriceEstimating};
+use services_core::gas_price::{self, GasEstimatorType, GasPriceEstimating};
 use services_core::health::{HealthReporting, HttpHealthEndpoint};
 use services_core::http::HttpFactory;
 use services_core::http_server::{DefaultRouter, RouilleServer, Serving};
@@ -244,6 +244,22 @@ struct Options {
         default_value = "true"
     )]
     use_external_price_source: bool,
+
+    /// Which gas estimators to use. Multiple estimators are used in sequence if a previous one
+    /// fails. Individual estimators support different networks.
+    /// `EthGasStation`: supports mainnet.
+    /// `GasNow`: supports mainnet.
+    /// `GnosisSafe`: supports mainnet and rinkeby.
+    /// `Web3`: supports every network.
+    #[structopt(
+        long,
+        env = "GAS_ESTIMATORS",
+        default_value = "Web3",
+        possible_values = GasEstimatorType::variant_names(),
+        case_insensitive = true,
+        use_delimiter = true
+    )]
+    gas_estimators: Vec<GasEstimatorType>,
 }
 
 fn main() {
@@ -370,9 +386,10 @@ async fn setup_http_services(
     options: &Options,
 ) -> (Web3, Arc<dyn GasPriceEstimating>) {
     let web3 = web3_provider(http_factory, options.node_url.as_str(), options.rpc_timeout).unwrap();
-    let gas_station = gas_price::create_estimator(&http_factory, &web3)
-        .await
-        .unwrap();
+    let gas_station =
+        gas_price::create_priority_estimator(&http_factory, &web3, &options.gas_estimators)
+            .await
+            .unwrap();
     (web3, gas_station)
 }
 
