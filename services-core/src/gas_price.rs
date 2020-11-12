@@ -6,7 +6,7 @@ mod linear_interpolation;
 mod priority;
 
 use crate::{contracts::Web3, http::HttpClient, http::HttpFactory, metrics::HttpLabel};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use isahc::http::uri::Uri;
 use serde::de::DeserializeOwned;
 use std::{str::FromStr, sync::Arc, time::Duration};
@@ -39,30 +39,48 @@ impl Transport for HttpClient {
     }
 }
 
-/// Creates the default gas price estimator for the given network.
-pub async fn create_estimator(
+arg_enum! {
+    #[derive(Debug)]
+    pub enum GasEstimatorType {
+        EthGasStation,
+        GasNow,
+        GnosisSafe,
+        Web3,
+    }
+}
+
+pub async fn create_priority_estimator(
     http_factory: &HttpFactory,
     web3: &Web3,
+    estimator_types: &[GasEstimatorType],
 ) -> Result<Arc<dyn GasPriceEstimating>> {
     let network_id = web3.net().version().await?;
     let mut estimators = Vec::<Box<dyn GasPriceEstimating>>::new();
-
-    if is_mainnet(&network_id) {
-        let gasnow = gasnow::GasNow::new(http_factory.create()?);
-        estimators.push(Box::new(gasnow));
-
-        let ethgasstation = ethgasstation::EthGasStation::new(http_factory.create()?);
-        estimators.push(Box::new(ethgasstation));
+    for estimator_type in estimator_types {
+        match estimator_type {
+            GasEstimatorType::EthGasStation => {
+                if !is_mainnet(&network_id) {
+                    return Err(anyhow!("EthGasStation only supports mainnet"));
+                }
+                estimators.push(Box::new(ethgasstation::EthGasStation::new(
+                    http_factory.create()?,
+                )))
+            }
+            GasEstimatorType::GasNow => {
+                if !is_mainnet(&network_id) {
+                    return Err(anyhow!("GasNow only supports mainnet"));
+                }
+                estimators.push(Box::new(gasnow::GasNow::new(http_factory.create()?)))
+            }
+            GasEstimatorType::GnosisSafe => estimators.push(Box::new(
+                gnosis_safe::GnosisSafeGasStation::with_network_id(
+                    &network_id,
+                    http_factory.create()?,
+                )?,
+            )),
+            GasEstimatorType::Web3 => estimators.push(Box::new(web3.clone())),
+        }
     }
-
-    if let Some(gnosis_url) = gnosis_safe::api_url_from_network_id(&network_id) {
-        let gnosis_estimator =
-            gnosis_safe::GnosisSafeGasStation::new(http_factory.create()?, gnosis_url.into());
-        estimators.push(Box::new(gnosis_estimator));
-    }
-
-    estimators.push(Box::new(web3.clone()));
-
     Ok(Arc::new(priority::PriorityGasPrice::new(estimators)))
 }
 

@@ -160,6 +160,11 @@ OPTIONS:
         --economic-viability-subsidy-factor <economic-viability-subsidy-factor>
             Subsidy factor used to compute the minimum average fee per order in a solution as well as the gas cap for
             economically viable solution [env: ECONOMIC_VIABILITY_SUBSIDY_FACTOR=]  [default: 1.0]
+        --gas-estimators <gas-estimators>...
+            Which gas estimators to use. Multiple estimators are used in sequence if a previous one fails. Individual
+            estimators support different networks. `EthGasStation`: supports mainnet. `GasNow`: supports mainnet.
+            `GnosisSafe`: supports mainnet and rinkeby. `Web3`: supports every network [env: GAS_ESTIMATORS=]  [default:
+            Web3]  [possible values: EthGasStation, GasNow, GnosisSafe, Web3]
         --http-timeout <http-timeout>
             The default timeout in milliseconds of HTTP requests to remote services such as the Gnosis Safe gas station
             and exchange REST APIs for fetching price estimates [env: HTTP_TIMEOUT=]  [default: 10000]

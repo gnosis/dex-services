@@ -2,8 +2,7 @@
 //! Api documentation at https://safe-relay.gnosis.io/ .
 
 use super::{linear_interpolation, GasPriceEstimating, Transport};
-
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use serde::Deserialize;
 use serde_with::rust::display_fromstr;
 use std::{convert::TryInto, time::Duration};
@@ -70,8 +69,11 @@ pub struct GnosisSafeGasStation<T> {
 }
 
 impl<T: Transport> GnosisSafeGasStation<T> {
-    pub fn new(transport: T, uri: String) -> GnosisSafeGasStation<T> {
-        GnosisSafeGasStation { transport, uri }
+    pub fn with_network_id(network_id: &str, transport: T) -> Result<Self> {
+        let uri = api_url_from_network_id(network_id)
+            .ok_or_else(|| anyhow!("unsupported network id {}", network_id))?
+            .into();
+        Ok(Self { transport, uri })
     }
 
     /// Retrieves the current gas prices from the gas station.
@@ -161,7 +163,7 @@ pub mod tests {
     #[ignore]
     fn real_request() {
         let gas_station =
-            GnosisSafeGasStation::new(TestTransport::default(), DEFAULT_MAINNET_URI.into());
+            GnosisSafeGasStation::with_network_id("1", TestTransport::default()).unwrap();
         let response = gas_station.gas_prices().wait().unwrap();
         println!("{:?}", response);
         for i in 0..10 {
