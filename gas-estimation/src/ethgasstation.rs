@@ -67,9 +67,8 @@ fn estimate_with_limits(response: &Response, time_limit: Duration) -> Result<f64
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::TestTransport;
+    use super::super::tests::{FutureWaitExt as _, TestTransport};
     use super::*;
-    use crate::util::FutureWaitExt as _;
 
     // cargo test -p services-core ethgasstation -- --ignored --nocapture
     #[test]
