@@ -26,7 +26,7 @@ mod tests {
     use super::*;
     use crate::contracts::web3_provider;
     use crate::http::HttpFactory;
-    use crate::util::FutureWaitExt;
+    use crate::util::FutureWaitExt as _;
     use ethcontract::secret::PrivateKey;
     use std::time::Duration;
 

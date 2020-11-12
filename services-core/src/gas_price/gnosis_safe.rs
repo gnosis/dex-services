@@ -119,7 +119,7 @@ pub mod tests {
     use super::super::tests::TestTransport;
     use super::super::DEFAULT_GAS_LIMIT;
     use super::*;
-    use crate::util::FutureWaitExt;
+    use crate::util::FutureWaitExt as _;
     use assert_approx_eq::assert_approx_eq;
 
     #[test]

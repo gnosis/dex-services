@@ -60,7 +60,7 @@ impl<T: Transport> GasPriceEstimating for GasNow<T> {
 mod tests {
     use super::super::tests::TestTransport;
     use super::*;
-    use crate::util::FutureWaitExt;
+    use crate::util::FutureWaitExt as _;
 
     // cargo test -p services-core gasnow -- --ignored --nocapture
     #[test]
