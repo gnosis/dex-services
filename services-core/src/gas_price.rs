@@ -9,7 +9,7 @@ use crate::{contracts::Web3, http::HttpClient, http::HttpFactory, metrics::HttpL
 use anyhow::Result;
 use isahc::http::uri::Uri;
 use serde::de::DeserializeOwned;
-use std::{sync::Arc, time::Duration};
+use std::{str::FromStr, sync::Arc, time::Duration};
 
 pub const DEFAULT_GAS_LIMIT: f64 = 21000.0;
 pub const DEFAULT_TIME_LIMIT: Duration = Duration::from_secs(30);
@@ -28,14 +28,14 @@ pub trait GasPriceEstimating: Send + Sync {
 
 #[async_trait::async_trait]
 pub trait Transport: Send + Sync {
-    async fn get_json<T: DeserializeOwned>(&self, url: &'static str) -> Result<T>;
+    async fn get_json<'a, T: DeserializeOwned>(&self, url: &'a str) -> Result<T>;
 }
 
 #[async_trait::async_trait]
 impl Transport for HttpClient {
-    async fn get_json<T: DeserializeOwned>(&self, url: &'static str) -> Result<T> {
-        let uri = Uri::from_static(url);
-        self.get_json_async(uri, HttpLabel::GasStation).await
+    async fn get_json<'a, T: DeserializeOwned>(&self, url: &'a str) -> Result<T> {
+        self.get_json_async(Uri::from_str(url)?, HttpLabel::GasStation)
+            .await
     }
 }
 
@@ -57,7 +57,7 @@ pub async fn create_estimator(
 
     if let Some(gnosis_url) = gnosis_safe::api_url_from_network_id(&network_id) {
         let gnosis_estimator =
-            gnosis_safe::GnosisSafeGasStation::new(http_factory.create()?, gnosis_url);
+            gnosis_safe::GnosisSafeGasStation::new(http_factory.create()?, gnosis_url.into());
         estimators.push(Box::new(gnosis_estimator));
     }
 
@@ -80,9 +80,8 @@ mod tests {
 
     #[async_trait::async_trait]
     impl Transport for TestTransport {
-        async fn get_json<T: DeserializeOwned>(&self, url: &'static str) -> Result<T> {
-            let uri = Uri::from_static(url);
-            let json: String = isahc::get_async(uri).await?.text()?;
+        async fn get_json<'a, T: DeserializeOwned>(&self, url: &'a str) -> Result<T> {
+            let json: String = isahc::get_async(Uri::from_str(url)?).await?.text()?;
             Ok(serde_json::from_str(&json)?)
         }
     }

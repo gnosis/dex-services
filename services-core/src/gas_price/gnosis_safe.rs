@@ -66,11 +66,11 @@ const SAFE_LOW_TIME: f64 = SECONDS_PER_BLOCK / SAFE_LOW_PERCENTILE;
 #[derive(Debug)]
 pub struct GnosisSafeGasStation<T> {
     transport: T,
-    uri: &'static str,
+    uri: String,
 }
 
 impl<T: Transport> GnosisSafeGasStation<T> {
-    pub fn new(transport: T, uri: &'static str) -> GnosisSafeGasStation<T> {
+    pub fn new(transport: T, uri: String) -> GnosisSafeGasStation<T> {
         GnosisSafeGasStation { transport, uri }
     }
 
@@ -81,7 +81,7 @@ impl<T: Transport> GnosisSafeGasStation<T> {
 }
 
 #[async_trait::async_trait]
-impl<T: Transport + Send + Sync> GasPriceEstimating for GnosisSafeGasStation<T> {
+impl<T: Transport> GasPriceEstimating for GnosisSafeGasStation<T> {
     // The default implementation calls estimate_with_limits with 30 seconds which would result in
     // the standard time instead of fast. So to keep that behavior we implement it manually.
     async fn estimate(&self) -> Result<f64> {
@@ -160,7 +160,8 @@ pub mod tests {
     #[test]
     #[ignore]
     fn real_request() {
-        let gas_station = GnosisSafeGasStation::new(TestTransport::default(), DEFAULT_MAINNET_URI);
+        let gas_station =
+            GnosisSafeGasStation::new(TestTransport::default(), DEFAULT_MAINNET_URI.into());
         let response = gas_station.gas_prices().wait().unwrap();
         println!("{:?}", response);
         for i in 0..10 {
