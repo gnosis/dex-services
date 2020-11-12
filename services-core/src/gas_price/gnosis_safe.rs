@@ -59,9 +59,9 @@ const SAFE_LOW_PERCENTILE: f64 = 0.3;
 // price can be 1000 times the fast gas price which is not reasonable.
 const SECONDS_PER_BLOCK: f64 = 15.0;
 // Treat percentiles as probabilities for geometric distribution.
-const FAST_TIME: f64 = SECONDS_PER_BLOCK * FAST_PERCENTILE;
-const STANDARD_TIME: f64 = SECONDS_PER_BLOCK * STANDARD_PERCENTILE;
-const SAFE_LOW_TIME: f64 = SECONDS_PER_BLOCK * SAFE_LOW_PERCENTILE;
+const FAST_TIME: f64 = SECONDS_PER_BLOCK / FAST_PERCENTILE;
+const STANDARD_TIME: f64 = SECONDS_PER_BLOCK / STANDARD_PERCENTILE;
+const SAFE_LOW_TIME: f64 = SECONDS_PER_BLOCK / SAFE_LOW_PERCENTILE;
 
 /// Retrieve gas prices from the Gnosis Safe gas station service.
 #[derive(Debug)]
@@ -144,6 +144,20 @@ pub mod tests {
         assert_approx_eq!(result.standard, 12000000001.0);
         assert_approx_eq!(result.fast, 20000000001.0);
         assert_approx_eq!(result.fastest, 1377000000001.0);
+    }
+
+    #[test]
+    fn returns_standard_gas_price_for_30_second_limit() {
+        let price = GasPrices {
+            last_update: String::new(),
+            lowest: 100.0,
+            safe_low: 200.0,
+            standard: 300.0,
+            fast: 400.0,
+            fastest: 500.0,
+        };
+        let estimate = estimate_with_limits(&price, 0.0, Duration::from_secs(30)).unwrap();
+        assert_approx_eq!(estimate, 300.0);
     }
 
     // cargo test -p services-core gnosis_safe -- --ignored --nocapture
