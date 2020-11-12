@@ -3,7 +3,7 @@
 
 use super::{linear_interpolation, GasPriceEstimating};
 use crate::http::{HttpClient, HttpFactory, HttpLabel};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use isahc::http::uri::Uri;
 use serde::Deserialize;
 use serde_with::rust::display_fromstr;
@@ -71,10 +71,12 @@ pub struct GnosisSafeGasStation {
 }
 
 impl GnosisSafeGasStation {
-    pub fn new(http_factory: &HttpFactory, api_uri: &str) -> Result<GnosisSafeGasStation> {
+    pub fn with_network_id(network_id: &str, http_factory: &HttpFactory) -> Result<Self> {
+        let api_uri = api_url_from_network_id(network_id)
+            .ok_or_else(|| anyhow!("unsupported network id {}", network_id))?;
         let client = http_factory.create()?;
         let uri: Uri = api_uri.parse()?;
-        Ok(GnosisSafeGasStation { client, uri })
+        Ok(Self { client, uri })
     }
 
     /// Retrieves the current gas prices from the gas station.
@@ -165,7 +167,7 @@ pub mod tests {
     #[ignore]
     fn real_request() {
         let gas_station =
-            GnosisSafeGasStation::new(&HttpFactory::default(), DEFAULT_MAINNET_URI).unwrap();
+            GnosisSafeGasStation::with_network_id("1", &HttpFactory::default()).unwrap();
         let response = gas_station.gas_prices().wait().unwrap();
         println!("{:?}", response);
         for i in 0..10 {

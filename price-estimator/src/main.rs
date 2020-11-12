@@ -15,7 +15,7 @@ use prometheus::Registry;
 use services_core::{
     contracts::{stablex_contract::StableXContractImpl, web3_provider},
     economic_viability::EconomicViabilityStrategy,
-    gas_price,
+    gas_price::{self, GasEstimatorType},
     health::{HealthReporting, HttpHealthEndpoint},
     http::HttpFactory,
     http_server::{DefaultRouter, RouilleServer, Serving},
@@ -133,6 +133,16 @@ struct Options {
     /// target chain (e.g. WETH on mainnet, DAI on xDAI).
     #[structopt(long, env = "NATIVE_TOKEN_ID", default_value = "1")]
     native_token_id: u16,
+
+    #[structopt(
+        long,
+        env = "GAS_ESTIMATORS",
+        default_value = "Web3",
+        possible_values = GasEstimatorType::variant_names(),
+        case_insensitive = true,
+        use_delimiter = true
+    )]
+    gas_estimators: Vec<GasEstimatorType>,
 }
 
 fn main() {
@@ -155,9 +165,10 @@ fn main() {
     // The private key is not actually used but StableXContractImpl requires it.
     let private_key = PrivateKey::from_raw([1u8; 32]).unwrap();
     let contract = Arc::new(StableXContractImpl::new(&web3, private_key).wait().unwrap());
-    let gas_station = gas_price::create_estimator(&http_factory, &web3)
-        .wait()
-        .unwrap();
+    let gas_station =
+        gas_price::create_priority_estimator(&http_factory, &web3, &options.gas_estimators)
+            .wait()
+            .unwrap();
 
     let cache: HashMap<_, _> = options.token_data.clone().into();
     let token_info = TokenInfoCache::with_cache(contract.clone(), cache);
