@@ -1,14 +1,36 @@
 use super::GasPriceEstimating;
 use anyhow::{anyhow, Result};
-use std::{future::Future, time::Duration};
+use std::{
+    future::Future,
+    sync::atomic::{AtomicUsize, Ordering},
+    time::Duration,
+};
+
+// Errors of an individual estimator are logged as warnings until it has failed this many times in
+// a row at which point they are logged as errors.
+// This is useful to reduce alerts for estimators that sometimes fail individual requests while
+// still getting them when the estimator really goes down.
+const LOG_ERROR_AFTER_N_ERRORS: usize = 10;
 
 // Uses the first successful estimator.
 pub struct PriorityGasPrice {
-    estimators: Vec<Box<dyn GasPriceEstimating>>,
+    estimators: Vec<Estimator>,
+}
+
+struct Estimator {
+    estimator: Box<dyn GasPriceEstimating>,
+    errors_in_a_row: AtomicUsize,
 }
 
 impl PriorityGasPrice {
     pub fn new(estimators: Vec<Box<dyn GasPriceEstimating>>) -> Self {
+        let estimators = estimators
+            .into_iter()
+            .map(|estimator| Estimator {
+                estimator,
+                errors_in_a_row: AtomicUsize::new(0),
+            })
+            .collect();
         Self { estimators }
     }
 
@@ -17,10 +39,20 @@ impl PriorityGasPrice {
         T: Fn(&'a dyn GasPriceEstimating) -> F,
         F: Future<Output = Result<f64>>,
     {
-        for estimator in &self.estimators {
-            match operation(estimator.as_ref()).await {
-                Ok(result) => return Ok(result),
-                Err(err) => log::error!("gas estimator failed: {:?}", err),
+        for (i, estimator) in self.estimators.iter().enumerate() {
+            match operation(estimator.estimator.as_ref()).await {
+                Ok(result) => {
+                    estimator.errors_in_a_row.store(0, Ordering::SeqCst);
+                    return Ok(result);
+                }
+                Err(err) => {
+                    let num_errors = estimator.errors_in_a_row.fetch_add(1, Ordering::SeqCst) + 1;
+                    if num_errors < LOG_ERROR_AFTER_N_ERRORS {
+                        log::warn!("gas estimator {} failed: {:?}", i, err);
+                    } else {
+                        log::error!("gas estimator {} failed: {:?}", i, err);
+                    }
+                }
             }
         }
         Err(anyhow!("all gas estimators failed"))
