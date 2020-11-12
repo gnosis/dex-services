@@ -13,7 +13,7 @@ use std::{
 const LOG_ERROR_AFTER_N_ERRORS: usize = 10;
 
 // Uses the first successful estimator.
-pub struct PriorityGasPrice {
+pub struct PriorityGasPriceEstimating {
     estimators: Vec<Estimator>,
 }
 
@@ -22,7 +22,7 @@ struct Estimator {
     errors_in_a_row: AtomicUsize,
 }
 
-impl PriorityGasPrice {
+impl PriorityGasPriceEstimating {
     pub fn new(estimators: Vec<Box<dyn GasPriceEstimating>>) -> Self {
         let estimators = estimators
             .into_iter()
@@ -60,7 +60,7 @@ impl PriorityGasPrice {
 }
 
 #[async_trait::async_trait]
-impl GasPriceEstimating for PriorityGasPrice {
+impl GasPriceEstimating for PriorityGasPriceEstimating {
     async fn estimate_with_limits(&self, gas_limit: f64, time_limit: Duration) -> Result<f64> {
         self.prioritize(|estimator| estimator.estimate_with_limits(gas_limit, time_limit))
             .await
@@ -85,7 +85,8 @@ mod tests {
 
         estimator_0.expect_estimate().times(1).returning(|| Ok(1.0));
 
-        let priority = PriorityGasPrice::new(vec![Box::new(estimator_0), Box::new(estimator_1)]);
+        let priority =
+            PriorityGasPriceEstimating::new(vec![Box::new(estimator_0), Box::new(estimator_1)]);
         let result = priority.estimate().now_or_never().unwrap().unwrap();
         assert_approx_eq!(result, 1.0);
     }
@@ -101,7 +102,8 @@ mod tests {
             .returning(|| Err(anyhow!("")));
         estimator_1.expect_estimate().times(1).returning(|| Ok(2.0));
 
-        let priority = PriorityGasPrice::new(vec![Box::new(estimator_0), Box::new(estimator_1)]);
+        let priority =
+            PriorityGasPriceEstimating::new(vec![Box::new(estimator_0), Box::new(estimator_1)]);
         let result = priority.estimate().now_or_never().unwrap().unwrap();
         assert_approx_eq!(result, 2.0);
     }
@@ -120,7 +122,8 @@ mod tests {
             .times(1)
             .returning(|| Err(anyhow!("")));
 
-        let priority = PriorityGasPrice::new(vec![Box::new(estimator_0), Box::new(estimator_1)]);
+        let priority =
+            PriorityGasPriceEstimating::new(vec![Box::new(estimator_0), Box::new(estimator_1)]);
         let result = priority.estimate().now_or_never().unwrap();
         assert!(result.is_err());
     }

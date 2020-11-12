@@ -6,9 +6,9 @@ mod linear_interpolation;
 mod priority;
 
 pub use ethgasstation::EthGasStation;
-pub use gasnow::GasNow;
+pub use gasnow::GasNowGasStation;
 pub use gnosis_safe::GnosisSafeGasStation;
-pub use priority::PriorityGasPrice;
+pub use priority::PriorityGasPriceEstimating;
 
 use anyhow::Result;
 use serde::de::DeserializeOwned;

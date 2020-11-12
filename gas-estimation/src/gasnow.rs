@@ -6,7 +6,7 @@ use std::{convert::TryInto, time::Duration};
 
 const API_URI: &str = "https://www.gasnow.org/api/v3/gas/price";
 
-pub struct GasNow<T> {
+pub struct GasNowGasStation<T> {
     transport: T,
 }
 
@@ -30,7 +30,7 @@ const FAST: Duration = Duration::from_secs(60);
 const STANDARD: Duration = Duration::from_secs(300);
 const SLOW: Duration = Duration::from_secs(600);
 
-impl<T: Transport> GasNow<T> {
+impl<T: Transport> GasNowGasStation<T> {
     pub fn new(transport: T) -> Self {
         Self { transport }
     }
@@ -41,7 +41,7 @@ impl<T: Transport> GasNow<T> {
 }
 
 #[async_trait::async_trait]
-impl<T: Transport> GasPriceEstimating for GasNow<T> {
+impl<T: Transport> GasPriceEstimating for GasNowGasStation<T> {
     async fn estimate_with_limits(&self, _gas_limit: f64, time_limit: Duration) -> Result<f64> {
         let response = self.gas_price().await?.data;
         let points: &[(f64, f64)] = &[
@@ -65,7 +65,7 @@ mod tests {
     #[test]
     #[ignore]
     fn real_request() {
-        let gasnow = GasNow::new(TestTransport::default());
+        let gasnow = GasNowGasStation::new(TestTransport::default());
         let response = gasnow.gas_price().wait();
         println!("{:?}", response);
     }

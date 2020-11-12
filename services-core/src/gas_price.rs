@@ -1,6 +1,8 @@
 use crate::{contracts::Web3, http::HttpClient, http::HttpFactory, metrics::HttpLabel};
 use anyhow::{anyhow, Result};
-use gas_estimation::{EthGasStation, GasNow, GnosisSafeGasStation, PriorityGasPrice, Transport};
+use gas_estimation::{
+    EthGasStation, GasNowGasStation, GnosisSafeGasStation, PriorityGasPriceEstimating, Transport,
+};
 use isahc::http::uri::Uri;
 use serde::de::DeserializeOwned;
 use std::{str::FromStr, sync::Arc};
@@ -44,7 +46,7 @@ pub async fn create_priority_estimator(
                 if !is_mainnet(&network_id) {
                     return Err(anyhow!("GasNow only supports mainnet"));
                 }
-                estimators.push(Box::new(GasNow::new(http_factory.create()?)))
+                estimators.push(Box::new(GasNowGasStation::new(http_factory.create()?)))
             }
             GasEstimatorType::GnosisSafe => estimators.push(Box::new(
                 GnosisSafeGasStation::with_network_id(&network_id, http_factory.create()?)?,
@@ -52,7 +54,7 @@ pub async fn create_priority_estimator(
             GasEstimatorType::Web3 => estimators.push(Box::new(web3.clone())),
         }
     }
-    Ok(Arc::new(PriorityGasPrice::new(estimators)))
+    Ok(Arc::new(PriorityGasPriceEstimating::new(estimators)))
 }
 
 fn is_mainnet(network_id: &str) -> bool {
