@@ -1,16 +1,13 @@
-use super::{linear_interpolation, GasPriceEstimating};
-use crate::http::{HttpClient, HttpFactory, HttpLabel};
+use super::{linear_interpolation, GasPriceEstimating, Transport};
 use anyhow::Result;
-use isahc::http::uri::Uri;
 use std::{convert::TryInto, time::Duration};
 
 // Gas price estimation with https://ethgasstation.info/ , api https://docs.ethgasstation.info/gas-price .
 
 const API_URI: &str = "https://ethgasstation.info/api/ethgasAPI.json";
 
-pub struct EthGasStation {
-    client: HttpClient,
-    uri: Uri,
+pub struct EthGasStation<T> {
+    transport: T,
 }
 
 // gas prices in gwei*10 (2 gwei is transmitted as `20`)
@@ -28,22 +25,18 @@ struct Response {
     safe_low_wait: f64,
 }
 
-impl EthGasStation {
-    pub fn new(http_factory: &HttpFactory) -> Result<Self> {
-        let client = http_factory.create()?;
-        let uri = Uri::from_static(API_URI);
-        Ok(Self { client, uri })
+impl<T: Transport> EthGasStation<T> {
+    pub fn new(transport: T) -> Self {
+        Self { transport }
     }
 
     async fn gas_price(&self) -> Result<Response> {
-        self.client
-            .get_json_async(&self.uri, HttpLabel::GasStation)
-            .await
+        self.transport.get_json(API_URI).await
     }
 }
 
 #[async_trait::async_trait]
-impl GasPriceEstimating for EthGasStation {
+impl<T: Transport> GasPriceEstimating for EthGasStation<T> {
     async fn estimate_with_limits(&self, _gas_limit: f64, time_limit: Duration) -> Result<f64> {
         let response = self.gas_price().await?;
         let result = estimate_with_limits(&response, time_limit)?;
@@ -74,14 +67,15 @@ fn estimate_with_limits(response: &Response, time_limit: Duration) -> Result<f64
 
 #[cfg(test)]
 mod tests {
+    use super::super::tests::TestTransport;
     use super::*;
-    use crate::util::FutureWaitExt;
+    use crate::util::FutureWaitExt as _;
 
     // cargo test -p services-core ethgasstation -- --ignored --nocapture
     #[test]
     #[ignore]
     fn real_request() {
-        let ethgasstation = EthGasStation::new(&HttpFactory::default()).unwrap();
+        let ethgasstation = EthGasStation::new(TestTransport::default());
         let response = ethgasstation.gas_price().wait().unwrap();
         println!("{:?}", response);
         for i in 0..10 {
