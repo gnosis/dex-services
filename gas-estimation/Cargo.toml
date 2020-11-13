@@ -11,6 +11,7 @@ log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_with = "1.5"
 web3 = "0.13"
+primitive-types = { version = "0.7.3", features = ["fp-conversion"] }
 
 [dev-dependencies]
 assert_approx_eq = "1.1"
