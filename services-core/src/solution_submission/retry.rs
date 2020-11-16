@@ -6,7 +6,7 @@ use crate::{
     models::Solution,
 };
 use anyhow::Result;
-use ethcontract::{errors::MethodError};
+use ethcontract::errors::MethodError;
 use futures::{
     future::{BoxFuture, FutureExt as _},
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
