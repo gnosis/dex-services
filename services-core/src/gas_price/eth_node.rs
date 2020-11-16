@@ -13,6 +13,6 @@ impl GasPriceEstimating for Web3 {
             .gas_price()
             .await
             .map_err(From::from)
-            .map(|g| U256::to_f64_lossy(g))
+            .map(U256::to_f64_lossy)
     }
 }
