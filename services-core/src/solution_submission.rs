@@ -14,7 +14,6 @@ use ethcontract::{
 };
 use futures::future::{self, Either};
 use gas_estimation::GasPriceEstimating;
-use pricegraph::num;
 use retry::SolutionTransactionSending;
 use std::{
     sync::Arc,
@@ -171,7 +170,7 @@ impl<'a> StableXSolutionSubmitter<'a> {
             gas_price
         );
         self.contract
-            .send_noop_transaction(num::f64_to_u256(gas_price), nonce)
+            .send_noop_transaction(U256::from_f64_lossy(gas_price), nonce)
             .await
             .map(|_| ())
     }

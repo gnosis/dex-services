@@ -2,6 +2,7 @@
 
 use super::GasPriceEstimating;
 use anyhow::Result;
+use primitive_types::U256;
 use std::time::Duration;
 use web3::{Transport, Web3};
 
@@ -16,6 +17,6 @@ where
             .gas_price()
             .await
             .map_err(From::from)
-            .map(|r| r.to_f64_lossy())
+            .map(U256::to_f64_lossy)
     }
 }

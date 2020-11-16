@@ -1082,6 +1082,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "flume"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9e818efa7776f4dd7df0e542f877f7a5a87bddd6a1a10f59a7732b71ffb9d55"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+ "spinning_top",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1574,19 +1585,17 @@ dependencies = [
 
 [[package]]
 name = "isahc"
-version = "0.9.12"
+version = "0.9.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "003be15733203fb6e7a926e4a23517b0dbc45e4ab3ead5bbc24c7ad84faae681"
+checksum = "80aafab09693e9fa74b76ef207c55dc1cba5d9d5dc6dcc1b6a96d008a98000e9"
 dependencies = [
  "bytes",
- "crossbeam-channel 0.5.0",
  "crossbeam-utils 0.8.0",
  "curl",
  "curl-sys",
  "encoding_rs",
- "futures-channel",
- "futures-io",
- "futures-util",
+ "flume",
+ "futures-lite",
  "http",
  "log 0.4.11",
  "mime 0.3.16",
@@ -1597,6 +1606,8 @@ dependencies = [
  "sluice",
  "tracing",
  "tracing-futures",
+ "url 2.2.0",
+ "waker-fn",
 ]
 
 [[package]]
@@ -3023,6 +3034,7 @@ dependencies = [
  "mockall",
  "num",
  "pricegraph",
+ "primitive-types",
  "prometheus",
  "rouille",
  "serde",
@@ -3194,6 +3206,15 @@ dependencies = [
  "log 0.4.11",
  "rand 0.7.3",
  "sha-1 0.9.2",
+]
+
+[[package]]
+name = "spinning_top"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e529d73e80d64b5f2631f9035113347c578a1c9c7774b83a2b880788459ab36"
+dependencies = [
+ "lock_api",
 ]
 
 [[package]]

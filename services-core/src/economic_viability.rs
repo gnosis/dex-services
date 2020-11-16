@@ -4,7 +4,6 @@
 use crate::models::solution::EconomicViabilityInfo;
 use anyhow::{anyhow, Context as _, Result};
 use gas_estimation::GasPriceEstimating;
-use pricegraph::num;
 use std::{num::NonZeroU128, sync::Arc};
 
 /// The approximate amount of gas used in a solution per trade. In practice the value depends on how
@@ -143,7 +142,7 @@ impl EconomicViabilityComputing for DynamicEconomicViabilityComputer {
     }
 
     async fn max_gas_price(&self, economic_viability_info: EconomicViabilityInfo) -> Result<f64> {
-        let earned_fee = pricegraph::num::u256_to_f64(economic_viability_info.earned_fee);
+        let earned_fee = economic_viability_info.earned_fee.to_f64_lossy();
         let num_trades = economic_viability_info.num_executed_orders;
         let native_token_price = self.native_token_price_in_owl().await?;
         let cap = gas_price_cap(native_token_price, earned_fee, num_trades);
@@ -219,7 +218,7 @@ impl EconomicViabilityComputing for CombinedEconomicViabilityComputer {
     }
 
     async fn max_gas_price(&self, economic_viability_info: EconomicViabilityInfo) -> Result<f64> {
-        let avg_fee = num::u256_to_f64(economic_viability_info.earned_fee)
+        let avg_fee = economic_viability_info.earned_fee.to_f64_lossy()
             / economic_viability_info.num_executed_orders as f64;
         // If the real average fee is worse than the fallback min average fee then we must have used
         // the dynamic computer for min_average_fee so we use it again for the max gas price.
