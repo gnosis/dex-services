@@ -1,7 +1,7 @@
 mod retry;
 
 use crate::{
-    contracts::stablex_contract::{NoopTransactionError, StableXContract},
+    contracts::stablex_contract::StableXContract,
     models::{BatchId, Solution},
     util::AsyncSleeping,
 };
@@ -159,7 +159,7 @@ impl<'a> StableXSolutionSubmitter<'a> {
         nonce: U256,
         gas_price_cap: f64,
         deadline: Instant,
-    ) -> Result<(), NoopTransactionError> {
+    ) -> Result<(), ExecutionError> {
         let remaining = deadline
             .checked_duration_since(Instant::now())
             .unwrap_or_default();
@@ -252,7 +252,7 @@ fn extract_transaction_receipt(err: &MethodError) -> Option<&TransactionReceipt>
     }
 }
 
-fn convert_cancel_result(result: Result<(), NoopTransactionError>) -> SolutionSubmissionError {
+fn convert_cancel_result(result: Result<(), ExecutionError>) -> SolutionSubmissionError {
     match result {
         Ok(()) => SolutionSubmissionError::Unexpected(anyhow!(
             "solution submission transaction not confirmed in time"
@@ -281,16 +281,16 @@ impl IsOpenEthereumTransactionError for ExecutionError {
 impl IsOpenEthereumTransactionError for Result<(), MethodError> {
     fn is_transaction_error(&self) -> bool {
         match self {
-            Ok(()) => false,
             Err(MethodError { inner, .. }) => inner.is_transaction_error(),
+            _ => false,
         }
     }
 }
 
-impl IsOpenEthereumTransactionError for Result<(), NoopTransactionError> {
+impl IsOpenEthereumTransactionError for Result<(), ExecutionError> {
     fn is_transaction_error(&self) -> bool {
         match self {
-            Err(NoopTransactionError::ExecutionError(err)) => err.is_transaction_error(),
+            Err(err) => err.is_transaction_error(),
             _ => false,
         }
     }
@@ -300,11 +300,11 @@ impl IsOpenEthereumTransactionError for Result<(), NoopTransactionError> {
 mod tests {
     use super::*;
     use crate::{
-        contracts::stablex_contract::{MockStableXContract, NoopTransactionError},
+        contracts::stablex_contract::MockStableXContract,
         util::{FutureWaitExt as _, MockAsyncSleeping},
     };
     use anyhow::anyhow;
-    use ethcontract::{web3::types::H2048, H256};
+    use ethcontract::{transaction::TransactionResult, web3::types::H2048, H256};
     use futures::FutureExt as _;
     use mockall::predicate::{always, eq};
     use retry::MockSolutionTransactionSending;
@@ -429,7 +429,7 @@ mod tests {
         contract
             .expect_send_noop_transaction()
             .times(1)
-            .returning(|_, _| immediate!(Err(NoopTransactionError::NoAccount)));
+            .returning(|_, _| immediate!(Ok(TransactionResult::Hash(H256::zero()))));
 
         let submitter =
             StableXSolutionSubmitter::with_retry_and_sleep(Arc::new(contract), retry, sleep);
@@ -437,7 +437,11 @@ mod tests {
             .submit_solution(0, Solution::trivial(), 0.into(), 0.into())
             .now_or_never()
             .unwrap();
-        assert!(result.is_err());
+        // Cancellation is an unexpected error.
+        assert!(matches!(
+            result,
+            Err(SolutionSubmissionError::Unexpected(_))
+        ));
     }
 
     #[test]
@@ -505,7 +509,7 @@ mod tests {
             .times(1)
             .return_once(move |_, _| {
                 sender.send(()).unwrap();
-                immediate!(Err(nonce_error().into()))
+                immediate!(Err(nonce_error()))
             });
 
         let submitter =

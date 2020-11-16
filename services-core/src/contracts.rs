@@ -17,13 +17,14 @@ pub fn web3_provider(http_factory: &HttpFactory, url: &str, timeout: Duration) -
     Ok(web3)
 }
 
-fn method_defaults(key: PrivateKey, chain_id: u64) -> Result<MethodDefaults> {
-    let account = Account::Offline(key, Some(chain_id));
-    let defaults = MethodDefaults {
+fn account(key: PrivateKey, chain_id: u64) -> Account {
+    Account::Offline(key, Some(chain_id))
+}
+
+fn method_defaults(account: Account) -> MethodDefaults {
+    MethodDefaults {
         from: Some(account),
         gas: None,
         gas_price: None,
-    };
-
-    Ok(defaults)
+    }
 }
