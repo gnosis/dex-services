@@ -6,12 +6,12 @@ use crate::{
     models::Solution,
 };
 use anyhow::Result;
-use ethcontract::{errors::MethodError, U256};
+use ethcontract::errors::MethodError;
 use futures::{
     future::{BoxFuture, FutureExt as _},
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
 };
-use pricegraph::num;
+use primitive_types::U256;
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -117,7 +117,7 @@ impl<'a> RetryWithGasPriceIncrease<'a> {
                 args.batch_index,
                 args.solution.clone(),
                 args.claimed_objective_value,
-                num::f64_to_u256(gas_price),
+                U256::from_f64_lossy(gas_price),
                 args.nonce,
             )
             .map(FutureOutput::SolutionSubmission)
