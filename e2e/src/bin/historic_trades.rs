@@ -106,7 +106,7 @@ impl OrderMetadata {
     /// data and a `Pricegraph` instance.
     fn compute(settlement: Option<&Settlement>, order: &Element, pricegraph: &Pricegraph) -> Self {
         let effective_sell_amount =
-            pricegraph::num::u256_to_f64(order.balance).min(order.remaining_sell_amount as _);
+            order.balance.to_f64_lossy().min(order.remaining_sell_amount as _);
         let limit_price = order.price.numerator as f64 / order.price.denominator as f64;
         let estimated_limit_price = pricegraph
             .estimate_limit_price(order.pair.into_unbounded_range(), effective_sell_amount);

@@ -338,7 +338,7 @@ impl Orderbook {
             transitive_xrate *= order.exchange_rate;
             max_xrate = cmp::max(max_xrate, transitive_xrate);
 
-            let sell_amount = num::u256_to_f64(order.get_effective_amount(&self.users));
+            let sell_amount = order.get_effective_amount(&self.users).to_f64_lossy();
             capacity = num::min(capacity, sell_amount * transitive_xrate.value());
         }
 
@@ -365,7 +365,7 @@ impl Orderbook {
 
             // NOTE: `capacity` is expressed in the buy token, so we need to
             // divide by the exchange rate to get the sell amount being filled.
-            let fill_amount = num::f64_to_u256(flow.capacity / transitive_xrate.value());
+            let fill_amount = U256::from_f64_lossy(flow.capacity / transitive_xrate.value());
             let new_balance = user.deduct_from_balance(pair.sell, fill_amount);
 
             if num::is_dust_amount(num::u256_to_u128_saturating(new_balance)) {

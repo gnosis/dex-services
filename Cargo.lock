@@ -3015,6 +3015,7 @@ dependencies = [
  "mockall",
  "num",
  "pricegraph",
+ "primitive-types",
  "prometheus",
  "rouille",
  "serde",
