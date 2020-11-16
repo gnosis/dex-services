@@ -4,6 +4,7 @@ members = [
     "services-core",
     "driver",
     "e2e",
+    "gas-estimation",
     "price-estimator",
     "pricegraph",
     "pricegraph/bench",
@@ -14,6 +15,7 @@ members = [
 ]
 default-members = [
     "contracts",
+    "gas-estimation",
     "services-core",
     "driver",
     "price-estimator",

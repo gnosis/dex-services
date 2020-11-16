@@ -2,7 +2,6 @@ use super::IsOpenEthereumTransactionError as _;
 use crate::util::{self, AsyncSleeping, Now};
 use crate::{
     contracts::stablex_contract::{StableXContract, SOLUTION_SUBMISSION_GAS_LIMIT},
-    gas_price::GasPriceEstimating,
     models::Solution,
 };
 use anyhow::Result;
@@ -11,6 +10,7 @@ use futures::{
     future::{BoxFuture, FutureExt as _},
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
 };
+use gas_estimation::GasPriceEstimating;
 use primitive_types::U256;
 use std::{
     sync::Arc,

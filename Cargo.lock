@@ -1274,6 +1274,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "gas-estimation"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assert_approx_eq",
+ "async-trait",
+ "futures 0.3.8",
+ "isahc",
+ "log 0.4.11",
+ "mockall",
+ "primitive-types",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "web3",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3009,6 +3027,7 @@ dependencies = [
  "contracts",
  "ethcontract",
  "futures 0.3.8",
+ "gas-estimation",
  "isahc",
  "lazy_static",
  "log 0.4.11",

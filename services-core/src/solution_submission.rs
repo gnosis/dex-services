@@ -2,7 +2,6 @@ mod retry;
 
 use crate::{
     contracts::stablex_contract::{NoopTransactionError, StableXContract},
-    gas_price::GasPriceEstimating,
     models::{BatchId, Solution},
     util::AsyncSleeping,
 };
@@ -14,6 +13,7 @@ use ethcontract::{
     U256,
 };
 use futures::future::{self, Either};
+use gas_estimation::GasPriceEstimating;
 use retry::SolutionTransactionSending;
 use std::{
     sync::Arc,

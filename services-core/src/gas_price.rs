@@ -1,35 +1,13 @@
-mod eth_node;
-mod ethgasstation;
-mod gasnow;
-mod gnosis_safe;
-mod linear_interpolation;
-mod priority;
-
 use crate::{contracts::Web3, http::HttpClient, http::HttpFactory, metrics::HttpLabel};
 use anyhow::{anyhow, Result};
+use gas_estimation::{
+    EthGasStation, GasNowGasStation, GnosisSafeGasStation, PriorityGasPriceEstimating, Transport,
+};
 use isahc::http::uri::Uri;
 use serde::de::DeserializeOwned;
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{str::FromStr, sync::Arc};
 
-pub const DEFAULT_GAS_LIMIT: f64 = 21000.0;
-pub const DEFAULT_TIME_LIMIT: Duration = Duration::from_secs(30);
-
-#[cfg_attr(test, mockall::automock)]
-#[async_trait::async_trait]
-pub trait GasPriceEstimating: Send + Sync {
-    /// Estimate the gas price for a transaction to be mined "quickly".
-    async fn estimate(&self) -> Result<f64> {
-        self.estimate_with_limits(DEFAULT_GAS_LIMIT, DEFAULT_TIME_LIMIT)
-            .await
-    }
-    /// Estimate the gas price for a transaction that uses <gas> to be mined within <time_limit>.
-    async fn estimate_with_limits(&self, gas_limit: f64, time_limit: Duration) -> Result<f64>;
-}
-
-#[async_trait::async_trait]
-pub trait Transport: Send + Sync {
-    async fn get_json<'a, T: DeserializeOwned>(&self, url: &'a str) -> Result<T>;
-}
+pub use gas_estimation::GasPriceEstimating;
 
 #[async_trait::async_trait]
 impl Transport for HttpClient {
@@ -62,26 +40,21 @@ pub async fn create_priority_estimator(
                 if !is_mainnet(&network_id) {
                     return Err(anyhow!("EthGasStation only supports mainnet"));
                 }
-                estimators.push(Box::new(ethgasstation::EthGasStation::new(
-                    http_factory.create()?,
-                )))
+                estimators.push(Box::new(EthGasStation::new(http_factory.create()?)))
             }
             GasEstimatorType::GasNow => {
                 if !is_mainnet(&network_id) {
                     return Err(anyhow!("GasNow only supports mainnet"));
                 }
-                estimators.push(Box::new(gasnow::GasNow::new(http_factory.create()?)))
+                estimators.push(Box::new(GasNowGasStation::new(http_factory.create()?)))
             }
             GasEstimatorType::GnosisSafe => estimators.push(Box::new(
-                gnosis_safe::GnosisSafeGasStation::with_network_id(
-                    &network_id,
-                    http_factory.create()?,
-                )?,
+                GnosisSafeGasStation::with_network_id(&network_id, http_factory.create()?)?,
             )),
             GasEstimatorType::Web3 => estimators.push(Box::new(web3.clone())),
         }
     }
-    Ok(Arc::new(priority::PriorityGasPrice::new(estimators)))
+    Ok(Arc::new(PriorityGasPriceEstimating::new(estimators)))
 }
 
 fn is_mainnet(network_id: &str) -> bool {
@@ -89,18 +62,14 @@ fn is_mainnet(network_id: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use isahc::ResponseExt;
-
-    #[derive(Default)]
-    pub struct TestTransport {}
+use std::time::Duration;
+#[cfg(test)]
+mockall::mock! {
+    pub GasPriceEstimating {}
 
     #[async_trait::async_trait]
-    impl Transport for TestTransport {
-        async fn get_json<'a, T: DeserializeOwned>(&self, url: &'a str) -> Result<T> {
-            let json: String = isahc::get_async(Uri::from_str(url)?).await?.text()?;
-            Ok(serde_json::from_str(&json)?)
-        }
+    trait GasPriceEstimating {
+        async fn estimate(&self) -> Result<f64>;
+        async fn estimate_with_limits(&self, gas_limit: f64, time_limit: Duration) -> Result<f64>;
     }
 }

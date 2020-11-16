@@ -1,8 +1,9 @@
 //! Module implementing minimum average fee computation based on reference token
 //! price estimates.
 
-use crate::{gas_price::GasPriceEstimating, models::solution::EconomicViabilityInfo};
+use crate::models::solution::EconomicViabilityInfo;
 use anyhow::{anyhow, Context as _, Result};
+use gas_estimation::GasPriceEstimating;
 use std::{num::NonZeroU128, sync::Arc};
 
 /// The approximate amount of gas used in a solution per trade. In practice the value depends on how
