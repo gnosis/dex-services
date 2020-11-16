@@ -6,6 +6,7 @@ COPY contracts contracts
 COPY services-core services-core
 COPY driver driver
 COPY e2e e2e
+COPY gas-estimation gas-estimation
 COPY pricegraph pricegraph
 COPY price-estimator price-estimator
 RUN ls -l && cargo build --release -p price-estimator
