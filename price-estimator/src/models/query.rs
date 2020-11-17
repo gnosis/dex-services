@@ -6,6 +6,10 @@ use serde::Deserialize;
 use services_core::models::BatchId;
 use std::convert::TryFrom;
 
+// It never makes sense to have more than 30 hops because we cannot have more orders in one batch.
+// A large number of hops is also a DOS attack vector because we allocate memory proportionally.
+const MAX_HOPS: usize = 30;
+
 /// Common query parameters shared across all price estimation routes.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(try_from = "RawQuery")]
@@ -85,6 +89,13 @@ impl TryFrom<RawQuery> for QueryParameters {
     type Error = Error;
 
     fn try_from(raw: RawQuery) -> Result<Self> {
+        if let Some(hops) = raw.hops {
+            anyhow::ensure!(
+                hops <= MAX_HOPS,
+                "hops parameter is limited to {}",
+                MAX_HOPS
+            );
+        }
         Ok(QueryParameters {
             unit: match (raw.atoms, raw.unit) {
                 (Some(true), None) => Unit::Atoms,
@@ -147,10 +158,15 @@ mod tests {
     }
 
     #[test]
+    fn large_number_of_hops_rejected() {
+        assert!(query_params("?hops=31").is_err());
+    }
+
+    #[test]
     fn all_query_parameters() {
-        let query = query_params("?unit=atoms&hops=42&batchId=1337").unwrap();
+        let query = query_params("?unit=atoms&hops=23&batchId=1337").unwrap();
         assert_eq!(query.unit, Unit::Atoms);
-        assert_eq!(query.hops, Some(42));
+        assert_eq!(query.hops, Some(23));
         assert_eq!(query.time, EstimationTime::Batch(1337.into()));
     }
 
