@@ -8,7 +8,7 @@ use crate::{
     models::{ExecutedOrder, Solution},
 };
 use ::contracts::{batch_exchange, BatchExchange, BatchExchangeViewer};
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result};
 use ethcontract::{
     contract::Event,
     errors::{ExecutionError, MethodError},
@@ -37,22 +37,28 @@ lazy_static! {
 pub struct StableXContractImpl {
     instance: BatchExchange,
     viewer: BatchExchangeViewer,
+    account: Account,
 }
 
 impl StableXContractImpl {
     pub async fn new(web3: &contracts::Web3, key: PrivateKey) -> Result<Self> {
         let chain_id = web3.eth().chain_id().await?.as_u64();
-        let defaults = contracts::method_defaults(key, chain_id)?;
+        let account = contracts::account(key, chain_id);
+        let defaults = contracts::method_defaults(account.clone());
 
         let viewer = BatchExchangeViewer::deployed(&web3).await?;
         let mut instance = BatchExchange::deployed(&web3).await?;
         *instance.defaults_mut() = defaults;
 
-        Ok(StableXContractImpl { instance, viewer })
+        Ok(StableXContractImpl {
+            instance,
+            viewer,
+            account,
+        })
     }
 
-    pub fn account(&self) -> Option<Account> {
-        self.instance.defaults().from.clone()
+    pub fn account(&self) -> Account {
+        self.account.clone()
     }
 
     pub fn address(&self) -> Address {
@@ -79,14 +85,6 @@ pub struct FilteredOrderPage {
     pub has_next_page: bool,
     pub next_page_user: Address,
     pub next_page_user_offset: u16,
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum NoopTransactionError {
-    #[error("no account")]
-    NoAccount,
-    #[error("execution error: {0}")]
-    ExecutionError(#[from] ExecutionError),
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -157,7 +155,7 @@ pub trait StableXContract: Send + Sync {
         &'a self,
         gas_price: U256,
         nonce: U256,
-    ) -> BoxFuture<'a, Result<TransactionResult, NoopTransactionError>>;
+    ) -> BoxFuture<'a, Result<TransactionResult, ExecutionError>>;
 
     /// The current nonce aka transaction_count.
     async fn get_transaction_count(&self) -> Result<U256>;
@@ -316,10 +314,10 @@ impl StableXContract for StableXContractImpl {
         &'a self,
         gas_price: U256,
         nonce: U256,
-    ) -> BoxFuture<'a, Result<TransactionResult, NoopTransactionError>> {
+    ) -> BoxFuture<'a, Result<TransactionResult, ExecutionError>> {
         async move {
             let web3 = self.instance.raw_instance().web3();
-            let account = self.account().ok_or(NoopTransactionError::NoAccount)?;
+            let account = self.account.clone();
             let address = account.address();
             let transaction = ethcontract::transaction::TransactionBuilder::new(web3)
                 .from(account)
@@ -336,8 +334,7 @@ impl StableXContract for StableXContractImpl {
 
     async fn get_transaction_count(&self) -> Result<U256> {
         let web3 = self.instance.raw_instance().web3();
-        let account = self.account().ok_or_else(|| anyhow!("no account"))?;
-        let address = account.address();
+        let address = self.account.address();
         web3.eth()
             .transaction_count(address, None)
             .await
