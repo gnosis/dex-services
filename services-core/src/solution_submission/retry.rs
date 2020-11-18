@@ -244,10 +244,26 @@ mod tests {
         gas_price::MockGasPriceEstimating,
         util::{FutureWaitExt as _, MockAsyncSleeping},
     };
+    use ethcontract::{transaction::TransactionResult, H256};
     use futures::future;
 
+    pub fn nonce_execution_error() -> ExecutionError {
+        ExecutionError::Web3(Web3Error::Rpc(RpcError {
+            code: ethcontract::jsonrpc::types::ErrorCode::ServerError(-32010),
+            message: "Transaction nonce is too low.".to_string(),
+            data: None,
+        }))
+    }
+
+    fn nonce_method_error() -> MethodError {
+        MethodError {
+            signature: String::new(),
+            inner: nonce_execution_error(),
+        }
+    }
+
     #[test]
-    fn new_as_price_estimate_() {
+    fn new_gas_price_estimate_() {
         // new below previous
         assert_eq!(new_gas_price_estimate(1.0, 0.0, 2.0), None);
         //new equal to previous
@@ -270,7 +286,7 @@ mod tests {
     }
 
     #[test]
-    fn test_retry_with_gas_price_respects_minimum_increase() {
+    fn respects_minimum_gas_price_increase() {
         let mut contract = MockStableXContract::new();
         let mut gas_price = MockGasPriceEstimating::new();
         let mut sleep = MockAsyncSleeping::new();
@@ -317,70 +333,8 @@ mod tests {
             sleep,
             util::default_now(),
         );
-        let result = retry.retry(args).wait();
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn previous_transaction_completes_first() {
-        let mut contract = MockStableXContract::new();
-        let mut gas_price = MockGasPriceEstimating::new();
-        let mut sleep = MockAsyncSleeping::new();
-        let (sender, receiver) = futures::channel::oneshot::channel();
-
-        gas_price
-            .expect_estimate_with_limits()
-            .times(1)
-            .returning(|_, _| Ok(1.0));
-        contract
-            .expect_submit_solution()
-            .times(1)
-            .return_once(|_, _, _, _, _| {
-                async move {
-                    receiver.await.unwrap();
-                    Ok(())
-                }
-                .boxed()
-            });
-        sleep.expect_sleep().times(1).returning(|_| immediate!(()));
-        gas_price
-            .expect_estimate_with_limits()
-            .times(1)
-            .returning(|_, _| Ok(2.0));
-        contract
-            .expect_submit_solution()
-            .times(1)
-            .return_once(|_, _, _, _, _| {
-                sender.send(()).unwrap();
-                futures::future::pending().boxed()
-            });
-        sleep
-            .expect_sleep()
-            .returning(|_| future::pending().boxed());
-
-        let args = Args {
-            batch_index: 1,
-            solution: Solution::trivial(),
-            claimed_objective_value: 1.into(),
-            gas_price_cap: 10.0,
-            nonce: 0.into(),
-            target_confirm_time: Instant::now(),
-        };
-        let retry = RetryWithGasPriceIncrease::with_sleep_and_now(
-            Arc::new(contract),
-            Arc::new(gas_price),
-            sleep,
-            util::default_now(),
-        );
-        let result = retry.retry(args).wait();
-        assert!(result.is_ok());
-    }
-
-    fn nonce_error() -> MethodError {
-        MethodError {
-            signature: String::new(),
-            inner: crate::solution_submission::tests::nonce_error(),
-        }
+        let result = retry.retry(args, future::pending().boxed()).wait();
+        assert!(matches!(result, RetryResult::Submitted(Ok(()))));
     }
 
     #[test]
@@ -414,7 +368,7 @@ mod tests {
             .times(1)
             .return_once(|_, _, _, _, _| {
                 sender.send(()).unwrap();
-                immediate!(Err(nonce_error()))
+                immediate!(Err(nonce_method_error()))
             });
         sleep
             .expect_sleep()
@@ -434,7 +388,105 @@ mod tests {
             sleep,
             util::default_now(),
         );
-        let result = retry.retry(args).wait();
-        assert!(result.is_ok());
+        let result = retry.retry(args, future::pending().boxed()).wait();
+        assert!(matches!(dbg!(result), RetryResult::Submitted(Ok(()))));
+    }
+
+    #[test]
+    fn submission_completes_during_cancellation() {
+        let (cancel_sender, cancel_receiver) = futures::channel::oneshot::channel();
+        let (submit_sender, submit_receiver) = futures::channel::oneshot::channel();
+        let mut contract = MockStableXContract::new();
+        let mut gas_price = MockGasPriceEstimating::new();
+        let mut sleep = MockAsyncSleeping::new();
+
+        let cancel_future = async move {
+            cancel_receiver.await.unwrap();
+            submit_sender.send(()).unwrap();
+        }
+        .boxed();
+        gas_price
+            .expect_estimate_with_limits()
+            .times(1)
+            .returning(|_, _| Ok(1.0));
+        contract
+            .expect_submit_solution()
+            .times(1)
+            .return_once(|_, _, _, _, _| {
+                async move {
+                    cancel_sender.send(()).unwrap();
+                    submit_receiver.await.unwrap();
+                    Ok(())
+                }
+                .boxed()
+            });
+        sleep
+            .expect_sleep()
+            .return_once(|_| future::pending().boxed());
+
+        let args = Args {
+            batch_index: 1,
+            solution: Solution::trivial(),
+            claimed_objective_value: 1.into(),
+            gas_price_cap: 10.0,
+            nonce: 0.into(),
+            target_confirm_time: Instant::now(),
+        };
+        let retry = RetryWithGasPriceIncrease::with_sleep_and_now(
+            Arc::new(contract),
+            Arc::new(gas_price),
+            sleep,
+            util::default_now(),
+        );
+        let result = retry.retry(args, cancel_future).wait();
+        assert!(matches!(result, RetryResult::Submitted(Ok(()))));
+    }
+
+    #[test]
+    fn cancellation_completes() {
+        let (cancel_sender, cancel_receiver) = futures::channel::oneshot::channel();
+        let mut contract = MockStableXContract::new();
+        let mut gas_price = MockGasPriceEstimating::new();
+        let mut sleep = MockAsyncSleeping::new();
+
+        let cancel_future = async move {
+            cancel_receiver.await.unwrap();
+        }
+        .boxed();
+        gas_price
+            .expect_estimate_with_limits()
+            .times(1)
+            .returning(|_, _| Ok(1.0));
+        contract
+            .expect_submit_solution()
+            .times(1)
+            .return_once(|_, _, _, _, _| {
+                cancel_sender.send(()).unwrap();
+                future::pending().boxed()
+            });
+        sleep
+            .expect_sleep()
+            .return_once(|_| future::pending().boxed());
+        contract
+            .expect_send_noop_transaction()
+            .times(1)
+            .return_once(|_, _| immediate!(Ok(TransactionResult::Hash(H256::zero()))));
+
+        let args = Args {
+            batch_index: 1,
+            solution: Solution::trivial(),
+            claimed_objective_value: 1.into(),
+            gas_price_cap: 10.0,
+            nonce: 0.into(),
+            target_confirm_time: Instant::now(),
+        };
+        let retry = RetryWithGasPriceIncrease::with_sleep_and_now(
+            Arc::new(contract),
+            Arc::new(gas_price),
+            sleep,
+            util::default_now(),
+        );
+        let result = retry.retry(args, cancel_future).wait();
+        assert!(matches!(result, RetryResult::Cancelled(Ok(()))));
     }
 }
