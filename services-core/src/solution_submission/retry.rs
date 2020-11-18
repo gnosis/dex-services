@@ -1,23 +1,26 @@
-use super::IsOpenEthereumTransactionError as _;
 use crate::util::{self, AsyncSleeping, Now};
 use crate::{
     contracts::stablex_contract::{StableXContract, SOLUTION_SUBMISSION_GAS_LIMIT},
     models::Solution,
 };
 use anyhow::Result;
-use ethcontract::errors::MethodError;
-use futures::{
-    future::{BoxFuture, FutureExt as _},
-    stream::{futures_unordered::FuturesUnordered, StreamExt as _},
+use ethcontract::{
+    errors::{ExecutionError, MethodError},
+    jsonrpc::types::Error as RpcError,
+    web3::error::Error as Web3Error,
+    U256,
 };
+use futures::future::{BoxFuture, FutureExt as _};
 use gas_estimation::GasPriceEstimating;
-use primitive_types::U256;
 use std::{
+    future::Future,
     sync::Arc,
     time::{Duration, Instant},
 };
 
-use super::MIN_GAS_PRICE_INCREASE_FACTOR;
+// openethereum requires that the gas price of the resubmitted transaction has increased by at
+// least 12.5%.
+const MIN_GAS_PRICE_INCREASE_FACTOR: f64 = 1.125 * (1.0 + f64::EPSILON);
 
 const GAS_PRICE_REFRESH_INTERVAL: Duration = Duration::from_secs(15);
 
@@ -30,11 +33,23 @@ pub struct Args {
     pub target_confirm_time: Instant,
 }
 
+#[derive(Debug)]
+pub enum RetryResult {
+    Submitted(Result<(), MethodError>),
+    Cancelled(Result<(), ExecutionError>),
+}
+
 #[cfg_attr(test, mockall::automock)]
 pub trait SolutionTransactionSending {
     /// Submit the solution with an appropriate gas price based on target_confirm_time. Until the
     /// transaction has been confirmed the gas price is continually updated.
-    fn retry<'a>(&'a self, args: Args) -> BoxFuture<'a, Result<(), MethodError>>;
+    /// When cancel_after is ready the transaction will be cancelled by sending a noop transaction
+    /// at a higher gas price.
+    fn retry<'a>(
+        &'a self,
+        args: Args,
+        cancel_after: BoxFuture<'static, ()>,
+    ) -> BoxFuture<'a, RetryResult>;
 }
 
 pub struct RetryWithGasPriceIncrease<'a> {
@@ -73,15 +88,13 @@ impl<'a> RetryWithGasPriceIncrease<'a> {
 }
 
 impl<'a> SolutionTransactionSending for RetryWithGasPriceIncrease<'a> {
-    fn retry<'b>(&'b self, args: Args) -> BoxFuture<'b, Result<(), MethodError>> {
-        self.retry_(args).boxed()
+    fn retry<'b>(
+        &'b self,
+        args: Args,
+        cancel_after: BoxFuture<'b, ()>,
+    ) -> BoxFuture<'b, RetryResult> {
+        self.retry_(args, cancel_after).boxed()
     }
-}
-
-#[derive(Debug)]
-enum FutureOutput {
-    SolutionSubmission(Result<(), MethodError>),
-    Timeout,
 }
 
 fn new_gas_price_estimate(
@@ -113,74 +126,31 @@ impl<'a> RetryWithGasPriceIncrease<'a> {
             .await
     }
 
-    fn submit_solution(&self, args: &Args, gas_price: f64) -> BoxFuture<FutureOutput> {
-        self.contract
-            .submit_solution(
-                args.batch_index,
-                args.solution.clone(),
-                args.claimed_objective_value,
-                U256::from_f64_lossy(gas_price),
-                args.nonce,
-            )
-            .map(FutureOutput::SolutionSubmission)
-            .boxed()
+    async fn retry_(&self, args: Args, cancel_after: impl Future) -> RetryResult {
+        todo!()
     }
+}
 
-    fn wait_interval(&self) -> BoxFuture<FutureOutput> {
-        self.async_sleep
-            .sleep(GAS_PRICE_REFRESH_INTERVAL)
-            .map(|()| FutureOutput::Timeout)
-            .boxed()
+trait IsOpenEthereumTransactionError {
+    /// Is this an error with the transaction itself instead of an evm related error.
+    fn is_transaction_error(&self) -> bool;
+}
+
+impl IsOpenEthereumTransactionError for ExecutionError {
+    fn is_transaction_error(&self) -> bool {
+        // This is the error as we've seen it on openethereum nodes. The code and error messages can
+        // be found in openethereum's source code in `rpc/src/v1/helpers/errors.rs`.
+        // TODO: check how this looks on geth and infura. Not recognizing the error is not a serious
+        // problem but it will make us sometimes log an error when there actually was no problem.
+        matches!(self, ExecutionError::Web3(Web3Error::Rpc(RpcError { code, .. })) if code.code() == -32010)
     }
+}
 
-    async fn retry_(&self, args: Args) -> Result<(), MethodError> {
-        // Like in `StableXSolutionSubmitter::submit_solution` we need to handle the situation where
-        // we observe a nonce error from one future before the completion of another. It is also
-        // possible that a previous submission transaction completes first instead of the most
-        // recent one.
-        // That is why we keep track of all past transaction futures in this variable.
-        let mut futures = FuturesUnordered::new();
-        let mut last_used_gas_price = 0.0;
-        log::debug!(
-            "starting transaction retry with gas price cap {}",
-            args.gas_price_cap
-        );
-        loop {
-            match self.gas_price(&args).await {
-                Ok(gas_price) => {
-                    log::debug!("estimated gas price {}", gas_price);
-                    if let Some(mut gas_price) =
-                        new_gas_price_estimate(last_used_gas_price, gas_price, args.gas_price_cap)
-                    {
-                        gas_price = gas_price.ceil();
-                        last_used_gas_price = gas_price;
-                        log::info!("submitting solution transaction at gas price {}", gas_price);
-                        futures.push(self.submit_solution(&args, gas_price));
-                    }
-                }
-                Err(err) => log::error!("gas estimation failed: {:?}", err),
-            }
-
-            // We also store the sleep future and have converted both future's return type to the
-            // `FutureOutput` enum so that they can be stored in the FuturesUnordered.
-            futures.push(self.wait_interval());
-
-            // We check which type of future completes first. We can unwrap `next` because there is
-            // always the wait_interval future. If it completes first then `while let` does not
-            // match and we go into the next loop with a new gas price.
-            // We need a while loop to work around the possibility of observing transaction futures
-            // completing in an unexpected ordering. If we get a transaction error a different
-            // transaction future could still complete.
-            // Only when we observe an error that isn't a transaction error or we get to the last
-            // transaction future we can be sure that we are done.
-            while let FutureOutput::SolutionSubmission(result) = futures.next().await.unwrap() {
-                // Compare to `1` instead of `empty` because of the wait_interval future.
-                let is_last_transaction_future = futures.len() == 1;
-                if !result.is_transaction_error() || is_last_transaction_future {
-                    return result;
-                }
-            }
-        }
+fn is_transaction_error(result: &RetryResult) -> bool {
+    match result {
+        RetryResult::Submitted(Err(err)) => err.inner.is_transaction_error(),
+        RetryResult::Cancelled(Err(err)) => err.is_transaction_error(),
+        _ => false,
     }
 }
 

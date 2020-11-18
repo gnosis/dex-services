@@ -2,28 +2,22 @@ mod retry;
 
 use crate::{
     contracts::stablex_contract::StableXContract,
+    gas_price::GasPriceEstimating,
     models::{BatchId, Solution},
     util::AsyncSleeping,
 };
 use anyhow::{anyhow, Error, Result};
 use ethcontract::{
     errors::{ExecutionError, MethodError},
-    jsonrpc::types::Error as RpcError,
-    web3::{error::Error as Web3Error, types::TransactionReceipt},
+    web3::types::TransactionReceipt,
     U256,
 };
-use futures::future::{self, Either};
-use gas_estimation::GasPriceEstimating;
-use retry::SolutionTransactionSending;
+use retry::{RetryResult, SolutionTransactionSending};
 use std::{
     sync::Arc,
     time::{Duration, Instant, SystemTime},
 };
 use thiserror::Error;
-
-// openethereum requires that the gas price of the resubmitted transaction has increased by at
-// least 12.5%.
-const MIN_GAS_PRICE_INCREASE_FACTOR: f64 = 1.125 * (1.0 + f64::EPSILON);
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
@@ -153,27 +147,6 @@ impl<'a> StableXSolutionSubmitter<'a> {
             Err(err) => Err(self.convert_submit_error(batch_index, solution, err).await),
         }
     }
-
-    async fn cancel_transaction_after_deadline(
-        &self,
-        nonce: U256,
-        gas_price_cap: f64,
-        deadline: Instant,
-    ) -> Result<(), ExecutionError> {
-        let remaining = deadline
-            .checked_duration_since(Instant::now())
-            .unwrap_or_default();
-        self.async_sleep.sleep(remaining).await;
-        let gas_price = (gas_price_cap * MIN_GAS_PRICE_INCREASE_FACTOR).ceil();
-        log::info!(
-            "cancelling transaction because it took too long, using gas price {}",
-            gas_price
-        );
-        self.contract
-            .send_noop_transaction(U256::from_f64_lossy(gas_price), nonce)
-            .await
-            .map(|_| ())
-    }
 }
 
 #[async_trait::async_trait]
@@ -202,44 +175,35 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
                 .duration_since(SystemTime::now())
                 .unwrap_or_else(|_| Duration::from_secs(0));
         let nonce = self.contract.get_transaction_count().await?;
-        let submit_future = self.retry_with_gas_price_increase.retry(retry::Args {
+        let args = retry::Args {
             batch_index,
             solution: solution.clone(),
             claimed_objective_value,
             gas_price_cap,
             nonce,
             target_confirm_time,
-        });
-        // Add some extra time in case of desync between real time and ethereum node current block time.
-        let deadline = target_confirm_time + Duration::from_secs(30);
-        let cancel_future = self.cancel_transaction_after_deadline(nonce, gas_price_cap, deadline);
+        };
 
-        // Run both futures at the same time. When one of them completes check whether the
-        // result is a "nonce already used error". If this is the case then the other future's
-        // transaction must have gone through so return that one instead.
-        // We need to handle this error because exactly one of the transactions will go through
-        // but we might observe the other transaction failing first.
-        futures::pin_mut!(cancel_future);
-        match future::select(submit_future, cancel_future).await {
-            Either::Left((submit_result, cancel_future)) => {
-                if submit_result.is_transaction_error() {
-                    log::info!("solution submission transaction is nonce error");
-                    Err(convert_cancel_result(cancel_future.await))
-                } else {
-                    log::info!("solution submission transaction completed first");
-                    self.convert_submit_result(batch_index, solution, submit_result)
-                        .await
-                }
+        // Add some extra time in case of desync between real time and ethereum node current block time.
+        let cancel_instant = target_confirm_time + Duration::from_secs(30);
+        let cancel_duration = cancel_instant
+            .checked_duration_since(Instant::now())
+            .unwrap_or_else(|| Duration::from_secs(0));
+        let cancel_future = self.async_sleep.sleep(cancel_duration);
+
+        match self
+            .retry_with_gas_price_increase
+            .retry(args, cancel_future)
+            .await
+        {
+            RetryResult::Submitted(result) => {
+                log::info!("solution submission transaction completed first");
+                self.convert_submit_result(batch_index, solution, result)
+                    .await
             }
-            Either::Right((cancel_result, submit_future)) => {
-                if cancel_result.is_transaction_error() {
-                    log::info!("cancel transaction is nonce error");
-                    self.convert_submit_result(batch_index, solution, submit_future.await)
-                        .await
-                } else {
-                    log::info!("cancel transaction completed first");
-                    Err(convert_cancel_result(cancel_result))
-                }
+            RetryResult::Cancelled(result) => {
+                log::info!("cancel transaction completed first");
+                convert_cancel_result(result)
             }
         }
     }
@@ -252,60 +216,23 @@ fn extract_transaction_receipt(err: &MethodError) -> Option<&TransactionReceipt>
     }
 }
 
-fn convert_cancel_result(result: Result<(), ExecutionError>) -> SolutionSubmissionError {
-    match result {
-        Ok(()) => SolutionSubmissionError::Unexpected(anyhow!(
-            "solution submission transaction not confirmed in time"
-        )),
-        Err(err) => SolutionSubmissionError::Unexpected(
-            Error::from(err).context("failed to cancel solution submission"),
-        ),
-    }
-}
-
-trait IsOpenEthereumTransactionError {
-    /// Is this an error with the transaction itself instead of an evm related error.
-    fn is_transaction_error(&self) -> bool;
-}
-
-impl IsOpenEthereumTransactionError for ExecutionError {
-    fn is_transaction_error(&self) -> bool {
-        // This is the error as we've seen it on openethereum nodes. The code and error messages can
-        // be found in openethereum's source code in `rpc/src/v1/helpers/errors.rs`.
-        // TODO: check how this looks on geth and infura. Not recognizing the error is not a serious
-        // problem but it will make us sometimes log an error when there actually was no problem.
-        matches!(self, ExecutionError::Web3(Web3Error::Rpc(RpcError { code, .. })) if code.code() == -32010)
-    }
-}
-
-impl IsOpenEthereumTransactionError for Result<(), MethodError> {
-    fn is_transaction_error(&self) -> bool {
-        match self {
-            Err(MethodError { inner, .. }) => inner.is_transaction_error(),
-            _ => false,
-        }
-    }
-}
-
-impl IsOpenEthereumTransactionError for Result<(), ExecutionError> {
-    fn is_transaction_error(&self) -> bool {
-        match self {
-            Err(err) => err.is_transaction_error(),
-            _ => false,
-        }
-    }
+fn convert_cancel_result(
+    result: Result<(), ExecutionError>,
+) -> Result<(), SolutionSubmissionError> {
+    let error = match result {
+        Ok(_) => anyhow!("solution submission transaction not confirmed in time"),
+        Err(err) => Error::from(err).context("failed to cancel solution submission"),
+    };
+    Err(SolutionSubmissionError::Unexpected(error))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        contracts::stablex_contract::MockStableXContract,
-        util::{FutureWaitExt as _, MockAsyncSleeping},
-    };
+    use crate::{contracts::stablex_contract::MockStableXContract, util::MockAsyncSleeping};
     use anyhow::anyhow;
-    use ethcontract::{transaction::TransactionResult, web3::types::H2048, H256};
-    use futures::FutureExt as _;
+    use ethcontract::{web3::types::H2048, H256};
+    use futures::{future, FutureExt as _};
     use mockall::predicate::{always, eq};
     use retry::MockSolutionTransactionSending;
 
@@ -380,15 +307,12 @@ mod tests {
             });
 
         let mut retry = MockSolutionTransactionSending::new();
-        retry.expect_retry().times(1).return_once(|_| {
-            async move {
-                Err(MethodError::from_parts(
+        retry.expect_retry().times(1).return_once(|_, _| {
+            immediate!(RetryResult::Submitted(Err(MethodError::from_parts(
                 "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
                     .to_owned(),
                 ExecutionError::Failure(Box::new(receipt)),
-            ))
-            }
-            .boxed()
+            ))))
         });
 
         let mut sleep = MockAsyncSleeping::new();
@@ -409,114 +333,5 @@ mod tests {
                 panic!("Expecting benign failure, but got {}", err)
             }
         };
-    }
-
-    #[test]
-    fn submit_timeout_results_in_cancellation() {
-        let mut contract = MockStableXContract::new();
-        let mut retry = MockSolutionTransactionSending::new();
-        let mut sleep = MockAsyncSleeping::new();
-
-        contract
-            .expect_get_transaction_count()
-            .returning(|| Ok(U256::from(0)));
-        retry
-            .expect_retry()
-            .returning(|_| future::pending().boxed());
-        sleep
-            .expect_sleep()
-            .returning(|_| future::ready(()).boxed());
-        contract
-            .expect_send_noop_transaction()
-            .times(1)
-            .returning(|_, _| immediate!(Ok(TransactionResult::Hash(H256::zero()))));
-
-        let submitter =
-            StableXSolutionSubmitter::with_retry_and_sleep(Arc::new(contract), retry, sleep);
-        let result = submitter
-            .submit_solution(0, Solution::trivial(), 0.into(), 0.into())
-            .now_or_never()
-            .unwrap();
-        // Cancellation is an unexpected error.
-        assert!(matches!(
-            result,
-            Err(SolutionSubmissionError::Unexpected(_))
-        ));
-    }
-
-    #[test]
-    fn submission_completes_during_cancellation() {
-        let (sender, receiver) = futures::channel::oneshot::channel();
-        let mut contract = MockStableXContract::new();
-        let mut retry = MockSolutionTransactionSending::new();
-        let mut async_sleep = MockAsyncSleeping::new();
-
-        contract
-            .expect_get_transaction_count()
-            .returning(|| Ok(U256::from(0)));
-        retry.expect_retry().return_once(|_| {
-            async move {
-                receiver.await.unwrap();
-                Ok(())
-            }
-            .boxed()
-        });
-        async_sleep.expect_sleep().returning(|_| immediate!(()));
-        contract
-            .expect_send_noop_transaction()
-            .times(1)
-            .return_once(move |_, _| {
-                sender.send(()).unwrap();
-                futures::future::pending().boxed()
-            });
-
-        let submitter =
-            StableXSolutionSubmitter::with_retry_and_sleep(Arc::new(contract), retry, async_sleep);
-        let result = submitter
-            .submit_solution(0, Solution::trivial(), 0.into(), 0.into())
-            .wait();
-        assert!(result.is_ok());
-    }
-
-    pub fn nonce_error() -> ExecutionError {
-        ExecutionError::Web3(Web3Error::Rpc(RpcError {
-            code: ethcontract::jsonrpc::types::ErrorCode::ServerError(-32010),
-            message: "Transaction nonce is too low.".to_string(),
-            data: None,
-        }))
-    }
-
-    #[test]
-    fn cancellation_fails_with_nonce_error_before_submission_completes() {
-        let (sender, receiver) = futures::channel::oneshot::channel();
-        let mut contract = MockStableXContract::new();
-        let mut retry = MockSolutionTransactionSending::new();
-        let mut async_sleep = MockAsyncSleeping::new();
-
-        contract
-            .expect_get_transaction_count()
-            .returning(|| Ok(U256::from(0)));
-        retry.expect_retry().return_once(|_| {
-            async move {
-                receiver.await.unwrap();
-                Ok(())
-            }
-            .boxed()
-        });
-        async_sleep.expect_sleep().returning(|_| immediate!(()));
-        contract
-            .expect_send_noop_transaction()
-            .times(1)
-            .return_once(move |_, _| {
-                sender.send(()).unwrap();
-                immediate!(Err(nonce_error()))
-            });
-
-        let submitter =
-            StableXSolutionSubmitter::with_retry_and_sleep(Arc::new(contract), retry, async_sleep);
-        let result = submitter
-            .submit_solution(0, Solution::trivial(), 0.into(), 0.into())
-            .wait();
-        assert!(result.is_ok());
     }
 }
