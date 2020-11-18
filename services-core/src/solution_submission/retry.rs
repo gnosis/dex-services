@@ -84,31 +84,33 @@ enum FutureOutput {
     Timeout,
 }
 
+fn new_gas_price_estimate(
+    previous_gas_price: f64,
+    new_gas_price: f64,
+    max_gas_price: f64,
+) -> Option<f64> {
+    let min_gas_price = previous_gas_price * MIN_GAS_PRICE_INCREASE_FACTOR;
+    if min_gas_price > max_gas_price {
+        return None;
+    }
+    if new_gas_price <= previous_gas_price {
+        // Gas price has not increased.
+        return None;
+    }
+    // Gas price could have increased but doesn't respect minimum increase so adjust it up.
+    let new_price = min_gas_price.max(new_gas_price);
+    Some(new_price.min(max_gas_price))
+}
+
 impl<'a> RetryWithGasPriceIncrease<'a> {
-    async fn new_gas_price_for_target_time(&self, args: &Args) -> Option<f64> {
+    async fn gas_price(&self, args: &Args) -> Result<f64> {
         let time_remaining = args
             .target_confirm_time
             .saturating_duration_since(self.now.instant_now());
         // TODO: Use a more accurate gas limit once the gas estimators take that into account.
-        let estimated_gas_price = match self
-            .gas_price_estimating
+        self.gas_price_estimating
             .estimate_with_limits(SOLUTION_SUBMISSION_GAS_LIMIT as f64, time_remaining)
             .await
-        {
-            Ok(gas_price) => gas_price,
-            Err(err) => {
-                log::error!("gas estimation failed: {:?}", err);
-                return None;
-            }
-        };
-        let capped_gas_price = estimated_gas_price.min(args.gas_price_cap);
-        log::info!(
-            "With {} seconds remaining estimated gas price {} capped to {}.",
-            time_remaining.as_secs(),
-            estimated_gas_price,
-            capped_gas_price,
-        );
-        Some(capped_gas_price)
     }
 
     fn submit_solution(&self, args: &Args, gas_price: f64) -> BoxFuture<FutureOutput> {
@@ -138,13 +140,25 @@ impl<'a> RetryWithGasPriceIncrease<'a> {
         // recent one.
         // That is why we keep track of all past transaction futures in this variable.
         let mut futures = FuturesUnordered::new();
-        let mut highest_used_gas_price = 0.0;
+        let mut last_used_gas_price = 0.0;
+        log::debug!(
+            "starting transaction retry with gas price cap {}",
+            args.gas_price_cap
+        );
         loop {
-            if let Some(gas_price) = self.new_gas_price_for_target_time(&args).await {
-                if gas_price >= highest_used_gas_price * MIN_GAS_PRICE_INCREASE_FACTOR {
-                    highest_used_gas_price = gas_price;
-                    futures.push(self.submit_solution(&args, gas_price));
+            match self.gas_price(&args).await {
+                Ok(gas_price) => {
+                    log::debug!("estimated gas price {}", gas_price);
+                    if let Some(mut gas_price) =
+                        new_gas_price_estimate(last_used_gas_price, gas_price, args.gas_price_cap)
+                    {
+                        gas_price = gas_price.ceil();
+                        last_used_gas_price = gas_price;
+                        log::info!("submitting solution transaction at gas price {}", gas_price);
+                        futures.push(self.submit_solution(&args, gas_price));
+                    }
                 }
+                Err(err) => log::error!("gas estimation failed: {:?}", err),
             }
 
             // We also store the sleep future and have converted both future's return type to the
@@ -179,6 +193,29 @@ mod tests {
         util::{FutureWaitExt as _, MockAsyncSleeping},
     };
     use futures::future;
+
+    #[test]
+    fn new_as_price_estimate_() {
+        // new below previous
+        assert_eq!(new_gas_price_estimate(1.0, 0.0, 2.0), None);
+        //new equal to previous
+        assert_eq!(new_gas_price_estimate(1.0, 1.0, 2.0), None);
+        // between previous and min increase rounded up to min increase
+        assert_eq!(
+            new_gas_price_estimate(1.0, 1.1, 2.0),
+            Some(MIN_GAS_PRICE_INCREASE_FACTOR)
+        );
+        // between min increase and max stays same
+        assert_eq!(new_gas_price_estimate(1.0, 1.2, 2.0), Some(1.2));
+        // larger than max stays max
+        assert_eq!(new_gas_price_estimate(1.0, 2.1, 2.0), Some(2.0));
+        // cannot increase by min increase
+        assert_eq!(new_gas_price_estimate(1.9, 1.8, 2.0), None);
+        assert_eq!(new_gas_price_estimate(1.9, 1.9, 2.0), None);
+        assert_eq!(new_gas_price_estimate(1.9, 1.95, 2.0), None);
+        assert_eq!(new_gas_price_estimate(1.9, 2.0, 2.0), None);
+        assert_eq!(new_gas_price_estimate(1.9, 2.5, 2.0), None);
+    }
 
     #[test]
     fn test_retry_with_gas_price_respects_minimum_increase() {
