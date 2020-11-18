@@ -1,3 +1,4 @@
+use super::first_match::FirstMatch;
 use crate::util::{self, AsyncSleeping, Now};
 use crate::{
     contracts::stablex_contract::{StableXContract, SOLUTION_SUBMISSION_GAS_LIMIT},
@@ -10,7 +11,10 @@ use ethcontract::{
     web3::error::Error as Web3Error,
     U256,
 };
-use futures::future::{BoxFuture, FutureExt as _};
+use futures::{
+    future::{BoxFuture, FutureExt as _},
+    stream::{self, FusedStream, StreamExt},
+};
 use gas_estimation::GasPriceEstimating;
 use std::{
     future::Future,
@@ -116,18 +120,96 @@ fn new_gas_price_estimate(
 }
 
 impl<'a> RetryWithGasPriceIncrease<'a> {
-    async fn gas_price(&self, args: &Args) -> Result<f64> {
-        let time_remaining = args
-            .target_confirm_time
-            .saturating_duration_since(self.now.instant_now());
+    async fn gas_price(&self, target_confirm_time: Instant) -> Result<f64> {
+        let time_remaining = target_confirm_time.saturating_duration_since(self.now.instant_now());
         // TODO: Use a more accurate gas limit once the gas estimators take that into account.
         self.gas_price_estimating
             .estimate_with_limits(SOLUTION_SUBMISSION_GAS_LIMIT as f64, time_remaining)
             .await
     }
 
+    async fn submit_solution(&self, args: &Args, gas_price: f64) -> RetryResult {
+        RetryResult::Submitted(
+            self.contract
+                .submit_solution(
+                    args.batch_index,
+                    args.solution.clone(),
+                    args.claimed_objective_value,
+                    U256::from_f64_lossy(gas_price),
+                    args.nonce,
+                )
+                .await,
+        )
+    }
+
+    async fn cancel(&self, gas_price: f64, nonce: U256) -> RetryResult {
+        let gas_price = U256::from_f64_lossy(gas_price);
+        log::debug!("cancelling transaction with gas price {}", gas_price);
+        let result = self.contract.send_noop_transaction(gas_price, nonce).await;
+        RetryResult::Cancelled(result.map(|_| ()))
+    }
+
+    // Yields the current gas price immediately and then every refresh interval.
+    fn gas_price_stream(
+        &self,
+        target_confirm_time: Instant,
+    ) -> impl FusedStream<Item = Result<f64>> + '_ {
+        stream::unfold(true, move |first_call| async move {
+            if !first_call {
+                self.async_sleep.sleep(GAS_PRICE_REFRESH_INTERVAL).await;
+            }
+            return Some((self.gas_price(target_confirm_time).await, false));
+        })
+    }
+
     async fn retry_(&self, args: Args, cancel_after: impl Future) -> RetryResult {
-        todo!()
+        log::debug!("starting retry with gas price cap {}", args.gas_price_cap);
+
+        let gas_price_stream = self.gas_price_stream(args.target_confirm_time);
+        // make useable in `select!`
+        let cancel_after = cancel_after.fuse();
+        futures::pin_mut!(cancel_after);
+        futures::pin_mut!(gas_price_stream);
+
+        // This struct keeps track of all the solution and cancellation futures. If we get a
+        // "nonce already used error" we continue running the other futures. We need to handle this
+        // case because we do not know which transactions will complete or fail or in which order we
+        // observe completion.
+        let mut first_match = FirstMatch::new(|result: &RetryResult| !is_transaction_error(result));
+        let mut last_used_gas_price = 0.0;
+        loop {
+            futures::select! {
+                gas_price = gas_price_stream.next() => match gas_price.unwrap() {
+                    Ok(gas_price) => {
+                        log::debug!("estimated gas price {}", gas_price);
+                        if let Some(mut gas_price) = new_gas_price_estimate(
+                            last_used_gas_price,
+                            gas_price,
+                            args.gas_price_cap,
+                        ) {
+                            gas_price = gas_price.ceil();
+                            last_used_gas_price = gas_price;
+                            log::info!(
+                                "submitting solution transaction at gas price {}",
+                                gas_price
+                            );
+                            first_match.push(self.submit_solution(&args, gas_price).boxed());
+                        }
+                    }
+                    Err(err) => log::error!("gas price estimation failed: {:?}", err),
+                },
+                result = first_match => return result,
+                _ = cancel_after => break,
+            }
+        }
+
+        let never_submitted_solution = last_used_gas_price == 0.0;
+        if never_submitted_solution {
+            return RetryResult::Cancelled(Ok(()));
+        }
+        let gas_price = (last_used_gas_price * MIN_GAS_PRICE_INCREASE_FACTOR).ceil();
+        first_match.push(self.cancel(gas_price, args.nonce).boxed());
+        first_match.await
     }
 }
 
