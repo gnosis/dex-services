@@ -179,6 +179,7 @@ impl<'a> RetryWithGasPriceIncrease<'a> {
         let mut last_used_gas_price = 0.0;
         loop {
             futures::select! {
+                // Unwrap because the stream never ends.
                 gas_price = gas_price_stream.next() => match gas_price.unwrap() {
                     Ok(gas_price) => {
                         log::debug!("estimated gas price {}", gas_price);
