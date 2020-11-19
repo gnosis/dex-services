@@ -59,6 +59,11 @@ fuzz_target!(|arguments: Arguments| {
                     return;
                 }
             }
+            if let Some(hops) = hops {
+                if hops > 30 {
+                    return;
+                }
+            }
             pricegraph.transitive_orderbook(market, hops, spread);
         }
     };
