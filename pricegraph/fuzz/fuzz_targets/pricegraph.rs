@@ -64,7 +64,7 @@ fuzz_target!(|arguments: Arguments| {
                     return;
                 }
             }
-            pricegraph.transitive_orderbook(market, hops, spread);
+            pricegraph.transitive_orderbook(market, 1+ (hops % 30), spread);
         }
     };
 });
