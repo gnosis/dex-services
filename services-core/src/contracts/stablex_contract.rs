@@ -7,7 +7,7 @@ use crate::{
     contracts,
     models::{ExecutedOrder, Solution},
 };
-use ::contracts::{batch_exchange, BatchExchange, BatchExchangeViewer};
+use ::contracts::{batch_exchange, BatchExchange, BatchExchangeViewer, SolutionSubmitter};
 use anyhow::{Error, Result};
 use ethcontract::{
     contract::Event,
@@ -37,22 +37,36 @@ lazy_static! {
 pub struct StableXContractImpl {
     instance: BatchExchange,
     viewer: BatchExchangeViewer,
+    solution_submitter: Option<SolutionSubmitter>,
     account: Account,
 }
 
 impl StableXContractImpl {
-    pub async fn new(web3: &contracts::Web3, key: PrivateKey) -> Result<Self> {
+    pub async fn new(
+        web3: &contracts::Web3,
+        key: PrivateKey,
+        use_solution_submitter: bool,
+    ) -> Result<Self> {
         let chain_id = web3.eth().chain_id().await?.as_u64();
         let account = contracts::account(key, chain_id);
         let defaults = contracts::method_defaults(account.clone());
 
         let viewer = BatchExchangeViewer::deployed(&web3).await?;
         let mut instance = BatchExchange::deployed(&web3).await?;
-        *instance.defaults_mut() = defaults;
+        *instance.defaults_mut() = defaults.clone();
+
+        let solution_submitter = if use_solution_submitter {
+            let mut instance = SolutionSubmitter::deployed(&web3).await?;
+            *instance.defaults_mut() = defaults;
+            Some(instance)
+        } else {
+            None
+        };
 
         Ok(StableXContractImpl {
             instance,
             viewer,
+            solution_submitter,
             account,
         })
     }
@@ -269,9 +283,8 @@ impl StableXContract for StableXContractImpl {
             let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
             let (owners, order_ids, volumes) =
                 encode_execution_for_contract(&solution.executed_orders);
-            let mut method = self
-                .instance
-                .submit_solution(
+            let mut method = match &self.solution_submitter {
+                Some(submitter) => submitter.submit_solution(
                     batch_index,
                     claimed_objective_value,
                     owners,
@@ -279,13 +292,23 @@ impl StableXContract for StableXContractImpl {
                     volumes,
                     prices,
                     token_ids_for_price,
-                )
-                .gas_price(GasPrice::Value(gas_price))
-                // NOTE: Gas estimate might be off, as we race with other solution
-                //   submissions and thus might have to revert trades which costs
-                //   more gas than expected.
-                .gas(SOLUTION_SUBMISSION_GAS_LIMIT.into())
-                .nonce(nonce);
+                ),
+                None => self.instance.submit_solution(
+                    batch_index,
+                    claimed_objective_value,
+                    owners,
+                    order_ids,
+                    volumes,
+                    prices,
+                    token_ids_for_price,
+                ),
+            }
+            .gas_price(GasPrice::Value(gas_price))
+            // NOTE: Gas estimate might be off, as we race with other solution
+            //   submissions and thus might have to revert trades which costs
+            //   more gas than expected.
+            .gas(SOLUTION_SUBMISSION_GAS_LIMIT.into())
+            .nonce(nonce);
             method.tx.resolve = Some(ResolveCondition::Confirmed(ConfirmParams::mined()));
             method.send().await.map(|_| ())
         }
