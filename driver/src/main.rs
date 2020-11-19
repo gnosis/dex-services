@@ -261,8 +261,7 @@ struct Options {
     )]
     gas_estimators: Vec<GasEstimatorType>,
 
-    /// Whether to rely on external price sources (e.g. 1Inch, Kraken etc)
-    /// when estimating token prices
+    /// Whether to use the SolutionSubmitter wrapper contract for submitting solutions
     #[structopt(
         long,
         env = "USE_SOLUTION_SUBMITTER",
