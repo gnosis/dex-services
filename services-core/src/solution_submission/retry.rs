@@ -1,4 +1,4 @@
-use super::first_match::FirstMatchOrLast;
+use super::{first_match::FirstMatchOrLast, gas_price_increase};
 use crate::util::{self, AsyncSleeping, Now};
 use crate::{
     contracts::stablex_contract::{StableXContract, SOLUTION_SUBMISSION_GAS_LIMIT},
@@ -21,10 +21,6 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-
-// openethereum requires that the gas price of the resubmitted transaction has increased by at
-// least 12.5%.
-const MIN_GAS_PRICE_INCREASE_FACTOR: f64 = 1.125 * (1.0 + f64::EPSILON);
 
 const GAS_PRICE_REFRESH_INTERVAL: Duration = Duration::from_secs(15);
 
@@ -101,24 +97,6 @@ impl<'a> SolutionTransactionSending for RetryWithGasPriceIncrease<'a> {
     }
 }
 
-fn new_gas_price_estimate(
-    previous_gas_price: f64,
-    new_gas_price: f64,
-    max_gas_price: f64,
-) -> Option<f64> {
-    let min_gas_price = previous_gas_price * MIN_GAS_PRICE_INCREASE_FACTOR;
-    if min_gas_price > max_gas_price {
-        return None;
-    }
-    if new_gas_price <= previous_gas_price {
-        // Gas price has not increased.
-        return None;
-    }
-    // Gas price could have increased but doesn't respect minimum increase so adjust it up.
-    let new_price = min_gas_price.max(new_gas_price);
-    Some(new_price.min(max_gas_price))
-}
-
 impl<'a> RetryWithGasPriceIncrease<'a> {
     async fn gas_price(&self, target_confirm_time: Instant) -> Result<f64> {
         let time_remaining = target_confirm_time.saturating_duration_since(self.now.instant_now());
@@ -149,24 +127,37 @@ impl<'a> RetryWithGasPriceIncrease<'a> {
         RetryResult::Cancelled(result.map(|_| ()))
     }
 
-    // Yields the current gas price immediately and then every refresh interval.
-    fn gas_price_stream(
-        &self,
-        target_confirm_time: Instant,
-    ) -> impl FusedStream<Item = Result<f64>> + '_ {
+    // Yields the current gas price immediately and then every refresh interval. Skips errors.
+    fn gas_price_stream(&self, target_confirm_time: Instant) -> impl FusedStream<Item = f64> + '_ {
         stream::unfold(true, move |first_call| async move {
             if !first_call {
                 self.async_sleep.sleep(GAS_PRICE_REFRESH_INTERVAL).await;
             }
             return Some((self.gas_price(target_confirm_time).await, false));
         })
+        .filter_map(|gas_price_result| async move {
+            match gas_price_result {
+                Ok(gas_price) => {
+                    log::debug!("estimated gas price {}", gas_price);
+                    Some(gas_price)
+                }
+                Err(err) => {
+                    log::error!("gas price estimation failed: {:?}", err);
+                    None
+                }
+            }
+        })
     }
 
     async fn retry_(&self, args: Args, cancel_after: impl Future) -> RetryResult {
         log::debug!("starting retry with gas price cap {}", args.gas_price_cap);
 
-        let gas_price_stream = self.gas_price_stream(args.target_confirm_time);
+        let gas_price_stream = gas_price_increase::enforce_minimum_increase_and_cap(
+            args.gas_price_cap,
+            self.gas_price_stream(args.target_confirm_time),
+        );
         // make useable in `select!`
+        let gas_price_stream = gas_price_stream.fuse();
         let cancel_after = cancel_after.fuse();
         futures::pin_mut!(cancel_after);
         futures::pin_mut!(gas_price_stream);
@@ -180,26 +171,12 @@ impl<'a> RetryWithGasPriceIncrease<'a> {
         let mut last_used_gas_price = 0.0;
         loop {
             futures::select! {
-                // Unwrap because the stream never ends.
-                gas_price = gas_price_stream.next() => match gas_price.unwrap() {
-                    Ok(gas_price) => {
-                        log::debug!("estimated gas price {}", gas_price);
-                        if let Some(mut gas_price) = new_gas_price_estimate(
-                            last_used_gas_price,
-                            gas_price,
-                            args.gas_price_cap,
-                        ) {
-                            gas_price = gas_price.ceil();
-                            last_used_gas_price = gas_price;
-                            log::info!(
-                                "submitting solution transaction at gas price {}",
-                                gas_price
-                            );
-                            first_match.add(self.submit_solution(&args, gas_price).boxed());
-                        }
-                    }
-                    Err(err) => log::error!("gas price estimation failed: {:?}", err),
-                },
+                gas_price = gas_price_stream.next() => {
+                    let gas_price = gas_price.expect("stream never ends");
+                    last_used_gas_price = gas_price;
+                    log::info!("submitting solution transaction at gas price {}", gas_price);
+                    first_match.add(self.submit_solution(&args, gas_price).boxed());
+                }
                 result = first_match => return result,
                 _ = cancel_after => break,
             }
@@ -209,7 +186,7 @@ impl<'a> RetryWithGasPriceIncrease<'a> {
         if never_submitted_solution {
             return RetryResult::Cancelled(Ok(()));
         }
-        let gas_price = (last_used_gas_price * MIN_GAS_PRICE_INCREASE_FACTOR).ceil();
+        let gas_price = gas_price_increase::minimum_increase(last_used_gas_price);
         first_match.add(self.cancel(gas_price, args.nonce).boxed());
         first_match.await
     }
@@ -262,81 +239,6 @@ mod tests {
             signature: String::new(),
             inner: nonce_execution_error(),
         }
-    }
-
-    #[test]
-    fn new_gas_price_estimate_() {
-        // new below previous
-        assert_eq!(new_gas_price_estimate(1.0, 0.0, 2.0), None);
-        //new equal to previous
-        assert_eq!(new_gas_price_estimate(1.0, 1.0, 2.0), None);
-        // between previous and min increase rounded up to min increase
-        assert_eq!(
-            new_gas_price_estimate(1.0, 1.1, 2.0),
-            Some(MIN_GAS_PRICE_INCREASE_FACTOR)
-        );
-        // between min increase and max stays same
-        assert_eq!(new_gas_price_estimate(1.0, 1.2, 2.0), Some(1.2));
-        // larger than max stays max
-        assert_eq!(new_gas_price_estimate(1.0, 2.1, 2.0), Some(2.0));
-        // cannot increase by min increase
-        assert_eq!(new_gas_price_estimate(1.9, 1.8, 2.0), None);
-        assert_eq!(new_gas_price_estimate(1.9, 1.9, 2.0), None);
-        assert_eq!(new_gas_price_estimate(1.9, 1.95, 2.0), None);
-        assert_eq!(new_gas_price_estimate(1.9, 2.0, 2.0), None);
-        assert_eq!(new_gas_price_estimate(1.9, 2.5, 2.0), None);
-    }
-
-    #[test]
-    fn respects_minimum_gas_price_increase() {
-        let mut contract = MockStableXContract::new();
-        let mut gas_price = MockGasPriceEstimating::new();
-        let mut sleep = MockAsyncSleeping::new();
-        let (sender, receiver) = futures::channel::oneshot::channel();
-
-        gas_price
-            .expect_estimate_with_limits()
-            .times(1)
-            .returning(|_, _| Ok(1.0));
-        contract
-            .expect_submit_solution()
-            .times(1)
-            .return_once(|_, _, _, _, _| {
-                async move {
-                    receiver.await.unwrap();
-                    Ok(())
-                }
-                .boxed()
-            });
-        sleep.expect_sleep().times(1).returning(|_| immediate!(()));
-        gas_price
-            .expect_estimate_with_limits()
-            .times(1)
-            .return_once(move |_, _| {
-                sender.send(()).unwrap();
-                Ok(1.0) // gas price hasn't increased
-            });
-        // submit_solution isn't called again
-        sleep
-            .expect_sleep()
-            .returning(|_| future::pending().boxed());
-
-        let args = Args {
-            batch_index: 1,
-            solution: Solution::trivial(),
-            claimed_objective_value: 1.into(),
-            gas_price_cap: 10.0,
-            nonce: 0.into(),
-            target_confirm_time: Instant::now(),
-        };
-        let retry = RetryWithGasPriceIncrease::with_sleep_and_now(
-            Arc::new(contract),
-            Arc::new(gas_price),
-            sleep,
-            util::default_now(),
-        );
-        let result = retry.retry(args, future::pending().boxed()).wait();
-        assert!(matches!(result, RetryResult::Submitted(Ok(()))));
     }
 
     #[test]

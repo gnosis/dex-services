@@ -1,4 +1,5 @@
 mod first_match;
+mod gas_price_increase;
 mod retry;
 
 use crate::{
