@@ -14,7 +14,7 @@ use ethcontract::{
     web3::types::TransactionReceipt,
     U256,
 };
-use retry::{RetryResult, SolutionTransactionSending};
+use retry::{RetryTransactionSending, RetryWithGasPriceIncrease};
 use std::{
     sync::Arc,
     time::{Duration, Instant, SystemTime},
@@ -87,9 +87,9 @@ impl From<Error> for SolutionSubmissionError {
     }
 }
 
-pub struct StableXSolutionSubmitter {
+pub struct StableXSolutionSubmitter<T = RetryWithGasPriceIncrease> {
     contract: Arc<dyn StableXContract>,
-    retry_with_gas_price_increase: Box<dyn SolutionTransactionSending>,
+    retry_with_gas_price_increase: T,
     async_sleep: Box<dyn AsyncSleeping>,
 }
 
@@ -100,19 +100,21 @@ impl StableXSolutionSubmitter {
     ) -> Self {
         Self::with_retry_and_sleep(
             contract.clone(),
-            retry::RetryWithGasPriceIncrease::new(contract, gas_price_estimating),
+            retry::RetryWithGasPriceIncrease::new(gas_price_estimating),
             crate::util::AsyncSleep {},
         )
     }
+}
 
+impl<T> StableXSolutionSubmitter<T> {
     fn with_retry_and_sleep(
         contract: Arc<dyn StableXContract>,
-        retry_with_gas_price_increase: impl SolutionTransactionSending + 'static,
+        retry_with_gas_price_increase: T,
         async_sleep: impl AsyncSleeping,
     ) -> Self {
         Self {
             contract,
-            retry_with_gas_price_increase: Box::new(retry_with_gas_price_increase),
+            retry_with_gas_price_increase,
             async_sleep: Box::new(async_sleep),
         }
     }
@@ -152,7 +154,10 @@ impl StableXSolutionSubmitter {
 }
 
 #[async_trait::async_trait]
-impl StableXSolutionSubmitting for StableXSolutionSubmitter {
+impl<T> StableXSolutionSubmitting for StableXSolutionSubmitter<T>
+where
+    T: RetryTransactionSending,
+{
     async fn get_solution_objective_value(
         &self,
         batch_index: u32,
@@ -177,14 +182,6 @@ impl StableXSolutionSubmitting for StableXSolutionSubmitter {
                 .duration_since(SystemTime::now())
                 .unwrap_or_else(|_| Duration::from_secs(0));
         let nonce = self.contract.get_transaction_count().await?;
-        let args = retry::Args {
-            batch_index,
-            solution: solution.clone(),
-            claimed_objective_value,
-            gas_price_cap,
-            nonce,
-            target_confirm_time,
-        };
 
         // Add some extra time in case of desync between real time and ethereum node current block time.
         let cancel_instant = target_confirm_time + Duration::from_secs(30);
@@ -193,21 +190,7 @@ impl StableXSolutionSubmitting for StableXSolutionSubmitter {
             .unwrap_or_else(|| Duration::from_secs(0));
         let cancel_future = self.async_sleep.sleep(cancel_duration);
 
-        match self
-            .retry_with_gas_price_increase
-            .retry(args, cancel_future)
-            .await
-        {
-            RetryResult::Submitted(result) => {
-                log::info!("solution submission transaction completed first");
-                self.convert_submit_result(batch_index, solution, result)
-                    .await
-            }
-            RetryResult::Cancelled(result) => {
-                log::info!("cancel transaction completed first");
-                convert_cancel_result(result)
-            }
-        }
+        todo!("do the retry")
     }
 }
 
@@ -228,6 +211,7 @@ fn convert_cancel_result(
     Err(SolutionSubmissionError::Unexpected(error))
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -337,3 +321,4 @@ mod tests {
         };
     }
 }
+*/
