@@ -123,11 +123,7 @@ fn parse_addresses(string: &str) -> Result<Vec<Address>> {
 }
 
 fn parse_address(string: &str) -> Result<Address> {
-    let string = if string.starts_with("0x") {
-        &string[2..]
-    } else {
-        &string[..]
-    };
+    let string = string.strip_prefix("0x").unwrap_or(string);
     string
         .parse()
         .with_context(|| format!("failed to parse address: {}", string))
