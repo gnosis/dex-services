@@ -87,13 +87,13 @@ impl From<Error> for SolutionSubmissionError {
     }
 }
 
-pub struct StableXSolutionSubmitter<'a> {
+pub struct StableXSolutionSubmitter {
     contract: Arc<dyn StableXContract>,
-    retry_with_gas_price_increase: Box<dyn SolutionTransactionSending + Send + Sync + 'a>,
-    async_sleep: Box<dyn AsyncSleeping + 'a>,
+    retry_with_gas_price_increase: Box<dyn SolutionTransactionSending>,
+    async_sleep: Box<dyn AsyncSleeping>,
 }
 
-impl<'a> StableXSolutionSubmitter<'a> {
+impl StableXSolutionSubmitter {
     pub fn new(
         contract: Arc<dyn StableXContract>,
         gas_price_estimating: Arc<dyn GasPriceEstimating>,
@@ -107,8 +107,8 @@ impl<'a> StableXSolutionSubmitter<'a> {
 
     fn with_retry_and_sleep(
         contract: Arc<dyn StableXContract>,
-        retry_with_gas_price_increase: impl SolutionTransactionSending + Send + Sync + 'a,
-        async_sleep: impl AsyncSleeping + 'a,
+        retry_with_gas_price_increase: impl SolutionTransactionSending + 'static,
+        async_sleep: impl AsyncSleeping,
     ) -> Self {
         Self {
             contract,
@@ -152,7 +152,7 @@ impl<'a> StableXSolutionSubmitter<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
+impl StableXSolutionSubmitting for StableXSolutionSubmitter {
     async fn get_solution_objective_value(
         &self,
         batch_index: u32,
