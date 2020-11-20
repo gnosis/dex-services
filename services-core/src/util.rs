@@ -62,7 +62,7 @@ where
 }
 
 #[cfg_attr(test, mockall::automock)]
-pub trait AsyncSleeping: Send + Sync {
+pub trait AsyncSleeping: 'static + Send + Sync {
     #[must_use]
     fn sleep(&self, duration: Duration) -> BoxFuture<'static, ()> {
         async_std::task::sleep(duration).boxed()
@@ -73,7 +73,7 @@ pub struct AsyncSleep;
 impl AsyncSleeping for AsyncSleep {}
 
 #[cfg_attr(test, mockall::automock)]
-pub trait Now: Send + Sync {
+pub trait Now: 'static + Send + Sync {
     fn system_now(&self) -> SystemTime;
     fn instant_now(&self) -> Instant;
 }

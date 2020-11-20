@@ -4,17 +4,22 @@ mod retry;
 
 use crate::{
     contracts::stablex_contract::StableXContract,
-    gas_price::GasPriceEstimating,
     models::{BatchId, Solution},
     util::AsyncSleeping,
 };
 use anyhow::{anyhow, Error, Result};
 use ethcontract::{
     errors::{ExecutionError, MethodError},
-    web3::types::TransactionReceipt,
+    jsonrpc::types::Error as RpcError,
+    web3::{error::Error as Web3Error, types::TransactionReceipt},
     U256,
 };
-use retry::{RetryResult, SolutionTransactionSending};
+use futures::future::FutureExt as _;
+use gas_estimation::GasPriceEstimating;
+use retry::{
+    RetryResult, RetryTransactionSending, RetryWithGasPriceIncrease, TransactionResult,
+    TransactionSending,
+};
 use std::{
     sync::Arc,
     time::{Duration, Instant, SystemTime},
@@ -87,32 +92,34 @@ impl From<Error> for SolutionSubmissionError {
     }
 }
 
-pub struct StableXSolutionSubmitter<'a> {
+pub struct StableXSolutionSubmitter<T = RetryWithGasPriceIncrease> {
     contract: Arc<dyn StableXContract>,
-    retry_with_gas_price_increase: Box<dyn SolutionTransactionSending + Send + Sync + 'a>,
-    async_sleep: Box<dyn AsyncSleeping + 'a>,
+    retry_with_gas_price_increase: T,
+    async_sleep: Box<dyn AsyncSleeping>,
 }
 
-impl<'a> StableXSolutionSubmitter<'a> {
+impl StableXSolutionSubmitter {
     pub fn new(
         contract: Arc<dyn StableXContract>,
         gas_price_estimating: Arc<dyn GasPriceEstimating>,
     ) -> Self {
         Self::with_retry_and_sleep(
             contract.clone(),
-            retry::RetryWithGasPriceIncrease::new(contract, gas_price_estimating),
+            retry::RetryWithGasPriceIncrease::new(gas_price_estimating),
             crate::util::AsyncSleep {},
         )
     }
+}
 
+impl<T> StableXSolutionSubmitter<T> {
     fn with_retry_and_sleep(
         contract: Arc<dyn StableXContract>,
-        retry_with_gas_price_increase: impl SolutionTransactionSending + Send + Sync + 'a,
-        async_sleep: impl AsyncSleeping + 'a,
+        retry_with_gas_price_increase: T,
+        async_sleep: impl AsyncSleeping,
     ) -> Self {
         Self {
             contract,
-            retry_with_gas_price_increase: Box::new(retry_with_gas_price_increase),
+            retry_with_gas_price_increase,
             async_sleep: Box::new(async_sleep),
         }
     }
@@ -142,9 +149,9 @@ impl<'a> StableXSolutionSubmitter<'a> {
         &self,
         batch_index: u32,
         solution: Solution,
-        result: Result<(), MethodError>,
+        result: SolutionResult,
     ) -> Result<(), SolutionSubmissionError> {
-        match result {
+        match result.0 {
             Ok(()) => Ok(()),
             Err(err) => Err(self.convert_submit_error(batch_index, solution, err).await),
         }
@@ -152,7 +159,10 @@ impl<'a> StableXSolutionSubmitter<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
+impl<T> StableXSolutionSubmitting for StableXSolutionSubmitter<T>
+where
+    T: RetryTransactionSending,
+{
     async fn get_solution_objective_value(
         &self,
         batch_index: u32,
@@ -177,35 +187,52 @@ impl<'a> StableXSolutionSubmitting for StableXSolutionSubmitter<'a> {
                 .duration_since(SystemTime::now())
                 .unwrap_or_else(|_| Duration::from_secs(0));
         let nonce = self.contract.get_transaction_count().await?;
-        let args = retry::Args {
-            batch_index,
-            solution: solution.clone(),
-            claimed_objective_value,
-            gas_price_cap,
-            nonce,
-            target_confirm_time,
-        };
-
         // Add some extra time in case of desync between real time and ethereum node current block time.
         let cancel_instant = target_confirm_time + Duration::from_secs(30);
         let cancel_duration = cancel_instant
             .checked_duration_since(Instant::now())
             .unwrap_or_else(|| Duration::from_secs(0));
-        let cancel_future = self.async_sleep.sleep(cancel_duration);
+
+        let solution_sender = SolutionSender {
+            contract: self.contract.as_ref(),
+            batch_index,
+            solution: solution.clone(),
+            claimed_objective_value,
+            nonce,
+        };
+        let cancellation_sender = CancellationSender {
+            contract: self.contract.as_ref(),
+            nonce,
+        };
+        let cancel_future = async {
+            self.async_sleep.sleep(cancel_duration).await;
+            cancellation_sender
+        };
 
         match self
             .retry_with_gas_price_increase
-            .retry(args, cancel_future)
+            .retry(
+                solution_sender,
+                cancel_future.boxed(),
+                target_confirm_time,
+                gas_price_cap,
+            )
             .await
         {
-            RetryResult::Submitted(result) => {
+            Some(RetryResult::Submitted(result)) => {
                 log::info!("solution submission transaction completed first");
                 self.convert_submit_result(batch_index, solution, result)
                     .await
             }
-            RetryResult::Cancelled(result) => {
+            Some(RetryResult::Cancelled(result)) => {
                 log::info!("cancel transaction completed first");
                 convert_cancel_result(result)
+            }
+            None => {
+                log::info!("transaction was never sent");
+                Err(SolutionSubmissionError::Unexpected(anyhow!(
+                    "transaction was never sent"
+                )))
             }
         }
     }
@@ -218,25 +245,96 @@ fn extract_transaction_receipt(err: &MethodError) -> Option<&TransactionReceipt>
     }
 }
 
-fn convert_cancel_result(
-    result: Result<(), ExecutionError>,
-) -> Result<(), SolutionSubmissionError> {
-    let error = match result {
+fn convert_cancel_result(result: CancellationResult) -> Result<(), SolutionSubmissionError> {
+    let error = match result.0 {
         Ok(_) => anyhow!("solution submission transaction not confirmed in time"),
         Err(err) => Error::from(err).context("failed to cancel solution submission"),
     };
     Err(SolutionSubmissionError::Unexpected(error))
 }
 
+fn is_transaction_error(error: &ExecutionError) -> bool {
+    // This is the error as we've seen it on openethereum nodes. The code and error messages can
+    // be found in openethereum's source code in `rpc/src/v1/helpers/errors.rs`.
+    // TODO: check how this looks on geth and infura. Not recognizing the error is not a serious
+    // problem but it will make us sometimes log an error when there actually was no problem.
+    matches!(error, ExecutionError::Web3(Web3Error::Rpc(RpcError { code, .. })) if code.code() == -32010)
+}
+
+struct SolutionResult(Result<(), MethodError>);
+impl TransactionResult for SolutionResult {
+    fn was_mined(&self) -> bool {
+        if let Err(err) = &self.0 {
+            !is_transaction_error(&err.inner)
+        } else {
+            false
+        }
+    }
+}
+
+struct SolutionSender<'a> {
+    contract: &'a dyn StableXContract,
+    batch_index: u32,
+    solution: Solution,
+    claimed_objective_value: U256,
+    nonce: U256,
+}
+#[async_trait::async_trait]
+impl<'a> TransactionSending for SolutionSender<'a> {
+    type Output = SolutionResult;
+    async fn send(&self, gas_price: f64) -> Self::Output {
+        let result = self
+            .contract
+            .submit_solution(
+                self.batch_index,
+                self.solution.clone(),
+                self.claimed_objective_value,
+                U256::from_f64_lossy(gas_price),
+                self.nonce,
+            )
+            .await;
+        SolutionResult(result)
+    }
+}
+
+struct CancellationResult(Result<(), ExecutionError>);
+impl TransactionResult for CancellationResult {
+    fn was_mined(&self) -> bool {
+        if let Err(err) = &self.0 {
+            !is_transaction_error(&err)
+        } else {
+            false
+        }
+    }
+}
+
+struct CancellationSender<'a> {
+    contract: &'a dyn StableXContract,
+    nonce: U256,
+}
+#[async_trait::async_trait]
+impl<'a> TransactionSending for CancellationSender<'a> {
+    type Output = CancellationResult;
+    async fn send(&self, gas_price: f64) -> Self::Output {
+        let result = self
+            .contract
+            .send_noop_transaction(U256::from_f64_lossy(gas_price), self.nonce)
+            .await;
+        CancellationResult(result.map(|_| ()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{contracts::stablex_contract::MockStableXContract, util::MockAsyncSleeping};
+    use crate::{
+        contracts::stablex_contract::MockStableXContract, gas_price::MockGasPriceEstimating,
+        util::MockAsyncSleeping,
+    };
     use anyhow::anyhow;
     use ethcontract::{web3::types::H2048, H256};
-    use futures::{future, FutureExt as _};
+    use futures::future;
     use mockall::predicate::{always, eq};
-    use retry::MockSolutionTransactionSending;
 
     #[test]
     fn test_benign_verification_failure() {
@@ -255,7 +353,7 @@ mod tests {
                 )))
             });
 
-        let retry = MockSolutionTransactionSending::new();
+        let retry = RetryWithGasPriceIncrease::new(Arc::new(MockGasPriceEstimating::new()));
         let sleep = MockAsyncSleeping::new();
 
         let submitter =
@@ -307,16 +405,20 @@ mod tests {
                     ExecutionError::Revert(Some("Claimed objective doesn't sufficiently improve current solution".to_owned())),
                 )))
             });
-
-        let mut retry = MockSolutionTransactionSending::new();
-        retry.expect_retry().times(1).return_once(|_, _| {
-            immediate!(RetryResult::Submitted(Err(MethodError::from_parts(
+        contract
+            .expect_submit_solution()
+            .return_once(|_, _, _, _, _| {
+                immediate!(Err(MethodError::from_parts(
                 "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
                     .to_owned(),
                 ExecutionError::Failure(Box::new(receipt)),
-            ))))
-        });
-
+            )))
+            });
+        let mut gas_price = MockGasPriceEstimating::new();
+        gas_price
+            .expect_estimate_with_limits()
+            .returning(|_, _| Ok(1.0));
+        let retry = RetryWithGasPriceIncrease::new(Arc::new(gas_price));
         let mut sleep = MockAsyncSleeping::new();
         sleep
             .expect_sleep()
