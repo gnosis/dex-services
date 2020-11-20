@@ -82,7 +82,7 @@ impl From<Error> for SolutionSubmissionError {
                 }
                 _ => None,
             })
-            .unwrap_or(SolutionSubmissionError::Unexpected(err))
+            .unwrap_or_else(|| SolutionSubmissionError::Unexpected(err))
     }
 }
 

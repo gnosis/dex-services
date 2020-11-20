@@ -11,7 +11,6 @@ pub struct DefaultRouter {
 }
 
 impl Handler for DefaultRouter {
-    #[allow(clippy::manual_strip)]
     fn handle_request(&self, request: &Request) -> Result<Response> {
         let handler = router!(request,
             (GET) (/metrics) => { self.metrics.as_ref() },
