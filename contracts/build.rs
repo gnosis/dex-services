@@ -20,6 +20,7 @@ fn main() {
     generate_contract("IERC20");
     generate_contract("IdToAddressBiMap");
     generate_contract("IterableAppendOnlySet");
+    generate_contract("SolutionSubmitter");
     generate_contract("TokenOWL");
     generate_contract("TokenOWLProxy");
 }

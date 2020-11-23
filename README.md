@@ -231,6 +231,9 @@ OPTIONS:
         --use-external-price-source <use-external-price-source>
             Whether to rely on external price sources (e.g. 1Inch, Kraken etc) when estimating token prices [env:
             USE_EXTERNAL_PRICE_SOURCE=]  [default: true]
+        --use-solution-submitter <use-solution-submitter>
+            Whether to use the SolutionSubmitter wrapper contract for submitting solutions [env:
+            USE_SOLUTION_SUBMITTER=]  [default: false]
 ```
 
 ### Orderbook Filter Example

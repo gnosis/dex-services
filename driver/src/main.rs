@@ -260,6 +260,15 @@ struct Options {
         use_delimiter = true
     )]
     gas_estimators: Vec<GasEstimatorType>,
+
+    /// Whether to use the SolutionSubmitter wrapper contract for submitting solutions
+    #[structopt(
+        long,
+        env = "USE_SOLUTION_SUBMITTER",
+        parse(try_from_str),
+        default_value = "false"
+    )]
+    use_solution_submitter: bool,
 }
 
 fn main() {
@@ -276,9 +285,13 @@ fn main() {
 
     // Set up connection to exchange contract
     let contract = Arc::new(
-        StableXContractImpl::new(&web3, options.private_key.clone())
-            .wait()
-            .unwrap(),
+        StableXContractImpl::new(
+            &web3,
+            options.private_key.clone(),
+            options.use_solution_submitter,
+        )
+        .wait()
+        .unwrap(),
     );
     info!("Using contract at {:?}", contract.address());
     info!("Using account {:?}", contract.account());

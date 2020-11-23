@@ -44,6 +44,7 @@ mod tests {
                 "0x0102030405060708091011121314151617181920212223242526272829303132",
             )
             .expect("Invalid private key"),
+            false,
         )
         .wait()
         .expect("Error creating contract")

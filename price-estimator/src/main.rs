@@ -164,7 +164,11 @@ fn main() {
     .unwrap();
     // The private key is not actually used but StableXContractImpl requires it.
     let private_key = PrivateKey::from_raw([1u8; 32]).unwrap();
-    let contract = Arc::new(StableXContractImpl::new(&web3, private_key).wait().unwrap());
+    let contract = Arc::new(
+        StableXContractImpl::new(&web3, private_key, false)
+            .wait()
+            .unwrap(),
+    );
     let gas_station =
         gas_price::create_priority_estimator(&http_factory, &web3, &options.gas_estimators)
             .wait()
