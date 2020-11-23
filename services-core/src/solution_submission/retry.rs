@@ -40,7 +40,7 @@ pub enum RetryResult {
 }
 
 #[cfg_attr(test, mockall::automock)]
-pub trait SolutionTransactionSending {
+pub trait SolutionTransactionSending: Send + Sync {
     /// Submit the solution with an appropriate gas price based on target_confirm_time. Until the
     /// transaction has been confirmed the gas price is continually updated.
     /// When cancel_after is ready the transaction will be cancelled by sending a noop transaction
@@ -52,14 +52,14 @@ pub trait SolutionTransactionSending {
     ) -> BoxFuture<'a, RetryResult>;
 }
 
-pub struct RetryWithGasPriceIncrease<'a> {
+pub struct RetryWithGasPriceIncrease {
     contract: Arc<dyn StableXContract>,
     gas_price_estimating: Arc<dyn GasPriceEstimating>,
-    async_sleep: Box<dyn AsyncSleeping + 'a>,
-    now: Box<dyn Now + 'a>,
+    async_sleep: Box<dyn AsyncSleeping>,
+    now: Box<dyn Now>,
 }
 
-impl<'a> RetryWithGasPriceIncrease<'a> {
+impl RetryWithGasPriceIncrease {
     pub fn new(
         contract: Arc<dyn StableXContract>,
         gas_price_estimating: Arc<dyn GasPriceEstimating>,
@@ -75,8 +75,8 @@ impl<'a> RetryWithGasPriceIncrease<'a> {
     pub fn with_sleep_and_now(
         contract: Arc<dyn StableXContract>,
         gas_price_estimating: Arc<dyn GasPriceEstimating>,
-        async_sleep: impl AsyncSleeping + 'a,
-        now: impl Now + 'a,
+        async_sleep: impl AsyncSleeping,
+        now: impl Now,
     ) -> Self {
         Self {
             contract,
@@ -87,17 +87,17 @@ impl<'a> RetryWithGasPriceIncrease<'a> {
     }
 }
 
-impl<'a> SolutionTransactionSending for RetryWithGasPriceIncrease<'a> {
-    fn retry<'b>(
-        &'b self,
+impl SolutionTransactionSending for RetryWithGasPriceIncrease {
+    fn retry<'a>(
+        &'a self,
         args: Args,
-        cancel_after: BoxFuture<'b, ()>,
-    ) -> BoxFuture<'b, RetryResult> {
+        cancel_after: BoxFuture<'a, ()>,
+    ) -> BoxFuture<'a, RetryResult> {
         self.retry_(args, cancel_after).boxed()
     }
 }
 
-impl<'a> RetryWithGasPriceIncrease<'a> {
+impl RetryWithGasPriceIncrease {
     async fn gas_price(&self, target_confirm_time: Instant) -> Result<f64> {
         let time_remaining = target_confirm_time.saturating_duration_since(self.now.instant_now());
         // TODO: Use a more accurate gas limit once the gas estimators take that into account.
