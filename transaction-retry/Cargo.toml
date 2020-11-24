@@ -1,0 +1,11 @@
+[package]
+name = "transaction-retry"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+async-trait = "0.1"
+futures = { version = "0.3", default-features = false, features = ["std", "async-await"] }
+
+[dev-dependencies]
+mockall = "0.8"

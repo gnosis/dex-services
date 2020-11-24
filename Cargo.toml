@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "contracts",
-    "services-core",
     "driver",
     "e2e",
     "gas-estimation",
@@ -12,12 +11,15 @@ members = [
     "pricegraph/data/bin",
     "pricegraph/fuzz",
     "pricegraph/wasm",
+    "services-core",
+    "transaction-retry",
 ]
 default-members = [
     "contracts",
-    "gas-estimation",
-    "services-core",
     "driver",
+    "gas-estimation",
     "price-estimator",
     "pricegraph",
+    "services-core",
+    "transaction-retry",
 ]
