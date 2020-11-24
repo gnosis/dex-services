@@ -1,4 +1,4 @@
-use futures::stream::{Stream, StreamExt};
+use futures::stream::{Stream, StreamExt as _};
 
 // openethereum requires that the gas price of the resubmitted transaction has increased by at
 // least 12.5%.
