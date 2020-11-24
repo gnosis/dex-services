@@ -1,7 +1,4 @@
-mod first_match;
-mod gas_price_increase;
 mod gas_price_stream;
-mod retry;
 
 use crate::{
     contracts::stablex_contract::StableXContract,
@@ -17,12 +14,12 @@ use ethcontract::{
 };
 use futures::future::FutureExt as _;
 use gas_estimation::GasPriceEstimating;
-use retry::{RetryResult, TransactionResult, TransactionSending};
 use std::{
     sync::Arc,
     time::{Duration, Instant, SystemTime},
 };
 use thiserror::Error;
+use transaction_retry::{RetryResult, TransactionResult, TransactionSending};
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
@@ -211,7 +208,7 @@ impl StableXSolutionSubmitting for StableXSolutionSubmitter {
             self.async_sleep.as_ref(),
         );
 
-        match retry::retry(solution_sender, cancel_future.boxed(), stream).await {
+        match transaction_retry::retry(solution_sender, cancel_future.boxed(), stream).await {
             Some(RetryResult::Submitted(result)) => {
                 log::info!("solution submission transaction completed first");
                 self.convert_submit_result(batch_index, solution, result)
@@ -276,6 +273,7 @@ struct SolutionSender<'a> {
 impl<'a> TransactionSending for SolutionSender<'a> {
     type Output = SolutionResult;
     async fn send(&self, gas_price: f64) -> Self::Output {
+        log::info!("submitting solution transaction at gas price {}", gas_price);
         let result = self
             .contract
             .submit_solution(
@@ -309,6 +307,7 @@ struct CancellationSender<'a> {
 impl<'a> TransactionSending for CancellationSender<'a> {
     type Output = CancellationResult;
     async fn send(&self, gas_price: f64) -> Self::Output {
+        log::info!("submitting noop transaction at gas price {}", gas_price);
         let result = self
             .contract
             .send_noop_transaction(U256::from_f64_lossy(gas_price), self.nonce)
