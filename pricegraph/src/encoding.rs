@@ -1,6 +1,8 @@
 //! This module implements decoding for the standard `BatchExchange` contract
 //! encoded orders.
 
+#[cfg(feature = "arbitrary")]
+use arbitrary::{Arbitrary, Unstructured};
 pub use primitive_types::{H160, U256};
 use thiserror::Error;
 
@@ -47,12 +49,21 @@ impl TokenPair {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct TokenPairRange {
     /// The traded pair.
     pub pair: TokenPair,
     /// The maximum number of transitive trades allowed to trade the pair.
     pub hops: Option<usize>,
+}
+
+#[cfg(feature = "arbitrary")]
+impl Arbitrary for TokenPairRange {
+    fn arbitrary(u: &mut Unstructured<'_>) -> arbitrary::Result<Self> {
+        let pair = u.arbitrary::<TokenPair>()?;
+        // The API doesn't allow creating ranges of more than 30 hops
+        let hops = u.arbitrary::<Option<usize>>()?.map(|hops| hops % 30);
+        Ok(Self { pair, hops })
+    }
 }
 
 impl TokenPairRange {
