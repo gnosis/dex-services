@@ -1,11 +1,14 @@
+//! Transactions with the same nonce must have a minimum gas price increase.
+
 use futures::stream::{Stream, StreamExt as _};
 
-// openethereum requires that the gas price of the resubmitted transaction has increased by at
-// least 12.5%.
+/// openethereum requires that the gas price of the resubmitted transaction has increased by at
+/// least 12.5%.
 const MIN_GAS_PRICE_INCREASE_FACTOR: f64 = 1.125 * (1.0 + f64::EPSILON);
 
-pub fn minimum_increase(gas_price: f64) -> f64 {
-    (gas_price * MIN_GAS_PRICE_INCREASE_FACTOR).ceil()
+/// The minimum gas price that allows a new transaction to replace an older one.
+pub fn minimum_increase(previous_gas_price: f64) -> f64 {
+    (previous_gas_price * MIN_GAS_PRICE_INCREASE_FACTOR).ceil()
 }
 
 fn new_gas_price_estimate(
@@ -26,8 +29,8 @@ fn new_gas_price_estimate(
     Some(new_price.min(max_gas_price))
 }
 
-// Adapt a stream of gas prices to only yield gas prices that respect the minimum gas price increase
-// while filtering out other values, including those over the cap.
+/// Adapt a stream of gas prices to only yield gas prices that respect the minimum gas price
+/// increase while filtering out other values, including those over the cap.
 pub fn enforce_minimum_increase_and_cap(
     gas_price_cap: f64,
     stream: impl Stream<Item = f64>,

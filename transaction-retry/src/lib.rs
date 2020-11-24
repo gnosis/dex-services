@@ -1,17 +1,28 @@
-use super::{first_match::FirstMatchOrLast, gas_price_increase};
+#![deny(missing_docs)]
+
+//! Keep sending a transaction with updated gas price.
+
+mod first_match;
+pub mod gas_price_increase;
+
+use first_match::FirstMatchOrLast;
 use futures::{
     future::FutureExt as _,
     stream::{Stream, StreamExt as _},
 };
 use std::future::Future;
 
+/// Implementation agnostic abstraction over sending a specific ethereum transaction.
 #[async_trait::async_trait]
 #[cfg_attr(test, mockall::automock(type Output = bool;))]
 pub trait TransactionSending: Send {
+    /// The result of sending the transaction.
     type Output: TransactionResult;
+    /// Send the transaction.
     async fn send(&self, gas_price: f64) -> Self::Output;
 }
 
+/// Trait that the result of sent transactions must implement.
 pub trait TransactionResult {
     /// Was the transaction mined or did it error before? This happens when a transaction was
     /// replaced with a higher gas price.
@@ -26,8 +37,11 @@ impl TransactionResult for bool {
     }
 }
 
+/// The result of retry function.
 pub enum RetryResult<TransactionResult, CancellationResult> {
+    /// The transaction was submitted.
     Submitted(TransactionResult),
+    /// The transaction was cancelled.
     Cancelled(CancellationResult),
 }
 
@@ -66,7 +80,6 @@ where
             gas_price = gas_price_stream.next() => {
                 let gas_price = gas_price.expect("stream never ends");
                 last_used_gas_price = gas_price;
-                log::info!("submitting solution transaction at gas price {}", gas_price);
                 first_match.add(transaction_sender.send(gas_price).map(RetryResult::Submitted).boxed());
             }
         }
@@ -116,7 +129,7 @@ mod tests {
         });
         transaction_sender.expect_send().times(1).return_once(|_| {
             sender.send(()).unwrap();
-            immediate!(false)
+            future::ready(false).boxed()
         });
 
         let result = retry(transaction_sender, cancel_after, stream::repeat(1.0));
@@ -168,7 +181,7 @@ mod tests {
         cancellation_sender
             .expect_send()
             .times(1)
-            .returning(|_| immediate!(true));
+            .returning(|_| future::ready(true).boxed());
         let cancel_after = async move {
             cancel_receiver.await.unwrap();
             cancellation_sender

@@ -1,8 +1,8 @@
-use super::gas_price_increase;
 use crate::{contracts::stablex_contract::SOLUTION_SUBMISSION_GAS_LIMIT, util::AsyncSleeping};
 use futures::stream::{self, Stream, StreamExt as _};
 use gas_estimation::GasPriceEstimating;
 use std::time::{Duration, Instant};
+use transaction_retry::gas_price_increase;
 
 const GAS_PRICE_REFRESH_INTERVAL: Duration = Duration::from_secs(15);
 
