@@ -1,6 +1,4 @@
-mod first_match;
-mod gas_price_increase;
-mod retry;
+mod gas_price_stream;
 
 use crate::{
     contracts::stablex_contract::StableXContract,
@@ -16,15 +14,12 @@ use ethcontract::{
 };
 use futures::future::FutureExt as _;
 use gas_estimation::GasPriceEstimating;
-use retry::{
-    RetryResult, RetryTransactionSending, RetryWithGasPriceIncrease, TransactionResult,
-    TransactionSending,
-};
 use std::{
     sync::Arc,
     time::{Duration, Instant, SystemTime},
 };
 use thiserror::Error;
+use transaction_retry::{RetryResult, TransactionResult, TransactionSending};
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
@@ -92,34 +87,34 @@ impl From<Error> for SolutionSubmissionError {
     }
 }
 
-pub struct StableXSolutionSubmitter<T = RetryWithGasPriceIncrease> {
+pub struct StableXSolutionSubmitter {
     contract: Arc<dyn StableXContract>,
-    retry_with_gas_price_increase: T,
+    gas_price_estimator: Arc<dyn GasPriceEstimating>,
     async_sleep: Box<dyn AsyncSleeping>,
 }
 
 impl StableXSolutionSubmitter {
     pub fn new(
         contract: Arc<dyn StableXContract>,
-        gas_price_estimating: Arc<dyn GasPriceEstimating>,
+        gas_price_estimator: Arc<dyn GasPriceEstimating>,
     ) -> Self {
-        Self::with_retry_and_sleep(
+        Self::with_estimator_and_sleep(
             contract.clone(),
-            retry::RetryWithGasPriceIncrease::new(gas_price_estimating),
+            gas_price_estimator,
             crate::util::AsyncSleep {},
         )
     }
 }
 
-impl<T> StableXSolutionSubmitter<T> {
-    fn with_retry_and_sleep(
+impl StableXSolutionSubmitter {
+    fn with_estimator_and_sleep(
         contract: Arc<dyn StableXContract>,
-        retry_with_gas_price_increase: T,
+        gas_price_estimator: Arc<dyn GasPriceEstimating>,
         async_sleep: impl AsyncSleeping,
     ) -> Self {
         Self {
             contract,
-            retry_with_gas_price_increase,
+            gas_price_estimator,
             async_sleep: Box::new(async_sleep),
         }
     }
@@ -159,10 +154,7 @@ impl<T> StableXSolutionSubmitter<T> {
 }
 
 #[async_trait::async_trait]
-impl<T> StableXSolutionSubmitting for StableXSolutionSubmitter<T>
-where
-    T: RetryTransactionSending,
-{
+impl StableXSolutionSubmitting for StableXSolutionSubmitter {
     async fn get_solution_objective_value(
         &self,
         batch_index: u32,
@@ -209,16 +201,14 @@ where
             cancellation_sender
         };
 
-        match self
-            .retry_with_gas_price_increase
-            .retry(
-                solution_sender,
-                cancel_future.boxed(),
-                target_confirm_time,
-                gas_price_cap,
-            )
-            .await
-        {
+        let stream = gas_price_stream::gas_price_stream(
+            target_confirm_time,
+            gas_price_cap,
+            self.gas_price_estimator.as_ref(),
+            self.async_sleep.as_ref(),
+        );
+
+        match transaction_retry::retry(solution_sender, cancel_future.boxed(), stream).await {
             Some(RetryResult::Submitted(result)) => {
                 log::info!("solution submission transaction completed first");
                 self.convert_submit_result(batch_index, solution, result)
@@ -283,6 +273,7 @@ struct SolutionSender<'a> {
 impl<'a> TransactionSending for SolutionSender<'a> {
     type Output = SolutionResult;
     async fn send(&self, gas_price: f64) -> Self::Output {
+        log::info!("submitting solution transaction at gas price {}", gas_price);
         let result = self
             .contract
             .submit_solution(
@@ -316,6 +307,7 @@ struct CancellationSender<'a> {
 impl<'a> TransactionSending for CancellationSender<'a> {
     type Output = CancellationResult;
     async fn send(&self, gas_price: f64) -> Self::Output {
+        log::info!("submitting noop transaction at gas price {}", gas_price);
         let result = self
             .contract
             .send_noop_transaction(U256::from_f64_lossy(gas_price), self.nonce)
@@ -353,11 +345,11 @@ mod tests {
                 )))
             });
 
-        let retry = RetryWithGasPriceIncrease::new(Arc::new(MockGasPriceEstimating::new()));
-        let sleep = MockAsyncSleeping::new();
-
-        let submitter =
-            StableXSolutionSubmitter::with_retry_and_sleep(Arc::new(contract), retry, sleep);
+        let submitter = StableXSolutionSubmitter::with_estimator_and_sleep(
+            Arc::new(contract),
+            Arc::new(MockGasPriceEstimating::new()),
+            MockAsyncSleeping::new(),
+        );
         let result = submitter
             .get_solution_objective_value(0, Solution::trivial())
             .now_or_never()
@@ -418,14 +410,16 @@ mod tests {
         gas_price
             .expect_estimate_with_limits()
             .returning(|_, _| Ok(1.0));
-        let retry = RetryWithGasPriceIncrease::new(Arc::new(gas_price));
         let mut sleep = MockAsyncSleeping::new();
         sleep
             .expect_sleep()
             .returning(|_| future::pending().boxed());
 
-        let submitter =
-            StableXSolutionSubmitter::with_retry_and_sleep(Arc::new(contract), retry, sleep);
+        let submitter = StableXSolutionSubmitter::with_estimator_and_sleep(
+            Arc::new(contract),
+            Arc::new(gas_price),
+            sleep,
+        );
         let result = submitter
             .submit_solution(0, Solution::trivial(), U256::zero(), 0.0)
             .now_or_never()
