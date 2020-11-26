@@ -257,7 +257,7 @@ impl TransactionResult for SolutionResult {
         if let Err(err) = &self.0 {
             !is_transaction_error(&err.inner)
         } else {
-            false
+            true
         }
     }
 }
@@ -294,7 +294,7 @@ impl TransactionResult for CancellationResult {
         if let Err(err) = &self.0 {
             !is_transaction_error(&err)
         } else {
-            false
+            true
         }
     }
 }
@@ -324,6 +324,7 @@ mod tests {
         util::MockAsyncSleeping,
     };
     use anyhow::anyhow;
+    use ethcontract::jsonrpc::types::ErrorCode;
     use ethcontract::{web3::types::H2048, H256};
     use futures::future;
     use mockall::predicate::{always, eq};
@@ -431,5 +432,41 @@ mod tests {
                 panic!("Expecting benign failure, but got {}", err)
             }
         };
+    }
+    #[test]
+    fn test_cancellation_resul_was_mined() {
+        let transaction_error = ExecutionError::Web3(Web3Error::Rpc(RpcError {
+            code: ErrorCode::from(-32010),
+            message: "".into(),
+            data: None,
+        }));
+        let result = CancellationResult(Ok(()));
+        assert!(result.was_mined());
+
+        let result = CancellationResult(Err(ExecutionError::StreamEndedUnexpectedly));
+        assert!(result.was_mined());
+
+        let result = CancellationResult(Err(transaction_error));
+        assert!(!result.was_mined());
+    }
+
+    #[test]
+    fn test_submission_result_was_mined() {
+        let transaction_error = ExecutionError::Web3(Web3Error::Rpc(RpcError {
+            code: ErrorCode::from(-32010),
+            message: "".into(),
+            data: None,
+        }));
+        let result = SolutionResult(Ok(()));
+        assert!(result.was_mined());
+
+        let result = SolutionResult(Err(MethodError::from_parts(
+            "".into(),
+            ExecutionError::StreamEndedUnexpectedly,
+        )));
+        assert!(result.was_mined());
+
+        let result = SolutionResult(Err(MethodError::from_parts("".into(), transaction_error)));
+        assert!(!result.was_mined());
     }
 }
