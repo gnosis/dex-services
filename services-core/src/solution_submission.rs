@@ -181,9 +181,6 @@ impl StableXSolutionSubmitting for StableXSolutionSubmitter {
         let nonce = self.contract.get_transaction_count().await?;
         // Add some extra time in case of desync between real time and ethereum node current block time.
         let cancel_instant = target_confirm_time + Duration::from_secs(30);
-        let cancel_duration = cancel_instant
-            .checked_duration_since(Instant::now())
-            .unwrap_or_else(|| Duration::from_secs(0));
 
         let solution_sender = SolutionSender {
             contract: self.contract.as_ref(),
@@ -197,6 +194,9 @@ impl StableXSolutionSubmitting for StableXSolutionSubmitter {
             nonce,
         };
         let cancel_future = async {
+            let cancel_duration = cancel_instant
+                .checked_duration_since(Instant::now())
+                .unwrap_or_else(|| Duration::from_secs(0));
             self.async_sleep.sleep(cancel_duration).await;
             cancellation_sender
         };
