@@ -257,7 +257,7 @@ impl TransactionResult for SolutionResult {
         if let Err(err) = &self.0 {
             !is_transaction_error(&err.inner)
         } else {
-            false
+            true
         }
     }
 }
@@ -294,7 +294,7 @@ impl TransactionResult for CancellationResult {
         if let Err(err) = &self.0 {
             !is_transaction_error(&err)
         } else {
-            false
+            true
         }
     }
 }
