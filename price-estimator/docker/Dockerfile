@@ -1,14 +1,8 @@
 FROM clux/muslrust:stable as builder
 WORKDIR /usr/src/app
-COPY Cargo.toml .
-COPY Cargo.lock .
-COPY contracts contracts
-COPY services-core services-core
-COPY driver driver
-COPY e2e e2e
-COPY gas-estimation gas-estimation
-COPY pricegraph pricegraph
-COPY price-estimator price-estimator
+
+COPY . .
+
 RUN ls -l && cargo build --release -p price-estimator
 
 FROM alpine:latest
