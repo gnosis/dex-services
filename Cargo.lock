@@ -3047,6 +3047,7 @@ dependencies = [
  "slog-stdlog",
  "slog-term",
  "thiserror",
+ "transaction-retry",
  "typenum",
  "uint",
  "url 2.2.0",
@@ -3549,6 +3550,15 @@ checksum = "ab7bb6f14721aa00656086e9335d363c5c8747bae02ebe32ea2c7dece5689b4c"
 dependencies = [
  "pin-project 0.4.27",
  "tracing",
+]
+
+[[package]]
+name = "transaction-retry"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "futures 0.3.8",
+ "mockall",
 ]
 
 [[package]]

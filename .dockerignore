@@ -6,3 +6,13 @@ target
 **/node_modules
 .git
 .vscode
+.github
+.mergify.yml
+.travis.yml
+.gitignore
+.dockerignore
+docker-compose.yml
+
+ci
+hooks
+
