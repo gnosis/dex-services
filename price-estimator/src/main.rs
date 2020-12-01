@@ -21,7 +21,7 @@ use services_core::{
     http_server::{DefaultRouter, RouilleServer, Serving},
     logging,
     metrics::{HttpMetrics, MetricsHandler},
-    orderbook::EventBasedOrderbook,
+    orderbook::{EventBasedOrderbook, FilteredOrderbookReader, OrderbookFilter},
     token_info::{cached::TokenInfoCache, hardcoded::TokenData},
     util::FutureWaitExt as _,
 };
@@ -89,6 +89,19 @@ struct Options {
     /// which can happen for example when tokens do not implement the standard properly.
     #[structopt(long, env = "TOKEN_DATA", default_value = "{}")]
     token_data: TokenData,
+
+    /// JSON encoded object of which tokens/orders to ignore.
+    ///
+    /// For example: '{
+    ///   "tokens": {"Whitelist": [1, 2]},
+    ///   "users": {
+    ///     "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0A": { "OrderIds": [0, 1] },
+    ///     "0x7b60655Ca240AC6c76dD29c13C45BEd969Ee6F0B": "All"
+    ///   }
+    ///  }'
+    /// More examples can be found in the tests of orderbook/filtered_orderboook.rs
+    #[structopt(long, env = "ORDERBOOK_FILTER", default_value = "{}")]
+    orderbook_filter: OrderbookFilter,
 
     /// The number of blocks to fetch events for at a time for constructing the
     /// orderbook.
@@ -182,12 +195,15 @@ fn main() {
         .expect("failed to cache token infos");
     let token_info = Arc::new(token_info);
 
-    let orderbook = EventBasedOrderbook::new(
-        contract,
-        web3,
-        options.auction_data_page_size,
-        options.orderbook_file,
-    );
+    let orderbook = Box::new(FilteredOrderbookReader::new(
+        Box::new(EventBasedOrderbook::new(
+            contract,
+            web3,
+            options.auction_data_page_size,
+            options.orderbook_file,
+        )),
+        options.orderbook_filter.clone(),
+    ));
 
     let external_price_sources = services_core::price_estimation::external_price_sources(
         &http_factory,
@@ -199,7 +215,7 @@ fn main() {
         PriceCacheUpdater::new(token_info.clone(), external_price_sources);
 
     let orderbook = Arc::new(Orderbook::new(
-        Box::new(orderbook),
+        orderbook,
         infallible_price_source,
         options.extra_rounding_buffer_factor,
         options.native_token_id.into(),
