@@ -76,7 +76,7 @@ impl SolverType {
     ) -> Result<Output> {
         match self {
             SolverType::OpenSolver => {
-                execute_open_solver(result_folder, input_file, min_avg_fee_per_order)
+                execute_open_solver(result_folder, input_file, time_limit, min_avg_fee_per_order)
             }
             SolverType::StandardSolver | SolverType::BestRingSolver => execute_private_solver(
                 result_folder,
@@ -97,6 +97,7 @@ impl SolverType {
 pub fn execute_open_solver(
     result_folder: &str,
     input_file: &str,
+    time_limit: String,
     min_avg_fee_per_order: u128,
 ) -> Result<Output> {
     let mut command = Command::new("gp_match");
@@ -108,6 +109,7 @@ pub fn execute_open_solver(
             "06_solution_int_valid.json",
         ))
         .arg("--logging=WARNING")
+        .arg(format!("--time-limit={}", time_limit))
         .arg(format!("--min-avg-fee-per-order={}", min_avg_fee_per_order))
         .arg(String::from("best-token-pair"));
     debug!("Using open-solver command `{:?}`", open_solver_command);
