@@ -1,7 +1,7 @@
 use crate::{
     amounts_at_price, error::RejectionReason, metrics::Metrics, models::*, orderbook::Orderbook,
 };
-use pricegraph::{Market, Pricegraph, TokenPairRange, TransitiveOrder};
+use pricegraph::{Market, OrderbookError, Pricegraph, TokenPairRange, TransitiveOrder};
 use services_core::{
     economic_viability::EconomicViabilityComputing,
     models::TokenId,
@@ -218,7 +218,8 @@ async fn get_markets(
         )
         .await
         .map_err(RejectionReason::InternalError)?
-        .transitive_orderbook(market, query.hops, None);
+        .transitive_orderbook(market, query.hops, None)
+        .map_err(|err| RejectionReason::InternalError(err.into()))?;
     let result = MarketsResult::from(&transitive_orderbook);
     let result = match query.unit {
         Unit::Atoms => result,
@@ -266,8 +267,9 @@ async fn estimate_buy_amount(
         ),
         RoundingBuffer::Disabled => sell_amount_in_quote_atoms,
     };
-    let transitive_order =
-        pricegraph.order_for_sell_amount(token_pair_range, sell_amount_in_quote_atoms);
+    let transitive_order = pricegraph
+        .order_for_sell_amount(token_pair_range, sell_amount_in_quote_atoms)
+        .map_err(|err| RejectionReason::InternalError(err.into()))?;
 
     let mut buy_amount_in_base =
         Amount::Atoms(transitive_order.map(|order| order.buy).unwrap_or_default() as _);
@@ -310,7 +312,8 @@ async fn estimate_amounts_at_price(
             price_in_quote,
             &pricegraph,
             rounding_buffer,
-        ),
+        )
+        .map_err(|err| RejectionReason::InternalError(err.into()))?,
         Unit::BaseUnits => {
             let buy_token_info =
                 get_token_info(token_pair_range.pair.buy, token_infos.as_ref()).await?;
@@ -324,7 +327,8 @@ async fn estimate_amounts_at_price(
                 price_in_quote_atoms,
                 &pricegraph,
                 rounding_buffer,
-            );
+            )
+            .map_err(|err| RejectionReason::InternalError(err.into()))?;
             result.buy_amount_in_base = result.buy_amount_in_base.into_base_units(&buy_token_info);
             result.sell_amount_in_quote = result
                 .sell_amount_in_quote
@@ -341,7 +345,7 @@ fn estimate_amounts_at_price_atoms(
     price_in_quote: f64,
     pricegraph: &Pricegraph,
     rounding_buffer: Option<f64>,
-) -> EstimatedOrderResult {
+) -> Result<EstimatedOrderResult, OrderbookError> {
     // NOTE: The price in quote is `sell_amount / buy_amount` which is the
     // inverse of an exchange rate.
     let limit_price = 1.0 / price_in_quote;
@@ -350,17 +354,17 @@ fn estimate_amounts_at_price_atoms(
         limit_price,
         pricegraph,
         rounding_buffer,
-    )
+    )?
     .unwrap_or(TransitiveOrder {
         buy: 0.0,
         sell: 0.0,
     });
-    EstimatedOrderResult {
+    Ok(EstimatedOrderResult {
         base_token_id: token_pair_range.pair.buy,
         quote_token_id: token_pair_range.pair.sell,
         sell_amount_in_quote: Amount::Atoms(order.sell as _),
         buy_amount_in_base: Amount::Atoms(order.buy as _),
-    }
+    })
 }
 
 async fn estimate_best_ask_price(
@@ -375,6 +379,7 @@ async fn estimate_best_ask_price(
         .await
         .map_err(RejectionReason::InternalError)?
         .best_ask_transitive_order(market)
+        .map_err(|err| RejectionReason::InternalError(err.into()))?
         .map(|order| order.overlapping_exchange_rate().recip());
 
     let result = PriceEstimateResult(price);

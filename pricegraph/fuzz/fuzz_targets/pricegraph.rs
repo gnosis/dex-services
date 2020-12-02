@@ -47,7 +47,9 @@ fuzz_target!(|arguments: Arguments| {
             pair_range,
             sell_amount,
         } => {
-            pricegraph.order_for_sell_amount(pair_range, sell_amount);
+            pricegraph
+                .order_for_sell_amount(pair_range, sell_amount)
+                .unwrap();
         }
         Operation::TransitiveOrderbook {
             market,
@@ -59,7 +61,9 @@ fuzz_target!(|arguments: Arguments| {
                     return;
                 }
             }
-            pricegraph.transitive_orderbook(market, hops.map(|hops| 1 + (hops % 30)), spread);
+            pricegraph
+                .transitive_orderbook(market, hops.map(|hops| 1 + (hops % 30)), spread)
+                .unwrap();
         }
     };
 });

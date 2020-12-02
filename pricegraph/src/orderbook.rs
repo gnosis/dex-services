@@ -126,22 +126,24 @@ impl Orderbook {
     }
 
     /// Reduces the orderbook by matching all overlapping ring trades.
-    pub fn reduce_overlapping_orders(mut self) -> ReducedOrderbook {
-        Subgraphs::new(self.projection.node_indices()).for_each(|token| loop {
+    pub fn reduce_overlapping_orders(mut self) -> Result<ReducedOrderbook, OrderbookError> {
+        let result = Subgraphs::new(self.projection.node_indices()).for_each_until(|token| loop {
             let cycle = match shortest_path(&self.projection, token, None) {
-                Ok(shortest_path_graph) => break shortest_path_graph.connected_nodes(),
+                Ok(shortest_path_graph) => {
+                    break ControlFlow::Continue(shortest_path_graph.connected_nodes())
+                }
                 Err(cycle) => cycle,
             };
-            self.fill_path(&cycle).unwrap_or_else(|| {
-                panic!(
-                    "failed to fill path along detected negative cycle {}",
-                    format_path(&cycle),
-                )
-            });
+            if let Err(err) = self.fill_path(&cycle) {
+                break ControlFlow::Break(err);
+            }
         });
+        if let Some(err) = result {
+            return Err(err);
+        }
 
         debug_assert!(!self.is_overlapping());
-        ReducedOrderbook(self)
+        Ok(ReducedOrderbook(self))
     }
 
     /// Fills a ring trade over the specified market, and returns the flow
@@ -154,9 +156,12 @@ impl Orderbook {
     /// specifically the market `base`'s subgraph in the case where the `quote`
     /// and `base` token are not part of the same subgraph, may still contain
     /// negative cycles.
-    pub fn fill_market_ring_trade(&mut self, market: Market) -> Option<Ring> {
+    pub fn fill_market_ring_trade(
+        &mut self,
+        market: Market,
+    ) -> Result<Option<Ring>, OrderbookError> {
         if !self.is_token_pair_valid(market.bid_pair()) {
-            return None;
+            return Ok(None);
         }
 
         let (base, quote) = (node_index(market.base), node_index(market.quote));
@@ -178,22 +183,17 @@ impl Orderbook {
                         .fill_path(&bid)
                         .expect("bid transitive path not found after being detected");
 
-                    return Some(Ring { ask, bid });
+                    return Ok(Some(Ring { ask, bid }));
                 }
                 Err(cycle) => {
                     // NOTE: Skip negative cycles that are not along the
                     // specified market.
-                    self.fill_path(&cycle).unwrap_or_else(|| {
-                        panic!(
-                            "failed to fill path along detected negative cycle {}",
-                            format_path(&cycle),
-                        )
-                    });
+                    self.fill_path(&cycle)?;
                 }
             };
         }
 
-        None
+        Ok(None)
     }
 
     /// Returns an iterator over all transitive orders from lowest to highest
@@ -206,7 +206,7 @@ impl Orderbook {
     pub fn transitive_orders(
         self,
         pair_range: TokenPairRange,
-    ) -> Result<TransitiveOrders, OverlapError> {
+    ) -> Result<TransitiveOrders, OrderbookError> {
         TransitiveOrders::new(self, pair_range)
     }
 
@@ -218,7 +218,7 @@ impl Orderbook {
     pub fn find_optimal_transitive_order(
         &self,
         pair_range: TokenPairRange,
-    ) -> Result<Option<Flow>, OverlapError> {
+    ) -> Result<Option<Flow>, OrderbookError> {
         if !self.is_token_pair_valid(pair_range.pair) {
             return Ok(None);
         }
@@ -283,27 +283,22 @@ impl Orderbook {
         self.projection.find_edge(buy, sell)
     }
 
-    /// Finds and fills a trading path through the orderbook between the
+    /// Finds a trading path through the orderbook between the
     /// specified tokens and computes the flow for the path.
     fn find_path_and_flow(
         &self,
         start: NodeIndex,
         end: NodeIndex,
         hops: Option<usize>,
-    ) -> Result<Option<(Path<NodeIndex>, Flow)>, OverlapError> {
-        let shortest_path_graph = shortest_path(&self.projection, start, hops)?;
+    ) -> Result<Option<(Path<NodeIndex>, Flow)>, OrderbookError> {
+        let shortest_path_graph =
+            shortest_path(&self.projection, start, hops).map_err(OrderbookError::OverlapError)?;
         let path = match shortest_path_graph.path_to(end) {
             Some(path) => path,
             None => return Ok(None),
         };
 
-        let flow = self.find_path_flow(&path).unwrap_or_else(|| {
-            panic!(
-                "failed to fill detected shortest path {}",
-                format_path(&path),
-            )
-        });
-
+        let flow = self.find_path_flow(&path)?;
         Ok(Some((path, flow)))
     }
 
@@ -313,36 +308,41 @@ impl Orderbook {
     ///
     /// Note that currently, user buy token balances are not incremented as a
     /// result of filling orders along a path.
-    fn fill_path(&mut self, path: &[NodeIndex]) -> Option<Flow> {
+    fn fill_path(&mut self, path: &[NodeIndex]) -> Result<Flow, OrderbookError> {
         let flow = self.find_path_flow(path)?;
-        self.fill_path_with_flow(path, &flow).unwrap_or_else(|| {
-            panic!(
-                "failed to fill with capacity along detected path {}",
-                format_path(path),
-            )
-        });
-
-        Some(flow)
+        self.fill_path_with_flow(path, &flow)?;
+        Ok(flow)
     }
 
     /// Finds a transitive trade along a path and returns the corresponding flow
     /// for that path or `None` if the path doesn't exist.
-    fn find_path_flow(&self, path: &[NodeIndex]) -> Option<Flow> {
+    ///
+    /// # Panics
+    ///
+    /// If an order along the path doesn't exist.
+    fn find_path_flow(&self, path: &[NodeIndex]) -> Result<Flow, OrderbookError> {
         // NOTE: Capacity is expressed in the starting token, which is the buy
         // token for the transitive order along the specified path.
         let mut capacity = f64::INFINITY;
         let mut transitive_xrate = ExchangeRate::IDENTITY;
         let mut max_xrate = ExchangeRate::IDENTITY;
         for pair in pairs_on_path(path) {
-            let order = self.orders.best_order_for_pair(pair)?;
-            transitive_xrate *= order.exchange_rate;
+            let order = self
+                .orders
+                .best_order_for_pair(pair)
+                .unwrap_or_else(|| panic!("missing order for pair {:?}", pair));
+            transitive_xrate = transitive_xrate
+                .checked_mul(order.exchange_rate)
+                .ok_or_else(|| OrderbookError::UnreducableOrderbook(path.to_vec()))?;
             max_xrate = cmp::max(max_xrate, transitive_xrate);
 
             let sell_amount = order.get_effective_amount(&self.users).to_f64_lossy();
             capacity = num::min(capacity, sell_amount * transitive_xrate.value());
+            if !num::is_strictly_positive_and_finite(capacity) {
+                return Err(OrderbookError::UnreducableOrderbook(path.to_vec()));
+            }
         }
-
-        Some(Flow {
+        Ok(Flow {
             exchange_rate: transitive_xrate,
             capacity,
             min_trade: capacity / max_xrate.value(),
@@ -359,20 +359,21 @@ impl Orderbook {
     ///
     /// # Panics
     ///
-    /// This method panics if the provided flow is empty and would not further
-    /// reduce the orderbook. This can happen in certain situations where the
-    /// flow becomes empty due to floating point rounding errors and can cause
-    /// infinite loops when reducing orderbook or enumerating transitive orders.
-    fn fill_path_with_flow(&mut self, path: &[NodeIndex], flow: &Flow) -> Option<()> {
-        if flow.is_empty() {
-            panic!("stuck reducing path with empty flow: {}", format_path(path));
-        }
-
+    /// If an order along the path doesn't exist.
+    fn fill_path_with_flow(
+        &mut self,
+        path: &[NodeIndex],
+        flow: &Flow,
+    ) -> Result<(), OrderbookError> {
         let mut transitive_xrate = ExchangeRate::IDENTITY;
         for pair in pairs_on_path(path) {
-            let (order, user) = self.best_order_with_user_for_pair_mut(pair)?;
+            let (order, user) = self
+                .best_order_with_user_for_pair_mut(pair)
+                .unwrap_or_else(|| panic!("missing order for pair {:?}", pair));
 
-            transitive_xrate *= order.exchange_rate;
+            transitive_xrate = transitive_xrate
+                .checked_mul(order.exchange_rate)
+                .ok_or_else(|| OrderbookError::UnreducableOrderbook(path.to_vec()))?;
 
             // NOTE: `capacity` is expressed in the buy token, so we need to
             // divide by the exchange rate to get the sell amount being filled.
@@ -391,8 +392,7 @@ impl Orderbook {
                 }
             }
         }
-
-        Some(())
+        Ok(())
     }
 
     /// Gets a mutable reference to the cheapest order for a given token pair
@@ -442,14 +442,6 @@ fn pairs_on_path(path: &[NodeIndex]) -> impl Iterator<Item = TokenPair> + '_ {
     })
 }
 
-/// Formats a token path into a string.
-fn format_path(path: &[NodeIndex]) -> String {
-    path.iter()
-        .map(|segment| segment.index().to_string())
-        .collect::<Vec<_>>()
-        .join("->")
-}
-
 /// Returns true if an auction element is a "dust" order, i.e. their remaining
 /// amount or balance is less than the minimum amount that the exchange allows
 /// for trades
@@ -459,16 +451,16 @@ fn is_dust_order(element: &Element) -> bool {
             && element.balance < U256::from(u128::MAX))
 }
 
-/// An error indicating an invalid operation was performed on an overlapping
-/// orderbook.
-#[derive(Debug, Error)]
-#[error("invalid operation on an overlapping orderbook")]
-pub struct OverlapError(pub NegativeCycle<NodeIndex>);
-
-impl From<NegativeCycle<NodeIndex>> for OverlapError {
-    fn from(cycle: NegativeCycle<NodeIndex>) -> Self {
-        OverlapError(cycle)
-    }
+#[derive(Clone, Debug, Error)]
+pub enum OrderbookError {
+    #[error("invalid operation on an overlapping orderbook")]
+    OverlapError(NegativeCycle<NodeIndex>),
+    // We used to have asserts that exchange rates in the flow computation would always be strictly
+    // positive and finite and that the resulting flow would never have capacity 0. It turned out
+    // that these conditions were triggerable in the real orderbook so to avoid panics we must
+    // return this as an error.
+    #[error("because of floating point math imprecision the orderbook cannot be reduced")]
+    UnreducableOrderbook(Vec<NodeIndex>),
 }
 
 #[cfg(test)]
@@ -538,7 +530,7 @@ mod tests {
             }
         };
 
-        let ReducedOrderbook(orderbook) = orderbook.reduce_overlapping_orders();
+        let ReducedOrderbook(orderbook) = orderbook.reduce_overlapping_orders().unwrap();
         // NOTE: We expect user 1's 2->1 order to be completely filled as well
         // as user 2's 5->3 order and user 4's 6->7 order.
         // User 3's 7->6 order may be filled or not depending on the order in
@@ -609,7 +601,7 @@ mod tests {
             orderbook.get_projected_pair_weight(pair)
         );
 
-        let ReducedOrderbook(orderbook) = orderbook.reduce_overlapping_orders();
+        let ReducedOrderbook(orderbook) = orderbook.reduce_overlapping_orders().unwrap();
         let order = orderbook.orders.best_order_for_pair(pair);
         assert_eq!(orderbook.num_orders(), 1);
         assert!(order.is_none());
@@ -813,8 +805,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn panics_on_empty_flow() {
+    fn errors_on_empty_flow() {
         // 0 --(3e-35)--> 1 .. 9 --(3e-35)--> 10
         let orderbook = orderbook! {
             users {
@@ -846,20 +837,8 @@ mod tests {
             }
         };
 
-        let mut orders = match orderbook
+        assert!(orderbook
             .transitive_orders(TokenPair { buy: 0, sell: 10 }.into_unbounded_range())
-        {
-            Ok(orders) => orders,
-            Err(err) => {
-                // NOTE: The test is marked as `#[should_panic]` so returning
-                // early in case there is an unexpected error here causes the
-                // test to fail.
-                dbg!(err);
-                return;
-            }
-        };
-
-        // NOTE: This should panic in release **and** debug mode.
-        orders.next();
+            .is_err());
     }
 }

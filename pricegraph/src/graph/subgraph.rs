@@ -16,13 +16,6 @@ impl<N: Copy + Ord> Subgraphs<N> {
         Subgraphs::<N>(nodes.collect())
     }
 
-    /// Iterate through each subgraph with the provided closure returning the
-    /// predecessor vector for the current node indicating which nodes are
-    /// connected to it.
-    pub fn for_each(self, mut f: impl FnMut(N) -> Vec<N>) {
-        self.for_each_until(|node| <ControlFlow<N, ()>>::Continue(f(node)));
-    }
-
     /// Iterate through each subgraph with the provided closure, returning the
     /// control flow `Break` value if there was an early return.
     pub fn for_each_until<T>(self, mut f: impl FnMut(N) -> ControlFlow<N, T>) -> Option<T> {

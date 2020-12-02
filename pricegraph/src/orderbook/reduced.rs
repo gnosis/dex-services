@@ -1,7 +1,7 @@
 //! Module containing reduced orderbook wrapper type.
 
 use crate::encoding::TokenPairRange;
-use crate::orderbook::{Flow, Orderbook, TransitiveOrders};
+use crate::orderbook::{Flow, Orderbook, OrderbookError, TransitiveOrders};
 
 /// A graph representation of a reduced orderbook. Reduced orderbooks are
 /// guaranteed to not contain any negative cycles.
@@ -29,9 +29,12 @@ impl ReducedOrderbook {
     pub fn significant_transitive_orders(
         self,
         pair_range: TokenPairRange,
-    ) -> impl Iterator<Item = Flow> {
+    ) -> impl Iterator<Item = Result<Flow, OrderbookError>> {
         self.transitive_orders(pair_range)
-            .filter(|flow| !flow.is_dust_trade())
+            .filter(|flow| match flow {
+                Ok(flow) => !flow.is_dust_trade(),
+                Err(_) => true,
+            })
     }
 
     /// Finds and returns the optimal transitive order for the specified token
