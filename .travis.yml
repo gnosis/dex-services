@@ -9,7 +9,7 @@ dist: bionic
 language: rust
 env:
   global:
-    - OPEN_SOLVER_VERSION=v0.1.2
+    - OPEN_SOLVER_VERSION=v0.2.0
     - PRIVATE_SOLVER_VERSION=v0.8.7
 
 jobs:
