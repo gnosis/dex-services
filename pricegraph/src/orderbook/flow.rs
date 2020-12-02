@@ -34,6 +34,12 @@ impl Flow {
     pub fn is_dust_trade(&self) -> bool {
         num::is_dust_amount(self.min_trade as u128)
     }
+
+    /// Returns whether or not the flow is empty. An empty flow is one that does
+    /// not further reduce the orderbook, so has a 0 capacity.
+    pub fn is_empty(&self) -> bool {
+        self.capacity <= 0.
+    }
 }
 
 /// A representation of flow on two halves of a ring trade through the orderbook
