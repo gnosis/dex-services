@@ -356,7 +356,18 @@ impl Orderbook {
     ///
     /// Note that currently, user buy token balances are not incremented as a
     /// result of filling orders along a path.
+    ///
+    /// # Panics
+    ///
+    /// This method panics if the provided flow is empty and would not further
+    /// reduce the orderbook. This can happen in certain situations where the
+    /// flow becomes empty due to floating point rounding errors and can cause
+    /// infinite loops when reducing orderbook or enumerating transitive orders.
     fn fill_path_with_flow(&mut self, path: &[NodeIndex], flow: &Flow) -> Option<()> {
+        if flow.is_empty() {
+            panic!("stuck reducing path with empty flow: {}", format_path(path));
+        }
+
         let mut transitive_xrate = ExchangeRate::IDENTITY;
         for pair in pairs_on_path(path) {
             let (order, user) = self.best_order_with_user_for_pair_mut(pair)?;
@@ -799,5 +810,56 @@ mod tests {
         assert!(orderbook
             .find_optimal_transitive_order(TokenPair { buy: 0, sell: 1 }.into_unbounded_range())
             .is_ok())
+    }
+
+    #[test]
+    #[should_panic]
+    fn panics_on_empty_flow() {
+        // 0 --(3e-35)--> 1 .. 9 --(3e-35)--> 10
+        let orderbook = orderbook! {
+            users {
+                @1 {
+                    token 0 => u128::MAX,
+                    token 1 => u128::MAX,
+                    token 2 => u128::MAX,
+                    token 3 => u128::MAX,
+                    token 4 => u128::MAX,
+                    token 5 => u128::MAX,
+                    token 6 => u128::MAX,
+                    token 7 => u128::MAX,
+                    token 8 => u128::MAX,
+                    token 9 => u128::MAX,
+                    token 10 => u128::MAX,
+                }
+            }
+            orders {
+                owner @1 buying 0 [10_000] selling 1 [u128::MAX],
+                owner @1 buying 1 [10_000] selling 2 [u128::MAX],
+                owner @1 buying 2 [10_000] selling 3 [u128::MAX],
+                owner @1 buying 3 [10_000] selling 4 [u128::MAX],
+                owner @1 buying 4 [10_000] selling 5 [u128::MAX],
+                owner @1 buying 5 [10_000] selling 6 [u128::MAX],
+                owner @1 buying 6 [10_000] selling 7 [u128::MAX],
+                owner @1 buying 7 [10_000] selling 8 [u128::MAX],
+                owner @1 buying 8 [10_000] selling 9 [u128::MAX],
+                owner @1 buying 9 [10_000] selling 10 [u128::MAX],
+            }
+        };
+
+        let mut orders = match orderbook
+            .transitive_orders(TokenPair { buy: 0, sell: 10 }.into_unbounded_range())
+        {
+            Ok(orders) => orders,
+            Err(err) => {
+                // NOTE: The test is marked as `#[should_panic]` so returning
+                // early in case there is an unexpected error here causes the
+                // test to fail.
+                dbg!(err);
+                return;
+            }
+        };
+
+        // NOTE: This should panic in release **and** debug mode.
+        orders.next();
     }
 }
