@@ -31,7 +31,7 @@ pub const MIN_AMOUNT: u128 = 10_000;
 #[derive(Clone, Debug)]
 pub struct Pricegraph {
     full_orderbook: Orderbook,
-    reduced_orderbook: ReducedOrderbook,
+    reduced_orderbook: Result<ReducedOrderbook, OrderbookError>,
 }
 
 impl Pricegraph {
@@ -86,7 +86,7 @@ impl Pricegraph {
     /// Gets a clone of the reduced orderbook for operations that prefer there
     /// to be no overlapping transitive orders. A clone is returned because
     /// orderbook operations are destructive.
-    pub fn reduced_orderbook(&self) -> ReducedOrderbook {
+    pub fn reduced_orderbook(&self) -> Result<ReducedOrderbook, OrderbookError> {
         self.reduced_orderbook.clone()
     }
 }
@@ -114,6 +114,7 @@ mod tests {
 
             let order = pricegraph
                 .order_for_sell_amount(dai_weth.bid_pair().into_unbounded_range(), volume)
+                .unwrap()
                 .unwrap();
             println!(
                 "#{}: estimated order for buying {} DAI for {} WETH",
@@ -122,8 +123,9 @@ mod tests {
                 order.sell / base_unit,
             );
 
-            let TransitiveOrderbook { asks, bids } =
-                pricegraph.transitive_orderbook(dai_weth, None, Some(spread));
+            let TransitiveOrderbook { asks, bids } = pricegraph
+                .transitive_orderbook(dai_weth, None, Some(spread))
+                .unwrap();
             println!(
                 "#{}: DAI-WETH market contains {} ask orders and {} bid orders within a {}% spread:",
                 batch_id,

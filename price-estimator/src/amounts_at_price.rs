@@ -1,4 +1,4 @@
-use pricegraph::{Pricegraph, TokenPairRange, TransitiveOrder};
+use pricegraph::{OrderbookError, Pricegraph, TokenPairRange, TransitiveOrder};
 
 /// An overlapping order where buy / sell ≈ price and the amounts take into account that the solver
 /// will subtract the rounding buffer from the sell amount.
@@ -7,11 +7,14 @@ pub fn order_at_price_with_rounding_buffer(
     limit_price: f64,
     pricegraph: &Pricegraph,
     rounding_buffer: Option<f64>,
-) -> Option<TransitiveOrder> {
-    let order = pricegraph.order_for_limit_price(token_pair_range, limit_price)?;
+) -> Result<Option<TransitiveOrder>, OrderbookError> {
+    let order = match pricegraph.order_for_limit_price(token_pair_range, limit_price)? {
+        Some(order) => order,
+        None => return Ok(None),
+    };
 
     let rounding_buffer = match rounding_buffer {
-        None => return Some(order),
+        None => return Ok(Some(order)),
         Some(rounding_buffer) => rounding_buffer,
     };
 
@@ -35,7 +38,7 @@ pub fn order_at_price_with_rounding_buffer(
         // still overlapping and we can use it. This case it much more likely than the other branch
         // because you would have to hit a narrow price so that there is no room to adjust for the
         // small (compared to buy and sell amounts) rounding buffer.
-        Some(order_that_user_places)
+        Ok(Some(order_that_user_places))
     } else {
         // Otherwise we cannot keep the limit_price exactly the same as requested. Since rounding
         // buffers are small compared to traded amounts the introduced error is small. This is
@@ -46,7 +49,7 @@ pub fn order_at_price_with_rounding_buffer(
             "unable to fulfill price constraint for token pair {}-{} at price {} using buy amount {} sell amount {}",
             token_pair_range.pair.buy, token_pair_range.pair.sell, limit_price, buy, sell
         );
-        Some(TransitiveOrder { sell, buy })
+        Ok(Some(TransitiveOrder { sell, buy }))
     }
 }
 
@@ -81,7 +84,7 @@ mod tests {
             Some(rounding_buffer),
         );
         assert_eq!(
-            result,
+            result.unwrap(),
             Some(TransitiveOrder {
                 buy: (denominator as f64) * limit_price * FEE_FACTOR,
                 sell: (denominator as f64) * FEE_FACTOR,
@@ -116,7 +119,7 @@ mod tests {
         );
         let sell = (denominator as f64) * FEE_FACTOR;
         assert_eq!(
-            result,
+            result.unwrap(),
             Some(TransitiveOrder {
                 buy: sell * limit_price,
                 sell: sell + rounding_buffer,

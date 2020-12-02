@@ -21,7 +21,7 @@ impl<N> From<NegativeCycle<N>> for Path<N> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 /// An ordered collection of nodes that form a cycle of negative weight.
 /// The first node of the cycle coincides with the last.
 pub struct NegativeCycle<N>(pub Vec<N>);

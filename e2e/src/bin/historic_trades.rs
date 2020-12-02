@@ -53,7 +53,7 @@ fn main() -> Result<()> {
                         .cloned(),
                 );
 
-                let meta = OrderMetadata::compute(settlement, order, &pricegraph);
+                let meta = OrderMetadata::compute(settlement, order, &pricegraph)?;
                 let result = if meta.is_reasonably_priced_order() {
                     process_reasonable_order(&meta)
                 } else {
@@ -104,14 +104,18 @@ struct OrderMetadata {
 impl OrderMetadata {
     /// Computes order metadata based on a batch settlement (solution), order
     /// data and a `Pricegraph` instance.
-    fn compute(settlement: Option<&Settlement>, order: &Element, pricegraph: &Pricegraph) -> Self {
+    fn compute(
+        settlement: Option<&Settlement>,
+        order: &Element,
+        pricegraph: &Pricegraph,
+    ) -> Result<Self> {
         let effective_sell_amount = order
             .balance
             .to_f64_lossy()
             .min(order.remaining_sell_amount as _);
         let limit_price = order.price.numerator as f64 / order.price.denominator as f64;
         let estimated_limit_price = pricegraph
-            .estimate_limit_price(order.pair.into_unbounded_range(), effective_sell_amount);
+            .estimate_limit_price(order.pair.into_unbounded_range(), effective_sell_amount)?;
 
         // NOTE: Compare the settled exchange rate to the limit price, this is
         // because the limit price must be respected by the actual executed
@@ -135,13 +139,13 @@ impl OrderMetadata {
             }
         }
 
-        OrderMetadata {
+        Ok(OrderMetadata {
             effective_sell_amount,
             limit_price,
             estimated_limit_price,
             settled_xrate,
             trade,
-        }
+        })
     }
 
     /// Returns `true` if an order is considered reasonably priced, `false`

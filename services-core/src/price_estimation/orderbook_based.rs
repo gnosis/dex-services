@@ -61,7 +61,13 @@ mod inner {
 
     impl TokenPriceEstimating for Pricegraph {
         fn estimate_token_price(&self, token: TokenId, hops: Option<usize>) -> Option<f64> {
-            let estimate = self.estimate_token_price(token.0, hops)?;
+            let estimate = match self.estimate_token_price(token.0, hops) {
+                Ok(estimate) => estimate,
+                Err(err) => {
+                    log::error!("price estimator error: {:?}", err);
+                    None
+                }
+            }?;
             Some(estimate)
         }
     }

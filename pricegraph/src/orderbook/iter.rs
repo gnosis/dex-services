@@ -3,7 +3,7 @@
 use crate::{
     encoding::TokenPairRange,
     graph::path::Path,
-    orderbook::{self, Flow, Orderbook, OverlapError},
+    orderbook::{self, Flow, Orderbook, OrderbookError},
 };
 use petgraph::graph::NodeIndex;
 use std::iter::FusedIterator;
@@ -21,11 +21,12 @@ pub struct TransitiveOrders {
     first_order: Option<(Path<NodeIndex>, Flow)>,
     /// The number of hops that can be considered during path finding (None being infinite)
     hops: Option<usize>,
+    errored: bool,
 }
 
 impl TransitiveOrders {
     /// Creates a new transitive orderbook iterator.
-    pub fn new(orderbook: Orderbook, pair_range: TokenPairRange) -> Result<Self, OverlapError> {
+    pub fn new(orderbook: Orderbook, pair_range: TokenPairRange) -> Result<Self, OrderbookError> {
         let (buy, sell) = if orderbook.is_token_pair_valid(pair_range.pair) {
             (
                 orderbook::node_index(pair_range.pair.buy),
@@ -37,6 +38,7 @@ impl TransitiveOrders {
                 pair: None,
                 first_order: None,
                 hops: None,
+                errored: false,
             });
         };
 
@@ -51,30 +53,35 @@ impl TransitiveOrders {
             pair: Some((buy, sell)),
             first_order,
             hops: pair_range.hops,
+            errored: false,
         })
     }
 }
 
 impl Iterator for TransitiveOrders {
-    type Item = Flow;
+    type Item = Result<Flow, OrderbookError>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.errored {
+            return None;
+        }
         let (buy, sell) = self.pair?;
-        let (path, flow) = self.first_order.take().or_else(|| {
-            self.orderbook
-                .find_path_and_flow(buy, sell, self.hops)
-                .expect("negative cycle after computing shortest path")
-        })?;
+        let (path, flow) = match self.first_order.take() {
+            Some(order) => order,
+            None => match self.orderbook.find_path_and_flow(buy, sell, self.hops) {
+                Ok(order) => order?,
+                Err(err) => {
+                    self.errored = true;
+                    return Some(Err(err));
+                }
+            },
+        };
 
-        self.orderbook
-            .fill_path_with_flow(&path, &flow)
-            .unwrap_or_else(|| {
-                panic!(
-                    "failed to fill with capacity along detected path {}",
-                    orderbook::format_path(&path),
-                )
-            });
-        Some(flow)
+        if let Err(err) = self.orderbook.fill_path_with_flow(&path, &flow) {
+            self.errored = true;
+            return Some(Err(err));
+        }
+        Some(Ok(flow))
     }
 }
 
@@ -114,7 +121,8 @@ mod tests {
             .clone()
             .transitive_orders(pair)
             .unwrap()
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
 
         assert_eq!(orders.len(), 3);
 
@@ -135,8 +143,10 @@ mod tests {
             orders,
             orderbook
                 .reduce_overlapping_orders()
+                .unwrap()
                 .transitive_orders(pair)
-                .collect::<Vec<_>>(),
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap(),
         );
     }
 

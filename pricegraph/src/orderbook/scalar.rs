@@ -2,7 +2,7 @@
 //! orderbook graph representation.
 
 use crate::{encoding::PriceFraction, num, orderbook::weight::Weight, FEE_FACTOR};
-use std::{cmp, ops};
+use std::cmp;
 
 /// An exchange limit price. Limit prices on the exchange are represented by a
 /// fraction of two `u128`s representing a buy and sell amount. These limit
@@ -104,6 +104,15 @@ impl ExchangeRate {
     pub fn weight(self) -> Weight {
         Weight::new(self.0)
     }
+
+    pub fn checked_mul(self, rhs: Self) -> Option<Self> {
+        let result = self.0 * rhs.0;
+        if num::is_strictly_positive_and_finite(result) {
+            Some(Self(result))
+        } else {
+            None
+        }
+    }
 }
 
 macro_rules! impl_cmp {
@@ -137,33 +146,6 @@ macro_rules! impl_cmp {
 }
 
 impl_cmp! { LimitPrice, ExchangeRate }
-
-macro_rules! impl_binop {
-    ($(
-        $op:tt for $t:ty => {
-            $trait:ident :: $method:ident,
-            $trait_assign:ident :: $method_assign:ident
-        }
-    )*) => {$(
-        impl ops::$trait for $t {
-            type Output = $t;
-
-            fn $method(self, rhs: Self) -> Self::Output {
-                Self(assert_strictly_positive_and_finite(self.0 $op rhs.0))
-            }
-        }
-
-        impl ops::$trait_assign for $t {
-            fn $method_assign(&mut self, rhs: Self) {
-                self.0 = assert_strictly_positive_and_finite(self.0 $op rhs.0);
-            }
-        }
-    )*}
-}
-
-impl_binop! {
-    * for ExchangeRate => { Mul::mul, MulAssign::mul_assign }
-}
 
 /// Internal method for asserting values are strictly positive and finite. This
 /// is used in debug builds to ensure assumptions about price and exchange rate

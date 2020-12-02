@@ -2,7 +2,7 @@
 //! it can be used for OWL price estimates to the solver.
 
 use crate::encoding::{TokenId, TokenPair, TokenPairRange};
-use crate::{Pricegraph, FEE_TOKEN};
+use crate::{OrderbookError, Pricegraph, FEE_TOKEN};
 
 const OWL_BASE_UNIT: f64 = 1_000_000_000_000_000_000.0;
 
@@ -16,9 +16,13 @@ impl Pricegraph {
     /// token).
     ///
     /// The fee token is defined as the token with ID 0.
-    pub fn estimate_token_price(&self, token: TokenId, hops: Option<usize>) -> Option<f64> {
+    pub fn estimate_token_price(
+        &self,
+        token: TokenId,
+        hops: Option<usize>,
+    ) -> Result<Option<f64>, OrderbookError> {
         if token == FEE_TOKEN {
-            return Some(OWL_BASE_UNIT);
+            return Ok(Some(OWL_BASE_UNIT));
         }
 
         // NOTE: Estimate price of selling 1 unit of the reference token for the
@@ -31,10 +35,13 @@ impl Pricegraph {
         };
         let range = TokenPairRange { pair, hops };
 
-        let price_in_token = self.estimate_limit_price(range, OWL_BASE_UNIT)?;
+        let price_in_token = match self.estimate_limit_price(range, OWL_BASE_UNIT)? {
+            Some(price) => price,
+            None => return Ok(None),
+        };
         let price_in_reference = 1.0 / price_in_token;
 
-        Some(OWL_BASE_UNIT * price_in_reference)
+        Ok(Some(OWL_BASE_UNIT * price_in_reference))
     }
 }
 
@@ -53,7 +60,7 @@ mod tests {
         };
 
         assert_approx_eq!(
-            pricegraph.estimate_token_price(0, None).unwrap(),
+            pricegraph.estimate_token_price(0, None).unwrap().unwrap(),
             OWL_BASE_UNIT
         );
     }
@@ -84,12 +91,12 @@ mod tests {
         let rounding_error = num::max_rounding_error_with_epsilon(OWL_BASE_UNIT);
 
         assert_approx_eq!(
-            pricegraph.estimate_token_price(1, None).unwrap(),
+            pricegraph.estimate_token_price(1, None).unwrap().unwrap(),
             (OWL_BASE_UNIT / 2.0) * FEE_FACTOR.powi(3),
             rounding_error
         );
         assert_approx_eq!(
-            pricegraph.estimate_token_price(2, None).unwrap(),
+            pricegraph.estimate_token_price(2, None).unwrap().unwrap(),
             (OWL_BASE_UNIT / 2.0) * FEE_FACTOR.powi(2),
             rounding_error
         );
@@ -121,13 +128,19 @@ mod tests {
         let rounding_error = num::max_rounding_error_with_epsilon(OWL_BASE_UNIT);
 
         assert_approx_eq!(
-            pricegraph.estimate_token_price(1, Some(1)).unwrap(),
+            pricegraph
+                .estimate_token_price(1, Some(1))
+                .unwrap()
+                .unwrap(),
             OWL_BASE_UNIT * FEE_FACTOR.powi(2),
             2.0 * rounding_error // adjust rounding error by the same factor that is used to adjust the price
         );
         // Same as without hops
         assert_approx_eq!(
-            pricegraph.estimate_token_price(2, Some(1)).unwrap(),
+            pricegraph
+                .estimate_token_price(2, Some(1))
+                .unwrap()
+                .unwrap(),
             (OWL_BASE_UNIT / 2.0) * FEE_FACTOR.powi(2),
             rounding_error
         );
