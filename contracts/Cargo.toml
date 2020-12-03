@@ -37,7 +37,7 @@ ethcontract-generate = { version = "0.9", optional = true }
 filetime = { version = "0.2.13", optional = true }
 futures = { version = "0.3.8", optional = true }
 log = { version = "0.4.11", optional = true }
-serde_json = { version = "1.0.59", optional = true }
+serde_json = { version = "1.0.60", optional = true }
 tokio = { version = "0.2", optional = true, features = ["macros"] }
 
 [build-dependencies]
