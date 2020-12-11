@@ -943,9 +943,9 @@ dependencies = [
 
 [[package]]
 name = "ethcontract"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70d483397a1bca79be56ff5c944e73c3a767ac8b90f3608c4f413f433e1a35b4"
+checksum = "29f81b28370c3b253a27c8773e7e7f8cd72df927722a55998db528ad7a7a250d"
 dependencies = [
  "ethcontract-common",
  "ethcontract-derive",
@@ -954,6 +954,7 @@ dependencies = [
  "hex",
  "jsonrpc-core",
  "lazy_static",
+ "primitive-types",
  "secp256k1 0.19.0",
  "serde",
  "serde_json",
@@ -981,9 +982,9 @@ dependencies = [
 
 [[package]]
 name = "ethcontract-derive"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e05a965a663f1850aa64de2d33d5e7f4ccb5dfef9f0492c6ea0601c0d83595d"
+checksum = "1b78022b200e99e3a1cd116e5c73a30a56affc11cfe4b78546a2b3a4c18a0efc"
 dependencies = [
  "ethcontract-common",
  "ethcontract-generate",
