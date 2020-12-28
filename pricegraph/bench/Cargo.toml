@@ -12,6 +12,6 @@ harness = false
 
 [dependencies]
 criterion = "0.3"
-itertools = "0.9"
+itertools = "0.10"
 pricegraph = { path = "..", features = ["bench"] }
 pricegraph-data = { path = "../data" }
