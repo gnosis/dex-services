@@ -16,7 +16,7 @@ contracts = { path = "../contracts" }
 ethcontract = { version = "0.9",  default-features = false }
 futures = "0.3.8"
 gas-estimation = { path = "../gas-estimation" }
-isahc = { version = "0.9.14", features = ["json"] }
+isahc = { version = "1.0.1", features = ["json"] }
 lazy_static = "1.4.0"
 log = "0.4.11"
 num = { version = "0.3", features = ["serde"] }
