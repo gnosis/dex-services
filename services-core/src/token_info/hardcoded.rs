@@ -5,7 +5,7 @@ use crate::{models::TokenId, price_estimation::price_source::PriceSource};
 use anyhow::{anyhow, Context, Error, Result};
 use ethcontract::Address;
 use serde::Deserialize;
-use std::{collections::HashMap, iter::FromIterator, num::NonZeroU128, str::FromStr};
+use std::{collections::HashMap, num::NonZeroU128, str::FromStr};
 
 use super::{TokenBaseInfo, TokenInfoFetching};
 #[cfg_attr(test, derive(Eq, PartialEq))]
@@ -63,7 +63,7 @@ impl TokenInfoFetching for TokenData {
     }
 
     async fn all_ids(&self) -> Result<Vec<TokenId>> {
-        Ok(Vec::from_iter(self.0.keys().copied()))
+        Ok(self.0.keys().copied().collect())
     }
 }
 

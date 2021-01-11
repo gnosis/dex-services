@@ -94,7 +94,7 @@ mod tests {
             1.0f64,
             42.42,
             83_798_276_971_421_254_262_445_676_335_662_107_162.0,
-            #[allow(clippy::inconsistent_digit_grouping)]
+            #[allow(clippy::unusual_byte_groupings)]
             f64::from_bits(0b0_10101010101_1111111111111111111111111111111111111111111111111111),
         ] {
             let upper_bound = value + max_rounding_error(*value);

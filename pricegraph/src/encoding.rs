@@ -117,7 +117,7 @@ pub struct Element {
 }
 
 impl Element {
-    pub fn read_all<'a>(bytes: &'a [u8]) -> Result<impl Iterator<Item = Self> + 'a, InvalidLength> {
+    pub fn read_all(bytes: &[u8]) -> Result<impl Iterator<Item = Self> + '_, InvalidLength> {
         if bytes.len() % ELEMENT_STRIDE != 0 {
             return Err(InvalidLength(bytes.len()));
         }

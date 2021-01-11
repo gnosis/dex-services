@@ -15,11 +15,7 @@ use ethcontract::{
     transaction::{confirm::ConfirmParams, Account, GasPrice, ResolveCondition, TransactionResult},
     Address, BlockId, BlockNumber, PrivateKey, U256,
 };
-use futures::{
-    future::BoxFuture,
-    stream::{BoxStream, StreamExt},
-    FutureExt as _,
-};
+use futures::stream::{BoxStream, StreamExt};
 
 use lazy_static::lazy_static;
 use std::collections::HashMap;
@@ -147,14 +143,14 @@ pub trait StableXContract: Send + Sync {
         block_number: Option<BlockNumber>,
     ) -> Result<U256>;
 
-    fn submit_solution<'a>(
-        &'a self,
+    async fn submit_solution(
+        &self,
         batch_index: u32,
         solution: Solution,
         claimed_objective_value: U256,
         gas_price: U256,
         nonce: U256,
-    ) -> BoxFuture<'a, Result<(), MethodError>>;
+    ) -> Result<(), MethodError>;
 
     async fn past_events<'a>(
         &'a self,
@@ -165,11 +161,11 @@ pub trait StableXContract: Send + Sync {
 
     /// Create a noop transaction. Useful to cancel a previous transaction that is stuck due to
     /// low gas price.
-    fn send_noop_transaction<'a>(
-        &'a self,
+    async fn send_noop_transaction(
+        &self,
         gas_price: U256,
         nonce: U256,
-    ) -> BoxFuture<'a, Result<TransactionResult, ExecutionError>>;
+    ) -> Result<TransactionResult, ExecutionError>;
 
     /// The current nonce aka transaction_count.
     async fn get_transaction_count(&self) -> Result<U256>;
@@ -271,48 +267,44 @@ impl StableXContract for StableXContractImpl {
         builder.call().await.map_err(Error::from)
     }
 
-    fn submit_solution<'a>(
-        &'a self,
+    async fn submit_solution(
+        &self,
         batch_index: u32,
         solution: Solution,
         claimed_objective_value: U256,
         gas_price: U256,
         nonce: U256,
-    ) -> BoxFuture<'a, Result<(), MethodError>> {
-        async move {
-            let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
-            let (owners, order_ids, volumes) =
-                encode_execution_for_contract(&solution.executed_orders);
-            let mut method = match &self.solution_submitter {
-                Some(submitter) => submitter.submit_solution(
-                    batch_index,
-                    claimed_objective_value,
-                    owners,
-                    order_ids,
-                    volumes,
-                    prices,
-                    token_ids_for_price,
-                ),
-                None => self.instance.submit_solution(
-                    batch_index,
-                    claimed_objective_value,
-                    owners,
-                    order_ids,
-                    volumes,
-                    prices,
-                    token_ids_for_price,
-                ),
-            }
-            .gas_price(GasPrice::Value(gas_price))
-            // NOTE: Gas estimate might be off, as we race with other solution
-            //   submissions and thus might have to revert trades which costs
-            //   more gas than expected.
-            .gas(SOLUTION_SUBMISSION_GAS_LIMIT.into())
-            .nonce(nonce);
-            method.tx.resolve = Some(ResolveCondition::Confirmed(ConfirmParams::mined()));
-            method.send().await.map(|_| ())
+    ) -> Result<(), MethodError> {
+        let (prices, token_ids_for_price) = encode_prices_for_contract(&solution.prices);
+        let (owners, order_ids, volumes) = encode_execution_for_contract(&solution.executed_orders);
+        let mut method = match &self.solution_submitter {
+            Some(submitter) => submitter.submit_solution(
+                batch_index,
+                claimed_objective_value,
+                owners,
+                order_ids,
+                volumes,
+                prices,
+                token_ids_for_price,
+            ),
+            None => self.instance.submit_solution(
+                batch_index,
+                claimed_objective_value,
+                owners,
+                order_ids,
+                volumes,
+                prices,
+                token_ids_for_price,
+            ),
         }
-        .boxed()
+        .gas_price(GasPrice::Value(gas_price))
+        // NOTE: Gas estimate might be off, as we race with other solution
+        //   submissions and thus might have to revert trades which costs
+        //   more gas than expected.
+        .gas(SOLUTION_SUBMISSION_GAS_LIMIT.into())
+        .nonce(nonce);
+        method.tx.resolve = Some(ResolveCondition::Confirmed(ConfirmParams::mined()));
+        method.send().await.map(|_| ())
     }
 
     async fn past_events<'a>(
@@ -333,26 +325,23 @@ impl StableXContract for StableXContractImpl {
         Ok(stream.boxed())
     }
 
-    fn send_noop_transaction<'a>(
-        &'a self,
+    async fn send_noop_transaction(
+        &self,
         gas_price: U256,
         nonce: U256,
-    ) -> BoxFuture<'a, Result<TransactionResult, ExecutionError>> {
-        async move {
-            let web3 = self.instance.raw_instance().web3();
-            let account = self.account.clone();
-            let address = account.address();
-            let transaction = ethcontract::transaction::TransactionBuilder::new(web3)
-                .from(account)
-                .to(address)
-                .gas(U256::from(21000))
-                .gas_price(GasPrice::Value(gas_price))
-                .nonce(nonce)
-                .value(U256::zero())
-                .resolve(ResolveCondition::Confirmed(ConfirmParams::mined()));
-            transaction.send().await.map_err(From::from)
-        }
-        .boxed()
+    ) -> Result<TransactionResult, ExecutionError> {
+        let web3 = self.instance.raw_instance().web3();
+        let account = self.account.clone();
+        let address = account.address();
+        let transaction = ethcontract::transaction::TransactionBuilder::new(web3)
+            .from(account)
+            .to(address)
+            .gas(U256::from(21000))
+            .gas_price(GasPrice::Value(gas_price))
+            .nonce(nonce)
+            .value(U256::zero())
+            .resolve(ResolveCondition::Confirmed(ConfirmParams::mined()));
+        transaction.send().await.map_err(From::from)
     }
 
     async fn get_transaction_count(&self) -> Result<U256> {
