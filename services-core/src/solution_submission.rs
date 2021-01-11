@@ -401,11 +401,11 @@ mod tests {
         contract
             .expect_submit_solution()
             .return_once(|_, _, _, _, _| {
-                immediate!(Err(MethodError::from_parts(
-                "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
-                    .to_owned(),
-                ExecutionError::Failure(Box::new(receipt)),
-            )))
+                Err(MethodError::from_parts(
+                    "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
+                        .to_owned(),
+                    ExecutionError::Failure(Box::new(receipt)),
+                ))
             });
         let mut gas_price = MockGasPriceEstimating::new();
         gas_price

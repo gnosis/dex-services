@@ -10,7 +10,6 @@ use ethcontract::{
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
-    iter::FromIterator,
 };
 
 /// Helper trait to make this functionality mockable for tests.
@@ -52,7 +51,11 @@ impl BatchedBlockReading for Web3 {
     ) -> Result<Vec<BlockPair>> {
         let batched_web3 = ethcontract::web3::Web3::new(Batch::new(self.transport().clone()));
         let mut result = Vec::with_capacity(block_hashes.len());
-        for chunk in Vec::from_iter(block_hashes.into_iter()).chunks(block_batch_size) {
+        for chunk in block_hashes
+            .into_iter()
+            .collect::<Vec<_>>()
+            .chunks(block_batch_size)
+        {
             let partial_result = query_block_timestamps_batched(&batched_web3, chunk).await?;
             result.extend(partial_result);
         }

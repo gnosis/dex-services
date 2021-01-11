@@ -68,8 +68,8 @@ impl Weight {
 
         let weight = value.log2() * FIXED_24X104_SCALING_FACTOR;
         debug_assert!(
-            -128.0 * FIXED_24X104_SCALING_FACTOR <= weight
-                && weight < 114.72 * FIXED_24X104_SCALING_FACTOR,
+            (-128.0 * FIXED_24X104_SCALING_FACTOR..114.72 * FIXED_24X104_SCALING_FACTOR)
+                .contains(&weight)
         );
 
         Weight(weight as _)
