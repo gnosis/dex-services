@@ -665,7 +665,7 @@ pub mod tests {
         let mut price_oracle = MockPriceEstimating::new();
         price_oracle
             .expect_get_token_prices()
-            .withf(|orders| orders == [])
+            .withf(|orders| orders.is_empty())
             .returning(|_| {
                 btree_map! {
                     TokenId(0) => Some(TokenInfo::new("T1", 18, 1_000_000_000_000_000_000)),
