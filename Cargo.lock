@@ -925,7 +925,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tiny-keccak 1.5.0",
- "uint",
+ "uint 0.8.5",
 ]
 
 [[package]]
@@ -959,7 +959,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "uint",
+ "uint 0.8.5",
  "web3",
  "zeroize",
 ]
@@ -1020,7 +1020,7 @@ dependencies = [
  "impl-rlp",
  "impl-serde",
  "primitive-types",
- "uint",
+ "uint 0.8.5",
 ]
 
 [[package]]
@@ -2428,7 +2428,7 @@ dependencies = [
  "impl-codec",
  "impl-rlp",
  "impl-serde",
- "uint",
+ "uint 0.8.5",
 ]
 
 [[package]]
@@ -3066,7 +3066,7 @@ dependencies = [
  "thiserror",
  "transaction-retry",
  "typenum",
- "uint",
+ "uint 0.9.0",
  "url 2.2.0",
 ]
 
@@ -3633,6 +3633,18 @@ dependencies = [
  "byteorder",
  "crunchy",
  "rustc-hex",
+ "static_assertions",
+]
+
+[[package]]
+name = "uint"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e11fe9a9348741cf134085ad57c249508345fe16411b3d7fb4ff2da2f1d6382e"
+dependencies = [
+ "byteorder",
+ "crunchy",
+ "hex",
  "static_assertions",
 ]
 
