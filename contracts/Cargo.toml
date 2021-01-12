@@ -28,7 +28,7 @@ bin = [
 
 [dependencies]
 ethcontract = { version = "0.9",  default-features = false }
-serde = "1.0.118"
+serde = "1.0.119"
 
 # [bin-dependencies]
 anyhow = { version = "1.0.37", optional = true }
