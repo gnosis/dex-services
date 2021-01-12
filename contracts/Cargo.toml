@@ -36,7 +36,7 @@ env_logger = { version = "0.8.2", optional = true }
 ethcontract-generate = { version = "0.9", optional = true }
 filetime = { version = "0.2.13", optional = true }
 futures = { version = "0.3.9", optional = true }
-log = { version = "0.4.11", optional = true }
+log = { version = "0.4.13", optional = true }
 serde_json = { version = "1.0.61", optional = true }
 tokio = { version = "0.2", optional = true, features = ["macros"] }
 
