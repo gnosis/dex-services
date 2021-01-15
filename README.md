@@ -142,6 +142,9 @@ OPTIONS:
         --auction-data-page-size <auction-data-page-size>
             Specify the number of blocks to fetch events for at a time for constructing the orderbook for the solver
             [env: AUCTION_DATA_PAGE_SIZE=]  [default: 500]
+        --custom-benign-errors <custom-benign-errors>
+            Specify additional custom benign errors that can occur during solution submission [env:
+            CUSTOM_BENIGN_ERRORS=]  [default: []]
         --earliest-solution-submit-time <earliest-solution-submit-time>
             The earliest offset from the start of a batch in seconds at which point we should submit the solution. This
             is useful when there are multiple solvers one of provides solutions more often but also worse solutions than
