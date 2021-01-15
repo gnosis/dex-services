@@ -15,6 +15,7 @@ use ethcontract::{
 use futures::future::FutureExt as _;
 use gas_estimation::GasPriceEstimating;
 use std::{
+    str::FromStr,
     sync::Arc,
     time::{Duration, Instant, SystemTime},
 };
@@ -53,6 +54,42 @@ pub trait StableXSolutionSubmitting {
     ) -> Result<(), SolutionSubmissionError>;
 }
 
+/// Configuration for specifying additional errors that are considered benign
+/// during solution submission.
+#[derive(Debug, Default)]
+pub struct CustomBenignErrors(Vec<String>);
+
+/// Revert reasons that are always considered benign regardless of configuration.
+const DEFAULT_BENIGN_ERRORS: &[&str] = &[
+    "New objective doesn\'t sufficiently improve current solution",
+    "Claimed objective doesn't sufficiently improve current solution",
+    "SafeMath: subtraction overflow",
+];
+
+impl CustomBenignErrors {
+    /// Returns true if the revert reason is benign.
+    fn is_benign(&self, reason: &str) -> bool {
+        self.all_benign_errors().any(|benign| reason == benign)
+    }
+
+    /// Returns an iterator over all benign errors, combining the specified
+    /// custom benign revert reasons with the default ones.
+    fn all_benign_errors(&self) -> impl Iterator<Item = &str> + '_ {
+        self.0
+            .iter()
+            .map(|reason| reason.as_str())
+            .chain(DEFAULT_BENIGN_ERRORS.iter().copied())
+    }
+}
+
+impl FromStr for CustomBenignErrors {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        Ok(Self(serde_json::from_str(s)?))
+    }
+}
+
 /// An error with verifying or submitting a solution
 #[derive(Debug, Error)]
 pub enum SolutionSubmissionError {
@@ -62,24 +99,14 @@ pub enum SolutionSubmissionError {
     Unexpected(Error),
 }
 
-impl From<Error> for SolutionSubmissionError {
-    fn from(err: Error) -> Self {
+impl SolutionSubmissionError {
+    fn new(err: Error, custom_benign_errors: &CustomBenignErrors) -> Self {
         err.downcast_ref::<MethodError>()
             .and_then(|method_error| match &method_error.inner {
-                ExecutionError::Revert(Some(reason)) => {
-                    let reason_slice: &str = &*reason;
-                    match reason_slice {
-                        "New objective doesn\'t sufficiently improve current solution" => {
-                            Some(SolutionSubmissionError::Benign(reason.clone()))
-                        }
-                        "Claimed objective doesn't sufficiently improve current solution" => {
-                            Some(SolutionSubmissionError::Benign(reason.clone()))
-                        }
-                        "SafeMath: subtraction overflow" => {
-                            Some(SolutionSubmissionError::Benign(reason.clone()))
-                        }
-                        _ => None,
-                    }
+                ExecutionError::Revert(Some(reason))
+                    if custom_benign_errors.is_benign(&*reason) =>
+                {
+                    Some(SolutionSubmissionError::Benign(reason.clone()))
                 }
                 _ => None,
             })
@@ -90,6 +117,7 @@ impl From<Error> for SolutionSubmissionError {
 pub struct StableXSolutionSubmitter {
     contract: Arc<dyn StableXContract>,
     gas_price_estimator: Arc<dyn GasPriceEstimating>,
+    custom_benign_errors: CustomBenignErrors,
     async_sleep: Box<dyn AsyncSleeping>,
 }
 
@@ -97,24 +125,26 @@ impl StableXSolutionSubmitter {
     pub fn new(
         contract: Arc<dyn StableXContract>,
         gas_price_estimator: Arc<dyn GasPriceEstimating>,
+        custom_benign_errors: CustomBenignErrors,
     ) -> Self {
         Self::with_estimator_and_sleep(
             contract.clone(),
             gas_price_estimator,
+            custom_benign_errors,
             crate::util::AsyncSleep {},
         )
     }
-}
 
-impl StableXSolutionSubmitter {
     fn with_estimator_and_sleep(
         contract: Arc<dyn StableXContract>,
         gas_price_estimator: Arc<dyn GasPriceEstimating>,
+        custom_benign_errors: CustomBenignErrors,
         async_sleep: impl AsyncSleeping,
     ) -> Self {
         Self {
             contract,
             gas_price_estimator,
+            custom_benign_errors,
             async_sleep: Box::new(async_sleep),
         }
     }
@@ -133,7 +163,7 @@ impl StableXSolutionSubmitter {
                     .get_solution_objective_value(batch_index, solution, Some(block_number.into()))
                     .await
                 {
-                    return SolutionSubmissionError::from(err);
+                    return SolutionSubmissionError::new(err, &self.custom_benign_errors);
                 }
             }
         }
@@ -163,7 +193,7 @@ impl StableXSolutionSubmitting for StableXSolutionSubmitter {
         self.contract
             .get_solution_objective_value(batch_index, solution, None)
             .await
-            .map_err(SolutionSubmissionError::from)
+            .map_err(|err| SolutionSubmissionError::new(err, &self.custom_benign_errors))
     }
 
     async fn submit_solution(
@@ -178,7 +208,11 @@ impl StableXSolutionSubmitting for StableXSolutionSubmitter {
                 .solve_end_time()
                 .duration_since(SystemTime::now())
                 .unwrap_or_else(|_| Duration::from_secs(0));
-        let nonce = self.contract.get_transaction_count().await?;
+        let nonce = self
+            .contract
+            .get_transaction_count()
+            .await
+            .map_err(SolutionSubmissionError::Unexpected)?;
         // Add some extra time in case of desync between real time and ethereum node current block time.
         let cancel_instant = target_confirm_time + Duration::from_secs(30);
 
@@ -349,6 +383,7 @@ mod tests {
         let submitter = StableXSolutionSubmitter::with_estimator_and_sleep(
             Arc::new(contract),
             Arc::new(MockGasPriceEstimating::new()),
+            CustomBenignErrors::default(),
             MockAsyncSleeping::new(),
         );
         let result = submitter
@@ -362,6 +397,41 @@ mod tests {
                 panic!("Expecting benign failure, but got {}", err)
             }
         };
+    }
+
+    #[test]
+    fn test_custom_benign_verification_failure() {
+        let mut contract = MockStableXContract::new();
+
+        contract
+            .expect_get_current_auction_index()
+            .return_once(|| Ok(1));
+        contract
+            .expect_get_solution_objective_value()
+            .return_once(move |_, _, _| {
+                Err(anyhow!(MethodError::from_parts(
+                    "submitSolution(uint32,uint256,address[],uint16[],uint128[],uint128[],uint16[])"
+                        .to_owned(),
+                    ExecutionError::Revert(Some("SafeMath: multiplication overflow".to_owned())),
+                )))
+            });
+
+        let submitter = StableXSolutionSubmitter::with_estimator_and_sleep(
+            Arc::new(contract),
+            Arc::new(MockGasPriceEstimating::new()),
+            CustomBenignErrors(vec!["SafeMath: multiplication overflow".to_owned()]),
+            MockAsyncSleeping::new(),
+        );
+        let result = submitter
+            .get_solution_objective_value(0, Solution::trivial())
+            .now_or_never()
+            .unwrap();
+
+        assert!(
+            matches!(result, Err(SolutionSubmissionError::Benign(_))),
+            "expecting beningn failure but got {:?}",
+            result
+        );
     }
 
     #[test]
@@ -419,6 +489,7 @@ mod tests {
         let submitter = StableXSolutionSubmitter::with_estimator_and_sleep(
             Arc::new(contract),
             Arc::new(gas_price),
+            CustomBenignErrors::default(),
             sleep,
         );
         let result = submitter

@@ -15,7 +15,7 @@ use services_core::orderbook::{
 };
 use services_core::price_estimation::PriceOracle;
 use services_core::price_finding::{self, Fee, InternalOptimizer, SolverType};
-use services_core::solution_submission::StableXSolutionSubmitter;
+use services_core::solution_submission::{CustomBenignErrors, StableXSolutionSubmitter};
 use services_core::token_info::hardcoded::TokenData;
 use services_core::util::FutureWaitExt as _;
 
@@ -269,6 +269,16 @@ struct Options {
         default_value = "false"
     )]
     use_solution_submitter: bool,
+
+    /// Specify additional custom benign errors that can occur during solution
+    /// submission.
+    #[structopt(
+        long,
+        env = "CUSTOM_BENIGN_ERRORS",
+        parse(try_from_str),
+        default_value = "[]"
+    )]
+    custom_benign_errors: CustomBenignErrors,
 }
 
 fn main() {
@@ -343,7 +353,11 @@ fn main() {
     );
 
     // Set up solution submitter.
-    let solution_submitter = Arc::new(StableXSolutionSubmitter::new(contract.clone(), gas_station));
+    let solution_submitter = Arc::new(StableXSolutionSubmitter::new(
+        contract.clone(),
+        gas_station,
+        options.custom_benign_errors,
+    ));
 
     // Set up the driver and start the run-loop.
     let driver = StableXDriverImpl::new(
