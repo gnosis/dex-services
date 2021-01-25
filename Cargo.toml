@@ -3,7 +3,6 @@ members = [
     "contracts",
     "driver",
     "e2e",
-    "gas-estimation",
     "price-estimator",
     "pricegraph",
     "pricegraph/bench",
@@ -12,14 +11,11 @@ members = [
     "pricegraph/fuzz",
     "pricegraph/wasm",
     "services-core",
-    "transaction-retry",
 ]
 default-members = [
     "contracts",
     "driver",
-    "gas-estimation",
     "price-estimator",
     "pricegraph",
     "services-core",
-    "transaction-retry",
 ]
