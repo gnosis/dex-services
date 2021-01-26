@@ -1379,17 +1379,13 @@ dependencies = [
 [[package]]
 name = "gas-estimation"
 version = "0.1.0"
+source = "git+https://github.com/gnosis/gp-gas-estimation.git?rev=6b761d74bae69019433bb025ba536a167e5ce85f#6b761d74bae69019433bb025ba536a167e5ce85f"
 dependencies = [
  "anyhow",
- "assert_approx_eq",
  "async-trait",
- "futures 0.3.12",
- "isahc",
  "log 0.4.13",
- "mockall",
  "primitive-types 0.7.3",
  "serde",
- "serde_json",
  "serde_with",
  "web3 0.13.0",
 ]
@@ -3796,10 +3792,10 @@ dependencies = [
 [[package]]
 name = "transaction-retry"
 version = "0.1.0"
+source = "git+https://github.com/gnosis/gp-transaction-retry.git?rev=2c5e862df601c8ae6419ebec29f213865d6ca4f3#2c5e862df601c8ae6419ebec29f213865d6ca4f3"
 dependencies = [
  "async-trait",
  "futures 0.3.12",
- "mockall",
 ]
 
 [[package]]

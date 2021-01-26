@@ -15,7 +15,7 @@ chrono = { version = "0.4.19", default-features = false  }
 contracts = { path = "../contracts" }
 ethcontract = { version = "0.9",  default-features = false }
 futures = "0.3.12"
-gas-estimation = { path = "../gas-estimation" }
+gas-estimation = { git = "https://github.com/gnosis/gp-gas-estimation.git", rev = "6b761d74bae69019433bb025ba536a167e5ce85f" }
 isahc = { version = "0.9.14", features = ["json"] }
 lazy_static = "1.4.0"
 log = "0.4.13"
@@ -34,7 +34,7 @@ slog-scope = "4.4.0"
 slog-stdlog = "4.1.0"
 slog-term = "2.6.0"
 thiserror = "1.0"
-transaction-retry = { path = "../transaction-retry" }
+transaction-retry = { git = "https://github.com/gnosis/gp-transaction-retry.git", rev = "2c5e862df601c8ae6419ebec29f213865d6ca4f3" }
 typenum = "1.12.0"
 uint = "0.9"
 url = "2.2.0"
@@ -42,4 +42,3 @@ url = "2.2.0"
 [dev-dependencies]
 assert_approx_eq = "1"
 mockall = "0.8.3"
-
