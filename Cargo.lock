@@ -1391,7 +1391,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "web3 0.13.0",
+ "web3 0.15.0",
 ]
 
 [[package]]
