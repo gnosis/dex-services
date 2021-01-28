@@ -18,7 +18,7 @@ futures = "0.3.12"
 gas-estimation = { git = "https://github.com/gnosis/gp-gas-estimation.git", rev = "6b761d74bae69019433bb025ba536a167e5ce85f" }
 isahc = { version = "0.9.14", features = ["json"] }
 lazy_static = "1.4.0"
-log = "0.4.13"
+log = "0.4.14"
 num = { version = "0.3", features = ["serde"] }
 pricegraph = { path = "../pricegraph" }
 primitive-types = { version = "0.7.3", features = ["fp-conversion"] }
