@@ -7,7 +7,7 @@ edition = "2018"
 anyhow = "1"
 contracts = { path = "../contracts" }
 services-core = { path = "../services-core" }
-ethcontract = { version = "0.9",  default-features = false }
+ethcontract = { version = "0.10",  default-features = false }
 crossbeam = "0.8"
 futures = { version = "0.3.12" }
 pbr = "1.0.4"

@@ -158,9 +158,9 @@ version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e9e7a929bd34c68a82d58a4de7f86fffdaf97fb2af850162a7bb19dd7269b33"
 dependencies = [
- "async-std",
  "native-tls",
  "thiserror",
+ "tokio 0.2.22",
  "url 2.2.0",
 ]
 
@@ -249,9 +249,21 @@ dependencies = [
 
 [[package]]
 name = "base64"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b41b7ea54a0c9d92199de89e20e58d49f02f8e699814ef3fdf266f6f748d15c7"
+
+[[package]]
+name = "base64"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3441f0f7b02788e948e47f457ca01f1d7e6d92c693bc132c22b087d3141c03ff"
+
+[[package]]
+name = "base64"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
 name = "bincode"
@@ -522,13 +534,13 @@ dependencies = [
  "anyhow",
  "env_logger",
  "ethcontract",
- "ethcontract-generate 0.10.2",
+ "ethcontract-generate",
  "filetime",
  "futures 0.3.12",
  "log 0.4.14",
  "serde",
  "serde_json",
- "tokio",
+ "tokio 0.2.22",
 ]
 
 [[package]]
@@ -996,41 +1008,25 @@ dependencies = [
 
 [[package]]
 name = "ethcontract"
-version = "0.9.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29f81b28370c3b253a27c8773e7e7f8cd72df927722a55998db528ad7a7a250d"
+checksum = "12a626563659af43e55b407dac9e79b9d3c322337d64c162bab26777ce07e63a"
 dependencies = [
- "ethcontract-common 0.9.1",
+ "ethcontract-common",
  "ethcontract-derive",
  "futures 0.3.12",
  "futures-timer",
  "hex",
- "jsonrpc-core 14.2.0",
+ "jsonrpc-core 16.0.0",
  "lazy_static",
- "primitive-types 0.7.3",
- "secp256k1 0.19.0",
+ "primitive-types 0.8.0",
+ "secp256k1 0.20.1",
  "serde",
  "serde_json",
  "thiserror",
- "uint 0.8.5",
- "web3 0.13.0",
+ "uint 0.9.0",
+ "web3 0.15.0",
  "zeroize",
-]
-
-[[package]]
-name = "ethcontract-common"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88513ab5b700836b2520fa1c3cfbff196eaf9c0aca406073bd3b38f11ad28f67"
-dependencies = [
- "ethabi 12.0.0",
- "hex",
- "serde",
- "serde_derive",
- "serde_json",
- "thiserror",
- "tiny-keccak 2.0.2",
- "web3 0.13.0",
 ]
 
 [[package]]
@@ -1051,31 +1047,15 @@ dependencies = [
 
 [[package]]
 name = "ethcontract-derive"
-version = "0.9.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b78022b200e99e3a1cd116e5c73a30a56affc11cfe4b78546a2b3a4c18a0efc"
+checksum = "bc16649b628a2eb24ac27bf77e7501d50dfa1ccebb07d12a838771b7c8eeef9c"
 dependencies = [
- "ethcontract-common 0.9.1",
- "ethcontract-generate 0.9.1",
+ "ethcontract-common",
+ "ethcontract-generate",
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "ethcontract-generate"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d276cadfc189527226cbd866479108bdc50c1c6c0a305e42ded793895de9d61b"
-dependencies = [
- "Inflector",
- "anyhow",
- "curl",
- "ethcontract-common 0.9.1",
- "proc-macro2",
- "quote",
- "syn",
- "url 2.2.0",
 ]
 
 [[package]]
@@ -1087,7 +1067,7 @@ dependencies = [
  "Inflector",
  "anyhow",
  "curl",
- "ethcontract-common 0.10.2",
+ "ethcontract-common",
  "proc-macro2",
  "quote",
  "syn",
@@ -1468,8 +1448,8 @@ dependencies = [
  "http",
  "indexmap",
  "slab",
- "tokio",
- "tokio-util",
+ "tokio 0.2.22",
+ "tokio-util 0.3.1",
  "tracing",
  "tracing-futures",
 ]
@@ -1592,10 +1572,28 @@ dependencies = [
  "itoa",
  "pin-project 1.0.1",
  "socket2",
- "tokio",
+ "tokio 0.2.22",
  "tower-service",
  "tracing",
  "want",
+]
+
+[[package]]
+name = "hyper-proxy"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f93ec5be69758dfc06b9b29efa9d6e9306e387c85eb362c603912eead2ad98c7"
+dependencies = [
+ "bytes 0.5.6",
+ "futures 0.3.12",
+ "http",
+ "hyper",
+ "hyper-tls",
+ "native-tls",
+ "tokio 0.2.22",
+ "tokio-tls",
+ "tower-service",
+ "typed-headers",
 ]
 
 [[package]]
@@ -1607,7 +1605,7 @@ dependencies = [
  "bytes 0.5.6",
  "hyper",
  "native-tls",
- "tokio",
+ "tokio 0.2.22",
  "tokio-tls",
 ]
 
@@ -1966,10 +1964,33 @@ dependencies = [
  "kernel32-sys",
  "libc",
  "log 0.4.14",
- "miow",
+ "miow 0.2.1",
  "net2",
  "slab",
  "winapi 0.2.8",
+]
+
+[[package]]
+name = "mio-named-pipes"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0840c1c50fd55e521b247f949c241c9997709f23bd7f023b9762cd561e935656"
+dependencies = [
+ "log 0.4.14",
+ "mio",
+ "miow 0.3.6",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "mio-uds"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afcb699eb26d4332647cc848492bbc15eafb26f08d0304550d5aa1f612e066f0"
+dependencies = [
+ "iovec",
+ "libc",
+ "mio",
 ]
 
 [[package]]
@@ -1982,6 +2003,16 @@ dependencies = [
  "net2",
  "winapi 0.2.8",
  "ws2_32-sys",
+]
+
+[[package]]
+name = "miow"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a33c1b55807fbed163481b5ba66db4b2fa6cde694a5027be10fb724206c5897"
+dependencies = [
+ "socket2",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -2514,7 +2545,7 @@ dependencies = [
  "services-core",
  "structopt",
  "thiserror",
- "tokio",
+ "tokio 0.2.22",
  "url 2.2.0",
  "warp",
 ]
@@ -3110,11 +3141,11 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.19.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6179428c22c73ac0fbb7b5579a56353ce78ba29759b3b8575183336ea74cdfb"
+checksum = "733b114f058f260c0af7591434eef4272ae1a8ec2751766d3cb89c6df8d5e450"
 dependencies = [
- "secp256k1-sys 0.3.0",
+ "secp256k1-sys 0.4.0",
 ]
 
 [[package]]
@@ -3128,9 +3159,9 @@ dependencies = [
 
 [[package]]
 name = "secp256k1-sys"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11553d210db090930f4432bea123b31f70bbf693ace14504ea2a35e796c28dd2"
+checksum = "67e4b6455ee49f5901c8985b88f98fb0a0e1d90a6661f5a03f4888bd987dad29"
 dependencies = [
  "cc",
 ]
@@ -3333,6 +3364,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "signal-hook-registry"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16f1d0fef1604ba8f7a073c7e701f213e056707210e9020af4528e0101ce11a6"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "siphasher"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3432,13 +3472,12 @@ checksum = "fbee7696b84bbf3d89a1c2eccff0850e3047ed46bfcd2e92c29a2d074d57e252"
 
 [[package]]
 name = "socket2"
-version = "0.3.15"
+version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1fa70dc5c8104ec096f4fe7ede7a221d35ae13dcd19ba1ad9a81d2cab9a1c44"
+checksum = "122e570113d28d773067fab24266b66753f6ea915758651696b6e35e49f88d6e"
 dependencies = [
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "libc",
- "redox_syscall 0.1.57",
  "winapi 0.3.9",
 ]
 
@@ -3695,12 +3734,27 @@ dependencies = [
  "futures-core",
  "iovec",
  "lazy_static",
+ "libc",
  "memchr",
  "mio",
+ "mio-named-pipes",
+ "mio-uds",
  "num_cpus",
  "pin-project-lite 0.1.11",
+ "signal-hook-registry",
  "slab",
  "tokio-macros",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "tokio"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6714d663090b6b0acb0fa85841c6d66233d150cdb2602c8f9b8abb03370beb3f"
+dependencies = [
+ "autocfg 1.0.1",
+ "pin-project-lite 0.2.4",
 ]
 
 [[package]]
@@ -3721,7 +3775,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a70f4fcd7b3b24fb194f837560168208f669ca8cb70d0c4b862944452396343"
 dependencies = [
  "native-tls",
- "tokio",
+ "tokio 0.2.22",
 ]
 
 [[package]]
@@ -3733,7 +3787,7 @@ dependencies = [
  "futures-util",
  "log 0.4.14",
  "pin-project 0.4.27",
- "tokio",
+ "tokio 0.2.22",
  "tungstenite",
 ]
 
@@ -3748,7 +3802,22 @@ dependencies = [
  "futures-sink",
  "log 0.4.14",
  "pin-project-lite 0.1.11",
- "tokio",
+ "tokio 0.2.22",
+]
+
+[[package]]
+name = "tokio-util"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebb7cb2f00c5ae8df755b252306272cd1790d39728363936e01827e11f0b017b"
+dependencies = [
+ "bytes 1.0.1",
+ "futures-core",
+ "futures-io",
+ "futures-sink",
+ "log 0.4.14",
+ "pin-project-lite 0.2.4",
+ "tokio 1.1.1",
 ]
 
 [[package]]
@@ -3847,6 +3916,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59b11b2b5241ba34be09c3cc85a36e56e48f9888862e19cedf23336d35316ed1"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "typed-headers"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3179a61e9eccceead5f1574fd173cf2e162ac42638b9bf214c6ad0baf7efa24a"
+dependencies = [
+ "base64 0.11.0",
+ "bytes 0.5.6",
+ "chrono",
+ "http",
+ "mime 0.3.16",
 ]
 
 [[package]]
@@ -4054,7 +4136,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "tokio",
+ "tokio 0.2.22",
  "tokio-tungstenite",
  "tower-service",
  "tracing",
@@ -4181,28 +4263,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50d03f64be59921dbc5791f05af61a87594bb454518fe4e97d827405422279a0"
 dependencies = [
  "arrayvec",
- "async-native-tls",
- "async-std",
- "base64 0.12.3",
  "derive_more",
  "ethabi 12.0.0",
  "ethereum-types 0.9.2",
  "futures 0.3.12",
  "futures-timer",
- "hyper",
- "hyper-tls",
  "jsonrpc-core 14.2.0",
  "log 0.4.14",
- "native-tls",
  "parking_lot",
  "rlp 0.4.6",
  "rustc-hex",
  "secp256k1 0.17.2",
  "serde",
  "serde_json",
- "soketto",
  "tiny-keccak 2.0.2",
- "url 2.2.0",
 ]
 
 [[package]]
@@ -4212,20 +4286,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4080a844bbb41437f0d432138f0a7543780a40b43345b76dc0338c59bdfd1336"
 dependencies = [
  "arrayvec",
+ "async-native-tls",
+ "base64 0.13.0",
  "derive_more",
  "ethabi 13.0.0",
  "ethereum-types 0.10.0",
  "futures 0.3.12",
  "futures-timer",
  "hex",
+ "hyper",
+ "hyper-proxy",
+ "hyper-tls",
  "jsonrpc-core 16.0.0",
  "log 0.4.14",
+ "native-tls",
  "parking_lot",
  "pin-project 1.0.1",
  "rlp 0.5.0",
+ "secp256k1 0.20.1",
  "serde",
  "serde_json",
+ "soketto",
  "tiny-keccak 2.0.2",
+ "tokio 0.2.22",
+ "tokio-util 0.6.3",
+ "typed-headers",
+ "url 2.2.0",
 ]
 
 [[package]]

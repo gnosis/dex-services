@@ -7,7 +7,7 @@ edition = "2018"
 anyhow = "1.0"
 async-trait = "0.1.42"
 services-core = { path = "../services-core" }
-ethcontract = { version = "0.9",  default-features = false }
+ethcontract = { version = "0.10",  default-features = false }
 futures = "0.3"
 log = "0.4"
 pricegraph = { path = "../pricegraph" }
