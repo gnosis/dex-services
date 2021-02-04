@@ -522,7 +522,7 @@ dependencies = [
  "anyhow",
  "env_logger",
  "ethcontract",
- "ethcontract-generate 0.10.2",
+ "ethcontract-generate 0.11.0",
  "filetime",
  "futures 0.3.12",
  "log 0.4.14",
@@ -1035,9 +1035,9 @@ dependencies = [
 
 [[package]]
 name = "ethcontract-common"
-version = "0.10.2"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec2f873eada6906c9b51b2a15ea2127d48bcf7be5430f755ac14d37e39379983"
+checksum = "8a2b669162ee2df1393e2a7ad8daef029871a65157d21ee3f68fcca91137538a"
 dependencies = [
  "ethabi 13.0.0",
  "hex",
@@ -1080,14 +1080,14 @@ dependencies = [
 
 [[package]]
 name = "ethcontract-generate"
-version = "0.10.2"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f61bafa15ea05bbb3720e6b75cd107fe4e5de35582667aba01c0ff84a283764"
+checksum = "f26680af988c8d63a7de47da6f627f182658e703723ba2cabf23b760112aac94"
 dependencies = [
  "Inflector",
  "anyhow",
  "curl",
- "ethcontract-common 0.10.2",
+ "ethcontract-common 0.11.0",
  "proc-macro2",
  "quote",
  "syn",
