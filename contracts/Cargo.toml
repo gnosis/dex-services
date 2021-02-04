@@ -27,7 +27,7 @@ bin = [
 ]
 
 [dependencies]
-ethcontract = { version = "0.9",  default-features = false }
+ethcontract = { version = "0.11",  default-features = false }
 serde = "1.0.118"
 
 # [bin-dependencies]
