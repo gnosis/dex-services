@@ -32,7 +32,7 @@ slog-async = "2.6.0"
 slog-envlogger = "2.2.0"
 slog-scope = "4.4.0"
 slog-stdlog = "4.1.0"
-slog-term = "2.6.0"
+slog-term = "2.7.0"
 thiserror = "1.0"
 transaction-retry = { git = "https://github.com/gnosis/gp-transaction-retry.git", rev = "2c5e862df601c8ae6419ebec29f213865d6ca4f3" }
 typenum = "1.12.0"
