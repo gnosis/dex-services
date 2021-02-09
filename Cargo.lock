@@ -2506,7 +2506,7 @@ dependencies = [
  "futures 0.3.12",
  "log 0.4.14",
  "pricegraph",
- "primitive-types 0.7.3",
+ "primitive-types 0.8.0",
  "prometheus",
  "serde",
  "serde_json",
@@ -2527,7 +2527,7 @@ dependencies = [
  "assert_approx_eq",
  "petgraph",
  "pricegraph-data",
- "primitive-types 0.7.3",
+ "primitive-types 0.8.0",
  "thiserror",
 ]
 
@@ -3270,7 +3270,7 @@ dependencies = [
  "mockall",
  "num",
  "pricegraph",
- "primitive-types 0.7.3",
+ "primitive-types 0.8.0",
  "prometheus",
  "rouille",
  "serde",
