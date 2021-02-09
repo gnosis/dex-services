@@ -20,7 +20,7 @@ structopt = "0.3"
 thiserror = "1.0"
 tokio = { version = "0.2", features = ["macros", "rt-threaded", "time"] }
 url = "2.2"
-warp = "0.2"
+warp = "0.3"
 
 [dev-dependencies]
 assert_approx_eq = "1"
