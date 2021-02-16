@@ -20,7 +20,7 @@ jobs:
   include:
     - name: "Build and Local Testing"
       if: type = pull_request
-      rust: stable
+      rust: 1.49.0
       cache:
         directories:
           - $HOME/.cargo/bin
@@ -79,7 +79,7 @@ jobs:
 
     - name: "Deploy Driver"
       if: (type != pull_request) AND (tag is present OR branch = master)
-      rust: stable
+      rust: 1.49.0
       before_install:
         - sudo apt-get update && sudo apt-get install -y python3-pip python3-setuptools && pip3 install --upgrade --user awscli
         - $(aws ecr get-login --no-include-email --region $AWS_REGION)
@@ -98,7 +98,7 @@ jobs:
             tags: true
     - name: "Deploy Price Estimator"
       if: (type != pull_request) AND (tag is present OR branch = master)
-      rust: stable
+      rust: 1.49.0
       script:
         - true
       deploy:
