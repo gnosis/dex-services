@@ -1,5 +1,8 @@
+use ethcontract::{common::DeploymentInformation, Address};
 use ethcontract_generate::Builder;
-use std::{env, fs, path::Path};
+use maplit::hashmap;
+use std::str::FromStr;
+use std::{collections::HashMap, env, fs, path::Path};
 
 #[path = "src/paths.rs"]
 mod paths;
@@ -14,7 +17,14 @@ fn main() {
     // - https://doc.rust-lang.org/cargo/reference/build-scripts.html#cargorerun-if-changedpath
     println!("cargo:rerun-if-changed=build.rs");
 
-    generate_contract("BatchExchange");
+    generate_contract_deployed_at(
+        "BatchExchange",
+        hashmap! {
+            1 => (Address::from_str("0x6F400810b62df8E13fded51bE75fF5393eaa841F").unwrap(), 9340147),
+            4 => (Address::from_str("0x6F400810b62df8E13fded51bE75fF5393eaa841F").unwrap(), 9340147),
+            100 => (Address::from_str("0x6F400810b62df8E13fded51bE75fF5393eaa841F").unwrap(), 9340147),
+        },
+    );
     generate_contract("BatchExchangeViewer");
     generate_contract("ERC20Mintable");
     generate_contract("IERC20");
@@ -26,6 +36,10 @@ fn main() {
 }
 
 fn generate_contract(name: &str) {
+    generate_contract_deployed_at(name, HashMap::new())
+}
+
+fn generate_contract_deployed_at(name: &str, deployment_info: HashMap<u32, (Address, u64)>) {
     let artifact = paths::contract_artifacts_dir().join(format!("{}.json", name));
     let address_file = paths::contract_address_file(name);
     let dest = env::var("OUT_DIR").unwrap();
@@ -39,6 +53,14 @@ fn generate_contract(name: &str) {
     if let Ok(address) = fs::read_to_string(&address_file) {
         println!("cargo:rerun-if-changed={}", address_file.display());
         builder = builder.add_deployment_str(5777, address.trim());
+    }
+
+    for (network_id, (address, deployment_block)) in deployment_info {
+        builder = builder.add_deployment(
+            network_id,
+            address,
+            Some(DeploymentInformation::BlockNumber(deployment_block)),
+        );
     }
 
     builder
