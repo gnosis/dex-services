@@ -53,7 +53,7 @@ impl OrderbookFilter {
                 })
                 .collect(),
         };
-        let user_filtered_orders = token_filtered_orders.into_iter().filter(|o| !{
+        let user_filtered_orders = token_filtered_orders.into_iter().filter(|o| {
             if let Some(user_filter) = self.users.get(&o.account_id) {
                 match user_filter {
                     UserOrderFilter::All => false,

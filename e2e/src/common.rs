@@ -15,7 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub const MAX_GAS: u32 = 2_000_000;
+pub const MAX_GAS: u32 = 6_000_000;
 
 pub trait FutureWaitExt: Future + Sized {
     fn wait(self) -> Self::Output {
