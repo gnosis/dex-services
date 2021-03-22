@@ -21,8 +21,8 @@ fn main() {
         "BatchExchange",
         hashmap! {
             1 => (Address::from_str("0x6F400810b62df8E13fded51bE75fF5393eaa841F").unwrap(), 9340147),
-            4 => (Address::from_str("0x6F400810b62df8E13fded51bE75fF5393eaa841F").unwrap(), 9340147),
-            100 => (Address::from_str("0x6F400810b62df8E13fded51bE75fF5393eaa841F").unwrap(), 9340147),
+            4 => (Address::from_str("0xC576eA7bd102F7E476368a5E98FA455d1Ea34dE2").unwrap(), 5844678),
+            100 => (Address::from_str("0x25B06305CC4ec6AfCF3E7c0b673da1EF8ae26313").unwrap(), 11948310),
         },
     );
     generate_contract("BatchExchangeViewer");
