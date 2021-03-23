@@ -126,7 +126,6 @@ pub fn create_accounts_with_funded_tokens(
     let tokens: Vec<IERC20> = (0..num_tokens)
         .map(|_| {
             let token = ERC20Mintable::builder(web3)
-                .gas(MAX_GAS.into())
                 .confirmations(0)
                 .wait_and_expect("Cannot deploy Mintable Token");
             for account in &accounts {
