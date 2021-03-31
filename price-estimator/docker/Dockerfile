@@ -1,4 +1,4 @@
-FROM clux/muslrust:stable as builder
+FROM clux/muslrust:1.49.0 as builder
 WORKDIR /usr/src/app
 
 COPY . .
