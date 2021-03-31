@@ -11,7 +11,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends gcc vim curl ca-certificates libc-dev pkg-config libssl1.0.0 libssl-dev \
   && rm -rf /var/lib/apt/lists/*
 
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.49.0
 ENV PATH="/root/.cargo/bin:$PATH"
 
 COPY ./ /app/dex-services

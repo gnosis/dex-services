@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.com/gnosis/dex-services.svg?branch=master)](https://travis-ci.com/gnosis/dex-services)
 [![Coverage Status](https://coveralls.io/repos/github/gnosis/dex-services/badge.svg?branch=master)](https://coveralls.io/github/gnosis/dex-services)
-
+[![Rustc Version](https://img.shields.io/badge/rustc-1.49-lightgray.svg)](https://blog.rust-lang.org/2020/12/31/Rust-1.49.0.html)
 
 # Contents
 1. [Introduction](#introduction)
